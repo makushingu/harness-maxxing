@@ -12,7 +12,7 @@ import { fetchBefore, fetchTail, qk, takeEarlyTail, TAIL_EVENTS, useSetSessionCa
 import { refreshFileStamps } from '@/lib/queries/files'
 import { errorMessage } from '@/lib/api'
 import { useEventSource } from '@/lib/sse'
-import type { Session, SessionEvent, SessionStreamEvents } from '@/lib/types'
+import type { Session, SessionEvent, SessionStreamEvents, TaskEvent } from '@/lib/types'
 import { usePending } from './store'
 
 type Ev<T extends SessionEvent['type']> = Extract<SessionEvent, { type: T }>
@@ -22,10 +22,14 @@ export type Item =
   | { kind: 'request'; key: string; ev: Ev<'user'> } // system-sourced prompt (compact / handoff summary)
   | { kind: 'assistant'; key: string; ev: Ev<'assistant'> }
   | { kind: 'thinking'; key: string; ev: Ev<'thinking'> }
-  | { kind: 'tool'; key: string; use: Ev<'tool_use'>; result: Ev<'tool_result'> | null }
+  | { kind: 'tool'; key: string; use: Ev<'tool_use'>; result: Ev<'tool_result'> | null; /** The background work it started. */ task?: Task }
   | { kind: 'init'; key: string; ev: Ev<'init'> }
   | { kind: 'result'; key: string; ev: Ev<'result'> }
   | { kind: 'note'; key: string; ev: Ev<'note'> }
+
+/** A task as the thread knows it: its `task` events merged. `interrupted`: a later turn started while it was
+ *  still running (its Claude process is gone; a later event of the same task clears it). */
+export type Task = Omit<TaskEvent, 'type' | 'at'> & { started: number; updated: number; ended?: number; interrupted?: boolean }
 
 export type LogState = {
   status: 'loading' | 'ready' | 'error'
@@ -49,6 +53,8 @@ export type LogState = {
   orphans: Record<string, Ev<'tool_result'>>
   /** User messages hidden from the thread, by their `at` (`hide` events; the latest one wins). */
   hidden: Record<string, boolean>
+  /** Background work (sub-agents, commands), by task id; tool items carry theirs too (`task`). */
+  tasks: Record<string, Task>
 }
 
 const EARLIER_EVENTS = 200
@@ -69,6 +75,7 @@ const INITIAL: LogState = {
   batches: 0,
   orphans: {},
   hidden: {},
+  tasks: {},
 }
 
 const cache = new Map<string, LogState>()
@@ -107,7 +114,14 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
   const toolIdx = { ...st.toolIdx }
   let orphans = st.orphans
   let hidden = st.hidden
+  let tasks = st.tasks
   let { count, lastModel, lastUserAt } = st
+  const setTask = (tk: Task) => {
+    tasks = { ...tasks, [tk.id]: tk }
+    const i = tk.tool_use_id ? toolIdx[tk.tool_use_id] : undefined
+    const it = i != null ? items[i] : undefined
+    if (it && it.kind === 'tool') items[i!] = { ...it, task: tk }
+  }
   const settle = settlePending ? usePending.getState().settle : () => {}
   for (const ev of evs) {
     const key = `${keyPrefix}${count++}`
@@ -119,6 +133,11 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
           settle(sid, ev.text)
         }
         lastUserAt = ev.at
+        // A new turn = a new Claude process: what the last one left running is gone.
+        for (const tk of Object.values(tasks)) if (tk.state === 'running' && !tk.interrupted) setTask({ ...tk, interrupted: true })
+        break
+      case 'task':
+        setTask(mergeTask(tasks[ev.id], ev))
         break
       case 'assistant':
         items.push({ kind: 'assistant', key, ev })
@@ -128,7 +147,7 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
         break
       case 'tool_use':
         toolIdx[ev.id] = items.length
-        items.push({ kind: 'tool', key, use: ev, result: null })
+        items.push({ kind: 'tool', key, use: ev, result: null, task: taskOfTool(tasks, ev.id) })
         break
       case 'tool_result': {
         const i = toolIdx[ev.tool_use_id]
@@ -163,7 +182,34 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
       }
     }
   }
-  return { ...st, items, toolIdx, orphans, hidden, count, lastModel, lastUserAt, next }
+  return { ...st, items, toolIdx, orphans, hidden, tasks, count, lastModel, lastUserAt, next }
+}
+
+function mergeTask(cur: Task | undefined, ev: TaskEvent): Task {
+  const { type: _t, at, ...fields } = ev
+  const base: Task = cur ?? { id: ev.id, started: at, updated: at }
+  const tk: Task = { ...base, ...fields, updated: at, interrupted: false }
+  if (ev.state && ev.state !== 'running') tk.ended = at
+  else if (ev.state === 'running') delete tk.ended
+  return tk
+}
+
+function taskOfTool(tasks: Record<string, Task>, toolUseId: string): Task | undefined {
+  for (const tk of Object.values(tasks)) if (tk.tool_use_id === toolUseId) return tk
+  return undefined
+}
+
+/** Tasks the thread shows (a live line, the bar above the composer): sub-agents, and commands sent to the
+ *  background; a command run in the foreground is already its own tool line. */
+export function isShownTask(tk: Task | undefined): tk is Task {
+  return !!tk && (tk.kind === 'agent' || (tk.kind === 'shell' && !!tk.background))
+}
+
+export type TaskStatus = 'running' | 'completed' | 'failed' | 'stopped' | 'interrupted'
+/** What a task shows: one still "running" after its session stopped (or a newer turn started) was interrupted. */
+export function taskStatus(tk: Task, sessionRunning: boolean): TaskStatus {
+  if (tk.state && tk.state !== 'running') return tk.state
+  return tk.interrupted || !sessionRunning ? 'interrupted' : 'running'
 }
 
 /** Prepend an older page (events strictly before `st.start`): existing items keep their identity. */
@@ -173,10 +219,29 @@ export function foldBefore(st: LogState, evs: SessionEvent[], start: number, mor
   const older = fold({ ...INITIAL, status: 'ready' }, evs, 0, sid, `b${st.batches}-`, false)
   const orphans = { ...older.orphans }
   // Results already loaded whose tool_use only arrives now.
+  // Tasks: the newer events win, field by field; one the older page left running was interrupted when the newer
+  // page holds a later turn.
+  const newerTurn = st.items.some((it) => it.kind === 'user' || it.kind === 'request')
+  const tasks: Record<string, Task> = {}
+  for (const tk of Object.values(older.tasks)) tasks[tk.id] = newerTurn && tk.state === 'running' ? { ...tk, interrupted: true } : tk
+  for (const tk of Object.values(st.tasks)) {
+    const old = tasks[tk.id]
+    if (!old) tasks[tk.id] = tk
+    else {
+      const merged: Task = { ...old, ...tk, started: old.started }
+      if (tk.state === 'running') delete merged.ended
+      tasks[tk.id] = merged
+    }
+  }
+  const relink = (it: Item): Item => {
+    if (it.kind !== 'tool') return it
+    const tk = taskOfTool(tasks, it.use.id)
+    return tk && tk !== it.task ? { ...it, task: tk } : it
+  }
   const head = older.items.map((it) => {
-    if (it.kind !== 'tool' || it.result) return it
+    if (it.kind !== 'tool' || it.result) return relink(it)
     const r = st.orphans[it.use.id]
-    return r ? { ...it, result: r } : it
+    return relink(r ? { ...it, result: r } : it)
   })
   for (const [id, r] of Object.entries(st.orphans)) if (!(id in older.toolIdx)) orphans[id] = r
   let tail = st.items
@@ -186,6 +251,7 @@ export function foldBefore(st: LogState, evs: SessionEvent[], start: number, mor
     const it = tail[firstInit]
     if (it.kind === 'init' && it.ev.model === older.lastModel) tail = tail.filter((_, i) => i !== firstInit)
   }
+  tail = tail.map((it) => (it.kind === 'tool' && it.task && tasks[it.task.id] !== it.task ? { ...it, task: tasks[it.task.id] } : it))
   const items = [...head, ...tail]
   const toolIdx: Record<string, number> = {}
   items.forEach((it, i) => {
@@ -197,6 +263,7 @@ export function foldBefore(st: LogState, evs: SessionEvent[], start: number, mor
     toolIdx,
     orphans,
     hidden: { ...older.hidden, ...st.hidden },           // the newer hide events win
+    tasks,
     batches: st.batches + 1,
     lastModel: st.lastModel ?? older.lastModel,
     lastUserAt: st.lastUserAt ?? older.lastUserAt,

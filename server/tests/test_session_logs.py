@@ -209,3 +209,80 @@ def test_log_lines_with_fields_of_the_wrong_type_are_skipped():
     good = {"type": "mx_user", "text": "still here"}
     out = normalize_lines([json.dumps(e) for e in odd] + [json.dumps(good)])
     assert out[-1]["type"] == "user" and out[-1]["text"] == "still here"
+
+
+def _task_lines() -> str:
+    """A background sub-agent as Claude Code logs it: Agent call, "launched" result, progress, notification."""
+    t = "toolu_agent0001"
+    return "".join([
+        _line({"type": "mx_user", "text": "review it", "attachments": [], "source": "web", "at": 1.0}),
+        _line({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": t, "name": "Agent", "input": {
+            "description": "Review the diff", "prompt": "Review", "run_in_background": True}}]}, "mx_at": 2.0}),
+        _line({"type": "system", "subtype": "task_started", "task_id": "a1", "tool_use_id": t, "task_type": "local_agent",
+               "description": "Review the diff", "subagent_type": "general-purpose", "is_backgrounded": True,
+               "prompt": "Review", "mx_at": 2.0}),
+        _line({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": t,
+                                                         "content": "Async agent launched successfully."}]}, "mx_at": 2.1}),
+        *[_line({"type": "system", "subtype": "task_progress", "task_id": "a1", "tool_use_id": t,
+                 "description": f"Running step {i}", "last_tool_name": "Bash", "subagent_type": "general-purpose",
+                 "usage": {"total_tokens": 1000 * i, "tool_uses": i, "duration_ms": 100 * i}, "mx_at": 3.0 + i})
+          for i in range(1, 51)],
+        # a command run by the sub-agent itself: part of its work, not shown on its own
+        _line({"type": "system", "subtype": "task_started", "task_id": "b9", "tool_use_id": "toolu_inner",
+               "task_type": "local_bash", "description": "ls", "is_backgrounded": False, "owned_by_subagent": True,
+               "mx_at": 4.0}),
+        _line({"type": "system", "subtype": "task_updated", "task_id": "a1", "patch": {"status": "completed",
+                                                                                     "end_time": 1}, "mx_at": 60.0}),
+        _line({"type": "system", "subtype": "task_notification", "task_id": "a1", "tool_use_id": t,
+               "status": "completed", "summary": "All good.", "usage": {"total_tokens": 51000, "tool_uses": 51,
+                                                                       "duration_ms": 58000}, "mx_at": 60.0}),
+        _line({"type": "result", "subtype": "success", "total_cost_usd": 0, "mx_at": 61.0}),
+    ])
+
+
+def test_background_tasks_become_task_events(client, topic):
+    sid = _session_with_log(topic, _task_lines())
+    evs = all_events(client, sid)
+    tasks = [e for e in evs if e["type"] == "task"]
+    assert all(e["id"] == "a1" for e in tasks)                       # the sub-agent's own command is dropped
+    start = tasks[0]
+    assert start["state"] == "running" and start["kind"] == "agent" and start["background"] is True
+    assert start["tool_use_id"] == "toolu_agent0001" and start["description"] == "Review the diff"
+    assert start["agent_type"] == "general-purpose" and "prompt" not in start
+    prog = tasks[50]
+    assert prog["activity"] == "Running step 50" and prog["last_tool"] == "Bash"
+    assert (prog["tokens"], prog["tools"], prog["duration_ms"]) == (50000, 50, 5000)
+    upd, end = tasks[-2], tasks[-1]
+    assert upd["state"] == "completed" and "tool_use_id" not in upd
+    assert end["state"] == "completed" and end["summary"] == "All good." and end["tokens"] == 51000
+    # task events are not thread rows: `tail` still returns that many rows, the task events come on top
+    r = client.get(f"/api/sessions/{sid}/events", params={"tail": 4}).json()
+    rows = [e for e in r["events"] if e["type"] != "task"]
+    assert len(rows) >= 4 and rows[0]["type"] == "user"
+    assert len(r["events"]) > 50
+
+
+def test_task_event_states_and_noise():
+    n = service.normalize.normalize
+    assert n({"type": "system", "subtype": "task_updated", "task_id": "x", "patch": {"status": "killed"}})[0]["state"] == "stopped"
+    assert n({"type": "system", "subtype": "task_updated", "task_id": "x", "patch": {"is_backgrounded": True}})[0]["background"] is True
+    assert n({"type": "system", "subtype": "task_updated", "task_id": "x", "patch": {"end_time": 3}}) == []
+    assert n({"type": "system", "subtype": "task_started", "task_type": "local_bash"}) == []            # no task id
+    bash = n({"type": "system", "subtype": "task_started", "task_id": "b", "task_type": "local_bash", "description": "npm ci"})[0]
+    assert bash["kind"] == "shell" and bash["background"] is False
+    big = n({"type": "system", "subtype": "task_notification", "task_id": "a", "status": "failed", "summary": "z" * 50_000})[0]
+    assert big["state"] == "failed" and len(big["summary"]) < 20_100
+
+
+def test_turn_with_background_agents_streams_their_state(client, topic):
+    s = client.post("/api/sessions", json={"path": topic, "message": "AGENTS please"}).json()
+    s = wait_idle(client, s["id"])
+    assert s["state"] == "idle" and s["error"] is None
+    tasks = [e for e in all_events(client, s["id"]) if e["type"] == "task"]
+    last: dict[str, dict] = {}
+    for e in tasks:
+        last.setdefault(e["id"], {}).update(e)
+    assert set(last) == {"a1", "a2", "b1"}
+    assert {k: (v["kind"], v["state"]) for k, v in last.items()} == {
+        "a1": ("agent", "completed"), "a2": ("agent", "completed"), "b1": ("shell", "completed")}
+    assert last["a1"]["summary"].startswith("**Review done.**") and last["a1"]["tools"] >= 1

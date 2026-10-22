@@ -6,6 +6,7 @@ tool_use, user tool_result, rate_limit_event, result with usage + modelUsage).
 
 Behaviour is driven by the prompt (read from stdin, or a positional argument):
   SLOW          long turn (~30 s) - for stop / queue tests
+  AGENTS        two background sub-agents and a background command (task_* lines), FAKE_CLAUDE_AGENTS_S long
   FAIL          prints an error, exits 1 (after init)
   RESUME_FAIL   with --resume: fails like the real CLI when the thread is gone
   PAUSE         short turn (~1.5 s) - for queue tests
@@ -61,6 +62,34 @@ def parse(argv: list[str]) -> dict:
         elif not a.startswith("-"):
             o["prompt"] = a
     return o
+
+
+def _agents(sid: str, model: str, seconds: float) -> None:
+    """Claude Code's task_* lines: started, "launched" result at once, progress while they work, then the end."""
+    jobs = [("a1", "Agent", "local_agent", "Review the server changes", {"subagent_type": "general-purpose"}),
+            ("a2", "Agent", "local_agent", "Write the release notes", {"subagent_type": "general-purpose"}),
+            ("b1", "Bash", "local_bash", "npm run build", {})]
+    for tid, tool, kind, desc, extra in jobs:
+        use = f"toolu_{tid}"
+        inp = {"description": desc, "prompt": desc + ".", "run_in_background": True} if tool == "Agent" else \
+            {"command": desc, "description": desc, "run_in_background": True}
+        emit(msg(sid, model, [{"type": "tool_use", "id": use, "name": tool, "input": inp}]))
+        emit({"type": "system", "subtype": "task_started", "task_id": tid, "tool_use_id": use, "task_type": kind,
+              "description": desc, "is_backgrounded": True, "session_id": sid, **extra})
+        emit({"type": "user", "message": {"role": "user", "content": [
+            {"tool_use_id": use, "type": "tool_result", "content": "Async agent launched successfully." if tool == "Agent"
+             else "Command running in background."}]}, "parent_tool_use_id": None, "session_id": sid})
+    steps = max(1, int(seconds / 0.5))
+    for i in range(1, steps + 1):
+        time.sleep(seconds / steps)
+        for tid in ("a1", "a2"):
+            emit({"type": "system", "subtype": "task_progress", "task_id": tid, "tool_use_id": f"toolu_{tid}",
+                  "description": f"Running pytest -q tests/test_step_{i}.py", "last_tool_name": "Bash",
+                  "subagent_type": "general-purpose", "session_id": sid,
+                  "usage": {"total_tokens": 4000 * i, "tool_uses": i, "duration_ms": int(i * 500)}})
+    for tid, summary in (("b1", "npm run build"), ("a2", "Release notes written."), ("a1", "**Review done.** No bug found.")):
+        emit({"type": "system", "subtype": "task_notification", "task_id": tid, "tool_use_id": f"toolu_{tid}",
+              "status": "completed", "summary": summary, "session_id": sid})
 
 
 def emit(ev: dict) -> None:
@@ -267,6 +296,8 @@ def main() -> int:
             if i % 50 == 0:
                 emit({"type": "tool_progress", "tool_use_id": "toolu_slow", "tool_name": "Bash",
                       "elapsed_time_seconds": i // 10, "session_id": sid})
+    if "AGENTS" in prompt:                               # two background sub-agents and a background command
+        _agents(sid, model, float(os.environ.get("FAKE_CLAUDE_AGENTS_S", "1.5")))
     if "PAUSE" in prompt:
         time.sleep(1.5)
     if "ORPHAN" in prompt:                               # a background program that keeps our stdout open
