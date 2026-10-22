@@ -17,6 +17,8 @@ stopped.
   its **…** menu. Only the session you clicked shows its full message box; the others show a slim **Write…** bar -
   click it to write there. Drag the line between two stacked sessions to share the height (double-click: half and
   half). The same button, or **Give it its own column**, puts them back side by side.
+- **Scrolling sideways** (trackpad swipe, or the mouse wheel between sessions) moves the columns; when you let go
+  near the edge of a session, the strip glides to it.
 - **Ready-made layouts**: hold the mouse button down on a session's grip (the dots left of its title): small
   layouts appear, click the zone where it should go (the others fill the rest). Or drag the session by its grip: a
   layouts bar slides down at the top of the sessions, drop it on a zone. Rest the pointer on the grid button to
