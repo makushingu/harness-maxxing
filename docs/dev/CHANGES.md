@@ -6,6 +6,16 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.92 - 2026-10-22
+
+Donate restyled (maintainers' request). Web only, no API change.
+- Icon `HandHeart` (lucide) instead of `Heart` everywhere (sidebar, ⊞ menu, `DonateButton`, Settings -> Support,
+  `SETTINGS_SECTIONS`). `DONATE_TONE` = accent classes (`border-primary/30 bg-primary/10 text-primary`), no pink.
+- Sidebar: `DonateLink` = ghost icon button (`size-8`, `text-primary`) after `UserMenu` in the bottom icon row (tooltip
+  "Donate · …"), no longer a row above Feedback. ⊞ menu: the Donate row is `text-primary`.
+- `SETTINGS_SECTIONS`: `support` last (after `docs`); its nav item (sidebar list and phone tabs) is `text-primary`.
+- Docs: user 23.
+
 ## 2.0.0-alpha.91 - 2026-10-22
 
 Donate buttons more visible (maintainers' request). Web only, no API change.

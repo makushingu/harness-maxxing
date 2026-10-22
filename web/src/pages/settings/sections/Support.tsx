@@ -1,6 +1,6 @@
 // Settings -> Support: Harness Maxxing is free, donations fund its development (a link to the website, nothing
 // else) + the switch that hides the other donation mentions of the app (setting `donation_hidden`).
-import { ExternalLink, Heart } from 'lucide-react'
+import { ExternalLink, HandHeart } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { useSaveSettings, useSettings } from '@/lib/queries'
 import { Button, Skeleton, Switch } from '@/components/ui'
@@ -22,7 +22,7 @@ export function SupportSection() {
           <div>
             <Button size="sm" asChild>
               <a href={donationUrl(lang)} target="_blank" rel="noopener">
-                <Heart /> {t('donation.donate')} <ExternalLink />
+                <HandHeart /> {t('donation.donate')} <ExternalLink />
               </a>
             </Button>
           </div>

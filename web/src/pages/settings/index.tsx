@@ -95,7 +95,7 @@ export default function SettingsPage() {
                 to={s.id === 'docs' ? '/docs' : `/settings/${s.id}`}
                 data-active={s.id === section || undefined}
                 className={({ isActive }) =>
-                  cn('flex h-9 max-md:h-10 pointer-coarse:h-10 items-center rounded-full px-3.5 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-200', isActive && 'bg-secondary text-foreground')
+                  cn('flex h-9 max-md:h-10 pointer-coarse:h-10 items-center rounded-full px-3.5 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-200', s.id === 'support' && 'text-primary', isActive && 'bg-secondary text-foreground', isActive && s.id === 'support' && 'text-primary')
                 }
               >
                 {t(s.label)}
@@ -125,6 +125,7 @@ export default function SettingsPage() {
                     cn(
                       'relative flex h-9 pointer-coarse:h-10 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                       isActive && 'font-medium text-foreground hover:bg-transparent',
+                      s.id === 'support' && 'font-medium text-primary hover:text-primary',
                     )
                   }
                 >
