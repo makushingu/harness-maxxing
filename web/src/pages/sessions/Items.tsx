@@ -11,7 +11,8 @@ import { filePreviewUrl, fileRawUrl, fileThumbUrl, knownFileStamp, prefetchImage
 import { Thumb } from '@/features/files/Thumb'
 import type { ClaudeModel, ResultField } from '@/lib/types'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
-import type { Item } from './log'
+import { isShownTask, taskStatus, type Item } from './log'
+import { TaskDetails, TaskElapsed, TaskStatusIcon, useOpenTaskLine } from './Tasks'
 import type { Seed } from './store'
 import { useOpenPreview } from './FilePreview'
 import { MediaPlayer } from '@/features/files/MediaPlayer'
@@ -515,8 +516,14 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   const [open, setOpen] = React.useState(false)
   const { use, result } = item
   const Icon = toolIcon(use.name)
-  const pendingNow = !result && live
-  const err = result?.is_error
+  const { running } = React.useContext(ItemContext)
+  // A sub-agent or a background command: its own state, not its tool result ("launched" comes back at once).
+  const task = isShownTask(item.task) ? item.task : undefined
+  const status = task ? taskStatus(task, running) : null
+  const pendingNow = status ? status === 'running' : !result && live
+  const err = status ? status === 'failed' : result?.is_error
+  const root = React.useRef<HTMLDivElement>(null)
+  useOpenTaskLine(task ? use.id : undefined, React.useCallback(() => setOpen(true), []), root)
   const input = (use.input && typeof use.input === 'object' ? use.input : {}) as Record<string, unknown>
   const diff = React.useMemo(() => (open || ['Edit', 'MultiEdit', 'Write'].includes(use.name) ? toolDiff(use.name, input) : null), [open, use.name, input])
   const stats = diff ? diffStats(diff) : null
@@ -529,7 +536,7 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   const full = file && FILE_TOOLS.has(use.name) ? file : use.summary.startsWith(use.name) ? use.summary.slice(use.name.length).replace(/^[:\s]+/, '') : use.summary
   const summary = file && FILE_TOOLS.has(use.name) ? relPath(file, bases) : relPaths(full, bases)
   return (
-    <div className={cn('min-w-0 overflow-hidden rounded-lg border bg-card/60 text-[13px]', err && 'border-destructive/40')}>
+    <div ref={root} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card/60 text-[13px]', err && 'border-destructive/40')}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -548,8 +555,9 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
             <span className="text-success">+{stats.add}</span> <span className="text-destructive">−{stats.del}</span>
           </span>
         )}
+        {task && status && <TaskElapsed task={task} status={status} />}
         <span className="flex size-4 shrink-0 items-center justify-center">
-          {pendingNow ? <Spinner className="size-3.5" /> : err ? <CircleAlert className="size-3.5 text-destructive" /> : result ? <Check className="size-3.5 text-success" /> : <X className="size-3.5 text-muted-foreground" />}
+          {status ? <TaskStatusIcon status={status} /> : pendingNow ? <Spinner className="size-3.5" /> : err ? <CircleAlert className="size-3.5 text-destructive" /> : result ? <Check className="size-3.5 text-success" /> : <X className="size-3.5 text-muted-foreground" />}
         </span>
         <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
       </button>
@@ -557,8 +565,9 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
       {open && (
         <div className="grid gap-2 border-t bg-background/40 p-2.5">
           <Sensitive block>
+            {task && status && <TaskDetails task={task} status={status} />}
             <ToolInput name={use.name} input={input} diff={diff} display={file ? relPath(file, bases) : null} />
-            {result ? (
+            {task && (task.background || task.summary) ? null : result ? (
               <ToolOutput text={result.text} error={result.is_error} />
             ) : (
               <p className="text-xs text-muted-foreground">{pendingNow ? t('sessions.tool.running') : t('sessions.tool.noResult')}</p>

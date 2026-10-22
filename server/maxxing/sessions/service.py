@@ -728,7 +728,7 @@ def read_back(sid: str, end: int | None = None, limit: int = 200) -> dict:
                 evs = normalize.normalize_lines([ln.decode("utf-8", "replace")])
                 if evs:
                     groups.append(evs)
-                    count += len(evs)
+                    count += sum(e["type"] != "task" for e in evs)   # frequent progress lines: not thread rows
                     if count >= limit:
                         break
     events = [e for g in reversed(groups) for e in g]
