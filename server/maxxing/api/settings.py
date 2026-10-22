@@ -147,6 +147,45 @@ async def put_register(body: RegisterIn):
     return st
 
 
+class LicenseIn(BaseModel):
+    key: str
+
+
+def _license_state() -> dict:
+    from .. import license
+    st = license.status()
+    return {k: st.get(k) for k in ("has_key", "key_hint", "kind", "email", "max_servers", "expires_at", "activated_at",
+                                   "enabled", "moved_to_git")}
+
+
+@router.get("/license")
+def get_license():
+    """The optional Enterprise key (docs/user/23-license.md). Never the key itself."""
+    return _license_state()
+
+
+@router.put("/license")
+async def put_license(body: LicenseIn):
+    from .. import license
+    key = body.key.strip()
+    if not re.fullmatch(r"(?i)HM(-[A-Z0-9]{4}){4}", key):
+        raise _err("invalid_key", "a key looks like HM-XXXX-XXXX-XXXX-XXXX")
+    try:
+        await asyncio.to_thread(license.activate, key)
+    except license.LicenseError as e:
+        raise _err(e.code or "license", str(e)) from None
+    bus.invalidate("license")
+    return _license_state()
+
+
+@router.delete("/license")
+async def delete_license():
+    from .. import license
+    await asyncio.to_thread(license.remove_key)
+    bus.invalidate("license")
+    return _license_state()
+
+
 @router.get("")
 def get_settings():
     return current()

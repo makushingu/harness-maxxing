@@ -6,6 +6,27 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.88 - 2026-10-22
+
+Fair source step 6.4: the license key is an optional right of use (Enterprise), never a delivery channel.
+- `license.activate` (cloud `/v1/activate` unchanged: checks the key, counts the machine) stores the token as
+  `license_seat` (only to free the seat: `release`, `remove_key`) instead of `license_token`, unless the install
+  is still on archives. `enabled()` (= archives) is therefore never turned on again. `move_to_git` keeps the seat
+  (token -> `license_seat`). `remove_key()` = release (best effort) + forget key, seat and license info (keeps
+  `moved_to_git`). `status().has_key`. `try_move_to_git` no longer records "already moving" (both triggers met on
+  the demo server).
+- `GET/PUT/DELETE /api/settings/license` (bus `license`); `/api/system/version` license adds `moved_to_git`,
+  `move_error`.
+- CLI: `maxxing license status` for a git install shows the key (or "no Enterprise key") and the update source;
+  `activate` records the key and fetches nothing unless the install is still on archives; new `remove`.
+- UI: Settings -> License (`LicenseSection`, `features/license/LicenseKey.tsx`: who needs a key, key field, remove);
+  onboarding About you: box "I have an Enterprise license key" -> the same field, saved on Next (cloud message shown
+  under the field on refusal).
+- `install.sh`: `BRANCH` = `stable` always; `LICENSE` no longer selects signed archives (choose_source), it is
+  recorded at the end with `maxxing license activate --key-from-stdin`. A re-run on an install still holding
+  `license_token` keeps it (it moves to git by itself). `publish.py` unchanged: the archive stays the bridge for
+  installs still on archives; `install.sh` is served from the same upload.
+
 ## 2.0.0-alpha.87 - 2026-10-22
 
 Fair source step 6.3: licensed installs leave the signed archives for the public repository.

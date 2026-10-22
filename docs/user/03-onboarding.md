@@ -8,24 +8,27 @@ The first visit happens through the **one-time setup link** printed by the insta
 it private. Lost it? Run `maxxing setup-link` on the server.
 
 The setup link first asks for the UI password (8 characters minimum, stored hashed with scrypt).
-Then the wizard has seven steps. You can leave and come back: it resumes where you stopped, and
+Then the wizard has eight steps. You can leave and come back: it resumes where you stopped, and
 every step also exists in Settings.
 
 1. **Language & time zone** – English or French, and the time zone used by scheduled jobs.
-2. **Claude connection** – the wizard detects whether Claude Code is signed in. Otherwise:
+2. **About you** (all optional) – your pseudo, an email for security alerts (and the product news if you want),
+   the anonymous installation counter, and, only for companies that have one, an **Enterprise license key**. See
+   [License](license).
+3. **Claude connection** – the wizard detects whether Claude Code is signed in. Otherwise:
    - run `claude setup-token` on any machine with a browser and paste the long-lived token, or
    - paste an Anthropic API key (pay-as-you-go).
    A real one-line test call confirms it works.
-3. **Import** (optional) – coming from another agent (Hermes, Claude Code, OpenClaw…)? Copy the
+4. **Import** (optional) – coming from another agent (Hermes, Claude Code, OpenClaw…)? Copy the
    prompt into it, drop the zip it makes: your projects, topics, memory and skills arrive, and
    Claude finishes the job (tasks, scheduled jobs, keys to add). See [Import](import).
-4. **First project & topic** – a starter project `general` with a topic `inbox` already exists;
+5. **First project & topic** – a starter project `general` with a topic `inbox` already exists;
    create your own (for example `acme` / `blog`).
-5. **Telegram** (optional) – connect a bot to talk to your sessions from the phone. See
+6. **Telegram** (optional) – connect a bot to talk to your sessions from the phone. See
    [Telegram](telegram).
-6. **Memory backup** (optional, recommended) – a private GitHub repository receiving your memory
+7. **Memory backup** (optional, recommended) – a private GitHub repository receiving your memory
    every day. See [Backup](backup).
-7. **Ready** – a short tour of the interface.
+8. **Ready** – a short tour of the interface.
 
 ## After the wizard: the tutorial
 

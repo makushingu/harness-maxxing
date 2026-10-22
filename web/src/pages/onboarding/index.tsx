@@ -4,13 +4,14 @@ import * as React from 'react'
 import { store as lsStore } from '@/lib/utils'
 import { useNavigate, useSearchParams } from 'react-router'
 import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, FolderOpen, ListChecks, MessagesSquare, Send, type LucideIcon } from 'lucide-react'
-import { useClaudeStatus, useCompleteOnboarding, useOnboarding, useProfile, useRegister, useSaveProfile, useSaveRegister, useSaveSettings, useSettings } from '@/lib/queries'
+import { useClaudeStatus, useCompleteOnboarding, useOnboarding, useProfile, useRegister, useSaveLicense, useSaveProfile, useSaveRegister, useSaveSettings, useSettings } from '@/lib/queries'
 import { browserTimezone } from '@/lib/timezones'
 import { useUI } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { useT, type TKey } from '@/i18n'
 import type { Language, OnboardingState } from '@/lib/types'
-import { Badge, Button, Input, Label, Sensitive, Skeleton } from '@/components/ui'
+import { Badge, Button, Checkbox, Input, Label, Sensitive, Skeleton } from '@/components/ui'
+import { errorMessage } from '@/lib/api'
 import { LogoMark } from '@/components/shell/Logo'
 import { useDocumentTitle } from '@/components/shell/Page'
 import { RegionFields } from '@/features/general/RegionFields'
@@ -25,6 +26,7 @@ import { requestTourAfterOnboarding } from '@/tour/store'
 import { ImportWizard } from '@/features/import/ImportWizard'
 import { PackChooser } from '@/features/packs/PackPicker'
 import { RegisterFields, validEmail, type RegisterValues } from '@/features/profile/Register'
+import { LicenseKeyField, WhoNeedsAKey, validKey } from '@/features/license/LicenseKey'
 
 type StepId = 'language' | 'profile' | 'claude' | 'import' | 'workspace' | 'telegram' | 'backup' | 'done'
 const STEPS: { id: StepId; label: TKey; optional?: boolean }[] = [
@@ -224,6 +226,10 @@ function ProfileStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
   const saveRegister = useSaveRegister()
   const [name, setName] = React.useState<string | null>(null)
   const [v, setV] = React.useState<RegisterValues | null>(null)
+  const saveLicense = useSaveLicense()
+  const [keyOpen, setKeyOpen] = React.useState(false)
+  const [key, setKey] = React.useState('')
+  const [keyError, setKeyError] = React.useState('')
   React.useEffect(() => {
     if (profile && name === null) setName(profile.name)
   }, [profile, name])
@@ -236,6 +242,14 @@ function ProfileStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
     if (!ready) return
     if (name.trim() !== profile.name) await saveProfile.mutateAsync({ ...profile, name: name.trim().slice(0, 32) })
     await saveRegister.mutateAsync({ ...v, email: v.email.trim(), asked: true })
+    if (key.trim()) {
+      try {
+        await saveLicense.mutateAsync(key.trim())
+      } catch (e) {
+        setKeyError(errorMessage(e))
+        return
+      }
+    }
     onNext()
   }
   return (
@@ -255,9 +269,24 @@ function ProfileStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
           </div>
           <RegisterFields v={v} onChange={setV} />
           <p className="text-xs text-muted-foreground">{t('register.privacy')}</p>
+          <div className="grid gap-3 border-t pt-4">
+            <label className="flex items-start gap-2.5 text-sm">
+              <Checkbox className="mt-0.5" checked={keyOpen} onCheckedChange={(c) => (setKeyOpen(c === true), c !== true && (setKey(''), setKeyError('')))} />
+              <span>
+                {t('license.onbToggle')}
+                <span className="block text-xs text-muted-foreground">{t('license.onbToggleDesc')}</span>
+              </span>
+            </label>
+            {keyOpen && (
+              <div className="grid gap-3 pl-6">
+                <WhoNeedsAKey />
+                <LicenseKeyField value={key} onChange={(k) => (setKey(k), setKeyError(''))} error={keyError} />
+              </div>
+            )}
+          </div>
         </div>
       )}
-      <StepFooter onBack={onBack} onNext={go} loading={saveProfile.isPending || saveRegister.isPending} nextDisabled={!ready || !validEmail(v.email)} />
+      <StepFooter onBack={onBack} onNext={go} loading={saveProfile.isPending || saveRegister.isPending || saveLicense.isPending} nextDisabled={!ready || !validEmail(v.email) || (!!key.trim() && !validKey(key))} />
     </>
   )
 }

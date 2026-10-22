@@ -8,6 +8,7 @@ import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 import { GeneralSection } from './sections/General'
 import { ProfileSection } from './sections/Profile'
+import { LicenseSection } from './sections/License'
 import { FeaturesSection } from './sections/Features'
 import { SecuritySection } from './sections/Security'
 import { ClaudeSection } from './sections/Claude'
@@ -29,6 +30,7 @@ import { UpdatesSection } from './sections/Updates'
 const COMPONENTS: Record<Exclude<SettingsSectionId, 'docs'>, React.ComponentType> = {
   general: GeneralSection,
   profile: ProfileSection,
+  license: LicenseSection,
   features: FeaturesSection,
   notifications: NotificationsSection,
   stats: StatsSection,

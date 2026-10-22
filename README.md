@@ -97,11 +97,11 @@ Other ways to install:
 
 ```bash
 curl -fsSL https://get.harness-maxxing.com | REPO=you/your-fork BRANCH=main bash   # from your fork (updates from it)
-curl -fsSL https://get.harness-maxxing.com | LICENSE=HM-… bash                     # an existing license key: signed releases
 bash /path/to/harness-maxxing/install.sh       # from a local copy (a clone with web/dist): no download, updates = a newer copy
 ```
 
-A license key bought earlier keeps working, with signed updates: see [docs/user/23-license.md](docs/user/23-license.md).
+No key and no account. Companies that need an Enterprise license give their key afterwards in Settings → License
+(optional): see [docs/user/23-license.md](docs/user/23-license.md).
 
 Day-to-day: `maxxing status`, `maxxing doctor`, `maxxing update`. Remove: `maxxing uninstall`.
 

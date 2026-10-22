@@ -930,7 +930,7 @@ def test_no_license_is_never_a_warning(env, tmp_path, monkeypatch, capsys):
     capsys.readouterr()
     assert run_cli("license", "status") == 0
     out = capsys.readouterr().out
-    assert "– no license (none is needed" in out and "  ! " not in out
+    assert "– no Enterprise key (none is needed" in out and "updates come from the git repository" in out and "  ! " not in out
 
 
 @pytest.mark.parametrize("branch", ["--upload-pack=touch {mark};git-upload-pack", "-x", "a..b", "a b", "a;b", "/a",

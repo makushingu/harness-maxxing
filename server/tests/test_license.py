@@ -132,9 +132,13 @@ def test_machine_id_is_a_stable_hash(mx):
 
 def test_activate_stores_the_token_and_the_license(server, keys, mx, capsys):
     assert run_cli("license", "activate", "hm-abcd-efgh-jkmn-pqrs", "--no-fetch") == 0
-    assert config.get_secret(license.TOKEN) == "a1.tok" and config.get_secret(license.KEY) == "HM-ABCD-EFGH-JKMN-PQRS"
+    # a88: the key is a right of use, the server stays on git (no archive token, only the seat to free later)
+    assert not config.get_secret(license.TOKEN) and config.get_secret(license.SEAT) == "a1.tok"
+    assert config.get_secret(license.KEY) == "HM-ABCD-EFGH-JKMN-PQRS"
     st = license.status()
-    assert st["enabled"] and st["email"] == "buyer@example.com" and st["kind"] == "paid" and st["key_hint"].startswith("HM-ABCD")
+    assert not st["enabled"] and st["has_key"] and st["email"] == "buyer@example.com" and st["kind"] == "paid"
+    assert st["key_hint"].startswith("HM-ABCD")
+    assert "Enterprise key recorded" in capsys.readouterr().out
     path, body = server.calls[0]
     assert path == "/v1/activate" and len(body["machine_id"]) == 64 and body["hostname"]
 
@@ -421,3 +425,31 @@ def test_the_move_starts_from_the_installed_version_not_a_fetched_one(code, serv
     assert r["moved"] and r["version"] == "1.0.0" and r["commit"] == v100
     assert (opt / "server" / "maxxing" / "__init__.py").read_text().strip() == '__version__ = "1.0.0"'
     assert "LIMIT = 50" in (opt / "server" / "maxxing" / "rules.py").read_text()
+
+
+def test_removing_the_key_frees_its_seat(server, keys, mx, capsys):
+    license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert run_cli("license", "remove") == 0
+    assert "Enterprise key removed" in capsys.readouterr().out
+    assert server.calls[-1][0] == "/v1/release"
+    assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
+    assert not license.status()["has_key"]
+
+
+def test_the_key_from_the_api(server, keys, client):
+    c = client
+    assert c.get("/api/settings/license").json()["has_key"] is False
+    assert c.put("/api/settings/license", json={"key": "nope"}).status_code == 400
+    r = c.put("/api/settings/license", json={"key": "HM-ABCD-EFGH-JKMN-PQRS"}).json()
+    assert r["has_key"] and r["kind"] == "paid" and r["enabled"] is False and "HM-ABCD-EFGH-JKMN-PQRS" not in str(r)
+    server.refuse = {"ok": False, "error": "limit", "message": "already on 2 servers"}
+    r = c.put("/api/settings/license", json={"key": "HM-ABCD-EFGH-JKMN-PQRS"})
+    assert r.status_code == 400 and "already on 2 servers" in r.text
+    assert c.delete("/api/settings/license").json()["has_key"] is False
+
+
+def test_a_moved_install_keeps_the_seat_of_its_key(code, server, keys, tmp_path, monkeypatch):
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    _git("push", "-q", "origin", "HEAD:stable", cwd=code["work"])
+    assert license.move_to_git()["moved"]
+    assert config.get_secret(license.SEAT) == "a1.tok" and not license.enabled() and license.status()["has_key"]

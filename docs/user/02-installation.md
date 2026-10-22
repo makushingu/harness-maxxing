@@ -32,8 +32,8 @@ It asks three questions (access mode, domain, restore a backup), then clones the
 `curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
 Harness Maxxing is free under a fair source license: see [License](license).
 
-You already have a license key (`HM-XXXX-XXXX-XXXX-XXXX`)? It keeps working: add `LICENSE=HM-…` to the command
-and the installer downloads the signed release instead and **verifies its signature**; see [License](license).
+No license key is asked. A company that needs an Enterprise key gives it after the install, in Settings → License
+(or the onboarding step About you); see [License](license).
 
 After the questions the installer runs unattended with a live progress display. Voice messages are enabled with the
 local engine (on servers with at least 3 GB of RAM) and the time zone is chosen in the web onboarding:
@@ -42,8 +42,7 @@ local engine (on servers with at least 3 GB of RAM) and the time zone is chosen 
 2. installs every system package it needs **in one pass** (git, curl, python3, gnupg, openssh-client, cron, ffmpeg,
    jq, ripgrep, ImageMagick, the browser libraries, unattended-upgrades, fail2ban...), turning Ubuntu's `universe`
    component on if the image shipped without it; on a small server without swap it adds a 2 GB swap file;
-3. clones the code into `/opt/claude-maxxing` (with a license key: downloads the signed release, checks its sha256
-   and its signature, and puts it there as a local git repository); your customizations sit on top of it, see
+3. clones the code into `/opt/claude-maxxing`; your customizations sit on top of it, see
    [Customizing](customizing);
 4. installs **uv** (Python toolchain) in `/usr/local/bin`, the Python of the server in
    `/var/lib/claude-maxxing/tools/python`, and the **Claude Code CLI**: each one a pinned version whose checksum is
@@ -149,10 +148,10 @@ curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `REPO`, `BRANCH` | `makushingu/harness-maxxing`, `stable` (`main` with `LICENSE`) | the git repository and branch the code and the updates come from (`stable` = published versions, `main` = work in progress) |
+| `REPO`, `BRANCH` | `makushingu/harness-maxxing`, `stable` | the git repository and branch the code and the updates come from (`stable` = published versions, `main` = work in progress) |
 | `GH_TOKEN` | – | a read token, only for a private fork or mirror (`REPO=owner/name`) |
-| `LICENSE` | – | optional: an existing license key - the code then comes from signed releases (see [License](license)) |
-| `LICENSE_API` | `https://api.harness-maxxing.com` | license server (licensed installs only) |
+| `LICENSE` | – | optional: an Enterprise key, recorded at the end (same as Settings → License, see [License](license)) |
+| `LICENSE_API` | `https://api.harness-maxxing.com` | license server (checks an Enterprise key) |
 | `INSTALL_DIR` | `/opt/claude-maxxing` | code + Python environment |
 | `WORKSPACE` | `/root/maxxing` | your workspace |
 | `STATE_DIR` | `/var/lib/claude-maxxing` | configuration and state |
@@ -174,8 +173,8 @@ curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com
 
 ## Restore on a new server
 
-Moving to a new server? Install with your backup repository (with a license key, first free the old server:
-`maxxing license release` on it, see [License](license)):
+Moving to a new server? Install with your backup repository (with an Enterprise key, first free it on the old
+server: Settings → License → Remove the key, see [License](license)):
 
 ```bash
 curl -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash

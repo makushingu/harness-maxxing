@@ -44,7 +44,8 @@ MCowBQYDK2VwAyEAfg3vG94nEzS93VB0zGtE2RH+1VF317mLumbHgMMkOPY=
 DEFAULT_KID = "k1"           # a release without `kid` is checked with this key
 PUBKEY = PUBKEYS[DEFAULT_KID]
 KEY = "license_key"          # secrets.json
-TOKEN = "license_token"      # secrets.json (activation token of this server)
+TOKEN = "license_token"      # secrets.json (activation token of a server still on signed archives, before a87)
+SEAT = "license_seat"        # secrets.json (activation token of a key: only to free the seat, `release`)
 PING_EVERY = 24 * 3600
 USER_AGENT = f"harness-maxxing/{__version__}"
 
@@ -130,10 +131,11 @@ def _save_info(lic: dict | None = None, **extra) -> dict:
 
 
 def status() -> dict:
-    """What the UI / doctor show (no secret)."""
+    """What the UI / doctor show (no secret). `enabled` = still on signed archives; `has_key` = an Enterprise key
+    is recorded (fair source: the key is a right of use, it changes nothing in how the server runs)."""
     info = dict(config.load_config().get("license") or {})
     key = config.get_secret(KEY)
-    info.update(enabled=enabled(), key_hint=(key[:7] + "…" + key[-4:]) if key else "", api=API)
+    info.update(enabled=enabled(), has_key=bool(key), key_hint=(key[:7] + "…" + key[-4:]) if key else "", api=API)
     return info
 
 
@@ -149,21 +151,43 @@ def disk_version(code: Path | None = None) -> str:
 
 
 def activate(key: str, version: str | None = None) -> dict:
-    """Activate this server with a license key -> server answer (license, release manifest)."""
+    """Record an Enterprise key on this server: the license server checks it and counts this server (one key =
+    one server) -> its answer. Since 2.0.0a88 the code keeps coming from git: the activation token only frees
+    the seat later (SEAT), it no longer switches the server to signed archives (TOKEN)."""
     r = _post("/v1/activate", {"key": key.strip(), "machine_id": machine_id(), "hostname": socket.gethostname(),
                                "os": os_name(), "version": version or disk_version()})
     config.set_secret(KEY, key.strip().upper())
-    config.set_secret(TOKEN, r["token"])
-    _save_info(r.get("license"), activation_id=r.get("activation_id"), activated_at=time.time(),
-               latest=r.get("latest"), message=r.get("message") or "")
+    if enabled():
+        config.set_secret(TOKEN, r["token"])          # still on archives (a pre-a87 install): moves to git soon
+    else:
+        config.set_secret(SEAT, r["token"])
+    _save_info(r.get("license"), activation_id=r.get("activation_id"), activated_at=time.time(), message="")
     return r
+
+
+def remove_key() -> dict:
+    """Forget the Enterprise key; frees its seat on the license server when it can (offline: forgotten anyway)."""
+    freed = False
+    if config.get_secret(SEAT) and not enabled():
+        try:
+            release()
+            freed = True
+        except LicenseError:
+            pass
+    config.set_secret(KEY, None)
+    config.set_secret(SEAT, None)
+    cfg = config.load_config()
+    lic = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
+    config.update_config(license=lic)
+    return {"ok": True, "freed": freed}
 
 
 def _rotate(r: dict) -> None:
     """The license server may hand out a new activation token in any answer: keep it."""
     tok = r.get("token") if isinstance(r, dict) else None
-    if isinstance(tok, str) and tok.strip() and tok != config.get_secret(TOKEN):
-        config.set_secret(TOKEN, tok.strip())
+    name = TOKEN if enabled() else SEAT
+    if isinstance(tok, str) and tok.strip() and tok != config.get_secret(name):
+        config.set_secret(name, tok.strip())
 
 
 def check(version: str | None = None) -> dict:
@@ -192,11 +216,12 @@ def ping(health: dict | None = None) -> dict:
 
 def release() -> dict:
     """Free this server's place on the license (moving to another server)."""
-    tok = config.get_secret(TOKEN)
+    tok = config.get_secret(TOKEN) or config.get_secret(SEAT)
     if not tok:
         raise LicenseError("this server has no license", "no_license")
     r = _post("/v1/release", {"token": tok, "machine_id": machine_id()})
     config.set_secret(TOKEN, None)
+    config.set_secret(SEAT, None)
     _save_info(released_at=time.time())
     return r
 
@@ -440,6 +465,7 @@ def _move_to_git(code: Path | None) -> dict:
         _git(code, "update-ref", "-d", f"refs/remotes/origin/{cur}")
     except (LicenseError, OSError, subprocess.TimeoutExpired) as e:
         return {"ok": False, "error": str(e)[-300:]}
+    config.set_secret(SEAT, config.get_secret(TOKEN))  # the key keeps its seat (freed by `remove_key`)
     config.set_secret(TOKEN, None)
     _save_info(moved_to_git=time.time(), move_error="")
     return {"ok": True, "moved": True, "branch": GIT_BRANCH, "commit": target, "version": version}
@@ -448,7 +474,7 @@ def _move_to_git(code: Path | None) -> dict:
 def try_move_to_git() -> dict:
     """move_to_git() + the outcome kept in config.json "license" (move_error), for doctor and the UI."""
     r = move_to_git()
-    if not r.get("ok"):
+    if not r.get("ok") and r.get("error") != "already moving":   # the other trigger is on it
         _save_info(move_error=r.get("error") or "?", move_tried_at=time.time())
     return r
 
