@@ -14,7 +14,7 @@ docs/dev/INTERNALS.md · UI rules: docs/dev/DESIGN.md. Change the contract docs 
 - Tests never touch the real system: use MAXXING_STATE=/tmp/..., MAXXING_CLAUDE_BIN=fake claude,
   MAXXING_SPAWN=direct, MAXXING_CRONTAB_FILE, MAXXING_TELEGRAM_API / MAXXING_GITHUB_API mocks.
   NEVER edit the real root crontab, NEVER poll a real Telegram bot (getUpdates), NEVER touch
-  /root/claude-code (that is the author's production v1) or the services claude-code-ui / claude-telegram-bot.
+  another installation or production service running on the same machine.
 - Dev servers: each contributor uses its own port (8801-8809) and its own MAXXING_STATE.
 - Every release: `CHANGELOG.md` entry (shown in the app in Settings -> Updates, in "What's new" after an update,
   and as the page "All updates" of the member area), `docs/dev/CHANGES.md` entry,
