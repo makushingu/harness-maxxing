@@ -143,7 +143,12 @@ rewrite, running sessions skipped) — open streams then receive `reset`. **Even
 {type:"init", model, cwd, at}
 {type:"result", ok, cost_usd, duration_ms, model, usage:{input,output,cache_read,cache_write}, at}   // cost_usd = this turn only (the raw total_cost_usd is the thread's running total)
 {type:"note", text, level:"info"|"warn"|"error", at}   // compact, handoff, resume fallback, stop…
-{type:"hide", ref, hidden, at}                      // ref = `at` of a user event: hidden (true) or shown again
+{type:"hide", ref, hidden, at}                      // ref = `at` of a user event: hidden (true) or shown again{type:"task", id, tool_use_id?, at, state?, kind?, background?, description?, agent_type?, activity?, last_tool?, tokens?, tools?, duration_ms?, summary?}
+                                                    // background work of Claude Code (task_started / _progress / _updated / _notification):
+                                                    // a partial update, merged on `id`; `tool_use_id` = the Agent / Bash call that started it.
+                                                    // state: running|completed|failed|stopped · kind: agent|shell|other ·
+                                                    // summary = the agent's final report (≤ 20 kB) · commands run by a sub-agent are dropped.
+                                                    // Not counted in `tail` / `limit` (they are not thread rows).
 ```
 
 ## Global bus
