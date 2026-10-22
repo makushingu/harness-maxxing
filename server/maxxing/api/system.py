@@ -332,10 +332,34 @@ async def usage(force: bool = False):
 _ping_task: asyncio.Task | None = None
 
 
+_STARTED = time.time()
+MOVE_QUIET_S = float(os.environ.get("MAXXING_MOVE_QUIET_S", "300"))
+
+
+async def _move_to_git() -> None:
+    """Licensed install -> git, never while an update may still be finishing (it restarted this server and checks
+    its health): 5 min after the start and no `maxxing-update` unit running."""
+    from .. import license
+    from ..auto_update import _update_running
+    try:
+        await asyncio.sleep(max(0.0, _STARTED + MOVE_QUIET_S - time.time()))
+        if await asyncio.to_thread(_update_running):
+            return
+        r = await asyncio.to_thread(license.try_move_to_git)
+        if r.get("moved"):
+            log.info("licensed install moved to git (%s at %s)", r.get("branch"), (r.get("commit") or "")[:8])
+        elif r.get("error"):
+            log.info("move to git: %s", r["error"])
+    except Exception as e:  # noqa: BLE001 - tried again later
+        log.warning("move to git failed: %s", e)
+
+
 async def _ping_loop() -> None:
     from .. import license
     await asyncio.sleep(60)
     while True:
+        if license.enabled() and license.move_due():
+            await _move_to_git()
         try:
             if license.enabled() and license.ping_due():
                 await asyncio.to_thread(license.ping, await asyncio.to_thread(license.health_summary))
@@ -362,6 +386,9 @@ async def _after_update() -> None:
         await asyncio.to_thread(smartupdate.after_update)
     except Exception as e:  # noqa: BLE001
         log.warning("after-update checks failed: %s", e)
+    from .. import license
+    if license.enabled():                              # fair source: leave the signed archives for git (a87)
+        await _move_to_git()
 
 
 async def startup() -> None:

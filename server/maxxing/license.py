@@ -1,5 +1,8 @@
 """License: activation, updates from signed archives, daily ping (api.harness-maxxing.com).
 
+Fair source (2.0.0a87): a licensed install moves to the public git repository by itself (`move_to_git`, right
+after an update and once a day), so the archives below only matter until then.
+
 A licensed install has no GitHub remote. Each published version is a .tar.gz of the code, signed
 with ed25519 (message "harness-maxxing|<version>|<sha256>", public keys below: a release names the key
 that signed it with `kid`, none = "k1"; an unknown key id is refused, so the key can be rotated by shipping
@@ -22,6 +25,7 @@ import socket
 import subprocess
 import tarfile
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -348,6 +352,107 @@ def fetch_latest(branch: str = "main", allow_downgrade: bool = False) -> dict:
     return {"ok": True, "version": rel["version"], "commit": commit, "latest": r.get("latest"), "message": r.get("message") or ""}
 
 
+# ---- move to git (fair source) -----------------------------------------------------------------
+GIT_URL = os.environ.get("MAXXING_GIT_URL", "https://github.com/makushingu/harness-maxxing.git")
+GIT_BRANCH = "stable"
+PRE_GIT_REF = "refs/maxxing/pre-git"          # HEAD before the move (to inspect or go back by hand)
+
+
+def _version_at(code: Path, rev: str) -> str | None:
+    try:
+        src = _git(code, "show", f"{rev}:server/maxxing/__init__.py")
+    except LicenseError:
+        return None
+    for line in src.splitlines():
+        if line.startswith("__version__"):
+            return line.split("=", 1)[1].strip().strip("\"'")
+    return None
+
+
+_move_lock = threading.Lock()
+
+
+def move_to_git(code: Path | None = None) -> dict:
+    """Harness Maxxing is fair source: a licensed install leaves the signed archives for the public repository.
+    The code directory gets `origin` = GIT_URL, its branch becomes `stable` at the same version (the GitHub commit
+    with the same files, else the same version number) with the customizations rebased on top, and the activation
+    token is forgotten (the key stays: Settings -> License). Then `maxxing update` works as on any git install.
+    Never raises: {ok, moved?, skipped?, error?}. Nothing changes until the very end; a failure is retried later."""
+    if not _move_lock.acquire(blocking=False):
+        return {"ok": False, "error": "already moving"}
+    try:
+        return _move_to_git(code)
+    finally:
+        _move_lock.release()
+
+
+def _move_to_git(code: Path | None) -> dict:
+    from . import customs
+    code = code or config.CODE
+    if not enabled():
+        return {"ok": True, "moved": False, "skipped": "not a licensed install"}
+    if not (code / ".git").exists():
+        return {"ok": False, "error": "no git directory in the code folder"}
+    if customs.rebase_in_progress() or customs.pending():
+        return {"ok": False, "error": "an update is being finished (customizations being adapted): later"}
+    if customs.dirty_files():
+        return {"ok": False, "error": "uncommitted changes in the code folder: `maxxing update` saves them first"}
+    try:
+        cur = _git(code, "rev-parse", "--abbrev-ref", "HEAD")
+        if cur == "HEAD":
+            return {"ok": False, "error": "detached HEAD (a version under test): later"}
+        head = _git(code, "rev-parse", "HEAD")
+        # the licensed version that runs (a newer archive may be fetched but not installed): customizations = base..HEAD
+        base = _git(code, "merge-base", head, f"refs/remotes/origin/{cur}")
+        try:
+            _git(code, "remote", "get-url", "origin")
+            _git(code, "remote", "set-url", "origin", GIT_URL)
+        except LicenseError:
+            _git(code, "remote", "add", "origin", GIT_URL)
+        _git(code, "fetch", "-q", "origin", "--", f"+refs/heads/{GIT_BRANCH}:refs/remotes/origin/{GIT_BRANCH}",
+             env={"GIT_TERMINAL_PROMPT": "0"}, timeout=300)
+        tree, version = _git(code, "rev-parse", f"{base}^{{tree}}"), _version_at(code, base)
+        target = None
+        for rec in _git(code, "log", "--format=%H %T", "-n", "500", f"refs/remotes/origin/{GIT_BRANCH}").splitlines():
+            sha, t = rec.split()
+            if t == tree:
+                target = sha
+                break
+            if target is None and version and _version_at(code, sha) == version:
+                target = sha                                   # same version, keep looking for the same files
+        if not target:
+            return {"ok": False, "error": f"{version or 'this version'} is not on {GIT_BRANCH} yet: later"}
+        _git(code, "update-ref", PRE_GIT_REF, head)
+        if _git(code, "branch", "--list", GIT_BRANCH):
+            _git(code, "branch", "-m", GIT_BRANCH, f"{GIT_BRANCH}-before-git-{int(time.time())}")
+        _git(code, "checkout", "-q", "-b", GIT_BRANCH)
+        customs.ensure_identity()
+        p = subprocess.run(["git", "-C", str(code), "rebase", "-q", "--onto", target, base, GIT_BRANCH],
+                           capture_output=True, text=True, timeout=300)
+        if p.returncode != 0:
+            subprocess.run(["git", "-C", str(code), "rebase", "--abort"], capture_output=True, timeout=60)
+            _git(code, "checkout", "-q", "-f", cur)
+            _git(code, "branch", "-D", GIT_BRANCH)
+            return {"ok": False, "error": "a customization does not apply on the git version: "
+                                          + (p.stderr or p.stdout).strip()[-300:]}
+        _git(code, "branch", "--set-upstream-to", f"origin/{GIT_BRANCH}", GIT_BRANCH)
+        _git(code, "branch", "-D", cur)
+        _git(code, "update-ref", "-d", f"refs/remotes/origin/{cur}")
+    except (LicenseError, OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "error": str(e)[-300:]}
+    config.set_secret(TOKEN, None)
+    _save_info(moved_to_git=time.time(), move_error="")
+    return {"ok": True, "moved": True, "branch": GIT_BRANCH, "commit": target, "version": version}
+
+
+def try_move_to_git() -> dict:
+    """move_to_git() + the outcome kept in config.json "license" (move_error), for doctor and the UI."""
+    r = move_to_git()
+    if not r.get("ok"):
+        _save_info(move_error=r.get("error") or "?", move_tried_at=time.time())
+    return r
+
+
 # ---- daily ping (started by the web server) ----------------------------------------------------
 def health_summary() -> dict:
     """A few health codes for the seller (no paths, prompts, names or keys)."""
@@ -359,6 +464,11 @@ def health_summary() -> dict:
                 "claude_auth": h["claude_auth"], "backup_age_h": h["backup_age_h"], "os": os_name()}
     except Exception as e:  # noqa: BLE001 - the ping must never fail because of the health probe
         return {"error": type(e).__name__}
+
+
+def move_due() -> bool:
+    last = (config.load_config().get("license") or {}).get("move_tried_at") or 0
+    return time.time() - float(last) > 6 * 3600
 
 
 def ping_due() -> bool:
