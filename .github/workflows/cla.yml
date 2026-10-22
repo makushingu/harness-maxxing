@@ -26,7 +26,7 @@ jobs:
           path-to-signatures: signatures/cla.json
           path-to-document: https://github.com/${{ github.repository }}/blob/main/CLA.md
           branch: cla-signatures
-          allowlist: FEUAZUR,rorogeno,dependabot[bot],github-actions[bot]
+          allowlist: FEUAZUR,romainmaxxing,dependabot[bot],github-actions[bot]
           lock-pullrequest-aftermerge: false
           custom-notsigned-prcomment: >-
             Thank you for your contribution! Before it can be merged, please read the
