@@ -1,0 +1,75 @@
+Harness Maxxing Fair Source License 1.0
+
+Copyright (c) 2026 Harness Maxxing - FEU and RomainPlus.
+All rights not expressly granted below are reserved by the Licensors.
+
+"Licensors" means FEU and RomainPlus, jointly, the owners of Harness Maxxing.
+"Software" means Harness Maxxing: the source code, documentation and assets in this repository,
+and any version of them.
+"You" means the individual or the single legal entity exercising rights under this license.
+
+1. What you may do
+
+   Free of charge, you may use, copy, modify, fork and redistribute the Software, in source or
+   compiled form, with or without changes, provided that you follow sections 2 to 5.
+
+2. Organisations: one entity
+
+   An organisation (company, association, administration or any other legal entity) may use the
+   Software only for the internal needs of that one legal entity. Using it for, or making it
+   available to, its affiliates, subsidiaries, group companies, clients or any other third party
+   requires a commercial license from the Licensors (Harness Maxxing Enterprise:
+   https://harness-maxxing.com/#enterprise).
+
+   Individuals may use the Software for any personal or professional purpose of their own.
+
+3. What you may not do without the Licensors' prior written consent
+
+   a. sell, resell, rent or license the Software or any fork, modified version or part of it,
+      or charge any fee for distributing it;
+   b. include the Software, a fork or a substantial part of it in a paid product, a paid offer
+      or a paid service, including paid installation, setup, support or consulting whose value
+      derives entirely or substantially from the Software;
+   c. offer the Software, a fork or a substantial part of it as a hosted or managed service for
+      a fee, or as part of one;
+   d. use the names "Harness Maxxing", "Maxxing" or the Harness Maxxing logos (or anything
+      confusingly similar) for a fork, a product or a service, other than to state truthfully
+      that your work is based on Harness Maxxing.
+
+4. Conditions for redistribution
+
+   Every copy or fork you distribute must include this license and the copyright notice above,
+   unchanged, and must state clearly that it has been modified, if it has. You may not impose
+   additional restrictions on recipients that conflict with this license.
+
+5. Contributions
+
+   Contributions (pull requests, patches, code, documentation, translations or other material
+   submitted to the Licensors' repositories) are accepted only under the Harness Maxxing
+   Contributor License Agreement (CLA.md). The Licensors may license contributed material under
+   this license and under their commercial licenses.
+
+6. Third-party components
+
+   Third-party components included with the Software keep their own licenses. Nothing in this
+   license restricts rights granted by those licenses.
+
+7. No warranty, no liability
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+   BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE LICENSORS OR
+   CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+8. Termination
+
+   If you breach this license, your rights under it end automatically. They are restored if you
+   stop the breach and fix it within 30 days after the Licensors notify you of it, unless you
+   have already been notified of a breach before. Copies received from you keep their rights as
+   long as their recipients comply with this license.
+
+9. Commercial licenses
+
+   Anything this license does not allow can be requested from the Licensors:
+   https://harness-maxxing.com/#enterprise

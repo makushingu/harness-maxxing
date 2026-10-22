@@ -1,0 +1,30 @@
+{
+  "id": "affiliate",
+  "project": "affiliate",
+  "emoji": "🤝",
+  "icon": "handshake",
+  "title": {"en": "Affiliate site", "fr": "Site d'affiliation"},
+  "description": {
+    "en": "Grow a niche affiliate site: pages, SEO articles, affiliate links and Google rankings.",
+    "fr": "Développez un site d'affiliation de niche : pages, articles SEO, liens affiliés et positions Google."
+  },
+  "topics": ["website", "blog", "affiliation", "google"],
+  "crons": [
+    {
+      "key": "affiliate-broken-links",
+      "name": "Broken affiliate links",
+      "schedule": "0 7 * * 3",
+      "topic": "affiliation",
+      "prompt": "Check the affiliate links of the site described in the project memory: crawl its pages (sitemap.xml first), collect outbound affiliate links, and list links that return an error, redirect to a home or search page, or point to a product marked unavailable or out of stock. Group the results by page with the suggested fix. If the site URL is not in memory, report it in one line and stop. Keep it under 20 lines.",
+      "notify": "always"
+    },
+    {
+      "key": "affiliate-seo-report",
+      "name": "SEO report",
+      "schedule": "0 8 * * 1",
+      "topic": "google",
+      "prompt": "Write the weekly SEO report for the site in the project memory from Google Search Console: clicks, impressions, CTR and average position for the last 7 days vs the 7 days before, top 5 pages up and down, queries ranked 5-15 worth improving, and indexing or Core Web Vitals issues. Suggest at most 3 actions. If Search Console access is not set up, report it in one line and stop.",
+      "notify": "always"
+    }
+  ]
+}

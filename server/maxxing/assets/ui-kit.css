@@ -1,0 +1,154 @@
+/* Harness Maxxing UI kit for extensions: the app's look in plain CSS classes (`ui-*`), for page extensions
+   (loaded by the app around /x/<id>) and HTML widgets (inlined in the widget frame). Everything reads the app's
+   theme variables, so light/dark, the accent colour, the background tint and the density follow by themselves.
+   Selectors sit inside :where(), so an extension's own CSS always wins. Reference: docs/dev/DESIGN.md §5 and the
+   extensions README. */
+:where(.mx-ext, [data-mx-kit]) {
+  --ui-radius: var(--radius, 10px);
+  --ui-pad: var(--pad-card, 20px);
+  --ui-row: var(--row-h, 40px);
+  color: var(--foreground);
+}
+:where(.mx-ext, [data-mx-kit]) :where(.ui-page) { display: flex; flex-direction: column; gap: 24px; max-width: 1152px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-stack) { display: flex; flex-direction: column; gap: 12px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-row) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-spacer) { flex: 1; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-grid) { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-section) { display: flex; flex-direction: column; gap: 12px; }
+
+/* type */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-h1) { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-h2) { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 600; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-h3) { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 500; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-text) { margin: 0; font-size: 14px; line-height: 1.55; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-muted) { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-small) { color: var(--muted-foreground); font-size: 12px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-label) { display: block; font-size: 13px; font-weight: 500; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-num) { font-variant-numeric: tabular-nums; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-link) { all: unset; cursor: pointer; color: var(--primary); font-size: inherit; font-weight: 500; border-radius: 4px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-link:hover) { text-decoration: underline; text-underline-offset: 3px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-code) { font-family: var(--mx-font-mono, ui-monospace, monospace); font-size: .85em; padding: 1px 5px; border-radius: 5px; background: var(--muted); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-kbd) { font: 500 11px/1 var(--mx-font-mono, ui-monospace, monospace); padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-separator) { height: 1px; border: 0; margin: 0; background: var(--border); }
+
+/* icons: ctx.icon(name) in a page; any inline <svg> works */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-icon, .ui-btn svg, .ui-badge svg, .ui-tile svg, .ui-icon-box svg) { flex: none; width: 16px; height: 16px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-icon-box) { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px;
+  color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-icon-box.ui-lg) { width: 44px; height: 44px; border-radius: 10px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-icon-box.ui-lg svg) { width: 20px; height: 20px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-icon-box.ui-neutral) { color: var(--muted-foreground); background: var(--muted); }
+
+/* surfaces */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-card) { display: flex; flex-direction: column; gap: 12px; padding: var(--ui-pad); border: 1px solid var(--border);
+  border-radius: calc(var(--ui-radius) + 4px); background: var(--card); color: var(--card-foreground, var(--foreground)); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-card-header) { display: flex; align-items: flex-start; gap: 12px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-card-header > div:not(.ui-icon-box)) { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-card-footer) { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout) { display: flex; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--ui-radius);
+  background: color-mix(in oklab, var(--muted) 60%, transparent); font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout svg) { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-info) { border-color: color-mix(in oklab, var(--primary) 30%, transparent); background: color-mix(in oklab, var(--primary) 7%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-info svg) { color: var(--primary); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-success) { border-color: color-mix(in oklab, var(--success) 30%, transparent); background: color-mix(in oklab, var(--success) 8%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-success svg) { color: var(--success); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-warning) { border-color: color-mix(in oklab, var(--warning) 35%, transparent); background: color-mix(in oklab, var(--warning) 8%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-warning svg) { color: var(--warning); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-error) { border-color: color-mix(in oklab, var(--destructive) 30%, transparent); background: color-mix(in oklab, var(--destructive) 8%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-callout.ui-error svg) { color: var(--destructive); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-empty) { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 16px; text-align: center; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-empty .ui-icon-box) { margin-bottom: 4px; }
+
+/* tile: a clickable card (icon, title, one line) - use on a <button> or <a> */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-tile) { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--ui-radius); background: color-mix(in oklab, var(--background) 40%, transparent);
+  transition: border-color .15s, background-color .15s; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-tile:hover) { border-color: color-mix(in oklab, var(--primary) 50%, transparent); background: color-mix(in oklab, var(--accent) 60%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-tile > div:not(.ui-icon-box)) { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-tile > div > b) { font-size: 14px; font-weight: 500; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-tile > div > span) { color: var(--muted-foreground); font-size: 12px; line-height: 1.4; }
+
+/* buttons: .ui-btn = primary; add .ui-secondary / .ui-outline / .ui-ghost / .ui-danger, and .ui-sm / .ui-icon-only */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn) { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 36px; padding: 0 16px; border-radius: calc(var(--ui-radius) - 2px); font-size: 14px; font-weight: 500; white-space: nowrap; user-select: none;
+  background: var(--primary); color: var(--primary-foreground); transition: background-color .15s, border-color .15s, opacity .15s; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn:hover) { background: color-mix(in oklab, var(--primary) 90%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-secondary) { background: var(--secondary); color: var(--secondary-foreground, var(--foreground)); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-secondary:hover) { background: color-mix(in oklab, var(--secondary) 80%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-outline) { background: transparent; color: var(--foreground); border: 1px solid var(--input, var(--border)); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-outline:hover, .ui-btn.ui-ghost:hover) { background: var(--accent); color: var(--accent-foreground, var(--foreground)); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-ghost) { background: transparent; color: var(--foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-danger) { background: var(--destructive); color: var(--destructive-foreground, #fff); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-sm) { height: 32px; padding: 0 12px; font-size: 13px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-icon-only) { width: 36px; padding: 0; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-sm.ui-icon-only) { width: 32px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn:disabled, .ui-btn[aria-disabled="true"]) { opacity: .5; pointer-events: none; }
+
+/* forms */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-field) { display: flex; flex-direction: column; gap: 6px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-input, .ui-select, .ui-textarea) { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; padding: 4px 12px;
+  border: 1px solid var(--input, var(--border)); border-radius: calc(var(--ui-radius) - 2px); background: transparent; color: var(--foreground);
+  font: inherit; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-textarea) { height: auto; min-height: 80px; padding: 8px 12px; line-height: 1.5; resize: vertical; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-select) { appearance: auto; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-input::placeholder, .ui-textarea::placeholder) { color: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-input:focus-visible, .ui-select:focus-visible, .ui-textarea:focus-visible) { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 25%, transparent); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-check) { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); }
+
+/* badges and status dots: .ui-success / .ui-warning / .ui-error / .ui-primary / .ui-outline */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge) { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 6px; border: 1px solid transparent; border-radius: 6px;
+  font-size: 12px; font-weight: 500; line-height: 1.35; white-space: nowrap; background: var(--muted); color: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge svg) { width: 12px; height: 12px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge.ui-primary) { background: color-mix(in oklab, var(--primary) 14%, transparent); color: var(--primary); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge.ui-success) { background: color-mix(in oklab, var(--success) 12%, transparent); border-color: color-mix(in oklab, var(--success) 25%, transparent); color: var(--success); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge.ui-warning) { background: color-mix(in oklab, var(--warning) 12%, transparent); border-color: color-mix(in oklab, var(--warning) 30%, transparent); color: var(--warning); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge.ui-error) { background: color-mix(in oklab, var(--destructive) 12%, transparent); border-color: color-mix(in oklab, var(--destructive) 25%, transparent); color: var(--destructive); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-badge.ui-outline) { background: transparent; border-color: var(--border); color: var(--foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-dot) { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-dot.ui-success) { background: var(--success); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-dot.ui-warning) { background: var(--warning); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-dot.ui-error) { background: var(--destructive); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-dot.ui-primary) { background: var(--primary); }
+
+/* data: lists, tables, figures */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-list) { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: calc(var(--ui-radius) + 4px); background: var(--card); overflow: hidden; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-list > li) { display: flex; align-items: center; gap: 12px; min-height: var(--ui-row); padding: 8px 16px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-list > li + li) { border-top: 1px solid var(--border); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-table) { width: 100%; border-collapse: collapse; font-size: 14px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-table th) { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-table td) { height: var(--ui-row); padding: 6px 12px; border-bottom: 1px solid var(--border); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-table tr:last-child td) { border-bottom: 0; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-table tbody tr:hover) { background: color-mix(in oklab, var(--accent) 50%, transparent); }
+/* wide tables scroll sideways instead of pushing the page: wrap them in .ui-table-wrap, or on phones a bare table
+   scrolls by itself */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-table-wrap) { max-width: 100%; overflow-x: auto; }
+@media (max-width: 639px) {
+  :where(.mx-ext, [data-mx-kit]) :where(:not(.ui-table-wrap) > .ui-table) { display: block; max-width: 100%; overflow-x: auto; }
+}
+:where(.mx-ext, [data-mx-kit]) :where(.ui-stat) { display: flex; flex-direction: column; gap: 2px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-stat-value) { font-size: 28px; line-height: 1.15; font-weight: 600; letter-spacing: -.02em; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-stat-label) { font-size: 13px; color: var(--muted-foreground); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-progress) { height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-progress > span) { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width .2s; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-skeleton) { border-radius: 6px; background: var(--muted); animation: ui-pulse 1.6s ease-in-out infinite; }
+@keyframes ui-pulse { 50% { opacity: .55; } }
+
+/* numbered steps */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-steps) { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin: 0; padding: 0; list-style: none; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-steps > li) { display: flex; gap: 12px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-steps > li > div) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-step-num) { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, transparent); }
+
+/* focus: always visible, like the app */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-btn, .ui-tile, .ui-link):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (pointer: coarse) {
+  :where(.mx-ext, [data-mx-kit]) :where(.ui-btn) { height: 44px; }
+  :where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-sm) { height: 40px; }
+  :where(.mx-ext, [data-mx-kit]) :where(.ui-btn.ui-icon-only) { width: 44px; }
+  :where(.mx-ext, [data-mx-kit]) :where(.ui-input, .ui-select) { height: 44px; font-size: 16px; }
+  :where(.mx-ext, [data-mx-kit]) :where(.ui-textarea) { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.mx-ext, [data-mx-kit]) :where(.ui-skeleton) { animation: none; }
+}

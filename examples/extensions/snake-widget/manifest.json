@@ -1,0 +1,10 @@
+{
+  "id": "snake-widget",
+  "name": "Snake",
+  "type": "widget",
+  "icon": "gamepad-2",
+  "version": "1.0.0",
+  "api": 1,
+  "span": 1,
+  "height": 300
+}

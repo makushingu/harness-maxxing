@@ -1,0 +1,29 @@
+{
+  "id": "creator",
+  "project": "creator",
+  "emoji": "🎬",
+  "icon": "clapperboard",
+  "title": {
+    "en": "Content creator",
+    "fr": "Créateur de contenu"
+  },
+  "description": {
+    "en": "Plan, script, edit and measure your videos, shorts and podcasts, from idea to weekly stats review.",
+    "fr": "Planifiez, écrivez, montez et mesurez vos vidéos, shorts et podcasts, de l'idée au bilan hebdo."
+  },
+  "topics": [
+    "scripts",
+    "video",
+    "stats"
+  ],
+  "crons": [
+    {
+      "key": "creator-weekly-review",
+      "name": "Weekly stats review",
+      "schedule": "0 9 * * 1",
+      "topic": "stats",
+      "prompt": "Write last week's content review for the channels listed in the stats topic memory: per platform, views, watch time or average view duration, retention, CTR, follower change, and the 3 best and 3 worst posts compared with the week before and with the goals in memory. End with at most 3 concrete ideas for this week. Use the API keys noted in memory (e.g. YOUTUBE_API_KEY, INSTAGRAM_ACCESS_TOKEN); if no key is set up and no new export was added, report it in one line and stop.",
+      "notify": "always"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "hello-widget",
+  "name": "Hello widget",
+  "type": "widget",
+  "icon": "sparkles",
+  "version": "1.0.0",
+  "api": 1,
+  "span": 1,
+  "ttl": 60
+}

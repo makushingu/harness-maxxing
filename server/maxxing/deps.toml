@@ -1,0 +1,157 @@
+# External components Harness Maxxing installs on a server - the ONE list of what they are, which version, where
+# they come from, how they are checked, where they go and how they are removed. Read by server/maxxing/deps.py
+# (`maxxing deps list|verify|update|remove|clean|check`) and by install.sh (its `dep` reader understands only the
+# subset used here: [name] sections, key = "string", key = ["a", "b"], key = { k = "v" } on ONE line, # comments).
+# Maintainers refresh versions and checksums with `scripts/bump-pins.sh` (every value checked, see docs/dev).
+#
+# Keys of a component:
+#   title      what it is (doctor, `maxxing deps list`)
+#   kind       how it is installed: archive (tarball checked, extracted) | binary (one file checked) | uv-python |
+#              venv (Python packages of a hash-locked requirements file) | playwright (browser of that venv) |
+#              npm (npm ci of a lockfile) | apt (system package from a repository whose key is pinned) | hf (models)
+#   version    pinned version: the installer installs it, `maxxing deps update` moves an install to it
+#   url        download URL template: {version}, {arch} (= arch.<machine>); fetched over HTTPS into a private work
+#              directory and checked against sha256.<machine> BEFORE anything runs or is extracted
+#   update     auto = `maxxing update` moves it to the version of the new release (installed side by side, checked,
+#              then switched; the old one is kept until the new one works) | self = updates itself (Claude Code:
+#              Settings -> Claude), the pin is the first install | apt = security updates by unattended-upgrades |
+#              manual = installed on demand (`maxxing infra bucket install`), checked by `deps verify`
+#   osv        ecosystem/name for the weekly vulnerability check (`maxxing deps check`, api.osv.dev)
+#   lock       a lockfile pinning every package of the component with its hash (checked by the package manager)
+#   path       where it lives ({state} = the state directory, {home} = root's home)
+#   links      commands put in /usr/local/bin (wrappers or symlinks to the version in use)
+#   remove     what `maxxing deps remove <name>` / `maxxing uninstall --purge` deletes
+#   owner      every file of it must belong to this user (`deps verify`, doctor): another owner could replace code
+#              that root runs
+# Machines: x86_64 and aarch64 (the names of `uname -m`).
+schema = 1
+
+[uv]
+title = "uv (Python toolchain)"
+kind = "archive"
+version = "0.13.1"
+url = "https://github.com/astral-sh/uv/releases/download/{version}/uv-{arch}-unknown-linux-gnu.tar.gz"
+arch = { x86_64 = "x86_64", aarch64 = "aarch64" }
+sha256 = { x86_64 = "eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220", aarch64 = "9041c73c99fdc5892cf128140beb354eca9231d502068cc36e6cb53a8e59ad14" }
+path = "/usr/local/bin/uv"
+files = ["uv", "uvx"]
+remove = ["/usr/local/bin/uv", "/usr/local/bin/uvx"]
+update = "auto"
+owner = "root"
+osv = { ecosystem = "PyPI", name = "uv" }
+source = "https://github.com/astral-sh/uv/releases (sha256.sum of the release)"
+
+[python]
+title = "Python (managed by uv: the server and Scrapling)"
+kind = "uv-python"
+version = "3.12"
+path = "{state}/tools/python"
+remove = ["{state}/tools/python"]
+update = "auto"
+owner = "root"
+source = "python-build-standalone, downloaded and checked by the pinned uv (its checksums are built into uv)"
+
+[node]
+title = "Node.js (video rendering, PDFs)"
+kind = "archive"
+version = "22.23.3"
+url = "https://nodejs.org/dist/v{version}/node-v{version}-linux-{arch}.tar.xz"
+arch = { x86_64 = "x64", aarch64 = "arm64" }
+sha256 = { x86_64 = "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de", aarch64 = "a44aeb94849a299b22df10b9e622ec2f605c2183501bc40590705131de7c740f" }
+# one folder per version in {state}/tools/nodejs/<version>, "current" -> the one in use; /usr/local/bin/node, npm,
+# npx and corepack link to it unless the server has a Node.js of its own (then only Harness Maxxing's PATH has it)
+path = "{state}/tools/nodejs"
+links = ["node", "npm", "npx", "corepack"]
+remove = ["{state}/tools/nodejs"]
+update = "auto"
+owner = "root"
+source = "https://nodejs.org/dist/ (SHASUMS256.txt.asc, signed by a Node.js releaser)"
+
+[claude]
+title = "Claude Code"
+kind = "binary"
+version = "2.1.292"
+url = "https://downloads.claude.ai/claude-code-releases/{version}/linux-{arch}/claude"
+arch = { x86_64 = "x64", aarch64 = "arm64" }
+sha256 = { x86_64 = "a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3", aarch64 = "24caa9e6ff13bf227049a2626f1c816fc895023050f0ec3b12dbf14d897367e0" }
+path = "{home}/.local/bin/claude"
+links = ["claude"]
+remove = ["{home}/.local/bin/claude", "{home}/.local/share/claude", "/usr/local/bin/claude"]
+update = "self"
+owner = "root"
+osv = { ecosystem = "npm", name = "@anthropic-ai/claude-code" }
+source = "Anthropic's release manifest (downloads.claude.ai/claude-code-releases/<version>/manifest.json)"
+
+[caddy]
+title = "Caddy (HTTPS for a domain)"
+kind = "apt"
+key_url = "https://dl.cloudsmith.io/public/caddy/stable/gpg.key"
+key_fingerprint = "65760C51EDEA2017CEA2CA15155B6D79CA56EA34"
+keyring = "/usr/share/keyrings/caddy-stable-archive-keyring.gpg"
+apt_source = "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+apt_list = "/etc/apt/sources.list.d/caddy-stable.list"
+package = "caddy"
+path = "/usr/bin/caddy"
+remove = ["/usr/share/keyrings/caddy-stable-archive-keyring.gpg", "/etc/apt/sources.list.d/caddy-stable.list"]
+update = "apt"
+osv = { ecosystem = "Go", name = "github.com/caddyserver/caddy/v2" }
+source = "Caddy's apt repository, key checked against its fingerprint, apt source written by the installer"
+
+[scrapling]
+title = "Scrapling (web scraping) with Playwright"
+kind = "venv"
+version = "0.4.15"
+lock = "templates/scrapling/requirements.txt"
+# one virtualenv per version + lock in {state}/tools/scrapling/<version>-<lock hash>, "current" -> the one in use
+path = "{state}/tools/scrapling"
+links = ["scrapling", "scrapling-python"]
+remove = ["{state}/tools/scrapling", "/usr/local/bin/scrapling", "/usr/local/bin/scrapling-python"]
+update = "auto"
+owner = "root"
+osv = { ecosystem = "PyPI", name = "scrapling" }
+source = "PyPI, every package pinned with its sha256 (uv pip install --require-hashes)"
+
+[chromium]
+title = "Chromium (Playwright's build: Scrapling, video rendering and PDFs share it)"
+kind = "playwright"
+# the version is the browser revision of the Playwright pinned in the Scrapling lock
+path = "{state}/tools/browsers"
+remove = ["{state}/tools/browsers"]
+update = "auto"
+owner = "root"
+source = "the build of the hash-locked Playwright of the Scrapling lock, over HTTPS from Playwright's CDN"
+
+[remotion]
+title = "Remotion (motion design videos)"
+kind = "npm"
+version = "4.0.534"
+lock = "templates/remotion/package-lock.json"
+path = "{state}/tools/remotion"
+remove = ["{state}/tools/remotion"]
+update = "auto"
+owner = "root"
+osv = { ecosystem = "npm", name = "remotion" }
+source = "npm, npm ci of the lockfile (integrity hashes); renders with the Chromium above (no second browser)"
+
+[whisper]
+title = "Whisper speech model (local voice messages)"
+kind = "hf"
+version = "faster-whisper (Systran)"
+path = "{state}/voice/models"
+remove = ["{state}/voice/models"]
+update = "auto"
+owner = "root"
+source = "Hugging Face, pinned revision of each model repository"
+revisions = { tiny = "d90ca5fe260221311c53c58e660288d3deb8d356", base = "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66", small = "536b0662742c02347bc0e980a01041f333bce120", medium = "08e178d48790749d25932bbc082711ddcfdfbc4f" }
+
+[garage]
+title = "Garage (S3 buckets, installed by `maxxing infra bucket install`)"
+kind = "binary"
+# version, URL and per-machine sha256 live in server/maxxing/infra/actions.py (GARAGE_VERSION, GARAGE_URL,
+# GARAGE_SHA256: the one place that downloads it); deps.py reads them from there
+pins = "server/maxxing/infra/actions.py"
+path = "/usr/local/bin/garage"
+remove = ["/usr/local/bin/garage"]
+update = "manual"
+owner = "root"
+source = "garagehq.deuxfleurs.fr static musl build; no checksum is published, the pin is the sha256 checked by the maintainer"

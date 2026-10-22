@@ -1,0 +1,31 @@
+[project]
+name = "claude-maxxing"
+version = "2.0.0a85"
+description = "Self-hosted control room for Claude Code"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+voice = ["faster-whisper>=1.0", "av>=11,<19"]   # PyAV 19 dropped av.open(metadata_errors=) used by faster-whisper 1.2
+
+[project.scripts]
+maxxing = "maxxing.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[build-system]
+requires = ["hatchling==1.32.4"]   # pinned (audit F09): the build backend of `uv sync`
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["maxxing"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,30 @@
+{
+  "id": "ecommerce",
+  "project": "ecommerce",
+  "emoji": "🛒",
+  "icon": "shopping-cart",
+  "title": {"en": "Online store", "fr": "Boutique en ligne"},
+  "description": {
+    "en": "Run your online store: site and theme, daily orders, paid ads and social media posts.",
+    "fr": "Gérez votre boutique en ligne : site et thème, commandes du jour, publicités et réseaux sociaux."
+  },
+  "topics": ["code", "orders", "ads", "social"],
+  "crons": [
+    {
+      "key": "ecommerce-orders-report",
+      "name": "Orders report",
+      "schedule": "0 17 * * 1-5",
+      "topic": "orders",
+      "prompt": "Write the end-of-day orders report for the store described in the project memory: number of orders and revenue today vs the same weekday last week, orders still unfulfilled (oldest first), refunds or cancellations, and any product that looks low on stock. Use the Shopify Admin API with SHOPIFY_STORE and SHOPIFY_ADMIN_TOKEN, or the platform noted in memory. If the keys or platform are missing, report it in one line and stop. Keep it under 15 lines.",
+      "notify": "always"
+    },
+    {
+      "key": "ecommerce-ads-review",
+      "name": "Ads review",
+      "schedule": "0 9 * * 1",
+      "topic": "ads",
+      "prompt": "Review last week's paid ads for the platforms listed in the ads topic memory: spend, revenue, ROAS, CPA and CTR per campaign, compared with the week before and with the target ROAS/CPA in memory. List the 3 best and the 3 worst ad sets and suggest at most 3 changes, without applying any of them. If no ad account key is set up, report it in one line and stop.",
+      "notify": "always"
+    }
+  ]
+}

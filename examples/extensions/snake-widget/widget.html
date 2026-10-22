@@ -1,0 +1,66 @@
+<!-- Snake - an HTML widget. One self-contained file: inline <style> and <script> (no other files
+     are served to the frame). The dashboard injects `maxxing` (api, resize, theme, onTheme) and the
+     theme colours as CSS variables (--mx-fg, --mx-muted, --mx-border, --mx-accent, --mx-card, --mx-bg). -->
+<style>
+  .wrap { display: grid; gap: 8px; }
+  .bar { display: flex; justify-content: space-between; color: var(--mx-muted); font-size: 12px; }
+  .bar b { color: var(--mx-fg); font-weight: 600; }
+  canvas { width: 100%; aspect-ratio: 2 / 1; border: 1px solid var(--mx-border); border-radius: 10px; outline: none; }
+  canvas:focus { border-color: var(--mx-accent); }
+  .hint { color: var(--mx-muted); font-size: 12px; text-align: center; }
+</style>
+<div class="wrap">
+  <div class="bar"><span>Score <b id="score">0</b></span><span>Best <b id="best">-</b></span></div>
+  <canvas id="c" width="400" height="200" tabindex="0"></canvas>
+  <div class="hint" id="hint">Click, then arrow keys / swipe</div>
+</div>
+<script>
+  const COLS = 20, ROWS = 10, c = document.getElementById("c"), g = c.getContext("2d");
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  let snake, dir, next, food, score, timer, best = 0;
+
+  maxxing.api("best").then((r) => { best = r.best; $("best").textContent = best; }).catch(() => {});
+
+  function reset() {
+    snake = [{ x: 5, y: 5 }, { x: 4, y: 5 }, { x: 3, y: 5 }]; dir = next = { x: 1, y: 0 };
+    score = 0; $("score").textContent = 0; place(); clearInterval(timer); timer = setInterval(step, 120);
+  }
+  function place() {
+    do { food = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }; }
+    while (snake.some((s) => s.x === food.x && s.y === food.y));
+  }
+  function step() {
+    dir = next;
+    const head = { x: (snake[0].x + dir.x + COLS) % COLS, y: (snake[0].y + dir.y + ROWS) % ROWS };
+    if (snake.some((s) => s.x === head.x && s.y === head.y)) return over();
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) { score++; $("score").textContent = score; place(); }
+    else snake.pop();
+    draw();
+  }
+  function over() {
+    clearInterval(timer); timer = null; $("hint").textContent = "Game over - click to play again";
+    maxxing.api("best", { method: "PUT", body: { score } }).then((r) => { best = r.best; $("best").textContent = best; }).catch(() => {});
+  }
+  function draw() {
+    const w = c.width / COLS, h = c.height / ROWS;
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = css("--mx-accent"); snake.forEach((s, i) => { g.globalAlpha = i ? 0.75 : 1; g.fillRect(s.x * w + 1, s.y * h + 1, w - 2, h - 2); });
+    g.globalAlpha = 1; g.fillStyle = css("--mx-fg"); g.beginPath(); g.arc(food.x * w + w / 2, food.y * h + h / 2, w / 3, 0, 7); g.fill();
+  }
+  const turn = (x, y) => { if (x !== -dir.x || y !== -dir.y) next = { x, y }; };
+  c.addEventListener("keydown", (e) => {
+    const k = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (k) { e.preventDefault(); turn(...k); }
+  });
+  let t0 = null;
+  c.addEventListener("touchstart", (e) => { t0 = e.touches[0]; }, { passive: true });
+  c.addEventListener("touchend", (e) => {
+    if (!t0) return; const t = e.changedTouches[0], dx = t.clientX - t0.clientX, dy = t.clientY - t0.clientY;
+    if (Math.abs(dx) > Math.abs(dy)) turn(Math.sign(dx), 0); else turn(0, Math.sign(dy)); t0 = null;
+  });
+  c.addEventListener("click", () => { c.focus(); if (!timer) { $("hint").textContent = "Arrow keys / swipe"; reset(); } });
+  maxxing.onTheme(() => snake && draw());
+  reset(); clearInterval(timer); timer = null; draw();
+</script>

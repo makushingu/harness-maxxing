@@ -1,0 +1,30 @@
+{
+  "id": "freelance",
+  "project": "freelance",
+  "emoji": "💼",
+  "icon": "briefcase",
+  "title": {"en": "Freelance business", "fr": "Activité freelance"},
+  "description": {
+    "en": "Run your freelance business: clients and follow-ups, quotes and invoices, prospecting, admin.",
+    "fr": "Gérez votre activité freelance : clients et relances, devis et factures, prospection, admin."
+  },
+  "topics": ["clients", "proposals", "prospecting", "admin"],
+  "crons": [
+    {
+      "key": "freelance-follow-ups",
+      "name": "Follow-ups due",
+      "schedule": "0 9 * * 1-5",
+      "topic": "clients",
+      "prompt": "Read the client files in this topic folder and list the follow-ups due today or overdue (field 'Next follow-up' and the history), plus clients with no contact for longer than the rhythm set in the topic memory. One line per client: who, why, suggested next step. Do not send anything. If there are no client files yet, report it in one line and stop.",
+      "notify": "always"
+    },
+    {
+      "key": "freelance-unpaid-invoices",
+      "name": "Unpaid invoices",
+      "schedule": "0 9 * * 1",
+      "topic": "proposals",
+      "prompt": "Check invoices/index.md in this topic folder: list the invoices that are unpaid and past their due date (number, client, amount, days late) and the ones due this week, with the total outstanding. Suggest a reminder for each late one but draft nothing and send nothing. If the invoice index is missing, report it in one line and stop.",
+      "notify": "always"
+    }
+  ]
+}
