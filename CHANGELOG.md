@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.92 - 2026-10-22
+
+Changes:
+- **Donate gets a hand-and-heart icon in the app's accent colour** (no more pink). In the sidebar it is now a small
+  icon next to the eye, the theme and the account, instead of a large button; **Settings -> Support** moves to the end
+  of the Settings list, in the accent colour. **Settings -> Support -> Hide the Donate buttons** still removes them.
+
 ## 2.0.0-alpha.91 - 2026-10-22
 
 Changes:

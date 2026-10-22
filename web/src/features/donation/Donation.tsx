@@ -2,7 +2,7 @@
 // the donation page of the website (new tab); the app never talks to a payment service. Settings -> Support shows
 // the card; the other mentions (sidebar / touch menu, What's new, Feedback sent, License) disappear with the setting
 // `donation_hidden`.
-import { ExternalLink, Heart } from 'lucide-react'
+import { ExternalLink, HandHeart } from 'lucide-react'
 import { useLang, useT, type TKey } from '@/i18n'
 import { useSettings } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -21,8 +21,8 @@ export function useDonationShown(): boolean {
   return !!data && !data.donation_hidden
 }
 
-/** Tinted classes shared by the donate buttons: visible on every theme and accent, never the primary action. */
-export const DONATE_TONE = 'border border-pink-500/35 bg-pink-500/10 text-pink-700 hover:bg-pink-500/20 dark:text-pink-300'
+/** Tinted classes shared by the donate buttons: the app's accent colour (follows the theme and accent), never the primary action. */
+export const DONATE_TONE = 'border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
 
 /** The "Donate" button: a link to the donation page (new tab). Renders nothing when the mentions are hidden. */
 export function DonateButton({ label = 'donation.donate', className }: { label?: TKey; className?: string }) {
@@ -37,7 +37,7 @@ export function DonateButton({ label = 'donation.donate', className }: { label?:
       data-testid="donate-button"
       className={cn('inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring', DONATE_TONE, className)}
     >
-      <Heart className="size-3.5 fill-current" aria-hidden />
+      <HandHeart className="size-4" aria-hidden />
       {t(label)}
       <ExternalLink className="size-3 opacity-70" aria-hidden />
     </a>

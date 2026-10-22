@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation, useNavigate } from 'react-router'
-import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, Heart, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
+import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, HandHeart, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
 import { useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
 import { useUI, type Theme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,7 @@ import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
 import { UsageIndicator } from './UsageIndicator'
 import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
-import { DONATE_TONE, donationUrl, useDonationShown } from '@/features/donation/Donation'
+import { donationUrl, useDonationShown } from '@/features/donation/Donation'
 
 type Panel = 'sessions' | 'app' | null
 export const useTouchNav = create<{ panel: Panel; setPanel: (p: Panel) => void }>((set) => ({ panel: null, setPanel: (panel) => set({ panel }) }))
@@ -314,8 +314,8 @@ function AppPanel() {
           </button>
         )}
         {donate && (
-          <a href={donationUrl(lang)} target="_blank" rel="noopener" className={cn(row, DONATE_TONE, 'font-semibold [&>svg]:fill-current [&>svg]:text-current')} onClick={close}>
-            <Heart />
+          <a href={donationUrl(lang)} target="_blank" rel="noopener" className={cn(row, 'font-semibold text-primary [&>svg]:text-primary')} onClick={close}>
+            <HandHeart />
             <span className="grid flex-1">
               <span>{t('donation.donate')}</span>
               <span className="text-[13px] font-normal opacity-80">{t('settings.support.desc')}</span>
