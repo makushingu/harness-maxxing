@@ -54,7 +54,7 @@ export function FeedbackDialog() {
             <CheckCircle2 className="size-10 text-success" />
             <DialogTitle>{t('feedback.sentTitle')}</DialogTitle>
             <DialogDescription>{t('feedback.sentBody', { email: email.trim() })}</DialogDescription>
-            <DonationLine text="donation.feedback" link="donation.feedbackLink" />
+            <DonationLine text="donation.feedback" className="justify-center" />
             <Button className="mt-2" onClick={() => setOpen(false)}>{t('common.close')}</Button>
           </div>
         ) : (

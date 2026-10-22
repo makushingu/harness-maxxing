@@ -6,6 +6,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.91 - 2026-10-22
+
+Donate buttons more visible (maintainers' request). Web only, no API change.
+- `features/donation/Donation.tsx`: `DONATE_TONE` (pink tinted classes), `DonateButton` (link styled as a button, Heart +
+  ExternalLink, hidden with `donation_hidden`); `DonationLine` = sentence + `DonateButton` (prop `link` removed; i18n
+  `donation.link` / `donation.feedbackLink` removed, `donation.feedback` is now a full sentence).
+- Sidebar: `DonateLink` above Feedback (collapsed = heart only, tooltip `settings.support.desc`); touch ⊞ menu
+  (`TouchNav.AppPanel`): Donate row before Feedback. Both hidden with `donation_hidden`.
+- i18n `donation.hide` / `donation.hideDesc` say "Donate buttons". Docs: user 11 + 23.
+- Website (cloud, deployed separately): `/donation` shows one tab per way to pay.
+
 ## 2.0.0-alpha.90 - 2026-10-22
 
 Donation links (links only, no payment code). The donation page itself is on the website (`/donation`: Lightning

@@ -34,7 +34,7 @@ export function LicenseSection() {
             {t('license.get')} <ExternalLink />
           </a>
         </Button>
-        <DonationLine text="donation.license" link="donation.donate" className="mt-4" />
+        <DonationLine text="donation.license" className="mt-4" />
       </SettingsCard>
       <SettingsCard title={t('license.yours')}>
         {lic.has_key ? (
