@@ -161,6 +161,10 @@ before a feature, tests, changelog, `web/dist`), sign the [Contributor License A
 your first pull request) and follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see
 [SECURITY.md](SECURITY.md), never a public issue.
 
+## Support the project
+
+Harness Maxxing is free; donations fund its development: [harness-maxxing.com/donation](https://harness-maxxing.com/donation).
+
 ## Enterprise
 
 Several entities, clients, a paid offer or hosting, the name or a custom deal: ask for a commercial license at

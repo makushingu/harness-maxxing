@@ -6,7 +6,20 @@ def test_get_defaults(client, org):
     s = client.get("/api/settings").json()
     assert s == {"timezone": "UTC", "language": "en", "public_url": "", "files_root": str(org.tmp),
                  "presentation_default": False, "usage_widget": False, "git_page": False, "infra_page": False,
-                 "memory_max_lines": 200, "result_line_hidden": []}
+                 "memory_max_lines": 200, "result_line_hidden": [], "donation_hidden": False}
+
+
+def test_donation_hidden(client, org):
+    assert config.load_config().get("donation_hidden") is False          # default: the donation links show
+    r = client.put("/api/settings", json={"donation_hidden": True})
+    assert r.status_code == 200 and r.json()["donation_hidden"] is True
+    assert config.load_config()["donation_hidden"] is True               # persisted in config.json
+    assert client.get("/api/settings").json()["donation_hidden"] is True
+    r = client.put("/api/settings", json={"timezone": "UTC"})            # another change keeps it
+    assert r.json()["donation_hidden"] is True
+    assert client.put("/api/settings", json={"donation_hidden": "maybe"}).status_code == 422
+    assert client.put("/api/settings", json={"donation_hidden": False}).json()["donation_hidden"] is False
+    assert config.load_config()["donation_hidden"] is False
 
 
 def test_result_line_hidden(client, org):
