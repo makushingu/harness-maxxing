@@ -25,7 +25,8 @@ def steps() -> dict:
             "claude": bool(auth_status()["ok"]),
             "workspace": has_topic,
             "telegram": bool((cfg.get("telegram") or {}).get("chat_id")),
-            "backup": bool((cfg.get("backup") or {}).get("repo"))}
+            "backup": bool((cfg.get("backup") or {}).get("repo")),
+            "profile": bool((cfg.get("register") or {}).get("asked"))}
 
 
 @router.get("")
