@@ -26,7 +26,8 @@ Please include:
 
 ## Supported versions
 
-Only the latest version on `main` (and the latest signed release) receives security fixes. Update with
+Only the latest version receives security fixes: the `stable` branch, which installs follow (`main` gets each
+version first). Update with
 `maxxing update`.
 
 ## Scope

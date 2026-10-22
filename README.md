@@ -8,7 +8,7 @@
 project and topic, plus files, tasks, scheduled jobs, a Telegram bridge and a memory backup -
 installed on your own server with one command and configured from a guided web onboarding.
 
-Free and [fair source](#fair-source). Install: `curl -fsSL https://get.harness-maxxing.com | bash` as root - no key,
+Free and [fair source](#fair-source) (source-available). Install: `curl -fsSL https://get.harness-maxxing.com | bash` as root - no key,
 no account. Details in [Install](#install) below. News: [@HarnessMaxxing](https://x.com/HarnessMaxxing) on X.
 
 ## Screenshots
@@ -128,8 +128,8 @@ cd web && npm ci && npm run build            # web UI (web/dist is committed)
 
 ## Fair Source
 
-Harness Maxxing is published under the [Harness Maxxing Fair Source License](LICENSE): the code is public and free,
-with a few limits that keep the project sustainable.
+Harness Maxxing is published under the [Harness Maxxing Fair Source License](LICENSE), a source-available license
+(not an OSI open source license): the code is public and free, with a few limits that keep the project sustainable.
 
 **Allowed, free of charge**
 - use it, for any personal or professional purpose of your own;
