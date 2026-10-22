@@ -52,6 +52,14 @@ your email, your message, its type, the Harness Maxxing version, the interface l
 Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
 time: the one of Settings → Profile → Harness Maxxing team, if any).
 
+## Donations
+
+Harness Maxxing is free; donations fund its development. **Settings → Support** has a **Donate** button, and a small
+"Support the project" link shows at the bottom of **What's new**, after a **Feedback** is sent and in **Settings →
+License**. They are only links: they open [harness-maxxing.com/donation](https://harness-maxxing.com/donation) in a
+new tab (in the interface language), and the app never talks to a payment service. **Settings → Support → Hide the
+donation links** removes the three small links for every browser of the server (the Support page stays).
+
 ## Enterprise key (optional)
 
 Only companies in one of the cases above need a key; nobody else has anything to do. Give it in

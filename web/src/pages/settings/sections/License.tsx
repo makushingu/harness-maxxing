@@ -4,6 +4,7 @@ import { useLicense, useRemoveLicense } from '@/lib/queries'
 import { useLang, useT } from '@/i18n'
 import { Button, Skeleton } from '@/components/ui'
 import { ENTERPRISE_URL, LICENSE_URL, LicenseKeyField, WhoNeedsAKey } from '@/features/license/LicenseKey'
+import { DonationLine } from '@/features/donation/Donation'
 import { SettingsCard, SectionStack } from './ui'
 
 export function LicenseSection() {
@@ -33,6 +34,7 @@ export function LicenseSection() {
             {t('license.get')} <ExternalLink />
           </a>
         </Button>
+        <DonationLine text="donation.license" link="donation.donate" className="mt-4" />
       </SettingsCard>
       <SettingsCard title={t('license.yours')}>
         {lic.has_key ? (

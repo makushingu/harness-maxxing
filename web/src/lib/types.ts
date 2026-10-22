@@ -409,6 +409,8 @@ export type Settings = {
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
   result_line_hidden?: ResultField[]
+  /** Settings -> Support: hide the donation links of What's new, Feedback and License (every browser). */
+  donation_hidden?: boolean
 }
 export type ResultField = 'model' | 'duration' | 'cost' | 'tokens' | 'cache'
 
