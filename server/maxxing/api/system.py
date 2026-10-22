@@ -205,7 +205,7 @@ def version_info(refresh: bool = False) -> dict:
     with _ver_lock:
         from .. import license
         lic = license.status()
-        lic = {k: lic.get(k) for k in ("enabled", "key_hint", "email", "kind", "updates_until", "expires_at", "channel", "latest", "message", "max_servers")}
+        lic = {k: lic.get(k) for k in ("enabled", "key_hint", "email", "kind", "updates_until", "expires_at", "channel", "latest", "message", "max_servers", "moved_to_git", "move_error")}
         out = {"version": __version__, "commit": commit, "latest_commit": _ver["latest"], "behind": _ver["behind"], "license": lic,
                "checking": _ver["busy"], "checked_at": _ver["at"] or None, "custom": custom, "pending": pend}
     from .. import smartupdate

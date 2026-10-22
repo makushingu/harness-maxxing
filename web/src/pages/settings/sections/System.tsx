@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { Play, RefreshCw, RotateCw, Sparkles, Square, Wrench, KeyRound } from 'lucide-react'
+import { Play, RefreshCw, RotateCw, Sparkles, Square, Wrench, KeyRound, GitBranch } from 'lucide-react'
 import { useWhatsNew } from '@/features/whatsnew/store'
 import { useCheckVersion, useHealth, useLogs, useServiceAction, useServices, useUpdate, useAutoUpdate, useVersion, useWorkspace } from '@/lib/queries'
 import { fmtRelative } from '@/lib/format'
@@ -238,6 +238,13 @@ function VersionCard() {
               ? t(v.license.updates_until * 1000 < Date.now() ? 'system.licenseUpdatesEnded' : 'system.licenseUpdatesUntil', { date: new Date(v.license.updates_until * 1000).toLocaleDateString(lang) })
               : t('system.licenseUpdatesForever')}
             {v.license.message ? <span className="block">{v.license.message}</span> : null}
+            {v.license.move_error ? <span className="block">{t('system.licenseMoving', { error: v.license.move_error })}</span> : null}
+          </p>
+        )}
+        {!v.license?.enabled && !!v.license?.moved_to_git && (
+          <p className="text-[13px] text-muted-foreground">
+            <GitBranch className="mr-1.5 inline size-3.5 align-[-2px]" />
+            {t('system.movedToGit', { key: v.license.key_hint, date: new Date(v.license.moved_to_git * 1000).toLocaleDateString(lang) })}
           </p>
         )}
         {!!v.custom?.count && (
