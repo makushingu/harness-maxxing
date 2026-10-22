@@ -117,6 +117,7 @@ def test_thumbnail_of_an_animated_png(client, tree):
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp" and r.content[:4] == b"RIFF"
 
 
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
 def test_thumb_does_not_render_a_file_outside_the_root_through_ffconcat(client, mx):
     """A .png holding an ffconcat script + a link next to it: ffmpeg must not open the link target (outside the root),
     nor draw a text file as a picture (tty demuxer). Same for a video probed by ffprobe."""

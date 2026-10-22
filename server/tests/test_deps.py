@@ -178,6 +178,7 @@ def test_node_update_that_does_not_run_keeps_the_old_one(st, monkeypatch):
     assert not list((st / "tools/nodejs").glob(".*.new"))
 
 
+@pytest.mark.skipif(os.geteuid() != 0, reason="verify expects root-owned files")
 def test_uv_update_checks_the_new_binary_and_records_it(st, monkeypatch):
     c = deps.get("uv")
     buf = io.BytesIO()
@@ -216,6 +217,7 @@ def test_verify_finds_files_another_user_could_replace(st):
 
 
 # ---- remove, clean ---------------------------------------------------------------------------------------------
+@pytest.mark.skipif(os.geteuid() != 0, reason="maxxing deps runs as root")
 def test_remove_lists_and_refuses_essentials(st, capsys):
     rem = st / "tools/remotion/node_modules"
     rem.mkdir(parents=True)

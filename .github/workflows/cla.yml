@@ -1,0 +1,35 @@
+# Contributor License Agreement (CLA.md): on a pull request, asks every committer who has not signed yet to post
+# the signing comment once, and keeps the "CLA" check red until they do. Signatures are stored in the branch
+# `cla-signatures` (signatures/cla.json). The maintainers are listed in the allowlist. The action never checks out
+# nor runs the code of the pull request (pull_request_target is safe here). Pinned by commit SHA.
+name: CLA
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, synchronize, reopened, closed]
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+jobs:
+  cla:
+    name: CLA
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request_target' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'))
+    steps:
+      - uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: signatures/cla.json
+          path-to-document: https://github.com/${{ github.repository }}/blob/main/CLA.md
+          branch: cla-signatures
+          allowlist: FEUAZUR,rorogeno,dependabot[bot],github-actions[bot]
+          lock-pullrequest-aftermerge: false
+          custom-notsigned-prcomment: >-
+            Thank you for your contribution! Before it can be merged, please read the
+            [Contributor License Agreement](https://github.com/${{ github.repository }}/blob/main/CLA.md) and sign it
+            by posting the comment below once (contributing for a company? sign on behalf of that entity, see CLA.md).
+          custom-allsigned-prcomment: All contributors have signed the CLA. Thank you!
