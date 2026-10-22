@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.90 - 2026-10-22
+
+Changes:
+- **Settings -> Support**: Harness Maxxing is free, donations fund its development. A **Donate** button opens the
+  donation page of harness-maxxing.com (Bitcoin or Lightning) in a new tab; a small "Support the project" link also
+  shows at the bottom of What's new, after a Feedback is sent and in Settings -> License. They are only links: the app
+  never talks to a payment service. **Hide the donation links** (Settings -> Support) removes the small links for
+  every browser.
+
 ## 2.0.0-alpha.89 - 2026-10-22
 
 Changes:

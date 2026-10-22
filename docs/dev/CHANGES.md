@@ -6,6 +6,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.90 - 2026-10-22
+
+Donation links (links only, no payment code). The donation page itself is on the website (`/donation`: Lightning
+offer + Bitcoin address set in the admin, optional "I made a donation" note to the admin Inbox).
+- Config `donation_hidden` (default false, `config.DEFAULTS`), in `GET/PUT /api/settings` (`SettingsIn`, bool, 422
+  otherwise). Tests: `tests/test_settings.py::test_donation_hidden` + defaults.
+- UI: `features/donation/Donation.tsx` (`DONATION_URL`, `donationUrl(lang)` adds `?lang=<lang>` except for en,
+  `useDonationShown()` = settings loaded and not hidden, `DonationLine`, `target=_blank rel=noopener`). New Settings
+  section `support` (`pages/settings/sections/Support.tsx`, Heart icon, after License): card + Donate button + switch
+  `donation_hidden`. `DonationLine` in `WhatsNewDialog` (footer, next to "All updates"), the sent state of
+  `FeedbackDialog` and the first card of `License.tsx`. i18n core keys `settings.support*`, `donation.*`. Mock server
+  knows `donation_hidden`.
+- `.github/FUNDING.yml` (GitHub "Sponsor" button -> the donation page); README "Support the project"; docs/user 11 +
+  23; help topic template index (23-license.md row).
+
 ## 2.0.0-alpha.89 - 2026-10-22
 
 Feedback to the authors (Romain's request).
