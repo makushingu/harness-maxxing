@@ -391,7 +391,7 @@ export type ProfileColor = 'clay' | 'blue' | 'violet' | 'green' | 'amber' | 'ros
 export type Profile = { name: string; color: ProfileColor | ''; emoji: string }
 /** Saying hello to the authors (all optional): anonymous counter, email (+ product news). */
 export type LicenseState = { has_key: boolean; key_hint: string; kind?: string | null; email?: string | null; max_servers?: number | null; expires_at?: number | null; activated_at?: number | null; enabled: boolean; moved_to_git?: number | null }
-export type RegisterState = { count: boolean; email: string; news: boolean; asked: boolean; registered: boolean; error: string; synced_at: number }
+export type RegisterState = { count: boolean; /** MAXXING_NO_TELEMETRY / DO_NOT_TRACK set on the server: counter off whatever `count`. */ count_blocked: boolean; email: string; news: boolean; asked: boolean; registered: boolean; error: string; synced_at: number }
 
 /* ---------------------------------------------------------------- Settings & secrets */
 export type Settings = {

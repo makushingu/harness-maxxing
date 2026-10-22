@@ -29,19 +29,37 @@ The full text is the `LICENSE` file in the code folder (`/opt/claude-maxxing/LIC
 
 ## Saying hello (optional)
 
-Nobody has to tell us anything. The onboarding has a step **About you** and **Settings → Profile** has a card
-**Harness Maxxing team** with three choices, all optional:
+Nobody has to tell us anything. **Settings → Profile** has a card **Harness Maxxing team** with three choices, all
+optional (the onboarding step **About you** only asks for the email):
 
 | Choice | What is sent to `api.harness-maxxing.com` |
 |---|---|
-| **Help count the installations (anonymous)** - checked by default in the onboarding | once a day: a random number the server got the first time and the Harness Maxxing version. Nothing else: no name, no email, no IP kept, no content. |
+| **Help count the installations (anonymous)** - checked by default | once a day: a random number the server got the first time, the Harness Maxxing version, the system (for example `Ubuntu 24.04`, `x86_64`) and up to 10 short health codes (see below). Nothing else: no name, no email, no IP or server name, no file path, no content. |
 | **Email** | your email, your pseudo (Settings → Profile) and the interface language, so we can warn you about a security issue or a breaking change. Never shared, never sold. |
 | **Also send me the product news** (needs an email) | the same, plus a few product emails a month at most. |
 
+The health codes tell us whether servers run well, never what they do: `service_ok` / `service_down` (the Harness
+Maxxing, Caddy and cron services), `claude_signed_in` / `claude_signed_out`, `update_failed` (the last update was
+rolled back), `telegram_on`, `backup_on`, and the codes of the health panel's warnings (`disk_full`, `low_memory`,
+`cron_failed`, `login_failures`, `backup_never`, `backup_old`, `backup_failed`). The country is guessed by our
+hosting provider from the connection; the IP address itself is never stored.
+
+**Turning the counter off**: uncheck **Help count the installations** in Settings → Profile. To make sure it stays
+off whatever the setting (for a fleet of servers, an image), set `MAXXING_NO_TELEMETRY=1` (or the common
+`DO_NOT_TRACK=1`) in the service environment: `systemctl edit claude-maxxing`, add
+
+```
+[Service]
+Environment=MAXXING_NO_TELEMETRY=1
+```
+
+then `systemctl restart claude-maxxing`. The checkbox then shows it is turned off on this server.
+
 Unchecking everything (or **Stop, don't contact me**) stops it: the server sends nothing more and is never contacted
 again (security alerts included). To have what we have about it erased, ask us (see
-[harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). An update never turns any of these on: a server
-installed before this choice existed sends nothing until you check something.
+[harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). The counter is on by default since 2.0.0a94: an
+update turned it on once for servers where nobody had ever answered this choice; a server where someone had seen it
+and left it unchecked keeps it off. An update never turns on the email or the news.
 
 ## Feedback (bugs, ideas)
 

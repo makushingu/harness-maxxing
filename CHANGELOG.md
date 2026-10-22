@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.94 - 2026-10-22
+
+Changes:
+- **The anonymous installation counter is on by default, and tells a bit more.** Once a day it sends a random
+  number, the version, the system (for example Ubuntu 24.04, x86_64) and a few health codes (service up, Claude
+  signed in, last update failed...): never a name, an email, an IP, a server name or any content. It now lives in
+  **Settings -> Profile** only; the onboarding step About you just asks for an optional email. This update turns it
+  on if nobody on this server had ever answered this choice; if you had left it unchecked, it stays off. Turn it off
+  in Settings -> Profile, or for good with `MAXXING_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) in the service environment.
+
 ## 2.0.0-alpha.93 - 2026-10-22
 
 Changes:
