@@ -6,6 +6,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.86 - 2026-10-22
+
+Fair source step 6.2: optional registration of servers with the cloud (`/v1/register`, `/v1/heartbeat`, cloud
+table `installs`, admin Users page).
+- `maxxing/register.py`: config `register` `{count, email, news, asked}`, `register_meta` `{error, synced_at}`,
+  token `register_token` in `secrets.json` (never the Keys vault). `sync()` creates / updates / unregisters the
+  cloud row to match the settings (pseudo of `profile` and `ui_lang` sent only with an email); `heartbeat()` once
+  a day from `_ping_loop` (`heartbeat_due`). Cloud answers `unknown_install` (archived from the admin) -> token
+  forgotten, registered again. `MAXXING_LICENSE_PING=0` = never calls the cloud (tests, air-gapped).
+- `GET/PUT /api/settings/register` (bus `register`); `/api/onboarding` `steps.profile` = `register.asked`.
+- UI: onboarding step "About you" after the language (count checked by default, email empty, news unchecked),
+  Settings -> Profile card with status line and "Stop, don't contact me" (= everything off + DELETE on the cloud,
+  which archives the row: `deleted_at`, never contacted again, kept for us; erasure on request).
+- Never enabled by an update: `register` absent = nothing sent, the onboarding step only shows to new installs.
+
 ## 2.0.0-alpha.85 - 2026-10-22
 
 The repository moved to the GitHub organisation `makushingu` (`makushingu/harness-maxxing`, still private until
