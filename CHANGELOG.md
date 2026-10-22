@@ -3,6 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.89 - 2026-10-22
+
+Changes:
+- **Feedback button at the bottom of the sidebar** (on a phone or a tablet: ⊞ -> Feedback): report a bug, suggest an
+  idea or write anything to the Harness Maxxing team, straight from the app. Your email is required, so we can answer
+  you; only your message, its type, the version and the language are sent.
+- Settings -> License shows "enterprise" for an Enterprise key (it said "paid").
+
 ## 2.0.0-alpha.88 - 2026-10-22
 
 Changes:

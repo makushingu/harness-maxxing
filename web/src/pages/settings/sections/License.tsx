@@ -13,7 +13,7 @@ export function LicenseSection() {
   const remove = useRemoveLicense()
   const [key, setKey] = React.useState('')
   if (!lic) return <Skeleton className="h-72 rounded-xl" />
-  const kind = lic.kind === 'beta' ? t('system.licenseKind.beta') : lic.kind === 'gift' ? t('system.licenseKind.gift') : t('system.licenseKind.paid')
+  const kind = lic.kind === 'beta' ? t('system.licenseKind.beta') : lic.kind === 'gift' ? t('system.licenseKind.gift') : lic.kind === 'enterprise' ? t('system.licenseKind.enterprise') : t('system.licenseKind.paid')
   return (
     <SectionStack>
       <SettingsCard
