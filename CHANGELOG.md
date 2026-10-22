@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.95 - 2026-10-23
+
+Changes:
+- **Mark a server issue as seen.** In the list of the dot at the bottom of the sidebar, **Seen** stops an issue
+  (a scheduled job that failed once, an old backup...) from counting in the dot; it comes back when it changes, or
+  after 24 hours if it is still there.
+- **Sideways scrolling glides to the nearest session** instead of jumping to it when you let go.
+- **See the agents Claude runs in the background.** An agent's card (or a background command's) now spins until its
+  work really ends, with how long it has been running; open it for its last action, the tools and tokens used, then
+  its report. While some still run, a pill above the composer lists them (a click jumps to the card), and it is
+  all still there after a reload or a lost connection.
+
 ## 2.0.0-alpha.94 - 2026-10-22
 
 Changes:
@@ -16,10 +28,6 @@ Changes:
 ## 2.0.0-alpha.93 - 2026-10-22
 
 Changes:
-- **Mark a server issue as seen.** In the list of the dot at the bottom of the sidebar, **Seen** stops an issue
-  (a scheduled job that failed once, an old backup...) from counting in the dot; it comes back when it changes, or
-  after 24 hours if it is still there.
-- **Sideways scrolling glides to the nearest session** instead of jumping to it when you let go.
 - **Leftovers of the old paid model removed.** Harness Maxxing installs and updates from the public git repository;
   the code that downloaded signed archives with a license key, `maxxing license check`, `maxxing license ping` and
   `maxxing update --allow-downgrade` are gone. Servers installed with a key before 2.0.0a87 still switch to the git
@@ -30,10 +38,6 @@ Changes:
 ## 2.0.0-alpha.92 - 2026-10-22
 
 Changes:
-- **See the agents Claude runs in the background.** An agent's card (or a background command's) now spins until its
-  work really ends, with how long it has been running; open it for its last action, the tools and tokens used, then
-  its report. While some still run, a pill above the composer lists them (a click jumps to the card), and it is
-  all still there after a reload or a lost connection.
 - **Donate gets a hand-and-heart icon in the app's accent colour** (no more pink). In the sidebar it is now a small
   icon next to the eye, the theme and the account, instead of a large button; **Settings -> Support** moves to the end
   of the Settings list, in the accent colour. **Settings -> Support -> Hide the Donate buttons** still removes them.

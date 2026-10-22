@@ -6,6 +6,40 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.95 - 2026-10-23
+
+Health issues marked as seen + smooth column snap (maintainers' request).
+- `health.py`: every issue gets `id` (sha1 of code + text without digits, 12 chars) and `seen`; marks in
+  `<state>/health-seen.json` `{id: at}`, kept while the issue is there and for `SEEN_TTL_S` (24 h), pruned at each
+  collect. `mark_seen(id, seen)`. `POST /api/system/health/seen {id, seen=true}` -> fresh health (`404 not_found`
+  when no current issue has that id), bus `health`. `ok` unchanged (all issues).
+- Web: `openIssues()` = issues not seen; `healthTone` and the count use them (sidebar, touch menu); the popover lists
+  all, seen ones greyed with an undo button. `useMarkHealthSeen` (optimistic). i18n `health.markSeen|seenHint|unsee`.
+- Sessions strip: after a sideways wheel / swipe, `glideToColumn` smooth-scrolls to the nearest column start when it
+  is within 30 % of the strip width, then turns `scroll-snap-type` back on (it used to jump there); a new wheel
+  event cancels the glide; reduced motion keeps the old behaviour.
+- Tests: `test_system.py::test_health_issue_marked_seen`. Docs: user 04, 16.
+
+Background agents visible in the thread. Claude Code's `system/task_*` lines (task_started / task_progress /
+task_updated / task_notification), dropped until now, become a normalised `task` event.
+- `sessions/normalize.py` `_task()`: partial `{type:"task", id, tool_use_id?, state?, kind?, background?,
+  description?, agent_type?, activity?, last_tool?, tokens?, tools?, duration_ms?, summary?, at}` (API.md, Event).
+  `killed` -> `stopped`; `summary` (the agent's report) clipped at 20 kB; lines with `owned_by_subagent` dropped;
+  a `task_updated` without status / background change dropped. Stateless per line, so old logs show it too.
+- `service.read_back`: `task` events do not count toward `tail` / `limit` (a busy agent writes a progress line every
+  few seconds: they would push the thread rows out of the first page).
+- Web: `log.ts` folds them into `LogState.tasks` (by task id) and `item.task` on the tool item of its `tool_use_id`
+  (`foldBefore` merges both pages, newer fields win). A `user` row (= a new Claude process) marks the tasks still
+  running `interrupted`; `taskStatus()` also says interrupted when the session no longer runs. Shown: agents, and
+  commands with `background` (a foreground command already is its own tool line).
+- `Tasks.tsx`: `TaskDetails` (in the opened card; the "Async agent launched" tool result is hidden), `TaskBar`
+  (pill above the composer + popover, `data-testid="task-bar"`; a click dispatches `mx-open-task`, the card opens
+  and scrolls into view), `TaskElapsed`. `RunningRow` says "n running in the background" instead of "Working…" when
+  nothing else is pending. i18n `tasks.*`.
+- `tests/fake_claude.py`: `AGENTS` (two background agents + a background command, `FAKE_CLAUDE_AGENTS_S`). Tests:
+  `test_session_logs.py` (normalisation, tail counting, end to end).
+- Docs: user 04 (What you see).
+
 ## 2.0.0-alpha.94 - 2026-10-22
 
 Anonymous counter on by default, out of the onboarding, enriched payload, environment opt-out.
@@ -32,18 +66,6 @@ Anonymous counter on by default, out of the onboarding, enriched payload, enviro
   health code format).
 
 ## 2.0.0-alpha.93 - 2026-10-22
-
-Health issues marked as seen + smooth column snap (maintainers' request; to move to the release version).
-- `health.py`: every issue gets `id` (sha1 of code + text without digits, 12 chars) and `seen`; marks in
-  `<state>/health-seen.json` `{id: at}`, kept while the issue is there and for `SEEN_TTL_S` (24 h), pruned at each
-  collect. `mark_seen(id, seen)`. `POST /api/system/health/seen {id, seen=true}` -> fresh health (`404 not_found`
-  when no current issue has that id), bus `health`. `ok` unchanged (all issues).
-- Web: `openIssues()` = issues not seen; `healthTone` and the count use them (sidebar, touch menu); the popover lists
-  all, seen ones greyed with an undo button. `useMarkHealthSeen` (optimistic). i18n `health.markSeen|seenHint|unsee`.
-- Sessions strip: after a sideways wheel / swipe, `glideToColumn` smooth-scrolls to the nearest column start when it
-  is within 30 % of the strip width, then turns `scroll-snap-type` back on (it used to jump there); a new wheel
-  event cancels the glide; reduced motion keeps the old behaviour.
-- Tests: `test_system.py::test_health_issue_marked_seen`. Docs: user 04, 16.
 
 Dead code of the paid / signed-archive model removed (fair source since a85-a88); third-party notices.
 - Removed from `maxxing/license.py`: `PUBKEYS` / `pubkey` / `DEFAULT_KID`, `_url_ok`, `check` (`/v1/update`), `ping`
@@ -89,26 +111,6 @@ Dead code of the paid / signed-archive model removed (fair source since a85-a88)
   tqdm with MIT, dompurify as MPL-2.0 OR Apache-2.0).
 
 ## 2.0.0-alpha.92 - 2026-10-22
-
-Background agents visible in the thread. Claude Code's `system/task_*` lines (task_started / task_progress /
-task_updated / task_notification), dropped until now, become a normalised `task` event.
-- `sessions/normalize.py` `_task()`: partial `{type:"task", id, tool_use_id?, state?, kind?, background?,
-  description?, agent_type?, activity?, last_tool?, tokens?, tools?, duration_ms?, summary?, at}` (API.md, Event).
-  `killed` -> `stopped`; `summary` (the agent's report) clipped at 20 kB; lines with `owned_by_subagent` dropped;
-  a `task_updated` without status / background change dropped. Stateless per line, so old logs show it too.
-- `service.read_back`: `task` events do not count toward `tail` / `limit` (a busy agent writes a progress line every
-  few seconds: they would push the thread rows out of the first page).
-- Web: `log.ts` folds them into `LogState.tasks` (by task id) and `item.task` on the tool item of its `tool_use_id`
-  (`foldBefore` merges both pages, newer fields win). A `user` row (= a new Claude process) marks the tasks still
-  running `interrupted`; `taskStatus()` also says interrupted when the session no longer runs. Shown: agents, and
-  commands with `background` (a foreground command already is its own tool line).
-- `Tasks.tsx`: `TaskDetails` (in the opened card; the "Async agent launched" tool result is hidden), `TaskBar`
-  (pill above the composer + popover, `data-testid="task-bar"`; a click dispatches `mx-open-task`, the card opens
-  and scrolls into view), `TaskElapsed`. `RunningRow` says "n running in the background" instead of "Working…" when
-  nothing else is pending. i18n `tasks.*`.
-- `tests/fake_claude.py`: `AGENTS` (two background agents + a background command, `FAKE_CLAUDE_AGENTS_S`). Tests:
-  `test_session_logs.py` (normalisation, tail counting, end to end).
-- Docs: user 04 (What you see).
 
 Donate restyled (maintainers' request). Web only, no API change.
 - Icon `HandHeart` (lucide) instead of `Heart` everywhere (sidebar, ⊞ menu, `DonateButton`, Settings -> Support,
