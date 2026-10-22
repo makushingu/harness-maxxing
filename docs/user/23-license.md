@@ -45,9 +45,13 @@ installed before this choice existed sends nothing until you check something.
 
 ## Existing license keys
 
-A license key bought earlier (`HM-XXXX-XXXX-XXXX-XXXX`) keeps working: a server installed with it keeps getting
-**signed** updates from the license server, and a new server can still use it
-(`curl -fsSL https://get.harness-maxxing.com | LICENSE=HM-… bash`). Every signed version is checked: the installer
+Since 2.0.0a87 a server installed with a license key (`HM-XXXX-XXXX-XXXX-XXXX`) **moves to the public git
+repository by itself**: a few minutes after updating to 2.0.0a87 (or at the next `maxxing update`), its code
+follows the `stable` branch of `github.com/makushingu/harness-maxxing`, at the same version, with your
+customizations kept. Nothing to do; the key stays in Settings -> License. If it cannot move yet (no network,
+uncommitted changes in the code folder, an update being finished) it tries again every few hours and
+`maxxing doctor` says why. Until then, and for a new server installed with
+`curl -fsSL https://get.harness-maxxing.com | LICENSE=HM-… bash`, the signed archives below still apply. Every signed version is checked: the installer
 and `maxxing update` refuse an archive that was not signed by Harness Maxxing. A licensed server keeps working on its
 version even if the license ends or the license server cannot be reached.
 

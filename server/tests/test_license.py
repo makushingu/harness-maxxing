@@ -311,3 +311,113 @@ def test_a_fetched_but_never_installed_version_does_not_block_the_offered_one(co
     assert license.fetch_latest()["version"] == "1.2.0"           # fetched into origin/main, not installed
     server.latest = "1.1.0"
     assert license.fetch_latest()["version"] == "1.1.0"
+
+
+# ---- fair source: a licensed install moves to the git repository (2.0.0a87) --------------------
+def _licensed_with_custom(code, server, keys, tmp_path, monkeypatch):
+    work = code["work"]
+    server.publish(keys, work, "1.0.0")
+    opt = _licensed_install(tmp_path, server, "1.0.0")
+    monkeypatch.setattr(config, "CODE", opt)
+    monkeypatch.setattr(license, "GIT_URL", str(code["origin"]))
+    config.set_secret(license.TOKEN, "a1.tok")
+    config.set_secret(license.KEY, "HM-ABCD-EFGH-JKMN-PQRS")
+    (opt / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    assert run_cli("custom", "save", "Raise the limit to 50", "--why", "many sessions") == 0
+    return opt
+
+
+def _g(opt, *args):
+    return subprocess.run(["git", "-C", str(opt), *args], capture_output=True, text=True).stdout.strip()
+
+
+def test_a_licensed_install_moves_to_git_and_keeps_its_customizations(code, server, keys, tmp_path, monkeypatch, capsys):
+    from maxxing import customs
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    work = code["work"]
+    _git("push", "-q", "origin", "HEAD:stable", cwd=work)            # 1.0.0 is on GitHub `stable`
+    head_before = _g(opt, "rev-parse", "HEAD")
+    r = license.move_to_git()
+    assert r["ok"] and r["moved"] and r["version"] == "1.0.0", r
+    assert r["commit"] == _g(work, "rev-parse", "HEAD")             # same files -> that very commit
+    assert _g(opt, "rev-parse", "--abbrev-ref", "HEAD") == "stable"
+    assert _g(opt, "rev-parse", "--abbrev-ref", "stable@{upstream}") == "origin/stable"
+    assert _g(opt, "remote", "get-url", "origin") == str(code["origin"])
+    assert _g(opt, "rev-parse", license.PRE_GIT_REF) == head_before
+    assert not _g(opt, "branch", "--list", "main") and not _g(opt, "rev-parse", "-q", "--verify", "refs/remotes/origin/main")
+    assert "LIMIT = 50" in (opt / "server" / "maxxing" / "rules.py").read_text()
+    assert [c["title"] for c in customs.list_customs()] == ["Raise the limit to 50"]
+    assert not license.enabled() and config.get_secret(license.KEY) == "HM-ABCD-EFGH-JKMN-PQRS"
+    from maxxing import cmd_core
+    assert cmd_core.update_source() == "git"
+    # from now on the updates come from git, customizations still carried over
+    _upstream_release(work, "1.1.0", extra="NEW.md")
+    _git("push", "-q", "origin", "HEAD:stable", cwd=work)
+    n = len(server.calls)
+    capsys.readouterr()
+    assert run_cli("update") == 0, capsys.readouterr().out
+    assert (opt / "server" / "maxxing" / "__init__.py").read_text().strip() == '__version__ = "1.1.0"'
+    assert (opt / "NEW.md").exists() and "LIMIT = 50" in (opt / "server" / "maxxing" / "rules.py").read_text()
+    assert len(server.calls) == n                                    # the license server is not asked any more
+
+
+def test_the_move_waits_until_the_version_is_on_stable(code, server, keys, tmp_path, monkeypatch):
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    work = code["work"]
+    _git("push", "-q", "origin", "HEAD:stable", cwd=work)
+    _upstream_release(work, "1.1.0")                                 # only 1.1.0 published as an archive...
+    server.publish(keys, work, "1.1.0")
+    _git("checkout", "-q", "HEAD~1", cwd=work)
+    _git("push", "-q", "-f", "origin", "HEAD:stable", cwd=work)      # ...stable still at 1.0.0
+    assert license.fetch_latest()["version"] == "1.1.0"
+    _git("-c", "user.name=t", "-c", "user.email=t@t", "rebase", "-q", "origin/main", cwd=opt)
+    before = _g(opt, "rev-parse", "HEAD")
+    r = license.try_move_to_git()
+    assert not r["ok"] and "1.1.0 is not on stable" in r["error"]
+    assert _g(opt, "rev-parse", "--abbrev-ref", "HEAD") == "main" and _g(opt, "rev-parse", "HEAD") == before
+    assert license.enabled() and (config.load_config()["license"]["move_error"])
+    assert not license.move_due()                                    # tried again in a few hours
+
+
+def test_the_move_matches_the_version_when_the_files_differ(code, server, keys, tmp_path, monkeypatch):
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    work = code["work"]
+    (work / "ONLY-IN-GIT.md").write_text("x\n")                      # same version, not the same files
+    _git("add", "-A", cwd=work)
+    _git("commit", "-q", "--amend", "-m", "rules + docs", cwd=work)  # no commit of stable has the archive's files
+    _git("push", "-q", "origin", "HEAD:stable", cwd=work)
+    r = license.move_to_git()
+    assert r["moved"] and r["commit"] == _g(work, "rev-parse", "HEAD")
+    assert (opt / "ONLY-IN-GIT.md").exists() and "LIMIT = 50" in (opt / "server" / "maxxing" / "rules.py").read_text()
+
+
+def test_the_move_never_touches_uncommitted_changes(code, server, keys, tmp_path, monkeypatch):
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    _git("push", "-q", "origin", "HEAD:stable", cwd=code["work"])
+    (opt / "server" / "maxxing" / "rules.py").write_text("LIMIT = 70\n")
+    r = license.move_to_git()
+    assert not r["ok"] and "uncommitted" in r["error"] and license.enabled()
+    assert (opt / "server" / "maxxing" / "rules.py").read_text() == "LIMIT = 70\n"
+
+
+def test_update_moves_a_licensed_install_first(code, server, keys, tmp_path, monkeypatch, capsys):
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    _git("push", "-q", "origin", "HEAD:stable", cwd=code["work"])
+    capsys.readouterr()
+    assert run_cli("update") == 0
+    out = capsys.readouterr().out
+    assert "now updates from" in out and _g(opt, "rev-parse", "--abbrev-ref", "HEAD") == "stable"
+
+
+def test_the_move_starts_from_the_installed_version_not_a_fetched_one(code, server, keys, tmp_path, monkeypatch):
+    opt = _licensed_with_custom(code, server, keys, tmp_path, monkeypatch)
+    work = code["work"]
+    v100 = _g(work, "rev-parse", "HEAD")
+    _upstream_release(work, "1.1.0")
+    server.publish(keys, work, "1.1.0")
+    assert license.fetch_latest()["version"] == "1.1.0"           # fetched by the daily check, never installed
+    _git("push", "-q", "origin", "HEAD:stable", cwd=work)
+    r = license.move_to_git()
+    assert r["moved"] and r["version"] == "1.0.0" and r["commit"] == v100
+    assert (opt / "server" / "maxxing" / "__init__.py").read_text().strip() == '__version__ = "1.0.0"'
+    assert "LIMIT = 50" in (opt / "server" / "maxxing" / "rules.py").read_text()
