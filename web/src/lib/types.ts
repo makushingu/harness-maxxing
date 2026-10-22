@@ -145,6 +145,29 @@ export type SessionEvent =
   | { type: 'note'; text: string; level: 'info' | 'warn' | 'error'; at: number }
   /** `ref` = `at` of a user event: hidden from the thread (or shown again). */
   | { type: 'hide'; ref: number; hidden: boolean; at: number }
+  /** Background work of Claude Code (a sub-agent, a command): a partial update merged on `id`. */
+  | TaskEvent
+export type TaskState = 'running' | 'completed' | 'failed' | 'stopped'
+export type TaskEvent = {
+  type: 'task'
+  id: string
+  /** The Agent / Bash call that started it. */
+  tool_use_id?: string
+  at: number
+  state?: TaskState
+  kind?: 'agent' | 'shell' | 'other'
+  background?: boolean
+  description?: string
+  agent_type?: string
+  /** What it is doing now ("Running npm test…") and with which tool. */
+  activity?: string
+  last_tool?: string
+  tokens?: number
+  tools?: number
+  duration_ms?: number
+  /** The agent's final report (or the command's description). */
+  summary?: string
+}
 export type SessionEventsPage = { events: SessionEvent[]; next: number; state: SessionState }
 /** `?tail=N` / `?before=<offset>&limit=N`: backward pages (`start` = offset of the first line read). */
 export type SessionEventsBackPage = {

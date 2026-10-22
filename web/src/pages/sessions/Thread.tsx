@@ -15,7 +15,7 @@ import { reducedMotion } from '@/lib/presence'
 import type { Session } from '@/lib/types'
 import { ItemRow, UserMessage } from './Items'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { setHiddenLocal, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
+import { isShownTask, setHiddenLocal, taskStatus, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
 import type { Pending, Seed } from './store'
 import { fmtElapsed } from './util'
 
@@ -383,6 +383,11 @@ function RunningRow({ session, log }: { session: Session; log: LogState }) {
       if (!it.result) activity = it.use.summary
       break
     }
+  }
+  // Nothing pending in the thread but sub-agents / background commands still run: say so (the bar lists them).
+  if (activity === t('sessions.working')) {
+    const bg = Object.values(log.tasks).filter((tk) => isShownTask(tk) && taskStatus(tk, true) === 'running')
+    if (bg.length) activity = t(bg.every((tk) => tk.kind === 'agent') ? 'tasks.bar' : 'tasks.barAny', { count: bg.length })
   }
   const since = log.lastUserAt || session.updated
   return (

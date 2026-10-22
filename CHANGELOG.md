@@ -26,6 +26,10 @@ Changes:
 ## 2.0.0-alpha.92 - 2026-10-22
 
 Changes:
+- **See the agents Claude runs in the background.** An agent's card (or a background command's) now spins until its
+  work really ends, with how long it has been running; open it for its last action, the tools and tokens used, then
+  its report. While some still run, a pill above the composer lists them (a click jumps to the card), and it is
+  all still there after a reload or a lost connection.
 - **Donate gets a hand-and-heart icon in the app's accent colour** (no more pink). In the sidebar it is now a small
   icon next to the eye, the theme and the account, instead of a large button; **Settings -> Support** moves to the end
   of the Settings list, in the accent colour. **Settings -> Support -> Hide the Donate buttons** still removes them.

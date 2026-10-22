@@ -1,7 +1,8 @@
 """Raw log lines (Claude stream-json + our mx_* lines) -> API.md Event vocabulary.
 
 Normalisation runs at read time and is stateless per line, so improvements apply to old sessions.
-Dropped on purpose: system chatter (thinking_tokens, task_*, status, rate limits, hooks…),
+Background work (sub-agents, commands) becomes `task` events, one per task_* line, merged by the UI on the
+task id. Dropped on purpose: system chatter (thinking_tokens, status, rate limits, hooks…), commands run by a sub-agent,
 sub-agent internals (lines with a parent_tool_use_id), synthetic user texts (auto-compaction
 summaries), and empty (redacted) thinking blocks.
 """
@@ -14,6 +15,8 @@ from typing import Any, Iterable
 
 TOOL_RESULT_MAX = 20_000
 SUMMARY_MAX = 120
+TASK_KINDS = {"local_agent": "agent", "local_bash": "shell"}
+TASK_STATES = {"completed": "completed", "failed": "failed", "stopped": "stopped", "killed": "stopped"}
 
 
 def normalize_lines(lines: Iterable[str]) -> list[dict]:
@@ -80,10 +83,61 @@ def _system(ev: dict, at: float | None) -> list[dict]:
         return [{"type": "init", "model": ev.get("model") or "", "cwd": ev.get("cwd") or "", "at": at}]
     if sub == "compact_boundary":
         return [{"type": "note", "text": "Harness compacted its context automatically.", "level": "info", "at": at}]
+    if isinstance(sub, str) and sub.startswith("task_"):
+        return _task(ev, sub, at)
     if sub == "api_retry":
         return [{"type": "note", "level": "warn", "at": at,
                  "text": f"API retry {ev.get('attempt')}/{ev.get('max_retries')}: {ev.get('error') or ''}".strip()}]
     return []
+
+
+def _clip(v: Any, n: int) -> str:
+    s = str(v or "").strip()
+    return s if len(s) <= n else s[:n] + f"\n… (truncated, {len(s)} characters)"
+
+
+def _task(ev: dict, sub: str, at: float | None) -> list[dict]:
+    """task_started / task_progress / task_updated / task_notification -> a partial `task` event (only the fields
+    the line carries). Commands are tasks too (foreground ones included: one may be moved to the background)."""
+    tid = ev.get("task_id")
+    if not isinstance(tid, str) or not tid or ev.get("owned_by_subagent"):
+        return []
+    out: dict[str, Any] = {"type": "task", "id": tid, "at": at}
+    if isinstance(ev.get("tool_use_id"), str) and ev["tool_use_id"]:
+        out["tool_use_id"] = ev["tool_use_id"]
+    usage = ev.get("usage") if isinstance(ev.get("usage"), dict) else {}
+    for k, key in (("total_tokens", "tokens"), ("tool_uses", "tools"), ("duration_ms", "duration_ms")):
+        if isinstance(usage.get(k), (int, float)):
+            out[key] = int(usage[k])
+    if sub == "task_started":
+        tt = ev.get("task_type")
+        out.update(state="running", kind=TASK_KINDS.get(tt, "other"), background=bool(ev.get("is_backgrounded")),
+                   description=_short(ev.get("description"), 200))
+        if ev.get("subagent_type"):
+            out["agent_type"] = str(ev["subagent_type"])
+    elif sub == "task_progress":
+        out["state"] = "running"
+        if ev.get("description"):
+            out["activity"] = _short(ev["description"])
+        if ev.get("last_tool_name"):
+            out["last_tool"] = str(ev["last_tool_name"])
+    elif sub == "task_updated":
+        patch = ev.get("patch") if isinstance(ev.get("patch"), dict) else {}
+        if patch.get("status") in TASK_STATES:
+            out["state"] = TASK_STATES[patch["status"]]
+        elif patch.get("status") == "running":
+            out["state"] = "running"
+        if isinstance(patch.get("is_backgrounded"), bool):
+            out["background"] = patch["is_backgrounded"]
+        if "state" not in out and "background" not in out:   # nothing shown changed
+            return []
+    elif sub == "task_notification":
+        out["state"] = TASK_STATES.get(ev.get("status"), "completed")
+        if ev.get("summary"):
+            out["summary"] = _clip(ev["summary"], TOOL_RESULT_MAX)
+    else:
+        return []
+    return [out]
 
 
 def _assistant(ev: dict, at: float | None) -> list[dict]:
