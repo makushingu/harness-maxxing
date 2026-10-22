@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from _conn_helpers import mx_state  # noqa: F401
-from maxxing import backup, cli, config, license, security
+from maxxing import backup, cli, config, security
 
 INSTALL = Path(__file__).resolve().parents[2] / "install.sh"
 
@@ -96,53 +96,6 @@ def test_backup_cli_held_and_release(mx_state, capsys):
 def test_custom_restore_stat_changes_nothing(tmp_path, capsys):
     assert cli.main(["custom", "restore", "--stat", "--from", str(tmp_path)]) == 0
     assert "No saved customization" in capsys.readouterr().out
-
-
-# ---- release keys ---------------------------------------------------------------------------------------------
-def _keypair(d: Path, name: str) -> Path:
-    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(d / f"{name}.pem")], check=True)
-    subprocess.run(["openssl", "pkey", "-in", str(d / f"{name}.pem"), "-pubout", "-out", str(d / f"{name}.pub")],
-                   check=True)
-    return d / f"{name}.pem"
-
-
-def _sign(key: Path, msg: bytes, d: Path) -> str:
-    import base64
-    (d / "m").write_bytes(msg)
-    sig = subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(d / "m")],
-                         capture_output=True, check=True).stdout
-    return base64.b64encode(sig).decode()
-
-
-def test_a_release_without_kid_verifies_with_any_known_key(tmp_path, monkeypatch):
-    """Same rule as the license server: a release signed by the next key (k2) verifies even before the server
-    names its kid; a kid this version does not know is refused."""
-    k1, k2, k3 = (_keypair(tmp_path, n) for n in ("k1", "k2", "k3"))
-    monkeypatch.setattr(license, "PUBKEYS", {"k1": (tmp_path / "k1.pub").read_text(),
-                                              "k2": (tmp_path / "k2.pub").read_text()})
-    monkeypatch.delenv("MAXXING_RELEASE_PUBKEY", raising=False)
-    msg = license.signed_message("2.0.0a99", "ab" * 32)
-    s1, s2, s3 = (_sign(k, msg, tmp_path) for k in (k1, k2, k3))
-    assert license.verify_signature("2.0.0a99", "ab" * 32, s1)
-    assert license.verify_signature("2.0.0a99", "ab" * 32, s2)               # no kid: every known key
-    assert license.verify_signature("2.0.0a99", "ab" * 32, s2, "k2")
-    assert not license.verify_signature("2.0.0a99", "ab" * 32, s2, "k1")     # a named kid: that key only
-    assert not license.verify_signature("2.0.0a99", "ab" * 32, s3)
-    assert not license.verify_signature("2.0.0a99", "ab" * 32, s1, "k9")
-    assert not license.verify_signature("2.0.0a99", "ab" * 32, "not base64!")
-
-
-def test_installer_trusts_the_same_release_keys_as_the_server():
-    text = INSTALL.read_text()
-    kids = re.search(r'^RELEASE_KIDS="([^"]*)"', text, re.M).group(1).split()
-    assert sorted(kids) == sorted(license.PUBKEYS)
-    for k in kids:
-        pem = re.search(rf"^RELEASE_PUBKEY_{k}='([^']*)'", text, re.M | re.S).group(1)
-        assert pem.strip() == license.PUBKEYS[k].strip()
-    floor = re.search(r'^MIN_VERSION="([^"]+)"', text, re.M).group(1)
-    from maxxing import __version__
-    from maxxing.cmd_core import version_key
-    assert version_key(floor) <= version_key(__version__)
 
 
 # ---- installer checks -----------------------------------------------------------------------------------------

@@ -48,9 +48,9 @@ Multi-user accounts and roles, Windows/macOS servers, Docker image (2.1 candidat
    redistribution; one legal entity per organisation; selling, paid offers, paid hosting and the name / logo need
    the owners' written consent. Contributions under `CLA.md`.
 2. **Distribution:** the default install clones the public git repository (no key, no token) and updates from it.
-   Signed release tarballs (ed25519, done in 2.0.0a6) are still downloaded with an existing license key from
-   `api.harness-maxxing.com` (`maxxing/license.py`, `install.sh` license mode). Each release is imported as a
-   commit on `refs/remotes/origin/<branch>`, so updates, customizations and rollback work as with git.
+   Installs made with a license key before 2.0.0a87 got signed release tarballs; their old code still downloads
+   the newest one, and once it runs this code they move to the public repository by themselves
+   (`license.move_to_git`). The code to download, verify and import tarballs is gone since 2.0.0a93.
 3. **Anthropic terms:** the buyer runs the official Claude Code CLI with *their own* account or API
    key on *their own* server; the product never ships, proxies or shares credentials. Verify the
    current Anthropic commercial / consumer terms for third-party tools built on Claude Code before

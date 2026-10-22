@@ -101,7 +101,8 @@ bash /path/to/harness-maxxing/install.sh       # from a local copy (a clone with
 ```
 
 No key and no account. Companies that need an Enterprise license give their key afterwards in Settings → License
-(optional): see [docs/user/23-license.md](docs/user/23-license.md).
+(optional): see [docs/user/23-license.md](docs/user/23-license.md). Servers installed with a key before 2.0.0a87
+switch to the public git repository by themselves.
 
 Day-to-day: `maxxing status`, `maxxing doctor`, `maxxing update`. Remove: `maxxing uninstall`.
 
@@ -174,6 +175,9 @@ Several entities, clients, a paid offer or hosting, the name or a custom deal: a
 
 [Harness Maxxing Fair Source License 1.0](LICENSE).
 Copyright (c) 2026 Harness Maxxing - FEU and RomainPlus.
+
+Third-party code and fonts shipped or installed with Harness Maxxing keep their own licenses (MIT, BSD, Apache,
+ISC, SIL Open Font License...): see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Harness Maxxing runs the official Claude Code CLI with your own Anthropic account or API key; it
 does not ship, proxy or share credentials. "Claude" is a trademark of Anthropic; this project is

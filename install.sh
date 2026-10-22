@@ -35,7 +35,7 @@
 #      `maxxing deps update` once the service runs | foreground: wait for them | 0: skip, `maxxing deps update` later)
 #    SWAP (auto - a 2 GB /swapfile when the server has under 4 GB of memory and no swap, on a fresh server only |
 #          1 - the same on a server already in use | 0 never)
-#    SOURCE_DIR (a local copy of the code to install instead of a git / release download)
+#    SOURCE_DIR (a local copy of the code to install instead of a git download)
 #    FIREWALL (auto - enabled only on a server with nothing else exposed | 1 always | 0 never)
 #    SSH_HARDEN (auto - SSH password logins are turned off only when this very session is proven to use a key
 #      | 1 also when a key is installed but the session cannot be checked | 0 never touch SSH)
@@ -60,18 +60,7 @@ BRANCH="${BRANCH:-stable}"
 GH_TOKEN="${GH_TOKEN:-}"
 LICENSE="${LICENSE:-}"
 LICENSE_API="${LICENSE_API:-https://api.harness-maxxing.com}"
-LICENSED=0          # 1 = code comes from a signed release (license), not from git
-RELEASE_JSON=""
-# public keys that sign the releases (message "harness-maxxing|<version>|<sha256>"), by key id: a release that names
-# its key with `kid` is checked with that key only (an unknown id is refused), one without `kid` with every key below.
-# Same list as PUBKEYS in server/maxxing/license.py.
-RELEASE_KIDS="k1"
-# shellcheck disable=SC2034  # read through ${!name} (release_pubkey)
-RELEASE_PUBKEY_k1='-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAfg3vG94nEzS93VB0zGtE2RH+1VF317mLumbHgMMkOPY=
------END PUBLIC KEY-----'
-# a signed release older than this one is refused (an old version replayed with its known holes)
-MIN_VERSION="2.0.0a68"
+LICENSED=0          # 1 = an install from before 2.0.0a87 still on signed archives: kept, it moves to git by itself
 
 # ---- third-party downloads ------------------------------------------------------------------
 # Versions, URLs and sha256 of uv, Claude Code, Node.js, Caddy's key... are in server/maxxing/deps.toml (the same
@@ -309,21 +298,6 @@ reset_env() {
   HOME=${HOME:-/root}
   export HOME
   export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-}
-
-# ver_lt A B - version A is older than B (2.0.0a9 < 2.0.0a10 < 2.0.0); an unparsable A counts as older
-ver_lt() {
-  python3 -I - "$1" "$2" <<'PY'
-import re, sys
-def key(v):
-    m = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:[-.]?(a|alpha|b|beta|rc)\.?(\d+))?$", v.strip())
-    if not m:
-        return None
-    pre = {"a": 0, "alpha": 0, "b": 1, "beta": 1, "rc": 2}.get(m.group(4) or "", 3)
-    return (int(m.group(1)), int(m.group(2)), int(m.group(3)), pre, int(m.group(5) or 0))
-a, b = key(sys.argv[1]), key(sys.argv[2])
-sys.exit(0 if a is None or (b is not None and a < b) else 1)
-PY
 }
 
 # url_ok URL - https://, or plain http to this machine only (tests)
@@ -1233,102 +1207,8 @@ secure_server() {
   fi
 }
 
-# ---- license --------------------------------------------------------------------------------
-machine_hash() {
-  local raw=""
-  raw=$(tr -d '[:space:]' </etc/machine-id 2>/dev/null || true)
-  [ -n "$raw" ] || raw=$(tr -d '[:space:]' </var/lib/dbus/machine-id 2>/dev/null || true)
-  [ -n "$raw" ] || die "/etc/machine-id is missing (run: systemd-machine-id-setup)"
-  printf 'harness-maxxing:%s' "$raw" | sha256sum | cut -d' ' -f1
-}
-
-# json_get FILE KEY.SUBKEY - prints a value of a JSON file ("" when absent)
-json_get() {
-  python3 -I - "$1" "$2" <<'PY' 2>/dev/null || true
-import json, sys
-v = json.load(open(sys.argv[1]))
-for k in sys.argv[2].split("."):
-    v = v.get(k) if isinstance(v, dict) else None
-print("" if v is None else v)
-PY
-}
-
-license_activate() {
-  command -v curl >/dev/null 2>&1 || { apt_get update -qq >/dev/null 2>&1; apt_get install -y -qq curl ca-certificates >/dev/null 2>&1; }
-  command -v python3 >/dev/null 2>&1 || { apt_get update -qq >/dev/null 2>&1; apt_get install -y -qq python3 >/dev/null 2>&1; }
-  RELEASE_JSON="$WORK/activation.json"
-  local code msg mh os
-  mh=$(machine_hash)
-  os=$(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-linux}")
-  # the key goes from a shell variable to python's stdin, then to curl's stdin: never in a command line (ps)
-  code=$(printf '%s' "$LICENSE" \
-    | python3 -I -c 'import json,sys; print(json.dumps({"key": sys.stdin.read().strip(), "machine_id": sys.argv[1], "hostname": sys.argv[2], "os": sys.argv[3]}))' \
-        "$mh" "$(hostname)" "$os" \
-    | curl -sS --proto '=https,http' -o "$RELEASE_JSON" -w '%{http_code}' -X POST -H 'content-type: application/json' \
-        --data-binary @- "$LICENSE_API/v1/activate" 2>/dev/null || echo 000)
-  if [ "$code" != 200 ]; then
-    msg=$(json_get "$RELEASE_JSON" message)
-    [ "$code" = 000 ] && msg="cannot reach $LICENSE_API (network?)"
-    die "license refused: ${msg:-HTTP $code}"
-  fi
-  [ -n "$(json_get "$RELEASE_JSON" release.url)" ] || die "license OK but $(json_get "$RELEASE_JSON" message || echo 'no version is available yet')"
-  ok "license ${LICENSE:0:7}…${LICENSE: -4} ($(json_get "$RELEASE_JSON" license.kind), $(json_get "$RELEASE_JSON" license.email)) - version $(json_get "$RELEASE_JSON" release.version)"
-}
-
-# the signed release of the activation -> $INSTALL_DIR as a git repository (origin/main = this version)
-# release_pubkey KID - the public key of a key id, nothing (status 1) for an unknown id
-release_pubkey() {
-  local k
-  for k in $RELEASE_KIDS; do
-    if [ "$k" = "$1" ]; then local v="RELEASE_PUBKEY_$k"; printf '%s' "${!v}"; return 0; fi
-  done
-  return 1
-}
-
-# release_verified DIR KID - DIR/msg is signed (DIR/sig) by the key KID, or by any known key when KID is empty
-release_verified() {
-  local k
-  for k in ${2:-$RELEASE_KIDS}; do
-    release_pubkey "$k" > "$1/pub.pem" || return 1
-    openssl pkeyutl -verify -pubin -inkey "$1/pub.pem" -rawin -in "$1/msg" -sigfile "$1/sig" >/dev/null 2>&1 && return 0
-  done
-  return 1
-}
-
-fetch_release() {
-  local tmp ver sha sig url kid got
-  tmp="$WORK/release"; mkdir -p "$tmp"
-  ver=$(json_get "$RELEASE_JSON" release.version); sha=$(json_get "$RELEASE_JSON" release.sha256)
-  sig=$(json_get "$RELEASE_JSON" release.signature); url=$(json_get "$RELEASE_JSON" release.url)
-  kid=$(json_get "$RELEASE_JSON" release.kid)
-  url_ok "$url" || die "the release is not served over HTTPS ($url) - refused"
-  [ -z "$kid" ] || release_pubkey "$kid" >/dev/null \
-    || die "the release is signed with a key this installer does not know ($kid) - get the latest installer"
-  printf '%s' "$sha" | grep -Eq '^[0-9a-f]{64}$' || die "the license server sent an invalid checksum - refused"
-  ver_lt "$ver" "$MIN_VERSION" && die "the license server offers version $ver, older than $MIN_VERSION - refused"
-  fetch_verified "$url" "$sha" "$tmp/release.tar.gz" || die "download of version $ver failed or does not match its sha256 - run the command again"
-  command -v openssl >/dev/null 2>&1 || apt_get install -y -qq openssl >/dev/null 2>&1
-  printf 'harness-maxxing|%s|%s' "$ver" "$sha" > "$tmp/msg"
-  printf '%s' "$sig" | base64 -d > "$tmp/sig" 2>/dev/null || die "the downloaded archive is not signed by Harness Maxxing - refused"
-  release_verified "$tmp" "$kid" \
-    || die "the downloaded archive is not signed by Harness Maxxing - refused"
-  # the signed version must be the one inside the archive (a signature is only worth the version it names)
-  got=$(tar -xzOf "$tmp/release.tar.gz" ./server/maxxing/__init__.py 2>/dev/null || tar -xzOf "$tmp/release.tar.gz" server/maxxing/__init__.py 2>/dev/null || true)
-  got=$(printf '%s\n' "$got" | sed -n 's/^__version__ = "\(.*\)"$/\1/p' | head -n1)
-  [ "$got" = "$ver" ] || die "the archive holds version '${got:-?}', not the signed $ver - refused"
-  (umask 022; mkdir -p "$INSTALL_DIR")
-  (umask 022; tar -xzf "$tmp/release.tar.gz" -C "$INSTALL_DIR" --no-same-owner --no-same-permissions) || die "cannot extract version $ver"
-  local id=(-c user.name="Harness Maxxing" -c user.email="releases@harness-maxxing.com")
-  git -C "$INSTALL_DIR" init -q -b "$BRANCH" --
-  git -C "$INSTALL_DIR" add -A -f
-  git "${id[@]}" -C "$INSTALL_DIR" commit -q -m "Harness Maxxing $ver" || die "git commit of version $ver failed"
-  git -C "$INSTALL_DIR" update-ref "refs/remotes/origin/$BRANCH" HEAD
-  rm -rf "$tmp"                                  # the archive is in git now: no copy is kept
-  ok "version $ver downloaded, signature verified, installed in $INSTALL_DIR"
-}
-
 # ---- code -----------------------------------------------------------------------------------
-# fetch_local - SOURCE_DIR copied into $INSTALL_DIR as a git repository without remote (= what a release does)
+# fetch_local - SOURCE_DIR copied into $INSTALL_DIR as a git repository without remote
 fetch_local() {
   local src=$SOURCE_DIR ver id=(-c user.name="Harness Maxxing" -c user.email="local@localhost")
   if [ -z "$src" ]; then ok "local install in $INSTALL_DIR (no remote) - kept"; return; fi
@@ -1363,15 +1243,8 @@ fetch_code() {
   local url="https://github.com/$REPO.git"
   export GIT_TERMINAL_PROMPT=0
   if [ "$LOCAL" = 1 ]; then fetch_local; return; fi
-  if [ -d "$INSTALL_DIR/.git" ] && [ "$LICENSED" = 1 ]; then
-    ok "licensed install in $INSTALL_DIR - kept (update with: maxxing update)"
-    return
-  fi
   if [ "$LICENSED" = 1 ]; then
-    if [ -e "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
-      die "$INSTALL_DIR exists and is not a Harness Maxxing install - move it away or set INSTALL_DIR"
-    fi
-    fetch_release
+    ok "install from before 2.0.0a87 in $INSTALL_DIR - kept (it moves to the git repository by itself; now: maxxing update)"
     return
   fi
   if [ -d "$INSTALL_DIR/.git" ]; then

@@ -17,7 +17,7 @@ os.environ["MAXXING_SPAWN"] = "direct"
 os.environ["MAXXING_SYSTEM_TZ"] = "0"                # never switch the real system clock
 os.environ.setdefault("MAXXING_AUTH_CHECK", "0")     # no background `claude -p` check (tests opt in)
 os.environ["MAXXING_CLAUDE_UPDATE"] = "0"          # no background `claude update` (tests call tick())
-os.environ["MAXXING_LICENSE_PING"] = "0"           # no daily license ping from the test servers
+os.environ["MAXXING_LICENSE_PING"] = "0"           # no call to the cloud (registration heartbeat) from the test servers
 os.environ["MAXXING_SHORT_TITLES"] = "0"           # no background title call (tests/test_titles.py opts in)
 # run from a Claude session started by Harness: its turn variables would pass through to the fake `claude`
 for _var in ("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"):

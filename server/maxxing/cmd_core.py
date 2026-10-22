@@ -1365,13 +1365,7 @@ def check_git(fetch: bool = True) -> Check:
 
 def _fetch_quiet(branch: str) -> None:
     from . import license
-    if license.enabled():
-        try:
-            license.fetch_latest(branch)
-        except license.LicenseError:
-            pass
-        return
-    if not valid_branch(branch):
+    if license.enabled() or not valid_branch(branch):  # still on archives: nothing to fetch before the move to git
         return
     _git("fetch", "-q", "origin", "--", branch, timeout=20, token=config.get_secret(UPDATE_TOKEN) or None)
 
@@ -1381,7 +1375,7 @@ def check_update_signature() -> Check | None:
         return None
     from . import license
     if license.enabled():
-        return _c("update_signature", OK, "update signatures: licensed archives are always verified")
+        return None                                    # still on archives: checked once it has moved to git
     ref = f"origin/{_current_branch()}"
     target = _rev(ref) or _rev("HEAD")
     ok, detail = verify_target(target) if target else (False, "no commit")
@@ -1399,14 +1393,12 @@ def check_license() -> Check:
         if update_source() == "git":
             return _c("license", INFO, "updates from the git repository (no license needed)")
         return _c("license", INFO, "no license needed (local copy: updates come from a newer copy)")
-    if st.get("move_error"):                          # fair source: waiting to move to the git repository
-        return _c("license", INFO, f"license {st['key_hint']}: moving to the public git repository - {st['move_error']}",
-                  "tried again by itself every few hours", "maxxing update (moves it first)")
-    up = st.get("updates_until")
-    if up and up < time.time():
-        return _c("license", WARN, f"license {st['key_hint']}: updates ended on {time.strftime('%Y-%m-%d', time.localtime(up))}",
-                  "this server keeps working on its version", "renew from your license email")
-    return _c("license", OK, f"license {st['key_hint']} ({st.get('kind') or '?'})", st.get("email") or "")
+    # an install from before 2.0.0a87 (code of a signed archive): moves to the public git repository by itself
+    if st.get("move_error"):
+        return _c("license", INFO, f"moving to the public git repository: not yet - {st['move_error']}",
+                  "tried again by itself every few hours", "maxxing update  (moves it first)")
+    return _c("license", INFO, "moving to the public git repository (by itself, a few minutes after the start)",
+              "", "maxxing update  (moves it now)")
 
 
 def _password_set() -> bool:
@@ -1507,9 +1499,6 @@ def changelog_since(old: str, new: str) -> list[str]:
     return [strip_show(ln[1:]) for ln in out.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
 
 
-_ALLOW_DOWNGRADE = False                               # `maxxing update --allow-downgrade` (licensed installs)
-
-
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 
@@ -1523,14 +1512,10 @@ def _fetch(branch: str) -> tuple[bool, str]:
     from . import license
     if not valid_branch(branch):
         return False, f"invalid branch name: {branch[:80]!r}"
-    if license.enabled():                              # licensed install: signed archive -> origin/<branch>
-        try:
-            r = license.fetch_latest(branch, allow_downgrade=_ALLOW_DOWNGRADE)
-        except license.LicenseError as e:
-            return False, str(e)
-        if r.get("message") and not r.get("version"):
-            line(INFO, r["message"])
-        return True, ""
+    if license.enabled():                              # pre-a87 install still on archives: git once it has moved
+        err = (license.status().get("move_error") or "").strip()
+        return False, ("this server still runs the code of a signed archive and has not moved to the public git "
+                       "repository yet" + (f": {err}" if err else "") + " - `maxxing update` moves it first")
     token = config.get_secret(UPDATE_TOKEN) or None
     code, out = _git("fetch", "-q", "origin", "--", branch, timeout=120, token=token)
     if code != 0:
@@ -1541,8 +1526,8 @@ def _fetch(branch: str) -> tuple[bool, str]:
 
 
 def update_source() -> str | None:
-    """Where updates come from: "license", "git" (a clone with an `origin` remote) or None (neither: no check can
-    ever succeed)."""
+    """Where updates come from: "git" (a clone with an `origin` remote), "license" (an install from before 2.0.0a87,
+    still on the code of a signed archive: it moves to git first) or None (no check can ever succeed)."""
     from . import license
     if license.enabled():
         return "license"
@@ -1768,8 +1753,6 @@ def cmd_update(a) -> int:
     conflict nothing changes and Claude adapts them (topic system/harness); a release that does not
     start is rolled back."""
     from . import customs
-    global _ALLOW_DOWNGRADE
-    _ALLOW_DOWNGRADE = bool(getattr(a, "allow_downgrade", False))
     if a.check:
         return cmd_update_check(a)
     if a.preflight:
@@ -1803,13 +1786,26 @@ def cmd_update(a) -> int:
              f"{config.CODE} rebase --abort)")
         return 1
     from . import license
-    if license.enabled() and not a.branch:            # fair source: a licensed install moves to git first
+    if license.enabled():                              # fair source: an install still on archives moves to git first
+        dirty = [f for f in customs.dirty_files() if not f.startswith("web/")]
+        if dirty:                                      # the move needs a clean tree: keep them as a customization
+            try:
+                it = customs.save("Unsaved changes found by the update",
+                                  why=f"auto-saved by maxxing update ({', '.join(dirty[:5])}) - "
+                                      f"give it a real title and reason (topic {update_topic()})")
+                line(WARN, f"{len(dirty)} uncommitted change(s) saved as customization {it['id']}",
+                     "Claude: rename it with the real purpose (skill maxxing-customize)")
+            except customs.CustomError as e:
+                line(FAIL, "uncommitted changes in the code directory cannot be kept", str(e))
+                return 1
         r = license.try_move_to_git()
         if r.get("moved"):
             line(OK, f"this server now updates from {license.GIT_URL} (branch {r['branch']}, "
                      f"{r.get('version') or '?'}), customizations kept")
-        elif r.get("error"):
-            line(INFO, f"still on licensed archives: {r['error']}")
+        else:
+            line(FAIL, "this server still runs the code of a signed archive and could not move to the public git "
+                       f"repository yet: {r.get('error') or '?'}", "fix what is said, then: maxxing update")
+            return 1
     branch = a.branch or _current_branch()
     old = _rev("HEAD")                                 # what runs now: a rollback goes back here, on this branch
     _UPDATE_CTX.clear()
@@ -1828,21 +1824,17 @@ def cmd_update(a) -> int:
             return 1
     target = _rev(f"origin/{branch}")
     if config.load_config().get("update_verify_signature") and target and target != old:
-        from . import license
-        if license.enabled():
-            line(INFO, "signature: licensed archive already verified (ed25519) - git signature check skipped")
-        else:
-            ok, detail = verify_target(target)
-            if not ok:
-                line(FAIL, f"update stopped: {target[:8]} has no valid signature (update_verify_signature is on)"
-                     f" - nothing changed, {__version__} keeps running",
-                     f"{detail} | check: git -C {config.CODE} verify-commit {target[:8]} ; import the maintainer's "
-                     "key (gpg --import) or set gpg.ssh.allowedSignersFile ; or turn the check off: "
-                     "update_verify_signature false in config.json")
-                _notify(f"Harness Maxxing update stopped: the new version {target[:8]} is not signed by a trusted "
-                        "key (update_verify_signature). Nothing changed.")
-                return 1
-            line(OK, detail)
+        ok, detail = verify_target(target)
+        if not ok:
+            line(FAIL, f"update stopped: {target[:8]} has no valid signature (update_verify_signature is on)"
+                 f" - nothing changed, {__version__} keeps running",
+                 f"{detail} | check: git -C {config.CODE} verify-commit {target[:8]} ; import the maintainer's "
+                 "key (gpg --import) or set gpg.ssh.allowedSignersFile ; or turn the check off: "
+                 "update_verify_signature false in config.json")
+            _notify(f"Harness Maxxing update stopped: the new version {target[:8]} is not signed by a trusted "
+                    "key (update_verify_signature). Nothing changed.")
+            return 1
+        line(OK, detail)
     web = [f for f in customs.dirty_files() if f.startswith("web/")]
     if web:                                            # the pre-built UI cannot be a customization: kept aside
         code, out = customs.git("stash", "push", "-u", "-q", "-m",
@@ -1978,7 +1970,6 @@ def _update_finish(a, old: str) -> int:
     line(OK, f"service {SERVICE} restarted ({new_version} answers)")
     customs.clear_pending()
     _mark_updated(new_version, a)
-    _report_version()
     _deps_background_update()
     return 0
 
@@ -2078,16 +2069,6 @@ def cmd_update_verify(a) -> int:
     return 0 if rep["ok"] else 1
 
 
-def _report_version() -> None:
-    """Licensed install: tell the license server the new version right away (best effort)."""
-    from . import license
-    if license.enabled():
-        try:
-            license.ping(license.health_summary())
-        except Exception:  # noqa: BLE001 - never fail an update for this
-            pass
-
-
 def _update_rollback(a) -> int:
     from . import customs
     old = _rev(customs.PRE_UPDATE_REF)
@@ -2132,8 +2113,6 @@ def _cfg_update(p: argparse.ArgumentParser) -> None:
                         "(changes nothing; with --json: machine-readable)")
     p.add_argument("--verify", action="store_true",
                    help="check that every extension loads and every customization check passes")
-    p.add_argument("--allow-downgrade", action="store_true",
-                   help="licensed install: accept a version that is not newer than the installed one")
     p.add_argument("--smart", action="store_true",
                    help="update started from the UI: afterwards the server applies the upgrade notes in a session")
 

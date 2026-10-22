@@ -443,22 +443,25 @@ URLs without query / fragment / userinfo. A channel with more than 64 MB waiting
   (`maxxing custom check`).
 
 ## maxxing.license  (owner: core)
-Licensed installs (no git remote). `enabled()` = `license_token` in secrets.json. `activate(key)`,
-`check(version)`, `ping(health)`, `release()` talk to `{API}/v1/activate|update|ping|release`
-(token = activation token, machine = sha256("harness-maxxing:" + /etc/machine-id)).
-`fetch_latest(branch)` = the `git fetch` of a licensed install: newest allowed release -> download ->
-sha256 + ed25519 signature of `harness-maxxing|<version>|<sha256>` (openssl, public key `PUBKEY`) ->
-`import_release()` commits the files on `refs/remotes/origin/<branch>` (parent = previous one).
-`cmd_core._fetch` / `check_git` and `api/system._refresh_remote` call it; everything after (rebase of
-customizations, health, rollback) is unchanged. `api/system.startup` pings once a day
-(`health_summary()`: codes only). Releases are built, signed and uploaded by the seller's publish script (not in this repository).
+The optional Enterprise key: `activate(key)`, `release()`, `remove_key()`, `status()` (`has_key`, `key_hint`, never
+the key) talk to `{API}/v1/activate|release` (activation token kept as `license_seat`, only to free the seat;
+machine = sha256("harness-maxxing:" + /etc/machine-id)). Also `API`, `USER_AGENT`, `disk_version()` (used by
+`register.py`, `feedback.py`).
+Installs from before 2.0.0a87 (`enabled()` = `license_token` in secrets.json) run the code of a signed archive
+imported by their old code as a commit on `refs/remotes/origin/<branch>`. `move_to_git()` makes them a clone of
+`GIT_URL` on `stable` (the `stable` commit with the same tree, else the same `__version__`; customizations
+rebased; `license_token` -> `license_seat`). Triggers: `api/system._after_update` at every start (after
+`MAXXING_MOVE_QUIET_S`, never while `maxxing-update` runs), the hourly loop (`move_due`, every 6 h after a
+failure) and `cmd_update` (saves uncommitted non-`web/` changes first, then stops with the reason if the move
+fails). Until then `_fetch` / `check_update` / `_refresh_remote` fetch nothing. Downloading and verifying archives
+is gone (2.0.0a93): the old code that still runs on those servers does it.
 
 ## CLI
 `maxxing.cli.register(name, help, configure(parser), handler(args) -> int)`, called from
 `maxxing/cmd_core.py` (init, doctor, update, status, harden, uninstall), `cmd_cron.py` (cron run/sync/list),
 `cmd_backup.py` (backup run/restore/status), `cmd_telegram.py` (telegram status/test),
 `cmd_sessions.py` (sessions compact-logs), `cmd_memory.py` (memory), `cmd_import.py` (import), `cmd_video.py` (video new/status), `cmd_voice.py` (voice status/set/download/transcribe),
-`cmd_custom.py` (custom status/save/drop/export/restore), `cmd_license.py` (license activate/status/check/release/ping).
+`cmd_custom.py` (custom status/save/drop/export/restore), `cmd_license.py` (license activate/status/remove/release).
 Startup speed: `configure(parser)` runs only for the command being run (the first non-option argument),
 and the `cmd_*` modules import their domain module (crons, feed, license, urllib...) inside the handler,
 never FastAPI (`maxxing.security` / `maxxing.app`): `maxxing --help` ~85 ms. Keep new commands that way.
@@ -572,7 +575,7 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 - `MAXXING_CRONTAB_FILE` write the managed crontab block into this file instead of `crontab -`
 - `MAXXING_SYSTEM_TZ=0` never switch the system time zone when the time zone setting changes (also skipped when `MAXXING_CRONTAB_FILE` is set)
 - `MAXXING_TELEGRAM_API` Telegram API base URL (tests: local mock) · `MAXXING_GITHUB_API` GitHub API base URL
-- `MAXXING_LICENSE_API` license server (default `https://api.harness-maxxing.com`) · `MAXXING_RELEASE_PUBKEY` path of the public key that verifies releases (tests) · `MAXXING_LICENSE_PING=0` no daily license ping (tests)
+- `MAXXING_LICENSE_API` license server (default `https://api.harness-maxxing.com`) · `MAXXING_GIT_URL` repository an install still on archives moves to (tests) · `MAXXING_LICENSE_PING=0` no hourly loop: no registration heartbeat, no call to the cloud (tests)
 - `MAXXING_AUTH_CHECK=0` no background Claude sign-in verification (tests) · `MAXXING_AUTH_CHECK_DELAY` seconds
   before the first one (default 5)
 - `MAXXING_CLAUDE_UPDATE=0` no background Claude Code update (tests), `=1` also on a non-default state dir · `MAXXING_CLAUDE_UPDATE_DELAY` seconds before

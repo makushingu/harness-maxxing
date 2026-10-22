@@ -74,13 +74,15 @@ where Claude is not available (https://www.anthropic.com/supported-countries), a
 architecture other than x86_64 / arm64. Fix it and re-run `curl -fsSL https://get.harness-maxxing.com | bash`:
 finished steps are skipped. (Running it after `sudo -i` is fine: Claude Code is installed for root.)
 
-**The installer says "license refused".**
-Only with `LICENSE=HM-…` (no key is needed: leave it out to install from the public git repository). The message says why: unknown key (check it in your license email - lost it? harness-maxxing.com/license),
-license revoked or refunded, or **already active on the maximum number of servers**: the installer lists
-them; run `maxxing license release` on the one you no longer use (or reply to your license email).
+**The installer says "could not record the Enterprise key".**
+Only with `LICENSE=HM-…` (no key is needed: leave it out). The install itself is done; run
+`maxxing license activate` to see why: unknown key (check it in your license email), key revoked, or **already
+active on another server** (one key = one server): run `maxxing license release` on the one you no longer use.
 
-**`maxxing update` says the updates period has ended.**
-The server keeps working on its version; renew from your license email to get the new versions.
+**`maxxing update` says the server "still runs the code of a signed archive".**
+A server installed with a key before 2.0.0a87 moves to the public git repository by itself; the message says what
+holds it back (no network, edits of `web/` in the code folder, an update being finished). Fix it and run
+`maxxing update` again.
 
 **The page does not load.**
 `systemctl status claude-maxxing`. If it is failing, read the journal. After a manual `git pull`,

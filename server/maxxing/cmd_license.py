@@ -1,12 +1,13 @@
-"""`maxxing license activate|status|remove|check|release|ping` - the Enterprise key of this server (optional)."""
+"""`maxxing license activate|status|remove|release` - the Enterprise key of this server (optional)."""
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
 
 from . import cli
-from .cmd_core import FAIL, INFO, OK, WARN, line
+from .cmd_core import FAIL, INFO, OK, line
 
 
 def _date(t) -> str:
@@ -25,13 +26,12 @@ def _show(st: dict) -> None:
                  "maxxing license activate")
         line(INFO, "updates come from the git repository" + (f" (since {_date(st['moved_to_git'])})" if st.get("moved_to_git") else ""))
         return
-    line(OK, f"license {st.get('key_hint', '')} ({st.get('kind') or '?'}) - {st.get('email') or ''}")
-    up = st.get("updates_until")
-    line(INFO, f"updates: {'until ' + _date(up) if up else 'included'}"
-         + (f" · key ends {_date(st['expires_at'])}" if st.get("expires_at") else "")
-         + (f" · channel {st['channel']}" if st.get("channel") and st["channel"] != "stable" else ""))
-    if st.get("latest"):
-        line(INFO, f"latest version: {st['latest']}" + (f" ({st['message']})" if st.get("message") else ""))
+    # an install from before 2.0.0a87, still on the code of a signed archive
+    if st.get("has_key"):
+        line(OK, f"Enterprise key {st.get('key_hint', '')} ({st.get('kind') or '?'})"
+             + (f" - {st['email']}" if st.get("email") else ""))
+    line(INFO, "this server moves to the public git repository by itself"
+         + (f" - not yet: {st['move_error']}" if st.get("move_error") else ""), "maxxing update  (moves it now)")
 
 
 def _configure(p) -> None:
@@ -39,12 +39,11 @@ def _configure(p) -> None:
     a = sub.add_parser("activate", help="record an Enterprise key on this server (checked by the license server)")
     a.add_argument("key", nargs="?", help="HM-XXXX-XXXX-XXXX-XXXX (better: leave it out to be asked, or --key-from-stdin)")
     a.add_argument("--key-from-stdin", action="store_true")
-    a.add_argument("--no-fetch", action="store_true", help="do not download the latest version now")
+    # no-op, kept: install.sh passes it (the old code of an install from before 2.0.0a87 understands it)
+    a.add_argument("--no-fetch", action="store_true", help=argparse.SUPPRESS)
     sub.add_parser("status", help="show the license of this server").add_argument("--json", action="store_true")
-    sub.add_parser("check", help="ask the license server for a new version").add_argument("--json", action="store_true")
     sub.add_parser("remove", help="forget the Enterprise key of this server (frees its place)")
     sub.add_parser("release", help="free this server's place on the license (before moving to another server)")
-    sub.add_parser("ping", help="send the daily status now")
 
 
 def _handler(a) -> int:
@@ -59,14 +58,9 @@ def _handler(a) -> int:
             if not key:
                 line(FAIL, "give the license key", "maxxing license activate  (it asks for the key)")
                 return 2
-            was_archives = license.enabled()
             r = license.activate(key)
             line(OK, f"Enterprise key recorded ({r['license'].get('kind')}, {r['license'].get('email')})",
                  "nothing else changes: updates keep coming from the git repository")
-            if was_archives and not a.no_fetch and config_is_git():
-                f = license.fetch_latest()
-                if f.get("version"):
-                    line(OK, f"version {f['version']} downloaded and verified", "install it with: maxxing update")
             return 0
         if act == "status":
             st = license.status()
@@ -74,17 +68,6 @@ def _handler(a) -> int:
                 print(json.dumps(st, indent=2))
             else:
                 _show(st)
-            return 0
-        if act == "check":
-            r = license.check()
-            if getattr(a, "json", False):
-                print(json.dumps(r, indent=2))
-            elif r.get("allowed"):
-                line(OK, f"version {r['release']['version']} available", "maxxing update")
-            elif r.get("available"):
-                line(WARN, f"version {r['latest']} exists", r.get("message") or "")
-            else:
-                line(OK, f"up to date ({license.disk_version()})")
             return 0
         if act == "remove":
             r = license.remove_key()
@@ -95,10 +78,6 @@ def _handler(a) -> int:
             line(OK, "this server no longer uses a place on the license",
                  "it keeps working; activate the key on the new server with: maxxing license activate <key>")
             return 0
-        if act == "ping":
-            r = license.ping(license.health_summary())
-            line(OK if r.get("ok") else WARN, "status sent" if r.get("ok") else f"not sent: {r.get('error')}")
-            return 0
     except license.LicenseError as e:
         line(FAIL, str(e))
         for s in (e.data.get("servers") or [])[:10]:
@@ -107,9 +86,4 @@ def _handler(a) -> int:
     return 2
 
 
-def config_is_git() -> bool:
-    from . import config
-    return (config.CODE / ".git").exists()
-
-
-cli.register("license", "license of this server (activate, status, check, release, ping)", _configure, _handler)
+cli.register("license", "Enterprise key of this server (activate, status, remove, release)", _configure, _handler)

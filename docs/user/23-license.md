@@ -82,7 +82,7 @@ comes from GitHub like every install.
 ### Servers installed with a key before 2.0.0a87
 
 They used to update from signed archives. Since 2.0.0a87 they **move to the public git repository by themselves**:
-a few minutes after updating to 2.0.0a87 (or at the next `maxxing update`) the code follows the `stable` branch of
+a few minutes after their next update (or at the next `maxxing update`) the code follows the `stable` branch of
 `github.com/makushingu/harness-maxxing`, at the same version, with the customizations kept; the key stays (Settings
 → License). If it cannot move yet (no network, uncommitted changes in the code folder, an update being finished) it
 tries again every few hours and `maxxing doctor` says why.
@@ -90,9 +90,8 @@ tries again every few hours and `maxxing doctor` says why.
 ## What is sent to the license server
 
 Only when a key is recorded or removed: the key, a one-way fingerprint of the machine (never the raw machine id),
-its hostname, operating system and Harness Maxxing version; the license server also sees the IP address. A server
-still on signed archives (before it moves to git) also sends, at each update check and once a day, whether the
-service runs and a few health codes (disk and memory level, uptime, Claude connected, age of the last backup).
+its hostname, operating system and Harness Maxxing version; the license server also sees the IP address. Nothing
+else, and nothing on a schedule (the daily status of the old signed-archive servers is gone).
 
 Never sent: your files, sessions, prompts, memory, keys, project or topic names (a **Feedback** message carries only
 what you typed, see above).
