@@ -38,8 +38,10 @@ Nobody has to tell us anything. The onboarding has a step **About you** and **Se
 | **Email** | your email, your pseudo (Settings → Profile) and the interface language, so we can warn you about a security issue or a breaking change. Never shared, never sold. |
 | **Also send me the product news** (needs an email) | the same, plus a few product emails a month at most. |
 
-Unchecking everything (or **Stop and delete**) deletes what we have about this server. An update never turns any of
-these on: a server installed before this choice existed sends nothing until you check something.
+Unchecking everything (or **Stop, don't contact me**) stops it: the server sends nothing more and is never contacted
+again (security alerts included). To have what we have about it erased, ask us (see
+[harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). An update never turns any of these on: a server
+installed before this choice existed sends nothing until you check something.
 
 ## Existing license keys
 
