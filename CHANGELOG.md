@@ -16,6 +16,10 @@ Changes:
 ## 2.0.0-alpha.93 - 2026-10-22
 
 Changes:
+- **Mark a server issue as seen.** In the list of the dot at the bottom of the sidebar, **Seen** stops an issue
+  (a scheduled job that failed once, an old backup...) from counting in the dot; it comes back when it changes, or
+  after 24 hours if it is still there.
+- **Sideways scrolling glides to the nearest session** instead of jumping to it when you let go.
 - **Leftovers of the old paid model removed.** Harness Maxxing installs and updates from the public git repository;
   the code that downloaded signed archives with a license key, `maxxing license check`, `maxxing license ping` and
   `maxxing update --allow-downgrade` are gone. Servers installed with a key before 2.0.0a87 still switch to the git

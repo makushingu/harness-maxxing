@@ -5,6 +5,7 @@ blocking (call it through asyncio.to_thread from async code).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -263,6 +264,58 @@ def _issue(level: str, code: str, text: str) -> dict:
     return {"level": level, "code": code, "text": text}
 
 
+# ---- issues marked as seen ------------------------------------------------------------------
+SEEN_TTL_S = 24 * 3600              # a seen issue still there comes back after this
+
+
+def _seen_path() -> Path:
+    return config.STATE / "health-seen.json"
+
+
+def issue_id(issue: dict) -> str:
+    """Stable id of an issue: its code and text without the numbers ("Last backup is 31 h old" keeps the id of
+    "30 h old"; another job failing is another issue)."""
+    key = issue["code"] + ":" + "".join(c for c in issue["text"] if not c.isdigit())
+    return hashlib.sha1(key.encode()).hexdigest()[:12]
+
+
+def _read_seen() -> dict[str, float]:
+    d = config.read_json(_seen_path(), {})
+    return {k: float(v) for k, v in d.items() if isinstance(v, (int, float))} if isinstance(d, dict) else {}
+
+
+def _apply_seen(issues: list[dict]) -> None:
+    """Adds `id` and `seen` to each issue; forgets the marks of issues gone or older than SEEN_TTL_S."""
+    seen = _read_seen()
+    now = time.time()
+    keep: dict[str, float] = {}
+    for i in issues:
+        i["id"] = issue_id(i)
+        at = seen.get(i["id"])
+        i["seen"] = at is not None and now - at < SEEN_TTL_S
+        if i["seen"]:
+            keep[i["id"]] = at
+    if keep != seen:
+        try:
+            config.write_json(_seen_path(), keep)
+        except OSError:
+            pass
+
+
+def mark_seen(iid: str, seen: bool = True) -> bool:
+    """Marks a current issue as seen (or not): False when no current issue has that id."""
+    if iid not in {i["id"] for i in collect(force=True)["issues"]}:
+        return False
+    marks = _read_seen()
+    if seen:
+        marks[iid] = time.time()
+    else:
+        marks.pop(iid, None)
+    config.write_json(_seen_path(), marks)
+    invalidate_cache()
+    return True
+
+
 def _collect() -> dict:
     issues: list[dict] = []
     mem = meminfo()
@@ -302,6 +355,7 @@ def _collect() -> dict:
                 issues.append(_issue("warn", "backup_old", f"Last memory backup is {age_h:.0f} h old"))
             elif last.get("ok") is False:
                 issues.append(_issue("warn", "backup_failed", "The last memory backup failed"))
+    _apply_seen(issues)
     return {"ok": not issues, "issues": issues, "cpu_pct": cpu_pct(), "load": loadavg(), "mem": mem,
             "disk": dsk, "uptime_s": uptime_s(), "claude_auth": auth, "claude_auth_error": ast.get("error"),
             "claude_checked_at": ast.get("checked_at"), "backup_age_h": age_h,

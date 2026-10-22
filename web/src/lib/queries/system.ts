@@ -13,6 +13,18 @@ export function useHealth(enabled = true) {
     enabled,
   })
 }
+/** Mark a health issue as seen (or not): the answer is the fresh health. */
+export function useMarkHealthSeen() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, seen }: { id: string; seen: boolean }) => api.post<Health>('/api/system/health/seen', { id, seen }),
+    onMutate: ({ id, seen }) => {
+      qc.setQueryData<Health>(qk.health, (h) => (h ? { ...h, issues: h.issues.map((i) => (i.id === id ? { ...i, seen } : i)) } : h))
+    },
+    onSuccess: (h) => qc.setQueryData(qk.health, h),
+    onError: () => void qc.invalidateQueries({ queryKey: qk.health }),
+  })
+}
 export const servicesQuery = () => ({ queryKey: qk.system.services, queryFn: () => api.get<Service[]>('/api/system/services') })
 export function useServices() {
   return useQuery(servicesQuery())

@@ -279,17 +279,45 @@ function Workspace() {
         }
       }
       e.preventDefault()
+      stopGlide()
       el.style.scrollSnapType = 'none'
       el.scrollLeft += e.deltaMode === 1 ? delta * 16 : delta
       window.clearTimeout(settle)
-      settle = window.setTimeout(() => {
+      settle = window.setTimeout(() => glideToColumn(el), 180)
+    }
+    // Turning snapping back on made the browser jump to the column: glide there first, then turn it back on
+    // (it is already in place). Like `snap-proximity`, only when a column edge is near.
+    let stopGlide = () => {}
+    const glideToColumn = (el: HTMLDivElement) => {
+      const max = el.scrollWidth - el.clientWidth
+      let target: number | null = null
+      for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
+        const left = Math.min(max, Math.max(0, c.offsetLeft))
+        if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
+      }
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      if (target == null || reduce || Math.abs(target - el.scrollLeft) < 1 || Math.abs(target - el.scrollLeft) > el.clientWidth * 0.3) {
         el.style.scrollSnapType = ''
-      }, 180)
+        return
+      }
+      const done = () => {
+        stopGlide()
+        el.style.scrollSnapType = ''
+      }
+      const fallback = window.setTimeout(done, 700)
+      el.addEventListener('scrollend', done, { once: true })
+      stopGlide = () => {
+        window.clearTimeout(fallback)
+        el.removeEventListener('scrollend', done)
+        stopGlide = () => {}
+      }
+      el.scrollTo({ left: target, behavior: 'smooth' })
     }
     document.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       document.removeEventListener('wheel', onWheel)
       window.clearTimeout(settle)
+      stopGlide()
     }
   }, [mobile])
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
