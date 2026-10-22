@@ -1466,6 +1466,8 @@ export const en = {
   'system.licenseUpdatesUntil': 'updates until {date}',
   'system.licenseUpdatesEnded': 'updates ended on {date} - this server keeps working on its version',
   'system.licenseUpdatesForever': 'updates included',
+  'system.licenseMoving': 'Moving to the GitHub updates is pending: {error}. Tried again every 6 h.',
+  'system.movedToGit': 'Updates from GitHub (stable branch) since {date}, like every install. Key {key} kept.',
   'system.pendingConflict': 'Update {version} waits for Harness',
   'system.pendingConflictDesc': 'Your customizations conflict with the new version. Nothing changed: the current version keeps running. Harness can adapt them in the system project (topic harness).',
   'system.pendingRolledBack': 'Update {version} was rolled back',

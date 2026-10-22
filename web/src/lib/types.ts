@@ -462,7 +462,7 @@ export type VersionInfo = {
   /** Last update stopped: customizations conflict, or the new version did not start (rolled back). */
   pending?: { at: number; reason: 'conflict' | 'health' | 'dependencies' | string; target_version?: string; conflicts?: string[] } | null
   /** License of this server (licensed installs get their updates from the license server). */
-  license?: { enabled: boolean; key_hint: string; email?: string | null; kind?: string | null; updates_until?: number | null; expires_at?: number | null; channel?: string | null; latest?: string | null; message?: string | null; max_servers?: number | null }
+  license?: { enabled: boolean; key_hint: string; email?: string | null; kind?: string | null; updates_until?: number | null; expires_at?: number | null; channel?: string | null; latest?: string | null; message?: string | null; max_servers?: number | null; moved_to_git?: number | null; move_error?: string | null }
   /** Last verification (after an update, or on demand): extensions load, customization checks pass. */
   report?: { at: number; version: string; ok: boolean; problems: number } | null
   /** Last update seen by the restarted server; notes_session = the Harness session applying its upgrade notes. */

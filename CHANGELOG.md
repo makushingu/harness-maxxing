@@ -8,7 +8,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 Changes:
 - **Servers installed with a license key now update from GitHub, like every other install.** A few minutes after
   this update the code follows the `stable` branch of the public repository, at the same version, with your
-  customizations kept. Nothing to do; your key stays in Settings -> License.
+  customizations kept. Nothing to do; your key is kept (Settings -> System shows it).
 
 ## 2.0.0-alpha.86 - 2026-10-22
 
