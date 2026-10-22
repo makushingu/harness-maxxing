@@ -33,6 +33,20 @@ async def get_health(force: bool = False):
     return await asyncio.to_thread(health.collect, force)
 
 
+class SeenBody(BaseModel):
+    id: str
+    seen: bool = True
+
+
+@router.post("/system/health/seen")
+async def health_seen(body: SeenBody):
+    """Mark a health issue as seen: it stops counting in the sidebar until it changes or for 24 h."""
+    if not await asyncio.to_thread(health.mark_seen, body.id, body.seen):
+        raise _err(404, "not_found", "No current issue has this id")
+    bus.invalidate("health")
+    return await asyncio.to_thread(health.collect)
+
+
 @router.get("/system/services")
 async def get_services():
     return await asyncio.to_thread(health.services)

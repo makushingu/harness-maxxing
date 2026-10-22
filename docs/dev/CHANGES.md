@@ -8,6 +8,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.93 - 2026-10-22
 
+Health issues marked as seen + smooth column snap (maintainers' request; to move to the release version).
+- `health.py`: every issue gets `id` (sha1 of code + text without digits, 12 chars) and `seen`; marks in
+  `<state>/health-seen.json` `{id: at}`, kept while the issue is there and for `SEEN_TTL_S` (24 h), pruned at each
+  collect. `mark_seen(id, seen)`. `POST /api/system/health/seen {id, seen=true}` -> fresh health (`404 not_found`
+  when no current issue has that id), bus `health`. `ok` unchanged (all issues).
+- Web: `openIssues()` = issues not seen; `healthTone` and the count use them (sidebar, touch menu); the popover lists
+  all, seen ones greyed with an undo button. `useMarkHealthSeen` (optimistic). i18n `health.markSeen|seenHint|unsee`.
+- Sessions strip: after a sideways wheel / swipe, `glideToColumn` smooth-scrolls to the nearest column start when it
+  is within 30 % of the strip width, then turns `scroll-snap-type` back on (it used to jump there); a new wheel
+  event cancels the glide; reduced motion keeps the old behaviour.
+- Tests: `test_system.py::test_health_issue_marked_seen`. Docs: user 04, 16.
+
 Dead code of the paid / signed-archive model removed (fair source since a85-a88); third-party notices.
 - Removed from `maxxing/license.py`: `PUBKEYS` / `pubkey` / `DEFAULT_KID`, `_url_ok`, `check` (`/v1/update`), `ping`
   (`/v1/ping`) + `health_summary` + `ping_due` + `PING_EVERY`, `_rotate`, `signed_message`, `verify_signature`,
