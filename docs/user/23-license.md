@@ -6,7 +6,7 @@ section: Getting started
 Harness Maxxing is **free** and **fair source**: its code is public on GitHub and published under the
 [Harness Maxxing Fair Source License](https://github.com/makushingu/harness-maxxing/blob/main/LICENSE).
 No license key is needed to install it or to get updates: the installer clones the public git repository
-and `maxxing update` pulls from it.
+and `maxxing update` pulls from it. A key is only for companies (see [Enterprise key](#enterprise-key-optional)).
 
 ## What the license allows
 
@@ -43,39 +43,37 @@ again (security alerts included). To have what we have about it erased, ask us (
 [harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). An update never turns any of these on: a server
 installed before this choice existed sends nothing until you check something.
 
-## Existing license keys
+## Enterprise key (optional)
 
-Since 2.0.0a87 a server installed with a license key (`HM-XXXX-XXXX-XXXX-XXXX`) **moves to the public git
-repository by itself**: a few minutes after updating to 2.0.0a87 (or at the next `maxxing update`), its code
-follows the `stable` branch of `github.com/makushingu/harness-maxxing`, at the same version, with your
-customizations kept. Nothing to do; the key is kept (Settings -> System shows it). If it cannot move yet (no network,
-uncommitted changes in the code folder, an update being finished) it tries again every few hours and
-`maxxing doctor` says why. Until then, and for a new server installed with
-`curl -fsSL https://get.harness-maxxing.com | LICENSE=HM-… bash`, the signed archives below still apply. Every signed version is checked: the installer
-and `maxxing update` refuse an archive that was not signed by Harness Maxxing. A licensed server keeps working on its
-version even if the license ends or the license server cannot be reached.
-
-A key works on a fixed number of servers at a time (shown in your license email). Moving to a new server:
-`maxxing license release` on the old one, then install on the new one with the key. Reinstalling the **same**
-server does not take a new place.
+Only companies in one of the cases above need a key; nobody else has anything to do. Give it in
+**Settings → License** (or in the onboarding step **About you**, box "I have an Enterprise license key"), or
+`maxxing license activate`. The key is checked by `api.harness-maxxing.com` and counted on this server (one key =
+one server). It changes nothing in how Harness Maxxing works: the code and the updates keep coming from GitHub.
+**Remove the key** (Settings → License, or `maxxing license remove`) frees its place for another server.
 
 | Command | What it does |
 |---|---|
-| `maxxing license status` | key, type, email, updates until, latest version (or "no license" on a git install) |
-| `maxxing license check` | ask the license server for a new version |
-| `maxxing license activate HM-…` | activate this server with a key (also turns a git install into a licensed one) |
-| `maxxing license release` | free this server's place before moving to another server |
-| `maxxing license ping` | send the daily status now |
+| `maxxing license status` | the key of this server (type, email, end date), or "no Enterprise key" |
+| `maxxing license activate` | record a key (asked hidden; or `HM-…`, or `--key-from-stdin`) |
+| `maxxing license remove` | forget the key and free its place |
 
-Settings → System shows the license when the server has one.
+The installer still accepts `LICENSE=HM-…` (scripts written before): the key is recorded at the end, the code
+comes from GitHub like every install.
+
+### Servers installed with a key before 2.0.0a87
+
+They used to update from signed archives. Since 2.0.0a87 they **move to the public git repository by themselves**:
+a few minutes after updating to 2.0.0a87 (or at the next `maxxing update`) the code follows the `stable` branch of
+`github.com/makushingu/harness-maxxing`, at the same version, with the customizations kept; the key stays (Settings
+→ License). If it cannot move yet (no network, uncommitted changes in the code folder, an update being finished) it
+tries again every few hours and `maxxing doctor` says why.
 
 ## What is sent to the license server
 
-Only by servers that use a license key (a git install sends only what you chose in [Saying hello](#saying-hello-optional)). When a server is activated, at each update
-check and **once a day**: the license it uses, a one-way fingerprint of the machine (never the raw machine id), its
-hostname, operating system, Harness Maxxing version, whether the service runs and a few health codes (disk and
-memory level, uptime, Claude connected, age of the last backup, names of the problems the doctor sees). The license
-server also sees the IP address the server connects from.
+Only when a key is recorded or removed: the key, a one-way fingerprint of the machine (never the raw machine id),
+its hostname, operating system and Harness Maxxing version; the license server also sees the IP address. A server
+still on signed archives (before it moves to git) also sends, at each update check and once a day, whether the
+service runs and a few health codes (disk and memory level, uptime, Claude connected, age of the last backup).
 
 Never sent: your files, sessions, prompts, memory, keys, project or topic names.
 Details: [harness-maxxing.com/privacy](https://harness-maxxing.com/privacy).

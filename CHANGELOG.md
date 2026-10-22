@@ -3,6 +3,17 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.88 - 2026-10-22
+
+Changes:
+- **Settings -> License: an optional Enterprise key, for the companies that need one.** The page explains who needs
+  a key (an organisation using Harness for its affiliates or clients, a paid offer built on it); nobody else has
+  anything to do. A key can also be given in the onboarding step About you. It changes nothing in how Harness works:
+  updates keep coming from GitHub.
+- The installer no longer deals with license keys: every install comes from GitHub (`LICENSE=` still works and just
+  records the key).
+- `maxxing license status` says where updates come from; `maxxing license remove` forgets the key.
+
 ## 2.0.0-alpha.87 - 2026-10-22
 
 Changes:

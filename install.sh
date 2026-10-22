@@ -4,7 +4,7 @@
 #
 #  Install from the public git repository (no key needed; updates come from git):
 #    curl -fsSL https://get.harness-maxxing.com | bash
-#  With an existing license key, from signed releases instead: LICENSE=HM-XXXX-XXXX-XXXX-XXXX
+#  An Enterprise key (optional, companies only) can be given too: LICENSE=HM-XXXX-XXXX-XXXX-XXXX (recorded, nothing else changes)
 #  From a private fork or mirror (read token): GH_TOKEN=$T REPO=owner/name bash install.sh
 #  Install from a local copy of the code (an unpacked archive or a clone, web/dist built), no network
 #  for the code itself (updates then come from a new copy: SOURCE_DIR=... bash install.sh again):
@@ -20,8 +20,8 @@
 #  Unattended: answer with variables and ASSUME_YES=1, e.g.
 #    curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
 #  Variables (default):
-#    LICENSE (optional: an existing license key, for signed releases)  LICENSE_API (https://api.harness-maxxing.com)
-#    REPO (makushingu/harness-maxxing)  BRANCH (stable; main with LICENSE)  GH_TOKEN (private fork or mirror only)  INSTALL_DIR (/opt/claude-maxxing)
+#    LICENSE (optional: an Enterprise key, recorded - or later in Settings -> License)  LICENSE_API (https://api.harness-maxxing.com)
+#    REPO (makushingu/harness-maxxing)  BRANCH (stable)  GH_TOKEN (private fork or mirror only)  INSTALL_DIR (/opt/claude-maxxing)
 #    WORKSPACE (/root/maxxing)  STATE_DIR (/var/lib/claude-maxxing)  PORT (8787)
 #    ACCESS (domain|tailscale|local)  DOMAIN  ASSUME_YES (0)
 #    TIMEZONE (system zone - also chosen later in the web onboarding, which switches the system clock)
@@ -55,9 +55,8 @@ unset BASH_ENV ENV CDPATH PYTHONPATH PYTHONHOME PYTHONSTARTUP LD_PRELOAD LD_LIBR
   GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT 2>/dev/null || true
 
 REPO="${REPO:-makushingu/harness-maxxing}"
-# without a key the code follows `stable` (advanced by each publication; `main` = work in progress);
-# an existing license key keeps `main`, as before (signed releases, the branch name is local only)
-if [ -n "${LICENSE:-}" ]; then BRANCH="${BRANCH:-main}"; else BRANCH="${BRANCH:-stable}"; fi
+# every install follows `stable` (published versions); an Enterprise key changes nothing there (2.0.0a88)
+BRANCH="${BRANCH:-stable}"
 GH_TOKEN="${GH_TOKEN:-}"
 LICENSE="${LICENSE:-}"
 LICENSE_API="${LICENSE_API:-https://api.harness-maxxing.com}"
@@ -446,7 +445,7 @@ usage() {
   cat <<'USAGE'
 Harness Maxxing installer
   curl -fsSL https://get.harness-maxxing.com | bash        install or repair from the public git repository (re-runnable)
-  ... | LICENSE=HM-XXXX-XXXX-XXXX-XXXX bash                 the same from signed releases, with an existing license key
+  ... | LICENSE=HM-XXXX-XXXX-XXXX-XXXX bash                 the same, recording an Enterprise key (companies only)
   GH_TOKEN=<token> REPO=owner/name bash install.sh         from a private fork or mirror
   bash /opt/claude-maxxing/install.sh --update              update (= maxxing update)
   bash /opt/claude-maxxing/install.sh --uninstall [--purge] [--purge-workspace]
@@ -665,19 +664,15 @@ choose_claude_dir() {
 }
 
 # choose_source - where the code comes from: an existing install keeps its source; a new one uses a local copy
-# (SOURCE_DIR / the folder of this script), a signed release when LICENSE=HM-... is set (existing license keys),
-# otherwise the public git repository (no key, no token: updates come from git)
+# (SOURCE_DIR / the folder of this script), otherwise the public git repository (no token: updates come from git).
+# An install still on signed archives (before 2.0.0a87) keeps them until it moves to git by itself.
 choose_source() {
   if [ -d "$INSTALL_DIR/.git" ]; then
     if [ -f "$STATE_DIR/secrets.json" ] && grep -q '"license_token"' "$STATE_DIR/secrets.json" 2>/dev/null; then LICENSED=1
     elif [ -n "$SOURCE_DIR" ] || ! git -C "$INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then LOCAL=1; fi
-  elif [ -z "$GH_TOKEN" ] && [ -z "$LICENSE" ] && local_source; then
+  elif [ -z "$GH_TOKEN" ] && local_source; then
     LOCAL=1
     ok "code: the local copy in $SOURCE_DIR (no download - updates: a newer copy, then this again)"
-  elif [ -n "$LICENSE" ] && [ -z "$GH_TOKEN" ]; then   # an existing license key: signed releases
-    LICENSED=1
-    LICENSE=$(printf '%s' "$LICENSE" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
-    license_activate
   else
     ok "code: the git repository github.com/$REPO ($BRANCH) - updates come from git"
   fi
@@ -1454,12 +1449,13 @@ init_state() {
     printf '%s' "$GH_TOKEN" | mx init --quiet --no-crons --secret-from-stdin github_update_token \
       && ok "update token stored in $STATE_DIR/secrets.json (used by maxxing update)"
   fi
-  if [ "$LICENSED" = 1 ] && [ -n "$LICENSE" ]; then
+  if [ -n "$LICENSE" ]; then                       # optional Enterprise key: recorded, checked by the license server
+    LICENSE=$(printf '%s' "$LICENSE" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
     local lic_env=()
     [ "$LICENSE_API" = https://api.harness-maxxing.com ] || lic_env=(MAXXING_LICENSE_API="$LICENSE_API")
     printf '%s\n' "$LICENSE" | env ${lic_env[@]+"${lic_env[@]}"} MAXXING_STATE="$STATE_DIR" "$BIN" license activate --key-from-stdin --no-fetch >/dev/null \
-      && ok "license stored (updates: maxxing update, status: maxxing license status)" \
-      || warn "could not store the license ${LICENSE:0:7}…${LICENSE: -4} - run: maxxing license activate (it asks for the key)"
+      && ok "Enterprise key recorded (Settings -> License, maxxing license status)" \
+      || warn "could not record the Enterprise key ${LICENSE:0:7}…${LICENSE: -4} - Settings -> License, or: maxxing license activate"
   fi
   if [ -n "$CLAUDE_TOKEN" ]; then
     printf '%s' "$CLAUDE_TOKEN" | mx init --quiet --no-crons --secret-from-stdin claude_oauth_token && ok "Claude token stored"
