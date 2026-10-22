@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.86 - 2026-10-22
+
+Changes:
+- **Say hello to the authors, if you want.** A new onboarding step **About you** and a card **Harness Maxxing
+  team** in Settings -> Profile: help count the installations (anonymous: a random number and the version, once a
+  day), leave an email for security alerts and, if you like, the product news. Everything is optional;
+  **Stop, don't contact me** ends it. An update never turns any of it on: an existing server sends nothing until
+  you check something.
+
 ## 2.0.0-alpha.85 - 2026-10-22
 
 Changes:
