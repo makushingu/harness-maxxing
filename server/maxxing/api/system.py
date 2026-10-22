@@ -106,16 +106,8 @@ def _refresh_remote() -> None:
     try:
         latest = behind = None
         from .. import license
-        if license.enabled():                          # licensed install: ask the license server
-            try:
-                f = license.fetch_latest()
-                info = license.status()
-                latest = info.get("latest")
-                b = _git("rev-list", "--count", "HEAD..refs/remotes/origin/main")
-                behind = int(b) if b and b.isdigit() else (1 if f.get("version") else 0)
-            except license.LicenseError:
-                pass
-            with _ver_lock:
+        if license.enabled():                          # pre-a87 install still on archives: nothing to fetch until
+            with _ver_lock:                            # it has moved to git (a few minutes after the start)
                 _ver.update(latest=latest, behind=behind)
             return
         if _git("fetch", "--quiet", "origin", timeout=30, auth=True) is not None:
@@ -328,7 +320,7 @@ async def usage(force: bool = False):
     return await asyncio.to_thread(health.usage, force)
 
 
-# ---- license: daily ping (version + service up + a few health codes) -------------------------
+# ---- hourly: move an install still on archives to git, optional registration heartbeat -------------
 _ping_task: asyncio.Task | None = None
 
 
@@ -360,11 +352,6 @@ async def _ping_loop() -> None:
     while True:
         if license.enabled() and license.move_due():
             await _move_to_git()
-        try:
-            if license.enabled() and license.ping_due():
-                await asyncio.to_thread(license.ping, await asyncio.to_thread(license.health_summary))
-        except Exception as e:  # noqa: BLE001 - offline or server down: try again later
-            log.info("license ping failed: %s", e)
         try:
             from .. import register
             if register.heartbeat_due():

@@ -61,6 +61,9 @@ request. When it does not touch `web/`, do not commit a rebuilt `web/dist`.
   `acme`, `blog`.
 - State writes are atomic (`config.write_json`); never block the event loop (`asyncio.to_thread`).
 - Add or update tests for what you change. A bug fix comes with a test that fails without it.
+- When you add or upgrade a dependency (Python, JavaScript or Go), run `python3 scripts/third_party_notices.py`
+  (after `uv sync --extra voice` in `server/` and `npm ci` in `web/`) and commit the updated
+  `THIRD_PARTY_NOTICES.md`. A new dependency must have a license compatible with the [CLA](CLA.md) (no GPL / AGPL).
 - Update the user docs page (`docs/user/`) of every visible change.
 
 ## 5. Changelogs
