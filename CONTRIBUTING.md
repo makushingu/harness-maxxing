@@ -81,7 +81,7 @@ set the version at release time):
 3. **Sign the CLA**: on your first pull request the CLA bot asks you to post this comment once, exactly and alone:
    `I have read the CLA Document and I hereby sign the CLA`. Contributing for a company? Sign it on behalf of that
    entity (see [CLA.md](CLA.md)). The pull request cannot be merged before (its **CLA** check stays red).
-4. CI runs the server tests, the web typecheck and build, and the pc-agent tests;
+4. CI (`.github/workflows/ci.yml`) runs the server tests, the web typecheck and build, and the pc-agent tests;
    every check must be green.
 
 ## 7. Review
