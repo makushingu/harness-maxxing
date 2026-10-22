@@ -65,6 +65,30 @@ def test_health(client, org, services, monkeypatch):
     assert client.get("/api/system/health?force=1").json()["claude_auth"] is True
 
 
+def test_health_issue_marked_seen(client, org, services, monkeypatch):
+    crons.append_run({"id": "r1", "cron_id": "c_a", "name": "Nightly", "at": time.time() - 60, "ok": False, "code": 2})
+    issues = client.get("/api/system/health?force=1").json()["issues"]
+    job = next(i for i in issues if i["code"] == "cron_failed")
+    assert job["seen"] is False and len(job["id"]) == 12
+    assert client.post("/api/system/health/seen", json={"id": "nope"}).status_code == 404
+    h = client.post("/api/system/health/seen", json={"id": job["id"]}).json()
+    assert next(i for i in h["issues"] if i["id"] == job["id"])["seen"] is True
+    assert all(not i["seen"] for i in h["issues"] if i["id"] != job["id"])
+    # the same job failing with another exit code keeps its mark (numbers left out); another job is a new issue
+    assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Nightly" failed (code 7)'}) == job["id"]
+    assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Weekly" failed (code 2)'}) != job["id"]
+    # the mark ends after 24 h
+    marks = json.loads(health._seen_path().read_text())
+    health._seen_path().write_text(json.dumps({job["id"]: marks[job["id"]] - health.SEEN_TTL_S - 1}))
+    h = client.get("/api/system/health?force=1").json()
+    assert next(i for i in h["issues"] if i["id"] == job["id"])["seen"] is False
+    assert json.loads(health._seen_path().read_text()) == {}
+    # seen -> not seen again
+    client.post("/api/system/health/seen", json={"id": job["id"]})
+    h = client.post("/api/system/health/seen", json={"id": job["id"], "seen": False}).json()
+    assert next(i for i in h["issues"] if i["id"] == job["id"])["seen"] is False
+
+
 def test_health_backup_never_and_ok(org, services):
     assert health.collect(force=True)["backup_age_h"] is None
     config.update_config(backup={"repo": "acme/memory"})

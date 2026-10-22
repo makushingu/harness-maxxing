@@ -457,7 +457,8 @@ export type Secret = { name: string; note: string; expose: boolean; updated: num
 export type SecretPutBody = { value?: string; note?: string; expose?: boolean }
 
 /* ---------------------------------------------------------------- System */
-export type HealthIssue = { level: 'info' | 'warn' | 'error'; code: string; text: string }
+/** `seen`: marked as seen - it does not count in the sidebar until it changes or for 24 h. */
+export type HealthIssue = { level: 'info' | 'warn' | 'error'; code: string; text: string; id?: string; seen?: boolean }
 export type Health = {
   ok: boolean
   issues: HealthIssue[]
