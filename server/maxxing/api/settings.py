@@ -147,6 +147,29 @@ async def put_register(body: RegisterIn):
     return st
 
 
+class FeedbackIn(BaseModel):
+    email: str
+    type: Literal["bug", "idea", "other"] = "other"
+    message: str
+
+
+@router.get("/feedback")
+def get_feedback():
+    """What the Feedback dialog prefills: the last email used, the version sent along."""
+    from .. import feedback
+    return feedback.defaults()
+
+
+@router.post("/feedback")
+async def post_feedback(body: FeedbackIn):
+    """Send a bug report / idea to the authors (api.harness-maxxing.com/v1/feedback). Email required."""
+    from .. import feedback
+    try:
+        return await asyncio.to_thread(feedback.send, body.email, body.type, body.message)
+    except feedback.FeedbackError as e:
+        raise HTTPException(e.status, detail={"error": e.code, "message": str(e)}) from None
+
+
 class LicenseIn(BaseModel):
     key: str
 

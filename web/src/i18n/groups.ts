@@ -14,6 +14,7 @@ export const GROUPS = {
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer', 'media'],
   show: ['show'],
+  feedback: ['feedback'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation, useNavigate } from 'react-router'
-import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, Keyboard, LayoutGrid, LogOut, Menu, Search, Settings } from 'lucide-react'
+import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
 import { useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
 import { useUI, type Theme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,7 @@ import { HealthSummary, healthTone } from './HealthIndicator'
 import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
 import { UsageIndicator } from './UsageIndicator'
 import { useShortcutsDialog } from './shortcuts-store'
+import { useFeedbackDialog } from './feedback-store'
 
 type Panel = 'sessions' | 'app' | null
 export const useTouchNav = create<{ panel: Panel; setPanel: (p: Panel) => void }>((set) => ({ panel: null, setPanel: (panel) => set({ panel }) }))
@@ -309,6 +310,20 @@ function AppPanel() {
             <Download /> {t('pwa.install')}
           </button>
         )}
+        <button
+          type="button"
+          className={row}
+          onClick={() => {
+            close()
+            useFeedbackDialog.getState().setOpen(true)
+          }}
+        >
+          <MessageSquareText />
+          <span className="grid flex-1">
+            <span>{t('shell.feedback')}</span>
+            <span className="text-[13px] text-muted-foreground">{t('shell.feedbackHint')}</span>
+          </span>
+        </button>
         <button type="button" className={cn(row, 'text-destructive [&>svg]:text-destructive')} onClick={() => logout.mutate()}>
           <LogOut /> {t('auth.signOut')}
         </button>

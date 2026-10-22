@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { NavLink } from 'react-router'
-import { PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { MessageSquareText, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useWorkspace } from '@/lib/queries'
@@ -17,6 +17,7 @@ import { SidebarExtensions } from './SidebarExtensions'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
 import { PresentationToggle, ThemeToggle, UserMenu } from './UserMenu'
+import { useFeedbackDialog } from './feedback-store'
 
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
 function useSessionBadge() {
@@ -142,6 +143,7 @@ export function Sidebar() {
         <UpdateIndicator collapsed={collapsed} />
         <HealthIndicator collapsed={collapsed} />
         <UsageIndicator collapsed={collapsed} />
+        <FeedbackButton collapsed={collapsed} />
         <div className={cn('flex items-center gap-1', collapsed ? 'flex-col' : 'justify-between')}>
           <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
             <PresentationToggle />
@@ -159,5 +161,27 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  )
+}
+
+/** Feedback to the authors (bug, idea): opens the Feedback dialog (FeedbackDialog.tsx). */
+function FeedbackButton({ collapsed }: { collapsed: boolean }) {
+  const t = useT()
+  const open = useFeedbackDialog((s) => s.setOpen)
+  return (
+    <Tooltip content={t('shell.feedbackHint')} side="right">
+      <button
+        type="button"
+        onClick={() => open(true)}
+        aria-label={collapsed ? t('shell.feedback') : undefined}
+        className={cn(
+          'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+          collapsed && 'justify-center px-0',
+        )}
+      >
+        <MessageSquareText className="size-4 shrink-0" />
+        {!collapsed && <span className="truncate">{t('shell.feedback')}</span>}
+      </button>
+    </Tooltip>
   )
 }

@@ -43,6 +43,15 @@ again (security alerts included). To have what we have about it erased, ask us (
 [harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). An update never turns any of these on: a server
 installed before this choice existed sends nothing until you check something.
 
+## Feedback (bugs, ideas)
+
+**Feedback** at the bottom of the sidebar (on a phone or a tablet: ⊞ → **Feedback**) writes to the Harness Maxxing
+team: pick **Bug**, **Idea** or **Other**, write your message and give your email. The email is required: it keeps
+spam away and lets us answer you (a confirmation is sent there). The server sends to `api.harness-maxxing.com`
+your email, your message, its type, the Harness Maxxing version, the interface language and your pseudo (Settings →
+Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
+time: the one of Settings → Profile → Harness Maxxing team, if any).
+
 ## Enterprise key (optional)
 
 Only companies in one of the cases above need a key; nobody else has anything to do. Give it in
@@ -75,5 +84,6 @@ its hostname, operating system and Harness Maxxing version; the license server a
 still on signed archives (before it moves to git) also sends, at each update check and once a day, whether the
 service runs and a few health codes (disk and memory level, uptime, Claude connected, age of the last backup).
 
-Never sent: your files, sessions, prompts, memory, keys, project or topic names.
+Never sent: your files, sessions, prompts, memory, keys, project or topic names (a **Feedback** message carries only
+what you typed, see above).
 Details: [harness-maxxing.com/privacy](https://harness-maxxing.com/privacy).

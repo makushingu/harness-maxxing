@@ -42,6 +42,7 @@ export const qk = {
   settings: ['settings'] as const,
   profile: ['settings', 'profile'] as const,
   register: ['settings', 'register'] as const,
+  feedback: ['settings', 'feedback'] as const,
   license: ['settings', 'license'] as const,
   secrets: ['secrets'] as const,
   health: ['health'] as const,
