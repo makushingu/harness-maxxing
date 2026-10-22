@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Offline · Harness Maxxing</title>
+    <!-- Served by the service worker when a navigation fails. Self-contained: no external assets. -->
+    <style>
+      :root { color-scheme: dark; --bg: #09090b; --fg: #fafafa; --muted: #a1a1aa; --card: #18181b; --border: #27272a; --primary: #5b8def; }
+      :root.light { color-scheme: light; --bg: #ffffff; --fg: #09090b; --muted: #71717a; --card: #f4f4f5; --border: #e4e4e7; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      main { max-width: 360px; text-align: center; display: grid; justify-items: center; gap: 12px; }
+      img { width: 48px; height: 48px; margin-bottom: 8px; border-radius: 11px; }
+      h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+      p { margin: 0; color: var(--muted); }
+      button {
+        margin-top: 12px; height: 40px; padding: 0 18px; border: 0; border-radius: 8px; cursor: pointer;
+        background: var(--primary); color: #fff; font: inherit; font-weight: 500;
+      }
+      button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    </style>
+    <script>
+      // Same theme as the app (persisted UI prefs, dark by default).
+      (function () {
+        var t = 'dark';
+        try { t = (JSON.parse(localStorage.getItem('mx-ui') || '{}').state || {}).theme || 'dark'; } catch (e) {}
+        var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (!dark) document.documentElement.className = 'light';
+        // Accent color of the app (copy of src/lib/accent.ts ACCENT_HEX).
+        var hex = {
+          light: { blue: '#0076ed', clay: '#ea7e00', violet: '#a126d7', green: '#25931c', amber: '#e0bb00', rose: '#e62e1e' },
+          dark: { blue: '#3c91fd', clay: '#f8962d', violet: '#c25af3', green: '#55cc4b', amber: '#f1d025', rose: '#fc523a' }
+        };
+        var a = 'blue';
+        try { a = (JSON.parse(localStorage.getItem('mx-ui') || '{}').state || {}).accent || 'blue'; } catch (e) {}
+        if (!hex.dark[a]) a = 'blue';
+        document.documentElement.style.setProperty('--primary', hex[dark ? 'dark' : 'light'][a]);
+        window.__mxAccent = a;
+      })();
+    </script>
+  </head>
+  <body>
+    <main>
+      <img id="logo" src="data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Cdefs%3E%3ClinearGradient id="g" x1="40" y1="96" x2="470" y2="414" gradientUnits="userSpaceOnUse"%3E%3Cstop offset="0" stop-color="#2d6efd"/%3E%3Cstop offset="1" stop-color="#0ec7f7"/%3E%3C/linearGradient%3E%3CclipPath id="c"%3E%3Crect width="512" height="512" rx="112"/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path="url(#c)"%3E%3Crect width="512" height="512" fill="#faf9f4"/%3E%3Cg transform="translate(0 0) scale(1)"%3E%3Cpath fill="url(#g)" d="M110 96H394V178H468V240H394V414H350V336H314V414H270V336H234V414H190V336H154V414H110V240H36V178H110Z"/%3E%3Crect x="151" y="136" width="38" height="38" fill="#1d1e24"/%3E%3Crect x="315" y="136" width="38" height="38" fill="#1d1e24"/%3E%3Cpath d="M110 243Q246 264 380 232" fill="none" stroke="#1d1e24" stroke-width="15"/%3E%3Cpath d="M384 227Q452 168 540 86" fill="none" stroke="#1d1e24" stroke-width="9" stroke-linecap="round"/%3E%3Crect x="-9" y="-12" width="18" height="24" rx="5" fill="none" stroke="#d6d9df" stroke-width="4" transform="translate(381 231) rotate(-32)"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E" alt="" aria-hidden="true">
+      <h1 id="t">You are offline</h1>
+      <p id="d">The server could not be reached. Check your connection (or VPN) and try again.</p>
+      <button id="r" type="button" autofocus>Retry</button>
+    </main>
+    <script>
+      (function () {
+        var lang = '';
+        try { lang = (JSON.parse(localStorage.getItem('mx-ui') || '{}').state || {}).language || ''; } catch (e) {}
+        if (!lang) lang = (navigator.language || 'en').slice(0, 2);
+        if (lang === 'fr') {
+          document.documentElement.lang = 'fr';
+          document.title = 'Hors ligne · Harness Maxxing';
+          document.getElementById('t').textContent = 'Vous êtes hors ligne';
+          document.getElementById('d').textContent = "Impossible de joindre le serveur. Vérifiez votre connexion (ou votre VPN) puis réessayez.";
+          document.getElementById('r').textContent = 'Réessayer';
+        }
+        // The logo in the accent color when the service worker has it cached (the embedded one is blue).
+        var logo = document.getElementById('logo'), fallback = logo.src;
+        if (window.__mxAccent && window.__mxAccent !== 'blue') {
+          logo.onerror = function () { logo.onerror = null; logo.src = fallback; };
+          logo.src = '/icons/logo-' + window.__mxAccent + '.svg';
+        }
+        document.getElementById('r').onclick = function () { location.reload(); };
+        window.addEventListener('online', function () { location.reload(); });
+      })();
+    </script>
+  </body>
+</html>

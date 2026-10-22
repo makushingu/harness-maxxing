@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Security issues go to SECURITY.md, never here. Remove tokens, domains and personal
+        data from what you paste.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `maxxing status` (first line), or the version in Settings -> System
+      placeholder: 2.0.0a81
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - git (default install)
+        - license key (signed releases)
+        - local copy
+        - development checkout
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Server
+      description: OS and architecture, access mode (domain, Tailscale, local)
+      placeholder: Ubuntu 24.04 x86_64, domain
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: maxxing doctor and logs
+      description: Output of `maxxing doctor`, relevant lines of `journalctl -u claude-maxxing -n 100`
+      render: text

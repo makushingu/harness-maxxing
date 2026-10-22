@@ -1,0 +1,11 @@
+{
+  "id": "pages",
+  "name": {
+    "en": "Your pages",
+    "fr": "Vos pages"
+  },
+  "type": "page",
+  "icon": "layout-grid",
+  "version": "1.1.0",
+  "api": 1
+}

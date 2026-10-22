@@ -1,0 +1,38 @@
+{
+  "id": "second-brain",
+  "project": "second-brain",
+  "emoji": "🧠",
+  "icon": "brain",
+  "title": {
+    "en": "Second brain",
+    "fr": "Second cerveau"
+  },
+  "description": {
+    "en": "Daily journal, evergreen notes, reading summaries and an ideas inbox, all searchable.",
+    "fr": "Journal quotidien, notes durables, résumés de lecture et boîte à idées, tout consultable."
+  },
+  "topics": [
+    "journal",
+    "knowledge",
+    "reading",
+    "ideas"
+  ],
+  "crons": [
+    {
+      "key": "second-brain-weekly-review",
+      "name": "Weekly journal review",
+      "schedule": "0 18 * * 0",
+      "topic": "journal",
+      "prompt": "Write the weekly review from this week's daily notes in this topic folder (YYYY/YYYY-MM-DD.md, Monday to today): main events, wins, lessons, recurring themes, mood or energy trend if noted, and open loops worth a task. Save it as YYYY/YYYY-Www-review.md (ISO week) and send a summary of at most 12 lines. If there are no entries this week, report it in one line and stop.",
+      "notify": "always"
+    },
+    {
+      "key": "second-brain-ideas-triage",
+      "name": "Ideas triage",
+      "schedule": "0 17 * * 5",
+      "topic": "ideas",
+      "prompt": "Triage the ideas added to inbox.md in this topic folder over the last 7 days: for each, suggest one decision (do, develop, project, later, drop) with a one-line reason, using the tags and criteria in the topic memory. Do not move or change anything; send the list (at most 15 lines) and wait for the user's answers in this session. If inbox.md is missing or has no new ideas, report it in one line and stop.",
+      "notify": "always"
+    }
+  ]
+}

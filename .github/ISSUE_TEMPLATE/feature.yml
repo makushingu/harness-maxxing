@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a feature or a bigger change (agree on it here before writing code)
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Features are discussed here first: wait for a maintainer's go before opening a pull request
+        (see CONTRIBUTING.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and what gets in the way today
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What Harness Maxxing should do (UI, CLI, Telegram...). Mock-ups welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you tried - an extension, a skill, a cron, a customization?
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to implement it myself (after agreement), under the CLA

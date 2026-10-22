@@ -1,0 +1,390 @@
+@import 'tailwindcss';
+/* Default interface font only; the other fonts are loaded on demand (lib/fonts.ts loadFont). */
+@import '@fontsource-variable/inter';
+
+/* ------------------------------------------------------------------------------------------
+ * Harness Maxxing design tokens. Documented in docs/dev/DESIGN.md — change both together.
+ * Neutrals = zinc. One accent (data-accent on <html>). Dark default (.dark on <html>).
+ * ---------------------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where(.dark, .dark *));
+/* `md:` = desktop layout, `max-md:` = touch layout (phones, tablets, narrow windows): decided once by
+   html[data-compact] (index.html + src/stores/media.ts), not by the width alone, so a tablet gets the phone UI. */
+@custom-variant md (&:where(html:not([data-compact]) *, html:not([data-compact])));
+@custom-variant max-md (&:where(html[data-compact] *, html[data-compact]));
+
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.6 0.15 155);
+  --warning: oklch(0.72 0.16 70);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --overlay: oklch(0 0 0 / 0.45);
+
+  /* accent (overridden per data-accent) */
+  --primary: oklch(0.58 0.2 258);
+  --primary-foreground: oklch(0.985 0 0);
+  --ring: var(--primary);
+
+  --shadow-pop: 0 10px 38px -10px rgb(0 0 0 / 0.35), 0 10px 20px -15px rgb(0 0 0 / 0.2);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  /* Bottom inset for bars: the home indicator may overlap the last pixels (like native tab bars),
+     otherwise an installed PWA shows an empty band under the tabs (iPhone inset = 34px). */
+  --safe-bottom-ui: max(calc(var(--safe-bottom) - 20px), 0px);
+  /* bottom of the layout hidden by the on-screen keyboard (iOS), visual viewport height: src/lib/mobile-viewport.ts */
+  --kbd-inset: 0px;
+  --header-h: 56px;
+}
+
+/* A field has the focus on a touch screen: the keyboard covers the home indicator. */
+html[data-kbd] {
+  --safe-bottom: 0px;
+  --safe-bottom-ui: 0px;
+}
+
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.178 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.19 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.235 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.637 0.208 25.331);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.72 0.15 155);
+  --warning: oklch(0.8 0.15 80);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --sidebar: oklch(0.16 0.005 285.823);
+  --sidebar-border: oklch(1 0 0 / 7%);
+  --overlay: oklch(0 0 0 / 0.6);
+  --shadow-pop: 0 10px 38px -10px rgb(0 0 0 / 0.7), 0 10px 20px -15px rgb(0 0 0 / 0.5);
+}
+
+/* Accent palette — 6 choices matching the colored logos (hue of each mascot). Light values first, dark after. */
+[data-accent='blue'] { --accent-h: 256; --primary: oklch(0.58 0.2 256); --primary-foreground: oklch(0.99 0 0); }
+[data-accent='clay'] { --accent-h: 58; --primary: oklch(0.7 0.17 58); --primary-foreground: oklch(0.2 0.03 55); }
+[data-accent='violet'] { --accent-h: 312; --primary: oklch(0.55 0.25 312); --primary-foreground: oklch(0.99 0 0); }
+[data-accent='green'] { --accent-h: 142; --primary: oklch(0.58 0.18 142); --primary-foreground: oklch(0.99 0 0); }
+[data-accent='amber'] { --accent-h: 95; --primary: oklch(0.8 0.17 95); --primary-foreground: oklch(0.22 0.04 95); }
+[data-accent='rose'] { --accent-h: 30; --primary: oklch(0.6 0.22 30); --primary-foreground: oklch(0.99 0 0); }
+.dark[data-accent='blue'] { --primary: oklch(0.66 0.18 256); }
+.dark[data-accent='clay'] { --primary: oklch(0.76 0.16 62); --primary-foreground: oklch(0.2 0.03 55); }
+.dark[data-accent='violet'] { --primary: oklch(0.66 0.23 313); }
+.dark[data-accent='green'] { --primary: oklch(0.75 0.2 142); --primary-foreground: oklch(0.2 0.05 142); }
+.dark[data-accent='amber'] { --primary: oklch(0.86 0.17 97); --primary-foreground: oklch(0.22 0.04 95); }
+.dark[data-accent='rose'] { --primary: oklch(0.67 0.21 31); }
+
+/* Tinted background (Settings > General > Background): neutral surfaces take a shade of the accent hue. */
+[data-tint='tinted'] {
+  --background: oklch(0.985 0.012 var(--accent-h));
+  --foreground: oklch(0.16 0.02 var(--accent-h));
+  --card: oklch(0.995 0.007 var(--accent-h));
+  --card-foreground: oklch(0.16 0.02 var(--accent-h));
+  --popover: oklch(0.995 0.007 var(--accent-h));
+  --popover-foreground: oklch(0.16 0.02 var(--accent-h));
+  --secondary: oklch(0.95 0.02 var(--accent-h));
+  --secondary-foreground: oklch(0.22 0.03 var(--accent-h));
+  --muted: oklch(0.955 0.018 var(--accent-h));
+  --muted-foreground: oklch(0.52 0.035 var(--accent-h));
+  --accent: oklch(0.945 0.024 var(--accent-h));
+  --accent-foreground: oklch(0.22 0.03 var(--accent-h));
+  --border: oklch(0.9 0.025 var(--accent-h));
+  --input: oklch(0.9 0.025 var(--accent-h));
+  --sidebar: oklch(0.965 0.02 var(--accent-h));
+  --sidebar-border: oklch(0.9 0.025 var(--accent-h));
+}
+.dark[data-tint='tinted'] {
+  --background: oklch(0.16 0.024 var(--accent-h));
+  --foreground: oklch(0.975 0.008 var(--accent-h));
+  --card: oklch(0.195 0.028 var(--accent-h));
+  --card-foreground: oklch(0.975 0.008 var(--accent-h));
+  --popover: oklch(0.21 0.03 var(--accent-h));
+  --popover-foreground: oklch(0.975 0.008 var(--accent-h));
+  --secondary: oklch(0.285 0.035 var(--accent-h));
+  --secondary-foreground: oklch(0.975 0.008 var(--accent-h));
+  --muted: oklch(0.25 0.032 var(--accent-h));
+  --muted-foreground: oklch(0.72 0.03 var(--accent-h));
+  --accent: oklch(0.285 0.035 var(--accent-h));
+  --accent-foreground: oklch(0.975 0.008 var(--accent-h));
+  --border: oklch(0.85 0.06 var(--accent-h) / 11%);
+  --input: oklch(0.85 0.06 var(--accent-h) / 15%);
+  --sidebar: oklch(0.175 0.026 var(--accent-h));
+  --sidebar-border: oklch(0.85 0.06 var(--accent-h) / 8%);
+}
+
+@theme inline {
+  /* chosen in Settings > General (src/lib/fonts.ts sets --mx-font-* on <html>) */
+  --font-sans: var(--mx-font-sans, 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  --font-mono: var(--mx-font-mono, ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-overlay: var(--overlay);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-pop: var(--shadow-pop);
+
+  --animate-in: mx-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-out: mx-out 100ms ease-in;
+  --animate-overlay-in: mx-fade-in 150ms ease-out;
+  --animate-sheet-up: mx-sheet-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-sheet-right: mx-sheet-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-sheet-left: mx-sheet-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* closing: Radix keeps the element until the animation ends; a swiped sheet slides on from where the finger left it */
+  --animate-overlay-out: mx-fade-out 200ms ease-in forwards;
+  --animate-sheet-down: mx-sheet-down 200ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  --animate-sheet-right-out: mx-sheet-right-out 180ms ease-in forwards;
+  --animate-sheet-left-out: mx-sheet-left-out 180ms ease-in forwards;
+  --animate-shimmer: mx-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes mx-in { from { opacity: 0; transform: translateY(2px) scale(0.98); } }
+@keyframes mx-out { to { opacity: 0; transform: scale(0.98); } }
+@keyframes mx-fade-in { from { opacity: 0; } }
+@keyframes mx-sheet-up { from { transform: translateY(100%); } }
+@keyframes mx-sheet-right { from { transform: translateX(100%); } }
+@keyframes mx-sheet-left { from { transform: translateX(-100%); } }
+@keyframes mx-fade-out { to { opacity: 0; } }
+@keyframes mx-sheet-down { to { transform: translateY(100%); } }
+@keyframes mx-sheet-right-out { to { transform: translateX(100%); } }
+@keyframes mx-sheet-left-out { to { transform: translateX(-100%); } }
+@keyframes mx-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes mx-badge-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--success) 45%, transparent); opacity: 1; } 50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--success) 0%, transparent); opacity: 0.8; } }
+.mx-badge-pulse { animation: mx-badge-pulse 1.6s ease-in-out infinite; }
+@keyframes mx-shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes mx-rise { from { opacity: 0; transform: translateY(5px); } }
+@keyframes mx-fade { from { opacity: 0; } }
+@keyframes mx-slide-right { from { opacity: 0; transform: translateX(-10px); } }
+@keyframes mx-card-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+@keyframes mx-queue-in { from { opacity: 0; transform: translateY(70%); } }
+@keyframes mx-queue-out { to { opacity: 0; transform: translateY(70%); } }
+@keyframes mx-slide-x-r { from { opacity: 0; transform: translateX(28px); } }
+@keyframes mx-slide-x-l { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes mx-unfold { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes mx-pop { from { opacity: 0; transform: scale(0.6); } 70% { transform: scale(1.08); } }
+@keyframes mx-grow-y { from { transform: scaleY(0); } }
+@keyframes mx-sweep { from { transform: scaleX(0); } }
+@keyframes mx-dot-in { from { opacity: 0; transform: scale(0); } 70% { opacity: 1; transform: scale(1.3); } }
+@keyframes mx-draw { from { stroke-dashoffset: 1; } }
+
+@layer base {
+  * { border-color: var(--color-border); }
+  /* No zoom on touch screens, like a native app: no double-tap zoom, no pinch (with the viewport's
+     user-scalable=no and the iOS gesture guard of lib/mobile-viewport.ts). Scrolling stays. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: pan-x pan-y; }
+  html, body, #root { height: 100%; }
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--mx-font-sans, 'Inter Variable', ui-sans-serif, system-ui, sans-serif);
+    font-feature-settings: 'cv11', 'ss01';
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+  ::selection { background: color-mix(in oklch, var(--primary) 35%, transparent); }
+  :focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+  button, [role='button'] { cursor: pointer; }
+  button:disabled { cursor: default; }
+  /* iOS zooms into any field whose text is under 16px when it gets the focus. 14px with a fine pointer; on touch
+     screens every field is 16px - !important so a component's text-xs / text-[13px] (or the code editor's
+     12.5px) can never bring the zoom back. */
+  input, textarea, select { font-size: 14px; }
+  @media (pointer: coarse) {
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']), textarea, select,
+    [contenteditable='true'], [contenteditable=''] { font-size: 16px !important; }
+  }
+  /* Thin, theme-aware scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent; }
+  code, kbd, pre, samp { font-family: var(--mx-font-mono, ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace); }
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Motion. Light, short, transform/opacity only (compositor-friendly on every GPU), and switched
+ * off by prefers-reduced-motion (rule above). Documented in docs/dev/DESIGN.md.
+ *  .mx-rise / .mx-unfold  entrance of a list item; --i (0..10) staggers siblings by 28 ms
+ *  #main > *              page content fades in when a route mounts (opacity only: a transform
+ *                         would turn the page into the containing block of its fixed overlays)
+ *  .mx-card-in             dashboard cards; at most ~0.5 s for the whole grid (--i capped at 6)
+ *  html[data-boot]        first load only (set in index.html, removed by AppShell): the shell
+ *                         (sidebar, nav items, main) assembles itself instead of popping in
+ *  .mx-pop                a check / badge that confirms an action (scale 0.6 -> 1, 220 ms)
+ *  .mx-cv                 content-visibility: off-screen rows of long lists are not laid out/painted
+ *  Dashboard widgets (after .mx-card-in, so a card's content builds itself once the card is in place):
+ *  .mx-grow-y             a chart bar grows from its base (--i: bar index, 24 ms apart)
+ *  .mx-draw               a chart line draws itself (needs pathLength="1"; one stroke, no layout)
+ *  .mx-sweep              a timeline lane's track opens left to right (--i: lane index)
+ *  .mx-dot-in             a timeline event pops in, lane by lane and left to right (--i lane, --x 0..100 %)
+ *  .mx-wait               a card below the fold: its animations (and theirs) wait until it scrolls into view
+ * ---------------------------------------------------------------------------------------- */
+.mx-rise { animation: mx-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--i, 0) * 28ms); }
+.mx-unfold { animation: mx-unfold 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--i, 0) * 22ms); }
+.mx-card-in { animation: mx-card-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(20ms + var(--i, 0) * 32ms); }
+.mx-queue-in { animation: mx-queue-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.mx-queue-out { animation: mx-queue-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+.mx-fade { animation: mx-fade 220ms ease-out backwards; }
+.mx-pop { animation: mx-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+#main > * { animation: mx-fade 180ms ease-out backwards; }
+html[data-boot] .mx-boot-side { animation: mx-slide-right 340ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+html[data-boot] .mx-boot-item { animation: mx-slide-right 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 30ms); }
+html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
+.mx-cv { content-visibility: auto; contain-intrinsic-size: auto 44px; }
+.mx-grow-y { transform-box: fill-box; transform-origin: 50% 100%; animation: mx-grow-y 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(140ms + var(--i, 0) * 24ms); }
+.mx-draw { stroke-dasharray: 1; animation: mx-draw 640ms cubic-bezier(0.45, 0, 0.2, 1) 140ms backwards; }
+.mx-sweep { transform-origin: left center; animation: mx-sweep 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(120ms + var(--i, 0) * 40ms); }
+.mx-wait, .mx-wait * { animation-play-state: paused !important; }
+.mx-dot-in { animation: mx-dot-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(200ms + var(--i, 0) * 40ms + var(--x, 0) * 3ms); }
+
+/* Density: compact tightens vertical rhythm in lists/tables/forms. */
+[data-density='compact'] { --row-h: 32px; --pad-card: 14px; }
+[data-density='comfortable'] { --row-h: 40px; --pad-card: 20px; }
+
+/* Touch layout: menus, lists of choices and pickers (.mx-sheet on their content) open as a bottom sheet that
+ * slides up over a dimmed page and slides back down; transform / opacity only. Radix keeps positioning the
+ * wrapper: pin it to the bottom instead. */
+html[data-compact] [data-radix-popper-content-wrapper]:has(> .mx-sheet) {
+  position: fixed !important;
+  transform: none !important;
+  inset: auto 0 var(--kbd-inset, 0px) 0 !important;
+  min-width: 0 !important;
+}
+html[data-compact] [data-radix-popper-content-wrapper]:has(> .mx-sheet)::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--overlay);
+  animation: var(--animate-overlay-in);
+}
+html[data-compact] [data-radix-popper-content-wrapper]:has(> .mx-sheet[data-state='closed'])::before {
+  animation: var(--animate-overlay-out);
+}
+html[data-compact] .mx-sheet {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: calc(var(--vvh, 100dvh) * 0.72) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-width: 1px 0 0;
+  border-radius: 1rem 1rem 0 0;
+  padding: 0.25rem 0.5rem calc(0.5rem + var(--safe-bottom));
+  will-change: transform;
+}
+html[data-compact] .mx-sheet::before {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 4px;
+  margin: 0.25rem auto 0.5rem;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+}
+html[data-compact] .mx-sheet[data-state='open'] { animation: var(--animate-sheet-up); }
+html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180ms cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Markdown (docs, dashboard markdown blocks, later: session messages) */
+.prose-mx { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.prose-mx > :first-child { margin-top: 0; }
+.prose-mx > :last-child { margin-bottom: 0; }
+.prose-mx h1 { font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 0.9rem; line-height: 1.25; }
+.prose-mx h2 { font-size: 1.2rem; font-weight: 620; letter-spacing: -0.01em; margin: 2rem 0 0.6rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--color-border); }
+.prose-mx h3 { font-size: 1.02rem; font-weight: 600; margin: 1.5rem 0 0.4rem; }
+.prose-mx h4 { font-size: 0.95rem; font-weight: 600; margin: 1.2rem 0 0.3rem; }
+.prose-mx p, .prose-mx ul, .prose-mx ol, .prose-mx blockquote, .prose-mx table { margin: 0.7rem 0; }
+.prose-mx ul { list-style: disc; padding-left: 1.4rem; }
+.prose-mx ol { list-style: decimal; padding-left: 1.4rem; }
+.prose-mx li { margin: 0.2rem 0; }
+.prose-mx li > ul, .prose-mx li > ol { margin: 0.2rem 0; }
+.prose-mx a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in oklch, var(--primary) 40%, transparent); }
+.prose-mx a:hover { text-decoration-color: var(--color-primary); }
+.prose-mx blockquote { border-left: 3px solid var(--color-border); padding: 0.1rem 0 0.1rem 0.9rem; color: var(--color-muted-foreground); }
+.prose-mx hr { border: 0; border-top: 1px solid var(--color-border); margin: 1.5rem 0; }
+.prose-mx :not(pre) > code { font-size: 0.86em; background: var(--color-muted); border: 1px solid var(--color-border); border-radius: 5px; padding: 0.1em 0.35em; }
+.prose-mx table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
+.prose-mx th, .prose-mx td { border: 1px solid var(--color-border); padding: 0.4rem 0.7rem; text-align: left; }
+.prose-mx th { background: var(--color-muted); font-weight: 600; white-space: nowrap; }
+.prose-mx img { max-width: 100%; border-radius: var(--radius-md); }
+.prose-mx input[type='checkbox'] { margin-right: 0.4rem; vertical-align: middle; }
+
+/* highlight.js theme mapped on tokens (works in both themes) */
+.hljs { color: var(--color-foreground); background: transparent; }
+.hljs-comment, .hljs-quote { color: var(--color-muted-foreground); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in { color: oklch(0.68 0.16 300); }
+.dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-literal, .dark .hljs-built_in { color: oklch(0.78 0.13 300); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute { color: oklch(0.55 0.13 150); }
+.dark .hljs-string, .dark .hljs-regexp, .dark .hljs-addition, .dark .hljs-attribute { color: oklch(0.8 0.13 150); }
+.hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable { color: oklch(0.6 0.15 50); }
+.dark .hljs-number, .dark .hljs-symbol, .dark .hljs-variable, .dark .hljs-template-variable { color: oklch(0.8 0.13 60); }
+.hljs-title, .hljs-section, .hljs-name, .hljs-type { color: oklch(0.55 0.15 250); }
+.dark .hljs-title, .dark .hljs-section, .dark .hljs-name, .dark .hljs-type { color: oklch(0.78 0.12 240); }
+.hljs-deletion { color: var(--color-destructive); }
+.hljs-meta { color: var(--color-muted-foreground); }
+
+/* Chart series (dashboard). Single-series charts use the accent; multi-series use these slots in order. */
+:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4; --series-6: #4a3aa7; }
+.dark { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; --series-6: #9085e9; }

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" class="dark" data-accent="blue" data-density="comfortable">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <!-- PWA: installable app (manifest + service worker registered in src/pwa) and iOS home-screen mode. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Maxxing" />
+    <meta name="application-name" content="Harness Maxxing" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Harness Maxxing</title>
+    <script>
+      // Apply theme/accent/density before first paint (no flash). Mirrors src/stores/ui.ts.
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem('mx-ui') || '{}').state || {};
+          var t = s.theme || 'dark';
+          var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          var r = document.documentElement;
+          r.classList.toggle('dark', dark);
+          // Accent in sRGB (copy of src/lib/accent.ts), available from the first paint.
+          var hex = {
+            light: { blue: '#0076ed', clay: '#ea7e00', violet: '#a126d7', green: '#25931c', amber: '#e0bb00', rose: '#e62e1e' },
+            dark: { blue: '#3c91fd', clay: '#f8962d', violet: '#c25af3', green: '#55cc4b', amber: '#f1d025', rose: '#fc523a' }
+          };
+          var a = hex.dark[s.accent] ? s.accent : 'blue';
+          r.dataset.accent = a;
+          r.dataset.tint = s.tint === 'tinted' ? 'tinted' : 'neutral';
+          // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, splash, installed app
+          // (manifest icons and launch screen) and the iOS home-screen icon.
+          var icon = document.querySelector('link[rel="icon"]');
+          if (icon) icon.href = '/icons/logo-' + a + '.svg';
+          var manifest = document.querySelector('link[rel="manifest"]');
+          if (manifest) manifest.href = '/manifest-' + a + '.webmanifest';
+          var touch = document.querySelector('link[rel="apple-touch-icon"]');
+          if (touch) touch.href = '/icons/apple-touch-icon-' + a + '.png';
+          window.__mxLogo = '/icons/logo-' + a + '.svg';
+          // Fonts (copy of src/lib/fonts.ts stacks).
+          var sans = {"geist": "'Geist Variable', ui-sans-serif, system-ui, sans-serif", "plex": "'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif", "dmsans": "'DM Sans Variable', ui-sans-serif, system-ui, sans-serif", "manrope": "'Manrope Variable', ui-sans-serif, system-ui, sans-serif", "jakarta": "'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif", "grotesk": "'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif", "outfit": "'Outfit Variable', ui-sans-serif, system-ui, sans-serif", "sora": "'Sora Variable', ui-sans-serif, system-ui, sans-serif", "nunito": "'Nunito Sans Variable', ui-sans-serif, system-ui, sans-serif", "quicksand": "'Quicksand Variable', ui-sans-serif, system-ui, sans-serif", "comfortaa": "'Comfortaa Variable', ui-sans-serif, system-ui, sans-serif", "rubik": "'Rubik Variable', ui-sans-serif, system-ui, sans-serif", "sourceserif": "'Source Serif 4 Variable', ui-serif, Georgia, 'Times New Roman', serif", "lora": "'Lora Variable', ui-serif, Georgia, 'Times New Roman', serif", "newsreader": "'Newsreader Variable', ui-serif, Georgia, 'Times New Roman', serif", "fraunces": "'Fraunces Variable', ui-serif, Georgia, 'Times New Roman', serif", "garamond": "'EB Garamond Variable', ui-serif, Georgia, 'Times New Roman', serif", "atkinson": "'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif", "lexend": "'Lexend Variable', ui-sans-serif, system-ui, sans-serif", "jetbrainsui": "'JetBrains Mono Variable', ui-monospace, monospace", "martian": "'Martian Mono Variable', ui-monospace, monospace", "system": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"};
+          var mono = {"jetbrains": "'JetBrains Mono Variable', ui-monospace, monospace", "fira": "'Fira Code Variable', ui-monospace, monospace", "geist": "'Geist Mono Variable', ui-monospace, monospace", "cascadia": "'Cascadia Code Variable', ui-monospace, monospace", "sourcecode": "'Source Code Pro Variable', ui-monospace, monospace", "victor": "'Victor Mono Variable', ui-monospace, monospace", "martian": "'Martian Mono Variable', ui-monospace, monospace", "roboto": "'Roboto Mono Variable', ui-monospace, monospace", "redhat": "'Red Hat Mono Variable', ui-monospace, monospace", "atkinsonmono": "'Atkinson Hyperlegible Mono Variable', ui-monospace, monospace"};
+          if (sans[s.font]) r.style.setProperty('--mx-font-sans', sans[s.font]);
+          if (mono[s.monoFont]) r.style.setProperty('--mx-font-mono', mono[s.monoFont]);
+          r.style.setProperty('--mx-splash-accent', hex[dark ? 'dark' : 'light'][a]);
+          r.dataset.density = s.density || 'comfortable';
+          // Touch layout (copy of src/stores/media.ts isCompact): phones, tablets and narrow windows.
+          var narrow = matchMedia('(max-width: 767px)').matches;
+          var touch = matchMedia('(pointer: coarse) and (hover: none)').matches;
+          if (narrow || s.layout === 'touch' || (touch && s.layout !== 'desktop')) r.dataset.compact = '';
+          if (s.language) r.lang = s.language;
+        } catch (e) {}
+        // First load: lets the shell animate in (removed by AppShell once the entrance is over).
+        document.documentElement.dataset.boot = '';
+        // Start the auth check now, in parallel with the JS download (consumed once by fetchAuthState).
+        try {
+          window.__mxAuth = fetch('/api/auth/state', { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (a) {
+              // A browser that never picked a theme shows the server's look at once (mirrors Root.tsx adoptLook).
+              var s = JSON.parse(localStorage.getItem('mx-ui') || '{}').state || {};
+              var own = s.lookChosen !== undefined ? s.lookChosen : s.theme !== undefined || s.accent !== undefined;
+              var l = a && a.look;
+              if (l && !own) {
+                var r = document.documentElement;
+                r.classList.toggle('dark', l.theme === 'dark' || (l.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
+                r.dataset.accent = l.accent;
+                r.dataset.tint = l.tint;
+              }
+              return a;
+            })
+            .catch(function () { return null; });
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      /* Splash painted before any JS: same footprint as AuthLayoutFallback (the logo does not move or flash). */
+      html { background: #fff; }
+      html.dark { background: #09090b; }
+      .mx-splash { display: flex; height: 100dvh; align-items: center; justify-content: center; }
+      .mx-splash img { width: 48px; height: 48px; animation: mx-splash 1.6s ease-in-out infinite; }
+      @keyframes mx-splash { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="mx-splash" aria-hidden="true">
+        <!-- no src in the markup: the browser would fetch (and might show) the blue logo before the accent one -->
+        <img id="mx-splash-logo" alt="" width="48" height="48" />
+        <script>document.getElementById('mx-splash-logo').src = window.__mxLogo || '/icons/logo-blue.svg';</script>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

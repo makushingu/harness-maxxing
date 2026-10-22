@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/makushingu/harness-maxxing/security/advisories/new
+    about: Report it privately (never in a public issue). See SECURITY.md.
+  - name: Enterprise and commercial licenses
+    url: https://harness-maxxing.com/#enterprise
+    about: Several entities, clients, a paid offer or hosting, the name - ask for a commercial license.
+  - name: News on X
+    url: https://x.com/HarnessMaxxing
+    about: Follow @HarnessMaxxing for releases and tips.
