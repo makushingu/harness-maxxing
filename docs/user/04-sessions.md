@@ -125,6 +125,12 @@ also send the quotes alone. Quotes are kept with the draft and shown as quote bl
 - Answers stream live (markdown, code, images).
 - **Tool calls** (reading files, running commands, editing) appear as compact cards; expand them
   to see input and output. Edits are shown as diffs.
+- **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
+  its card keeps spinning, with the time it has been running, until that work really ends (✓ done, ✗ failed, ⊘
+  stopped or interrupted). Expand it for where it is: its last action, the tools and tokens used so far, then the
+  agent's report once it is done. While some still run, a pill above the composer says so (**2 agents running**):
+  click it to list them, click one to jump to its card. All of it comes back as it was after a reload or a lost
+  connection.
 - **Diagrams**: to explain how something works, Claude can draw a small diagram (a flowchart, a sequence, the
   states of something...) right in the answer. Click it to open it in the file viewer like a picture (zoom,
   fullscreen, ← / → with the other files of the conversation, **Source** for its code); hover it for **Show the
