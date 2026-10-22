@@ -1450,6 +1450,8 @@ export const fr: Record<keyof typeof en, string> = {
   'system.licenseUpdatesUntil': 'mises à jour jusqu’au {date}',
   'system.licenseUpdatesEnded': 'mises à jour terminées le {date} : ce serveur continue sur sa version',
   'system.licenseUpdatesForever': 'mises à jour incluses',
+  'system.licenseMoving': 'Passage aux mises à jour GitHub en attente : {error}. Nouvel essai toutes les 6 h.',
+  'system.movedToGit': 'Mises à jour depuis GitHub (branche stable) depuis le {date}, comme toutes les installations. Clé {key} gardée.',
   'system.pendingConflict': 'La mise à jour {version} attend Harness',
   'system.pendingConflictDesc': 'Vos personnalisations entrent en conflit avec la nouvelle version. Rien n’a changé : la version actuelle continue de tourner. Harness peut les adapter dans le projet system (topic harness).',
   'system.pendingRolledBack': 'La mise à jour {version} a été annulée',
