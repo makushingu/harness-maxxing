@@ -6,6 +6,23 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.87 - 2026-10-22
+
+Fair source step 6.3: licensed installs leave the signed archives for the public repository.
+- `license.move_to_git()` (lock, never raises): refused while a rebase / pending update / uncommitted change /
+  detached HEAD; base = merge-base(HEAD, synthetic `origin/<branch>`) (a fetched-not-installed archive is
+  ignored); `origin` = `MAXXING_GIT_URL` (default `makushingu/harness-maxxing`), fetch `stable` only; target =
+  the `stable` commit with the same tree, else the newest with the same `__version__` (last 500); old HEAD in
+  `refs/maxxing/pre-git`; `checkout -b stable` + `rebase --onto target base` (customizations; abort and back to
+  the old branch on conflict); upstream `origin/stable`; old branch and synthetic ref deleted; `license_token`
+  forgotten (key kept). `try_move_to_git()` records `license.move_error` / `move_tried_at` (retry after 6 h,
+  `move_due`).
+- Triggers: `_after_update` and the hourly `_ping_loop` (`_move_to_git`: 5 min after the server start,
+  `MAXXING_MOVE_QUIET_S`, and never while the `maxxing-update` unit runs), and `maxxing update` (before choosing
+  the branch, unless `--branch`). Doctor `license` check shows `move_error`.
+- Tried for real on a copy of the demo server (a85 licensed): moved to `0b19e196` (same version, other files),
+  then a plain git fetch saw a86.
+
 ## 2.0.0-alpha.86 - 2026-10-22
 
 Fair source step 6.2: optional registration of servers with the cloud (`/v1/register`, `/v1/heartbeat`, cloud

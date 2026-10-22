@@ -1399,6 +1399,9 @@ def check_license() -> Check:
         if update_source() == "git":
             return _c("license", INFO, "updates from the git repository (no license needed)")
         return _c("license", INFO, "no license needed (local copy: updates come from a newer copy)")
+    if st.get("move_error"):                          # fair source: waiting to move to the git repository
+        return _c("license", INFO, f"license {st['key_hint']}: moving to the public git repository - {st['move_error']}",
+                  "tried again by itself every few hours", "maxxing update (moves it first)")
     up = st.get("updates_until")
     if up and up < time.time():
         return _c("license", WARN, f"license {st['key_hint']}: updates ended on {time.strftime('%Y-%m-%d', time.localtime(up))}",
@@ -1799,6 +1802,14 @@ def cmd_update(a) -> int:
              "finish it then run: maxxing update --resume   (or abandon: git -C "
              f"{config.CODE} rebase --abort)")
         return 1
+    from . import license
+    if license.enabled() and not a.branch:            # fair source: a licensed install moves to git first
+        r = license.try_move_to_git()
+        if r.get("moved"):
+            line(OK, f"this server now updates from {license.GIT_URL} (branch {r['branch']}, "
+                     f"{r.get('version') or '?'}), customizations kept")
+        elif r.get("error"):
+            line(INFO, f"still on licensed archives: {r['error']}")
     branch = a.branch or _current_branch()
     old = _rev("HEAD")                                 # what runs now: a rollback goes back here, on this branch
     _UPDATE_CTX.clear()
