@@ -232,7 +232,7 @@ function VersionCard() {
         {v.license?.enabled && (
           <p className="text-[13px] text-muted-foreground">
             <KeyRound className="mr-1.5 inline size-3.5 align-[-2px]" />
-            {t('system.license', { key: v.license.key_hint, kind: t(v.license.kind === 'beta' ? 'system.licenseKind.beta' : v.license.kind === 'gift' ? 'system.licenseKind.gift' : 'system.licenseKind.paid'), email: v.license.email || '' })}
+            {t('system.license', { key: v.license.key_hint, kind: t(v.license.kind === 'beta' ? 'system.licenseKind.beta' : v.license.kind === 'gift' ? 'system.licenseKind.gift' : v.license.kind === 'enterprise' ? 'system.licenseKind.enterprise' : 'system.licenseKind.paid'), email: v.license.email || '' })}
             {' · '}
             {v.license.updates_until
               ? t(v.license.updates_until * 1000 < Date.now() ? 'system.licenseUpdatesEnded' : 'system.licenseUpdatesUntil', { date: new Date(v.license.updates_until * 1000).toLocaleDateString(lang) })

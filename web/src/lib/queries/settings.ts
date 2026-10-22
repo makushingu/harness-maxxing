@@ -59,6 +59,17 @@ export function useSaveProfile() {
 }
 
 /** Saying hello to the authors (Settings -> Profile, onboarding step Profile). */
+export type FeedbackType = 'bug' | 'idea' | 'other'
+/** Feedback button: the email it prefills and the version sent along (docs/user/23-license.md). */
+export function useFeedbackDefaults(enabled: boolean) {
+  return useQuery({ queryKey: qk.feedback, queryFn: () => api.get<{ email: string; version: string }>('/api/settings/feedback'), enabled })
+}
+export function useSendFeedback() {
+  return useMut((b: { email: string; type: FeedbackType; message: string }) => api.post<{ ok: boolean }>('/api/settings/feedback', b), {
+    invalidate: [qk.feedback],
+    errorToast: false,
+  })
+}
 export function useRegister() {
   return useQuery({ queryKey: qk.register, queryFn: () => api.get<RegisterState>('/api/settings/register') })
 }

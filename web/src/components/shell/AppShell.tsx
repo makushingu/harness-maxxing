@@ -21,6 +21,7 @@ import { TouchDrawers } from './TouchNav'
 import { useCompact } from '@/stores/media'
 import { useMobileViewport } from '@/lib/mobile-viewport'
 import { useShortcutsDialog } from './shortcuts-store'
+import { useFeedbackDialog } from './feedback-store'
 import { useNav } from './nav'
 import { RouteProgress } from './RouteProgress'
 
@@ -76,6 +77,21 @@ function useBootEntrance() {
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
 const FileViewerHost = React.lazy(withGroups(['files'], () => import('@/features/files/Viewer')))
+const FeedbackDialog = React.lazy(withGroups(['feedback'], () => import('./FeedbackDialog').then((m) => ({ default: m.FeedbackDialog }))))
+
+/** The Feedback dialog: its code (and words) load the first time it is opened, then it stays mounted for its animations. */
+function FeedbackHost() {
+  const open = useFeedbackDialog((s) => s.open)
+  const [ever, setEver] = React.useState(open)
+  React.useEffect(() => {
+    if (open) setEver(true)
+  }, [open])
+  return ever ? (
+    <React.Suspense fallback={null}>
+      <FeedbackDialog />
+    </React.Suspense>
+  ) : null
+}
 
 /** The file viewer: its code loads the first time a file is opened. */
 function FileViewer() {
@@ -223,6 +239,7 @@ export function AppShell() {
       <WhenIdle>
         <CommandPalette />
         <ShortcutsDialog />
+        <FeedbackHost />
         <InstallDialog />
         <WhatsNew />
         <TourHost />

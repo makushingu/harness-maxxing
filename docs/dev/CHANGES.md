@@ -6,6 +6,23 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.89 - 2026-10-22
+
+Feedback to the authors (Romain's request).
+- `maxxing/feedback.py`: `send(email, type, message)` -> cloud `POST /v1/feedback` (`register._call`, `license.API`,
+  user agent `harness-maxxing/<v>`) with `{email, type: bug|idea|other, message <= 4000, version, lang, name (profile
+  pseudo)}`; `FeedbackError(code, message, status)`; offline guard = `register._offline()` (`MAXXING_LICENSE_PING=0`);
+  the last email is kept in config `feedback_email`, defaults to `register.email`.
+- `GET /api/settings/feedback` (`{email, version}`), `POST /api/settings/feedback` (400 invalid_email /
+  message_required / too_long, 429 rate from the cloud, 502 unreachable, 503 offline).
+- UI: `components/shell/FeedbackDialog.tsx` (lazy, i18n group `feedback`, open state `feedback-store.ts`), mounted
+  by `FeedbackHost` in `AppShell` on first open; `FeedbackButton` in `Sidebar.tsx` (above the icon row; icon only
+  when folded); row in the touch app drawer (`TouchNav.tsx`). Core keys: `shell.feedback`, `shell.feedbackHint`.
+- `system.licenseKind.enterprise` (License page, System version card).
+- Cloud (`harness-maxxing-cloud` `a3865b8`): `/v1/feedback` (10/h per IP, 10/day per email, ack email), stored as
+  lead kind `feedback` (`subject` = type, `leads.version`, migration 0011), admin Inbox tab Feedback, alert emailed to
+  the admins with reply-to = sender.
+
 ## 2.0.0-alpha.88 - 2026-10-22
 
 Fair source step 6.4: the license key is an optional right of use (Enterprise), never a delivery channel.
