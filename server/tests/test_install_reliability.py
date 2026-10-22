@@ -196,21 +196,21 @@ def test_branch_names_are_validated(value, ok):
 def test_a_new_install_needs_no_license_key(tmp_path):
     """Fair source: without LICENSE nor GH_TOKEN a new install clones the public git repository (no question, no
     license server); LICENSE=HM-... too since 2.0.0a88 (the Enterprise key is only recorded at the end); an existing
-    licensed install (still on archives) stays licensed until it moves to git by itself."""
-    stub = 'license_activate() { echo ACTIVATE; }; local_source() { return 1; }'
+    licensed install (still on archives) is kept: it moves to git by itself."""
+    stub = 'local_source() { return 1; }'
     base = dict(INSTALL_DIR=str(tmp_path / "opt"), STATE_DIR=str(tmp_path / "state"), REPO="o/n", BRANCH="main")
     r = sh(f'{stub}; choose_source; echo "licensed=$LICENSED local=$LOCAL"', **base)
-    assert "licensed=0 local=0" in r.stdout and "ACTIVATE" not in r.stdout, r.stdout + r.stderr
+    assert "licensed=0 local=0" in r.stdout, r.stdout + r.stderr
     assert "github.com/o/n" in r.stdout
     r = sh(f'{stub}; choose_source; echo "licensed=$LICENSED key=$LICENSE"', LICENSE=" hm-abcd-efgh-jkmn-pqrs ", **base)
-    assert "ACTIVATE" not in r.stdout and "licensed=0" in r.stdout and "github.com/o/n" in r.stdout
+    assert "licensed=0" in r.stdout and "github.com/o/n" in r.stdout
     r = sh(f'{stub}; choose_source; echo "licensed=$LICENSED"', GH_TOKEN="t", LICENSE="HM-X", **base)
-    assert "licensed=0" in r.stdout and "ACTIVATE" not in r.stdout      # a token: git (private fork / mirror)
+    assert "licensed=0" in r.stdout      # a token: git (private fork / mirror)
     (tmp_path / "opt/.git").mkdir(parents=True)
     (tmp_path / "state").mkdir()
     (tmp_path / "state/secrets.json").write_text('{"license_token": "a1.tok"}')
     r = sh(f'{stub}; choose_source; echo "licensed=$LICENSED"', **base)
-    assert "licensed=1" in r.stdout and "ACTIVATE" not in r.stdout      # re-run of a licensed install: kept
+    assert "licensed=1" in r.stdout      # re-run of a licensed install: kept
 
 
 def test_a_keyless_clone_uses_no_token(tmp_path):

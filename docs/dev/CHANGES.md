@@ -6,6 +6,51 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.93 - 2026-10-22
+
+Dead code of the paid / signed-archive model removed (fair source since a85-a88); third-party notices.
+- Removed from `maxxing/license.py`: `PUBKEYS` / `pubkey` / `DEFAULT_KID`, `_url_ok`, `check` (`/v1/update`), `ping`
+  (`/v1/ping`) + `health_summary` + `ping_due` + `PING_EVERY`, `_rotate`, `signed_message`, `verify_signature`,
+  `_verify_with`, `download`, `_extract`, `import_release`, `remote_version`, `is_downgrade`, `fetch_latest`.
+  `MAXXING_RELEASE_PUBKEY` is gone.
+- Why it is dead: a server only runs this code after a git update, or after its OLD code (a31..a86, still on
+  archives) installed the newest signed archive. In both cases the archive download / verification is done by the
+  code that fetched it; this code only has to move the server to git.
+- Kept for those servers: `enabled()` (`license_token` = still on archives), `move_to_git` / `try_move_to_git` /
+  `move_due` / `_git` / `_version_at`, `GIT_URL`, `PRE_GIT_REF`, and the triggers: `api/system._after_update` (every
+  start, after `MAXXING_MOVE_QUIET_S`, never while `maxxing-update` runs), the hourly `_ping_loop` (now only the move
+  and the registration heartbeat) and `cmd_update`. Kept for the Enterprise key: `activate`, `release`,
+  `remove_key`, `status`, `machine_id`, `os_name`, `_post`, `API`, `USER_AGENT`, `disk_version` (register,
+  feedback).
+- `release()` no longer forgets `license_token` (it is the marker of the move still to do).
+- `cmd_update` on an install still on archives: saves uncommitted non-`web/` changes as a customization, then
+  `try_move_to_git`; on failure exit 1 with the reason (before: fell back to the archive download). Moves even with
+  `--branch`. `--allow-downgrade` and `_ALLOW_DOWNGRADE`, `_report_version` (ping after an update) removed.
+  `_fetch` / `_fetch_quiet` / `api/system._refresh_remote` fetch nothing while `enabled()`; `check_update` returns
+  `ok: false` with the reason. Doctor: `license` check = INFO "moving to the public git repository" (+ `move_error`),
+  `update_signature` check skipped until the move.
+- CLI: `maxxing license check` and `ping` removed; `activate --no-fetch` kept as a hidden no-op (install.sh passes
+  it, the old code of a pre-a87 install understands it); `status` of an install still on archives says it moves.
+- `install.sh`: removed `license_activate`, `machine_hash`, `json_get`, `release_pubkey`, `release_verified`,
+  `fetch_release`, `ver_lt`, `RELEASE_KIDS` / `RELEASE_PUBKEY_k1`, `MIN_VERSION`, `RELEASE_JSON` (all unreachable since
+  a88). `LICENSE=HM-...` still records the key at the end (`maxxing license activate --key-from-stdin --no-fetch`);
+  a re-run on an install still holding `license_token` keeps its code (`LICENSED=1`, it moves by itself).
+- Tests: `test_license.py` rewritten without archives (fake `/v1/activate` + `/v1/release` only); the old code's
+  archive install is simulated in the test (`_old_code_installs_archive`).
+  `test_an_old_server_that_installs_this_version_from_an_archive_ends_on_stable` runs the start trigger
+  (`system._after_update`) on such a server and checks `stable`, upstream, customizations, key and seat, then a plain
+  git update. Release-key tests of `test_install_security.py` removed.
+- Server side (cloud, unchanged): `publish.py` keeps producing the signed archive, the bridge of the servers still on
+  archives; `/v1/update` and `/v1/ping` stay for their old code.
+- `scripts/third_party_notices.py` (stdlib) -> `THIRD_PARTY_NOTICES.md`: Python packages of `uv.lock` (runtime +
+  `voice` extra, markers evaluated for Linux / CPython 3.12; texts from the dist-info of `server/.venv`, else the
+  package's top-level LICENSE from RECORD), JS production dependencies of `web/package.json` and their transitive
+  production deps (`package-lock.json`, texts from `node_modules`) plus `vite` / `tailwindcss` (code embedded in
+  `web/dist`, own license only), Go modules of `pc-agent/go.mod` (module cache if present, else a known license id
+  + pkg.go.dev link). Fonts = the `@fontsource-variable/*` packages (OFL-1.1). Sorted, identical texts merged,
+  `--check` mode. CONTRIBUTING + README mention it. No GPL / AGPL / LGPL found; weak copyleft: MPL-2.0 (certifi,
+  tqdm with MIT, dompurify as MPL-2.0 OR Apache-2.0).
+
 ## 2.0.0-alpha.92 - 2026-10-22
 
 Donate restyled (maintainers' request). Web only, no API change.

@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.93 - 2026-10-22
+
+Changes:
+- **Leftovers of the old paid model removed.** Harness Maxxing installs and updates from the public git repository;
+  the code that downloaded signed archives with a license key, `maxxing license check`, `maxxing license ping` and
+  `maxxing update --allow-downgrade` are gone. Servers installed with a key before 2.0.0a87 still switch to the git
+  repository by themselves, customizations kept; an optional Enterprise key works as before (Settings -> License).
+- **Third-party notices**: `THIRD_PARTY_NOTICES.md` lists the code and fonts shipped or installed with Harness
+  Maxxing, with their licenses.
+
 ## 2.0.0-alpha.92 - 2026-10-22
 
 Changes:

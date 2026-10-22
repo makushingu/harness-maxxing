@@ -61,21 +61,20 @@ Restart the service after changing the port, bind address or public URL:
 | `--verify` | check that every extension loads and every widget answers, and run each customization's check. Exit `0` everything works, `1` something to fix |
 | `--smart` | used by the Update button: after the restart the server opens a `system/harness` session that applies the upgrade notes |
 
-A git install (the default) fetches the new version from its git remote (a private fork or mirror: with the read
-token stored as `github_update_token`); a server installed with a license key gets it from the license server
-(signed archive, checked before use). After an update, the command
+Every install fetches the new version from its git remote (a private fork or mirror: with the read token stored as
+`github_update_token`). A server installed with a key before 2.0.0a87 first moves to the public git repository by
+itself (see [License](license)). After an update, the command
 lists the **workspace upgrade notes** of the versions installed (`<code>/docs/upgrade/<version>.md`):
 instructions for Claude to adapt your workspace. The easiest path is the topic `system/harness` (`system/update` on older servers):
 say "update" and Claude checks, explains, updates after your yes, then applies these notes.
 
-**Signed updates only (optional, git installs).** Set `"update_verify_signature": true` in
+**Signed updates only (optional).** Set `"update_verify_signature": true` in
 `/var/lib/claude-maxxing/config.json` and `maxxing update` installs a new version only if its commit, or a tag
 pointing at it, carries a valid signature from a key git trusts on this server (`git verify-commit` /
 `git verify-tag`: import the maintainer's GPG key with `gpg --import`, or point `gpg.ssh.allowedSignersFile` at
 their SSH key). Otherwise the update stops before changing anything (exit code `1`, a warning in the
 notifications feed and on Telegram) and the current version keeps running. `maxxing doctor` tells whether the
-latest fetched version passes the check. Off by default; licensed servers always verify their signed archive
-and skip this git check.
+latest fetched version passes the check. Off by default.
 
 ## maxxing license
 
@@ -85,7 +84,6 @@ and skip this git check.
 | `maxxing license activate [HM-…]` | record an Enterprise key, checked by the license server (asked hidden; `--key-from-stdin` reads it from stdin) |
 | `maxxing license remove` | forget the key and free its place on the license |
 | `maxxing license release` | free the key's place without forgetting it |
-| `maxxing license check`, `ping` | servers still on signed archives (before 2.0.0a87) only |
 
 See [License](license).
 
