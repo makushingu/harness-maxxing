@@ -44,7 +44,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 | POST | `/api/auth/password` | `{current, new}` | `{ok}` (min length 12, `security.MIN_PASSWORD`; `400 weak_password`, `400 bad_password` for a character UTF-8 cannot store, same on setup) + new cookie · wrong `current`: `401` after the sign-in delay, `429 throttled` past `FAIL_MAX` (own counter `pw:<client>`); rotates the cookie key: every other browser is signed out |
 
 ## Onboarding
-| GET | `/api/onboarding` | – | `{completed, steps:{password:bool, claude:bool, workspace:bool, telegram:bool, backup:bool}}` |
+| GET | `/api/onboarding` | – | `{completed, steps:{password:bool, claude:bool, workspace:bool, telegram:bool, backup:bool, profile:bool}}` (`profile` = the Profile step was answered, `register.asked`) |
 | POST | `/api/onboarding/complete` | – | `{ok, jobs_enabled:[cron_id]}` (Claude signed in: the default jobs created off until then - Memory compaction - are turned on, once) |
 
 ## Claude
@@ -243,6 +243,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"]}` (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default true) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted) |
 | PUT | `/api/settings/look` | `{theme:"dark"\|"light"\|"system", accent:"blue"\|"clay"\|"violet"\|"green"\|"amber"\|"rose", tint?:"neutral"\|"tinted"}` | `{ok, look}` · sent by the web app 600 ms after a change of theme / accent / tint (config `look`) · `422` bad value |
 | GET / PUT | `/api/settings/profile` | `{name ≤32, color: "clay"\|"blue"\|"violet"\|"green"\|"amber"\|"rose"\|"teal"\|"zinc", emoji}` | `Profile` (bus `profile`) |
+| GET / PUT | `/api/settings/register` | `{count?, email?, news?, asked?}` (email: valid or `""`) | `RegisterState` `{count, email, news, asked, registered, error, synced_at}` (bus `register`). Optional hello to the authors (`maxxing/register.py`): `count` = anonymous daily signal (cloud id + version), `email` (+ `news`) adds pseudo and language; neither = cloud row deleted. Never turned on by an update. |
 | GET | `/api/secrets` | – | `[{name, note, expose, updated, preview}]` (preview = first 4 chars + …, only `…` for values < 8 chars) |
 | PUT | `/api/secrets/{name}` | `{value?, note?, expose?}` | `{ok}` · `400 invalid_name\|reserved_name\|value_required` (PATH, HOME…, MAXXING_* are reserved) — `expose` = exported as env var to Claude sessions |
 | GET | `/api/secrets/{name}/reveal` | – | `{value}` |

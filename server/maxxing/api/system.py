@@ -341,6 +341,12 @@ async def _ping_loop() -> None:
                 await asyncio.to_thread(license.ping, await asyncio.to_thread(license.health_summary))
         except Exception as e:  # noqa: BLE001 - offline or server down: try again later
             log.info("license ping failed: %s", e)
+        try:
+            from .. import register
+            if register.heartbeat_due():
+                await asyncio.to_thread(register.heartbeat)
+        except Exception as e:  # noqa: BLE001 - offline or server down: try again later
+            log.info("register signal failed: %s", e)
         await asyncio.sleep(3600)
 
 
