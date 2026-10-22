@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import type { Ok, Profile, RegisterState, Settings } from '../types'
+import type { LicenseState, Ok, Profile, RegisterState, Settings } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -66,4 +66,15 @@ export function useSaveRegister() {
   return useMut((b: Partial<Pick<RegisterState, 'count' | 'email' | 'news' | 'asked'>>) => api.put<RegisterState>('/api/settings/register', b), {
     invalidate: [qk.register, qk.onboarding],
   })
+}
+
+// optional Enterprise key (Settings -> License, onboarding step "About you")
+export function useLicense() {
+  return useQuery({ queryKey: qk.license, queryFn: () => api.get<LicenseState>('/api/settings/license') })
+}
+export function useSaveLicense() {
+  return useMut((key: string) => api.put<LicenseState>('/api/settings/license', { key }), { invalidate: [qk.license, ['system']], errorToast: false })
+}
+export function useRemoveLicense() {
+  return useMut(() => api.del<LicenseState>('/api/settings/license'), { invalidate: [qk.license, ['system']] })
 }

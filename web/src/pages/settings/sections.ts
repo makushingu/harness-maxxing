@@ -1,12 +1,13 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
-import { UserRound, BarChart3, Bell, FolderKanban, History, ToggleRight, Blocks, BookOpen, Bot, Brain, DatabaseBackup, FileInput, KeyRound, Mic, Plug, Send, Server, Shield, SlidersHorizontal, Trash2, type LucideIcon } from 'lucide-react'
+import { Building2, UserRound, BarChart3, Bell, FolderKanban, History, ToggleRight, Blocks, BookOpen, Bot, Brain, DatabaseBackup, FileInput, KeyRound, Mic, Plug, Send, Server, Shield, SlidersHorizontal, Trash2, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
-export type SettingsSectionId = 'general' | 'profile' | 'packs' | 'features' | 'notifications' | 'security' | 'claude' | 'stats' | 'memory' | 'telegram' | 'voice' | 'backup' | 'keys' | 'mcp' | 'extensions' | 'import' | 'trash' | 'system' | 'updates' | 'docs'
+export type SettingsSectionId = 'general' | 'profile' | 'license' | 'packs' | 'features' | 'notifications' | 'security' | 'claude' | 'stats' | 'memory' | 'telegram' | 'voice' | 'backup' | 'keys' | 'mcp' | 'extensions' | 'import' | 'trash' | 'system' | 'updates' | 'docs'
 
 export const SETTINGS_SECTIONS: { id: SettingsSectionId; label: TKey; description: TKey; icon: LucideIcon; keywords?: string }[] = [
   { id: 'general', label: 'settings.general', description: 'settings.general.desc', icon: SlidersHorizontal, keywords: 'theme accent language timezone density' },
   { id: 'profile', label: 'settings.profile', description: 'settings.profile.desc', icon: UserRound, keywords: 'pseudo name nickname avatar color emoji identity' },
+  { id: 'license', label: 'settings.license', description: 'settings.license.desc', icon: Building2, keywords: 'license licence enterprise company key business fair source' },
   { id: 'system', label: 'settings.system', description: 'settings.system.desc', icon: Server, keywords: 'health services logs update version' },
   { id: 'updates', label: 'settings.updates', description: 'settings.updates.desc', icon: History, keywords: 'changelog what is new versions release notes history' },
   { id: 'stats', label: 'settings.stats', description: 'settings.stats.desc', icon: BarChart3, keywords: 'usage quota tokens statistics plan limit' },

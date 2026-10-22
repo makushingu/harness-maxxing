@@ -42,6 +42,7 @@ export const qk = {
   settings: ['settings'] as const,
   profile: ['settings', 'profile'] as const,
   register: ['settings', 'register'] as const,
+  license: ['settings', 'license'] as const,
   secrets: ['secrets'] as const,
   health: ['health'] as const,
   system: {
@@ -88,6 +89,7 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   feed: [qk.feed.all],
   profile: [qk.profile],
   register: [qk.register, qk.onboarding],
+  license: [qk.license, ['system']],
   infra: [['infra']],
   mcp: [['mcp']],
 }

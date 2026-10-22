@@ -81,11 +81,11 @@ and skip this git check.
 
 | Command | Effect |
 |---|---|
-| `maxxing license status [--json]` | key, type, email, updates until, latest version |
-| `maxxing license check [--json]` | ask the license server whether a new version is available |
-| `maxxing license activate HM-… [--no-fetch]` | activate this server with a key (`--key-from-stdin` reads it from stdin) |
-| `maxxing license release` | free this server's place on the license (before moving to another server) |
-| `maxxing license ping` | send the daily status now (normally sent by the service once a day) |
+| `maxxing license status [--json]` | the optional Enterprise key of this server (type, email, end date) and where updates come from |
+| `maxxing license activate [HM-…]` | record an Enterprise key, checked by the license server (asked hidden; `--key-from-stdin` reads it from stdin) |
+| `maxxing license remove` | forget the key and free its place on the license |
+| `maxxing license release` | free the key's place without forgetting it |
+| `maxxing license check`, `ping` | servers still on signed archives (before 2.0.0a87) only |
 
 See [License](license).
 
