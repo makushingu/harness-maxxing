@@ -533,6 +533,8 @@ def do_init(a: argparse.Namespace) -> dict:
         raw["cron_keep_background"] = before_a70  # jobs keep living, as they did
     if "unit_hardening" not in raw:               # same: the turn / job unit protections are new there, so off
         raw["unit_hardening"] = not before_a70
+    from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
+    register.migrate(raw)
     config.write_json(config.config_path(), raw)
     for sub in ("sessions", "crons", "telegram", "backup", "trash", "logs"):
         config.state_dir(sub)

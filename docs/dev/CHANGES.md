@@ -6,6 +6,31 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.94 - 2026-10-22
+
+Anonymous counter on by default, out of the onboarding, enriched payload, environment opt-out.
+- `register.DEFAULTS["count"]` = `True`. `register.migrate(raw)` (called by `cmd_core.do_init`, so by every
+  `maxxing update` through the new code's init, and by the installer): once, guarded by config
+  `register_migrated_a94`, sets `register.count = true` when `register.asked` is false or `register` is missing;
+  installs with `asked: true` keep their `count`. Fresh installs get the flag on their first init.
+- `register.blocked()`: `MAXXING_NO_TELEMETRY` or `DO_NOT_TRACK` set to anything but ``/`0`/`false`/`no` = counter off
+  whatever `count`. `counting()` = `count and not blocked()`; every "is the row wanted" test uses
+  `counting() or email`. `heartbeat_due()` is also true when a token is left while nothing is wanted (opt-out set
+  after a count-only registration): `heartbeat()` then goes through `sync()`, which deletes the row.
+- Payload (POST `/v1/register` and `/v1/heartbeat`) when counting: `os` (`NAME VERSION_ID` of `/etc/os-release`, else
+  `PRETTY_NAME`, else `platform.system()`, sanitized, <= 40 chars), `arch` (`platform.machine()`, <= 16), `health`
+  (<= 10 codes matching `^[a-z_]{1,24}$`, from the cached `health.collect()`: `service_ok`/`service_down`,
+  `claude_signed_in`/`claude_signed_out`, the other issue codes, `update_failed` when `customs.pending()` has a
+  reason, `telegram_on`, `backup_on`; `health_unknown` if the health check raised). Register with an email but the
+  counter off sends `os`/`arch`/`health` = `null` (clear). The old cloud ignores unknown fields (`fields()` picks
+  known keys; heartbeat reads `token` + `version`).
+- `GET/PUT /api/settings/register` gains `count_blocked`. Web: `RegisterFields` props `counter` (false in the
+  onboarding: email + news only; the step no longer sends `count`) and `counterBlocked` (checkbox disabled + note).
+  New i18n keys `register.countBlocked`, `onb.profile.counterOn`.
+- Tests: `tests/test_register.py` (defaults, payload keys and no pseudo/path/hostname/IP for count-only, heartbeat
+  payload, migration asked / not asked / once, `do_init`, both opt-out variables, `os_name` parsing and length,
+  health code format).
+
 ## 2.0.0-alpha.93 - 2026-10-22
 
 Dead code of the paid / signed-archive model removed (fair source since a85-a88); third-party notices.

@@ -104,6 +104,10 @@ No key and no account. Companies that need an Enterprise license give their key 
 (optional): see [docs/user/23-license.md](docs/user/23-license.md). Servers installed with a key before 2.0.0a87
 switch to the public git repository by themselves.
 
+An anonymous counter (once a day: a random id, the version, the system and a few health codes; no name, no IP, no
+content) is on by default; turn it off in Settings → Profile, or with `MAXXING_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`)
+in the service environment - see [docs/user/23-license.md](docs/user/23-license.md#saying-hello-optional).
+
 Day-to-day: `maxxing status`, `maxxing doctor`, `maxxing update`. Remove: `maxxing uninstall`.
 
 ## Documentation

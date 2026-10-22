@@ -1,4 +1,4 @@
-// Saying hello to the authors: all optional. Used by the onboarding step "Profile" and Settings -> Profile.
+// Saying hello to the authors: all optional. Used by the onboarding step "Profile" (email only) and Settings -> Profile.
 import { Checkbox, Input, Label } from '@/components/ui'
 import { useT } from '@/i18n'
 
@@ -6,7 +6,20 @@ export type RegisterValues = { email: string; news: boolean; count: boolean }
 
 export const validEmail = (e: string) => !e.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
-export function RegisterFields({ v, onChange, onEmailBlur }: { v: RegisterValues; onChange: (v: RegisterValues) => void; onEmailBlur?: () => void }) {
+export function RegisterFields({
+  v,
+  onChange,
+  onEmailBlur,
+  counter = true,
+  counterBlocked = false,
+}: {
+  v: RegisterValues
+  onChange: (v: RegisterValues) => void
+  onEmailBlur?: () => void
+  /** false: the email only (onboarding); the anonymous counter lives in Settings -> Profile */
+  counter?: boolean
+  counterBlocked?: boolean
+}) {
   const t = useT()
   const bad = !validEmail(v.email)
   return (
@@ -35,13 +48,15 @@ export function RegisterFields({ v, onChange, onEmailBlur }: { v: RegisterValues
           <span className="block text-xs text-muted-foreground">{t('register.newsDesc')}</span>
         </span>
       </label>
-      <label className="flex items-start gap-2.5 text-sm">
-        <Checkbox className="mt-0.5" checked={v.count} onCheckedChange={(c) => onChange({ ...v, count: c === true })} />
-        <span>
-          {t('register.count')}
-          <span className="block text-xs text-muted-foreground">{t('register.countDesc')}</span>
-        </span>
-      </label>
+      {counter && (
+        <label className="flex items-start gap-2.5 text-sm">
+          <Checkbox className="mt-0.5" checked={v.count && !counterBlocked} disabled={counterBlocked} onCheckedChange={(c) => onChange({ ...v, count: c === true })} />
+          <span>
+            {t('register.count')}
+            <span className="block text-xs text-muted-foreground">{t(counterBlocked ? 'register.countBlocked' : 'register.countDesc')}</span>
+          </span>
+        </label>
+      )}
     </div>
   )
 }

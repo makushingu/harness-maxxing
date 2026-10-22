@@ -7,8 +7,9 @@ Harness Maxxing is a self-hosted control room for **Claude Code** on your own se
 run many persistent Claude conversations organised by project and topic, from a browser or from
 Telegram, together with the files, tasks, scheduled jobs and memory that make them useful.
 
-Everything runs on your server, with your own Claude account or API key. Nothing is sent anywhere
-else.
+Everything runs on your server, with your own Claude account or API key. Nothing else leaves it except
+an anonymous daily counter (version, system, health codes; no name, no IP, no content), which you can turn off
+in Settings → Profile - see [License](license#saying-hello-optional).
 
 ## Concepts
 

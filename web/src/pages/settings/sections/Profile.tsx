@@ -114,10 +114,10 @@ function RegisterCard() {
     setV(n)
     if (n.news !== v.news || n.count !== v.count) put(n)        // checkboxes save at once, the email on blur
   }
-  const on = reg.count || !!reg.email
+  const on = (reg.count && !reg.count_blocked) || !!reg.email
   return (
     <SettingsCard title={t('register.title')} description={t('register.desc')}>
-      <RegisterFields v={v} onChange={change} onEmailBlur={() => v.email.trim() !== reg.email && put(v)} />
+      <RegisterFields v={v} onChange={change} onEmailBlur={() => v.email.trim() !== reg.email && put(v)} counterBlocked={reg.count_blocked} />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-xs text-muted-foreground">
         <span>
           {!on ? t('register.statusOff') : reg.registered ? t('register.statusOn') : reg.error ? t('register.statusError', { error: reg.error }) : t('register.statusPending')}

@@ -234,14 +234,14 @@ function ProfileStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
     if (profile && name === null) setName(profile.name)
   }, [profile, name])
   React.useEffect(() => {
-    // first visit: the anonymous counter is checked (the user unchecks it here); afterwards, what was saved
-    if (reg && v === null) setV({ email: reg.email, news: reg.news, count: reg.asked ? reg.count : true })
+    // the email only: the anonymous counter (on by default) is in Settings -> Profile
+    if (reg && v === null) setV({ email: reg.email, news: reg.news, count: reg.count })
   }, [reg, v])
   const ready = profile && reg && name !== null && v !== null
   const go = async () => {
     if (!ready) return
     if (name.trim() !== profile.name) await saveProfile.mutateAsync({ ...profile, name: name.trim().slice(0, 32) })
-    await saveRegister.mutateAsync({ ...v, email: v.email.trim(), asked: true })
+    await saveRegister.mutateAsync({ email: v.email.trim(), news: v.news, asked: true })
     if (key.trim()) {
       try {
         await saveLicense.mutateAsync(key.trim())
@@ -267,8 +267,8 @@ function ProfileStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
             <Input id="onb-pseudo" value={name} maxLength={32} placeholder={t('profile.namePlaceholder')} onChange={(e) => setName(e.target.value)} className="max-w-sm" />
             <p className="text-xs text-muted-foreground">{t('onb.profile.pseudoDesc')}</p>
           </div>
-          <RegisterFields v={v} onChange={setV} />
-          <p className="text-xs text-muted-foreground">{t('register.privacy')}</p>
+          <RegisterFields v={v} onChange={setV} counter={false} />
+          <p className="text-xs text-muted-foreground">{t(reg.count && !reg.count_blocked ? 'onb.profile.counterOn' : 'register.privacy')}</p>
           <div className="grid gap-3 border-t pt-4">
             <label className="flex items-start gap-2.5 text-sm">
               <Checkbox className="mt-0.5" checked={keyOpen} onCheckedChange={(c) => (setKeyOpen(c === true), c !== true && (setKey(''), setKeyError('')))} />
