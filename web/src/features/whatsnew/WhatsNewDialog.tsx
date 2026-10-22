@@ -8,6 +8,7 @@ import type { ChangelogEntry } from '@/lib/types'
 import { markSeen, useWhatsNew } from './store'
 import { SHOW_LINK_CLASS, showcaseLink, showLinks } from './showcases'
 import { useTour } from '@/tour/store'
+import { DonationLine } from '@/features/donation/Donation'
 
 const norm = (v: string) =>
   v
@@ -70,9 +71,12 @@ export default function WhatsNewDialog() {
             </div>
           )}
         </div>
-        <Link to="/settings/updates" onClick={() => onOpenChange(false)} className="text-[13px] font-medium text-primary hover:underline">
-          {t('updates.all')}
-        </Link>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <Link to="/settings/updates" onClick={() => onOpenChange(false)} className="text-[13px] font-medium text-primary hover:underline">
+            {t('updates.all')}
+          </Link>
+          <DonationLine text="donation.whatsnew" />
+        </div>
       </DialogContent>
     </Dialog>
   )

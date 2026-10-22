@@ -4,6 +4,7 @@ import { useT } from '@/i18n'
 import { ApiError } from '@/lib/api'
 import { type FeedbackType, useFeedbackDefaults, useSendFeedback } from '@/lib/queries'
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, Segmented, Spinner, Textarea } from '@/components/ui'
+import { DonationLine } from '@/features/donation/Donation'
 import { useFeedbackDialog } from './feedback-store'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -53,6 +54,7 @@ export function FeedbackDialog() {
             <CheckCircle2 className="size-10 text-success" />
             <DialogTitle>{t('feedback.sentTitle')}</DialogTitle>
             <DialogDescription>{t('feedback.sentBody', { email: email.trim() })}</DialogDescription>
+            <DonationLine text="donation.feedback" link="donation.feedbackLink" />
             <Button className="mt-2" onClick={() => setOpen(false)}>{t('common.close')}</Button>
           </div>
         ) : (
