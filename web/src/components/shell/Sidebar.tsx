@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { NavLink } from 'react-router'
-import { Heart, MessageSquareText, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useWorkspace } from '@/lib/queries'
@@ -18,7 +18,7 @@ import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
 import { PresentationToggle, ThemeToggle, UserMenu } from './UserMenu'
 import { useFeedbackDialog } from './feedback-store'
-import { DONATE_TONE, donationUrl, useDonationShown } from '@/features/donation/Donation'
+import { donationUrl, useDonationShown } from '@/features/donation/Donation'
 import { useLang } from '@/i18n'
 
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
@@ -145,13 +145,13 @@ export function Sidebar() {
         <UpdateIndicator collapsed={collapsed} />
         <HealthIndicator collapsed={collapsed} />
         <UsageIndicator collapsed={collapsed} />
-        <DonateLink collapsed={collapsed} />
         <FeedbackButton collapsed={collapsed} />
         <div className={cn('flex items-center gap-1', collapsed ? 'flex-col' : 'justify-between')}>
           <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
             <PresentationToggle />
             <ThemeToggle collapsed={collapsed} />
             <UserMenu collapsed={collapsed} />
+            <DonateLink />
           </div>
           {/* Fold / unfold: always at the bottom, in the same place in both states. */}
           {!tablet && (
@@ -167,28 +167,19 @@ export function Sidebar() {
   )
 }
 
-/** Donate (features/donation): the donation page of the website in a new tab; hidden with `donation_hidden`. */
-function DonateLink({ collapsed }: { collapsed: boolean }) {
+/** Donate (features/donation): a small icon next to the eye, the theme and the account, in the accent colour; the
+ *  donation page of the website in a new tab; hidden with `donation_hidden`. */
+function DonateLink() {
   const t = useT()
   const lang = useLang()
   if (!useDonationShown()) return null
   return (
-    <Tooltip content={t('settings.support.desc')} side="right">
-      <a
-        href={donationUrl(lang)}
-        target="_blank"
-        rel="noopener"
-        aria-label={collapsed ? t('donation.donate') : undefined}
-        data-testid="sidebar-donate"
-        className={cn(
-          'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-          DONATE_TONE,
-          collapsed && 'justify-center px-0',
-        )}
-      >
-        <Heart className="size-4 shrink-0 fill-current" />
-        {!collapsed && <span className="truncate">{t('donation.donate')}</span>}
-      </a>
+    <Tooltip content={<>{t('donation.donate')} · {t('settings.support.desc')}</>} side="right">
+      <Button asChild variant="ghost" size="icon-sm" className="size-8 text-primary hover:bg-primary/10 hover:text-primary">
+        <a href={donationUrl(lang)} target="_blank" rel="noopener" aria-label={t('donation.donate')} data-testid="sidebar-donate">
+          <HandHeart />
+        </a>
+      </Button>
     </Tooltip>
   )
 }

@@ -54,9 +54,10 @@ time: the one of Settings → Profile → Harness Maxxing team, if any).
 
 ## Donations
 
-Harness Maxxing is free; donations fund its development. A **Donate** button sits at the bottom of the sidebar (on a
-phone or a tablet: in the ⊞ menu), in **Settings → Support**, at the bottom of **What's new**, after a **Feedback** is
-sent and in **Settings → License**. They are only links: they open
+Harness Maxxing is free; donations fund its development. The **Donate** links carry a hand-and-heart icon in the app's
+accent colour: a small icon at the bottom of the sidebar, next to the eye, the theme and the account (on a phone or a
+tablet: a line of the ⊞ menu), **Settings → Support** (last in the list of Settings), at the bottom of **What's new**,
+after a **Feedback** is sent and in **Settings → License**. They are only links: they open
 [harness-maxxing.com/donation](https://harness-maxxing.com/donation) in a new tab (in the interface language: pay with
 Lightning or Bitcoin), and the app never talks to a payment service. **Settings → Support → Hide the Donate buttons**
 removes them for every browser of the server (the Support page stays).
