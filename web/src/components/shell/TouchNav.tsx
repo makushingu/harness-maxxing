@@ -4,11 +4,11 @@
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation, useNavigate } from 'react-router'
-import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
+import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, Heart, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
 import { useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
 import { useUI, type Theme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
-import { useT, withGroups } from '@/i18n'
+import { useLang, useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { CountBadge, CountDot, NamedIcon, Segmented, Switch } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
@@ -21,6 +21,7 @@ import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
 import { UsageIndicator } from './UsageIndicator'
 import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
+import { DONATE_TONE, donationUrl, useDonationShown } from '@/features/donation/Donation'
 
 type Panel = 'sessions' | 'app' | null
 export const useTouchNav = create<{ panel: Panel; setPanel: (p: Panel) => void }>((set) => ({ panel: null, setPanel: (panel) => set({ panel }) }))
@@ -149,6 +150,8 @@ const row =
 /** Right drawer: everything the desktop sidebar holds. */
 function AppPanel() {
   const t = useT()
+  const lang = useLang()
+  const donate = useDonationShown()
   const navigate = useNavigate()
   const nav = useNav()
   const { data: ext } = useExtensions()
@@ -309,6 +312,15 @@ function AppPanel() {
           >
             <Download /> {t('pwa.install')}
           </button>
+        )}
+        {donate && (
+          <a href={donationUrl(lang)} target="_blank" rel="noopener" className={cn(row, DONATE_TONE, 'font-semibold [&>svg]:fill-current [&>svg]:text-current')} onClick={close}>
+            <Heart />
+            <span className="grid flex-1">
+              <span>{t('donation.donate')}</span>
+              <span className="text-[13px] font-normal opacity-80">{t('settings.support.desc')}</span>
+            </span>
+          </a>
         )}
         <button
           type="button"

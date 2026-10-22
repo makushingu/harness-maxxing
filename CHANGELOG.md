@@ -3,6 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.91 - 2026-10-22
+
+Changes:
+- **A visible Donate button** at the bottom of the sidebar (on a phone or a tablet: in the ⊞ menu); the small donation
+  links of What's new, the Feedback window and Settings -> License are now Donate buttons too. The donation page
+  (harness-maxxing.com/donation) now has one tab per way to pay: Lightning, Bitcoin. **Settings -> Support -> Hide the
+  Donate buttons** still removes them all.
+
 ## 2.0.0-alpha.90 - 2026-10-22
 
 Changes:
