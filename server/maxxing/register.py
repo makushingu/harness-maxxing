@@ -6,10 +6,10 @@ Two independent choices, kept in config.json "register":
   never turned on by an update.
 - email (+ news): the server is known by an email address (pseudo of Settings -> Profile and language sent
   too). Security alerts go to every email; product news only when `news` is checked.
-Neither: the cloud row is deleted and the token forgotten.
+Neither: the cloud archives the row (never contacted again) and the token is forgotten.
 
 The cloud (api.harness-maxxing.com/v1/register, /v1/heartbeat) hands out the token that alone can change or
-delete the row; it lives in secrets.json, never in the Keys vault.
+stop the row; it lives in secrets.json, never in the Keys vault.
 """
 from __future__ import annotations
 
