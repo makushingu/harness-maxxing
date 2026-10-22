@@ -77,6 +77,7 @@ import {
   useMask,
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
+import { TaskBar } from './Tasks'
 import { forgetLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
 import { AsidePanel, useAside } from './Aside'
@@ -651,6 +652,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
           />
         )}
         {!notFound && aside.aside && <AsidePanel aside={aside.aside} onClose={aside.close} />}
+        {!notFound && <TaskBar sid={sid} running={running} />}
         {!notFound && (
           <StackedComposer colKey={col.key} stacked={!!place && place.row !== 'full'}>
           <Composer
