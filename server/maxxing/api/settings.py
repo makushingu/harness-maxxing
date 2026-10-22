@@ -1,6 +1,7 @@
 """General settings stored in config.json. See docs/dev/API.md#settings--secrets."""
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 from typing import Literal, Optional
@@ -117,6 +118,33 @@ def put_profile(body: ProfileIn):
         config.update_config(profile=new)
         bus.invalidate("profile")
     return profile()
+
+
+class RegisterIn(BaseModel):
+    count: Optional[bool] = None
+    email: Optional[str] = None
+    news: Optional[bool] = None
+    asked: Optional[bool] = None
+
+
+_EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+@router.get("/register")
+def get_register():
+    from .. import register
+    return register.state()
+
+
+@router.put("/register")
+async def put_register(body: RegisterIn):
+    """Say hello to the authors or stop (docs/user/23-license.md). Talks to the cloud: in a thread."""
+    from .. import register
+    if body.email and not _EMAIL.match(body.email.strip()):
+        raise _err("invalid_email", "email: a valid address or empty")
+    st = await asyncio.to_thread(register.save, body.count, body.email, body.news, body.asked)
+    bus.invalidate("register")
+    return st
 
 
 @router.get("")

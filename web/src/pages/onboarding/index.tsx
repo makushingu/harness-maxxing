@@ -4,13 +4,13 @@ import * as React from 'react'
 import { store as lsStore } from '@/lib/utils'
 import { useNavigate, useSearchParams } from 'react-router'
 import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, FolderOpen, ListChecks, MessagesSquare, Send, type LucideIcon } from 'lucide-react'
-import { useClaudeStatus, useCompleteOnboarding, useOnboarding, useSaveSettings, useSettings } from '@/lib/queries'
+import { useClaudeStatus, useCompleteOnboarding, useOnboarding, useProfile, useRegister, useSaveProfile, useSaveRegister, useSaveSettings, useSettings } from '@/lib/queries'
 import { browserTimezone } from '@/lib/timezones'
 import { useUI } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { useT, type TKey } from '@/i18n'
 import type { Language, OnboardingState } from '@/lib/types'
-import { Badge, Button, Sensitive, Skeleton } from '@/components/ui'
+import { Badge, Button, Input, Label, Sensitive, Skeleton } from '@/components/ui'
 import { LogoMark } from '@/components/shell/Logo'
 import { useDocumentTitle } from '@/components/shell/Page'
 import { RegionFields } from '@/features/general/RegionFields'
@@ -24,10 +24,12 @@ import { VoiceQuickSetup } from '@/features/voice/VoiceSetup'
 import { requestTourAfterOnboarding } from '@/tour/store'
 import { ImportWizard } from '@/features/import/ImportWizard'
 import { PackChooser } from '@/features/packs/PackPicker'
+import { RegisterFields, validEmail, type RegisterValues } from '@/features/profile/Register'
 
-type StepId = 'language' | 'claude' | 'import' | 'workspace' | 'telegram' | 'backup' | 'done'
+type StepId = 'language' | 'profile' | 'claude' | 'import' | 'workspace' | 'telegram' | 'backup' | 'done'
 const STEPS: { id: StepId; label: TKey; optional?: boolean }[] = [
   { id: 'language', label: 'onb.step.language' },
+  { id: 'profile', label: 'onb.step.profile', optional: true },
   { id: 'claude', label: 'onb.step.claude' },
   { id: 'import', label: 'onb.step.import', optional: true },
   { id: 'workspace', label: 'onb.step.workspace' },
@@ -129,6 +131,7 @@ export default function OnboardingPage() {
         <main ref={top} tabIndex={-1} className="min-w-0 outline-none" key={current}>
           <div className="animate-in">
             {current === 'language' && <LanguageStep onNext={next} />}
+            {current === 'profile' && <ProfileStep onNext={next} onBack={back} />}
             {current === 'claude' && <ClaudeStep onNext={next} onBack={back} />}
             {current === 'import' && <ImportStep onNext={next} onBack={back} />}
             {current === 'workspace' && <WorkspaceStep onNext={next} onBack={back} />}
@@ -209,6 +212,52 @@ function LanguageStep({ onNext }: { onNext: () => void }) {
         nextDisabled={tz === null}
         onNext={() => save.mutate({ language, timezone: tz || 'UTC' }, { onSuccess: onNext })}
       />
+    </>
+  )
+}
+
+function ProfileStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const t = useT()
+  const { data: profile } = useProfile()
+  const { data: reg } = useRegister()
+  const saveProfile = useSaveProfile()
+  const saveRegister = useSaveRegister()
+  const [name, setName] = React.useState<string | null>(null)
+  const [v, setV] = React.useState<RegisterValues | null>(null)
+  React.useEffect(() => {
+    if (profile && name === null) setName(profile.name)
+  }, [profile, name])
+  React.useEffect(() => {
+    // first visit: the anonymous counter is checked (the user unchecks it here); afterwards, what was saved
+    if (reg && v === null) setV({ email: reg.email, news: reg.news, count: reg.asked ? reg.count : true })
+  }, [reg, v])
+  const ready = profile && reg && name !== null && v !== null
+  const go = async () => {
+    if (!ready) return
+    if (name.trim() !== profile.name) await saveProfile.mutateAsync({ ...profile, name: name.trim().slice(0, 32) })
+    await saveRegister.mutateAsync({ ...v, email: v.email.trim(), asked: true })
+    onNext()
+  }
+  return (
+    <>
+      <StepHeader step="profile" title={t('onb.profile.title')} description={t('onb.profile.desc')} />
+      {!ready ? (
+        <div className="grid gap-5">
+          <Skeleton className="h-16 w-64" />
+          <Skeleton className="h-28" />
+        </div>
+      ) : (
+        <div className="grid max-w-lg gap-5">
+          <div className="grid gap-1.5">
+            <Label htmlFor="onb-pseudo">{t('profile.name')}</Label>
+            <Input id="onb-pseudo" value={name} maxLength={32} placeholder={t('profile.namePlaceholder')} onChange={(e) => setName(e.target.value)} className="max-w-sm" />
+            <p className="text-xs text-muted-foreground">{t('onb.profile.pseudoDesc')}</p>
+          </div>
+          <RegisterFields v={v} onChange={setV} />
+          <p className="text-xs text-muted-foreground">{t('register.privacy')}</p>
+        </div>
+      )}
+      <StepFooter onBack={onBack} onNext={go} loading={saveProfile.isPending || saveRegister.isPending} nextDisabled={!ready || !validEmail(v.email)} />
     </>
   )
 }

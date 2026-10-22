@@ -27,6 +27,20 @@ and `maxxing update` pulls from it.
 For any of these, ask for a commercial license: [Harness Maxxing Enterprise](https://harness-maxxing.com/#enterprise).
 The full text is the `LICENSE` file in the code folder (`/opt/claude-maxxing/LICENSE`).
 
+## Saying hello (optional)
+
+Nobody has to tell us anything. The onboarding has a step **About you** and **Settings → Profile** has a card
+**Harness Maxxing team** with three choices, all optional:
+
+| Choice | What is sent to `api.harness-maxxing.com` |
+|---|---|
+| **Help count the installations (anonymous)** - checked by default in the onboarding | once a day: a random number the server got the first time and the Harness Maxxing version. Nothing else: no name, no email, no IP kept, no content. |
+| **Email** | your email, your pseudo (Settings → Profile) and the interface language, so we can warn you about a security issue or a breaking change. Never shared, never sold. |
+| **Also send me the product news** (needs an email) | the same, plus a few product emails a month at most. |
+
+Unchecking everything (or **Stop and delete**) deletes what we have about this server. An update never turns any of
+these on: a server installed before this choice existed sends nothing until you check something.
+
 ## Existing license keys
 
 A license key bought earlier (`HM-XXXX-XXXX-XXXX-XXXX`) keeps working: a server installed with it keeps getting
@@ -51,7 +65,7 @@ Settings → System shows the license when the server has one.
 
 ## What is sent to the license server
 
-Only by servers that use a license key; a git install sends nothing. When a server is activated, at each update
+Only by servers that use a license key (a git install sends only what you chose in [Saying hello](#saying-hello-optional)). When a server is activated, at each update
 check and **once a day**: the license it uses, a one-way fingerprint of the machine (never the raw machine id), its
 hostname, operating system, Harness Maxxing version, whether the service runs and a few health codes (disk and
 memory level, uptime, Claude connected, age of the last backup, names of the problems the doctor sees). The license

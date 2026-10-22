@@ -63,10 +63,10 @@ def test_onboarding(client, monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     r = client.get("/api/onboarding").json()
     assert r == {"completed": False, "steps": {"password": True, "claude": False, "workspace": False,
-                                               "telegram": False, "backup": False}}
+                                               "telegram": False, "backup": False, "profile": False}}
     client.post("/api/workspace/projects", json={"name": "acme"})
     client.post("/api/workspace/projects/acme/topics", json={"name": "blog"})
-    config.update_config(telegram={"chat_id": 123}, backup={"repo": "acme/memory"})
+    config.update_config(telegram={"chat_id": 123}, backup={"repo": "acme/memory"}, register={"asked": True})
     config.set_secret("anthropic_api_key", "sk-ant-api-0123456789")
     steps = client.get("/api/onboarding").json()["steps"]
     assert all(steps.values())

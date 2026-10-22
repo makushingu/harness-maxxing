@@ -28,7 +28,7 @@ export type TwoFactorPoll = { ok: boolean; status: 'pending' | 'approved'; expir
 export type ChangePasswordBody = { current: string; new: string }
 
 /* ---------------------------------------------------------------- Onboarding */
-export type OnboardingStepKey = 'password' | 'claude' | 'workspace' | 'telegram' | 'backup'
+export type OnboardingStepKey = 'password' | 'claude' | 'workspace' | 'telegram' | 'backup' | 'profile'
 export type OnboardingState = { completed: boolean; steps: Record<OnboardingStepKey, boolean> }
 
 /* ---------------------------------------------------------------- Claude */
@@ -159,7 +159,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'infra' | 'mcp'
+export type BusTopic = 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'infra' | 'mcp'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -389,6 +389,8 @@ export type BackupRestoreResult = { ok: boolean; files: number; restored: string
 /* ---------------------------------------------------------------- Profile (pseudo) */
 export type ProfileColor = 'clay' | 'blue' | 'violet' | 'green' | 'amber' | 'rose' | 'teal' | 'zinc'
 export type Profile = { name: string; color: ProfileColor | ''; emoji: string }
+/** Saying hello to the authors (all optional): anonymous counter, email (+ product news). */
+export type RegisterState = { count: boolean; email: string; news: boolean; asked: boolean; registered: boolean; error: string; synced_at: number }
 
 /* ---------------------------------------------------------------- Settings & secrets */
 export type Settings = {
