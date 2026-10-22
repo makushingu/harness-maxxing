@@ -8,7 +8,7 @@ docs/dev/INTERNALS.md · UI rules: docs/dev/DESIGN.md. Change the contract docs 
 - Server: Python >= 3.11, FastAPI, managed with uv (`cd server && uv sync && uv run pytest`). The turn
   runner (`maxxing/sessions/runner.py`) is stdlib-only.
 - Web: React + TypeScript + Vite + Tailwind (`cd web && npm ci && npm run build`); the build output
-  `web/dist` IS committed (servers do not need Node). Node lives in /root/.hermes/node/bin on the dev box.
+  `web/dist` IS committed (servers do not need Node).
 - State writes are atomic (`config.write_json`). Never block the event loop with long work (use
   `asyncio.to_thread`).
 - Tests never touch the real system: use MAXXING_STATE=/tmp/..., MAXXING_CLAUDE_BIN=fake claude,

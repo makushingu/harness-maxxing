@@ -28,7 +28,7 @@ Read [CLAUDE.md](CLAUDE.md) (development rules) and [docs/dev/PLAN.md](docs/dev/
 contract is [docs/dev/API.md](docs/dev/API.md), the module interfaces [docs/dev/INTERNALS.md](docs/dev/INTERNALS.md),
 the UI rules [docs/dev/DESIGN.md](docs/dev/DESIGN.md): change the contract docs first, then the code.
 
-- **Server** (Python >= 3.11, FastAPI, [uv](https://docs.astral.sh/uv/)):
+- **Server** (Python >= 3.11, 3.12 recommended, FastAPI, [uv](https://docs.astral.sh/uv/)):
   ```bash
   cd server && uv sync && uv run pytest
   ```
@@ -78,10 +78,11 @@ set the version at release time):
 
 1. Run the checks of step 3 for the parts you touched; they must pass.
 2. Push your branch and open a pull request to `main`. Fill in the template (tests, changelogs, `web/dist`, CLA).
-3. **Sign the CLA**: on your first pull request a bot asks you to post this comment once:
+3. **Sign the CLA**: on your first pull request the CLA bot asks you to post this comment once, exactly and alone:
    `I have read the CLA Document and I hereby sign the CLA`. Contributing for a company? Sign it on behalf of that
-   entity (see [CLA.md](CLA.md)). The pull request cannot be merged before.
-4. CI runs the server tests, the web typecheck and build, and the pc-agent tests.
+   entity (see [CLA.md](CLA.md)). The pull request cannot be merged before (its **CLA** check stays red).
+4. CI runs the server tests, the web typecheck and build, and the pc-agent tests;
+   every check must be green.
 
 ## 7. Review
 

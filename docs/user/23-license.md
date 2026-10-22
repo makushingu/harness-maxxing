@@ -3,7 +3,7 @@ section: Getting started
 ---
 # License
 
-Harness Maxxing is **free** and **fair source**: its code is public on GitHub and published under the
+Harness Maxxing is **free** and **fair source** (source-available): its code is public on GitHub and published under the
 [Harness Maxxing Fair Source License](https://github.com/makushingu/harness-maxxing/blob/main/LICENSE).
 No license key is needed to install it or to get updates: the installer clones the public git repository
 and `maxxing update` pulls from it. A key is only for companies (see [Enterprise key](#enterprise-key-optional)).
