@@ -3,6 +3,15 @@ section: Reference
 ---
 # Troubleshooting
 
+
+## The dot at the bottom of the sidebar
+
+It turns orange or red when something needs you (disk, memory, a failed scheduled job, a stopped service, Claude
+not connected, an old backup). Click it for the list. **Seen** on an issue stops it from counting in the dot (it
+stays in the list, greyed): it comes back by itself when it changes - another job failing, for example - or after
+24 hours if it is still there. The arrow next to a seen issue counts it again. Seen marks are kept on the server,
+so they hold on every device.
+
 ## Start with the doctor
 
 ```bash

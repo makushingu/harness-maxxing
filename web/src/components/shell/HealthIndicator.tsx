@@ -1,16 +1,22 @@
 import { Link } from 'react-router'
-import { AlertTriangle, CheckCircle2, CircleAlert, Info } from 'lucide-react'
-import { useHealth } from '@/lib/queries'
+import { AlertTriangle, Check, CheckCircle2, CircleAlert, Info, Undo2 } from 'lucide-react'
+import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, StatusDot, Tooltip } from '@/components/ui'
 
+/** Issues not marked as seen: the ones the dot and the count are about. */
+export function openIssues(h: Health): Health['issues'] {
+  return h.issues.filter((i) => !i.seen)
+}
+
 export function healthTone(h: Health | undefined): 'ok' | 'warn' | 'error' | 'idle' {
   if (!h) return 'idle'
-  if (h.issues.some((i) => i.level === 'error')) return 'error'
-  if (!h.ok || h.issues.some((i) => i.level === 'warn')) return 'warn'
+  const open = openIssues(h)
+  if (open.some((i) => i.level === 'error')) return 'error'
+  if (open.some((i) => i.level === 'warn')) return 'warn'
   return 'ok'
 }
 
@@ -18,6 +24,7 @@ export function healthTone(h: Health | undefined): 'ok' | 'warn' | 'error' | 'id
 export function HealthSummary({ compact }: { compact?: boolean }) {
   const t = useT()
   const { data: h, isError } = useHealth()
+  const mark = useMarkHealthSeen()
   if (isError) return <p className="text-sm text-destructive">{t('health.unavailable')}</p>
   if (!h)
     return (
@@ -34,14 +41,26 @@ export function HealthSummary({ compact }: { compact?: boolean }) {
     <div className="grid gap-3">
       <div className="flex items-center gap-2">
         {tone === 'ok' ? <CheckCircle2 className="size-4 text-success" /> : <AlertTriangle className={cn('size-4', tone === 'error' ? 'text-destructive' : 'text-warning')} />}
-        <span className="text-sm font-semibold">{tone === 'ok' ? t('health.allGood') : t('health.issues', { count: h.issues.length })}</span>
+        <span className="text-sm font-semibold">{tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })}</span>
       </div>
       {h.issues.length > 0 && (
         <ul className="grid gap-1.5">
           {h.issues.map((i) => (
-            <li key={i.code} className="flex items-start gap-2 text-[13px]">
-              {i.level === 'error' ? <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : i.level === 'warn' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" /> : <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />}
-              <span>{i.text}</span>
+            <li key={i.id || i.code} className={cn('group flex items-start gap-2 text-[13px]', i.seen && 'text-muted-foreground')}>
+              {i.seen ? <Check className="mt-0.5 size-3.5 shrink-0" /> : i.level === 'error' ? <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : i.level === 'warn' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" /> : <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />}
+              <span className="min-w-0 flex-1">{i.text}</span>
+              {i.id && (
+                <Tooltip content={i.seen ? t('health.unsee') : t('health.seenHint')}>
+                  <button
+                    type="button"
+                    onClick={() => mark.mutate({ id: i.id!, seen: !i.seen })}
+                    aria-label={i.seen ? t('health.unsee') : t('health.markSeen')}
+                    className="-my-0.5 flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  >
+                    {i.seen ? <Undo2 className="size-3.5" /> : <><Check className="size-3.5" /> {t('health.markSeen')}</>}
+                  </button>
+                </Tooltip>
+              )}
             </li>
           ))}
         </ul>
@@ -80,7 +99,7 @@ export function HealthIndicator({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
   const { data: h } = useHealth()
   const tone = healthTone(h)
-  const label = !h ? t('health.checking') : tone === 'ok' ? t('health.allGood') : t('health.issues', { count: h.issues.length })
+  const label = !h ? t('health.checking') : tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })
   return (
     <Popover>
       <Tooltip content={collapsed ? label : null} side="right">
