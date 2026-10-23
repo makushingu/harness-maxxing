@@ -25,6 +25,8 @@ import { PreviewProvider } from './FilePreview'
 import { HudBar } from './Hud'
 import { topicLabel, useIsMobile } from './util'
 import { useTouchNav } from '@/components/shell/TouchNav'
+import { enter, promoteColumn, useMaxxing, useMaxxingDriver } from './maxxing'
+import { MaxxingControls } from './MaxxingMeter'
 
 /** Sessions sliding to their new place (reorder, stack, layout): short, the content is heavy. */
 const FLIP_MS = 180
@@ -175,11 +177,19 @@ function Workspace() {
     [mobile, navigate],
   )
 
+  // Maxxing mode: a finished session comes to the front (first, big column; full screen on a phone).
+  useMaxxingDriver(sessions, (s) => {
+    if (mobile) {
+      navigate(`/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`, { state: { mxPushed: true } })
+      requestAnimationFrame(() => requestAnimationFrame(() => enter(document.querySelector('[data-touch-layer] > *'))))
+    } else promoteColumn(s.id, strip.current)
+  })
+
   const topics = React.useMemo(() => (ws?.projects || []).flatMap((p) => p.topics), [ws])
   const defaultTopic = currentTopic ?? topics[0]?.path ?? null
   const newInCurrent = () => defaultTopic !== null && newSession(defaultTopic)
 
-  // Keyboard: Alt+N / Alt+←→ / Alt+W use e.code (layout- and macOS-proof), '/' focuses the composer.
+  // Keyboard: Alt+N / Alt+←→ / Alt+W / Alt+M (Maxxing mode) use e.code (layout- and macOS-proof), '/' focuses the composer.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return
@@ -193,6 +203,9 @@ function Workspace() {
         const j = Math.max(0, Math.min(st.cols.length - 1, (i < 0 ? 0 : i) + (e.code === 'ArrowLeft' ? -1 : 1)))
         st.focus(st.cols[j].key)
         focusComposer(st.cols[j].key)
+      } else if (e.code === 'KeyM') {
+        e.preventDefault()
+        useMaxxing.getState().setOn(!useMaxxing.getState().on)
       } else if (e.code === 'KeyW' && st.focused) {
         e.preventDefault()
         st.close(st.focused)
@@ -486,6 +499,7 @@ function Workspace() {
               </Button>
             </LayoutPicker>
           )}
+          <MaxxingControls />
           <Tooltip content={`${t('sessions.newSession')} (Alt+N)`}>
             <Button size={mobile ? 'icon' : 'sm'} onClick={newInCurrent} disabled={defaultTopic === null} aria-label={t('sessions.newSession')} data-tour="new-session">
               <MessageSquarePlus /> <span className="max-md:hidden">{t('sessions.newSession')}</span>
@@ -697,6 +711,7 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     [['Alt', '←'], t('sessions.shortcuts.prev')],
     [['Alt', '→'], t('sessions.shortcuts.next')],
     [['Alt', 'W'], t('sessions.shortcuts.close')],
+    [['Alt', 'M'], t('maxxing.toggle')],
     [[MOD, 'K'], t('sessions.shortcuts.palette')],
   ]
   return (
