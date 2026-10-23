@@ -148,6 +148,20 @@ def deny_rules(cfg: dict) -> list[str]:
     return rules
 
 
+# Claude Code sends subagents to the background by default: the turn ends, then waits for a notification to carry on
+# (slower, and in Harness 91 % of the agents went there). Unless `background_agents` is on, each turn asks for
+# foreground agents - several in one message still run in parallel - and keeps background ones for when the user
+# asks for them.
+FOREGROUND_AGENTS = ("Subagents (Agent tool): run them in the foreground, always passing run_in_background: false, "
+                     "unless the user explicitly asks for a background agent. To run several at once, put several "
+                     "Agent calls in the same message: they run in parallel and their results come back in this turn.")
+
+
+def agents_args(cfg: dict) -> list[str]:
+    """`--append-system-prompt` asking for foreground subagents, unless config `background_agents` is on."""
+    return [] if cfg.get("background_agents") else ["--append-system-prompt", FOREGROUND_AGENTS]
+
+
 def settings_args(cfg: dict) -> list[str]:
     """`--settings` for the turn: deny rules (they apply in every permission mode, bypass included, and add to
     the user's own settings files)."""

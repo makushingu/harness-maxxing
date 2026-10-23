@@ -811,3 +811,18 @@ def test_queue_preview_skips_the_message_being_sent_and_cuts_long_texts():
     assert [q["text"][:7] for q in p] == ["x" * 7, "summary"] and len(p[0]["text"]) == service.QUEUE_PREVIEW_CHARS
     assert p[0]["attachments"] == 2 and p[0]["source"] == "telegram" and p[1]["kind"] == "compact"
     assert service._waiting(m) == 3 and service._queue_preview({"queue": "bad"}) == []
+
+
+def test_turns_ask_for_foreground_agents(client, topic, mx):
+    """Claude Code sends subagents to the background by default (the turn then waits for them): every turn asks
+    for foreground ones, unless config `background_agents` is on."""
+    from maxxing import config
+    s = client.post("/api/sessions", json={"path": topic, "message": "Hi NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    argv = calls(mx)[-1]["argv"]
+    assert "run_in_background: false" in argv[argv.index("--append-system-prompt") + 1]
+    config.update_config(background_agents=True)
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "Again NOTOOL"})
+    wait_for(lambda: len(calls(mx)) >= 2)
+    wait_idle(client, s["id"])
+    assert "--append-system-prompt" not in calls(mx)[-1]["argv"]
