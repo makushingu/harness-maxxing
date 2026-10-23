@@ -80,6 +80,8 @@ import { Combobox } from '@/components/ui/combobox'
 import { TaskBar } from './Tasks'
 import { forgetLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
+import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
+import { notifySendFailed, notifySent } from './maxxing'
 import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
@@ -381,6 +383,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
     const remove = usePending.getState().remove
     const lid = add(sid, { text, attachments, queued: running })
     thread.current?.scrollToBottom()
+    notifySent(sid)
     try {
       const r = await send.mutateAsync({ id: sid, text, attachments })
       if (r.queued !== running) {
@@ -390,6 +393,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
       return true
     } catch {
       remove(sid, lid)
+      notifySendFailed(sid)
       return false
     }
   }
@@ -752,11 +756,13 @@ function ColumnHeader({
   if (variant === 'mobile')
     // phone / tablet: app bar (☰ logo ⋯ ⊞), then the session's title, then its topic and what it used
     return (
-      <header className="shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
+      <header className="relative shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
+        <MaxxingMeter strip />
         <div className="flex h-11 min-w-0 items-center gap-1">
           <TouchSessionsButton className="-ml-2" />
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" />
           <div className="flex shrink-0 items-center">
+            <MaxxingControls compact />
             {menu}
             <TouchAppButton className="-mr-2" />
           </div>

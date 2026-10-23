@@ -6,7 +6,8 @@
 //   curl -X POST localhost:8809/__mock/scenario -d '{"name":"login"}'   # reset state at runtime
 //
 // Implements every endpoint of docs/dev/API.md with in-memory state and fake, product-neutral data.
-// Serves the built SPA from ../dist (web/dist). Scenarios: setup | login | onboarding | ready.
+// Serves the built SPA from ../dist (web/dist). Scenarios: setup | login | onboarding | ready | maxxing.
+// maxxing: 30 more sessions that keep finishing at random (Maxxing mode); MOCK_PASSWORD=... asks for that password.
 
 import http from 'node:http'
 import fs from 'node:fs'
@@ -15,14 +16,15 @@ import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DIST = path.resolve(__dirname, '../dist')
+const DIST = process.env.MOCK_DIST || path.resolve(__dirname, '../dist')
 const PORT = Number(process.env.MOCK_PORT || 8809)
 const HOST = '127.0.0.1'
 const ROOT = '/root/maxxing'
 const VERSION = '2.0.0'
 const SETUP_TOKEN = 'dev-token'
 const DEFAULT_PASSWORD = 'password123'
-const SCENARIOS = ['setup', 'login', 'onboarding', 'ready']
+const SCENARIOS = ['setup', 'login', 'onboarding', 'ready', 'maxxing']
+const MOCK_PASSWORD = process.env.MOCK_PASSWORD || ''
 
 /* =================================================================== helpers */
 const now = () => Date.now() / 1000
@@ -96,13 +98,13 @@ let GEN = 0 // bumped on reset; async timers check it
 
 function buildState(scenario) {
   const t = now()
-  const ready = scenario === 'ready' || scenario === 'login'
+  const ready = scenario === 'ready' || scenario === 'login' || scenario === 'maxxing'
   const st = {
     scenario,
     bootAt: t - 12 * DAY - 3 * HOUR,
     setup_required: scenario === 'setup',
-    password: scenario === 'setup' ? null : DEFAULT_PASSWORD,
-    autoAuth: scenario === 'onboarding' || scenario === 'ready',
+    password: scenario === 'setup' ? null : scenario === 'maxxing' && MOCK_PASSWORD ? MOCK_PASSWORD : DEFAULT_PASSWORD,
+    autoAuth: scenario === 'onboarding' || scenario === 'ready' || (scenario === 'maxxing' && !MOCK_PASSWORD),
     tokens: new Set(),
     loginFails: [], // timestamps
     lockUntil: 0,
@@ -144,6 +146,7 @@ function buildState(scenario) {
   }
   if (ready) {
     seedSessions(st, t)
+    if (scenario === 'maxxing') seedMaxxing(st, t)
     seedTasks(st, t)
     seedCrons(st, t)
     // telegram
@@ -216,6 +219,56 @@ function seedSessions(st, t) {
     st.sessions.push(s)
     st.events[id] = conversation(s, d)
   }
+}
+
+/* Maxxing scenario: 30 sessions spread over the topics, most of them running; each finishes after 5 to 40 s
+ * (startMaxxing), one of them on an error, a few with a plan waiting. A prompt sent starts a turn of 8 to 35 s. */
+const MAXXING_TASKS = ['Refactor the checkout flow', 'Write the FAQ page', 'Audit the sitemap', 'Translate the landing page', 'Fix flaky login test',
+  'Draft the newsletter', 'Compare hosting offers', 'Clean the CSV export', 'Add dark mode to the docs', 'Optimise hero images', 'Write release notes',
+  'Map the internal links', 'Review the privacy policy', 'Profile the slow API route', 'Plan the Q1 content', 'Migrate the cron jobs', 'Design the pricing table',
+  'Summarise user feedback', 'Set up uptime alerts', 'Rewrite the onboarding emails', 'Check broken links', 'Tag the photo library', 'Benchmark the search',
+  'Prepare the board slides', 'Draft a job post', 'Split the big component', 'Write the API docs', 'Tidy the backlog', 'Archive old invoices', 'Estimate the redesign']
+function seedMaxxing(st, t) {
+  const topics = st.projects.flatMap((p) => p.topics.map((tp) => topicPath(p.name, tp.name)))
+  MAXXING_TASKS.forEach((title, i) => {
+    const id = uuid()
+    const s = {
+      id, title, path: topics[i % topics.length], state: 'running', queue: 0,
+      created: t - (i + 2) * 7 * MIN, updated: t - i * 5, turns: 1 + (i % 4), cost_usd: +(0.1 + (i % 7) * 0.13).toFixed(2),
+      model: '', real_model: i % 3 ? 'claude-opus-5-5' : 'claude-sonnet-5-5', context_tokens: 22000 + i * 1700, context_window: 1000000,
+      archived: false, notify: false, source: 'web', unread: false, last_text: `Working on: ${title.toLowerCase()}…`, error: null,
+      plan_mode: i % 9 === 4, plan_ready: false, maxxing: true,
+    }
+    st.sessions.push(s)
+    st.events[id] = [
+      { type: 'user', text: `${title}. Keep it short and tell me when it is done.`, attachments: [], at: s.created, source: 'web' },
+      { type: 'init', model: s.real_model, cwd: `${ROOT}/${s.path}`, at: s.created + 2 },
+      { type: 'thinking', text: `Starting: ${title}. First I read the topic memory, then the files involved.`, at: s.created + 4 },
+    ]
+  })
+}
+function maxxingFinish(s, i) {
+  const model = s.real_model || 'claude-opus-5-5'
+  const failed = i === 7 && s.turns < 3
+  const cost = +(0.03 + Math.random() * 0.2).toFixed(4)
+  s.turns += 1; s.cost_usd = +(s.cost_usd + cost).toFixed(4); s.updated = now(); s.unread = true; s.state = failed ? 'error' : 'idle'
+  if (failed) {
+    s.error = 'Claude exited with code 1: overloaded, retry later'
+    addEvents(s, { type: 'result', ok: false, error: s.error, cost_usd: cost, duration_ms: 20000, model, at: now() })
+  } else {
+    const answer = s.plan_mode
+      ? `**Plan for “${s.title}”**\n\n1. Read the files involved.\n2. Make the change in small steps.\n3. Check the result and report.\n\nValidate the plan and I start.`
+      : `Done: **${s.title}**. I changed 3 files and checked the result. What next?`
+    if (s.plan_mode) s.plan_ready = true
+    s.last_text = answer.replace(/[*`#\n]/g, ' ').slice(0, 200)
+    addEvents(s, { type: 'assistant', text: answer, at: now() },
+      { type: 'result', ok: true, cost_usd: cost, duration_ms: 20000, model, usage: { input: 900, output: 210, cache_read: 21000, cache_write: 400 }, at: now() })
+  }
+  bus('sessions', 'workspace')
+}
+function startMaxxing() {
+  if (S.scenario !== 'maxxing') return
+  S.sessions.filter((s) => s.maxxing).forEach((s, i) => later(s, 5000 + Math.random() * 35000, () => maxxingFinish(s, i)))
 }
 
 function conversation(s, d) {
@@ -594,13 +647,16 @@ function startTurn(s, text, attachments = []) {
   const cwd = `${ROOT}/${s.path}`
   const model = s.model || S.claude.default_model
   s.state = 'running'; s.error = null; s.updated = now()
+  if (s.plan_ready) s.plan_ready = false
+  // Maxxing scenario: turns of 8 to 35 s, so several sessions finish while the user types
+  const k = S.scenario === 'maxxing' ? (8000 + Math.random() * 27000) / 3400 : 1
   addEvents(s, { type: 'user', text, attachments, at: now(), source: 'web' }, { type: 'init', model, cwd, at: now() })
   bus('sessions', 'workspace')
   const tu = `toolu_${crypto.randomBytes(6).toString('hex')}`
-  later(s, 700, () => addEvents(s, { type: 'thinking', text: `Let me look at the files in this topic before answering: "${text.slice(0, 80)}"`, at: now() }))
-  later(s, 1500, () => addEvents(s, { type: 'tool_use', id: tu, name: 'Bash', input: { command: 'ls -la', description: 'List topic files' }, summary: 'Bash: ls -la', at: now() }))
-  later(s, 2200, () => addEvents(s, { type: 'tool_result', tool_use_id: tu, text: 'total 24\n-rw-r--r-- 1 root root  412 CLAUDE.md\n-rw-r--r-- 1 root root 1893 memory.md\ndrwxr-xr-x 2 root root 4096 drafts', is_error: false, at: now() }))
-  later(s, 3400, () => {
+  later(s, 700 * k, () => addEvents(s, { type: 'thinking', text: `Let me look at the files in this topic before answering: "${text.slice(0, 80)}"`, at: now() }))
+  later(s, 1500 * k, () => addEvents(s, { type: 'tool_use', id: tu, name: 'Bash', input: { command: 'ls -la', description: 'List topic files' }, summary: 'Bash: ls -la', at: now() }))
+  later(s, 2200 * k, () => addEvents(s, { type: 'tool_result', tool_use_id: tu, text: 'total 24\n-rw-r--r-- 1 root root  412 CLAUDE.md\n-rw-r--r-- 1 root root 1893 memory.md\ndrwxr-xr-x 2 root root 4096 drafts', is_error: false, at: now() }))
+  later(s, 3400 * k, () => {
     const answer = `Sure. Here is what I found for **“${text.slice(0, 60)}”**:\n\n- The topic contains a \`CLAUDE.md\`, a \`memory.md\` and a \`drafts/\` folder.\n- Nothing needed to change yet.\n\n\`\`\`bash\nls -la ${s.path}\n\`\`\`\n\nTell me if you want me to go further.`
     const cost = +(0.02 + Math.random() * 0.12).toFixed(4)
     s.turns += 1; s.cost_usd = +(s.cost_usd + cost).toFixed(4); s.real_model = model; s.context_tokens = 20000 + Math.floor(Math.random() * 30000)
@@ -1226,7 +1282,8 @@ R('POST', '/api/sessions', ({ body }) => {
 R('GET', '/api/sessions/:id', ({ params }) => findSession(params.id))
 R('PATCH', '/api/sessions/:id', ({ params, body }) => {
   const s = findSession(params.id)
-  for (const k of ['title', 'model', 'archived', 'notify']) if (body[k] !== undefined) s[k] = body[k]
+  for (const k of ['title', 'model', 'archived', 'notify', 'plan_mode']) if (body[k] !== undefined) s[k] = body[k]
+  if (body.plan_mode === false) s.plan_ready = false
   if (body.archived === true) addEvents(s, { type: 'note', text: 'Session archived.', level: 'info', at: now() })
   bus('sessions', 'workspace')
   pushEvents(s.id, [])
@@ -1252,6 +1309,13 @@ R('POST', '/api/sessions/:id/messages', ({ params, body }) => {
     return { queued: true, session: s }
   }
   startTurn(s, text, body.attachments || [])
+  return { queued: false, session: s }
+})
+R('POST', '/api/sessions/:id/plan/approve', ({ params, body }) => {
+  const s = findSession(params.id)
+  if (s.state === 'running') fail(409, 'running', 'A turn is running')
+  s.plan_mode = false; s.plan_ready = false
+  startTurn(s, String(body.text || '').trim() || 'The plan is validated: carry it out.', [])
   return { queued: false, session: s }
 })
 R('DELETE', '/api/sessions/:id/queue', ({ params }) => {
@@ -1904,6 +1968,7 @@ function resetScenario(name) {
   for (const id of Object.keys(S?.timers || {})) for (const h of S.timers[id]) clearTimeout(h)
   GEN++
   S = buildState(name)
+  startMaxxing()
   for (const set of sessionSubs.values()) for (const r of set) r.end()
   sessionSubs.clear()
   bus('sessions', 'workspace', 'tasks', 'crons', 'telegram', 'backup', 'health', 'extensions')
@@ -1940,7 +2005,8 @@ const server = http.createServer(async (req, res) => {
 
 const initial = SCENARIOS.includes(process.env.MOCK_SCENARIO) ? process.env.MOCK_SCENARIO : 'ready'
 S = buildState(initial)
+startMaxxing()
 server.listen(PORT, HOST, () => {
   console.log(`[mock] Harness Maxxing mock API on http://${HOST}:${PORT} — scenario "${initial}"${initial === 'setup' ? ` (setup token "${SETUP_TOKEN}")` : initial === 'login' ? ` (password "${DEFAULT_PASSWORD}")` : ''}`)
-  console.log(`[mock] SPA from ${DIST}${fs.existsSync(DIST) ? '' : ' (missing — 503 until built)'} · switch: POST /__mock/scenario {"name":"setup|login|onboarding|ready"}`)
+  console.log(`[mock] SPA from ${DIST}${fs.existsSync(DIST) ? '' : ' (missing — 503 until built)'} · switch: POST /__mock/scenario {"name":"setup|login|onboarding|ready|maxxing"}`)
 })

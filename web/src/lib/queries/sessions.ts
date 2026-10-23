@@ -156,9 +156,11 @@ export function fetchTail(id: string, n = 200, signal?: AbortSignal): Promise<Se
 /** Events of a session's first page (the thread's initial load). */
 export const TAIL_EVENTS = 100
 const earlyTails = new Map<string, { p: Promise<SessionEventsBackPage>; at: number }>()
-/** Starts loading a session's tail before the Sessions page is there (app boot, see lib/boot.ts). */
+/** Starts loading a session's tail before the Sessions page is there (app boot, see lib/boot.ts), or before it
+ *  comes in front (Maxxing mode). A tail still fresh is kept; an old one is loaded again. */
 export function prefetchTail(id: string) {
-  if (earlyTails.has(id)) return
+  const e = earlyTails.get(id)
+  if (e && Date.now() - e.at < 10_000) return
   const p = fetchTail(id, TAIL_EVENTS)
   p.catch(() => undefined)
   earlyTails.set(id, { p, at: Date.now() })
