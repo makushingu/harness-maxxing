@@ -146,3 +146,10 @@ def test_unit_survives_a_command_out_of_memory(monkeypatch):
 def test_default_memory_cap():
     from maxxing import config
     assert config.DEFAULT_CONFIG["unit_memory_max"] == "75%"
+
+
+def test_turns_ask_for_foreground_agents_unless_background_agents_is_on():
+    args = spawn.agents_args({})
+    assert args[0] == "--append-system-prompt" and "run_in_background: false" in args[1]
+    assert spawn.agents_args({"background_agents": False}) == args
+    assert spawn.agents_args({"background_agents": True}) == []

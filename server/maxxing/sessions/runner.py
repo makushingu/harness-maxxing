@@ -249,7 +249,8 @@ class Runner:
             store.update(self.sid, plan_ready=False)
         model = (meta.get("model") or cfg.get("default_model") or "").strip()
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + (["--model", model] if model else [])
+        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg)
+        base += ["--model", model] if model else []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
         base += pcbridge.mcp_config_args()
         env = spawn.claude_env(meta.get("env") or {}, mode)

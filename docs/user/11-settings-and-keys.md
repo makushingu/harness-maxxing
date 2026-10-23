@@ -74,6 +74,11 @@ Three ways, best first:
 Turns start Claude without its update check, telemetry and feature-flag download (faster start, shorter prompt);
 `"claude_quiet_start": false` in config.json turns that off.
 
+Claude runs its helper agents in the foreground: you get their result in the same turn (several agents still run
+side by side). Claude Code's own habit is to send them to the background, where the turn waits for them to report
+back, which is slower; `"background_agents": true` in config.json goes back to it. You can always ask Claude for a
+background agent in your message.
+
 ## Claude Code updates
 
 **Update Claude Code automatically** (off by default): every 6 hours the server looks for a newer **stable** Claude
