@@ -1,0 +1,22 @@
+#!/bin/sh
+# Refuses a commit that credits an AI: a "Generated with/by" signature, a Co-Authored-By (or Signed-off-by) trailer
+# naming Claude or Anthropic, or an author or committer that is not a person (Claude, an anthropic.com address).
+# Co-Authored-By lines naming people stay allowed (several of us often work on one commit).
+# Enabled by: git config core.hooksPath .githooks
+# Talking about the product (Claude Code is what Harness Maxxing runs) stays allowed in the text.
+msg="$1"
+body=$(grep -v '^#' "$msg")
+bad=$(printf '%s\n' "$body" | grep -inE '^[[:space:]]*(co-authored-by|signed-off-by|assisted-by|generated-by):.*(claude|anthropic|openai|chatgpt|copilot|gemini)' | head -3)
+bad2=$(printf '%s\n' "$body" | grep -inE 'generated (with|by) .*(claude|anthropic|ai\b)|noreply@anthropic\.com|🤖' | head -3)
+if [ -n "$bad$bad2" ]; then
+  echo "commit refused: the message credits an AI:" >&2
+  printf '%s\n%s\n' "$bad" "$bad2" | grep -v '^$' >&2
+  exit 1
+fi
+who="$(git var GIT_AUTHOR_IDENT 2>/dev/null) / $(git var GIT_COMMITTER_IDENT 2>/dev/null)"
+if printf '%s' "$who" | grep -qiE '(^|/ )claude[ <]|anthropic\.com'; then
+  echo "commit refused: author or committer is not a person ($who)." >&2
+  echo "fix: git config user.name \"Your Name\" && git config user.email you@example.com" >&2
+  exit 1
+fi
+exit 0
