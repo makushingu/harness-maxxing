@@ -29,8 +29,8 @@ stopped.
   **☰** at the top left opens all your sessions: a search field, **New session** (in the topic of the session on
   screen), the **All / Running / Unread** chips, then your projects and topics. **Press and hold** a session, a
   topic or a project for its menu (rename, favorite, archive, delete...). The **plan button** (checklist icon)
-  sits right of the session's name; the session's **…** menu also holds *Telegram notifications*. **⊞** at the top right opens the rest of the app (see
-  [Settings](11-settings-and-keys.md#on-a-phone-or-a-tablet)).
+  sits right of the session's name; the session's **…** menu also holds *Telegram notifications*. **⊞** at the
+  top right opens the rest of the app (see [Settings](11-settings-and-keys.md#on-a-phone-or-a-tablet)).
 
 ## Move a session to another topic
 
