@@ -128,6 +128,10 @@ type State = {
   toColumns: () => void
   /** A ready-made layout (`arrange`); widths go back to even shares. */
   applyLayout: (slots: Slot[], move?: { key: string; zone: number }) => void
+  /** Maxxing mode: session `id` alone on the strip (its column kept if it is open); returns its column key. */
+  solo: (id: string) => string
+  /** Put back a saved arrangement (Maxxing mode off), plus the session on screen if it was not in it. */
+  restoreLayout: (saved: { cols: Col[]; widths: Record<string, number> }) => void
   toggle: (node: string, value?: boolean) => void
   /** Set many tree nodes at once (expand / collapse all). */
   setExpanded: (nodes: Record<string, boolean>) => void
@@ -267,6 +271,25 @@ export const useSessionsUI = create<State>()(
       toColumns: () => set((s) => ({ cols: s.cols.map((c) => (({ below: _b, ...r }) => r as Col)(c)) })),
       applyLayout: (slots, move) =>
         set((s) => ({ cols: arrange(s.cols, slots, move), widths: {}, focused: move?.key ?? s.focused })),
+      solo: (id) => {
+        const { cols, focused } = get()
+        // the column on screen is reused (same key: its place stays, only the session in it changes); else the
+        // session's own column, else a new one
+        const keep = cols.length === 1 ? cols[0] : cols.find((x) => x.kind === 'session' && x.id === id) || cols.find((x) => x.key === focused)
+        const col: Col = { key: keep?.key ?? uid(), kind: 'session', id }
+        set({ cols: [col], focused: col.key })
+        return col.key
+      },
+      restoreLayout: (saved) =>
+        set((s) => {
+          const ids = new Set(saved.cols.flatMap((c) => (c.kind === 'session' ? [c.id] : [])))
+          const keys = new Set(saved.cols.map((c) => c.key))
+          const extra = s.cols.filter((c) => !keys.has(c.key) && !(c.kind === 'session' && ids.has(c.id))).map(({ below: _b, wide: _w, ...r }) => r as Col)
+          const cols = normalizeCols([...saved.cols, ...extra])
+          const cur = s.cols.find((c) => c.key === s.focused)
+          const focused = cols.find((c) => c.key === s.focused || (cur?.kind === 'session' && c.kind === 'session' && c.id === cur.id))?.key ?? cols[0]?.key ?? null
+          return { cols, widths: saved.widths, focused }
+        }),
       setWidth: (key, w) =>
         set((s) => {
           const { [key]: _old, ...rest } = s.widths
