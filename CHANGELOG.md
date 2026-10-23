@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.96 - 2026-10-23
+
+Changes:
+- **Claude's helper agents now run in the foreground.** Their results come back in the same turn (several agents
+  still run side by side), instead of the turn waiting for agents sent to the background. The session stays busy
+  while they work; `"background_agents": true` in config.json goes back to the old behavior, and you can always ask
+  Claude for a background agent in your message.
+- **Maxxing mode (beta), for many sessions at once.** Once turned on in **Settings -> Features**, a **⚡ Maxxing**
+  switch on the Sessions page (Alt+M) brings each session that finishes to the front, alone and full width, so you
+  type what comes next at once; a playful bar measures how busy you keep your sessions. Off by default.
+- **On a phone, the plan mode button sits next to the session's name** instead of in the **…** menu.
+
 ## 2.0.0-alpha.95 - 2026-10-23
 
 Changes:
