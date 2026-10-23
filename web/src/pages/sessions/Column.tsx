@@ -523,10 +523,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
               >
                 {variant === 'mobile' && (
                   <>
-                    {/* Touch layout: the header keeps room for the title - plan mode and Telegram live here. */}
-                    <DropdownMenuCheckboxItem checked={!!session?.plan_mode} disabled={!session} onSelect={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}>
-                      {t('plan.toggle')}
-                    </DropdownMenuCheckboxItem>
+                    {/* Touch layout: the header keeps room for the title - Telegram lives here (plan mode is next to the title). */}
                     <DropdownMenuCheckboxItem checked={!!session?.notify} disabled={!session || !tgLinked} onSelect={actions.notify}>
                       {t('sessions.notify.label')}
                     </DropdownMenuCheckboxItem>
@@ -764,6 +761,19 @@ function ColumnHeader({
         <div className="flex min-h-8 min-w-0 items-center gap-2">
           {session ? <InlineTitle value={session.title} onSave={onRename} className="text-[17px] font-semibold" /> : <Skeleton className="h-5 w-48" />}
           {session && <StateBadge session={session} />}
+          {onPlan && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={session?.plan_mode ? t('plan.toggleOff') : t('plan.toggleOn')}
+              aria-pressed={!!session?.plan_mode}
+              disabled={!session}
+              onClick={onPlan}
+              className={cn('-mr-1 ml-auto shrink-0 pointer-coarse:size-10', session?.plan_mode && 'bg-primary/12 text-primary hover:bg-primary/20 hover:text-primary')}
+            >
+              <ListChecks />
+            </Button>
+          )}
         </div>
         <div className="mt-0.5 flex h-6 min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
           {session ? (
