@@ -771,7 +771,7 @@ function ColumnHeader({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={session?.plan_mode ? t('plan.toggleOff') : t('plan.toggleOn')}
+              aria-label={t('plan.toggle')}
               aria-pressed={!!session?.plan_mode}
               disabled={!session}
               onClick={onPlan}
