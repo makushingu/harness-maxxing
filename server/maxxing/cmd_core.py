@@ -322,16 +322,24 @@ def copy_templates(ws: Path) -> list[str]:
 
 
 def claude_settings_defaults() -> bool:
-    """~/.claude/settings.json: keep transcripts ~10 years (sessions are resumed for months)."""
+    """~/.claude/settings.json defaults, each set only when the user has not chosen:
+    - keep transcripts ~10 years (sessions are resumed for months);
+    - no AI credit in the commits and pull requests Claude makes (no Co-Authored-By trailer, no "Generated with"
+      line): the work is the user's. `attribution` (or the older `includeCoAuthoredBy`) already set = left as is."""
     p = config.claude_dir() / "settings.json"
     data = config.read_json(p, {})
     if not isinstance(data, dict):
         return False
-    if "cleanupPeriodDays" in data:
-        return False
-    data["cleanupPeriodDays"] = 3650
-    config.write_json(p, data)
-    return True
+    changed = False
+    if "cleanupPeriodDays" not in data:
+        data["cleanupPeriodDays"] = 3650
+        changed = True
+    if "attribution" not in data and "includeCoAuthoredBy" not in data:
+        data["attribution"] = {"commit": "", "pr": ""}
+        changed = True
+    if changed:
+        config.write_json(p, data)
+    return changed
 
 
 def detect_timezone() -> str:
@@ -553,7 +561,7 @@ def do_init(a: argparse.Namespace) -> dict:
     ws = Path(raw["workspace"])
     report["workspace_created"] = copy_templates(ws)
     report["skills"] = install_skills()
-    report["claude_settings"] = "cleanupPeriodDays set to 3650" if claude_settings_defaults() else "unchanged"
+    report["claude_settings"] = "defaults set (transcripts kept, no AI credit in commits)" if claude_settings_defaults() else "unchanged"
     report["crons"] = "skipped (--no-crons)" if a.no_crons else ensure_default_crons()
     report["jobs_slice"] = ensure_jobs_slice()
     report["service_memory"] = ensure_service_memory()
