@@ -1259,6 +1259,8 @@ export const fr: Record<keyof typeof en, string> = {
   'nav.infra': 'Infra',
   'features.infra': 'Page Infra',
   'features.infraDesc': 'Une entrée « Infra » dans la barre latérale : chaque site, base de données, bucket, domaine et serveur - ce serveur, vos autres serveurs (SSH), Cloudflare, Hostinger - avec son état, ses liens et où il se trouve. En lecture seule ; Claude crée sites, bases et buckets de façon standard. Pour Cloudflare et Hostinger, ajoutez leurs clés dans',
+  'features.maxxing': 'Mode Maxxing (bêta)',
+  'features.maxxingDesc': 'Un bouton « ⚡ Maxxing » sur la page Sessions (Alt+M), à activer dans chaque navigateur : dès qu’une session finit, elle passe devant, seule, à la place des autres colonnes, pour que vous tapiez la suite tout de suite. Désactivé, vos colonnes reviennent.',
   'infra.title': 'Infra',
   'infra.desc': 'Tout ce que vous hébergez - sites, bases, buckets, domaines, serveurs - où ça tourne et si ça marche.',
   'infra.off': 'La page Infra est désactivée',

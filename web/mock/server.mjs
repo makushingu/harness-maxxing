@@ -109,7 +109,7 @@ function buildState(scenario) {
     loginFails: [], // timestamps
     lockUntil: 0,
     onboarding_completed: ready,
-    settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, usage_widget: false, memory_max_lines: 200, donation_hidden: false },
+    settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, usage_widget: false, maxxing_mode: false, memory_max_lines: 200, donation_hidden: false },
     claude: {
       installed: true, version: '2.4.1',
       auth: ready ? { ok: true, method: 'oauth_token', detail: 'Long-lived OAuth token (claude setup-token), Max plan' } : { ok: false, method: null, detail: 'Not connected' },
@@ -146,7 +146,10 @@ function buildState(scenario) {
   }
   if (ready) {
     seedSessions(st, t)
-    if (scenario === 'maxxing') seedMaxxing(st, t)
+    if (scenario === 'maxxing') {
+      seedMaxxing(st, t)
+      st.settings.maxxing_mode = true
+    }
     seedTasks(st, t)
     seedCrons(st, t)
     // telegram

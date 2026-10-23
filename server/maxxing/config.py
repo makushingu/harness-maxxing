@@ -68,6 +68,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "onboarding_completed": False,
     "profile": {"name": "", "color": "", "emoji": ""},   # the user's pseudo: messages, notifications
     "usage_widget": False,
+    "maxxing_mode": False,             # Settings -> Features (beta): a finished session comes to the front (Sessions page)
     "git_page": False,                 # Settings -> Features: the Git & GitHub page and its sidebar entry
     "infra_page": False,               # Settings -> Features: the Infra page (sites, databases, buckets, domains, servers)
     "infra_refresh_min": 15,
