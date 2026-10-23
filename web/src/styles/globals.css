@@ -337,6 +337,41 @@ html[data-compact] .mx-sheet::before {
 html[data-compact] .mx-sheet[data-state='open'] { animation: var(--animate-sheet-up); }
 html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180ms cubic-bezier(0.32, 0.72, 0, 1) forwards; }
 
+/* Maxxing mode meter (pages/sessions/MaxxingMeter.tsx): a bar of liquid, green to orange along the track, that keeps
+ * flowing - two layers drift at different speeds so the colours mix gently, and a soft wave of light runs over it.
+ * Laid on the full 110 % track. */
+.mx-liquid {
+  background: linear-gradient(90deg, oklch(0.72 0.17 148) 0%, oklch(0.8 0.17 115) 18%, oklch(0.8 0.17 80) 36%, oklch(0.74 0.18 60) 55%, oklch(0.7 0.19 50) 75%, oklch(0.67 0.2 42) 100%);
+  overflow: hidden;
+}
+.mx-liquid::before,
+.mx-liquid::after {
+  content: '';
+  position: absolute;
+  inset: -40% -50%;
+}
+.mx-liquid::before {
+  background:
+    radial-gradient(ellipse 18% 70% at 15% 50%, oklch(0.74 0.17 148 / 0.7), transparent 70%),
+    radial-gradient(ellipse 18% 80% at 40% 40%, oklch(0.76 0.18 62 / 0.65), transparent 70%),
+    radial-gradient(ellipse 22% 70% at 66% 60%, oklch(0.7 0.19 48 / 0.7), transparent 70%),
+    radial-gradient(ellipse 16% 90% at 90% 45%, oklch(0.78 0.17 75 / 0.55), transparent 70%);
+  filter: blur(2px);
+  animation: mx-liquid-mix 7s ease-in-out infinite alternate;
+}
+.mx-liquid::after {
+  background: radial-gradient(ellipse 12% 55% at 50% 30%, rgb(255 255 255 / 0.42), transparent 70%);
+  background-size: 50% 100%;
+  mix-blend-mode: soft-light;
+  animation: mx-liquid-wave 2.8s linear infinite;
+}
+@keyframes mx-liquid-mix {
+  0% { transform: translateX(-12%) translateY(4%) scaleY(1); }
+  50% { transform: translateX(6%) translateY(-6%) scaleY(1.15); }
+  100% { transform: translateX(14%) translateY(3%) scaleY(0.92); }
+}
+@keyframes mx-liquid-wave { from { background-position: 0 0; } to { background-position: 100% 0; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
