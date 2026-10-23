@@ -47,7 +47,7 @@ def parse(argv: list[str]) -> dict:
     with_value = {"--output-format": "format", "--model": "model", "--session-id": "session_id",
                   "--resume": "resume", "--permission-mode": "permission_mode", "-r": "resume",
                   "--input-format": "input", "--settings": "settings", "--tools": "tools",
-                  "--system-prompt": "system_prompt"}
+                  "--system-prompt": "system_prompt", "--append-system-prompt": "append_system_prompt"}
     for a in it:
         if a in ("-p", "--print"):
             o["print"] = True
