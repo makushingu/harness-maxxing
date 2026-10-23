@@ -86,6 +86,10 @@ set the version at release time):
    `I have read the CLA Document and I hereby sign the CLA`. Contributing for a company? Sign it on behalf of that
    entity (see [CLA.md](CLA.md)). The pull request cannot be merged before (its **CLA** check stays red).
 
+Commits credit people only: no AI author, no "Generated with" signature, no `Co-Authored-By` naming an AI
+(co-authoring people is fine). Once per clone, `git config core.hooksPath .githooks` turns on the `commit-msg`
+hook that refuses them.
+
 ## 7. Review and release
 
 A maintainer, **FEU** or **Romain**, reviews the pull request. Expect questions and change requests; push new

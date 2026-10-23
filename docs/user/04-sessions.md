@@ -339,6 +339,9 @@ A Telegram session can be continued from the web UI and the other way round.
 - Claude Code keeps transcripts for ~10 years (`cleanupPeriodDays` is set to 3650), so old
   sessions can always be resumed. If a transcript is missing, a fresh Claude context is started
   automatically and a note is shown.
+- The commits and pull requests Claude makes carry no AI credit (no `Co-Authored-By` line, no
+  "Generated with" signature): `attribution` is set to empty in Claude Code's `settings.json`, unless
+  you already chose something there (`attribution` or `includeCoAuthoredBy`).
 
 
 **Close all / Open all** (Vertical layout): the quick button at the bottom of the session list folds every project and topic as soon as something is open, and unfolds everything when all is folded.
