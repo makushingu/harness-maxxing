@@ -179,6 +179,26 @@ commands that modify anything in this mode.
 - Plan mode applies to every message of the session, Telegram included; validate the plan from the web
   app or the HUD. Compact and hand off still work normally.
 
+## Maxxing mode
+
+For many sessions at once: as soon as one finishes, it **comes to the front** so you type what comes next at once.
+
+- Turn it on with **⚡ Maxxing** at the top right of the Sessions page (**Alt+M**), or **⚡** in a session's header
+  on a phone. The setting belongs to this browser.
+- A session that finishes its turn (or whose plan waits, or that stopped on an error) joins a queue. The first one
+  takes the **whole width** (it slides in where the previous one was), its composer takes the focus and it
+  glows briefly; on a phone it opens full screen.
+- **You are never cut off**: while the session in front waits for your prompt, or while you type in any composer,
+  the next ones wait. The next comes right after you send. **⏭ N waiting** shows the queue; click it to leave the
+  session in front as it is and go to the next one. **⏮** (Back) brings back the session you just left (a prompt sent
+  too fast: stop it or edit it there); it stays in front until you send to it again, it finishes or you move on, and
+  the session that was in front goes back to the head of the queue.
+- Nothing to close by hand: one session at a time, and turned off, your previous arrangement comes back (plus the
+  session on screen). Drafts stay saved in their session.
+- The **liquid bar** next to it (always gently moving, green to orange) is a game: over the last 10 minutes, 70 % the time your sessions worked rather than
+  waited for you, 30 % how fast you answered (30 s target). Faster than that and it overflows, up to 110 %. Hover
+  it for the details; it stays in this browser and starts again on reload.
+
 ## HUD mode
 
 A small floating bar to drive one session while you work in other apps. Turn it on in
@@ -298,6 +318,7 @@ A Telegram session can be continued from the web UI and the other way round.
 | Ctrl/⌘+\ | show / hide the sidebar |
 | Shift+P | presentation mode (hides sensitive data on screen) |
 | G then D / S / F / T / C | go to Dashboard / Sessions / Files / Tasks / Crons |
+| Alt+M | Maxxing mode on / off (Sessions page) |
 
 ## Good to know
 

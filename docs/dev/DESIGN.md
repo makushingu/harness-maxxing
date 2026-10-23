@@ -249,7 +249,9 @@ Don't
 ## 9. Mock & visual checks
 
 `web/mock/server.mjs` implements every API.md endpoint with in-memory, product-neutral data and serves `web/dist`:
-`MOCK_PORT=8809 MOCK_SCENARIO=ready|onboarding|login|setup node mock/server.mjs`
+`MOCK_PORT=8809 MOCK_SCENARIO=ready|onboarding|login|setup|maxxing node mock/server.mjs`
+(`maxxing`: 30 more sessions that keep finishing at random, for Maxxing mode; `MOCK_PASSWORD=…` asks for that password;
+`MOCK_DIST=…` serves another build)
 (`POST /__mock/scenario {"name"}` resets at runtime; setup token `dev-token`, password `password123`).
 Visual pass = Playwright screenshots at 375 / 768 / 1280 / 1920 of every page in dark and light, plus a check that
 the console has no errors.
