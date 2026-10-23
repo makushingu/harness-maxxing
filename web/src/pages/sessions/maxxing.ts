@@ -3,11 +3,12 @@
 // Never in the middle of a prompt: while the session in front waits for its answer, or while the user types in
 // a composer, the next finished session waits in the queue; it comes to the front right after the prompt is sent.
 // Sessions that stopped on an error queue too: the next prompt starts them again.
+// Beta, off by default: shown only when Settings -> Features -> Maxxing mode (config `maxxing_mode`) is on.
 import * as React from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Session } from '@/lib/types'
-import { prefetchTail } from '@/lib/queries'
+import { prefetchTail, useSettings } from '@/lib/queries'
 import { reducedMotion, EASE_OUT } from '@/lib/presence'
 import { focusComposer, useSessionsUI, type Col } from './store'
 import * as stats from './maxxingStats'
@@ -107,6 +108,13 @@ export const useMaxxing = create<MaxxingState>()(
   ),
 )
 
+/** Settings -> Features -> Maxxing mode (beta, off by default): the switch, the meter, the driver and Alt+M exist only
+ *  when it is on. */
+export function useMaxxingEnabled() {
+  const { data } = useSettings()
+  return !!data?.maxxing_mode
+}
+
 /** A session that, once finished, comes to the front: not archived, not a scheduled job nobody asked to hear about. */
 const counts = (s: Session) => !s.archived && (s.source !== 'cron' || s.notify)
 const waiting = (s: Session) => s.state !== 'running' && counts(s)
@@ -205,8 +213,12 @@ export function useMaxxingDriver(sessions: Session[] | undefined, show: (s: Sess
       const now = Date.now()
       stats.sample(ss.filter((s) => s.state === 'running' && counts(s)).length, m.queue.length + (m.current ? 1 : 0), now)
       // the session in front was closed by the user: it no longer waits there
+      // (on a phone the touch layer is always there: the session on screen is the one in the URL)
       const ui = useSessionsUI.getState()
-      if (m.current && !ui.cols.some((c) => c.kind === 'session' && c.id === m.current) && !document.querySelector('[data-touch-layer]')) m.setCurrent(null)
+      const onScreen = document.querySelector('[data-touch-layer]')
+        ? new URLSearchParams(location.search).get('session') === m.current
+        : ui.cols.some((c) => c.kind === 'session' && c.id === m.current)
+      if (m.current && !onScreen) m.setCurrent(null)
       // the next one's thread loads in the background, so it shows at once when its turn comes
       const head = m.queue[0]
       if (head && now - (prefetched.get(head) || 0) > PREFETCH_EVERY_MS) {
@@ -241,6 +253,12 @@ export function useMaxxingDriver(sessions: Session[] | undefined, show: (s: Sess
       unsub()
     }
   }, [on])
+}
+
+/** Mounts the driver (the Sessions page renders it only when Maxxing mode is enabled in Settings -> Features). */
+export function MaxxingDriver({ sessions, show }: { sessions: Session[] | undefined; show: (s: Session) => void }) {
+  useMaxxingDriver(sessions, show)
+  return null
 }
 
 /** A prompt was just sent to session `id` (the column's send, before the server answers): if it is the session in

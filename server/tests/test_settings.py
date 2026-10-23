@@ -6,7 +6,18 @@ def test_get_defaults(client, org):
     s = client.get("/api/settings").json()
     assert s == {"timezone": "UTC", "language": "en", "public_url": "", "files_root": str(org.tmp),
                  "presentation_default": False, "usage_widget": False, "git_page": False, "infra_page": False,
+                 "maxxing_mode": False,
                  "memory_max_lines": 200, "result_line_hidden": [], "donation_hidden": False}
+
+
+def test_maxxing_mode_is_an_opt_in_feature(client, org):
+    assert config.load_config().get("maxxing_mode") is False             # beta: off by default
+    r = client.put("/api/settings", json={"maxxing_mode": True})
+    assert r.status_code == 200 and r.json()["maxxing_mode"] is True
+    assert config.load_config()["maxxing_mode"] is True
+    assert client.put("/api/settings", json={"timezone": "UTC"}).json()["maxxing_mode"] is True
+    assert client.put("/api/settings", json={"maxxing_mode": "maybe"}).status_code == 422
+    assert client.put("/api/settings", json={"maxxing_mode": False}).json()["maxxing_mode"] is False
 
 
 def test_donation_hidden(client, org):
