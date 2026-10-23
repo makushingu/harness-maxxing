@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
-import { useSessions, useSessionSeeded, useWorkspace } from '@/lib/queries'
+import { useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
 import type { Session } from '@/lib/types'
 import { PageHeader } from '@/components/shell/Page'
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, Kbd, MOD, Tooltip } from '@/components/ui'
@@ -25,7 +25,7 @@ import { PreviewProvider } from './FilePreview'
 import { HudBar } from './Hud'
 import { topicLabel, useIsMobile } from './util'
 import { useTouchNav } from '@/components/shell/TouchNav'
-import { enter, promoteColumn, useMaxxing, useMaxxingDriver } from './maxxing'
+import { enter, MaxxingDriver, promoteColumn, useMaxxing, useMaxxingEnabled } from './maxxing'
 import { MaxxingControls } from './MaxxingMeter'
 
 /** Sessions sliding to their new place (reorder, stack, layout): short, the content is heavy. */
@@ -177,13 +177,22 @@ function Workspace() {
     [mobile, navigate],
   )
 
-  // Maxxing mode: a finished session comes to the front (first, big column; full screen on a phone).
-  useMaxxingDriver(sessions, (s) => {
-    if (mobile) {
-      navigate(`/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`, { state: { mxPushed: true } })
-      requestAnimationFrame(() => requestAnimationFrame(() => enter(document.querySelector('[data-touch-layer] > *'))))
-    } else promoteColumn(s.id, strip.current)
-  })
+  // Maxxing mode (beta, Settings -> Features): a finished session comes to the front (first, big column; full screen
+  // on a phone). Turned off in the settings while on in this browser: it ends, the previous arrangement comes back.
+  const maxxingEnabled = useMaxxingEnabled()
+  const { isSuccess: settingsLoaded } = useSettings()
+  React.useEffect(() => {
+    if (settingsLoaded && !maxxingEnabled && useMaxxing.getState().on) useMaxxing.getState().setOn(false)
+  }, [settingsLoaded, maxxingEnabled])
+  const showMaxxing = React.useCallback(
+    (s: Session) => {
+      if (mobile) {
+        navigate(`/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`, { state: { mxPushed: true } })
+        requestAnimationFrame(() => requestAnimationFrame(() => enter(document.querySelector('[data-touch-layer] > *'))))
+      } else promoteColumn(s.id, strip.current)
+    },
+    [mobile, navigate],
+  )
 
   const topics = React.useMemo(() => (ws?.projects || []).flatMap((p) => p.topics), [ws])
   const defaultTopic = currentTopic ?? topics[0]?.path ?? null
@@ -203,7 +212,7 @@ function Workspace() {
         const j = Math.max(0, Math.min(st.cols.length - 1, (i < 0 ? 0 : i) + (e.code === 'ArrowLeft' ? -1 : 1)))
         st.focus(st.cols[j].key)
         focusComposer(st.cols[j].key)
-      } else if (e.code === 'KeyM') {
+      } else if (e.code === 'KeyM' && maxxingEnabled) {
         e.preventDefault()
         useMaxxing.getState().setOn(!useMaxxing.getState().on)
       } else if (e.code === 'KeyW' && st.focused) {
@@ -499,7 +508,7 @@ function Workspace() {
               </Button>
             </LayoutPicker>
           )}
-          <MaxxingControls />
+          {maxxingEnabled && <MaxxingControls />}
           <Tooltip content={`${t('sessions.newSession')} (Alt+N)`}>
             <Button size={mobile ? 'icon' : 'sm'} onClick={newInCurrent} disabled={defaultTopic === null} aria-label={t('sessions.newSession')} data-tour="new-session">
               <MessageSquarePlus /> <span className="max-md:hidden">{t('sessions.newSession')}</span>
@@ -512,6 +521,7 @@ function Workspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {maxxingEnabled && <MaxxingDriver sessions={sessions} show={showMaxxing} />}
       {/* Touch layout: the session layer has its own header (☰, ⋯, ⊞); nothing while the session to show is picked. */}
       {!mobileOpen && !touchPicking && header}
       <div className="flex min-h-0 flex-1">
@@ -701,6 +711,7 @@ function HudView() {
 /* ---------------------------------------------------------------- shortcuts help */
 function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const t = useT()
+  const maxxing = useMaxxingEnabled()
   const rows: [string[], string][] = [
     [['Enter'], t('sessions.shortcuts.send')],
     [['Shift', 'Enter'], t('sessions.shortcuts.newline')],
@@ -711,7 +722,7 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     [['Alt', '←'], t('sessions.shortcuts.prev')],
     [['Alt', '→'], t('sessions.shortcuts.next')],
     [['Alt', 'W'], t('sessions.shortcuts.close')],
-    [['Alt', 'M'], t('maxxing.toggle')],
+    ...(maxxing ? [[['Alt', 'M'], t('maxxing.toggle')] as [string[], string]] : []),
     [[MOD, 'K'], t('sessions.shortcuts.palette')],
   ]
   return (

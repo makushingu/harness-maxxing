@@ -428,6 +428,8 @@ export type Settings = {
   git_page: boolean
   /** Settings -> Features: the Infra page (/infra) and its sidebar entry */
   infra_page: boolean
+  /** Settings -> Features (beta): Maxxing mode on the Sessions page (its switch, meter and Alt+M) */
+  maxxing_mode?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */

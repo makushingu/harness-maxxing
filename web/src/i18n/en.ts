@@ -1274,6 +1274,8 @@ export const en = {
   'nav.infra': 'Infra',
   'features.infra': 'Infra page',
   'features.infraDesc': 'An "Infra" entry in the sidebar: every site, database, bucket, domain and server - this server, your other servers (SSH), Cloudflare, Hostinger - with its status, its links and where it lives. Read-only; Claude creates sites, databases and buckets the standard way. For Cloudflare and Hostinger, add their keys in',
+  'features.maxxing': 'Maxxing mode (beta)',
+  'features.maxxingDesc': 'A "⚡ Maxxing" switch on the Sessions page (Alt+M), turned on in each browser: as soon as a session finishes, it comes to the front alone and takes the place of the other columns, so you type what comes next at once. Turned off, your columns come back.',
   'infra.title': 'Infra',
   'infra.desc': 'Everything you host - sites, databases, buckets, domains, servers - where it runs and whether it works.',
   'infra.off': 'The Infra page is off',

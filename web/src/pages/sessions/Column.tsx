@@ -81,7 +81,7 @@ import { TaskBar } from './Tasks'
 import { forgetLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
-import { notifySendFailed, notifySent } from './maxxing'
+import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
 import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
@@ -750,16 +750,17 @@ function ColumnHeader({
   const billed = useCostIsBilled()
   const showCost = !useResultLine().hidden.includes('cost')
   const notifyTip = !tgLinked ? t('sessions.notify.unavailable') : session?.notify ? t('sessions.notify.on') : t('sessions.notify.off')
+  const maxxing = useMaxxingEnabled()
   if (variant === 'mobile')
     // phone / tablet: app bar (☰ logo ⋯ ⊞), then the session's title, then its topic and what it used
     return (
       <header className="relative shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
-        <MaxxingMeter strip />
+        {maxxing && <MaxxingMeter strip />}
         <div className="flex h-11 min-w-0 items-center gap-1">
           <TouchSessionsButton className="-ml-2" />
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" />
           <div className="flex shrink-0 items-center">
-            <MaxxingControls compact />
+            {maxxing && <MaxxingControls compact />}
             {menu}
             <TouchAppButton className="-mr-2" />
           </div>
