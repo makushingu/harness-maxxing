@@ -6,6 +6,31 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.96 - 2026-10-23
+
+Pull requests #3, #5 and #4 (FEU), adapted at integration.
+- #5 Foreground subagents: config `background_agents` (default **false**). `spawn.agents_args(cfg)` adds
+  `--append-system-prompt FOREGROUND_AGENTS` (always `run_in_background: false` unless the user asks) to every turn
+  (`runner.py`); `[]` when `background_agents` is true. Behavior change for every installation (upgrade note).
+  `tests/fake_claude.py` parses `--append-system-prompt`. Tests: `test_spawn_tuning.py`,
+  `test_sessions.py::test_turns_ask_for_foreground_agents`.
+- #4 Maxxing mode (web only): `pages/sessions/maxxing.ts` (zustand store `mx-maxxing` persisted `{on, saved}`: queue
+  of finished sessions, `current`, `history` for Back, `useMaxxingDriver` ticking every 500 ms), `maxxingStats.ts`
+  (10 min window: 70 % utilisation, 30 % answer delay, score up to 1.1), `MaxxingMeter.tsx` (`MaxxingControls`,
+  `MaxxingMeter`), store `solo(id)` / `restoreLayout(saved)`, `prefetchTail` refreshes a tail older than 10 s, CSS
+  `mx-liquid` / `mx-meter-*`, mock scenario `maxxing` (`MOCK_PASSWORD`, `MOCK_DIST`).
+  Adapted at integration: config + settings key `maxxing_mode` (default false, `api/settings` KEYS / `SettingsIn`
+  / `current()`, `backup.RESTORABLE_CONFIG`), Settings -> Features row "Maxxing mode (beta)" (i18n
+  `features.maxxing|maxxingDesc`); `useMaxxingEnabled()` gates `MaxxingControls`, `MaxxingMeter`, the driver (now
+  mounted as `<MaxxingDriver>`) and Alt+M (also hidden from the shortcuts help); setting off while a browser has
+  `on` -> `setOn(false)` (layout restored). Bug fixed: in the touch layout `[data-touch-layer]` always exists, so
+  `current` was never released; the session on screen is now read from the URL (`?session=`).
+  Test: `test_settings.py::test_maxxing_mode_is_an_opt_in_feature`.
+- #3 Touch layout: plan mode button (`ListChecks`) next to the session title in `ColumnHeader` (mobile), removed
+  from the **…** menu; `aria-label` = `plan.toggle` (state in `aria-pressed`, like desktop).
+- Docs: user 04 (plan button, Maxxing mode), 11 (foreground agents, Features), API.md (`maxxing_mode`), DESIGN.md
+  (mock scenario).
+
 ## 2.0.0-alpha.95 - 2026-10-23
 
 Health issues marked as seen + smooth column snap (maintainers' request).
