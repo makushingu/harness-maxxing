@@ -17,7 +17,7 @@ a merged pull request.
 
 1. Fork the repository on GitHub, then clone your fork:
    `git clone https://github.com/<you>/harness-maxxing.git && cd harness-maxxing`
-2. Create a branch from `main` named after the change:
+2. Create a branch from `beta` named after the change:
    - `feat/<short-name>` for a feature (`feat/telegram-reactions`);
    - `fix/<short-name>` for a bug fix (`fix/cron-timezone`).
 3. Keep one topic per branch and per pull request.
@@ -80,24 +80,28 @@ set the version at release time):
 ## 6. Open the pull request
 
 1. Run the checks of step 3 for the parts you touched; they must pass.
-2. Push your branch and open a pull request to `main`. Fill in the template (tests, changelogs, `web/dist`, CLA).
+2. Push your branch and open a pull request to **`beta`** (not `main`). Fill in the template (tests, changelogs,
+   `web/dist`, CLA).
 3. **Sign the CLA**: on your first pull request the CLA bot asks you to post this comment once, exactly and alone:
    `I have read the CLA Document and I hereby sign the CLA`. Contributing for a company? Sign it on behalf of that
    entity (see [CLA.md](CLA.md)). The pull request cannot be merged before (its **CLA** check stays red).
-4. CI (`.github/workflows/ci.yml`) runs the server tests, the web typecheck and build, and the pc-agent tests;
-   every check must be green.
 
-## 7. Review
+## 7. Review and release
 
 A maintainer, **FEU** or **Romain**, reviews the pull request. Expect questions and change requests; push new
-commits to the same branch. A maintainer merges once it is approved and green. A large pull request may be
-adapted at integration (version numbers, `web/dist` rebuilt) - your authorship is kept.
+commits to the same branch. The path of a change:
+
+1. **`beta`**: a maintainer integrates the pull request (full test suite, version number, `web/dist` rebuilt;
+   a large pull request may be adapted - your authorship is kept). The maintainers run `beta` on their own
+   servers.
+2. **`main`**: once a maintainer has checked the version in real use, `main` moves to it: it is the release for
+   everyone (`stable`, the branch installs follow, is a copy of `main`).
 
 ## What gets refused
 
 - a feature without a prior issue agreed by a maintainer, or that does not fit the product (see the non-goals in
   [docs/dev/PLAN.md](docs/dev/PLAN.md));
-- changes without tests, failing CI, or without changelog entries;
+- changes without tests, failing tests, or without changelog entries;
 - a `web/dist` that does not match the sources (or a rebuilt `web/dist` with no web change);
 - personal data, secrets, real domains or server paths in code, docs or tests;
 - tests that touch the real system (crontab, Telegram, a real install);
