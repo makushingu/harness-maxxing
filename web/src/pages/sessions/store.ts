@@ -136,6 +136,9 @@ type State = {
   /** Set many tree nodes at once (expand / collapse all). */
   setExpanded: (nodes: Record<string, boolean>) => void
   setTreeHidden: (v: boolean) => void
+  /** Tabs view: one session on screen, the open ones as chips above it (the columns stay as they are). */
+  tabs: boolean
+  setTabs: (v: boolean) => void
 }
 
 export type SessionShow = 'running' | 'unread'
@@ -298,6 +301,8 @@ export const useSessionsUI = create<State>()(
       toggle: (node, value) => set((s) => ({ expanded: { ...s.expanded, [node]: value ?? !s.expanded[node] } })),
       setExpanded: (nodes) => set((s) => ({ expanded: { ...s.expanded, ...nodes } })),
       setTreeHidden: (treeHidden) => set({ treeHidden }),
+      tabs: false,
+      setTabs: (tabs) => set({ tabs }),
       show: null,
       setShow: (show) => set({ show }),
       layoutPicker: null,
@@ -324,6 +329,7 @@ export const useSessionsUI = create<State>()(
         rowSplit: s.rowSplit,
         expanded: s.expanded,
         treeHidden: s.treeHidden,
+        tabs: s.tabs,
         listBy: s.listBy,
         treeMode: s.treeMode,
         drill: s.drill,
