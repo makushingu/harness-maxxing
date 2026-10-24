@@ -470,6 +470,23 @@ def test_removed_jobs_are_kept_and_restored(org, monkeypatch, capsys):
     assert {j["id"] for j in crons.list_jobs()} == {keep["id"], a["id"]}
 
 
+def test_restore_refuses_an_id_or_a_job_that_is_not_safe(org, monkeypatch):
+    """deleted.jsonl is only a file: what comes back from it is checked before it reaches the crontab."""
+    monkeypatch.setattr(crons, "maxxing_bin", lambda: "/usr/local/bin/maxxing")
+    bad = "x >/dev/null; touch /tmp/PWN #"
+    job = {"name": "Old", "schedule": "0 5 * * *", "kind": "shell", "command": "echo old", "enabled": True}
+    crons.deleted_path().write_text(
+        json.dumps({"at": 1, "reason": "deleted", "job": {**job, "id": bad}}) + "\n"
+        + json.dumps({"at": 2, "reason": "deleted", "job": {"id": "c_bad000", "schedule": "nope"}}) + "\n")
+    with pytest.raises(crons.CronError) as e:
+        crons.restore_job(bad)
+    assert e.value.code == "invalid_id"
+    with pytest.raises(crons.CronError):
+        crons.restore_job("c_bad000")
+    assert crons.list_jobs() == []
+    assert "touch /tmp/PWN" not in "\n".join(crons.managed_lines([{**job, "id": bad}]))
+
+
 def test_a_hand_edit_noticed_at_the_next_save(org):
     """No `maxxing cron sync` after the hand edit: the next save through the API still archives the lost job."""
     a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})

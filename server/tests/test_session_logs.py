@@ -262,6 +262,23 @@ def test_background_tasks_become_task_events(client, topic):
     assert len(r["events"]) > 50
 
 
+def test_a_page_without_the_task_start_still_knows_the_agent(client, topic):
+    t = "toolu_agent0002"
+    head = _line({"type": "system", "subtype": "task_started", "task_id": "a2", "tool_use_id": t,
+                  "task_type": "local_agent", "description": "Audit", "subagent_type": "Explore",
+                  "is_backgrounded": True, "mx_at": 1.0})
+    body = "".join(_turn_lines(i) for i in range(400))
+    tail = _line({"type": "system", "subtype": "task_progress", "task_id": "a2", "tool_use_id": t,
+                  "description": "Reading", "mx_at": 500.0})
+    sid = _session_with_log(topic, head + body + tail + _turn_lines(400))
+    r = client.get(f"/api/sessions/{sid}/events", params={"tail": 20}).json()
+    assert r["more_before"] is True
+    tasks = [e for e in r["events"] if e["type"] == "task"]
+    assert len(tasks) == 1 and tasks[0]["activity"] == "Reading"
+    assert (tasks[0]["kind"], tasks[0]["background"], tasks[0]["description"], tasks[0]["agent_type"]) == \
+        ("agent", True, "Audit", "Explore")
+
+
 def test_task_event_states_and_noise():
     n = service.normalize.normalize
     assert n({"type": "system", "subtype": "task_updated", "task_id": "x", "patch": {"status": "killed"}})[0]["state"] == "stopped"
