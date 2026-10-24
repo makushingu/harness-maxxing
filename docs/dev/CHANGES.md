@@ -12,6 +12,7 @@ Radar fixes (FEU).
 
 ### bug
 - rdf722cd7 `license.remove_key()` replaces the `license` section (`save_config` under `config._lock`) instead of `update_config`, which deep-merged and kept email/kind/status/max_servers/updates_until/activation_id. Test: `test_license.py::test_remove_key_forgets_the_license_info`.
+- r8710d993 `feedback.send()` refuses an email over `MAX_EMAIL` = 254 characters (`invalid_email`, 400), like `register.save`; a 1 MB address was sent to the cloud and written to `config.json` (`feedback_email`). Test: `test_feedback.py::test_feedback_email_is_capped`.
 
 - re74d3a46 `license.activate()` raises `LicenseError(code="bad_answer")` when the answer has no string `token`, before writing the key, the seat or the info (it was a KeyError -> 500 after `set_secret(KEY)`). Test: `test_license.py::test_activate_without_token_leaves_no_key`.
 

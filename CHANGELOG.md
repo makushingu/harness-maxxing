@@ -7,6 +7,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 Changes:
 - **Removing the Enterprise key forgets its license.** Settings -> License no longer shows the email and status of the key you removed.
+- **The feedback form refuses an email address longer than 254 characters**, instead of sending it and keeping it in the settings.
 
 - **A key activation the license server did not complete leaves nothing behind.** Before, the key was recorded without a seat and the page showed an error 500.
 
