@@ -82,6 +82,7 @@ import { forgetLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSession
 import { PlanChip, PlanNotice } from './Plan'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
+import { MobileTabsSlot, TabsToggle } from './Tabs'
 import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
@@ -101,7 +102,8 @@ export const MAX_W = 1400
 
 /** Cell of a session in the strip grid: its grid column, and the whole height or the top / bottom half. */
 /** `top`: key of the session at the top of this grid column (its width is saved under that key). */
-export type Place = { col: number; row: 'full' | 'top' | 'bottom'; top?: string }
+/** `hidden`: kept mounted but not shown (tabs view: only the focused session is on screen). */
+export type Place = { col: number; row: 'full' | 'top' | 'bottom'; top?: string; hidden?: boolean }
 /** The strip owns the grid template: handles ask it to resize a column or the row split. */
 export const StripContext = React.createContext<{
   startColResize: (key: string, e: React.PointerEvent) => void
@@ -111,6 +113,11 @@ export const StripContext = React.createContext<{
   columns: number
   resetRowSplit: () => void
 } | null>(null)
+
+/** Phone, tabs view: the open sessions' chips, under the app bar of the session's header. */
+function MobileTabs() {
+  return <>{React.useContext(MobileTabsSlot)}</>
+}
 
 /* ---------------------------------------------------------------- shell */
 export function ColumnShell({ col, index, count, variant, place, children }: { col: Col; index: number; count: number; variant: ColumnVariant; place?: Place; children: React.ReactNode }) {
@@ -160,6 +167,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         isCol && row === 'top' && 'border-b',
         isCol && count > 1 && focused && 'shadow-[inset_0_2px_0_0_var(--primary)]',
         !isCol && 'h-full w-full',
+        place?.hidden && 'hidden',
       )}
     >
       {children}
@@ -760,11 +768,13 @@ function ColumnHeader({
           <TouchSessionsButton className="-ml-2" />
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" />
           <div className="flex shrink-0 items-center">
+            <TabsToggle compact />
             {maxxing && <MaxxingControls compact />}
             {menu}
             <TouchAppButton className="-mr-2" />
           </div>
         </div>
+        <MobileTabs />
         <div className="flex min-h-8 min-w-0 items-center gap-2">
           {session ? <InlineTitle value={session.title} onSave={onRename} className="text-[17px] font-semibold" /> : <Skeleton className="h-5 w-48" />}
           {session && <StateBadge session={session} />}
@@ -1073,6 +1083,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
               </Tooltip>
             )}
           </div>
+          {variant === 'mobile' && <MobileTabs />}
           <div className="flex h-5 items-center text-[11px] text-muted-foreground">{t('sessions.new.subtitle')}</div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
