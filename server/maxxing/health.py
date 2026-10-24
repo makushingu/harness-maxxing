@@ -60,7 +60,7 @@ def cpu_pct() -> float | None:
             prev = (now, busy, total)
             busy, total = _cpu_times()
             now = time.time()
-        if now - prev[0] < 1 and _cpu_last is not None:
+        elif now - prev[0] < 1 and _cpu_last is not None:   # after a pause the 0.1 s sample is always < 1 s old
             return _cpu_last
         _cpu_prev = (now, busy, total)
         dt = total - prev[2]
