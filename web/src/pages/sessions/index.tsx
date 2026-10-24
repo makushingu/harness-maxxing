@@ -27,6 +27,7 @@ import { topicLabel, useIsMobile } from './util'
 import { useTouchNav } from '@/components/shell/TouchNav'
 import { enter, MaxxingDriver, promoteColumn, useMaxxing, useMaxxingEnabled } from './maxxing'
 import { MaxxingControls } from './MaxxingMeter'
+import { MobileTabsSlot, stepCol, TabsArrows, TabsBar, TabsToggle, useSwipe } from './Tabs'
 
 /** Sessions sliding to their new place (reorder, stack, layout): short, the content is heavy. */
 const FLIP_MS = 180
@@ -64,6 +65,7 @@ function Workspace() {
   const widths = useSessionsUI((s) => s.widths)
   const rowSplit = useSessionsUI((s) => s.rowSplit)
   const setTreeHidden = useSessionsUI((s) => s.setTreeHidden)
+  const tabs = useSessionsUI((s) => s.tabs)
   const { data: ws } = useWorkspace()
   const { data: sessions, isError: sessionsFailed, refetch: refetchSessions } = useSessions(undefined, false)
   const [helpOpen, setHelpOpen] = React.useState(false)
@@ -177,6 +179,22 @@ function Workspace() {
     [mobile, navigate],
   )
 
+  // Tabs view: a chip (or Alt+←/→, a swipe) shows its session - the URL on a phone, the focus on a computer.
+  const pickTab = React.useCallback(
+    (c: Col) => {
+      if (mobile) {
+        const path = c.kind === 'new' ? c.path : sessions?.find((s) => s.id === c.id)?.path
+        const q = path !== undefined ? `path=${encodeURIComponent(path)}&` : ''
+        const url = c.kind === 'new' ? `/sessions?${q}new=1` : `/sessions?${q}session=${c.id}`
+        navigate(url, { replace: true })
+        return
+      }
+      useSessionsUI.getState().focus(c.key)
+      requestAnimationFrame(() => focusComposer(c.key))
+    },
+    [mobile, navigate, sessions],
+  )
+
   // Maxxing mode (beta, Settings -> Features): a finished session comes to the front (first, big column; full screen
   // on a phone). Turned off in the settings while on in this browser: it ends, the previous arrangement comes back.
   const maxxingEnabled = useMaxxingEnabled()
@@ -212,6 +230,9 @@ function Workspace() {
         const j = Math.max(0, Math.min(st.cols.length - 1, (i < 0 ? 0 : i) + (e.code === 'ArrowLeft' ? -1 : 1)))
         st.focus(st.cols[j].key)
         focusComposer(st.cols[j].key)
+      } else if (e.code === 'KeyT') {
+        e.preventDefault()
+        st.setTabs(!st.tabs)
       } else if (e.code === 'KeyM' && maxxingEnabled) {
         e.preventDefault()
         useMaxxing.getState().setOn(!useMaxxing.getState().on)
@@ -345,6 +366,12 @@ function Workspace() {
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
   const places = React.useMemo(() => {
     const out = new Map<string, Place>()
+    if (tabs) {
+      // tabs view: every session in the one cell, only the focused one shown (the others stay mounted: no reload)
+      const shown = shownCols.some((p) => p.key === focused && !p.leaving) ? focused : shownCols.find((p) => !p.leaving)?.key
+      for (const p of shownCols) out.set(p.key, { col: 1, row: 'full', hidden: p.key !== shown })
+      return { places: out, tops: shownCols.length ? [shownCols[0].key] : [] }
+    }
     const tops: string[] = []
     let prev: { key: string; place: Place } | null = null
     for (const p of shownCols) {
@@ -360,7 +387,7 @@ function Workspace() {
       prev = { key: p.key, place }
     }
     return { places: out, tops }
-  }, [shownCols])
+  }, [shownCols, tabs, focused])
   const wide = React.useMemo(() => new Set(cols.filter((c) => c.wide).map((c) => c.key)), [cols])
   const template = React.useCallback(
     (override?: { key: string; w: number }) =>
@@ -398,6 +425,10 @@ function Workspace() {
     // a slide still running would skew the measures: it stops where the session really is
     for (const a of flips.current.values()) a.cancel()
     flips.current.clear()
+    if (tabs) {
+      lastRects.current = new Map()
+      return
+    }
     const now = new Map<string, DOMRect>()
     for (const p of shownCols) {
       if (p.leaving) continue
@@ -422,7 +453,7 @@ function Workspace() {
         }
       }
     lastRects.current = now
-  }, [cols.map((c) => c.key + (c.below ? 'v' : '') + (c.wide ? 'w' : '') + (widths[c.key] ?? '')).join(' ')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, cols.map((c) => c.key + (c.below ? 'v' : '') + (c.wide ? 'w' : '') + (widths[c.key] ?? '')).join(' ')]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resizing: the column handle (width of a grid column) and the row handle (height split of stacked sessions) set
   // the grid template live, then save it.
@@ -494,7 +525,8 @@ function Workspace() {
       description={t('sessions.description')}
       actions={
         <>
-          {!mobile && cols.length >= 2 && (
+          {!mobile && <TabsToggle />}
+          {!mobile && !tabs && cols.length >= 2 && (
             <LayoutPicker count={cols.length}>
               <Button
                 variant="ghost"
@@ -581,11 +613,13 @@ function Workspace() {
         )}
         {!mobile && (
           <StripContext.Provider value={strip_}>
-          <div className="relative flex min-w-0 flex-1">
-          <LayoutDropBar />
+          <div className={cn('relative flex min-w-0 flex-1', tabs && 'flex-col')}>
+          {tabs && <TabsBar sessions={sessions} onPick={pickTab} />}
+          {!tabs && <LayoutDropBar />}
+          {tabs && <TabsArrows onPick={pickTab} />}
           <div
             ref={strip}
-            className={cn('relative min-w-0 flex-1 pr-2 snap-x snap-proximity overflow-x-auto overflow-y-hidden', shownCols.length ? 'grid' : 'flex')}
+            className={cn('relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
             style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: rows(rowSplit) } : undefined}
             data-columns
           >
@@ -615,7 +649,7 @@ function Workspace() {
           </StripContext.Provider>
         )}
       </div>
-      {mobileOpen && focusedCol && <MobileOverlay col={focusedCol} />}
+      {mobileOpen && focusedCol && <MobileOverlay col={focusedCol} tabs={tabs} sessions={sessions} onPick={pickTab} />}
       <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   )
@@ -630,8 +664,17 @@ const ColumnFor = React.memo(function ColumnFor({ col, index, count, variant, pl
 
 /** Touch layout: the session is a full-screen layer, sized to the visual viewport so the composer stays pinned right
  *  above the on-screen keyboard. Its header opens the sessions (☰) and the app menu (⊞). */
-function MobileOverlay({ col }: { col: Col }) {
+function MobileOverlay({ col, tabs, sessions, onPick }: { col: Col; tabs: boolean; sessions: Session[] | undefined; onPick: (c: Col) => void }) {
   const ref = React.useRef<HTMLDivElement>(null)
+  const body = React.useRef<HTMLDivElement>(null)
+  const go = React.useCallback(
+    (dir: -1 | 1) => {
+      const c = stepCol(dir)
+      if (c) onPick(c)
+    },
+    [onPick],
+  )
+  useSwipe(body, tabs, go)
   React.useLayoutEffect(() => {
     const vv = window.visualViewport
     const el = ref.current
@@ -664,7 +707,11 @@ function MobileOverlay({ col }: { col: Col }) {
   }, [])
   return (
     <div ref={ref} className="fixed inset-0 z-[45] flex flex-col bg-background pr-[var(--safe-right)] pl-[var(--safe-left)]" data-touch-layer data-testid="touch-session">
-      <ColumnFor col={col} index={0} count={1} variant="mobile" />
+      <div ref={body} className="flex min-h-0 flex-1 flex-col">
+        <MobileTabsSlot.Provider value={tabs ? <TabsBar sessions={sessions} onPick={onPick} className="-mx-3 border-b-0 bg-transparent px-3 py-1" /> : null}>
+          <ColumnFor col={col} index={0} count={1} variant="mobile" />
+        </MobileTabsSlot.Provider>
+      </div>
     </div>
   )
 }
@@ -722,6 +769,7 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     [['Alt', '←'], t('sessions.shortcuts.prev')],
     [['Alt', '→'], t('sessions.shortcuts.next')],
     [['Alt', 'W'], t('sessions.shortcuts.close')],
+    [['Alt', 'T'], t('tabs.toggle')],
     ...(maxxing ? [[['Alt', 'M'], t('maxxing.toggle')] as [string[], string]] : []),
     [[MOD, 'K'], t('sessions.shortcuts.palette')],
   ]
