@@ -15,6 +15,8 @@ export const GROUPS = {
   files: ['files', 'viewer', 'media'],
   show: ['show'],
   feedback: ['feedback'],
+  // Maxxing mode (beta, off by default): its texts load only once its controls show
+  maxxing: ['maxxing'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

@@ -6,6 +6,24 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.98 - 2026-10-24
+
+Pull request #15 (tabs view), web only.
+- `web/src/pages/sessions/Tabs.tsx`: `TabsToggle`, `TabsBar` (chips of `cols`, state from the sessions list,
+  cross = `close(key)`, "Waiting" = first other col whose session is not running and is unread or in error),
+  `TabsArrows` (computer, edges of the strip), `useSwipe` (phone: > 70 px sideways in < 600 ms, ignored over an
+  element that scrolls sideways or a text field), `MobileTabsSlot` (context: the session layer hands the chips to
+  the mobile header of `Column.tsx`, between the app bar and the title).
+- `store.ts`: `tabs` (persisted in `mx-sessions`, default false, no version bump: unknown = default).
+- `index.tsx`: in tabs view every column is placed in the single grid cell with `Place.hidden` for all but the
+  focused one (`hidden` class in `ColumnShell`): columns stay mounted (no thread reload, scroll kept) and `cols`,
+  `widths`, `below`, `wide` are never touched, so turning it off shows the same strip. FLIP skipped while on;
+  grid / layouts button hidden. Alt+T toggles; Alt+Left / Right unchanged (they move the focus, hence the tab).
+- Phone: a chip navigates (`/sessions?path=…&session=…`, replace) like the session list.
+- Adapted at integration: the `maxxing` namespace (Maxxing mode, beta, off by default) is a dictionary group of
+  its own (`groups.ts`), loaded once its controls show: the French first load of `/sessions` was over the 20 kB
+  budget of `test_web_first_load` (already on `beta`, 20 086 B; 20 185 B with the tabs texts).
+
 ## 2.0.0-alpha.97 - 2026-10-24
 
 Pull requests #6 and #7 (FEU), merged as they were.
