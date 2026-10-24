@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -274,8 +275,10 @@ def _seen_path() -> Path:
 
 def issue_id(issue: dict) -> str:
     """Stable id of an issue: its code and text without the numbers ("Last backup is 31 h old" keeps the id of
-    "30 h old"; another job failing is another issue)."""
-    key = issue["code"] + ":" + "".join(c for c in issue["text"] if not c.isdigit())
+    "30 h old"; another job failing is another issue). Quoted names keep their digits ("Backup 1" / "Backup 2")."""
+    text = "".join(part if i % 2 else "".join(c for c in part if not c.isdigit())
+                   for i, part in enumerate(re.split(r'("[^"]*")', issue["text"])))
+    key = issue["code"] + ":" + text
     return hashlib.sha1(key.encode()).hexdigest()[:12]
 
 
