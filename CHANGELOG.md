@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## 2.0.0-alpha.98 - 2026-10-24
 
 Changes:
+- **Removing the Enterprise key forgets its license.** Settings -> License no longer shows the email and status of the key you removed.
 
 ## 2.0.0-alpha.97 - 2026-10-24
 
