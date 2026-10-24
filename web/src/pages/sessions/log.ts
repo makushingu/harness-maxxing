@@ -115,9 +115,14 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
   let orphans = st.orphans
   let hidden = st.hidden
   let tasks = st.tasks
+  let ownTasks = false // copy st.tasks once, on the first change of this fold
   let { count, lastModel, lastUserAt } = st
   const setTask = (tk: Task) => {
-    tasks = { ...tasks, [tk.id]: tk }
+    if (!ownTasks) {
+      tasks = { ...tasks }
+      ownTasks = true
+    }
+    tasks[tk.id] = tk
     const i = tk.tool_use_id ? toolIdx[tk.tool_use_id] : undefined
     const it = i != null ? items[i] : undefined
     if (it && it.kind === 'tool') items[i!] = { ...it, task: tk }
