@@ -1818,12 +1818,29 @@ def cmd_update(a) -> int:
         line(FAIL, "git fetch failed", err)
         return 1
     if branch != _current_branch():
+        carried = customs.list_customs() if switched else []     # the customizations live on the branch left
         code, out = _git("checkout", "-q", branch)
         if code != 0:
             code, out = _git("checkout", "-q", "-b", branch, "--track", f"origin/{branch}")
         if code != 0:
             line(FAIL, f"cannot switch to branch {branch}", out.strip()[-300:])
             return 1
+        have = {c["id"] for c in customs.list_customs(branch)}
+        todo = [c for c in carried if c["id"] not in have]
+        if todo:                                       # replayed here, then rebased like any customization below
+            customs.ensure_identity()
+            for c in todo:
+                code, out = customs.git("cherry-pick", "--allow-empty", c["commit"])
+                if code != 0:
+                    customs.git("cherry-pick", "--abort")
+                    _back_to(old)
+                    line(FAIL, f"customization \"{c['title']}\" cannot be carried to branch {branch}"
+                         f" - nothing changed, {__version__} keeps running", out.strip()[-300:])
+                    print(f"\nFor Claude (topic {update_topic()}, skill maxxing-customize): adapt it on {branch}"
+                          f"\n  cd {config.CODE} && git checkout {branch} && git cherry-pick {c['commit'][:12]}"
+                          "\n  # resolve, git add, GIT_EDITOR=true git cherry-pick --continue, then: maxxing update")
+                    return 3
+            line(OK, f"{len(todo)} customization(s) carried to branch {branch}")
     target = _rev(f"origin/{branch}")
     if config.load_config().get("update_verify_signature") and target and target != old:
         ok, detail = verify_target(target)
