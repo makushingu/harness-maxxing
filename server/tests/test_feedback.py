@@ -86,6 +86,13 @@ def test_the_cloud_rate_limit_is_passed_on(client, cloud):
     assert r.status_code == 429 and r.json()["error"] == "rate"
 
 
+def test_feedback_email_is_capped(client, cloud):
+    big = "a" * 1_000_000 + "@example.com"
+    r = client.post("/api/settings/feedback", json={"email": big, "message": "hello there"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_email"
+    assert cloud.got == [] and not config.load_config().get("feedback_email")
+
+
 def test_unreachable_or_offline_cloud(client, mx, monkeypatch):
     monkeypatch.setattr(license, "API", "http://127.0.0.1:9")            # nothing listens there
     monkeypatch.setattr(register, "_offline", lambda: False)
