@@ -13,6 +13,7 @@ verifying and importing archives is gone from this code: those servers never nee
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
 import platform
@@ -85,7 +86,7 @@ def _post(path: str, body: dict, timeout: float = 25) -> dict:
         except ValueError:
             j = {}
         raise LicenseError(j.get("message") or f"license server answered HTTP {e.code}", j.get("error") or f"http_{e.code}", j) from None
-    except (urllib.error.URLError, OSError, ValueError) as e:
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
         raise LicenseError(f"cannot reach the license server ({API}): {e}", "network") from None
 
 
