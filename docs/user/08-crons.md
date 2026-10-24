@@ -91,7 +91,8 @@ Lines outside the block are yours and never touched; they are listed read-only a
 closing line of the block gets deleted by hand, only the `maxxing cron run` lines are treated as managed: your own
 lines after it are kept.
 From a terminal: `maxxing cron list`, `maxxing cron run <id>` (runs it in your terminal and waits),
-`maxxing cron sync` (rewrites the block). Two runs of the same job never overlap.
+`maxxing cron sync` (rewrites the block), `maxxing cron deleted` (the removed jobs kept) and
+`maxxing cron restore <id>` (puts one back). Two runs of the same job never overlap.
 
 ### Memory and time limits
 
