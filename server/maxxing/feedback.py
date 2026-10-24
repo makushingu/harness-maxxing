@@ -14,6 +14,7 @@ from . import config, license, register
 
 TYPES = ("bug", "idea", "other")
 MAX_MESSAGE = 4000
+MAX_EMAIL = 254                    # as register.save
 _EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 LANGS = ("en", "fr", "es", "de", "it", "pt")
 
@@ -32,7 +33,7 @@ def defaults() -> dict:
 def send(email: str, kind: str, message: str) -> dict:
     """Send one message; raises FeedbackError (code, message, http status) when it did not go."""
     email, message = (email or "").strip(), (message or "").strip()
-    if not _EMAIL.match(email):
+    if len(email) > MAX_EMAIL or not _EMAIL.match(email):
         raise FeedbackError("invalid_email", "Enter a valid email address")
     if len(message) < 3:
         raise FeedbackError("message_required", "Write your message")
