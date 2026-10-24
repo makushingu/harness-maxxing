@@ -104,7 +104,7 @@ def status() -> dict:
     is recorded (fair source: the key is a right of use, it changes nothing in how the server runs)."""
     info = dict(config.load_config().get("license") or {})
     key = config.get_secret(KEY)
-    info.update(enabled=enabled(), has_key=bool(key), key_hint=(key[:7] + "…" + key[-4:]) if key else "", api=API)
+    info.update(enabled=enabled(), has_key=bool(key), key_hint=("HM-…" + key[-4:]) if key else "", api=API)
     return info
 
 
