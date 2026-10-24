@@ -4,6 +4,8 @@
   maxxing cron run <id> --detach   start it in its transient systemd unit (what the crontab lines call)
   maxxing cron sync       rewrite the managed crontab block from jobs.json
   maxxing cron list       print the jobs, their schedule and last result
+  maxxing cron deleted    the removed jobs kept (deleted, or gone from jobs.json after a hand edit)
+  maxxing cron restore <id>   put a removed job back, with its id
 """
 from __future__ import annotations
 
@@ -25,6 +27,9 @@ def _configure(p) -> None:
                         "runs here when systemd is not available")
     sub.add_parser("sync", help="rewrite the managed crontab block")
     sub.add_parser("list", help="list jobs")
+    sub.add_parser("deleted", help="list the removed jobs that can be restored")
+    r = sub.add_parser("restore", help="put a removed job back, with its id")
+    r.add_argument("id")
 
 
 def _handler(a) -> int:
@@ -61,6 +66,23 @@ def _handler(a) -> int:
               f"{len(text.splitlines())} lines total)")
         return 0
     zone = crons.tz()
+    if a.cron_cmd == "deleted":
+        rows = crons.deleted_jobs()
+        if not rows:
+            print("no removed jobs")
+        for d in rows:
+            j = d["job"]
+            when = dt.datetime.fromtimestamp(d.get("at") or 0, zone).strftime("%Y-%m-%d %H:%M")
+            print(f"{j['id']}  {when}  {j.get('name', '')}  - {d.get('reason', '')}")
+        return 0
+    if a.cron_cmd == "restore":
+        try:
+            j = crons.restore_job(a.id)
+        except crons.CronError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        print(f"restored {j['id']}  {j['name']}  ({'on' if j['enabled'] else 'off'})")
+        return 0
     jobs = crons.list_jobs()
     if not jobs:
         print("no jobs")
@@ -77,4 +99,4 @@ def _handler(a) -> int:
     return 0
 
 
-cli.register("cron", "scheduled jobs (run, sync, list)", _configure, _handler)
+cli.register("cron", "scheduled jobs (run, sync, list, deleted, restore)", _configure, _handler)
