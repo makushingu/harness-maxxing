@@ -186,6 +186,16 @@ def test_removing_the_key_frees_its_seat(server, mx, capsys):
     assert not license.status()["has_key"]
 
 
+def test_remove_key_forgets_the_license_info(server, mx):
+    config.set_secret(license.KEY, "HM-ABCD-EFGH-JKMN-PQRS")
+    license._save_info({"email": "boss@example.com", "kind": "enterprise", "status": "active", "max_servers": 3},
+                       activation_id="a1", moved_to_git=True)
+    license.remove_key()
+    lic = config.load_config().get("license") or {}
+    assert lic == {"moved_to_git": True}, lic
+    assert "email" not in license.status()
+
+
 def test_the_key_from_the_api(server, client):
     c = client
     assert c.get("/api/settings/license").json()["has_key"] is False
