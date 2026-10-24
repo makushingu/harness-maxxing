@@ -89,6 +89,8 @@ def test_health_issue_marked_seen(client, org, services, monkeypatch):
     # the same job failing with another exit code keeps its mark (numbers left out); another job is a new issue
     assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Nightly" failed (code 7)'}) == job["id"]
     assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Weekly" failed (code 2)'}) != job["id"]
+    assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Backup 1" failed (code 1)'}) \
+        != health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Backup 2" failed (code 1)'})
     # the mark ends after 24 h
     marks = json.loads(health._seen_path().read_text())
     health._seen_path().write_text(json.dumps({job["id"]: marks[job["id"]] - health.SEEN_TTL_S - 1}))
