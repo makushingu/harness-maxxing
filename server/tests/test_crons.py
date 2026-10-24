@@ -440,3 +440,41 @@ def test_shell_job_gets_the_claude_turn_environment(org, tmp_path):
     j = crons.create_job({"name": "env", "command": "echo $CLAUDE_CODE_OAUTH_TOKEN; echo $CLAUDE_CONFIG_DIR"})
     r = crons.run_job(j["id"])
     assert r["ok"] and r["output_tail"].splitlines() == ["sk-test-oauth", str(tmp_path / "own-claude")]
+
+
+def test_removed_jobs_are_kept_and_restored(org, monkeypatch, capsys):
+    """A job deleted, or dropped by a hand edit of jobs.json, stays findable and comes back with its id."""
+    from maxxing import cmd_cron
+    keep = crons.create_job({"name": "Keep", "schedule": "0 5 * * *", "command": "echo keep"})
+    a = crons.create_job({"name": "Radar - PR", "schedule": "0 3 1 1 *", "command": "echo a", "enabled": False})
+    b = crons.create_job({"name": "Gone by hand", "schedule": "0 4 * * *", "command": "echo b"})
+    assert crons.deleted_jobs() == []
+
+    crons.delete_job(a["id"])
+    data = json.loads(crons.jobs_path().read_text())            # a session rewrites jobs.json without b
+    data["jobs"] = [j for j in data["jobs"] if j["id"] != b["id"]]
+    crons.jobs_path().write_text(json.dumps(data))
+    crons.sync_crontab()                                        # what `maxxing cron sync` does after a hand edit
+
+    rows = crons.deleted_jobs()
+    assert [(d["job"]["id"], d["reason"]) for d in rows] == [
+        (b["id"], "vanished (jobs.json edited outside Harness Maxxing)"), (a["id"], "deleted")]
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="deleted")) == 0
+    assert a["id"] in capsys.readouterr().out
+
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="restore", id=a["id"])) == 0
+    r = crons.get_job(a["id"])
+    assert r["name"] == "Radar - PR" and r["enabled"] is False and r["created"] == a["created"]
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="restore", id=a["id"])) == 2      # already there
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="restore", id="c_000000")) == 2   # never existed
+    assert {j["id"] for j in crons.list_jobs()} == {keep["id"], a["id"]}
+
+
+def test_a_hand_edit_noticed_at_the_next_save(org):
+    """No `maxxing cron sync` after the hand edit: the next save through the API still archives the lost job."""
+    a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
+    data = json.loads(crons.jobs_path().read_text())
+    data["jobs"] = []
+    crons.jobs_path().write_text(json.dumps(data))
+    crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
+    assert [d["job"]["id"] for d in crons.deleted_jobs()] == [a["id"]]
