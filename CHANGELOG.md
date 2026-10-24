@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.97 - 2026-10-24
+
+Changes:
+- **A scheduled job that disappears can be brought back.** Every job removed from the list, deleted from the Crons
+  page or dropped when the jobs file was edited by hand, is kept: `maxxing cron deleted` lists them and
+  `maxxing cron restore <id>` puts one back with its id, on or off as it was.
+- **The CPU meter of the health dot no longer freezes.** After ten minutes without a look, it could stay stuck on its
+  last value until the service restarted.
+
 ## 2.0.0-alpha.96 - 2026-10-23
 
 Changes:

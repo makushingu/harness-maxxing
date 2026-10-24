@@ -6,6 +6,23 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.97 - 2026-10-24
+
+Pull requests #6 and #7 (FEU), merged as they were.
+- #7 Removed cron jobs kept: `crons._save_raw(jobs, reason)` calls `_remember()` before and after the write; it
+  compares with `<state>/crons/jobs.seen.json` (the list as last written or synced) and appends every job gone to
+  `<state>/crons/deleted.jsonl` (`{at, reason, job}`, last `MAX_DELETED` = 200), reason `deleted` (from
+  `delete_job`) or `vanished (jobs.json edited outside Harness Maxxing)` (noticed at the next save or at
+  `sync_crontab()` without a job list). Never raises; warning in the server log. `crons.deleted_jobs()`,
+  `crons.restore_job(id)` (CronError `exists` / `not_found`); CLI `maxxing cron deleted` and
+  `maxxing cron restore <id>`. Existing installs start the trace at their first save (no `jobs.seen.json` yet).
+  Skill `maxxing-cron`: hand edits read and write in one step under `flock <state>/.crons.lock`.
+  Tests: `test_crons.py::test_removed_jobs_are_kept_and_restored`, `test_a_hand_edit_noticed_at_the_next_save`.
+- #6 `health.cpu_pct()`: after a pause of more than 10 min the 0.1 s sample fell into the "calls closer than 1 s
+  repeat the last value" guard and never saved the new baseline, so the value stayed frozen; the guard is now an
+  `elif`. Test: `test_system.py::test_cpu_after_a_long_pause_is_measured_again`.
+- Docs: `28-mcp.md`, `<service>` and `<your PC>` in code spans (they vanished in the HTML of the public docs).
+
 ## 2.0.0-alpha.96 - 2026-10-23
 
 Pull requests #3, #5 and #4 (FEU), adapted at integration.

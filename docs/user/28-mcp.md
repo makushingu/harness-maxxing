@@ -31,7 +31,7 @@ States are checked in the background when you open the page and with **Check** (
 
 ## Add a server
 
-Simplest: ask Claude in the topic that needs it - "connect the MCP of <service>, here is its address". Or
+Simplest: ask Claude in the topic that needs it - "connect the MCP of `<service>`, here is its address". Or
 **Add a server**:
 
 - **Name**: short, letters, digits, `-` (e.g. `google-ads`).
@@ -78,7 +78,7 @@ downloaded from your server.)
 2. Download **Harness PC** (already linked to this server, valid 15 minutes) and open it - or paste the command shown
    in PowerShell / a terminal. On Windows, SmartScreen may say "Windows protected your PC": **More info** -> **Run
    anyway** (Harness PC is not signed by a publisher yet). It needs no administrator rights.
-3. The card then asks **"<your PC> wants to connect"**, with the address it connected from: click **Yes, it is my PC**. Until then nothing reaches that
+3. The card then asks **"`<your PC>` wants to connect"**, with the address it connected from: click **Yes, it is my PC**. Until then nothing reaches that
    computer - if you do not recognise the name (someone else used your download link), click **Refuse**: it is
    disconnected and forgets your server. Every session can then use the browser tools (`harness-pc`).
 
