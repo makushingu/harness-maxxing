@@ -443,7 +443,7 @@ URLs without query / fragment / userinfo. A channel with more than 64 MB waiting
   (`maxxing custom check`).
 
 ## maxxing.license  (owner: core)
-The optional Enterprise key: `activate(key)`, `release()`, `remove_key()`, `status()` (`has_key`, `key_hint`, never
+The optional Enterprise key: `activate(key)`, `release()`, `remove_key()`, `status()` (`has_key`, `key_hint` = `HM-…` + the last 4 characters, never
 the key) talk to `{API}/v1/activate|release` (activation token kept as `license_seat`, only to free the seat;
 machine = sha256("harness-maxxing:" + /etc/machine-id)). Also `API`, `USER_AGENT`, `disk_version()` (used by
 `register.py`, `feedback.py`).

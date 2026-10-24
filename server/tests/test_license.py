@@ -140,7 +140,8 @@ def test_activate_stores_the_seat_and_the_license(server, mx, capsys):
     assert config.get_secret(license.KEY) == "HM-ABCD-EFGH-JKMN-PQRS"
     st = license.status()
     assert not st["enabled"] and st["has_key"] and st["email"] == "buyer@example.com" and st["kind"] == "paid"
-    assert st["key_hint"].startswith("HM-ABCD")
+    assert st["key_hint"] == "HM-…PQRS"  # 4 of the 16 secret characters at most
+    assert not any(part in st["key_hint"] for part in ("ABCD", "EFGH", "JKMN"))
     assert "Enterprise key recorded" in capsys.readouterr().out
     path, body = server.calls[0]
     assert path == "/v1/activate" and len(body["machine_id"]) == 64 and body["hostname"]
