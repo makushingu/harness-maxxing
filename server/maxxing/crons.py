@@ -386,16 +386,21 @@ def deleted_jobs() -> list[dict]:
     return out
 
 
+SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
 def restore_job(cid: str) -> dict:
     """Put back the most recent archived copy of job `cid`, with its id (CronError if absent or still there)."""
     with _lock:
         jobs = _load_raw()
         if any(j["id"] == cid for j in jobs):
             raise CronError(f"job {cid} exists", "exists")
+        if not SAFE_ID.fullmatch(str(cid)):              # the id goes into a crontab line: never shell syntax
+            raise CronError(f"invalid job id {cid!r}", "invalid_id")
         job = next((d["job"] for d in deleted_jobs() if d["job"]["id"] == cid), None)
         if job is None:
             raise CronError(f"no removed job {cid}", "not_found")
-        jobs.append({**job, "updated": time.time()})
+        jobs.append({**_clean(job), "id": cid, "updated": time.time()})   # checked like a new job
         _save_raw(jobs)
         sync_crontab(jobs)
     return get_job(cid)  # type: ignore[return-value]
@@ -785,7 +790,7 @@ def managed_lines(jobs: list[dict]) -> list[str]:
     whole = guard and _whole_hours_apart()
     out = []
     for j in jobs:
-        if not j.get("enabled", True):
+        if not j.get("enabled", True) or not SAFE_ID.fullmatch(str(j.get("id"))):
             continue
         try:
             sched = validate(j.get("schedule", ""))
