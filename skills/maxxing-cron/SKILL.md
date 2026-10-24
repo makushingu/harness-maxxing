@@ -34,8 +34,9 @@ weekdays 08:30 · `0 9 1 * *` 1st of the month 09:00 · `0 */6 * * *` every 6 h.
 ## Without the UI (CLI + file)
 1. Read `{{STATE_DIR}}/crons/jobs.json` (`{"version": 1, "jobs": [...]}`).
 2. Add or edit a job object with the fields above plus a unique `id` (`c_` + 6 hex chars, e.g.
-   `c_3fa91c`), `created`/`updated` (Unix seconds). Keep unknown fields. Write atomically (write a
-   temp file in the same folder, then rename).
+   `c_3fa91c`), `created`/`updated` (Unix seconds). Keep unknown fields and every other job. Read and write in
+   the same step, under the lock the server uses (`flock {{STATE_DIR}}/.crons.lock python3 - <<'EOF' … EOF`),
+   never from a copy read earlier; write atomically (write a temp file in the same folder, then rename).
 3. `maxxing cron sync` - rewrites the crontab block. `maxxing cron list` - check.
 4. `maxxing cron run <id>` - test it now (records a run, sends the report per `notify`).
 
@@ -45,5 +46,7 @@ weekdays 08:30 · `0 9 1 * *` 1st of the month 09:00 · `0 */6 * * *` every 6 h.
 - Shell jobs: absolute paths, idempotent scripts, write their own logs if long; the run keeps the
   last 2 KB of output.
 - Long work: raise `timeout_s` rather than chaining jobs. Overlapping runs of the same job are skipped.
+- A job disappeared: `maxxing cron deleted` lists the removed ones (deleted, or gone after a hand edit of
+  jobs.json), `maxxing cron restore <id>` puts one back with its id.
 - Debug: `maxxing cron list` (last result), `maxxing cron run <id>`, `crontab -l`, `systemctl status cron`.
 - Never edit lines inside the `# >>> claude-maxxing (managed) >>>` block by hand: they are rewritten.
