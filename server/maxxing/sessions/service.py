@@ -26,6 +26,7 @@ log = logging.getLogger("maxxing.sessions")
 READ_CHUNK = 4 * 1024 * 1024          # max bytes normalised per read_events call
 BACK_CHUNK = 256 * 1024               # backward reading step
 BACK_SCAN_MAX = 64 * 1024 * 1024      # max bytes scanned by one read_back call (then more_before)
+TASK_START_SCAN_MAX = 32 * 1024 * 1024  # how far back read_back looks for the task_started of a task in its page
 STOP_WAIT_S = 10.0
 KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"]
 _MODEL_RE = re.compile(rb'"model"\s*:\s*"(claude-[a-z0-9.-]+)"')
@@ -731,8 +732,44 @@ def read_back(sid: str, end: int | None = None, limit: int = 200) -> dict:
                     count += sum(e["type"] != "task" for e in evs)   # frequent progress lines: not thread rows
                     if count >= limit:
                         break
-    events = [e for g in reversed(groups) for e in g]
+        events = [e for g in reversed(groups) for e in g]
+        _add_task_starts(f, start, events)
     return {"events": events, "start": start, "next": end, "more_before": start > 0}
+
+
+_START_FIELDS = ("kind", "background", "description", "agent_type")
+
+
+def _add_task_starts(f, before: int, events: list[dict]) -> None:
+    """A task whose task_started line is before the page (a long agent: its progress lines only) would show
+    without its kind (the UI hides tasks of unknown kind): copy kind / background / description / agent_type
+    of that line onto the task's first event of the page. Only lines holding `task_started` are parsed."""
+    first: dict[str, dict] = {}
+    for e in events:
+        if e["type"] == "task":
+            first.setdefault(e["id"], e)
+            if "kind" in e:
+                first[e["id"]] = {}                   # its start is in the page
+    want = {tid: e for tid, e in first.items() if e}
+    pos, carry = before, b""
+    while want and pos > 0 and before - pos < TASK_START_SCAN_MAX:
+        n = min(BACK_CHUNK, pos)
+        pos -= n
+        f.seek(pos)
+        buf = f.read(n) + carry
+        i = buf.find(b"\n") if pos > 0 else -1
+        carry, body = buf[: i + 1], buf[i + 1:]
+        if pos > 0 and i < 0:
+            carry, body = buf, b""
+        for ln in reversed(body.split(b"\n")):
+            if b"task_started" not in ln:
+                continue
+            for ev in normalize.normalize_lines([ln.decode("utf-8", "replace")]):
+                tgt = want.pop(ev["id"], None) if ev["type"] == "task" and "kind" in ev else None
+                if tgt is not None:
+                    for k in _START_FIELDS:
+                        if k in ev and k not in tgt:
+                            tgt[k] = ev[k]
 
 
 def compact_log(sid: str, dry_run: bool = False) -> dict:
