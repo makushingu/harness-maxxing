@@ -36,6 +36,18 @@ def test_proc_readers():
     assert c is None or 0 <= c <= 100
 
 
+def test_cpu_after_a_long_pause_is_measured_again(monkeypatch):
+    """After 10 min without a call, every later call repeated the last value forever (seen stuck at 90 %)."""
+    ticks = iter([(100, 1000), (100, 1010), (101, 1020)])
+    monkeypatch.setattr(health, "_cpu_times", lambda: next(ticks))
+    monkeypatch.setattr(health.time, "sleep", lambda s: None)
+    monkeypatch.setattr(health, "_cpu_last", 90.2)
+    monkeypatch.setattr(health, "_cpu_prev", (time.time() - 700, 0, 0))
+    assert health.cpu_pct() == 0.0            # the 0.1 s sample: no busy tick out of 10
+    health._cpu_prev = (time.time() - 5, *health._cpu_prev[1:])
+    assert health.cpu_pct() == 10.0           # the next call is a real measure, not the old 90.2
+
+
 def test_health(client, org, services, monkeypatch):
     monkeypatch.setattr(health, "disk", lambda path=None: {"total": 100e9, "free": 5e9, "pct": 95.0})
     monkeypatch.setattr(health, "meminfo", lambda: {"total": 8 << 30, "avail": 100 << 20})
