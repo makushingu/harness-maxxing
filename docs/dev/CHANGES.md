@@ -6,6 +6,10 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.98 - 2026-10-24
+
+Radar fixes (FEU).
+
 ## 2.0.0-alpha.97 - 2026-10-24
 
 Pull requests #6 and #7 (FEU), merged as they were.

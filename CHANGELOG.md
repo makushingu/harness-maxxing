@@ -3,6 +3,10 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.98 - 2026-10-24
+
+Changes:
+
 ## 2.0.0-alpha.97 - 2026-10-24
 
 Changes:
