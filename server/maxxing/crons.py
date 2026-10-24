@@ -1,7 +1,9 @@
 """Scheduled jobs: cron expressions, job store, run history, crontab bridge and the job runner.
 
 Storage (state_dir("crons")):
-  jobs.json     {"version": 1, "jobs": [job]}         - edited by the API only
+  jobs.json     {"version": 1, "jobs": [job]}         - edited by the API (and sometimes by hand)
+  jobs.seen.json the job list as last written or synced - to notice a job that vanished
+  deleted.jsonl {at, reason, job} per removed job       - last MAX_DELETED kept; `maxxing cron restore <id>`
   runs.jsonl    one Run per line (last MAX_RUNS kept)  - appended by `maxxing cron run` (other process)
   sessions.json {cron_id: session_id}                  - session reused by `reuse_session` Claude jobs
   locks/<id>.lock                                      - flock held while a job runs (no overlap)
@@ -22,6 +24,7 @@ from __future__ import annotations
 import datetime as dt
 import fcntl
 import json
+import logging
 import os
 import re
 import secrets as _secrets
@@ -41,6 +44,7 @@ from . import config
 BLOCK_BEGIN = "# >>> claude-maxxing (managed) >>>"
 BLOCK_END = "# <<< claude-maxxing <<<"
 MAX_RUNS = 2000
+MAX_DELETED = 200
 OUTPUT_TAIL = 2048
 DEFAULT_TIMEOUT = 3600
 NOTIFY_POLICIES = ("never", "failure", "always")
@@ -51,6 +55,7 @@ UNIT_RUNTIME_MARGIN_S = 120              # RuntimeMaxSec of a job unit = timeout
 SYSTEMD_DIR = Path("/run/systemd/system")   # present when systemd is PID 1 (absent in most containers)
 
 _lock = config.ProcessLock("crons")      # jobs.json + crontab: also written by `maxxing cron` and the runs
+log = logging.getLogger("maxxing.crons")
 
 
 class CronError(ValueError):
@@ -331,8 +336,69 @@ def _load_raw() -> list[dict]:
     return [j for j in (jobs or []) if isinstance(j, dict) and j.get("id")]
 
 
-def _save_raw(jobs: list[dict]) -> None:
+def _save_raw(jobs: list[dict], reason: str = "removed") -> None:
+    _remember(_load_raw(), "vanished (jobs.json edited outside Harness Maxxing)")
     config.write_json(jobs_path(), {"version": 1, "jobs": jobs})
+    _remember(jobs, reason)
+
+
+def deleted_path() -> Path:
+    return _dir() / "deleted.jsonl"
+
+
+def _remember(jobs: list[dict], reason: str) -> None:
+    """Archive in deleted.jsonl every job of the last known list that is not in `jobs` any more, then remember
+    `jobs`. A deleted job (or one dropped by a hand edit of jobs.json) can then be found and restored. Never raises."""
+    try:
+        seen_p = _dir() / "jobs.seen.json"
+        seen = config.read_json(seen_p, None)
+        ids = {j.get("id") for j in jobs}
+        gone = [j for j in seen if isinstance(j, dict) and j.get("id") not in ids] if isinstance(seen, list) else []
+        if gone:
+            p = deleted_path()
+            lines = p.read_text(encoding="utf-8").splitlines(keepends=True) if p.exists() else []
+            for j in gone:
+                log.warning("cron job %s (%s) %s", j.get("id"), j.get("name"), reason)
+                lines.append(json.dumps({"at": time.time(), "reason": reason, "job": j}, ensure_ascii=False) + "\n")
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text("".join(lines[-MAX_DELETED:]), encoding="utf-8")
+            os.replace(tmp, p)
+        if gone or seen != jobs:
+            config.write_json(seen_p, jobs)
+    except Exception as e:  # noqa: BLE001 - the trace must never break a save
+        log.warning("could not keep the trace of removed cron jobs: %s", e)
+
+
+def deleted_jobs() -> list[dict]:
+    """The archived jobs, most recent first ({at, reason, job})."""
+    try:
+        lines = deleted_path().read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    out = []
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and isinstance(d.get("job"), dict) and d["job"].get("id"):
+            out.append(d)
+    return out
+
+
+def restore_job(cid: str) -> dict:
+    """Put back the most recent archived copy of job `cid`, with its id (CronError if absent or still there)."""
+    with _lock:
+        jobs = _load_raw()
+        if any(j["id"] == cid for j in jobs):
+            raise CronError(f"job {cid} exists", "exists")
+        job = next((d["job"] for d in deleted_jobs() if d["job"]["id"] == cid), None)
+        if job is None:
+            raise CronError(f"no removed job {cid}", "not_found")
+        jobs.append({**job, "updated": time.time()})
+        _save_raw(jobs)
+        sync_crontab(jobs)
+    return get_job(cid)  # type: ignore[return-value]
 
 
 DEFAULTS: dict[str, Any] = {
@@ -468,7 +534,7 @@ def delete_job(cid: str) -> bool:
         rest = [j for j in jobs if j["id"] != cid]
         if len(rest) == len(jobs):
             return False
-        _save_raw(rest)
+        _save_raw(rest, "deleted")
         sync_crontab(rest)
         m = config.read_json(_dir() / "sessions.json", {}) or {}
         if m.pop(cid, None):
@@ -740,6 +806,7 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
     with _lock:
         if jobs is None:
             jobs = _load_raw()
+            _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
         outside, _ = split_crontab(read_crontab())
         while outside and not outside[-1].strip():
             outside.pop()
