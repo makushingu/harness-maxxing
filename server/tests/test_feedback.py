@@ -1,6 +1,7 @@
 """Feedback button: messages sent to the authors' cloud (maxxing/feedback.py, /api/settings/feedback)."""
 from __future__ import annotations
 
+import http.client
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -91,6 +92,18 @@ def test_feedback_email_is_capped(client, cloud):
     r = client.post("/api/settings/feedback", json={"email": big, "message": "hello there"})
     assert r.status_code == 400 and r.json()["error"] == "invalid_email"
     assert cloud.got == [] and not config.load_config().get("feedback_email")
+
+
+def test_a_cut_answer_is_unreachable_not_a_500(client, mx, monkeypatch):
+    def cut(*a, **k):
+        raise http.client.IncompleteRead(b"x")
+    monkeypatch.setattr(register, "_offline", lambda: False)
+    monkeypatch.setattr("urllib.request.urlopen", cut)
+    r = client.post("/api/settings/feedback", json={"email": "a@b.io", "message": "hello"})
+    assert r.status_code == 502 and r.json()["error"] == "unreachable"
+    with pytest.raises(license.LicenseError) as e:
+        license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert e.value.code == "network" and not config.get_secret(license.KEY)
 
 
 def test_unreachable_or_offline_cloud(client, mx, monkeypatch):
