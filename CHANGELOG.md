@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.98 - 2026-10-24
+
+Changes:
+- **Tabs view on the Sessions page.** The **Tabs** button (Alt+T) shows one session at a time, full width, with your
+  open sessions as chips above it: each chip shows whether its session is working, has an unread answer or stopped
+  on an error. Click a chip, or the arrows on the edges of the session (Alt+← / Alt+→), to change session; its cross
+  closes it, and **Waiting** jumps to the next session that waits for your answer. On a phone, swipe sideways on
+  the session. Click **Tabs** again and your columns are back exactly as they were.
+
 ## 2.0.0-alpha.97 - 2026-10-24
 
 Changes:
