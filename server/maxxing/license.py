@@ -144,9 +144,10 @@ def remove_key() -> dict:
             pass
     config.set_secret(KEY, None)
     config.set_secret(SEAT, None)
-    cfg = config.load_config()
-    lic = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
-    config.update_config(license=lic)
+    with config._lock:                     # replaced, not merged: update_config would keep the old info
+        cfg = config.load_config()
+        cfg["license"] = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
+        config.save_config(cfg)
     return {"ok": True, "freed": freed}
 
 
