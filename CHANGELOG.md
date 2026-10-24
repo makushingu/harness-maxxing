@@ -11,6 +11,7 @@ Changes:
 - **A network answer cut short no longer gives an error 500** when you send feedback or activate a license key: you get the usual "cannot be reached" message.
 - **Registering twice at the same moment no longer creates two entries** on the Harness Maxxing cloud.
 - **Two server problems that differ only by a number in a name** (jobs "Backup 1" and "Backup 2") are now separate: marking one as seen no longer hides the other.
+- **Two server problems marked as seen at the same moment both stay marked.**
 
 - **A key activation the license server did not complete leaves nothing behind.** Before, the key was recorded without a seat and the page showed an error 500.
 

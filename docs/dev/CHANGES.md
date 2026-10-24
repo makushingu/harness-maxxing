@@ -16,6 +16,7 @@ Radar fixes (FEU).
 - rb6871725 `feedback.send()` and `license._post()` also catch `http.client.HTTPException` (IncompleteRead, RemoteDisconnected...) -> `unreachable` 502 / `LicenseError("network")`. Test: `test_feedback.py::test_a_cut_answer_is_unreachable_not_a_500`.
 - rdea19bdd `register.save`, `sync` and `heartbeat` run one at a time (`_serialized`, module `threading.RLock`): two saves at once both POSTed `/v1/register` without a token (two rows, the first token lost). Test: `test_register.py::test_concurrent_saves_make_one_row`.
 - rb81922ab `health.issue_id()` keeps the digits inside double quotes (names) and drops the others (ages, counts, exit codes). A mark on such an issue made before this version is lost once. Test: `test_system.py::test_health_issue_marked_seen`.
+- rde63e81a `health.mark_seen()` and the write of `_apply_seen()` read-modify-write `health-seen.json` under `ProcessLock("health-seen")` (two marks at once kept only one). Test: `test_system.py::test_two_marks_at_once_are_both_kept`.
 
 - re74d3a46 `license.activate()` raises `LicenseError(code="bad_answer")` when the answer has no string `token`, before writing the key, the seat or the info (it was a KeyError -> 500 after `set_secret(KEY)`). Test: `test_license.py::test_activate_without_token_leaves_no_key`.
 
