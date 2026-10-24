@@ -267,6 +267,7 @@ def _issue(level: str, code: str, text: str) -> dict:
 
 # ---- issues marked as seen ------------------------------------------------------------------
 SEEN_TTL_S = 24 * 3600              # a seen issue still there comes back after this
+_seen_lock = config.ProcessLock("health-seen")   # read-modify-write of health-seen.json: two marks at once lost one
 
 
 def _seen_path() -> Path:
@@ -289,32 +290,34 @@ def _read_seen() -> dict[str, float]:
 
 def _apply_seen(issues: list[dict]) -> None:
     """Adds `id` and `seen` to each issue; forgets the marks of issues gone or older than SEEN_TTL_S."""
-    seen = _read_seen()
-    now = time.time()
-    keep: dict[str, float] = {}
-    for i in issues:
-        i["id"] = issue_id(i)
-        at = seen.get(i["id"])
-        i["seen"] = at is not None and now - at < SEEN_TTL_S
-        if i["seen"]:
-            keep[i["id"]] = at
-    if keep != seen:
-        try:
-            config.write_json(_seen_path(), keep)
-        except OSError:
-            pass
+    with _seen_lock:
+        seen = _read_seen()
+        now = time.time()
+        keep: dict[str, float] = {}
+        for i in issues:
+            i["id"] = issue_id(i)
+            at = seen.get(i["id"])
+            i["seen"] = at is not None and now - at < SEEN_TTL_S
+            if i["seen"]:
+                keep[i["id"]] = at
+        if keep != seen:
+            try:
+                config.write_json(_seen_path(), keep)
+            except OSError:
+                pass
 
 
 def mark_seen(iid: str, seen: bool = True) -> bool:
     """Marks a current issue as seen (or not): False when no current issue has that id."""
     if iid not in {i["id"] for i in collect(force=True)["issues"]}:
         return False
-    marks = _read_seen()
-    if seen:
-        marks[iid] = time.time()
-    else:
-        marks.pop(iid, None)
-    config.write_json(_seen_path(), marks)
+    with _seen_lock:
+        marks = _read_seen()
+        if seen:
+            marks[iid] = time.time()
+        else:
+            marks.pop(iid, None)
+        config.write_json(_seen_path(), marks)
     invalidate_cache()
     return True
 
