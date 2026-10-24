@@ -16,11 +16,13 @@ stop the row; it lives in secrets.json, never in the Keys vault.
 """
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
 import platform
 import re
+import threading
 import time
 from pathlib import Path
 import urllib.error
@@ -31,6 +33,7 @@ from . import config, license
 log = logging.getLogger(__name__)
 
 TOKEN = "register_token"          # secrets.json
+_sync_lock = threading.RLock()     # one save / sync / heartbeat at a time: two at once made two rows
 EVERY = 24 * 3600
 DEFAULTS = {"count": True, "email": "", "news": False, "asked": False}
 MIGRATED = "register_migrated_a94"   # config.json: the one-time "counter on unless the user was asked" is done
@@ -162,10 +165,19 @@ def _payload(s: dict) -> dict:
     return body
 
 
+def _serialized(fn):
+    @functools.wraps(fn)
+    def run(*a, **k):
+        with _sync_lock:
+            return fn(*a, **k)
+    return run
+
+
 def _meta(**kw) -> None:
     config.update_config(register_meta={**(config.load_config().get("register_meta") or {}), **kw})
 
 
+@_serialized
 def sync() -> dict:
     """Make the cloud match the settings: create / update the row, or delete it. Never raises."""
     s, tok = settings(), config.get_secret(TOKEN)
@@ -192,6 +204,7 @@ def sync() -> dict:
     return state()
 
 
+@_serialized
 def save(count: bool | None = None, email: str | None = None, news: bool | None = None, asked: bool | None = None) -> dict:
     cur = settings()
     new = dict(cur)
@@ -221,6 +234,7 @@ def heartbeat_due() -> bool:
     return time.time() - float((config.load_config().get("register_meta") or {}).get("beat_at") or 0) > EVERY - 600
 
 
+@_serialized
 def heartbeat() -> dict:
     """The daily signal (version, + system and health codes when the counter is on). Unknown on the cloud (deleted
     from the admin) -> registered again."""

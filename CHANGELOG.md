@@ -9,6 +9,7 @@ Changes:
 - **Removing the Enterprise key forgets its license.** Settings -> License no longer shows the email and status of the key you removed.
 - **The feedback form refuses an email address longer than 254 characters**, instead of sending it and keeping it in the settings.
 - **A network answer cut short no longer gives an error 500** when you send feedback or activate a license key: you get the usual "cannot be reached" message.
+- **Registering twice at the same moment no longer creates two entries** on the Harness Maxxing cloud.
 
 - **A key activation the license server did not complete leaves nothing behind.** Before, the key was recorded without a seat and the page showed an error 500.
 

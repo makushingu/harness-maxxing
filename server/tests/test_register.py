@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -183,6 +184,22 @@ def test_heartbeat_registers_again_when_the_cloud_forgot_us(cloud):
     cloud.rows.clear()                              # deleted from the admin
     register.heartbeat()
     assert config.get_secret(register.TOKEN) != tok and len(cloud.rows) == 1
+
+
+def test_concurrent_saves_make_one_row(mx, monkeypatch):
+    monkeypatch.delenv("MAXXING_LICENSE_PING", raising=False)
+    rows = []
+
+    def call(method, path, body):
+        time.sleep(0.3)
+        if method == "POST" and not body.get("token"):
+            rows.append(1)
+        return {"ok": True, "token": f"t{len(rows)}"}
+    monkeypatch.setattr(register, "_call", call)
+    ts = [threading.Thread(target=register.save, kwargs={"email": "a@b.co"}) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert rows == [1] and config.get_secret(register.TOKEN) == "t1"
 
 
 def test_nothing_is_sent_when_off_or_offline(mx, monkeypatch):
