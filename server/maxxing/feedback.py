@@ -7,6 +7,7 @@ sent: no logs, no files, no session content.
 """
 from __future__ import annotations
 
+import http.client
 import re
 import urllib.error
 
@@ -47,7 +48,7 @@ def send(email: str, kind: str, message: str) -> dict:
             "lang": lang if lang in LANGS else "en", "name": ((cfg.get("profile") or {}).get("name") or "")[:100]}
     try:
         r = register._call("POST", "/v1/feedback", body)
-    except (urllib.error.URLError, OSError, ValueError):
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError):
         raise FeedbackError("unreachable", "The Harness Maxxing cloud cannot be reached, try again later", 502) from None
     if not r.get("ok"):
         code = r.get("error") or "failed"
