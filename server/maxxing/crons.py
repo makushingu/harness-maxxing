@@ -25,6 +25,7 @@ import datetime as dt
 import fcntl
 import json
 import logging
+import math
 import os
 import re
 import secrets as _secrets
@@ -398,6 +399,9 @@ def deleted_jobs() -> list[dict]:
         except ValueError:
             continue
         if isinstance(d, dict) and isinstance(d.get("job"), dict) and d["job"].get("id"):
+            at = d.get("at")
+            if not isinstance(at, (int, float)) or isinstance(at, bool) or not math.isfinite(at):
+                d["at"] = 0
             out.append(d)
     return out
 
