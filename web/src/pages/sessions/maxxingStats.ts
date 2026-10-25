@@ -14,6 +14,18 @@ const samples: Sample[] = []
 const delays: { t: number; ms: number }[] = []
 const finishedAt = new Map<string, number>()
 
+/** The browser clock went back (NTP, wake from sleep): move what is stored back as much, so no time is
+ * counted negative and the next samples are not merged into one taken "in the future". */
+function rewind(now: number) {
+  let last = Math.max(samples[samples.length - 1]?.t ?? -Infinity, delays[delays.length - 1]?.t ?? -Infinity)
+  for (const at of finishedAt.values()) last = Math.max(last, at)
+  if (last <= now) return
+  const back = last - now
+  for (const s of samples) s.t -= back
+  for (const d of delays) d.t -= back
+  for (const [id, at] of finishedAt) finishedAt.set(id, at - back)
+}
+
 function trim(now: number) {
   while (samples.length && samples[0].t < now - WINDOW_MS) samples.shift()
   while (delays.length && delays[0].t < now - WINDOW_MS) delays.shift()
@@ -21,20 +33,23 @@ function trim(now: number) {
 
 /** A session finished its turn (or its plan waits): the clock of the user's answer starts. */
 export function onFinished(id: string, now = Date.now()) {
+  rewind(now)
   finishedAt.set(id, now)
 }
 
 /** The user sent a prompt to a session: how long it waited for them, if it was waiting. */
 export function onSent(id: string, now = Date.now()) {
+  rewind(now)
   const at = finishedAt.get(id)
   if (at === undefined) return
   finishedAt.delete(id)
-  delays.push({ t: now, ms: now - at })
+  delays.push({ t: now, ms: Math.max(0, now - at) })
   trim(now)
 }
 
 /** How many sessions work and how many wait for the user right now (at most one sample every 2 s). */
 export function sample(running: number, waiting: number, now = Date.now()) {
+  rewind(now)
   const last = samples[samples.length - 1]
   if (last && now - last.t < SAMPLE_MS) {
     last.running = Math.max(last.running, running)
@@ -57,6 +72,7 @@ export type MaxxingScore = {
 }
 
 export function score(now = Date.now()): MaxxingScore {
+  rewind(now)
   trim(now)
   let run = 0
   let all = 0
