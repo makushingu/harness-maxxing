@@ -6,6 +6,30 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.99 - 2026-10-25
+
+Team (`team_page`, off by default; plan: chats between people, never between Claudes).
+- `maxxing/team.py`: chats in `<state>/team/team.json` (format in the module docstring), files uploaded to
+  `<workspace>/team/attachments/YYYY-MM/`. DM id = `d_` + sha256(sorted addresses)[:16] (same on both servers),
+  group id `g_<hex16>`, message / option ids global (`_ID`), so an event means the same thing everywhere.
+  `apply_remote(frm, contact, event)` applies `chat|message|vote|react` from a peer after checking membership
+  (only the group admin sends `chat`; a sender can only write as itself). `summarize(cid, ids|since)`: one
+  `claude -p --output-format json --model claude-sonnet-5-5 --tools "" --no-session-persistence --strict-mcp-config
+  --disable-slash-commands` in `claude-titles`, 409 `nothing_new` under 2 messages; posted as a `summary` message
+  (shared with the members). `mark_sent` records "to a session" clicks.
+- `maxxing/teampeer.py` (stdlib + httpx): connections, signing, outbox (protocol in the module docstring).
+  `<state>/team/peers.json` (600): `peers` (address -> {key, status accepted|request|waiting, profile,
+  fingerprint}), `invites` (sha256 of the code, 15 min, one use), `files` (fid -> path, shared), `outbox`
+  (retries with backoff for 7 days, then dropped; `pending` on the message until delivered). Inbound: ±300 s,
+  nonce replay cache, 240 req/min/IP, 5 bad hellos/h/IP -> 429. Outbound: https + public IP only; Tailscale
+  (100.64/10, `*.ts.net`) and private ranges refused (`readiness()` reasons `no_address|not_https|tailscale|local`).
+  `team_insecure` / `MAXXING_TEAM_INSECURE=1` lifts this for local tests. Files: signed GET, capped by `upload_max_mb`.
+- `api/team.py` (auth) and `api/teampeer.py` (public `/api/team-peer/{hello,inbox,files/<fid>}`, 404 while
+  `team_page` is off, listed in `bodylimit._public`). `startup()` starts the outbox worker.
+- Web: `features/team/` (TeamPage `/team` in `FEATURE_NAV`, TeamPanel = right column in `AppShell` toggled from
+  `TeamNavExtra` in the sidebar, localStorage `mx-team-open` + `mx-team-chat`), dictionary group `team`, bus topic `team`.
+- Tests: `tests/test_team.py`, `tests/test_teampeer.py`. Checked end to end with three local servers.
+
 ## 2.0.0-alpha.98 - 2026-10-24
 
 Pull request #15 (tabs view), web only.

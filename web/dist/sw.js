@@ -8,8 +8,8 @@
  *   other static files      stale-while-revalidate (icons, fonts, manifest, favicon)
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  */
-const VERSION = "a0ec826ceb5e"
-const PRECACHE = ["/assets/index-C8D26qm7.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-CATZNyVw.js","/assets/createLucideIcon-Bl3st4bB.js","/assets/code-block-DsvnIpYT.js","/assets/vendor-router-B8kuLWb3.js","/assets/vendor-ui-D63TVlIK.js","/assets/ui-3nMCpYTx.js","/assets/folder-BERr9CuD.js","/assets/compass-DClv-X2T.js","/assets/vendor-query-CthOliPc.js","/assets/files-yYnZY2Xd.js","/assets/queries-CCfUtezW.js","/assets/store-Br1xPcC0.js","/assets/chevron-right-GKW0K5MI.js","/assets/folder-open-DAgsONbC.js","/assets/hand-heart-oQYvXUqf.js","/assets/store-CATYdUzt.js","/assets/index-i4nq8mL5.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "3644fdd07826"
+const PRECACHE = ["/assets/index-BE1G4Pf5.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-CATZNyVw.js","/assets/createLucideIcon-Bl3st4bB.js","/assets/code-block-CgNiI25z.js","/assets/vendor-router-B8kuLWb3.js","/assets/vendor-ui-D63TVlIK.js","/assets/ui-DSexrcVD.js","/assets/folder-BERr9CuD.js","/assets/compass-DClv-X2T.js","/assets/vendor-query-CthOliPc.js","/assets/files-BN0RpvlH.js","/assets/queries-BGsovI4T.js","/assets/store-fPIEi-KJ.js","/assets/chevron-right-GKW0K5MI.js","/assets/folder-open-DAgsONbC.js","/assets/hand-heart-oQYvXUqf.js","/assets/store-CATYdUzt.js","/assets/index-DZiizGYI.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'

@@ -11,6 +11,7 @@ export const GROUPS = {
   auth: ['onb', 'setup', 'login', 'pw', 'twofa'],
   infra: ['infra'],
   git: ['git'],
+  team: ['team'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer', 'media'],
   show: ['show'],

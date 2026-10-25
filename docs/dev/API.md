@@ -394,6 +394,40 @@ list_failed, file_missing), details, links:[id], project, note, hidden, declared
 `db:cloudflare:d1:<name>`, `bucket:<server>:garage:<name>`, `bucket:cloudflare:r2:<name>`, `worker:cloudflare:<name>`,
 `pages:cloudflare:<name>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).
 
+## Team
+
+Chats between people (`maxxing/team.py`, `maxxing/teampeer.py`, Settings -> Features -> `team_page`, off by default).
+Errors: `{error, message}`: `400 empty|no_members|invalid_poll|invalid_emoji|bad_file|bad_id|bad_invitation|self|
+not_https|not_public`, `404 not_found`, `409 nothing_new|not_reachable`, `502 summary_failed|unreachable|bad_answer`,
+`504 timeout`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/team` | – | `{me, people:{<id>: Profile + {server, status, address?, peer?, contact?}}, chats:[Chat + {last, unread, updated}], reactions}` |
+| POST | `/api/team/chats` | `{kind: dm\|group, members:[contact ids], name?, emoji?}` | Chat (a DM with the same person returns the existing one); a group is sent to every member with its pair keys |
+| GET | `/api/team/chats/{cid}` | – | `{chat, messages:[Message]}` (format: `team.py` docstring) |
+| POST | `/api/team/chats/{cid}/read` | – | `{ok}` |
+| POST | `/api/team/chats/{cid}/messages` | `{text, reply_to?, files?:[{path}]}` | Message (`pending` = members not reached yet) |
+| POST | `/api/team/files` | multipart `file` (≤ `upload_max_mb`) | `{files:[{path, name, size, mime}]}` saved under `<workspace>/team/attachments/YYYY-MM/` |
+| POST | `/api/team/chats/{cid}/messages/{mid}/react` | `{emoji}` | Message (toggle) |
+| POST | `/api/team/chats/{cid}/polls` | `{question, options:[2..12], multi}` | Message |
+| POST | `/api/team/chats/{cid}/messages/{mid}/vote` | `{option}` | Message (toggle; one answer clears the others unless `multi`) |
+| POST | `/api/team/chats/{cid}/summarize` | `{ids?, since?}` | Message `kind: summary` (`ids` = the chosen messages, else after `since`, else after the last summary) |
+| POST | `/api/team/chats/{cid}/messages/{mid}/forward` | `{text, session?}` or `{text, path, title?}` | `{session, message}`; the message's files go as attachments |
+| GET | `/api/team/connections` | – | `{ok, address, reason: ""\|no_address\|not_https\|tailscale\|local, insecure, contacts:[{address, id, name, emoji, color, status: accepted\|request\|waiting, fingerprint, since, last_seen}], open_invites}` |
+| POST | `/api/team/connections/invite` | – | `{invitation: "<address>#<code>", expires}` (15 min, one use) |
+| POST | `/api/team/connections/join` | `{invitation}` | `{address, fingerprint}` (status `waiting` until the other side accepts) |
+| POST | `/api/team/connections/answer` | `{address, accept}` | `{ok}` (accept is delivered at once, or fails) |
+| POST | `/api/team/connections/remove` | `{address}` | `{ok}` (the other server is told) |
+
+Between servers (public, no cookie, `404` while `team_page` is off; protocol in the `teampeer.py` docstring):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/team-peer/hello` | `{from, to, nonce_b, proof, profile}` | `{nonce_a, proof_a, profile}` · `403` no matching invitation · `429` after 5 bad hellos/h/IP |
+| POST | `/api/team-peer/inbox` | signed event `{type: accept\|refuse\|bye\|profile\|chat\|message\|vote\|react, …}` | `{ok}` · `401` unsigned / stale / replayed · `403` bad signature |
+| GET | `/api/team-peer/files/{fid}` | signed | the file, when the sender is a member of a chat where it was shared |
+
 ## Dashboard & extensions
 ```
 Card = {title?, status?:"ok"|"warn"|"error", link?:string, blocks:[Block], updated?:float}

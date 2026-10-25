@@ -92,6 +92,7 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   register: [qk.register, qk.onboarding],
   license: [qk.license, ['system']],
   infra: [['infra']],
+  team: [['team']],
   mcp: [['mcp']],
 }
 

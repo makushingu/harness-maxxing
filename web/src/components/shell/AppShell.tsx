@@ -24,6 +24,7 @@ import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
 import { useNav } from './nav'
 import { RouteProgress } from './RouteProgress'
+import { useTeamUI } from '@/features/team/store'
 
 // Rarely-used overlays are separate chunks: they are fetched when the browser is idle (or at first use),
 // not before the first paint.
@@ -77,6 +78,7 @@ function useBootEntrance() {
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
 const FileViewerHost = React.lazy(withGroups(['files'], () => import('@/features/files/Viewer')))
+const TeamPanel = React.lazy(withGroups(['team'], () => import('@/features/team/TeamPanel').then((m) => ({ default: m.TeamPanel }))))
 const FeedbackDialog = React.lazy(withGroups(['feedback'], () => import('./FeedbackDialog').then((m) => ({ default: m.FeedbackDialog }))))
 
 /** The Feedback dialog: its code (and words) load the first time it is opened, then it stays mounted for its animations. */
@@ -205,6 +207,14 @@ function useScrollReset(ref: React.RefObject<HTMLElement | null>) {
   }, [pathname, ref])
 }
 
+/** Team (Settings -> Features -> team_page), desktop only: the chats in a column on the right of every page but /team. */
+function useTeamPanel(touch: boolean) {
+  const { data: s } = useSettings()
+  const open = useTeamUI((u) => u.open)
+  const { pathname } = useLocation()
+  return !touch && !!s?.team_page && open && !pathname.startsWith('/team')
+}
+
 export function AppShell() {
   const bus = useGlobalBus(true)
   useSyncLanguage()
@@ -217,6 +227,7 @@ export function AppShell() {
   useMobileViewport()
   const touch = useCompact()
   const goSessions = useTouchHome(touch)
+  const teamPanel = useTeamPanel(touch)
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       <RouteProgress />
@@ -233,6 +244,11 @@ export function AppShell() {
       >
         {goSessions ? <Navigate to="/sessions" replace /> : <Outlet />}
       </main>
+      {teamPanel && (
+        <React.Suspense fallback={null}>
+          <TeamPanel />
+        </React.Suspense>
+      )}
       {touch && <TouchDrawers />}
       <GlobalHotkeys />
       <FileViewer />

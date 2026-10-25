@@ -34,7 +34,8 @@ _MUTATING = ("POST", "PUT", "PATCH", "DELETE")
 
 def _public(path: str) -> bool:
     # /api/pc/pair (pairing code) and /api/pc/mcp (loopback + secret) check their own permission
-    return path.startswith(("/api/auth/", "/api/hooks/")) or path in ("/api/pc/pair", "/api/pc/mcp")
+    # /api/team-peer/* (other Harness servers) checks its own signatures
+    return path.startswith(("/api/auth/", "/api/hooks/", "/api/team-peer/")) or path in ("/api/pc/pair", "/api/pc/mcp")
 
 
 def cap_for(method: str, path: str, authed: bool) -> int:
