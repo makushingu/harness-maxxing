@@ -766,7 +766,7 @@ function ColumnHeader({
         {maxxing && <MaxxingMeter strip />}
         <div className="flex h-11 min-w-0 items-center gap-1">
           <TouchSessionsButton className="-ml-2" />
-          <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" />
+          <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" nameClassName={maxxing ? 'max-[479px]:sr-only' : undefined} />
           <div className="flex shrink-0 items-center">
             <TabsToggle compact />
             {maxxing && <MaxxingControls compact />}
