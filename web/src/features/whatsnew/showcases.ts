@@ -23,6 +23,7 @@ export const SHOWCASES: Record<string, TourStep[]> = {
   'git-branch-menu': [{ id: 'git-branch-menu', targets: [], title: 'show.gitBranchMenu.title', body: 'show.gitBranchMenu.body' }],
   'dashboard-motion': [{ id: 'dashboard-motion', targets: [], title: 'show.dashMotion.title', body: 'show.dashMotion.body', route: (c) => (c.pathname === '/' ? null : '/') }],
   git: [{ id: 'git', targets: [], title: 'show.git.title', body: 'show.git.body', route: (c) => (c.pathname === '/git' ? null : '/git') }],
+  team: [{ id: 'team', targets: [], title: 'show.team.title', body: 'show.team.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   infra: [{ id: 'infra', targets: [], title: 'show.infra.title', body: 'show.infra.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   'infra-servers': [{ id: 'infra-servers', targets: [], title: 'show.infraServers.title', body: 'show.infraServers.body', route: (c) => (c.pathname === '/infra' ? null : '/infra?tab=servers') }],
   twofa: [{ id: 'twofa', targets: [], title: 'show.twofa.title', body: 'show.twofa.body', route: (c) => (c.pathname === '/settings/security' ? null : '/settings/security') }],

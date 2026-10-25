@@ -303,6 +303,23 @@ GIT_OPTIONAL_LOCKS=0, 10 s. GitHub (`_gh(path, params, tok)`, MAXXING_GITHUB_API
 listing (`clear_cache()` in tests). Web: `features/git/` (GitGraph = lane layout + SVG, GitBlock = ```git in
 `components/ui/markdown.tsx`, lazy; GitPage = route `/git`, shown in the nav by `useNav()` when settings `git_page`).
 
+## maxxing.team  (owner: organisation)
+Chats between people, `<state>/team/team.json` (format in the docstring), one lock (`_lock`), atomic writes, bus
+topic `team`. `state()`, `messages(cid)`, `create_chat`, `send`, `react`, `create_poll`, `vote`, `mark_read`,
+`mark_sent` (a "to a session" click), `summarize(cid, ids, since)` (one `claude -p` without tools, Sonnet,
+prompt `SUMMARY_PROMPT`, titles in the chat's language). Every local change is `_broadcast` to the other members
+through `teampeer.send` (message `pending` = ids not reached yet, cleared by `delivered()`); remote events come in
+through `apply_remote(frm, contact, event)` which checks membership and authorship. People ids = `teampeer.pid(address)`;
+the user is `ME`. Web: `features/team/` (page `/team`, right panel `TeamPanel`).
+
+## maxxing.teampeer  (owner: organisation)
+Server-to-server transport, stdlib + httpx, protocol in the docstring. `<state>/team/peers.json` (600): peers,
+invites (sha256 of the code), shared files, outbox. `readiness()` (public https address, not Tailscale / private),
+`create_invite`, `join`, `hello` (public side), `answer`, `forget`, `verify(request)` (signature, time ±300 s,
+nonce cache, rate limits), `receive(frm, event)`, `send(addresses, event, msg)` -> outbox, worker `start()`
+(`RETRY` backoff, `OUTBOX_DAYS`), `share_file` / `file_for` / `fetch_file` (signed GET, ≤ `upload_max_mb`).
+`team_insecure` / MAXXING_TEAM_INSECURE=1 allows http and local addresses (tests only).
+
 ## maxxing.infra  (owner: organisation)
 - `probe.py`: stdlib-only, Python >= 3.8, one JSON on stdout; run locally as a subprocess and remotely with
   `ssh -o BatchMode=yes ... host python3 - '<opts>'` (script on stdin). Sections (each fails alone into `errors`):

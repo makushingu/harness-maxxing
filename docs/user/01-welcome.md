@@ -52,6 +52,8 @@ missing and never re-create a project or topic you deleted.
 - **Infra** (Settings -> Features): every site, database, bucket, domain and server, here and at Cloudflare /
   Hostinger, with its status; a Hostinger VPS connects in one click; ask Claude to put a site online or create a
   database, it is done the standard way.
+- **Team** (Settings -> Features): chat with the people you work with, server to server; Claude summarizes
+  what you pick and any message can go to a session.
 - **Tasks**: a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons**: scheduled shell commands or Harness prompts, with history and Telegram reports.
 - **Telegram**: talk to the same sessions from your phone, one thread per open session.

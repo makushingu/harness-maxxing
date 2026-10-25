@@ -182,7 +182,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp'
+export type BusTopic = 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -428,6 +428,8 @@ export type Settings = {
   git_page: boolean
   /** Settings -> Features: the Infra page (/infra) and its sidebar entry */
   infra_page: boolean
+  /** Settings -> Features: the Team page (/team, chats between people) and its sidebar entry */
+  team_page?: boolean
   /** Settings -> Features (beta): Maxxing mode on the Sessions page (its switch, meter and Alt+M) */
   maxxing_mode?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
