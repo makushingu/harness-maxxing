@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BUS_KEYS, BUS_TURN_KEYS, LIVE_KEYS } from './queries/keys'
 import type { BusTopic, InvalidatePayload } from './types'
+import { checkForUpdate } from '@/pwa'
 
 export type SSEStatus = 'connecting' | 'open' | 'reconnecting' | 'closed'
 type Handlers = Record<string, (data: any, ev: MessageEvent) => void>
@@ -164,6 +165,7 @@ export function useGlobalBus(enabled: boolean): SSEStatus {
       // We may have missed invalidations while disconnected: refresh what the bus covers (mounted queries only).
       // A blip shorter than RECONNECT_REFRESH_MS (proxy idle timeout, server reload) is not worth a refetch storm.
       onReconnect: (downMs) => {
+        checkForUpdate() // the server restarted, maybe updated: the new build then loads by itself
         if (downMs >= RECONNECT_REFRESH_MS) invalidate([...Object.values(BUS_KEYS).flat(), ...BUS_TURN_KEYS])
       },
     },
