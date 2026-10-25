@@ -46,9 +46,11 @@ brings you back to the same passage.
 **Video quality**: a big video (over 1080p, a high bitrate, or a format some browsers cannot play, like AV1 on
 Safari) can be slow to start, mostly on a phone. The player's quality button (next to the speed) lists
 **Auto**, **Original** and lighter copies. The server makes a copy once (H.264, built to start playing
-at once), one video at a time and at low priority. Meanwhile the original keeps playing, and the player switches
-at the same moment when the copy is ready. **Auto** (the default) uses a 720p copy only for heavy videos, and only
-once you press play: opening a video to look at it starts no encoding.
+at once), one video at a time and at low priority. Meanwhile the original keeps playing. A quality you pick switches
+at the same moment when its copy is ready. **Auto** (the default) uses a 720p copy only for heavy videos, and only
+once you press play: opening a video to look at it starts no encoding. With **Auto**, a copy that gets ready while
+the original already plays well is kept for the next time you open the video (switching would make the picture jump);
+it takes over at once only if the original keeps stalling or dropping frames.
 Your choice is remembered on this device. Copies are kept up to 4 GB in total (the least recently played go first)
 and need `ffmpeg`.
 
@@ -69,7 +71,9 @@ pictures. The **fullscreen** button opens the file viewer (see below) on the fil
 - **Videos and audio** play in the built-in player; click it, then: Space or K play/pause, ←/→ 5 s, J/L 10 s, ↑/↓
   volume, M mute, F full screen, 0-9 jump to 0-90 %, < / > slower / faster; the speed and quality buttons open
   the device's own list (the system picker on a phone, never cut off, also in full screen), speeds 0.5× to 4×;
-  picture in picture and full screen from the buttons. The poster image appears at once.
+  picture in picture and full screen from the buttons. The poster image appears at once. On a phone or a tablet,
+  tap the speaker to show the volume slider, tap it again to mute (on an iPhone or iPad the slider also works,
+  on top of the device's volume buttons).
 
 ## The file viewer
 
