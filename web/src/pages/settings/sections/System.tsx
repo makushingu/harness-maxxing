@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { Play, RefreshCw, RotateCw, Sparkles, Square, Wrench, KeyRound, GitBranch } from 'lucide-react'
 import { useWhatsNew } from '@/features/whatsnew/store'
+import { applyUpdate } from '@/pwa'
 import { useCheckVersion, useHealth, useLogs, useServiceAction, useServices, useUpdate, useAutoUpdate, useVersion, useWorkspace } from '@/lib/queries'
 import { fmtRelative } from '@/lib/format'
 import { api } from '@/lib/api'
@@ -181,6 +182,7 @@ function VersionCard() {
           } else if (nv && (nv.commit !== startVersion || wentDown)) {
             setPhase('done')
             qc.invalidateQueries()
+            applyUpdate() // load the new version straight away (the success message stays if it cannot)
           }
         }
       } catch {
