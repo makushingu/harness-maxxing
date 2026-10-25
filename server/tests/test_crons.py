@@ -495,3 +495,22 @@ def test_a_hand_edit_noticed_at_the_next_save(org):
     crons.jobs_path().write_text(json.dumps(data))
     crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
     assert [d["job"]["id"] for d in crons.deleted_jobs()] == [a["id"]]
+
+
+def test_an_unreadable_jobs_json_is_not_an_empty_list(org):
+    """A damaged or truncated jobs.json archives nothing as vanished and keeps jobs.seen.json: once the file
+    is repaired, nothing was lost from the archive and no job comes back twice."""
+    a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
+    b = crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
+    good = crons.jobs_path().read_text()
+    seen = (crons._dir() / "jobs.seen.json").read_text()
+    for bad in ("{trunc", '["not", "a", "dict"]', '{"version": 1, "jobs": 3}'):
+        crons.jobs_path().write_text(bad)
+        crons.sync_crontab()
+        assert crons.deleted_jobs() == []
+        assert (crons._dir() / "jobs.seen.json").read_text() == seen
+    crons.jobs_path().write_text(good)
+    crons.sync_crontab()
+    assert crons.deleted_jobs() == []
+    assert {j["id"] for j in crons.list_jobs()} == {a["id"], b["id"]}
+
