@@ -514,3 +514,15 @@ def test_an_unreadable_jobs_json_is_not_an_empty_list(org):
     assert crons.deleted_jobs() == []
     assert {j["id"] for j in crons.list_jobs()} == {a["id"], b["id"]}
 
+
+def test_deleted_lists_even_with_a_bad_date(org, capsys):
+    """deleted.jsonl is only a file: a date that is not a number (or out of range) does not break the list."""
+    from maxxing import cmd_cron
+    job = {"name": "Old", "schedule": "0 5 * * *", "kind": "shell", "command": "echo old", "enabled": True}
+    crons.deleted_path().write_text("".join(
+        json.dumps({"at": at, "reason": "deleted", "job": {**job, "id": f"c_old00{i}"}}) + "\n"
+        for i, at in enumerate(["yesterday", 1e300, None, [1], True, 1700000000])))
+    assert all(d["at"] in (0, 1e300, 1700000000) for d in crons.deleted_jobs())
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="deleted")) == 0
+    out = capsys.readouterr().out
+    assert all(f"c_old00{i}" in out for i in range(6))
