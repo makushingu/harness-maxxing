@@ -142,7 +142,7 @@ export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
             type="button"
             data-testid="task-bar"
             aria-live="polite"
-            className="mx-queue-in flex h-7 items-center gap-1.5 rounded-full border bg-card px-2.5 text-xs text-muted-foreground shadow-xs hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="mx-queue-in flex h-7 items-center pointer-coarse:h-10 gap-1.5 rounded-full border bg-card px-2.5 text-xs text-muted-foreground shadow-xs hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Spinner className="size-3.5 text-primary" />
             <span>{t(agentsOnly ? 'tasks.bar' : 'tasks.barAny', { count: live.length })}</span>
