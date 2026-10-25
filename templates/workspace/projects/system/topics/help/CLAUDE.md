@@ -51,6 +51,7 @@ is the only authority: `{{CODE_DIR}}/docs/user/` (the same pages as Settings -> 
 | `26-git.md` | Git & GitHub: ```git graphs in the chat, the Git page (Settings -> Features: server clones + GitHub account, rights, branches, commits, pull requests), GITHUB_TOKEN |
 | `27-infra.md` | Infra page (Settings -> Features, off by default): sites, databases, buckets, domains, servers of this server, other servers (SSH), Cloudflare, Hostinger; statuses and alerts; recipes `maxxing infra` (path sites, PostgreSQL, Garage buckets); ```infra blocks; any domain without a key (public DNS + RDAP, Add a domain); Vercel, Netlify, Supabase, GitHub Pages (beta) |
 | `28-mcp.md` | Settings -> MCP: MCP servers (tools of a service for Claude), every session or one topic, states, Connect (OAuth sign-in), keys as ${KEY}; `maxxing mcp` |
+| `29-team.md` | Settings -> Features -> Team: chats with other Harness users (DMs, groups, files, polls), one-time invitation server to server (public address, not Tailscale), Summarize, To a session |
 | `{{CODE_DIR}}/CHANGELOG.md` | every update, newest first ("what changed?", "since when?") - Settings -> Updates |
 
 Useful commands: `maxxing status`, `maxxing doctor`, `maxxing cron list`. For updates, widgets,

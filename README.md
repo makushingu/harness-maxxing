@@ -37,6 +37,8 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
   a Hostinger VPS connects in one click),
   Cloudflare, Hostinger; statuses, certificate and domain expiry, links domain -> server -> site -> app -> repository;
   standard recipes to put a site online, create a PostgreSQL database or an S3 bucket (`maxxing infra`).
+- **Team** (optional) - chats with other Harness users (direct messages, groups, files, polls), server to server
+  through a one-time invitation; Claude summarizes the messages you pick; any message can go to a session.
 - **Tasks** - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos

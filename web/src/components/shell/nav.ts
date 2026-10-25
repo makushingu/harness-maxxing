@@ -1,5 +1,5 @@
 // Primary navigation — single source for the sidebar, the mobile tab bar, the palette and shortcuts.
-import { Clock, FolderOpen, GitBranch, LayoutDashboard, ListChecks, MessagesSquare, Network, Settings, type LucideIcon } from 'lucide-react'
+import { Clock, FolderOpen, GitBranch, LayoutDashboard, ListChecks, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 import { useSettings } from '@/lib/queries'
 
@@ -19,7 +19,8 @@ export const NAV: NavItem[] = [
 
 /** Pages of optional features (Settings -> Features), inserted before Settings when switched on. Not in the mobile
  *  tab bar (no room). */
-const FEATURE_NAV: (NavItem & { setting: 'git_page' | 'infra_page'; defaultOn: boolean })[] = [
+const FEATURE_NAV: (NavItem & { setting: 'git_page' | 'infra_page' | 'team_page'; defaultOn: boolean })[] = [
+  { to: '/team', label: 'nav.team', icon: UsersRound, key: 'm', setting: 'team_page', defaultOn: false },
   { to: '/git', label: 'nav.git', icon: GitBranch, key: 'b', setting: 'git_page', defaultOn: false },
   { to: '/infra', label: 'nav.infra', icon: Network, key: 'i', setting: 'infra_page', defaultOn: false },
 ]

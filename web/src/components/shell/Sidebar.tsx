@@ -1,9 +1,10 @@
 import type * as React from 'react'
 import { NavLink } from 'react-router'
-import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
 import { useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
-import { useWorkspace } from '@/lib/queries'
+import { useTeam, useWorkspace } from '@/lib/queries'
+import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
@@ -32,6 +33,37 @@ function useSessionBadge() {
       running += tp.running
     }
   return { unread, running }
+}
+
+/** Team entry: its unread count, and (on hover) the button that opens the chats on the right of the page. */
+function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
+  const t = useT()
+  const { data } = useTeam()
+  const open = useTeamUI((s) => s.open)
+  const setOpen = useTeamUI((s) => s.setOpen)
+  const unread = data?.chats.reduce((n, c) => n + c.unread, 0) || 0
+  if (collapsed) return unread ? <span className="absolute top-0.5 right-1 flex size-4 items-center justify-center"><CountDot tone="unread" /></span> : null
+  return (
+    <span className="flex items-center gap-1">
+      <span
+        role="button"
+        tabIndex={-1}
+        title={open ? t('nav.teamPanelClose') : t('nav.teamPanel')}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setOpen(!open)
+        }}
+        className={cn(
+          'inline-flex size-6 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground',
+          open ? 'text-primary' : 'opacity-0 group-hover:opacity-100',
+        )}
+      >
+        <PanelRight className="size-3.5" />
+      </span>
+      <CountBadge count={unread} />
+    </span>
+  )
 }
 
 export function Sidebar() {
@@ -108,6 +140,7 @@ export function Sidebar() {
                     {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
                     <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
                     {!collapsed && <span className="flex-1 truncate">{label}</span>}
+                    {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
                     {showBadge &&
                       (collapsed ? (
                         badge.unread ? (

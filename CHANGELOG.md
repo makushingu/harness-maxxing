@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.99 - 2026-10-25
+
+Changes:
+- **Team: chat with the people you work with, next to your sessions.** Turn it on in Settings -> Features: a
+  **Team** page and a panel on the right (the icon next to Team in the sidebar) for direct messages and groups,
+  with files, reactions and polls (round = one answer, square = several). **Summarize** asks Claude for a short
+  summary of the messages you pick (or the last hour, 2 hours, 24 hours, since the last summary). **To a session**
+  sends a message or a summary to one of your sessions, or starts a new one in any topic, after you edit the text:
+  nothing written in a chat ever reaches Claude by itself. You connect with someone through a one-time invitation
+  link, server to server, with no Harness server in between; both servers need a public address (domain mode, not
+  Tailscale). Connect only with people you trust. [Show me](#show:team)
+
 ## 2.0.0-alpha.98 - 2026-10-24
 
 Changes:
