@@ -162,7 +162,7 @@ export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
                       setOpen(false)
                       if (tk.tool_use_id) openTaskLine(tk.tool_use_id)
                     }}
-                    className="grid w-full gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                    className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   >
                     <span className="flex min-w-0 items-center gap-2 text-[13px]">
                       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
