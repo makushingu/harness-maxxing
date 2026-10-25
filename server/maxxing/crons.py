@@ -330,14 +330,30 @@ def runs_path() -> Path:
     return _dir() / "runs.jsonl"
 
 
+def _read_raw() -> list[dict] | None:
+    """The jobs of jobs.json ([] when there is no file yet); None when the file exists but cannot be read
+    (damaged, truncated): that is not an empty list, nothing may be archived as vanished from it."""
+    try:
+        with open(jobs_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError):
+        return None
+    jobs = data.get("jobs", []) if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return None
+    return [j for j in jobs if isinstance(j, dict) and j.get("id")]
+
+
 def _load_raw() -> list[dict]:
-    data = config.read_json(jobs_path(), {"version": 1, "jobs": []})
-    jobs = data.get("jobs") if isinstance(data, dict) else None
-    return [j for j in (jobs or []) if isinstance(j, dict) and j.get("id")]
+    return _read_raw() or []
 
 
 def _save_raw(jobs: list[dict], reason: str = "removed") -> None:
-    _remember(_load_raw(), "vanished (jobs.json edited outside Harness Maxxing)")
+    old = _read_raw()
+    if old is not None:
+        _remember(old, "vanished (jobs.json edited outside Harness Maxxing)")
     config.write_json(jobs_path(), {"version": 1, "jobs": jobs})
     _remember(jobs, reason)
 
@@ -810,8 +826,11 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
     (except a trailing blank line). Returns the new crontab text."""
     with _lock:
         if jobs is None:
-            jobs = _load_raw()
-            _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
+            jobs = _read_raw()
+            if jobs is None:
+                jobs = []
+            else:
+                _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
         outside, _ = split_crontab(read_crontab())
         while outside and not outside[-1].strip():
             outside.pop()
