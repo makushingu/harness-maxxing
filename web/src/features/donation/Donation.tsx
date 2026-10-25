@@ -35,7 +35,7 @@ export function DonateButton({ label = 'donation.donate', className }: { label?:
       target="_blank"
       rel="noopener"
       data-testid="donate-button"
-      className={cn('inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring', DONATE_TONE, className)}
+      className={cn('inline-flex h-8 shrink-0 pointer-coarse:h-10 items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring', DONATE_TONE, className)}
     >
       <HandHeart className="size-4" aria-hidden />
       {t(label)}
