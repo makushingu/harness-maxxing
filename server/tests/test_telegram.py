@@ -47,7 +47,7 @@ def test_blocks():
     assert '<pre><code class="language-python">if a &lt; b:\n    print(\'**no**\')</code></pre>' in html
     assert "• one\n• two\n1. first" in html
     assert "<blockquote>quoted</blockquote>" in html
-    assert "<pre>| a | b |" in html
+    assert "• <b>1</b>\n   <i>b</i>: 2" in html and "|" not in html          # tables become lists
 
 
 def _balanced(h: str) -> bool:
@@ -213,8 +213,9 @@ async def test_wrong_code_and_strangers_refused_once(api, tg, svc):
     tg.message("hello", chat_id=777, user_id=777)
     await wait_for(lambda: tg.sent(), what="refusal")
     await asyncio.sleep(0.3)
-    refusals = [p for p in tg.sent() if p["chat_id"] == 777]
-    assert len(refusals) == 1 and "private" in refusals[0]["text"]
+    replies = [p for p in tg.sent() if p["chat_id"] == 777]
+    # the wrong code is explained (not refused), the other message refused once
+    assert len(replies) == 2 and "expired" in replies[0]["text"] and "private" in replies[1]["text"]
     assert not gateway.link_status()["linked"] and not svc.sent
 
 
@@ -407,7 +408,8 @@ async def test_topics_disabled_fallback(api, tg, svc):
     tg.message(f"/start {code}")
     await wait_for(lambda: gateway.load_state().get("topics_enabled") is False, what="fallback")
     st = gateway.status()
-    assert st["topics_enabled"] is False and "BotFather" in st["last_error"] and st["threads"] == []
+    assert st["topics_enabled"] is False and "BotFather" in st["topics_notice"] and st["threads"] == []
+    assert st["last_error"] is None and st["sync_error"] is None
     # the main chat talks to the workspace root
     tg.message("hi from the main chat")
     await wait_for(lambda: svc.sent, what="message")
@@ -751,9 +753,10 @@ async def test_commands(api, tg, svc):
     tg.message("hello", thread=_thread("#crons"))
     await wait_for(lambda: any("only receives notifications" in p["text"] for p in tg.sent()), what="crons thread")
     assert not svc.sent
-    # a command before the topic is chosen
+    # a session command in the main chat: where to send it (no "where?" question left behind)
     tg.message("/status")
-    await wait_for(lambda: any("Choose where" in p["text"] for p in tg.sent()), what="pick first")
+    await wait_for(lambda: any("send it in that session's thread" in p["text"] for p in tg.sent()), what="in a thread")
+    assert gateway.gateway()._new == {}
 
 
 # =============================================================================================

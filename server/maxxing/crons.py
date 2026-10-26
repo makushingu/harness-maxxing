@@ -1064,9 +1064,7 @@ def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
         text = ""
     if not ok and not text:
         text = str(res.get("error") or "the Harness turn failed or timed out")
-    if len(text) > OUTPUT_TAIL:
-        text = "…" + text[-OUTPUT_TAIL:]
-    return ok, 0 if ok else 1, text, sid
+    return ok, 0 if ok else 1, text, sid                 # whole answer: run_job keeps its start
 
 
 def _turn_ok(res: dict) -> bool:
@@ -1099,9 +1097,11 @@ def run_job(cid: str) -> dict | None:
         lockf.flush()
         start = time.time()
         session_id = None
+        answer = None
         try:
             if job["kind"] == "claude":
-                ok, code, tail, session_id = _run_claude(job)
+                ok, code, answer, session_id = _run_claude(job)
+                tail = _clip_head(answer, OUTPUT_TAIL)  # an answer starts with its title and summary
             else:
                 ok, code, tail = _run_shell(job)
         except Exception as e:                           # never die without recording the run
@@ -1110,13 +1110,13 @@ def run_job(cid: str) -> dict | None:
                "ok": ok, "code": code, "duration_s": round(time.time() - start, 2),
                "output_tail": tail, "session_id": session_id}
         append_run(run)
-        _notify(job, run)
-        return run
     finally:
         try:
             fcntl.flock(lockf, fcntl.LOCK_UN)
         finally:
             lockf.close()
+    _notify(job, run, answer)                            # after the lock: a slow Telegram never holds the job
+    return run
 
 
 def _feed(job: dict, run: dict) -> None:
@@ -1127,23 +1127,44 @@ def _feed(job: dict, run: dict) -> None:
         feed.system("Cron jobs succeeded", f"{job['name']} ({fmt_duration(run['duration_s'])})", "success",
                     "crons", url, group="ok")
     else:
-        feed.system(f"Cron failed: {job['name']}", (run.get("output_tail") or "")[-600:], "error", "crons", url)
+        out = run.get("output_tail") or ""
+        body = _clip_head(out, 600) if job.get("kind") == "claude" else _clip_tail(out, 600)
+        feed.system(f"Cron failed: {job['name']}", body, "error", "crons", url)
 
 
-def _notify(job: dict, run: dict) -> None:
+def _clip_head(text: str, n: int) -> str:
+    from .telegram import format as tgfmt
+    return tgfmt.head(text, n)
+
+
+def _clip_tail(text: str, n: int) -> str:
+    from .telegram import format as tgfmt
+    return tgfmt.tail(text, n)
+
+
+def _notify(job: dict, run: dict, answer: str | None = None) -> None:
+    """Feed + Telegram report. A Claude job's report is its answer from the start (markdown, rendered
+    in Telegram); a command's report is the end of its output (where errors are)."""
     _feed(job, run)
     policy = job.get("notify", "failure")
     if policy == "never" or (policy == "failure" and run["ok"]):
         return
     status = "OK" if run["ok"] else f"FAILED (code {run['code']})"
-    text = f"{status} - {job['name']} ({fmt_duration(run['duration_s'])})"
-    if not run["ok"] and run.get("output_tail"):
-        text += "\n" + run["output_tail"][-600:]
-    elif run["ok"] and policy == "always" and (run.get("output_tail") or "").strip():
-        text += "\n" + run["output_tail"].strip()[-1500:]      # e.g. a Claude job's brief / reminder
+    header = f"{status} - {job['name']} ({fmt_duration(run['duration_s'])})"
+    claude = job.get("kind") == "claude"
+    body = ""
+    if not run["ok"] or policy == "always":
+        if claude:
+            body = (answer if answer is not None else run.get("output_tail") or "").strip()
+        else:
+            body = _clip_tail(run.get("output_tail") or "", 600 if not run["ok"] else 1500)
     try:
         from .telegram import gateway
-        gateway.notify_cron(text)
+        report = getattr(gateway, "notify_cron_report", None)
+        if report is not None:
+            report(header, body, markdown=claude, loud=not run["ok"])
+        else:
+            gateway.notify_cron(header + ("\n" + body if body else ""))
     except Exception:
         pass
 

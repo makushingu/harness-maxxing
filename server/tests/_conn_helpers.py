@@ -169,6 +169,9 @@ class FakeTelegram:
                              "username": "maxxing_test_bot", "has_topics_enabled": self.topics_enabled})
         if method == "getWebhookInfo":
             return self._ok({"url": self.webhook, "pending_update_count": 0})
+        if method == "deleteWebhook":
+            self.webhook = ""
+            return self._ok(True)
         if method == "getUpdates":
             off = int(params.get("offset") or 0)
             deadline = time.time() + min(float(params.get("timeout") or 0), 1.0)
@@ -275,6 +278,9 @@ class FakeService(types.ModuleType):
         self.events: dict[str, list[dict]] = {}
         self.callbacks: list[Callable] = []
         self.stopped: list[str] = []
+        self.queues: dict[str, list[dict]] = {}          # sid -> waiting items {text, source, refs}
+        self.current: dict[str, dict] = {}               # sid -> item of the running turn
+        self.unreadable: set[str] = set()                 # sessions whose file cannot be read just now
 
     def create_session(self, path: str, message: str | None = None, title: str | None = None,
                        model: str | None = None, attachments: list | None = None, source: str = "web",
@@ -292,21 +298,43 @@ class FakeService(types.ModuleType):
         return dict(self.sessions[sid])
 
     def get_session(self, sid: str) -> dict | None:
-        s = self.sessions.get(sid)
+        s = self.sessions.get(sid) if sid not in self.unreadable else None
         return dict(s) if s else None
 
     def list_sessions(self, path: str | None = None, archived: bool | None = None) -> list[dict]:
-        out = [dict(s) for s in self.sessions.values()
-               if (path is None or s["path"] == path) and (archived is None or s["archived"] == archived)]
+        out = [dict(s) for s in self.sessions.values() if s["id"] not in self.unreadable
+               and (path is None or s["path"] == path) and (archived is None or s["archived"] == archived)]
         return sorted(out, key=lambda s: s["updated"], reverse=True)
 
-    def send_message(self, sid: str, text: str, attachments: list | None = None, source: str = "web") -> dict:
+    def send_message(self, sid: str, text: str, attachments: list | None = None, source: str = "web",
+                     ref: str | None = None) -> dict:
         s = self.sessions[sid]
         queued = s["state"] == "running"
+        item = {"text": text, "source": source, "kind": "user", "refs": [ref] if ref else []}
+        if queued:
+            self.queues.setdefault(sid, []).append(item)
+        else:
+            self.current[sid] = item
         s["state"] = "running"
         s["updated"] = time.time()
-        self.sent.append({"sid": sid, "text": text, "attachments": attachments, "source": source})
+        self.sent.append({"sid": sid, "text": text, "attachments": attachments, "source": source, "ref": ref})
         return {"queued": queued, "session": dict(s)}
+
+    def live_refs(self, sid: str) -> set:
+        out = {r for x in self.queues.get(sid, []) for r in x["refs"]}
+        if self.sessions[sid]["state"] == "running" and sid in self.current:
+            out |= set(self.current[sid]["refs"])
+        return out
+
+    def session_exists(self, sid: str) -> bool:
+        return sid in self.sessions
+
+    def steer(self, sid: str) -> None:
+        """The waiting messages become one (their refs merged); the running turn ends interrupted (finish it)."""
+        q = self.queues.get(sid, [])
+        if q:
+            self.queues[sid] = [{"text": "\n\n".join(x["text"] for x in q), "source": q[-1]["source"],
+                                 "kind": "user", "refs": [r for x in q for r in x["refs"]]}]
 
     def update_session(self, sid: str, **fields: Any) -> dict:
         self.sessions[sid].update(fields)
@@ -315,6 +343,8 @@ class FakeService(types.ModuleType):
     def stop(self, sid: str) -> None:
         self.stopped.append(sid)
         self.sessions[sid]["state"] = "idle"
+        self.queues.pop(sid, None)
+        self.current.pop(sid, None)
 
     def last_assistant_text(self, sid: str) -> str:
         return self.replies.get(sid, "")
@@ -330,13 +360,25 @@ class FakeService(types.ModuleType):
     def on_turn_end(self, cb: Callable) -> None:
         self.callbacks.append(cb)
 
-    def finish(self, sid: str, text: str = "", error: str | None = None) -> None:
-        """Simulate the end of a turn (call on the event loop)."""
+    def finish(self, sid: str, text: str = "", error: str | None = None, kind: str = "user") -> None:
+        """Simulate the end of a turn (call on the event loop): the running item ends, the next queued one runs.
+        kind="compact": a summary turn (the running message stays queued behind it)."""
         s = self.sessions[sid]
         self.replies[sid] = text
-        s.update(state="error" if error else "idle", error=error, last_text=text[:200], turns=s["turns"] + 1)
+        if kind != "user":
+            item = {"text": "summary", "source": "system", "kind": kind, "refs": []}
+            if sid in self.current:
+                self.queues.setdefault(sid, []).insert(0, self.current.pop(sid))
+        else:
+            item = self.current.pop(sid, None) or {"source": "web", "kind": "user", "refs": []}
+        q = self.queues.get(sid) or []
+        if q and not error:
+            self.current[sid] = q.pop(0)
+        state = "error" if error else ("running" if sid in self.current else "idle")
+        s.update(state=state, error=error, last_text=text[:200], turns=s["turns"] + 1)
+        last = {"kind": item["kind"], "source": item["source"], "refs": list(item["refs"])}
         for cb in self.callbacks:
-            cb(dict(s), {"ok": not error})
+            cb({**s, "last_turn": last}, {"ok": not error})
 
 
 class FakeWorkspace(types.ModuleType):

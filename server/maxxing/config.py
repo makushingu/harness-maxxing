@@ -84,6 +84,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "thread_days": 30,                 # open sessions idle longer than this lose their thread
         "sessions": {},                    # topic path -> session id (main chat when threads are off)
         "notify_crons": True, "login_alerts": True, "reply_mode": "progress",
+        "notify_system": True,             # update / rollback / vulnerability problems into the "Alerts" thread
         "mirror_web": False,               # web turns are copied into the session's thread (opt-in)
     },
     "backup": {"repo": "", "schedule": "40 4 * * *",
