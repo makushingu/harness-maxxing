@@ -322,7 +322,7 @@ Server-to-server transport, stdlib + httpx, protocol in the docstring. `<state>/
 invites (the code, 15 min), shared files, outbox. `readiness()` (public https address, not Tailscale / private),
 `create_invite`, `join`, `hello` (public side; 409 for an address already linked: an invitation never replaces a
 key), `answer`, `forget` (a member of shared groups stays as `group`), `verify(request)` -> (sender, scope: "" =
-contact key, else the one group its key is for; signature, time ±300 s, nonce cache, rate limits on
+contact key, else the one group its key is for; signature, time ±300 s and not before `_STARTED` (the nonce cache is in memory), rate limits on
 `security.client_key`), `receive(frm, event, scope)` (a group key: message / vote / react of that group only),
 `add_group_peer` (never for a contact or a request), `send(addresses, event, msg)` -> outbox, worker `start()` /
 `_outbox_round()` (`RETRY` backoff, `OUTBOX_DAYS`; a failing address waits, the others go; no key = dropped),

@@ -76,6 +76,17 @@ def _signed(key, body: bytes, frm="http://127.0.0.1:8802", path="/api/team-peer/
     return {**h, **over, "Content-Type": "application/json"}
 
 
+def test_a_request_signed_before_a_restart_is_refused(client, monkeypatch):
+    key = _setup(monkeypatch)
+    body = json.dumps({"type": "message", "chat": team.dm_id("http://127.0.0.1:8801", "http://127.0.0.1:8802"),
+                       "message": {"id": "m_0123abce", "at": time.time(), "text": "hi", "kind": "text"}}).encode()
+    h = _signed(key, body)
+    assert client.post("/api/team-peer/inbox", content=body, headers=h).status_code == 200
+    monkeypatch.setattr(teampeer, "_nonces", {})                  # a restart forgets the nonces seen
+    monkeypatch.setattr(teampeer, "_STARTED", time.time() + 1, raising=False)
+    assert client.post("/api/team-peer/inbox", content=body, headers=h).status_code == 401
+
+
 def test_inbox_signatures(client, monkeypatch):
     key = _setup(monkeypatch)
     body = json.dumps({"type": "message", "chat": team.dm_id("http://127.0.0.1:8801", "http://127.0.0.1:8802"),
