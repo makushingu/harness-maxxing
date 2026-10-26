@@ -79,9 +79,34 @@ export function applyUpdate() {
   else location.reload()
 }
 
-/** A new build is ready while the app is open: shown discreetly in the sidebar ("New version - reload"). */
+/** Someone is writing (a message, a file, a field): reloading now would steal the caret. */
+function typing() {
+  const el = document.activeElement
+  return el instanceof HTMLElement && (el.isContentEditable || el.matches('input, textarea, select'))
+}
+
+/** A new build is ready while the app is open (Harness was updated): switch to it by itself as soon as nobody
+ *  is typing - right away, or when the field loses focus or the tab goes to the background. Until then the
+ *  sidebar shows "New version - reload". */
 function announceUpdate(w: ServiceWorker) {
   usePWA.setState({ waiting: w })
+  if (!typing()) return applyUpdate()
+  const later = () => {
+    if (document.visibilityState === 'visible' && typing()) return
+    document.removeEventListener('focusout', soon)
+    document.removeEventListener('visibilitychange', later)
+    applyUpdate()
+  }
+  // focusout fires before the next element takes focus: look once it has
+  const soon = () => setTimeout(later, 0)
+  document.addEventListener('focusout', soon)
+  document.addEventListener('visibilitychange', later)
+}
+
+let registration: ServiceWorkerRegistration | null = null
+/** Look for a new build now (the server came back after a restart, maybe from an update). */
+export function checkForUpdate() {
+  registration?.update().catch(() => {})
 }
 
 let started = false
@@ -113,6 +138,7 @@ export function initPWA() {
   const register = async () => {
     try {
       const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
+      registration = reg
       const track = (w: ServiceWorker | null) => {
         if (!w) return
         w.addEventListener('statechange', () => {
