@@ -8,7 +8,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from .. import config, team, teampeer
+from .. import config, security, team, teampeer
 
 router = APIRouter(prefix="/api/team-peer", tags=["team-peer"])
 
@@ -19,7 +19,9 @@ def _on() -> None:
 
 
 def _ip(request: Request) -> str:
-    return request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")
+    """The sender for the rate limits: the connection's address (uvicorn already takes it from the local proxy only),
+    never an X-Forwarded-For header anyone can write."""
+    return security.client_key(request)
 
 
 async def _call(fn, *args):
@@ -45,20 +47,20 @@ async def hello(request: Request):
 async def inbox(request: Request):
     _on()
     raw = await request.body()
-    frm = await _call(teampeer.verify, "POST", "/api/team-peer/inbox", dict(request.headers), raw, _ip(request))
+    frm, scope = await _call(teampeer.verify, "POST", "/api/team-peer/inbox", dict(request.headers), raw, _ip(request))
     try:
         event = json.loads(raw)
     except ValueError:
         raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
     if not isinstance(event, dict):
         raise HTTPException(400, detail={"error": "bad_request", "message": "Object expected"})
-    return await _call(teampeer.receive, frm, event)
+    return await _call(teampeer.receive, frm, event, scope)
 
 
 @router.get("/files/{fid}")
 async def file(fid: str, request: Request):
     _on()
     path = f"/api/team-peer/files/{fid}"
-    frm = await _call(teampeer.verify, "GET", path, dict(request.headers), b"", _ip(request))
-    f = await _call(teampeer.file_for, frm, fid)
+    frm, scope = await _call(teampeer.verify, "GET", path, dict(request.headers), b"", _ip(request))
+    f = await _call(teampeer.file_for, frm, fid, scope)
     return FileResponse(f["path"], media_type="application/octet-stream", filename=f["name"])

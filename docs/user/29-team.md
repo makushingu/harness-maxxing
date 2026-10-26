@@ -25,7 +25,9 @@ included.
 
 Both servers need a **public address** (Harness installed with a domain, `https://`). Team does not work through
 Tailscale nor on a local network: the other server could not reach yours. Connections shows why when it is not
-ready. **Remove** a contact in Connections: their server is told and can no longer write to you.
+ready. **Remove** a contact in Connections: their server is told and can no longer write to you. To connect
+again with someone who is still a contact (a reinstalled server, for example), they remove you first, then use a
+new invitation: an invitation never replaces an existing contact.
 
 ## Chats and groups
 
