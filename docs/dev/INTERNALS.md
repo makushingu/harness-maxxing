@@ -83,6 +83,8 @@ Python modules call each other only through these functions. Keep signatures sta
   `<state>/claude-titles`, env `spawn.claude_env(None, "default")`, timeout 30 s; answer through `clean()`.
 - `heuristic(message) -> str` - first sentence, leading FR/EN filler removed, cut at 40 chars on a word.
 - `provisional(message) -> str` - first 60 chars (+ "…"): the instant title, and the title when the switch is off.
+- `pending(sid) -> bool` - a short title is being made (between `schedule` and the end of its thread) or meta
+  `title_auto` is set: the Telegram sync waits for it (60 s at most) before creating the session's thread.
 ## maxxing.claude_auth  (stdlib only, also used by the runner)
 - `record(ok, error=None, source="turn"|"test"|"check")` - outcome of a real call; `detect(text) -> str|None`
   finds a sign-in error; `status() -> {ok, method, detail, checked_at, error}` (GET /api/claude/status `auth`,
