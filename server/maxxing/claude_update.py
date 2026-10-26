@@ -252,8 +252,10 @@ def _tick(now: float, force_check: bool) -> str:
     d.update(installed=after or installed, failed_version=latest, failed_at=at,
              last={"from": installed, "to": latest, "at": at, "ok": False, "error": err[-400:]})
     _save(d)
-    feed.system(f"Claude Code could not update to {latest}", f"{err[-600:]}\nBy hand: claude update", "error",
-                "system", "/settings/claude", dedupe=f"claude-update-failed:{latest}")
+    if feed.system(f"Claude Code could not update to {latest}", f"{err[-600:]}\nBy hand: claude update", "error",
+                   "system", "/settings/claude", dedupe=f"claude-update-failed:{latest}") is not None:
+        from .telegram import gateway
+        gateway.system_alert(f"Claude Code could not update to {latest}:\n{err[-600:]}\nBy hand: claude update")
     return "failed"
 
 

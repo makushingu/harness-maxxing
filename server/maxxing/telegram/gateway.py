@@ -76,6 +76,8 @@ STATUS_STEPS = 3               # last steps shown while running
 STATUS_STEPS_FINAL = 12        # in the folded summary
 STEP_CHARS = 42                # each step of the status message is cut to its first characters
 TYPING_MAX = 3 * 3600
+RECHECK_EVERY = 5.0            # the typing loop checks that its messages are still queued or running
+REF_GRACE = 5.0                # a message missing that long from the queue (stop, steer, cleared) is dropped
 
 STATUS_WORDS = {
     "en": {"working": "Working…", "done": "Done", "failed": "Stopped with an error", "steps": "steps",
@@ -163,7 +165,10 @@ WORDS = {
            "pick_first": "Choose where the session lives first (buttons above).",
            "open": "Open sessions (one thread each):", "none_open": "No open session - write in the main chat to start one.",
            "threads_on": "Threads are on: every open session has its own thread. Write in the main chat to start a new one.",
-           "notify_only": "This thread only receives notifications - write in a session thread or in the main chat."},
+           "notify_only": "This thread only receives notifications - write in a session thread or in the main chat.",
+           "in_thread": "/{cmd} is about one session: send it in that session's thread.",
+           "start_failed": "Could not start the session: {err}. Your messages are kept - choose a topic again (buttons above).",
+           "restarted": "Harness restarted before your new session was started: {n} message(s) not handled - send them again, please."},
     "fr": {"where": "Où mettre cette session ?", "more": "Autres topics…",
            "started": "🆕 <b>{title}</b> · {where}", "moved": "🆕 <b>{title}</b> · {where}\n→ la suite dans le fil <b>{name}</b>",
            "auto": " (sans réponse : topic par défaut)", "ready": "Écris ton message ici.",
@@ -171,7 +176,10 @@ WORDS = {
            "pick_first": "Choisis d'abord où mettre la session (boutons au-dessus).",
            "open": "Sessions ouvertes (un fil chacune) :", "none_open": "Aucune session ouverte - écris dans le chat principal pour en démarrer une.",
            "threads_on": "Les fils sont activés : chaque session ouverte a son propre fil. Écris dans le chat principal pour en démarrer une.",
-           "notify_only": "Ce fil ne reçoit que des notifications - écris dans le fil d'une session ou dans le chat principal."},
+           "notify_only": "Ce fil ne reçoit que des notifications - écris dans le fil d'une session ou dans le chat principal.",
+           "in_thread": "/{cmd} concerne une session : envoyez-la dans le fil de cette session.",
+           "start_failed": "Impossible de démarrer la session : {err}. Vos messages sont gardés - choisissez à nouveau un topic (boutons au-dessus).",
+           "restarted": "Harness a redémarré avant de créer votre nouvelle session : {n} message(s) non traité(s) - renvoyez-les, s'il vous plaît."},
 }
 
 TOPICS_HELP = ("Telegram refused to create topic threads in this chat, so everything goes to the main "
@@ -217,6 +225,11 @@ def _state_path() -> Path:
 
 def _offset_path() -> Path:
     return config.state_dir("telegram") / "offset.json"
+
+
+def _new_path() -> Path:
+    """Messages waiting for the "where?" buttons (kept across a restart: the buttons still work after it)."""
+    return config.state_dir("telegram") / "new.json"
 
 
 def _inflight_path() -> Path:
@@ -287,10 +300,40 @@ def _forget_thread(tid: int) -> None:
     bus.invalidate("telegram", "workspace")
 
 
-def _thread_gone(e: TelegramError) -> bool:
+def _thread_closed(e: TelegramError) -> bool:
+    """The user closed the thread (TOPIC_CLOSED): it still exists, reopenForumTopic brings it back."""
     d = e.description.lower()
-    return e.code == 400 and ("thread" in d or "topic" in d) and ("not found" in d or "deleted" in d
-                                                                   or "closed" in d or "invalid" in d)
+    return e.code == 400 and ("topic_closed" in d or (("thread" in d or "topic" in d) and "closed" in d))
+
+
+def _thread_gone(e: TelegramError) -> bool:
+    """The thread was deleted (a closed one is not gone: see _thread_closed)."""
+    d = e.description.lower()
+    return e.code == 400 and not _thread_closed(e) and ("thread" in d or "topic" in d) \
+        and ("not found" in d or "deleted" in d or "invalid" in d)
+
+
+def _topics_refused(e: TelegramError) -> bool:
+    """Telegram says this chat cannot have topic threads (not a 429, a network or a server error)."""
+    d = e.description.lower()
+    return e.code in (400, 403) and any(k in d for k in (
+        "not a forum", "not enough rights", "topics_disabled", "topic_disabled", "forum_disabled",
+        "chat_admin_required", "only for supergroups", "can't manage topics", "not_enough_rights"))
+
+
+def _transient(e: TelegramError) -> bool:
+    return e.network or e.code == 429 or e.code >= 500
+
+
+def reopen_sync(tok: str, chat: int, tid: int) -> bool:
+    """Reopen a closed thread (blocking). True when it is open again."""
+    try:
+        call_sync(tok, "reopenForumTopic", chat_id=chat, message_thread_id=tid)
+        return True
+    except TelegramError as e:
+        return "not_modified" in e.description.lower() or "not modified" in e.description.lower()
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _bad_html(e: TelegramError) -> bool:
@@ -327,6 +370,22 @@ def _w(key: str, **kw: Any) -> str:
 def threaded() -> bool:
     """True when the bot chat has topics: one thread per open session (else: the main chat only)."""
     return load_state().get("topics_enabled") is not False
+
+
+SERVICE_KEYS = frozenset((
+    "pinned_message", "new_chat_members", "left_chat_member", "new_chat_title", "new_chat_photo",
+    "delete_chat_photo", "group_chat_created", "supergroup_chat_created", "channel_chat_created",
+    "message_auto_delete_timer_changed", "migrate_to_chat_id", "migrate_from_chat_id", "write_access_allowed",
+    "users_shared", "chat_shared", "connected_website", "proximity_alert_triggered", "boost_added",
+    "chat_background_set", "video_chat_scheduled", "video_chat_started", "video_chat_ended",
+    "video_chat_participants_invited", "giveaway_created", "giveaway_completed", "giveaway_winners",
+    "successful_payment", "refunded_payment", "general_forum_topic_hidden", "general_forum_topic_unhidden",
+    "checklist_tasks_done", "checklist_tasks_added", "paid_message_price_changed"))
+
+
+def _is_service(msg: dict) -> bool:
+    """A Telegram service message (not written by the user). A created thread is not one: it starts a session."""
+    return any(k in SERVICE_KEYS or (k.startswith("forum_topic_") and k != "forum_topic_created") for k in msg)
 
 
 def _msg_thread(msg: dict) -> int | None:
@@ -492,6 +551,13 @@ def _unique(p: Path) -> Path:
         names = [p.with_name(f"{stem}-{secrets.token_hex(3)}{suf}")]
 
 
+def _takes(fn: Callable[..., Any], name: str) -> bool:
+    try:
+        return name in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+
+
 def _fmt_cost(v: Any) -> str:
     try:
         return f"${float(v):.2f}"
@@ -518,7 +584,8 @@ class Gateway:
         self._groups: dict[str, list[dict]] = {}          # media_group_id -> messages
         self._sync_lock: asyncio.Lock | None = None
         self._sync_handle: asyncio.TimerHandle | None = None
-        self._new: dict[int, dict] = {}                   # thread id (0 = main chat) -> session to create
+        self._new: dict[int, dict] = {}                   # thread id (0 = main chat) -> session to create (_new_path)
+        self._new_taken = False
         self._lanes: dict[str, asyncio.Task] = {}         # session/topic -> its slow messages (files, voice), in order
         self._inflight: dict[str, dict] = {}               # messages of the lanes still running (see _inflight_path)
         self._inflight_taken = False
@@ -551,7 +618,13 @@ class Gateway:
         await self.client.aclose()
 
     def spawn(self, coro: Awaitable[Any], name: str = "telegram") -> asyncio.Task:
-        """Run a coroutine in the background; exceptions are logged, never raised."""
+        """Run a coroutine in the background; exceptions are logged, never raised. Nothing new starts once the
+        gateway is stopping (a late turn end would restart 'typing' forever and block the client's close)."""
+        if self._stopping:
+            if asyncio.iscoroutine(coro):
+                coro.close()
+            coro = asyncio.sleep(0)
+
         async def guard() -> None:
             try:
                 await coro
@@ -593,6 +666,9 @@ class Gateway:
                     # sessions changed, or a project (its emoji, its name) -> thread names to update
                     if ("sessions" in topics or "workspace" in topics) and tg_config().get("chat_id") and threaded():
                         self.schedule_sync(SYNC_DEBOUNCE)
+                    elif "feed" in topics and tg_config().get("chat_id") and threaded() \
+                            and FEED not in (tg_config().get("threads") or {}) and await asyncio.to_thread(_feed_on):
+                        self.schedule_sync(0.5)             # the feed's Telegram option was turned on
                 except asyncio.CancelledError:
                     raise
                 except Exception:                            # disk full, odd answer...: next pass, never stop
@@ -630,6 +706,7 @@ class Gateway:
         left = self._inflight_take()
         if left:
             self.spawn(self._inflight_recover(left), "inflight")
+        self._new_restore()
         while not self._stopping:
             to = poll_timeout()
             try:
@@ -669,16 +746,25 @@ class Gateway:
     # ---- sending -------------------------------------------------------------------------------
     async def send_html(self, chat: int, thread: int | None, html: str, silent: bool = False,
                         markup: dict | None = None) -> dict | None:
-        """sendMessage with fallbacks: bad HTML -> plain text, deleted thread -> main chat."""
+        """sendMessage with fallbacks: bad HTML -> plain text, closed thread -> reopened, deleted thread -> a new
+        one (session) or the main chat; flood limits and network errors are waited out (twice at most)."""
         params: dict[str, Any] = {"chat_id": chat, "text": html or "-", "parse_mode": "HTML",
                                   "message_thread_id": thread, "disable_notification": silent or None,
                                   "link_preview_options": {"is_disabled": True}, "reply_markup": markup}
-        for _ in range(3):
+        waits = reopened = 0
+        for _ in range(6):
             try:
                 return await self.client.call("sendMessage", **params)
             except TelegramError as e:
                 if _bad_html(e) and params.get("parse_mode"):
                     params.update(text=fmt.strip_tags(params["text"])[:4096] or "-", parse_mode=None)
+                elif _transient(e) and waits < 2:
+                    waits += 1
+                    await asyncio.sleep(min(float(e.retry_after or 2 * waits), 60.0))
+                elif _thread_closed(e) and params.get("message_thread_id") and not reopened:
+                    reopened = 1                        # closed by the user: open it again, never a duplicate
+                    if not await self._reopen_topic(chat, params["message_thread_id"]):
+                        params["message_thread_id"] = None
                 elif _thread_gone(e) and params.get("message_thread_id"):
                     old = params["message_thread_id"]
                     sid = sid_of_thread(old)
@@ -688,6 +774,17 @@ class Gateway:
                     log.warning("telegram sendMessage failed: %s", e.description)
                     return None
         return None
+
+    async def _reopen_topic(self, chat: int, tid: int) -> bool:
+        try:
+            await self.client.call("reopenForumTopic", chat_id=chat, message_thread_id=tid)
+            return True
+        except TelegramError as e:
+            d = e.description.lower()
+            if "not_modified" in d or "not modified" in d:  # already open
+                return True
+            log.info("reopenForumTopic %s failed: %s", tid, e.description)
+            return False
 
     async def reopen_thread(self, sid: str, session: dict | None = None) -> int | None:
         """A thread for an open session that has none (deleted by hand, or not synced yet). None when the
@@ -702,14 +799,20 @@ class Gateway:
         if not s or s.get("archived") or not is_human(s):
             return None
         name = session_label(s, [t["path"] for t in _topics()])
-        try:
-            r = await self.client.call("createForumTopic", chat_id=tg_config()["chat_id"], name=name)
-        except TelegramError as e:
-            log.warning("createForumTopic failed: %s", e.description)
-            return None
-        tid = (r or {}).get("message_thread_id")
+        assert self._sync_lock is not None
+        async with self._sync_lock:                     # a sync running meanwhile may have made it already
+            tid = thread_of(sid)
+            if tid is not None:
+                return tid
+            try:
+                r = await self.client.call("createForumTopic", chat_id=tg_config()["chat_id"], name=name)
+            except TelegramError as e:
+                log.warning("createForumTopic failed: %s", e.description)
+                return None
+            tid = (r or {}).get("message_thread_id")
+            if tid is not None:
+                _set_session_thread(sid, tid, name)
         if tid is not None:
-            _set_session_thread(sid, tid, name)
             bus.invalidate("telegram")
         return tid
 
@@ -757,6 +860,8 @@ class Gateway:
             await self._refuse(msg)
             return
         known = cmd in {c for c, _ in COMMANDS} | {"start"} if cmd else False
+        if _is_service(msg):                             # pinned, renamed, closed, members…: nothing to answer
+            return
         if threaded():
             tid = _msg_thread(msg)
             if tid is not None and tid in (tg.get("threads") or {}).values():
@@ -767,9 +872,9 @@ class Gateway:
             if sid:
                 session = await self._open_session(sid)
             if session is None:
-                if any(k.startswith("forum_topic_") and k != "forum_topic_created" for k in msg):
-                    return                                   # renamed / closed / reopened: nothing to do
                 await self._new_session_flow(msg, tid, cmd if known else None, arg)
+                return
+            if msg.get("forum_topic_created"):
                 return
             path = session.get("path") or ROOT
         else:
@@ -801,6 +906,7 @@ class Gateway:
             gid = str(msg["media_group_id"])
             first = gid not in self._groups
             self._groups.setdefault(gid, []).append(msg)
+            self._inflight_add(msg, "message")           # a restart before the flush: asked again at the next start
             if first:
                 self.spawn(self._flush_group(gid, path, sid), "media-group")
             return
@@ -874,10 +980,14 @@ class Gateway:
 
     async def _inflight_recover(self, left: dict) -> None:
         """Lanes cut by a restart: ask for those messages again (replaying them could start a turn twice)."""
+        told: set[tuple] = set()
         for item in left.values():
             if not isinstance(item, dict) or not isinstance(item.get("chat"), int):
                 continue
             what = "voice note" if item.get("kind") == "voice" else "message"
+            if (item["chat"], item.get("thread"), what) in told:     # an album: one notice
+                continue
+            told.add((item["chat"], item.get("thread"), what))
             try:
                 await self.send_html(item["chat"], item.get("thread") if isinstance(item.get("thread"), int) else None,
                                      fmt.escape(f"Harness restarted while your last {what} was being handled: "
@@ -889,26 +999,75 @@ class Gateway:
     async def _new_session_flow(self, msg: dict, tid: int | None, cmd: str | None, arg: str) -> None:
         """Main chat or a thread the user created: ask where the new session lives, keep the messages."""
         key = tid or 0
-        if cmd in ("help", "start"):
+        if cmd in ("help", "start", "sessions", "topic"):  # not about one session: answered here
             await self._command(cmd, arg, msg, ROOT, None)
             return
         p = self._new.get(key)
+        if cmd in ("status", "stop", "model", "close"):    # about a session: there is none here (yet)
+            asked = p is not None and not p.get("starting")
+            await self._reply(msg, _w("pick_first") if asked else _w("in_thread", cmd=cmd), silent=True)
+            return
+        if p is not None and p.get("starting"):           # tapped a topic, the session is being made: it gets these
+            if cmd is None and not msg.get("forum_topic_created"):
+                p["msgs"].append(msg)
+                self._new_save()
+            return
         if p is None:
             p = self._new[key] = {"msgs": [], "name": "", "title": "", "chat": msg["chat"]["id"], "thread": tid,
-                                  "asked": None, "task": None}
+                                  "asked": None, "task": None, "at": time.time()}
         if msg.get("forum_topic_created"):
             p["name"] = " ".join(str((msg["forum_topic_created"] or {}).get("name") or "").split())[:80]
         elif cmd == "new":
             p["title"] = arg[:80]
-        elif cmd:
-            await self._reply(msg, _w("pick_first"), silent=True)
-            return
         else:
             p["msgs"].append(msg)
+        self._new_save()
         if p["asked"] is None:
+            p["asked"] = 0                                # one question, even if the next message comes meanwhile
             m = await self._reply(msg, _w("where"), markup=keyboard(await self._where_rows(key)), silent=True)
             p["asked"] = (m or {}).get("message_id") or 0
             p["task"] = self.spawn(self._new_timeout(key), "new-session")
+            self._new_save()
+
+    def _new_save(self) -> None:
+        keep = {str(k): {f: v for f, v in p.items() if f != "task"} for k, p in self._new.items()}
+        try:
+            config.write_json(_new_path(), keep)
+        except OSError:
+            log.warning("telegram pending new sessions not saved", exc_info=True)
+
+    def _new_restore(self) -> None:
+        """Once per process: the "where?" questions of the previous process get their messages back (their
+        buttons still work); a session that was being made when it stopped is announced as not started."""
+        if self._new_taken:
+            return
+        self._new_taken = True
+        try:
+            left = config.read_json(_new_path(), {}) or {}
+        except (TypeError, ValueError, AttributeError):
+            left = {}
+        if not isinstance(left, dict):
+            left = {}
+        lost: list[dict] = []
+        for k, p in left.items():
+            try:
+                key = int(k)
+            except ValueError:
+                continue
+            if not isinstance(p, dict) or not isinstance(p.get("chat"), int) or not isinstance(p.get("msgs"), list):
+                continue
+            if p.get("starting") or not p.get("asked") or key in self._new:
+                lost.append(p)
+                continue
+            p["task"] = None
+            self._new[key] = p
+            wait = max(5.0, NEW_WAIT - (time.time() - float(p.get("at") or 0)))
+            p["task"] = self.spawn(self._new_timeout(key, wait), "new-session")
+        self._new_save()
+        for p in lost:
+            if p.get("msgs"):
+                self.spawn(self.send_html(p["chat"], p.get("thread") if isinstance(p.get("thread"), int) else None,
+                                          fmt.escape(_w("restarted", n=len(p["msgs"])))), "new-lost")
 
     async def _recent_topics(self) -> list[str]:
         svc = _service()
@@ -936,36 +1095,56 @@ class Gateway:
             rows.append([(_w("more"), f"w:{key}:+")])
         return rows
 
-    async def _new_timeout(self, key: int) -> None:
-        await asyncio.sleep(NEW_WAIT)
-        if key in self._new:
+    async def _new_timeout(self, key: int, wait: float | None = None) -> None:
+        await asyncio.sleep(NEW_WAIT if wait is None else wait)
+        p = self._new.get(key)
+        if p is not None and not p.get("starting"):
             await self._start_new(key, self._default_path(), auto=True)
 
     async def _start_new(self, key: int, path: str, auto: bool = False) -> None:
-        """Create the session chosen with the "where?" buttons and replay the messages kept meanwhile."""
-        p = self._new.pop(key, None)
-        if p is None:
+        """Create the session chosen with the "where?" buttons and replay the messages kept meanwhile (also the
+        ones written while it was being made)."""
+        p = self._new.get(key)
+        if p is None or p.get("starting"):
             return
+        p["starting"] = True
+        self._new_save()
         t = p.get("task")
         if t is not None and not t.done() and t is not asyncio.current_task():
             t.cancel()
         first = next((m.get("text") or m.get("caption") for m in p["msgs"] if m.get("text") or m.get("caption")), "")
         title = p["title"] or p["name"] or " ".join((first or "").split())[:60] or "Telegram"
         auto = not (p["title"] or p["name"]) and bool((first or "").strip())   # made from the message: shortened later
-        s, tid, name = await self.new_session(path, title, p["chat"], p["thread"], quote=first if p["thread"] is None else "",
-                                              auto_title=auto)
+        try:
+            s, tid, name = await self.new_session(path, title, p["chat"], p["thread"],
+                                                  quote=first if p["thread"] is None else "", auto_title=auto)
+        except Exception as e:                              # keep the messages: the buttons can be tapped again
+            log.exception("telegram new session failed")
+            p["starting"], p["task"] = False, None
+            self._new_save()
+            await self.send_html(p["chat"], p["thread"], "⚠️ " + fmt.escape(_w("start_failed", err=str(e)[:300])))
+            return
         where = topic_label(path) if path else "General"
-        if p["asked"]:
-            words = "moved" if p["thread"] is None and tid is not None else "started"
-            await self._edit({"chat": {"id": p["chat"]}, "message_id": p["asked"]},
-                             _w(words, title=fmt.escape(s.get("title") or title), where=fmt.escape(where),
-                                name=fmt.escape(name)) + (_w("auto") if auto else ""))
-        for m in p["msgs"]:
-            if tid is not None and _msg_thread(m) != tid:
-                m = {**m, "message_thread_id": tid, "is_topic_message": True}
-            await self._dispatch(m, path, s["id"], m.get("text") or m.get("caption") or "")
-        if not p["msgs"] and tid is not None:
-            await self.send_html(p["chat"], tid, _w("ready"), silent=True)
+        try:
+            if p["asked"]:
+                words = "moved" if p["thread"] is None and tid is not None else "started"
+                await self._edit({"chat": {"id": p["chat"]}, "message_id": p["asked"]},
+                                 _w(words, title=fmt.escape(s.get("title") or title), where=fmt.escape(where),
+                                    name=fmt.escape(name)) + (_w("auto") if auto else ""))
+            sent = 0
+            while p["msgs"]:
+                m = p["msgs"].pop(0)
+                self._new_save()
+                if tid is not None and _msg_thread(m) != tid:
+                    m = {**m, "message_thread_id": tid, "is_topic_message": True}
+                await self._dispatch(m, path, s["id"], m.get("text") or m.get("caption") or "")
+                sent += 1
+            if not sent and tid is not None:
+                await self.send_html(p["chat"], tid, _w("ready"), silent=True)
+        finally:
+            if self._new.get(key) is p and not self._stopping:   # stopping: the next start says what was left
+                self._new.pop(key, None)
+                self._new_save()
 
     async def new_session(self, path: str, title: str, chat: int, tid: int | None = None,
                           quote: str = "", auto_title: bool = False, plan_mode: bool = False) -> tuple[dict, int | None, str]:
@@ -994,8 +1173,10 @@ class Gateway:
                     log.warning("createForumTopic failed: %s", e.description)
                 if tid is not None:
                     _set_session_thread(s["id"], tid, name)
-                    if quote.strip():
-                        await self.send_html(chat, tid, f"💬 <i>{fmt.escape(quote.strip()[:800])}</i>", silent=True)
+                else:
+                    quote = ""
+        if quote.strip():                                 # outside the lock: send_html may reopen the thread
+            await self.send_html(chat, tid, f"💬 <i>{fmt.escape(quote.strip()[:800])}</i>", silent=True)
         bus.invalidate("telegram")
         return s, tid, name
 
@@ -1109,9 +1290,16 @@ class Gateway:
     async def _flush_group(self, gid: str, path: str, sid: str | None = None) -> None:
         await asyncio.sleep(MEDIA_GROUP_WAIT)
         msgs = self._groups.pop(gid, [])
-        if msgs:
-            text = next((m.get("caption") for m in msgs if m.get("caption")), "") or ""
-            await self._converse(msgs, path, text, sid=sid)
+        try:
+            if msgs:
+                text = next((m.get("caption") for m in msgs if m.get("caption")), "") or ""
+                await self._converse(msgs, path, text, sid=sid)
+        except asyncio.CancelledError:                  # stopping: kept in flight, told at the next start
+            raise
+        finally:
+            if not self._stopping:
+                for m in msgs:
+                    self._inflight_drop(self._inflight_mark(m))
 
     async def _download(self, msg: dict, path: str) -> list[str]:
         """Save the photo/document of a message under <topic>/attachments/telegram/YYYY-MM/."""
@@ -1204,7 +1392,8 @@ class Gateway:
             return
         chat = first["chat"]["id"]
         thread = first.get("message_thread_id") if first.get("is_topic_message") or first.get("message_thread_id") else None
-        await self._track(sid, chat, thread)
+        ref = secrets.token_hex(6)                        # found again in the meta of the turn that runs this message
+        p = await self._track(sid, chat, thread, ref)
         try:
             send = svc.send_message
             if not inspect.iscoroutinefunction(send):
@@ -1215,11 +1404,14 @@ class Gateway:
                     for m in msgs:
                         self._inflight_drop(self._inflight_mark(m))
                     return res
-            res = await _svc(send, sid, text, attachments or None, source="telegram")
+            kw = {"ref": ref} if _takes(svc.send_message, "ref") else {}
+            res = await _svc(send, sid, text, attachments or None, source="telegram", **kw)
         except Exception as e:
-            self._untrack(sid)
+            self._untrack(sid, ref)
             await self._reply(first, f"⚠️ {e}")
             return
+        finally:
+            p["sending"].discard(ref)
         if isinstance(res, dict) and res.get("queued"):
             await self._reply(first, "⏳ Queued - Harness is still working on the previous message.", silent=True)
 
@@ -1240,8 +1432,9 @@ class Gateway:
             bus.invalidate("telegram")
         return sid
 
-    async def _track(self, sid: str, chat: int, thread: int | None) -> None:
-        """Remember that a turn of `sid` must be answered in (chat, thread); start 'typing' + status."""
+    async def _track(self, sid: str, chat: int, thread: int | None, ref: str) -> dict:
+        """Remember that the turn running the message `ref` of `sid` must be answered in (chat, thread); start
+        'typing' + status."""
         p = self._pending.get(sid)
         if p is None:
             offset = 0
@@ -1254,34 +1447,70 @@ class Gateway:
                         _, offset = await _svc(svc.read_events, sid, 0)
                 except Exception:
                     offset = 0
-            p = self._pending[sid] = {"chat": chat, "thread": thread, "count": 0, "offset": offset}
-            self._reset_status(p)
-            p["task"] = self.spawn(self._typing(sid), "typing")
+            p = self._pending.get(sid)                   # another message may have started it meanwhile
+            if p is None:
+                p = self._pending[sid] = {"chat": chat, "thread": thread, "refs": [], "sending": set(), "dead": {},
+                                          "offset": offset, "task": None}
+                self._reset_status(p)
         p.update(chat=chat, thread=thread)
-        p["count"] += 1
+        p["refs"].append(ref)
+        p["sending"].add(ref)
+        if p.get("task") is None or p["task"].done():
+            p["task"] = self.spawn(self._typing(sid), "typing")
+        return p
 
     @staticmethod
     def _reset_status(p: dict) -> None:
         p.update(steps=[], todos=[], msg_id=None, shown="", started=time.monotonic(), edited=0.0)
 
-    def _untrack(self, sid: str) -> dict | None:
+    def _untrack(self, sid: str, ref: str | None = None) -> dict | None:
+        """Forget the message `ref` (None: all of them); no message left -> no more 'typing'."""
         p = self._pending.get(sid)
         if p is None:
             return None
-        p["count"] -= 1
-        if p["count"] <= 0:
+        if ref is None:
+            p["refs"].clear()
+        elif ref in p["refs"]:
+            p["refs"].remove(ref)
+        p["sending"].discard(ref)
+        if not p["refs"]:
             self._pending.pop(sid, None)
             t = p.get("task")
             if t is not None and not t.done() and t is not asyncio.current_task():
                 t.cancel()
         return p
 
+    async def _recheck(self, sid: str, p: dict) -> None:
+        """Drop the messages that are neither queued nor running any more (/stop, steer, a cleared queue) - after
+        REF_GRACE, so that a turn that just ended is answered first."""
+        svc = _service()
+        if svc is None or not hasattr(svc, "live_refs"):
+            return
+        try:
+            live = await _svc(svc.live_refs, sid)
+        except Exception:  # noqa: BLE001
+            return
+        now = time.monotonic()
+        for r in list(p["refs"]):
+            if r in live or r in p["sending"]:
+                p["dead"].pop(r, None)
+            elif now - p["dead"].setdefault(r, now) >= REF_GRACE:
+                p["dead"].pop(r, None)
+                p["refs"].remove(r)
+        if not p["refs"] and self._pending.get(sid) is p:
+            self._untrack(sid)
+
     async def _typing(self, sid: str) -> None:
         """'typing…' every few seconds while a Telegram turn runs, and the live status message."""
-        started, typed = time.monotonic(), 0.0
-        while sid in self._pending and time.monotonic() - started < TYPING_MAX:
+        started, typed, checked = time.monotonic(), 0.0, time.monotonic()
+        while sid in self._pending and not self._stopping and time.monotonic() - started < TYPING_MAX:
             p = self._pending[sid]
             now = time.monotonic()
+            if now - checked >= RECHECK_EVERY:
+                checked = now
+                await self._recheck(sid, p)
+                if self._pending.get(sid) is not p:
+                    return
             if now - typed >= TYPING_EVERY:
                 typed = now
                 await self._chat_action(p)
@@ -1365,25 +1594,48 @@ class Gateway:
                 log.warning("telegram status edit failed: %s", e.description)
 
     async def on_turn_end(self, session: dict, result: dict | None) -> None:
-        """A turn of any session finished: answer Telegram turns, notify web sessions."""
+        """A turn of any session finished: answer the turns started from Telegram, mirror / notify the others.
+        `session["last_turn"]` (sessions.service) says which message the turn ran; a summary (compaction,
+        hand-off) is never sent as an answer."""
+        if self._stopping:                              # answered (or asked again) by the next start
+            return
         sid = session.get("id", "")
         p = self._pending.get(sid)
+        last = session.get("last_turn")
+        kind = (last or {}).get("kind") or "user"
         if p is not None:
             t = p.get("task")                           # stop the status loop first: an edit still in
             if t is not None and not t.done():          # flight must not land after the final summary
                 t.cancel()
                 await asyncio.gather(t, return_exceptions=True)
-            if live_status():
-                failed = session.get("state") == "error" or (isinstance(result, dict) and result.get("ok") is False)
-                try:
-                    await self._progress(sid, p, final="error" if failed else "ok")
-                except Exception:  # noqa: BLE001
-                    log.exception("telegram status update failed")
-            self._untrack(sid)
-            await self._answer(sid, session, result, p["chat"], p["thread"])
-            self._reset_status(p)                       # a queued message starts a new status
-            if self._pending.get(sid) is p:             # ... and gets its own typing / status loop
+            # after the loop stopped: it may have dropped refs that were no longer live meanwhile
+            if isinstance(last, dict):
+                done = [r for r in p["refs"] if r in set(last.get("refs") or [])]
+            else:                                       # a service without turn refs: the oldest message
+                done = p["refs"][:1]
+            if done:
+                if live_status():
+                    failed = session.get("state") == "error" or (isinstance(result, dict) and result.get("ok") is False)
+                    try:
+                        await self._progress(sid, p, final="error" if failed else "ok")
+                    except Exception:  # noqa: BLE001
+                        log.exception("telegram status update failed")
+                p["refs"] = [r for r in p["refs"] if r not in done]
+                await self._answer(sid, session, result, p["chat"], p["thread"])
+            elif session.get("state") == "error":       # the turn never started (or its runner died)
+                self._untrack(sid)
+                err = session.get("error") or "the turn failed"
+                await self.send_html(p["chat"], thread_of(sid) or p["thread"], "⚠️ " + fmt.escape(str(err)[:3000]))
+                return
+            await self._recheck(sid, p)
+            if self._pending.get(sid) is p and p["refs"]:
+                self._reset_status(p)                   # the next message gets its own typing / status loop
                 p["task"] = self.spawn(self._typing(sid), "typing")
+            elif self._pending.get(sid) is p:
+                self._untrack(sid)
+            if done:
+                return
+        if kind in ("compact", "handoff", "seed"):      # a summary or its seed: not an answer to show
             return
         if mirror_web() and threaded() and is_human(session) \
                 and not session.get("archived") and await self._mirror(session, result):
@@ -1488,6 +1740,7 @@ class Gateway:
                     await self._reply(msg, "Nothing is running.", silent=True)
                 else:
                     await _svc(svc.stop, sid)
+                    self._untrack(sid)                  # the queue is gone too: no more 'typing'
                     await self._reply(msg, "⏹ Stopped.")
             elif cmd == "close":
                 await self._cmd_close(msg, path, sid)
@@ -1681,7 +1934,7 @@ class Gateway:
             key = int(key_s)
         except ValueError:
             return "Unknown action."
-        if key not in self._new:
+        if key not in self._new or self._new[key].get("starting"):
             return "Already done."
         if h == "+":
             try:
@@ -1790,10 +2043,12 @@ async def sync_threads_with(call: Callable[..., Awaitable[Any]]) -> dict:
         try:
             r = await call("createForumTopic", chat_id=chat, name=SPECIAL[key])
         except TelegramError as e:
-            if e.network:
-                error = f"Telegram unreachable: {e.description}"
+            if _transient(e):                         # flood limit, network, Telegram's own error: next sync
+                error = (f"Telegram unreachable: {e.description}" if e.network
+                         else f"Telegram asks to slow down: {e.description}" if e.code == 429
+                         else f"Telegram error: {e.description}")
                 break
-            if not threads and created == 0:
+            if not threads and created == 0 and _topics_refused(e):
                 enabled = False
                 error = f"{TOPICS_HELP} (Telegram said: {e.description})"
                 break
@@ -1874,9 +2129,13 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
     want = {s["id"]: s for s in wanted}
     topics = [t["path"] for t in _topics()]
     mapped = session_threads()
+    exists = getattr(svc, "session_exists", None)
     for sid, info in mapped.items():
         if sid in want:
             continue
+        if exists is not None and await asyncio.to_thread(svc.get_session, sid) is None \
+                and await asyncio.to_thread(exists, sid):
+            continue                                   # its file could not be read just now: not gone
         try:
             await call("deleteForumTopic", chat_id=chat, message_thread_id=info["tid"])
         except TelegramError as e:
@@ -1896,7 +2155,7 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
                 r = await call("createForumTopic", chat_id=chat, name=name)
             except TelegramError as e:
                 res["error"] = f"Could not create the thread \"{name}\": {e.description}"
-                if e.network:
+                if e.network or e.code == 429:         # the next sync goes on (new_session waits on this pass)
                     break
                 continue
             tid = (r or {}).get("message_thread_id")
@@ -1923,10 +2182,13 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
                         res["created"] += 1
                 except TelegramError as e2:
                     log.info("createForumTopic failed: %s", e2.description)
+                    if e2.network or e2.code == 429:
+                        res["error"] = f"Telegram {'unreachable' if e2.network else 'asks to slow down'}: {e2.description}"
+                        break
             elif "not_modified" in e.description.lower() or "not modified" in e.description.lower():
                 _set_session_thread(sid, info["tid"], name)
-            elif e.network:
-                res["error"] = f"Telegram unreachable: {e.description}"
+            elif e.network or e.code == 429:
+                res["error"] = f"Telegram {'unreachable' if e.network else 'asks to slow down'}: {e.description}"
                 break
             else:
                 log.info("editForumTopic %s failed: %s", info["tid"], e.description)
@@ -2155,6 +2417,7 @@ def status() -> dict:
                    + [{"path": "", "thread_id": v["tid"], "name": v.get("name") or "", "session_id": sid}
                       for sid, v in session_threads().items()],
         "settings": {"notify_crons": bool(tg.get("notify_crons", True)),
+                     "notify_system": bool(tg.get("notify_system", True)),
                      "login_alerts": bool(tg.get("login_alerts", True)),
                      "two_factor": bool(tg.get("two_factor")),
                      "reply_mode": reply_mode(tg),
@@ -2166,9 +2429,9 @@ def status() -> dict:
 
 
 def update_settings(**kw: Any) -> dict:
-    """PUT /api/telegram/settings (notify_crons, login_alerts, reply_mode, thread_days)."""
+    """PUT /api/telegram/settings (notify_crons, notify_system, login_alerts, reply_mode, thread_days)."""
     def fn(tg: dict) -> None:
-        for k in ("notify_crons", "login_alerts", "mirror_web"):
+        for k in ("notify_crons", "notify_system", "login_alerts", "mirror_web"):
             if kw.get(k) is not None:
                 tg[k] = bool(kw[k])
         if kw.get("mirror_web") is not None:
@@ -2192,33 +2455,47 @@ def update_settings(**kw: Any) -> dict:
 
 # ---- notifications (thread-safe, any process) ------------------------------------------------
 def _send_sync(key: str, parts: list[str], silent: bool, markup: dict | None = None) -> bool:
-    """Direct blocking send (no gateway in this process). Never raises."""
+    """Direct blocking send (no gateway in this process): every part in order, each retried on its own (flood
+    limits waited out up to a minute). Returns False when a part could not be sent. Never raises."""
     tok = token()
     chat, thread = _target(key)
     if not tok or not chat:
         return False
-    try:
-        for i, p in enumerate(parts):
-            params: dict[str, Any] = {"chat_id": chat, "text": p, "parse_mode": "HTML",
-                                      "message_thread_id": thread, "disable_notification": silent or None,
-                                      "link_preview_options": {"is_disabled": True},
-                                      "reply_markup": markup if i == len(parts) - 1 else None}
-            for _ in range(3):
-                try:
-                    call_sync(tok, "sendMessage", **params)
-                    break
-                except TelegramError as e:
-                    if _bad_html(e) and params.get("parse_mode"):
-                        params.update(text=fmt.strip_tags(p)[:4096], parse_mode=None)
-                    elif _thread_gone(e) and params.get("message_thread_id"):
-                        _forget_thread(params["message_thread_id"])
+    ok = True
+    for i, p in enumerate(parts):
+        params: dict[str, Any] = {"chat_id": chat, "text": p, "parse_mode": "HTML",
+                                  "message_thread_id": thread, "disable_notification": silent or None,
+                                  "link_preview_options": {"is_disabled": True},
+                                  "reply_markup": markup if i == len(parts) - 1 else None}
+        waits = reopened = 0
+        for _ in range(6):
+            try:
+                call_sync(tok, "sendMessage", max_wait=60.0, **params)
+                break
+            except TelegramError as e:
+                if _bad_html(e) and params.get("parse_mode"):
+                    params.update(text=fmt.strip_tags(p)[:4096], parse_mode=None)
+                elif _transient(e) and waits < 2:
+                    waits += 1
+                    time.sleep(min(float(e.retry_after or 2 * waits), 60.0))
+                elif _thread_closed(e) and params.get("message_thread_id") and not reopened:
+                    reopened = 1                       # closed by the user: open it again, never a duplicate
+                    if not reopen_sync(tok, chat, params["message_thread_id"]):
                         params["message_thread_id"] = None
-                    else:
-                        raise
-        return True
-    except Exception as e:
-        log.warning("telegram notification failed: %s", e)
-        return False
+                elif _thread_gone(e) and params.get("message_thread_id"):
+                    _forget_thread(params["message_thread_id"])
+                    thread = params["message_thread_id"] = None
+                else:
+                    log.warning("telegram notification failed: %s", e)
+                    ok = False
+                    break
+            except Exception as e:  # noqa: BLE001
+                log.warning("telegram notification failed: %s", e)
+                ok = False
+                break
+        else:
+            ok = False
+    return ok
 
 
 def _post(key: str, parts: list[str], silent: bool, markup: dict | None = None) -> None:
@@ -2247,6 +2524,20 @@ def alert(text: str, loud: bool = False) -> None:
             _post(ALERTS, fmt.plain(text), silent=not loud)
     except Exception:
         log.exception("telegram alert failed")
+
+
+def system_alert(text: str, loud: bool = True) -> bool:
+    """A problem of the server itself (an update that failed or was rolled back, a known vulnerability, Claude Code
+    that could not update…) into the "Alerts" thread, unless `notify_system` is off. True when it was handed over."""
+    try:
+        tg = tg_config()
+        if not tg.get("notify_system", True) or not token() or not tg.get("chat_id"):
+            return False
+        _post(ALERTS, fmt.plain(text), silent=not loud)
+        return True
+    except Exception:
+        log.exception("telegram system alert failed")
+        return False
 
 
 def notify_topic(path: str, text: str) -> None:

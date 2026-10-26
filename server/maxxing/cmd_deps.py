@@ -55,8 +55,10 @@ def cmd_deps(a) -> int:
         failed = [r for r in rep if r["result"] == "failed"]
         if failed and a.notify:
             from . import feed
-            feed.system("Dependency update failed", "\n".join(f"{r['name']}: {r['text']}" for r in failed)[:2000],
-                        "warning", "system", "/settings")
+            body = "\n".join(f"{r['name']}: {r['text']}" for r in failed)[:2000]
+            feed.system("Dependency update failed", body, "warning", "system", "/settings")
+            from .telegram import gateway
+            gateway.system_alert("Dependency update failed (Harness Maxxing):\n" + body)
         if a.quiet and failed:
             for r in failed:
                 print(f"{r['name']}: {r['text']}", file=sys.stderr)

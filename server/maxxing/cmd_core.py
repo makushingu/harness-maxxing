@@ -1584,7 +1584,7 @@ def check_update(branch: str | None = None) -> dict:
 
 
 def notify_update(info: dict) -> bool:
-    """Telegram message (Crons thread) about an available update; no-op when not configured."""
+    """Telegram message ("Alerts" thread) about an available update; no-op when not configured."""
     from . import feed
     feed.system(f"Update available: {info['latest']}", f"Installed: {info['current']}. Open the topic {update_topic()} "
                 "and say: update.", "info", "system", f"/sessions?path=projects/{update_topic().replace('/', '/topics/')}",
@@ -1595,8 +1595,7 @@ def notify_update(info: dict) -> bool:
             + (f" ({url}/sessions)" if url else "") + " and say: update")
     try:
         from .telegram import gateway
-        gateway.notify_cron(text)
-        return True
+        return gateway.system_alert(text, loud=False)
     except Exception:  # noqa: BLE001 - never fail the check because of Telegram
         return False
 
@@ -1753,7 +1752,7 @@ def _notify(text: str) -> None:
     feed.system("Update needs attention", text, "warning", "system", f"/sessions?path=projects/{update_topic().replace('/', '/topics/')}")
     try:
         from .telegram import gateway
-        gateway.notify_cron(text)
+        gateway.system_alert(text)
     except Exception:  # noqa: BLE001 - Telegram is optional
         pass
 
