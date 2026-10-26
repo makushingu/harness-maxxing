@@ -3,6 +3,25 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.100 - 2026-10-26
+
+Changes:
+- **Open pages switch to the new version by themselves after an update.** No more reload by hand: a page where
+  you are typing waits until you leave the field or the tab.
+- **Sessions: the mouse wheel over a session's title bar, or Shift + wheel anywhere, scrolls the sessions
+  sideways.**
+- **Video player on a phone or a tablet: the volume slider works with a finger** (tap the speaker to open it, tap
+  again to mute), also on iPhone and iPad. In Auto quality, a video no longer jumps when you come back to it: the
+  lighter copy only takes over when the playback stalls.
+- **`maxxing update --branch` keeps your customizations** on the new branch.
+- **Touch screens: bigger buttons** for the background agents pill, "Seen" on a server issue, the tabs view chips
+  and their close button, the donate button and the profile colours. On a narrow phone with Maxxing mode on, the
+  app bar keeps the logo instead of a cut name.
+- **Fixes:** removing the license key now forgets all its details, and its hint shows only the last 4 characters;
+  a damaged scheduled jobs file no longer empties the list of jobs; a long session with many agents opens much
+  faster; a tab still on an older version gets a clear error instead of a broken page; feedback and license
+  activation give a clear error when the network cuts; marking a server issue as seen no longer hides a similar one.
+
 ## 2.0.0-alpha.99 - 2026-10-25
 
 Changes:
