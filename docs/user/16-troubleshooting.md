@@ -138,8 +138,9 @@ in a file (the message names the file). See [Backup](backup).
 **Disk full.** Check `~/.claude/projects` (transcripts), attachments in topics, and the journal
 (`journalctl --vacuum-size=200M`). Delete with care: transcripts are needed to resume sessions.
 
-**The UI looks outdated after an update.** Reload the page; the app's HTML is never cached, a
-reload is enough.
+**The UI looks outdated after an update.** An open page loads the new version by itself once the
+server is back (if you are typing, as soon as you leave the field). Otherwise reload the page; the
+app's HTML is never cached, a reload is enough.
 
 **Tailscale URL stops working after a reboot.** If the Tailscale IP changed, re-run the installer
 with `ACCESS=tailscale` (or `maxxing init --bind <ip> --public-url http://<ip>:8787` and restart).
