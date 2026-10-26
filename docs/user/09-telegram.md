@@ -20,16 +20,25 @@ program to install.
 
 1. In Telegram, open **@BotFather**, send `/newbot`, choose a name and a username ending in `bot`.
    Copy the token it gives you (`123456789:AA...`).
-2. In BotFather, open your bot's settings and **enable topics (threads) for private chats**, so
+2. In BotFather, send `/mybots`, pick your bot, then **Bot Settings -> Threaded Mode -> turn it on**, so
    each open session gets its own thread. Without it everything works in the main chat (use
-   `/topic` to choose which topic it talks to).
-3. Paste the token in Settings -> Telegram. The server checks it.
-4. Click **Link**, open the `t.me/<bot>?start=<code>` link on your phone and press **Start**. The
-   code is valid 15 minutes. From then on, messages from any other chat are ignored.
-5. Click **Sync threads** (afterwards it is automatic: see below).
+   `/topic` to choose which topic it talks to) and Settings -> Telegram shows a notice with a
+   **Retry** button.
+3. Paste the token in Settings -> Telegram and press **Verify token**. The server checks it, and checks
+   that no other program uses the bot (a webhook, or another program reading its messages).
+4. Click **Link my Telegram**, open the `t.me/<bot>?start=<code>` link on your phone (or scan the QR code)
+   and press **Start**. The code is valid 15 minutes (the countdown shows under it; then **New link**).
+   You can leave the page: the code is still there when you come back. From then on, messages from any
+   other chat are ignored.
+5. The threads are created right after linking (and kept in sync automatically: see below). Setup is done
+   as soon as the chat is linked.
 6. Choose the options: cron reports, sign-in alerts, [two-step sign-in](#two-step-sign-in), reply mode (*live progress*, the default = one
    status message updated while Claude works with its task list and each step, folded into a summary
-   at the end; *final answer* = only the answer). Press **Send test**.
+   at the end; *final answer* = only the answer). Press **Send a test message**: it sends a message
+   and checks that the server receives messages too (poller running, last answer from Telegram, no webhook).
+
+At every stage, **Change bot** takes the token of another bot (or a new token of the same bot) - nothing
+changes until it is verified - and, once linked, **Link another chat** replaces the linked chat.
 
 Cron reports arrive in *Crons*: a Claude job's answer is shown from its beginning, formatted like a normal reply
 (bold, lists, code; tables become one bullet per row), split over several messages and cut after about 12,000
@@ -112,18 +121,27 @@ maxxing 2fa status          # on / off
 ## Troubleshooting
 
 ```bash
-maxxing telegram status     # bot, chat, threads, settings, last error
-maxxing telegram test       # sends a test message
+maxxing telegram status     # bot, chat, poller (running, last answer from Telegram), pending link, poll / sync errors, threads
+maxxing telegram test       # sends a test message and checks the receiving side (poller, webhook)
 ```
+
+Settings -> Telegram shows the same: **Gateway** (running / stopped), **Last answer from Telegram**,
+*Receiving messages* errors (the poller) apart from *Thread sync* errors.
 
 | Problem | Fix |
 |---|---|
-| Token rejected | revoked or mistyped: get a new one from BotFather (`/token`) and paste it again |
-| "Conflict: terminated by other getUpdates" | another program (an old bot, another server) uses the same bot: stop it or create a new bot |
-| Nothing answers | the message comes from another chat than the linked one: re-link |
-| Everything lands in one chat | topics not enabled for the bot in BotFather; enable, then Sync threads |
+| "Telegram rejected the bot token" | the token was revoked or replaced in BotFather (`/revoke`, `/token`): Settings -> Telegram shows the token field right away - paste the new token. Same bot: the chat and the threads are kept |
+| "This bot sends its messages to a webhook" | another program (n8n, Make, an old script…) receives the bot's messages through a webhook: press **Remove the webhook** (that program stops receiving them) or create a dedicated bot |
+| "Another program (n8n, Hermes, OpenClaw…) is already using this bot" | Telegram gives a bot's messages to one program only (error 409 Conflict): stop the other program, or create a bot dedicated to Harness Maxxing |
+| "This link expired or is not valid" in Telegram | the code is older than 15 minutes, or Start was pressed before the link was created: Settings -> Telegram -> **New link**, then open that link (or scan its QR code). A Start pressed before the link exists is ignored |
+| Nothing answers | the message comes from another chat than the linked one: **Link another chat** |
+| Everything lands in one chat ("Threads are disabled for this bot") | Threaded Mode is off for the bot: in BotFather `/mybots` -> your bot -> Bot Settings -> Threaded Mode, then **Retry** in Settings -> Telegram. Not an error: the main chat works meanwhile |
 | A session vanished from Telegram | archived (in the web UI: Sessions tree -> topic -> Archived), or idle longer than *Keep a thread for* - it comes back when you use it |
-| A special thread (Crons, Alerts) was deleted | Sync threads recreates it |
+| A special thread (Crons, Alerts) was deleted | **Sync threads** (Settings -> Telegram -> Threads) recreates it |
 | Two-step sign-in: no message, you cannot sign in | on the server: `maxxing 2fa off`, then sign in with the password |
 
-To disconnect: Settings -> Telegram -> **Unlink** (forgets the token and the chat).
+`maxxing doctor` warns when the bot is configured but the server is not reading its messages (poller
+stopped, or no answer from Telegram for 5 minutes), when the token was rejected, or when the last thread
+sync failed. Threads being off is shown as a note, not a warning.
+
+To disconnect: Settings -> Telegram -> **Disconnect Telegram** (forgets the token, the chat and the threads).

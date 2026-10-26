@@ -38,8 +38,13 @@ inside the server they go through the running gateway; elsewhere (e.g. `maxxing 
 are sent directly with a short-lived HTTP client.
 
 State files (state_dir('telegram')):
-  state.json  {bot:{id,username,name,has_topics_enabled}, topics_enabled, last_error,
-               link:{code, expires}|null, refused:[chat_id], fallback_path}
+  state.json  {bot:{id,username,name,has_topics_enabled}, topics_enabled,
+               poll_error, poll_error_code (set / cleared by the poller only: 401 -> "token_rejected",
+               409 -> "conflict", else "unreachable"), sync_error (thread sync), topics_notice (topics off
+               in @BotFather: information, not an error), last_poll_ok + poller_pid (heartbeat of the
+               poller, read by `maxxing telegram status` / doctor from another process),
+               link:{code, created, expires}|null, refused:[chat_id], fallback_path}
+               (`last_error` = older versions; status() still reports it as poll_error or sync_error)
   offset.json {offset}
 """
 from __future__ import annotations
@@ -68,6 +73,8 @@ ROOT, CRONS, ALERTS, FEED = "", "#crons", "#alerts", "#feed"
 SPECIAL = {ROOT: "General", CRONS: "Crons", ALERTS: "Alerts", FEED: "Notifications"}
 NOTIFY_ONLY = (CRONS, ALERTS, FEED)    # threads the bot writes in; not topics, never migrated
 LINK_TTL = 15 * 60
+LINK_GRACE = 24 * 3600         # a /start with a wrong or expired code this long after a link is explained, not refused
+HEARTBEAT_EVERY = 30.0         # last_poll_ok is written at most this often
 TYPING_EVERY = 4.0             # Telegram shows "typing…" for ~5 s
 PROGRESS_EVERY = 3.0           # the live status message is edited at most this often
 PROGRESS_DELAY = 4.0           # quick answers get no status message
@@ -184,7 +191,10 @@ WORDS = {
 
 TOPICS_HELP = ("Telegram refused to create topic threads in this chat, so everything goes to the main "
                "chat. To get one thread per topic, enable topics (\"threaded mode\") for your bot in "
-               "@BotFather (open your bot's settings), then press \"Sync threads\" again.")
+               "@BotFather (open your bot's settings, \"Threaded Mode\"), then press \"Retry\" in "
+               "Settings -> Telegram.")
+CONFLICT_HELP = ("Another program (n8n, Hermes, OpenClaw, a second Harness Maxxing…) is already reading this "
+                 "bot's messages: stop it, or create a bot dedicated to Harness Maxxing with @BotFather.")
 
 COMMANDS = [
     ("new", "Start a new session (its own thread)"),
@@ -252,10 +262,23 @@ def update_state(**changes: Any) -> dict:
         return st
 
 
-def _set_error(msg: str | None) -> None:
-    if load_state().get("last_error") != msg:
-        update_state(last_error=msg)
+def _set_poll_error(msg: str | None, code: str | None = None) -> None:
+    """Error of the poller (getUpdates). Only the poller sets / clears it; the thread sync has `sync_error`."""
+    st = load_state()
+    if st.get("poll_error") != msg or st.get("poll_error_code") != code:
+        update_state(poll_error=msg, poll_error_code=code if msg else None)
         bus.invalidate("telegram")
+
+
+_set_error = _set_poll_error                                     # older name
+
+
+LINK_WORDS = {
+    "en": "This link expired or is not valid - create a new one in Harness Maxxing → Settings → Telegram, "
+          "then open it (or scan its QR code).",
+    "fr": "Ce lien a expiré ou n'est pas valide - créez-en un nouveau dans Harness Maxxing → Réglages → Telegram, "
+          "puis ouvrez-le (ou scannez son QR code).",
+}
 
 
 def tg_config() -> dict:
@@ -590,6 +613,8 @@ class Gateway:
         self._inflight: dict[str, dict] = {}               # messages of the lanes still running (see _inflight_path)
         self._inflight_taken = False
         self._inflight_lock = threading.Lock()              # also dropped from the worker thread of send_message
+        self._beat = 0.0                                   # last heartbeat written (see _poll_ok)
+        self._poll_err = bool(load_state().get("poll_error"))
 
     # ---- lifecycle ---------------------------------------------------------------------------
     async def start(self) -> None:
@@ -691,6 +716,28 @@ class Gateway:
                     await asyncio.sleep(5)
         finally:
             self.running = False
+            try:
+                if load_state().get("poller_pid") == os.getpid():
+                    update_state(poller_pid=None)
+            except OSError:
+                pass
+
+    def _poll_ok(self) -> None:
+        """A getUpdates answered: heartbeat (at most every HEARTBEAT_EVERY s) and the poll error cleared."""
+        now = time.time()
+        if not self._poll_err and now - self._beat < HEARTBEAT_EVERY:
+            return
+        self._beat = now
+        changes: dict[str, Any] = {"last_poll_ok": now, "poller_pid": os.getpid()}
+        if self._poll_err:
+            changes.update(poll_error=None, poll_error_code=None)
+        try:
+            update_state(**changes)
+        except OSError:
+            return
+        if self._poll_err:
+            self._poll_err = False
+            bus.invalidate("telegram")
 
     async def _poll(self) -> None:
         backoff = 1.0
@@ -714,20 +761,20 @@ class Gateway:
                     "getUpdates", http_timeout=to + 15, offset=offset or None, timeout=to,
                     allowed_updates=["message", "callback_query"])
             except TelegramError as e:
+                self._poll_err = True
                 if e.code in (401, 404):
-                    _set_error("Telegram rejected the bot token - enter a new token.")
+                    _set_poll_error("Telegram rejected the bot token (revoked or replaced in @BotFather) - "
+                                    "enter the new token.", "token_rejected")
                     log.warning("telegram token rejected, gateway stopped")
                     return
                 if e.code == 409:
-                    _set_error("Another program is reading this bot's updates (a webhook or a second "
-                               "instance). Use a bot dedicated to Harness Maxxing.")
+                    _set_poll_error(CONFLICT_HELP, "conflict")
                 else:
-                    _set_error(f"Telegram unreachable: {e.description}")
+                    _set_poll_error(f"Telegram unreachable: {e.description}", "unreachable")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
                 continue
-            if backoff > 1:
-                _set_error(None)
+            self._poll_ok()
             backoff = 1.0
             for u in updates or []:
                 offset = self._offset = max(offset, int(u.get("update_id", 0)) + 1)
@@ -857,6 +904,14 @@ class Gateway:
         if cmd == "start" and arg and await self._try_link(msg, arg):
             return
         if not self.authorized(msg["chat"].get("id"), frm.get("id")):
+            link = load_state().get("link") or {}
+            if link.get("code"):
+                created = float(link.get("created") or 0)
+                if created and float(msg.get("date") or 0) + 2 < created:
+                    return                       # sent before the link existed (Start pressed too early): not an answer
+                if cmd == "start" and time.time() < float(link.get("expires") or 0) + LINK_GRACE:
+                    await self._link_invalid(msg)
+                    return
             await self._refuse(msg)
             return
         known = cmd in {c for c, _ in COMMANDS} | {"start"} if cmd else False
@@ -1196,6 +1251,16 @@ class Gateway:
         if msg["chat"].get("type") == "private":
             await self.send_html(cid, None, "Sorry, this is a private assistant - it only answers its owner.")
 
+    async def _link_invalid(self, msg: dict) -> None:
+        """/start with a wrong or expired code (or none) while a link is pending or recent: say how to get a
+        new one (the chat is NOT added to `refused`, so the next try is answered too)."""
+        chat = msg["chat"]
+        if chat.get("type") != "private":
+            return
+        lang = str((msg.get("from") or {}).get("language_code") or "")
+        text = LINK_WORDS["fr" if lang.startswith("fr") or (not lang and _lang() == "fr") else "en"]
+        await self.send_html(chat["id"], None, fmt.escape(text))
+
     def _path_for(self, msg: dict) -> str | None:
         """Topic path of an incoming message; None = a notification-only thread."""
         tid = msg.get("message_thread_id") if msg.get("is_topic_message") or msg.get("message_thread_id") else None
@@ -1235,7 +1300,8 @@ class Gateway:
             tg["chat_title"] = title
             tg["user_ids"] = [frm["id"]]
         mutate_tg(fn)
-        update_state(link=None, refused=[], fallback_path=ROOT, topics_enabled=None)
+        update_state(link=None, refused=[], fallback_path=ROOT, topics_enabled=None, topics_notice=None,
+                     sync_error=None)
         bus.invalidate("telegram", "workspace")
         await self.send_html(chat["id"], None,
                              "<b>Linked to Harness Maxxing.</b>\nEach open session gets its own thread. "
@@ -2066,12 +2132,20 @@ async def sync_threads_with(call: Callable[..., Awaitable[Any]]) -> dict:
     if enabled and not error:
         r = await _sync_sessions(call, chat)
         created, deleted, error = created + r["created"], r["deleted"], r["error"]
-    update_state(topics_enabled=enabled, last_error=error)
+    # Topics off in @BotFather is not an error (everything works in the main chat): kept apart as a notice
+    notice = error if enabled is False and error and error.startswith(TOPICS_HELP) else None
+    if notice:
+        error = None
+    changes: dict[str, Any] = {"topics_enabled": enabled, "sync_error": error, "last_error": None}
+    if notice or enabled:
+        changes["topics_notice"] = notice
+    update_state(**changes)
     # "workspace" (thread links of the sessions) only when a link changed (created, deleted, renamed or dropped): the
     # session watcher syncs again on "workspace", so announcing it every time made the sync re-run itself forever
     changed = created or deleted or dict(tg_config().get("session_threads") or {}) != links
     bus.invalidate("telegram", *(("workspace",) if changed else ()))
-    return {"created": created, "deleted": deleted, "topics_enabled": bool(enabled), "error": error}
+    return {"created": created, "deleted": deleted, "topics_enabled": bool(enabled), "error": error,
+            "notice": notice}
 
 
 async def _migrate_topic_threads(call: Callable[..., Awaitable[Any]], chat: int) -> None:
@@ -2305,43 +2379,99 @@ def _on_workspace_change(change: dict | None = None, *_a: Any, **_k: Any) -> Non
     gw.schedule_sync()
 
 
+class SetupError(ValueError):
+    """A setup step refused, with a stable `code` for the UI (bad_token, unreachable, webhook_set,
+    webhook_check_failed, conflict, not_configured)."""
+
+    def __init__(self, code: str, message: str, **extra: Any):
+        super().__init__(message)
+        self.code = code
+        self.extra = extra
+
+
+def _pending_link(st: dict | None = None) -> dict | None:
+    """The last link code (pending or expired) with its deep link, or None."""
+    st = load_state() if st is None else st
+    link = st.get("link") or {}
+    if not link.get("code"):
+        return None
+    bot = (st.get("bot") or {}).get("username") or tg_config().get("bot_username") or ""
+    expires = float(link.get("expires") or 0)
+    left = max(0, int(expires - time.time()))
+    return {"code": link["code"], "deep_link": f"https://t.me/{bot}?start={link['code']}",
+            "expires_at": expires, "expires_in": left, "expired": left <= 0}
+
+
 def new_link() -> dict:
-    """Issue a one-time link code (15 min) -> {code, deep_link}. Caller then (re)starts polling."""
+    """Issue a one-time link code (15 min) -> {code, deep_link, expires_at, expires_in}. Caller then (re)starts
+    polling. The refused list is emptied: whoever was refused before can link now."""
     bot = (load_state().get("bot") or {}).get("username") or tg_config().get("bot_username")
     if not token() or not bot:
         raise ValueError("Set the bot token first.")
     code = secrets.token_urlsafe(12).replace("-", "x").replace("_", "y")
-    update_state(link={"code": code, "expires": time.time() + LINK_TTL})
-    return {"code": code, "deep_link": f"https://t.me/{bot}?start={code}"}
+    now = time.time()
+    update_state(link={"code": code, "created": now, "expires": now + LINK_TTL}, refused=[])
+    bus.invalidate("telegram")
+    return {"code": code, "deep_link": f"https://t.me/{bot}?start={code}", "expires_at": now + LINK_TTL,
+            "expires_in": LINK_TTL}
 
 
 def link_status() -> dict:
+    """GET /api/telegram/link: the linked chat, and the pending (or expired) link code if any."""
     tg = tg_config()
     chat = {"id": tg["chat_id"], "title": tg.get("chat_title") or "", "type": "private"} if tg.get("chat_id") else None
-    return {"linked": chat is not None, "chat": chat}
+    return {"linked": chat is not None, "chat": chat, "pending": _pending_link()}
+
+
+def probe_timeout() -> int:
+    """Long poll used at token save to catch another program polling the same bot (it takes the bot back
+    within a second or two and Telegram answers us 409). 2 s; 0 in tests (short MAXXING_TELEGRAM_POLL)."""
+    return min(2, max(0, poll_timeout() - 1))
 
 
 async def set_token(tok: str) -> dict:
-    """Validate a bot token with getMe, store it, reset the link if the bot changed."""
+    """Validate a bot token with getMe, refuse a bot used elsewhere (webhook, another poller), store it,
+    reset the link if the bot changed. Raises SetupError."""
     tok = (tok or "").strip()
     if not TOKEN_RE.match(tok):
-        raise ValueError("This does not look like a bot token (expected 123456789:ABC…, from @BotFather).")
+        raise SetupError("bad_token", "This does not look like a bot token (expected 123456789:ABC…, from @BotFather).")
     c = Client(tok, timeout=15)
     try:
-        me = await c.call("getMe")
         try:
-            hook = await c.call("getWebhookInfo")
-        except TelegramError:
-            hook = {}
-    except TelegramError as e:
-        if e.code in (401, 404):
-            raise ValueError("Telegram rejected this token - copy it again from @BotFather.") from None
-        raise ValueError(f"Could not reach Telegram: {e.description}") from None
+            me = await c.call("getMe")
+        except TelegramError as e:
+            if e.code in (401, 404):
+                raise SetupError("bad_token", "Telegram rejected this token - copy it again from @BotFather "
+                                 "(or revoke it there and paste the new one).") from None
+            raise SetupError("unreachable", f"Could not reach Telegram: {e.description}") from None
+        try:
+            hook = await c.call("getWebhookInfo") or {}
+        except TelegramError as e:
+            raise SetupError("webhook_check_failed",
+                             f"Could not check whether another program uses this bot (Telegram said: "
+                             f"{e.description}). Try again in a moment.") from None
+        if hook.get("url"):
+            raise SetupError("webhook_set",
+                             "This bot sends its messages to a webhook (another program uses it). Remove the "
+                             "webhook to use it here (the other program stops receiving messages), or create a "
+                             "dedicated bot with @BotFather.", pending_updates=hook.get("pending_update_count") or 0)
+        # Our own poller (same token saved again) would answer 409 to the probe: stop it first.
+        own = _gw is not None and _gw.token == tok
+        if own:
+            await stop()
+        try:
+            await c.call("getUpdates", http_timeout=probe_timeout() + 15, timeout=probe_timeout(), limit=1,
+                         allowed_updates=["message", "callback_query"])
+        except TelegramError as e:
+            if own:
+                await start()
+            if e.code == 409:
+                raise SetupError("conflict", CONFLICT_HELP) from None
+            if e.network:
+                raise SetupError("unreachable", f"Could not reach Telegram: {e.description}") from None
+            log.info("telegram getUpdates probe: %s", e.description)
     finally:
         await c.aclose()
-    if (hook or {}).get("url"):
-        raise ValueError("This bot is connected to a webhook (another program uses it). "
-                         "Create a dedicated bot with @BotFather.")
     bot = {"id": me.get("id"), "username": me.get("username") or "",
            "name": me.get("first_name") or "", "has_topics_enabled": me.get("has_topics_enabled")}
     old = load_state().get("bot") or {}
@@ -2352,13 +2482,33 @@ async def set_token(tok: str) -> dict:
             tg.pop("two_factor", None)
         mutate_tg(fn)
         config.write_json(_offset_path(), {"offset": 0})
-        update_state(link=None, topics_enabled=None, refused=[], fallback_path=ROOT)
+        update_state(link=None, topics_enabled=None, topics_notice=None, refused=[], fallback_path=ROOT)
     config.set_secret("telegram_token", tok)
     mutate_tg(lambda tg: tg.__setitem__("bot_username", bot["username"]))
-    update_state(bot=bot, last_error=None)
+    update_state(bot=bot, last_error=None, poll_error=None, poll_error_code=None, sync_error=None)
     await start()
     bus.invalidate("telegram")
     return bot
+
+
+async def remove_webhook(tok: str | None = None) -> dict:
+    """POST /api/telegram/webhook/remove: deleteWebhook for `tok` (the token being saved) or the stored token,
+    so getUpdates works. Pending updates are kept. Raises SetupError."""
+    tok = (tok or "").strip() or token()
+    if not tok:
+        raise SetupError("not_configured", "Set the bot token first.")
+    if not TOKEN_RE.match(tok):
+        raise SetupError("bad_token", "This does not look like a bot token (expected 123456789:ABC…, from @BotFather).")
+    c = Client(tok, timeout=15)
+    try:
+        await c.call("deleteWebhook", drop_pending_updates=False)
+    except TelegramError as e:
+        if e.code in (401, 404):
+            raise SetupError("bad_token", "Telegram rejected this token - copy it again from @BotFather.") from None
+        raise SetupError("unreachable", f"Could not remove the webhook: {e.description}") from None
+    finally:
+        await c.aclose()
+    return {"ok": True}
 
 
 async def forget() -> None:
@@ -2404,9 +2554,20 @@ def status() -> dict:
     if enabled is None:
         enabled = bool((bot or {}).get("has_topics_enabled")) or bool(tg.get("threads"))
     link = st.get("link") or {}
+    poll_error, sync_error, notice = st.get("poll_error"), st.get("sync_error"), st.get("topics_notice")
+    legacy = st.get("last_error")                     # written by older versions (poller and sync shared it)
+    if legacy and "sync_error" not in st and "poll_error" not in st:
+        if legacy.startswith(TOPICS_HELP[:60]):
+            notice = notice or legacy
+        else:
+            sync_error = legacy
+    off = st.get("topics_enabled") is False and bool(tg.get("chat_id"))
+    if off and not notice:
+        notice = TOPICS_HELP
+    last_ok = st.get("last_poll_ok")
     return {
         "configured": bool(tok),
-        "running": bool(_gw is not None and _gw.running),
+        "running": poller_running(st),
         "bot": ({"id": bot.get("id"), "username": bot.get("username"), "name": bot.get("name")}
                 if bot else None),
         "chat": link_status()["chat"],
@@ -2424,8 +2585,35 @@ def status() -> dict:
                      "thread_days": int(tg.get("thread_days") or THREAD_DAYS),
                      "mirror_web": mirror_web(tg)},
         "linking": bool(link.get("code")) and time.time() < float(link.get("expires") or 0),
-        "last_error": st.get("last_error"),
+        "link": _pending_link(st) if tok else None,
+        "poll_error": poll_error,
+        "poll_error_code": st.get("poll_error_code") if poll_error else None,
+        "sync_error": sync_error,
+        "topics_notice": notice if off else None,
+        "last_poll_ok": last_ok,
+        "last_poll_age": round(max(0.0, time.time() - float(last_ok)), 1) if last_ok else None,
+        "last_error": poll_error or sync_error,      # older readers: one error, the poller's first
     }
+
+
+def poller_running(st: dict | None = None) -> bool:
+    """Is a poller running? In the server: the gateway itself. In another process (CLI, doctor): the
+    poller_pid written by the server's heartbeat is alive."""
+    if _gw is not None:
+        return bool(_gw.running)
+    st = load_state() if st is None else st
+    pid = st.get("poller_pid")
+    if not isinstance(pid, int) or pid <= 0 or pid == os.getpid():
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    except OSError:
+        return False
+    return True
 
 
 def update_settings(**kw: Any) -> dict:
@@ -2621,6 +2809,36 @@ def notify_cron_report(header: str, body: str = "", markdown: bool = True, loud:
         log.exception("telegram notify_cron_report failed")
 
 
-def send_test() -> bool:
-    """POST /api/telegram/test - blocking (call from a worker thread)."""
-    return _send_sync(ROOT, ["✅ <b>Harness Maxxing</b> is connected. Write here to talk to Harness."], False)
+def send_test() -> dict:
+    """POST /api/telegram/test / `maxxing telegram test` - blocking (call from a worker thread).
+    Sending only proves the bot can WRITE; what it receives depends on the poller (running, last
+    successful getUpdates) and on no webhook being set -> {ok, sent, poller:{running, last_poll_ok,
+    last_poll_age, error, error_code}, webhook:{url, pending_updates, last_error}|None, problems:[str]}."""
+    sent = _send_sync(ROOT, ["✅ <b>Harness Maxxing</b> is connected. Write here to talk to Harness."], False)
+    st = status()
+    webhook = None
+    tok = token()
+    if tok:
+        try:
+            info = call_sync(tok, "getWebhookInfo") or {}
+            webhook = {"url": info.get("url") or "", "pending_updates": info.get("pending_update_count") or 0,
+                       "last_error": info.get("last_error_message") or None}
+        except Exception as e:  # noqa: BLE001 - reported, never raised
+            webhook = {"url": "", "pending_updates": 0, "last_error": f"getWebhookInfo failed: {e}"}
+    problems: list[str] = []
+    if not sent:
+        problems.append("Telegram did not accept the test message - see the server log.")
+    if not st["running"]:
+        problems.append("The server is not reading Telegram messages (poller stopped)"
+                        + (f": {st['poll_error']}" if st.get("poll_error") else "."))
+    elif st.get("poll_error"):
+        problems.append(st["poll_error"])
+    elif st.get("last_poll_age") is not None and st["last_poll_age"] > 300:
+        problems.append(f"No answer from Telegram for {int(st['last_poll_age'] // 60)} min.")
+    if webhook and webhook["url"]:
+        problems.append("A webhook is set on this bot: messages go to another program, not here.")
+    return {"ok": sent and not problems, "sent": sent,
+            "poller": {"running": st["running"], "last_poll_ok": st.get("last_poll_ok"),
+                       "last_poll_age": st.get("last_poll_age"), "error": st.get("poll_error"),
+                       "error_code": st.get("poll_error_code")},
+            "webhook": webhook, "problems": problems}

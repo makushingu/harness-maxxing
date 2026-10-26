@@ -21,6 +21,10 @@ class TokenIn(BaseModel):
     token: str
 
 
+class WebhookIn(BaseModel):
+    token: str | None = None
+
+
 class SettingsIn(BaseModel):
     notify_crons: bool | None = None
     notify_system: bool | None = None
@@ -31,7 +35,8 @@ class SettingsIn(BaseModel):
 
 
 def _bad(code: str, e: Exception, status: int = 400) -> HTTPException:
-    return HTTPException(status, detail={"error": code, "message": str(e)})
+    return HTTPException(status, detail={"error": getattr(e, "code", None) or code, "message": str(e),
+                                         **(getattr(e, "extra", None) or {})})
 
 
 async def startup() -> None:
@@ -55,6 +60,15 @@ async def set_token(body: TokenIn):
     except ValueError as e:
         raise _bad("bad_token", e) from None
     return {"ok": True, "bot": {"id": bot["id"], "username": bot["username"], "name": bot["name"]}}
+
+
+@router.post("/webhook/remove")
+async def remove_webhook(body: WebhookIn):
+    """Remove the webhook of the bot being saved (`token`) or of the stored one, then save the token again."""
+    try:
+        return await gateway.remove_webhook(body.token)
+    except ValueError as e:
+        raise _bad("bad_token", e) from None
 
 
 @router.post("/link")
@@ -97,11 +111,12 @@ async def test():
     st = gateway.status()
     if not st["configured"] or not st["chat"]:
         raise HTTPException(409, detail={"error": "not_linked", "message": "Link a Telegram chat first"})
-    ok = await asyncio.to_thread(gateway.send_test)
-    if not ok:
+    res = await asyncio.to_thread(gateway.send_test)
+    if not res["sent"]:
         raise HTTPException(502, detail={"error": "telegram_error",
-                                         "message": "Telegram did not accept the message - see the server log"})
-    return {"ok": True}
+                                         "message": "Telegram did not accept the message - see the server log",
+                                         **res})
+    return res
 
 
 @router.delete("")
