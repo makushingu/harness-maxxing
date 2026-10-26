@@ -123,6 +123,9 @@ def put_profile(body: ProfileIn):
     if new != profile():
         config.update_config(profile=new)
         bus.invalidate("profile")
+        if config.load_config().get("team_page"):
+            from .. import teampeer
+            teampeer.share_profile()           # Team contacts see the new name / face
     return profile()
 
 

@@ -4,7 +4,7 @@ import type { Ok, Profile, Session } from '../types'
 import { useMut } from './util'
 
 // Team chats (server/maxxing/team.py): plain chats between people, kept fresh by the bus topic `team`.
-export type TeamPerson = Profile & { server: string; status: 'online' | 'away' | 'offline'; address?: string; peer?: boolean; contact?: boolean }
+export type TeamPerson = Profile & { server: string; status: 'online' | 'away' | 'offline'; address?: string; peer?: boolean; contact?: boolean; last_seen?: number }
 export type TeamPollOption = { id: string; label: string; votes: string[] }
 export type TeamFile = { path: string; name: string; size: number; mime: string }
 export type TeamMessage = {
@@ -31,11 +31,14 @@ export type TeamChat = {
   created: number
   read_at?: number
   remote?: boolean
+  /** the group's creator (only they can change it) */
+  admin?: string | null
   last: { author: string; at: number; kind: TeamMessage['kind']; text: string; files: number } | null
   unread: number
   updated: number
 }
-export type TeamState = { me: string; people: Record<string, TeamPerson>; chats: TeamChat[]; reactions: string[] }
+/** typing: chat id -> the people writing in it right now (refreshed by the bus, dropped by the server when it ends). */
+export type TeamState = { me: string; people: Record<string, TeamPerson>; chats: TeamChat[]; reactions: string[]; typing?: Record<string, string[]> }
 
 export const teamKeys = {
   all: ['team'] as const,
@@ -61,6 +64,10 @@ export function useTeamSend() {
   return useMut(({ cid, ...b }: { cid: string; text: string; reply_to?: string; files?: { path: string }[] }) => api.post<TeamMessage>(`${chatUrl(cid)}/messages`, b), {
     invalidate: inv,
   })
+}
+/** "I am writing" (the server sends it at most every 3 s, never queued). */
+export function useTeamTyping() {
+  return useMut((cid: string) => api.post<Ok>(`${chatUrl(cid)}/typing`), { errorToast: false })
 }
 export function useTeamRead() {
   return useMut((cid: string) => api.post<Ok>(`${chatUrl(cid)}/read`), { invalidate: [teamKeys.state], errorToast: false })

@@ -2,62 +2,24 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import {
-  ArrowLeft, BarChart3, Check, Clock, Copy, FileText, Loader2, MessageSquarePlus, MessageSquareShare, Paperclip, Plus, Search, Send, Smile, Sparkles, UserPlus, Users, X,
+  ArrowLeft, BarChart3, Check, Clock, Copy, FileText, Loader2, MessageSquareShare, Paperclip, Search, Send, Smile, Sparkles, SquarePen, UserPlus, Users, X,
 } from 'lucide-react'
 import {
-  fileRawUrl, useTeamChat, useTeamConnections, useTeamRead, useTeamReact, useTeamSend, useTeamSummarize, useTeamUpload, useTeamVote,
-  type TeamChat, type TeamFile, type TeamMessage, type TeamPerson, type TeamState,
+  fileRawUrl, useTeamChat, useTeamConnections, useTeamRead, useTeamReact, useTeamSend, useTeamSummarize, useTeamTyping, useTeamUpload, useTeamVote,
+  type TeamChat, type TeamFile, type TeamMessage, type TeamState,
 } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
+import { Button, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
 import { openFileViewer } from '@/features/files/viewerStore'
 import { fmtBytes } from '@/lib/format'
 import { Markdown } from '@/components/ui/markdown'
 import { Avatar } from '@/features/profile/Avatar'
 import { projectColor } from '@/features/tasks/model'
 import { ForwardDialog, NewChatDialog, PollDialog } from './Dialogs'
-import { ConnectDialog } from './Connect'
-
-const STATUS_DOT: Record<TeamPerson['status'], string> = { online: 'bg-emerald-500', away: 'bg-amber-400', offline: 'bg-zinc-400' }
-
-export function personOf(team: TeamState | undefined, id: string): TeamPerson {
-  return team?.people[id] || { name: id, color: 'zinc', emoji: '', server: '', status: 'offline' }
-}
-
-export function chatTitle(team: TeamState | undefined, chat: TeamChat): string {
-  if (chat.kind === 'dm') return personOf(team, chat.members[0]).name
-  return chat.name || chat.members.map((m) => personOf(team, m).name).join(', ')
-}
-
-export function PersonAvatar({ person, size = 'md', status, className }: { person: TeamPerson; size?: 'sm' | 'md' | 'lg'; status?: boolean; className?: string }) {
-  return (
-    <span className={cn('relative inline-flex shrink-0', className)}>
-      <Avatar profile={person} size={size} />
-      {status && (
-        <span className={cn('absolute -right-0.5 -bottom-0.5 rounded-full ring-2 ring-background', size === 'lg' ? 'size-3' : 'size-2.5', STATUS_DOT[person.status])} />
-      )}
-    </span>
-  )
-}
-
-/** The chat's face: the person of a direct chat, else the group's emoji or its first members stacked. */
-export function ChatAvatar({ team, chat, size = 'lg' }: { team: TeamState | undefined; chat: TeamChat; size?: 'md' | 'lg' }) {
-  if (chat.kind === 'dm') return <PersonAvatar person={personOf(team, chat.members[0])} size={size} status />
-  if (chat.emoji)
-    return (
-      <span className={cn('inline-flex shrink-0 items-center justify-center rounded-xl bg-muted', size === 'lg' ? 'size-10 text-xl' : 'size-7 text-sm')}>{chat.emoji}</span>
-    )
-  const two = chat.members.slice(0, 2)
-  return (
-    <span className={cn('relative inline-flex shrink-0', size === 'lg' ? 'size-10' : 'size-7')}>
-      {two.map((m, i) => (
-        <Avatar key={m} profile={personOf(team, m)} size={size === 'lg' ? 'md' : 'sm'} className={cn('absolute ring-2 ring-background', i ? 'right-0 bottom-0' : 'top-0 left-0')} />
-      ))}
-    </span>
-  )
-}
+import { AddFriendDialog, useOpenDm } from './Friends'
+import { ChatAvatar, chatTitle, friendsOf, PersonAvatar, personOf, TypingDots, usePresence, useTypingLabel } from './people'
 
 /** fmtDate with only the given parts (its default date/time styles cannot be mixed with them). */
 const fmt = (at: number, lang: string, opts: Intl.DateTimeFormatOptions) => fmtDate(at, lang, undefined, { dateStyle: undefined, timeStyle: undefined, ...opts })
@@ -81,60 +43,84 @@ function dayLabel(at: number, lang: string, t: ReturnType<typeof useT>) {
 }
 
 /* ------------------------------------------------------------------------------------------------ list */
-export function ChatList({ team, active, onOpen, compact }: { team: TeamState | undefined; active: string | null; onOpen: (id: string) => void; compact?: boolean }) {
+export function ChatList({
+  team, active, onOpen, onFriends, compact,
+}: {
+  team: TeamState | undefined
+  active: string | null
+  onOpen: (id: string) => void
+  onFriends: () => void
+  compact?: boolean
+}) {
   const t = useT()
   const lang = useLang()
+  const typingLabel = useTypingLabel()
   const [q, setQ] = React.useState('')
   const [newOpen, setNewOpen] = React.useState(false)
-  const [cxOpen, setCxOpen] = React.useState(false)
+  const [addOpen, setAddOpen] = React.useState(false)
   const { data: cx } = useTeamConnections()
+  const dm = useOpenDm(onOpen)
   const requests = cx?.contacts.filter((x) => x.status === 'request').length || 0
+  const friends = friendsOf(team)
   const chats = (team?.chats || []).filter((c) => !q || chatTitle(team, c).toLowerCase().includes(q.toLowerCase()))
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn('flex items-center gap-2 border-b', compact ? 'p-2' : 'p-3')}>
-        <div className="relative flex-1">
+      <div className={cn('flex items-center gap-2', compact ? 'p-2' : 'p-3')}>
+        <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('team.search')} className="h-8 pl-8 text-[13px]" />
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" variant="outline" aria-label={t('team.new')}>
-              <Plus />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60">
-            <DropdownMenuItem onSelect={() => setNewOpen(true)}>
-              <MessageSquarePlus className="size-4" /> {t('team.new')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setCxOpen(true)}>
-              <UserPlus className="size-4" /> {t('team.cx.open')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Tooltip content={t('team.new')}>
+          <Button size="icon-sm" variant="outline" onClick={() => setNewOpen(true)} aria-label={t('team.new')}>
+            <SquarePen />
+          </Button>
+        </Tooltip>
       </div>
       {requests > 0 && (
         <button
           type="button"
-          onClick={() => setCxOpen(true)}
-          className="mx-2 mt-2 flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/[0.06] px-3 py-2 text-left text-[12.5px] font-medium hover:bg-primary/10"
+          onClick={onFriends}
+          className="mx-2 mb-1 flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/[0.06] px-3 py-2 text-left text-[12.5px] font-medium hover:bg-primary/10"
         >
           <UserPlus className="size-4 text-primary" />
           {t('team.cx.pending', { count: requests })}
         </button>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+      {friends.length > 0 && !q && (
+        <div className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]" aria-label={t('team.friends.title')}>
+          {friends.slice(0, 20).map(([id, p]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => dm.open(id)}
+              title={p.name}
+              className="flex w-14 shrink-0 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-accent/60"
+            >
+              <PersonAvatar person={p} size="lg" status />
+              <span className="w-full truncate px-0.5 text-center text-[11px] text-muted-foreground">{p.name.split(' ')[0]}</span>
+            </button>
+          ))}
+          <button type="button" onClick={() => setAddOpen(true)} title={t('team.friends.add')} className="flex w-14 shrink-0 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-accent/60">
+            <span className="inline-flex size-10 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground">
+              <UserPlus className="size-4" />
+            </span>
+            <span className="w-full truncate text-center text-[11px] text-muted-foreground">{t('team.friends.addShort')}</span>
+          </button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto border-t p-1.5">
         {!team && [0, 1, 2].map((i) => <Skeleton key={i} className="m-1 h-14" />)}
         {chats.map((c) => {
           const last = c.last
           const author = last ? (last.author === team?.me ? t('team.you') : personOf(team, last.author).name.split(' ')[0]) : ''
+          const writing = team?.typing?.[c.id] || []
           return (
             <button
               key={c.id}
               type="button"
               onClick={() => onOpen(c.id)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60',
+                'flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60',
                 active === c.id && 'bg-accent',
               )}
             >
@@ -145,16 +131,23 @@ export function ChatList({ team, active, onOpen, compact }: { team: TeamState | 
                   {last && <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">{when(last.at, lang)}</span>}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className={cn('truncate text-[12.5px]', c.unread ? 'text-foreground' : 'text-muted-foreground')}>
-                    {last ? (
-                      <>
-                        {(c.kind === 'group' || last.author === team?.me) && <span className="text-muted-foreground">{author} : </span>}
-                        {last.kind === 'poll' ? `📊 ${last.text}` : last.kind === 'summary' ? `✨ ${t('team.summaryShort')}` : `${last.files ? '📎 ' : ''}${last.text}`}
-                      </>
-                    ) : (
-                      t('team.noMessage')
-                    )}
-                  </span>
+                  {writing.length ? (
+                    <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-primary">
+                      <TypingDots className="shrink-0" />
+                      <span className="truncate">{c.kind === 'dm' ? t('team.typing.short') : typingLabel(team, writing)}</span>
+                    </span>
+                  ) : (
+                    <span className={cn('truncate text-[12.5px]', c.unread ? 'text-foreground' : 'text-muted-foreground')}>
+                      {last ? (
+                        <>
+                          {(c.kind === 'group' || last.author === team?.me) && <span className="text-muted-foreground">{author} : </span>}
+                          {last.kind === 'poll' ? `📊 ${last.text}` : last.kind === 'summary' ? `✨ ${t('team.summaryShort')}` : `${last.files ? '📎 ' : ''}${last.text}`}
+                        </>
+                      ) : (
+                        t('team.noMessage')
+                      )}
+                    </span>
+                  )}
                   {c.unread > 0 && (
                     <span className="ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold text-primary-foreground">
                       {c.unread}
@@ -166,9 +159,17 @@ export function ChatList({ team, active, onOpen, compact }: { team: TeamState | 
           )
         })}
         {team && !chats.length && q && <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">{t('team.noMatch')}</p>}
+        {team && !team.chats.length && !q && (
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <p className="text-[13px] text-muted-foreground">{friends.length ? t('team.startHint') : t('team.friends.noneDesc')}</p>
+            <Button size="sm" variant="outline" onClick={() => (friends.length ? setNewOpen(true) : setAddOpen(true))}>
+              {friends.length ? <SquarePen /> : <UserPlus />} {friends.length ? t('team.new') : t('team.friends.add')}
+            </Button>
+          </div>
+        )}
       </div>
-      <NewChatDialog open={newOpen} onOpenChange={setNewOpen} team={team} onCreated={onOpen} onConnect={() => setCxOpen(true)} />
-      <ConnectDialog open={cxOpen} onOpenChange={setCxOpen} />
+      <NewChatDialog open={newOpen} onOpenChange={setNewOpen} team={team} onCreated={onOpen} onAddFriend={() => setAddOpen(true)} />
+      <AddFriendDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
   )
 }
@@ -207,7 +208,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
   React.useLayoutEffect(() => {
     const el = scroller.current
     if (el && !sel) el.scrollTop = el.scrollHeight
-  }, [chatId, msgs.length, summarize.isPending, isLoading])
+  }, [chatId, msgs.length, summarize.isPending, isLoading, (team?.typing?.[chatId] || []).length])
 
   const choose = (p: Preset) => {
     const now = Date.now() / 1000
@@ -255,8 +256,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
   }
 
   if (!chat) return <div className="flex flex-1 items-center justify-center">{isLoading ? <Spinner /> : null}</div>
-  const members = chat.members.map((m) => personOf(team, m))
-  const online = members.filter((p) => p.status === 'online').length
+  const writing = team?.typing?.[chatId] || []
 
   return (
     <div
@@ -283,15 +283,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
             <ArrowLeft />
           </Button>
         )}
-        <ChatAvatar team={team} chat={chat} size={compact ? 'md' : 'lg'} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[14.5px] font-semibold">{title}</div>
-          <div className="truncate text-[12px] text-muted-foreground">
-            {chat.kind === 'dm'
-              ? `${t(`team.status.${members[0].status}`)}${members[0].server ? ` · ${members[0].server}` : ''}`
-              : `${t('team.members', { count: members.length + 1 })} · ${t('team.online', { count: online })}`}
-          </div>
-        </div>
+        <ChatHeader team={team} chat={chat} title={title} compact={compact} writing={writing} />
         <Tooltip content={t('team.summarizeHint')}>
           <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" disabled={summarize.isPending} onClick={() => (sel ? setSel(null) : startSummary())}>
             {summarize.isPending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5 text-primary" />}
@@ -301,8 +293,8 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
         {headerExtra}
       </header>
 
-      <div ref={scroller} className={cn('min-h-0 flex-1 overflow-y-auto', compact ? 'px-2.5 py-3' : 'px-4 py-4 md:px-8')}>
-        <div className={cn('mx-auto flex flex-col', !compact && 'max-w-3xl')}>
+      <div ref={scroller} className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto', compact ? 'px-2.5 py-3' : 'px-4 py-4 md:px-8')}>
+        <div className={cn('mx-auto flex min-w-0 flex-col', !compact && 'max-w-3xl')}>
           {isLoading && <Skeleton className="h-40" />}
           {msgs.map((m, i) => {
             const prev = msgs[i - 1]
@@ -332,6 +324,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
               </React.Fragment>
             )
           })}
+          {writing.length > 0 && !sel && <TypingRow team={team} ids={writing} />}
           {summarize.isPending && (
             <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-[13px] text-muted-foreground">
               <Sparkles className="size-4 animate-pulse text-primary" />
@@ -360,6 +353,78 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
         initialText={forward?.text || ''}
         suggestedTitle={title}
       />
+    </div>
+  )
+}
+
+/** Who the chat is with: the person's name and presence (never their server address), or a group's members. */
+function ChatHeader({ team, chat, title, compact, writing }: { team: TeamState | undefined; chat: TeamChat; title: string; compact?: boolean; writing: string[] }) {
+  const t = useT()
+  const presence = usePresence()
+  const typingLabel = useTypingLabel()
+  const members = chat.members.map((m) => [m, personOf(team, m)] as const)
+  const online = members.filter(([, p]) => p.status === 'online').length
+  const sub = writing.length ? (
+    <span className="flex items-center gap-1.5 text-primary">
+      <TypingDots />
+      {chat.kind === 'dm' ? t('team.typing.short') : typingLabel(team, writing)}
+    </span>
+  ) : chat.kind === 'dm' ? (
+    presence(members[0][1])
+  ) : (
+    `${t('team.members', { count: members.length + 1 })}${online ? ` · ${t('team.online', { count: online })}` : ''}`
+  )
+  const face = (
+    <>
+      <ChatAvatar team={team} chat={chat} size={compact ? 'md' : 'lg'} />
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-[14.5px] font-semibold">{title}</span>
+        <span className="block truncate text-[12px] text-muted-foreground">{sub}</span>
+      </span>
+    </>
+  )
+  if (chat.kind === 'dm') return <div className="flex min-w-0 flex-1 items-center gap-2.5">{face}</div>
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="-my-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-2 transition-colors hover:bg-accent/50">
+          {face}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1.5">
+        <div className="px-2 pt-1 pb-1.5 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.members', { count: members.length + 1 })}</div>
+        {[...members, [team?.me || 'me', personOf(team, team?.me || 'me')] as const].map(([id, p]) => (
+          <div key={id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
+            <PersonAvatar person={p} size="md" status={id !== team?.me} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13.5px] font-medium">
+                {p.name}
+                {id === team?.me && <span className="font-normal text-muted-foreground"> · {t('team.you')}</span>}
+                {chat.admin === id && <span className="font-normal text-muted-foreground"> · {t('team.creator')}</span>}
+              </span>
+              {id !== team?.me && <span className="block truncate text-[11.5px] text-muted-foreground">{presence(p)}</span>}
+            </span>
+          </div>
+        ))}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** The others writing right now: their faces and three dots, under the last message. */
+function TypingRow({ team, ids }: { team: TeamState | undefined; ids: string[] }) {
+  const typingLabel = useTypingLabel()
+  return (
+    <div className="mt-3 flex items-end gap-2 animate-in fade-in-0 slide-in-from-bottom-1" aria-live="polite">
+      <span className="flex w-7 shrink-0 -space-x-2">
+        {ids.slice(0, 2).map((id) => (
+          <Avatar key={id} profile={personOf(team, id)} size="md" className="ring-2 ring-background" />
+        ))}
+      </span>
+      <span className="inline-flex items-center gap-2 rounded-2xl bg-muted px-3.5 py-2.5 text-muted-foreground">
+        <TypingDots />
+        <span className="sr-only">{typingLabel(team, ids)}</span>
+      </span>
     </div>
   )
 }
@@ -478,7 +543,7 @@ function MessageRow({
       )}
       <div className={cn('flex min-w-0 flex-1 gap-2', right && 'flex-row-reverse')}>
         {!right && <span className="w-7 shrink-0 self-end">{(showAvatar || card) && <Avatar profile={author} size="md" />}</span>}
-        <div className={cn('flex min-w-0 flex-col', card ? 'flex-1' : 'max-w-[78%]', right && 'items-end')}>
+        <div className={cn('flex min-w-0 flex-col', card ? 'flex-1' : 'max-w-[85%]', right && 'items-end')}>
           {(showName || card) && (
             <span className="mb-1 flex items-baseline gap-2 px-1 text-[12px]">
               <span className="font-semibold" style={{ color: mine ? undefined : projectColor(author.color || 'zinc') }}>
@@ -487,7 +552,7 @@ function MessageRow({
               {card && <span className="text-muted-foreground tabular-nums">{clock(m.at, lang)}</span>}
             </span>
           )}
-          <div className={cn('relative flex flex-col gap-1', right && 'items-end', selecting && 'pointer-events-none')}>
+          <div className={cn('relative flex max-w-full min-w-0 flex-col gap-1', right && 'items-end', selecting && 'pointer-events-none')}>
             {!!m.files?.length && <Files files={m.files} right={right} />}
             {m.kind === 'summary' ? (
               <SummaryCard m={m} />
@@ -496,12 +561,12 @@ function MessageRow({
             ) : m.text ? (
               <div
                 className={cn(
-                  'rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed break-words whitespace-pre-wrap',
+                  'max-w-full rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
                   mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
                   mine ? (tight ? 'rounded-tr-md' : '') : tight ? 'rounded-tl-md' : '',
                 )}
               >
-                {m.text}
+                <Linkified text={m.text} mine={mine} />
                 <span className={cn('ml-2 inline-flex translate-y-0.5 items-center gap-1 text-[10.5px] tabular-nums', mine ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                   {clock(m.at, lang)}
                   {mine && !!m.pending?.length && (
@@ -535,6 +600,26 @@ function MessageRow({
   )
 }
 
+const URL_RE = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g
+
+/** A message's text with its web links clickable (opened in a new tab, nothing else is interpreted). */
+function Linkified({ text, mine }: { text: string; mine: boolean }) {
+  const parts = text.split(URL_RE)
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 ? (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer nofollow" className={cn('underline underline-offset-2', mine ? 'decoration-primary-foreground/50' : 'text-primary decoration-primary/40')} onClick={(e) => e.stopPropagation()}>
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  )
+}
+
 /** Files of a message: pictures as thumbnails, other files as chips; a click opens the file viewer. */
 function Files({ files: all, right }: { files: (TeamFile & { pending?: boolean; failed?: boolean })[]; right: boolean }) {
   const t = useT()
@@ -544,18 +629,18 @@ function Files({ files: all, right }: { files: (TeamFile & { pending?: boolean; 
   const images = files.filter((f) => f.mime.startsWith('image/'))
   const others = files.filter((f) => !f.mime.startsWith('image/'))
   return (
-    <div className={cn('flex flex-col gap-1', right && 'items-end')}>
+    <div className={cn('flex max-w-full min-w-0 flex-col gap-1', right && 'items-end')}>
       {!!images.length && (
         <div className={cn('flex flex-wrap gap-1', right && 'justify-end')}>
           {images.map((f) => (
-            <button key={f.path} type="button" onClick={() => openFileViewer(f.path, paths)} className="overflow-hidden rounded-xl border bg-muted transition-opacity hover:opacity-90">
-              <img src={fileRawUrl(f.path)} alt={f.name} loading="lazy" className={cn('block object-cover', images.length > 1 ? 'size-36' : 'max-h-60 max-w-[300px]')} />
+            <button key={f.path} type="button" onClick={() => openFileViewer(f.path, paths)} className="max-w-full overflow-hidden rounded-xl border bg-muted transition-opacity hover:opacity-90">
+              <img src={fileRawUrl(f.path)} alt={f.name} loading="lazy" className={cn('block max-w-full object-cover', images.length > 1 ? 'size-36' : 'max-h-60 w-auto sm:max-w-[300px]')} />
             </button>
           ))}
         </div>
       )}
       {waiting.map((f) => (
-        <span key={f.name} className={cn('flex max-w-[300px] items-center gap-2.5 rounded-xl border border-dashed px-3 py-2 text-[12.5px]', f.failed ? 'text-destructive' : 'text-muted-foreground')}>
+        <span key={f.name} className={cn('flex max-w-full items-center gap-2.5 rounded-xl border border-dashed px-3 py-2 text-[12.5px]', f.failed ? 'text-destructive' : 'text-muted-foreground')}>
           {f.failed ? <X className="size-4" /> : <Loader2 className="size-4 animate-spin" />}
           <span className="min-w-0 truncate">{f.name}</span>
           <span className="shrink-0">{f.failed ? t('team.fileFailed') : `${fmtBytes(f.size)} · ${t('team.fileLoading')}`}</span>
@@ -566,7 +651,7 @@ function Files({ files: all, right }: { files: (TeamFile & { pending?: boolean; 
           key={f.path}
           type="button"
           onClick={() => openFileViewer(f.path, paths)}
-          className="flex max-w-[300px] items-center gap-2.5 rounded-xl border bg-card px-3 py-2 text-left transition-colors hover:border-primary/50"
+          className="flex max-w-full min-w-0 items-center gap-2.5 rounded-xl border bg-card px-3 py-2 text-left sm:max-w-[300px] transition-colors hover:border-primary/50"
         >
           <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <FileText className="size-4" />
@@ -593,7 +678,7 @@ function MessageTools({ team, chat, m, mine, compact, onForward }: { team: TeamS
       className={cn(
         'absolute -top-3.5 z-10 flex items-center gap-0.5 rounded-lg border bg-popover p-0.5 opacity-0 shadow-sm transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100',
         open && 'opacity-100',
-        compact ? (mine ? 'left-1' : 'right-1') : mine ? 'left-0 -translate-x-1/4' : 'right-0 translate-x-1/4',
+        mine ? 'left-1' : 'right-1',
       )}
     >
       <Popover open={open} onOpenChange={setOpen}>
@@ -663,13 +748,13 @@ function SummaryCard({ m }: { m: TeamMessage }) {
   const t = useT()
   const s = m.summary
   return (
-    <div className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-b from-primary/[0.07] to-transparent">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-b from-primary/[0.07] to-transparent">
       <div className="flex items-center gap-2 border-b border-primary/20 px-3.5 py-2 text-[12px] font-medium">
         <Sparkles className="size-3.5 text-primary" />
         {t('team.summaryBy')}
         {s && <span className="ml-auto font-normal text-muted-foreground">{t('team.summaryOf', { count: s.count })}</span>}
       </div>
-      <Markdown className="px-3.5 py-2.5 text-[13.5px] [&_p]:my-1.5 [&_ul]:my-1">{m.text}</Markdown>
+      <Markdown className="min-w-0 px-3.5 py-2.5 text-[13.5px] [overflow-wrap:anywhere] [&_p]:my-1.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:my-1">{m.text}</Markdown>
     </div>
   )
 }
@@ -683,12 +768,12 @@ function PollCard({ team, chat, m }: { team: TeamState | undefined; chat: TeamCh
   const voters = new Set(poll.options.flatMap((o) => o.votes)).size
   const max = Math.max(1, ...poll.options.map((o) => o.votes.length))
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className="min-w-0 overflow-hidden rounded-xl border bg-card">
       <div className="flex items-center gap-2 px-3.5 pt-3 pb-1">
         <BarChart3 className="size-4 text-primary" />
         <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{poll.multi ? t('team.poll.multi') : t('team.poll.single')}</span>
       </div>
-      <div className="px-3.5 pb-2 text-[15px] font-semibold">{poll.question}</div>
+      <div className="px-3.5 pb-2 text-[15px] font-semibold [overflow-wrap:anywhere]">{poll.question}</div>
       <div className="flex flex-col gap-1.5 px-2.5 pb-2.5">
         {poll.options.map((o) => {
           const pct = voters ? Math.round((o.votes.length / voters) * 100) : 0
@@ -739,6 +824,8 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
   const t = useT()
   const send = useTeamSend()
   const upload = useTeamUpload()
+  const typing = useTeamTyping()
+  const lastTyping = React.useRef(0)
   const [text, setText] = React.useState('')
   const [pending, setPending] = React.useState<Pending[]>([])
   const input = React.useRef<HTMLTextAreaElement>(null)
@@ -768,6 +855,7 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
     const files = ready.map((p) => ({ path: p.file!.path }))
     setText('')
     setPending([])
+    lastTyping.current = 0
     send.mutate({ cid: chatId, text: v, files }, { onError: () => setText(v) })
   }
   return (
@@ -811,7 +899,14 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
           <Textarea
             ref={input}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value)
+              const now = Date.now()
+              if (e.target.value.trim() && now - lastTyping.current > 2500) {
+                lastTyping.current = now
+                typing.mutate(chatId)
+              }
+            }}
             onPaste={(e) => {
               const files = [...e.clipboardData.files]
               if (files.length) {
