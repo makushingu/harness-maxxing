@@ -228,7 +228,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET | `/api/crons/preview?schedule=` | – | `{valid, human, next:[at×5], error?}` (next runs in the configured time zone) |
 
 ## Telegram
-| GET | `/api/telegram` | – | `{configured, running, bot:{id, username, name}\|null, chat:{id, title, type}\|null, topics_enabled, threads:[{path, thread_id, name, session_id?}], settings:{notify_crons, login_alerts, two_factor:bool, reply_mode:"progress"(default)\|"final", thread_days:int(30), mirror_web:bool(false)}, linking:bool, last_error}` (special threads: path `"#crons"` / `"#alerts"`; session threads: `session_id`, path `""`) |
+| GET | `/api/telegram` | – | `{configured, running, bot:{id, username, name}\|null, chat:{id, title, type}\|null, topics_enabled, threads:[{path, thread_id, name, session_id?}], settings:{notify_crons, notify_system:bool(true), login_alerts, two_factor:bool, reply_mode:"progress"(default)\|"final", thread_days:int(30), mirror_web:bool(false)}, linking:bool, last_error}` (special threads: path `"#crons"` / `"#alerts"`; session threads: `session_id`, path `""`) |
 | POST | `/api/telegram/token` | `{token}` | getMe → `{ok, bot}` · `400 bad_token` (bad format, rejected, or bot already bound to a webhook). A different bot resets the chat link |
 | POST | `/api/telegram/link` | – | `{code, deep_link}` (`https://t.me/<bot>?start=<code>`, valid 15 min) — starts polling and waits for `/start <code>` from a private chat; threads are synced right after linking · `409 not_configured` |
 | GET | `/api/telegram/link` | – | `{linked, chat}` |

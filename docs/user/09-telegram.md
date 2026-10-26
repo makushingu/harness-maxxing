@@ -8,7 +8,9 @@ program to install.
 
 - One bot, linked to **your** private chat only.
 - **One thread per open session** - the Telegram chat mirrors the Sessions page - plus *Crons*
-  (job reports), *Alerts* (sign-in alerts) and *Notifications* (the [notifications feed](feed): sales, orders,
+  (job reports), *Alerts* (sign-in alerts, and problems of the server itself: an update that failed or was
+  rolled back, an update available, a known vulnerability, Claude Code that could not update; on by default,
+  setting `notify_system` of `PUT /api/telegram/settings`) and *Notifications* (the [notifications feed](feed): sales, orders,
   your scripts… per the rules you set, posted by the bot itself, with an *Ask Harness* button). A thread is named `<project>/<topic> · <session title>`, with the project's emoji in front when it has one (project **…** menu in Sessions -> *Set an emoji…*), e.g. `🛒 acme/blog · Launch plan`. Changing the emoji renames the threads.
 - A thread is the session itself: what you write on the phone appears in the web UI and you can
   continue there, and the other way round.
@@ -42,8 +44,9 @@ are. Successful reports arrive silently; failures ring.
 | Rename a session | its thread is renamed |
 | **Archive** a session (session menu -> Archive), or send `/close` in its thread | its thread is deleted - the conversation stays in the web UI (Archived) |
 | Un-archive it | the thread comes back (new, empty) |
-| Write in the **main chat** | the bot asks *where* (topic buttons); the session is created there with its own thread and your message goes to it. No answer within 5 minutes: `general/inbox` |
+| Write in the **main chat** | the bot asks *where* (topic buttons); the session is created there with its own thread and your message goes to it (and the ones you write while it is being created). No answer within 5 minutes: `general/inbox`. A server restart meanwhile keeps the question and your messages |
 | Create a thread yourself | same question; that thread becomes the session's thread |
+| **Close** a thread in Telegram (not delete) | nothing changes: the next message for it reopens the same thread (no duplicate) |
 | Delete a thread by hand in Telegram | the session stays open (Telegram does not tell bots) and gets a new thread the next time it is used - e.g. you write in it from the web UI. To really close it: `/close` |
 | Write in a session from the **web UI** | optional (off by default): Settings -> Telegram -> *Show web conversations in Telegram* copies your message ("🖥 …") and Claude's answer into its thread, silently; the session's **bell** makes its answers ring on the phone |
 
@@ -57,7 +60,9 @@ Renaming a session renames its thread: Telegram shows a small "topic renamed" li
 ## Using it
 
 - Write in a session's thread: Claude answers in that thread. While it works you see "typing…" and,
-  for longer tasks, the live status message.
+  for longer tasks, the live status message. A message sent while the session is busy waits its turn and
+  gets its own answer (a turn started from the web UI or an automatic summary is never sent as the answer);
+  "typing…" stops as soon as the queue is stopped or cleared.
 - Send photos and files: they are saved in `<topic>/attachments/telegram/YYYY-MM/` and passed to
   Claude with your caption.
 - Commands:
