@@ -6,6 +6,39 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.103 - 2026-10-26
+
+Team, three commits (`feat/team-ui`). Mixing versions only loses the new features: an older server answers the new
+event kinds with 400 (`unknown_event`, dropped from the outbox), or 403 when they come with a group key (retried up
+to `OUTBOX_DAYS`, then dropped). typing / read / presence are signals, never queued.
+
+Server:
+- New routes (API.md): `POST /api/team/presence`, `/chats/{cid}/typing`, `/chats/{cid}/messages/{mid}/edit|delete`,
+  `/chats/{cid}/group` (`name?, emoji?, add?, remove?`, creator only), `/chats/{cid}/leave`, `/chats/{cid}/mute`;
+  `messages` takes `reply_to`.
+- New inbox events: `typing` (signal: never queued, `signal_all` pool of 4 batches, 4 s timeout, one timer per person
+  `_typing_gen`), `read` (Seen: only forward, never in the future), `edit`, `delete` (author only; a taken id or
+  someone else's message changes nothing), `leave` (final), `presence` (contacts only, `last_seen`; sent at most every
+  120 s), `profile` (on `PUT /api/settings/profile` when `team_page`: `teampeer.share_profile()`). Group keys accept
+  `typing|read|edit|delete|leave` of their group too.
+- Chat fields: `admin` (creator), `muted`, `left: "self"|"removed"`, `seen {person: at}`; message fields `reply_to`,
+  `edited`, `deleted`, `kind: info` (local line, `info: joined|removed|left`, never sent). `_send_group(chat, peers,
+  new=, removed=)` sends pair keys only for pairs with someone new; removed members get the roster without them.
+- Hardening (review): `_finite` on every number from a peer (a NaN `at` broke `GET /api/team`); a roster stores
+  nothing unless we are in it, in one write (`add_group_peers`, at most 500 group-only peers, a known person's name
+  is never renamed by a group); pair keys must be 32 bytes (`_key_ok`); malformed event = 400; outbox: 400 / 413
+  dropped, 403 / 404 retried (roster / message order); removed members' keys dropped; summaries render without
+  remote images.
+
+Web:
+- `features/team/`: `Side.tsx` (Chats / Friends tabs), `Friends.tsx`, `people.tsx` (avatars, presence, typing),
+  `Live.tsx` (presence ping every 150 s while visible, notifications through `notifyTeam` in `mx-ui`, Settings ->
+  Notifications), `SendTo.tsx` (session message menu -> "Send to": DM created on first send, text only, ≤ 8000);
+  `Connect.tsx` removed. Panel width `mx-team-width` (`PANEL_W`). Bus `team_live` = `['team','state']`.
+- Session message menu (`pages/sessions/Items.tsx` `useMessageMenu`): `SendToSub` sub-menu, `SendToDialog` opened
+  after the menu closes. Key `sessions.msg.sendTo` in the core dictionary, the rest under `team.*`.
+- Tests: `test_team.py`, `test_teampeer.py` (new events, hardening).
+
 ## 2.0.0-alpha.102 - 2026-10-26
 
 Integration of #23, the port of the pre-squash `fix/telegram-all` (a76-a79 there, never merged). `web/dist`

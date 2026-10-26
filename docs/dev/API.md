@@ -411,6 +411,13 @@ not_https|not_public`, `404 not_found`, `409 nothing_new|not_reachable`, `502 su
 | GET | `/api/team/chats/{cid}` | – | `{chat, messages:[Message]}` (format: `team.py` docstring) |
 | POST | `/api/team/chats/{cid}/read` | – | `{ok}` |
 | POST | `/api/team/chats/{cid}/messages` | `{text, reply_to?, files?:[{path}]}` | Message (`pending` = members not reached yet) |
+| POST | `/api/team/chats/{cid}/messages/{mid}/edit` | `{text}` | Message (`edited`; own messages only) |
+| POST | `/api/team/chats/{cid}/messages/{mid}/delete` | – | Message (`deleted`; own messages only) |
+| POST | `/api/team/chats/{cid}/typing` | – | `{ok}` (signal to the members, at most every 3 s, never queued) |
+| POST | `/api/team/chats/{cid}/group` | `{name?, emoji?, add?:[contact ids], remove?:[ids]}` | Chat (creator only) |
+| POST | `/api/team/chats/{cid}/leave` | – | Chat (`left: "self"`, read-only, final) |
+| POST | `/api/team/chats/{cid}/mute` | `{muted}` | Chat |
+| POST | `/api/team/presence` | – | `{ok}` (the UI is open; sent to the contacts at most every 2 min) |
 | POST | `/api/team/files` | multipart `file` (≤ `upload_max_mb`) | `{files:[{path, name, size, mime}]}` saved under `<workspace>/team/attachments/YYYY-MM/` |
 | POST | `/api/team/chats/{cid}/messages/{mid}/react` | `{emoji}` | Message (toggle) |
 | POST | `/api/team/chats/{cid}/polls` | `{question, options:[2..12], multi}` | Message |
@@ -428,7 +435,7 @@ Between servers (public, no cookie, `404` while `team_page` is off; protocol in 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/api/team-peer/hello` | `{from, to, nonce_b, proof, profile}` | `{nonce_a, proof_a, profile}` · `403` no matching invitation · `429` after 5 bad hellos/h/IP |
-| POST | `/api/team-peer/inbox` | signed event `{type: accept\|refuse\|bye\|profile\|chat\|message\|vote\|react, …}` | `{ok}` · `401` unsigned / stale / replayed · `403` bad signature |
+| POST | `/api/team-peer/inbox` | signed event `{type: accept\|refuse\|bye\|profile\|presence\|chat\|message\|vote\|react\|typing\|read\|edit\|delete\|leave, …}` | `{ok}` · `401` unsigned / stale / replayed · `403` bad signature |
 | GET | `/api/team-peer/files/{fid}` | signed | the file, when the sender is a member of a chat where it was shared |
 
 ## Dashboard & extensions

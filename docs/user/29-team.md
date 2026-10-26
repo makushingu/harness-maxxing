@@ -7,7 +7,10 @@ Chat with the people you work with - a colleague, a partner, a client who also u
 to your sessions: direct messages and groups, files, polls, and a summary by Claude when you want one.
 
 Turn it on in **Settings -> Features -> Team**. The **Team** entry appears in the sidebar; the small icon next to it
-(on hover) opens the chats in a panel on the right of any page, with the number of unread messages.
+(on hover) opens the chats in a panel on the right of any page, with the number of unread messages. Drag the panel's
+left edge to make it wider (double-click: normal width).
+
+The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
 
 ## Connecting with someone
 
@@ -31,14 +34,21 @@ new invitation: an invitation never replaces an existing contact.
 
 ## Chats and groups
 
-- **New chat** (the **+** of the list): a direct message with a contact, or a group with several of them. A group
+- **New chat** (the **+** of the list): pick one friend for a private chat, several for a group. A group
   has no host: each member's server sends straight to the others, so it keeps working when its creator is offline.
   Members of a group who are not your contacts can still talk in the group.
 - **Files**: the paperclip, drag and drop or paste. Up to the upload limit of your server (2 GB by default). A file
   stays on the sender's server until the others download it.
 - **Polls**: the poll button of the message box. Round options = one answer; tick **Several answers allowed** for square
   options. Click again to take your vote back.
-- **Reactions** on hover of a message.
+- **Reactions**, **Reply** on hover of a message. Your own messages can be **edited** or **deleted** for everyone
+  (Up arrow in an empty message box edits your last one).
+- **Seen** under your last message, **writing…** while someone types, and each friend's presence (online, or seen
+  5 min ago): it shows while their Harness is open in a browser.
+- **Notifications** for new messages of the chats you are not looking at: Settings -> Notifications -> Team
+  messages. **Mute** a chat (its menu) to silence it.
+- **Groups**: their creator renames them, adds friends and removes members; anyone can **leave** (final). The
+  thread says who joined, was removed or left.
 - A small clock on a message: not delivered yet to someone (their server is off); Harness retries for 7 days.
 
 ## Summarize
@@ -53,3 +63,9 @@ tool, about a cent.
 On hover of any message or summary, **To a session** sends it to one of your sessions or starts a new session in
 the topic you choose. The text is shown first and you can edit it; the message's files are attached. Nothing is
 ever sent to a session without that click.
+
+## From a session to a friend
+
+Right click (a long press on a phone) on any message of a session, yours or Claude's: **Send to** lists your friends
+and groups. The text is shown first and you can edit it; a private chat is created if you had none. Only the text
+goes, not the message's attachments.

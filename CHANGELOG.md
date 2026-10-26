@@ -3,6 +3,32 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.103 - 2026-10-26
+
+New (Team, Settings -> Features -> Team):
+- **Friends.** The list has two tabs, **Chats** and **Friends**: your friends with who is online, pending requests and
+  **Add a friend**. One click opens the chat. **New chat** shows every friend at once: one = a private chat,
+  several = a group.
+- **Reply, edit, delete.** Reply to a message (quoted, click it to jump there); edit or delete your own messages,
+  for everyone (Up arrow edits your last one).
+- **Seen, writing, online.** "Seen" under your last message, "writing…" while someone types, and each friend's
+  presence (online, or seen 5 min ago) in the list and the chat header, which shows the person, never a server
+  address.
+- **Notifications** for new Team messages of chats you are not looking at (Settings -> Notifications -> Team
+  messages). **Mute** a chat to silence it.
+- **Groups**: their creator renames them, adds friends and removes members; anyone can leave. The thread says who
+  joined, was removed or left.
+- **Send to a friend from a session.** Right click (a long press on a phone) on any message of a session: **Send
+  to** a friend or a group. The text is shown first and you can edit it.
+- The side panel can be resized (drag its left edge; double-click: normal width). A change of your name or avatar
+  reaches your contacts. Links are clickable and long lines wrap instead of scrolling sideways.
+
+Fixes:
+- **Team is more robust against a misbehaving server.** Malformed data from another server (an invalid date, a
+  group list you are not in, a wrong key) is refused instead of breaking the page or being retried for days.
+
+The other people need this version too to see your edits, "Seen", "writing…" and your presence.
+
 ## 2.0.0-alpha.102 - 2026-10-26
 
 New:
