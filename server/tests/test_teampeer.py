@@ -198,13 +198,13 @@ def test_one_undeliverable_event_never_blocks_the_others(mx, monkeypatch):
     round_ = teampeer._outbox_round
     monkeypatch.setattr(teampeer, "_outbox_round", lambda: None)      # the real worker (other tests) stays out
     posted = []
-    monkeypatch.setattr(teampeer, "_post", lambda addr, ev, key: posted.append(addr) or type("R", (), {"status_code": 200})())
+    monkeypatch.setattr(teampeer, "_post", lambda addr, ev, key, *_: posted.append(addr) or type("R", (), {"status_code": 200})())
     teampeer.send(["http://127.0.0.1:8809"], {"type": "message", "chat": "x"})     # nobody: no key
     teampeer.send([LEA], {"type": "message", "chat": "y"})
     round_()
     assert posted == [LEA] and teampeer._load()["outbox"] == []
     # an address down: its events wait, the others go, the failure is counted once per round
-    monkeypatch.setattr(teampeer, "_post", lambda addr, ev, key: type("R", (), {"status_code": 503 if addr == LEA else 200})())
+    monkeypatch.setattr(teampeer, "_post", lambda addr, ev, key, *_: type("R", (), {"status_code": 503 if addr == LEA else 200})())
     doc = teampeer._load()
     doc["peers"][MALLORY] = {"key": teampeer._b64(b"m" * 32), "status": "accepted"}
     teampeer._save(doc)
