@@ -9,11 +9,13 @@ Document: {"me": "me", "chats": [{id, kind: dm|group, name,
 emoji, members: [ids], created, read_at, remote, admin, messages: [Message]}]}; Message = {id, author, at, text,
 kind: text|summary|poll, reply_to?, files?: [{path, name, size, mime, fid?, pending?, failed?}], poll?: {question,
 multi, options: [{id, label, votes: [ids]}]}, sent?: [{session, title, at}], reactions?: {emoji: [ids]}, pending?:
-[ids not delivered yet]}. People's ids are `teampeer.pid(address)` (the contacts: `teampeer.people()`).
+[ids not delivered yet], recv?: when it reached this server (messages of others: unread counts on it, not
+on the sender's clock)}. People's ids are `teampeer.pid(address)` (the contacts: `teampeer.people()`).
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import mimetypes
 import secrets
@@ -37,6 +39,9 @@ _ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}$")         # message and poll option id
 REACTIONS = ("👍", "❤️", "😂", "🎉", "🤔", "👀")
 
 _lock = threading.RLock()
+_slots = threading.BoundedSemaphore(4)          # files of the others: 4 downloads at a time
+_queued = [0]                                   # downloads started or waiting (at most QUEUE_MAX, the others fail)
+QUEUE_MAX = 100
 
 
 class TeamError(Exception):
@@ -91,7 +96,8 @@ def _message(chat: dict, mid: str) -> dict:
 def _summary(chat: dict, doc: dict) -> dict:
     msgs = chat["messages"]
     last = msgs[-1] if msgs else None
-    unread = sum(1 for m in msgs if m["author"] != ME and m["at"] > chat.get("read_at", 0))
+    read_at = chat.get("read_at", 0)
+    unread = sum(1 for m in msgs if m["author"] != ME and m.get("recv", m["at"]) > read_at)
     return {k: v for k, v in chat.items() if k != "messages"} | {
         "last": ({"author": last["author"], "at": last["at"], "kind": last.get("kind", "text"),
                   "text": (last.get("poll") or {}).get("question") or last["text"][:140]
@@ -420,13 +426,13 @@ def _remote_message(frm_pid: str, raw: dict) -> dict:
     kind = raw.get("kind") if raw.get("kind") in ("text", "summary", "poll") else "text"
     now = time.time()
     try:
-        at = min(float(raw.get("at") or now), now + 60)
+        at = min(float(raw.get("at") or now), now)
     except (TypeError, ValueError):
         at = now
     mid = str(raw.get("id") or "")
     if not _ID.match(mid):
         raise TeamError(400, "bad_id", "Bad message id")
-    msg = {"id": mid, "author": frm_pid, "at": at,
+    msg = {"id": mid, "author": frm_pid, "at": at, "recv": now,
            "text": str(raw.get("text") or "")[:TEXT_MAX * 2 if kind == "summary" else TEXT_MAX], "kind": kind}
     if kind == "poll":
         p = raw.get("poll") if isinstance(raw.get("poll"), dict) else {}
@@ -442,7 +448,11 @@ def _remote_message(frm_pid: str, raw: dict) -> dict:
     for f in (raw.get("files") or [])[:FILES_MAX]:
         if isinstance(f, dict) and f.get("id"):
             name = _safe_name(f.get("name"))
-            files.append({"path": "", "name": name, "size": int(f.get("size") or 0),
+            try:
+                size = max(int(f.get("size") or 0), 0)
+            except (TypeError, ValueError):
+                size = 0
+            files.append({"path": "", "name": name, "size": size,
                           "mime": mimetypes.guess_type(name)[0] or "application/octet-stream",
                           "fid": str(f["id"])[:40], "pending": True})
     if files:
@@ -533,14 +543,26 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
 
 
 def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
-    from .uploads import limits
+    from .api.sessions import reserve_path
+    from .uploads import free_bytes, limits
+    max_b, reserve = limits()
     d = files_dir()
-    dest = d / f["name"]
-    n = 1
-    while dest.exists():
-        dest = d / f"{Path(f['name']).stem}-{n}{Path(f['name']).suffix}"
-        n += 1
-    ok = teampeer.fetch_file(frm, f["fid"], dest, limits()[0], cid)
+    ok = False
+    dest = None
+    with _lock:
+        _queued[0] += 1
+        room = _queued[0] <= QUEUE_MAX
+    try:
+        if room and (not max_b or f["size"] <= max_b) and free_bytes(d) - f["size"] >= reserve:
+            with _slots:
+                dest, fd = reserve_path(d, f["name"])  # the name is taken at once: two "image.png" never collide
+                os.close(fd)
+                ok = teampeer.fetch_file(frm, f["fid"], dest, max_b, cid, reserve)
+                if not ok:
+                    dest.unlink(missing_ok=True)
+    finally:
+        with _lock:
+            _queued[0] -= 1
     with _lock:
         doc = _load()
         try:

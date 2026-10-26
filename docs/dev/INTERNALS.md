@@ -313,15 +313,21 @@ topic `team`. `state()`, `messages(cid)`, `create_chat`, `send`, `react`, `creat
 `mark_sent` (a "to a session" click), `summarize(cid, ids, since)` (one `claude -p` without tools, Sonnet,
 prompt `SUMMARY_PROMPT`, titles in the chat's language). Every local change is `_broadcast` to the other members
 through `teampeer.send` (message `pending` = ids not reached yet, cleared by `delivered()`); remote events come in
-through `apply_remote(frm, contact, event)` which checks membership and authorship. People ids = `teampeer.pid(address)`;
+through `apply_remote(frm, contact, event)` which checks membership and authorship; their messages keep `recv`
+(arrival time here, unread counts on it) and an `at` never in the future. People ids = `teampeer.pid(address)`;
 the user is `ME`. Web: `features/team/` (page `/team`, right panel `TeamPanel`).
 
 ## maxxing.teampeer  (owner: organisation)
 Server-to-server transport, stdlib + httpx, protocol in the docstring. `<state>/team/peers.json` (600): peers,
-invites (sha256 of the code), shared files, outbox. `readiness()` (public https address, not Tailscale / private),
-`create_invite`, `join`, `hello` (public side), `answer`, `forget`, `verify(request)` (signature, time ±300 s,
-nonce cache, rate limits), `receive(frm, event)`, `send(addresses, event, msg)` -> outbox, worker `start()`
-(`RETRY` backoff, `OUTBOX_DAYS`), `share_file` / `file_for` / `fetch_file` (signed GET, ≤ `upload_max_mb`).
+invites (the code, 15 min), shared files, outbox. `readiness()` (public https address, not Tailscale / private),
+`create_invite`, `join`, `hello` (public side; 409 for an address already linked: an invitation never replaces a
+key), `answer`, `forget` (a member of shared groups stays as `group`), `verify(request)` -> (sender, scope: "" =
+contact key, else the one group its key is for; signature, time ±300 s, nonce cache, rate limits on
+`security.client_key`), `receive(frm, event, scope)` (a group key: message / vote / react of that group only),
+`add_group_peer` (never for a contact or a request), `send(addresses, event, msg)` -> outbox, worker `start()` /
+`_outbox_round()` (`RETRY` backoff, `OUTBOX_DAYS`; a failing address waits, the others go; no key = dropped),
+`share_file` / `file_for` (scope checked) / `fetch_file` (signed GET, ≤ `upload_max_mb`, keeps
+`upload_min_free_mb` free, `FETCH_DEADLINE`; `team._fetch` reserves the name, 4 downloads at a time).
 `team_insecure` / MAXXING_TEAM_INSECURE=1 allows http and local addresses (tests only).
 
 ## maxxing.infra  (owner: organisation)
