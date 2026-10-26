@@ -93,6 +93,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   license: [qk.license, ['system']],
   infra: [['infra']],
   team: [['team']],
+  /** someone started / stopped writing, came online: the list and the faces only */
+  team_live: [['team', 'state']],
   mcp: [['mcp']],
 }
 

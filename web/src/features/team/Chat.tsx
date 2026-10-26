@@ -2,22 +2,27 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import {
-  ArrowLeft, BarChart3, Check, Clock, Copy, FileText, Loader2, MessageSquareShare, Paperclip, Search, Send, Smile, Sparkles, SquarePen, UserPlus, Users, X,
+  ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, Clock, Copy, FileText, Loader2, LogOut, MessageSquareShare, MoreHorizontal, Paperclip, Pencil, Reply, Search,
+  Send, Settings2, Smile, Sparkles, SquarePen, Trash2, UserPlus, Users, X,
 } from 'lucide-react'
 import {
-  fileRawUrl, useTeamChat, useTeamConnections, useTeamRead, useTeamReact, useTeamSend, useTeamSummarize, useTeamTyping, useTeamUpload, useTeamVote,
+  fileRawUrl, useTeamChat, useTeamConnections, useTeamDelete, useTeamEdit, useTeamLeave, useTeamMute, useTeamRead, useTeamReact, useTeamSend, useTeamSummarize,
+  useTeamTyping, useTeamUpload, useTeamVote,
   type TeamChat, type TeamFile, type TeamMessage, type TeamState,
 } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
-import { Button, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
+import {
+  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner,
+  Textarea, Tooltip, toast,
+} from '@/components/ui'
 import { openFileViewer } from '@/features/files/viewerStore'
 import { fmtBytes } from '@/lib/format'
 import { Markdown } from '@/components/ui/markdown'
 import { Avatar } from '@/features/profile/Avatar'
 import { projectColor } from '@/features/tasks/model'
-import { ForwardDialog, NewChatDialog, PollDialog } from './Dialogs'
+import { ForwardDialog, GroupDialog, NewChatDialog, PollDialog } from './Dialogs'
 import { AddFriendDialog, useOpenDm } from './Friends'
 import { ChatAvatar, chatTitle, friendsOf, PersonAvatar, personOf, TypingDots, usePresence, useTypingLabel } from './people'
 
@@ -127,7 +132,8 @@ export function ChatList({
               <ChatAvatar team={team} chat={c} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
-                  <span className={cn('truncate text-[14px]', c.unread ? 'font-semibold' : 'font-medium')}>{chatTitle(team, c)}</span>
+                  <span className={cn('truncate text-[14px]', c.unread && !c.muted ? 'font-semibold' : 'font-medium')}>{chatTitle(team, c)}</span>
+                  {c.muted && <BellOff className="size-3 shrink-0 text-muted-foreground" />}
                   {last && <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">{when(last.at, lang)}</span>}
                 </span>
                 <span className="flex items-center gap-2">
@@ -137,11 +143,17 @@ export function ChatList({
                       <span className="truncate">{c.kind === 'dm' ? t('team.typing.short') : typingLabel(team, writing)}</span>
                     </span>
                   ) : (
-                    <span className={cn('truncate text-[12.5px]', c.unread ? 'text-foreground' : 'text-muted-foreground')}>
+                    <span className={cn('truncate text-[12.5px]', c.unread && !c.muted ? 'text-foreground' : 'text-muted-foreground')}>
                       {last ? (
                         <>
                           {(c.kind === 'group' || last.author === team?.me) && <span className="text-muted-foreground">{author} : </span>}
-                          {last.kind === 'poll' ? `📊 ${last.text}` : last.kind === 'summary' ? `✨ ${t('team.summaryShort')}` : `${last.files ? '📎 ' : ''}${last.text}`}
+                          {last.deleted
+                            ? t('team.msg.deleted')
+                            : last.kind === 'poll'
+                              ? `📊 ${last.text}`
+                              : last.kind === 'summary'
+                                ? `✨ ${t('team.summaryShort')}`
+                                : `${last.files ? '📎 ' : ''}${last.text}`}
                         </>
                       ) : (
                         t('team.noMessage')
@@ -149,7 +161,12 @@ export function ChatList({
                     </span>
                   )}
                   {c.unread > 0 && (
-                    <span className="ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold text-primary-foreground">
+                    <span
+                      className={cn(
+                        'ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[10.5px] font-semibold',
+                        c.muted ? 'bg-muted-foreground/25 text-foreground' : 'bg-primary text-primary-foreground',
+                      )}
+                    >
                       {c.unread}
                     </span>
                   )}
@@ -184,6 +201,9 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
   const read = useTeamRead()
   const summarize = useTeamSummarize()
   const [forward, setForward] = React.useState<Forward | null>(null)
+  const [replyTo, setReplyTo] = React.useState<TeamMessage | null>(null)
+  const [editing, setEditing] = React.useState<TeamMessage | null>(null)
+  const del = useTeamDelete()
   const [pollOpen, setPollOpen] = React.useState(false)
   // Summary: the messages chosen (null = not choosing)
   const [sel, setSel] = React.useState<Set<string> | null>(null)
@@ -196,7 +216,8 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
   const msgs = React.useMemo(() => data?.messages || [], [data?.messages])
   const me = team?.me || 'me'
   const title = chat ? chatTitle(team, chat) : ''
-  const pickable = React.useMemo(() => msgs.filter((m) => m.kind !== 'summary'), [msgs])
+  const pickable = React.useMemo(() => msgs.filter((m) => m.kind !== 'summary' && m.kind !== 'info' && !m.deleted), [msgs])
+  const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
 
   // Seen: everything shown is read (once per new message).
   const lastAt = msgs.length ? msgs[msgs.length - 1].at : 0
@@ -257,6 +278,14 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
 
   if (!chat) return <div className="flex flex-1 items-center justify-center">{isLoading ? <Spinner /> : null}</div>
   const writing = team?.typing?.[chatId] || []
+  // "Seen" under the user's last message: who read up to it
+  const lastMine = [...msgs].reverse().find((m) => m.kind !== 'info')
+  const seenBy = lastMine && lastMine.author === me && !lastMine.deleted ? chat.members.filter((p) => (chat.seen?.[p] || 0) >= lastMine.at) : []
+  const editLast = () => {
+    const m = [...msgs].reverse().find((x) => x.author === me && x.kind === 'text' && !x.deleted)
+    if (m) setEditing(m)
+  }
+  const remove = (m: TeamMessage) => window.confirm(t('team.msg.deleteConfirm')) && del.mutate({ cid: chatId, mid: m.id })
 
   return (
     <div
@@ -284,8 +313,9 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
           </Button>
         )}
         <ChatHeader team={team} chat={chat} title={title} compact={compact} writing={writing} />
+        <ChatMenu team={team} chat={chat} />
         <Tooltip content={t('team.summarizeHint')}>
-          <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" disabled={summarize.isPending} onClick={() => (sel ? setSel(null) : startSummary())}>
+          <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" disabled={summarize.isPending || pickable.length < 2} onClick={() => (sel ? setSel(null) : startSummary())}>
             {summarize.isPending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5 text-primary" />}
             {!compact && t('team.summarize')}
           </Button>
@@ -304,6 +334,13 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
             const joinPrev = !newDay && !card && prev && prev.kind === 'text' && prev.author === m.author && m.at - prev.at < 300
             const joinNext =
               !card && next && next.kind === 'text' && next.author === m.author && next.at - m.at < 300 && new Date(next.at * 1000).toDateString() === new Date(m.at * 1000).toDateString()
+            if (m.kind === 'info')
+              return (
+                <React.Fragment key={m.id}>
+                  {newDay && <DaySeparator at={m.at} />}
+                  <InfoLine team={team} m={m} />
+                </React.Fragment>
+              )
             return (
               <React.Fragment key={m.id}>
                 {newDay && <DaySeparator at={m.at} />}
@@ -320,7 +357,12 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
                   selected={!!sel?.has(m.id)}
                   onSelect={(range) => toggle(m.id, range)}
                   onForward={(msg) => setForward({ message: msg, text: sendLabel(msg) })}
+                  quoted={m.reply_to ? byId.get(m.reply_to) : undefined}
+                  onReply={chat.left ? undefined : () => setReplyTo(m)}
+                  onEdit={() => setEditing(m)}
+                  onDelete={() => remove(m)}
                 />
+                {m === lastMine && seenBy.length > 0 && <SeenLine team={team} chat={chat} ids={seenBy} />}
               </React.Fragment>
             )
           })}
@@ -336,8 +378,22 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
 
       {sel ? (
         <SelectBar count={sel.size} preset={preset} compact={compact} onPreset={choose} onNone={() => (setSel(new Set()), setPreset(null))} onCancel={() => setSel(null)} onRun={runSummary} />
+      ) : chat.left ? (
+        <div className={cn('shrink-0 border-t bg-muted/30 text-center text-[13px] text-muted-foreground', compact ? 'p-3' : 'p-4')}>{t('team.group.leftNotice')}</div>
       ) : (
-        <Composer ref={composer} chatId={chatId} title={title} compact={compact} onPoll={() => setPollOpen(true)} />
+        <Composer
+          ref={composer}
+          chatId={chatId}
+          title={title}
+          compact={compact}
+          onPoll={() => setPollOpen(true)}
+          replyTo={replyTo}
+          replyName={replyTo ? (replyTo.author === me ? t('team.you') : personOf(team, replyTo.author).name) : ''}
+          onCancelReply={() => setReplyTo(null)}
+          editing={editing}
+          onCancelEdit={() => setEditing(null)}
+          onEditLast={editLast}
+        />
       )}
       {dragging && (
         <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/80 text-[14px] font-medium text-primary">
@@ -408,6 +464,64 @@ function ChatHeader({ team, chat, title, compact, writing }: { team: TeamState |
         ))}
       </PopoverContent>
     </Popover>
+  )
+}
+
+/** The chat's menu: mute; for a group, manage it (its creator) or leave it. */
+function ChatMenu({ team, chat }: { team: TeamState | undefined; chat: TeamChat }) {
+  const t = useT()
+  const mute = useTeamMute()
+  const leave = useTeamLeave()
+  const [manage, setManage] = React.useState(false)
+  const admin = chat.kind === 'group' && chat.admin === team?.me && !chat.left
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon-sm" variant="ghost" aria-label={t('common.more')} className="shrink-0 text-muted-foreground">
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onSelect={() => mute.mutate({ cid: chat.id, muted: !chat.muted })}>
+            {chat.muted ? <Bell className="size-4" /> : <BellOff className="size-4" />} {chat.muted ? t('team.mute.off') : t('team.mute.on')}
+          </DropdownMenuItem>
+          {admin && (
+            <DropdownMenuItem onSelect={() => setManage(true)}>
+              <Settings2 className="size-4" /> {t('team.group.manage')}
+            </DropdownMenuItem>
+          )}
+          {chat.kind === 'group' && !chat.left && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem destructive onSelect={() => window.confirm(t('team.group.leaveConfirm')) && leave.mutate(chat.id)}>
+                <LogOut className="size-4" /> {t('team.group.leave')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {admin && <GroupDialog open={manage} onOpenChange={setManage} team={team} chat={chat} />}
+    </>
+  )
+}
+
+/** "Léa joined", "Tom left the group": a quiet line in the thread. */
+function InfoLine({ team, m }: { team: TeamState | undefined; m: TeamMessage }) {
+  const t = useT()
+  const name = m.author === team?.me ? t('team.you') : personOf(team, m.author).name
+  return <div className="my-2 text-center text-[12px] text-muted-foreground">{t(`team.info.${m.info || 'joined'}`, { name })}</div>
+}
+
+/** "Seen" (a private chat) or "Seen by Léa, Tom" (a group) under the user's last message. */
+function SeenLine({ team, chat, ids }: { team: TeamState | undefined; chat: TeamChat; ids: string[] }) {
+  const t = useT()
+  const names = ids.map((id) => personOf(team, id).name.split(' ')[0])
+  return (
+    <div className="mt-1 flex items-center justify-end gap-1 px-1 text-[11px] text-muted-foreground">
+      <CheckCheck className="size-3.5 text-primary" />
+      {chat.kind === 'dm' ? t('team.seenMsg') : ids.length === chat.members.length ? t('team.seenAll') : t('team.seenBy', { names: names.join(', ') })}
+    </div>
   )
 }
 
@@ -499,7 +613,7 @@ function SelectBar({
 
 /* ------------------------------------------------------------------------------------------------ one message */
 function MessageRow({
-  team, chat, m, mine, showName, showAvatar, tight, compact, selecting, selected, onSelect, onForward,
+  team, chat, m, mine, showName, showAvatar, tight, compact, selecting, selected, onSelect, onForward, quoted, onReply, onEdit, onDelete,
 }: {
   team: TeamState | undefined
   chat: TeamChat
@@ -513,14 +627,20 @@ function MessageRow({
   selected: boolean
   onSelect: (range: boolean) => void
   onForward: (m: TeamMessage) => void
+  quoted?: TeamMessage
+  onReply?: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
   const t = useT()
   const lang = useLang()
   const author = personOf(team, m.author)
+  const quotedName = quoted ? (quoted.author === (team?.me || 'me') ? t('team.you') : personOf(team, quoted.author).name) : ''
   const card = m.kind !== 'text'
   const right = mine && !card
   return (
     <div
+      id={`tm-${m.id}`}
       className={cn(
         'group/msg relative flex gap-2 rounded-xl',
         tight ? 'mt-0.5' : 'mt-3',
@@ -553,8 +673,27 @@ function MessageRow({
             </span>
           )}
           <div className={cn('relative flex max-w-full min-w-0 flex-col gap-1', right && 'items-end', selecting && 'pointer-events-none')}>
-            {!!m.files?.length && <Files files={m.files} right={right} />}
-            {m.kind === 'summary' ? (
+            {!!m.reply_to && (
+              <button
+                type="button"
+                onClick={() => document.getElementById(`tm-${m.reply_to}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                className={cn('flex max-w-full min-w-0 items-stretch gap-2 rounded-lg bg-muted/60 py-1 pr-2.5 pl-1 text-left text-[12px] hover:bg-muted', right && 'self-end')}
+              >
+                <span className="w-[3px] shrink-0 rounded-full bg-primary/60" />
+                <span className="min-w-0">
+                  <span className="block font-medium">{quoted ? quotedName : t('team.msg.unknown')}</span>
+                  <span className="line-clamp-2 text-muted-foreground [overflow-wrap:anywhere]">
+                    {!quoted ? '' : quoted.deleted ? t('team.msg.deleted') : quoted.kind === 'poll' ? `📊 ${quoted.poll?.question}` : quoted.text || `📎 ${quoted.files?.map((f) => f.name).join(', ')}`}
+                  </span>
+                </span>
+              </button>
+            )}
+            {m.deleted ? (
+              <div className="rounded-2xl border border-dashed px-3.5 py-2 text-[13px] text-muted-foreground italic">{t('team.msg.deleted')}</div>
+            ) : (
+              !!m.files?.length && <Files files={m.files} right={right} />
+            )}
+            {m.deleted ? null : m.kind === 'summary' ? (
               <SummaryCard m={m} />
             ) : m.kind === 'poll' ? (
               <PollCard team={team} chat={chat} m={m} />
@@ -568,6 +707,7 @@ function MessageRow({
               >
                 <Linkified text={m.text} mine={mine} />
                 <span className={cn('ml-2 inline-flex translate-y-0.5 items-center gap-1 text-[10.5px] tabular-nums', mine ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                  {!!m.edited && <span>{t('team.msg.edited')}</span>}
                   {clock(m.at, lang)}
                   {mine && !!m.pending?.length && (
                     <span title={t('team.notDelivered', { names: m.pending.map((p) => personOf(team, p).name).join(', ') })}>
@@ -577,7 +717,9 @@ function MessageRow({
                 </span>
               </div>
             ) : null}
-            {!selecting && <MessageTools team={team} chat={chat} m={m} mine={right} compact={compact} onForward={() => onForward(m)} />}
+            {!selecting && !m.deleted && (
+              <MessageTools team={team} chat={chat} m={m} mine={right} own={mine} compact={compact} onForward={() => onForward(m)} onReply={onReply} onEdit={onEdit} onDelete={onDelete} />
+            )}
           </div>
           {!!m.reactions && Object.keys(m.reactions).length > 0 && <Reactions team={team} chat={chat} m={m} />}
           {!!m.sent?.length && (
@@ -666,10 +808,25 @@ function Files({ files: all, right }: { files: (TeamFile & { pending?: boolean; 
   )
 }
 
-function MessageTools({ team, chat, m, mine, compact, onForward }: { team: TeamState | undefined; chat: TeamChat; m: TeamMessage; mine: boolean; compact?: boolean; onForward: () => void }) {
+function MessageTools({
+  team, chat, m, mine, own, compact, onForward, onReply, onEdit, onDelete,
+}: {
+  team: TeamState | undefined
+  chat: TeamChat
+  m: TeamMessage
+  mine: boolean
+  own: boolean
+  compact?: boolean
+  onForward: () => void
+  onReply?: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
   const t = useT()
   const react = useTeamReact()
   const [open, setOpen] = React.useState(false)
+  const [menu, setMenu] = React.useState(false)
+  const tool = 'inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
   const copy = () => {
     void navigator.clipboard?.writeText(m.text).then(() => toast.success(t('team.copied')))
   }
@@ -677,10 +834,17 @@ function MessageTools({ team, chat, m, mine, compact, onForward }: { team: TeamS
     <div
       className={cn(
         'absolute -top-3.5 z-10 flex items-center gap-0.5 rounded-lg border bg-popover p-0.5 opacity-0 shadow-sm transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100',
-        open && 'opacity-100',
+        (open || menu) && 'opacity-100',
         mine ? 'left-1' : 'right-1',
       )}
     >
+      {onReply && !chat.left && (
+        <Tooltip content={t('team.msg.reply')}>
+          <button type="button" onClick={onReply} className={tool} aria-label={t('team.msg.reply')}>
+            <Reply className="size-4" />
+          </button>
+        </Tooltip>
+      )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button type="button" className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('team.react')}>
@@ -709,13 +873,33 @@ function MessageTools({ team, chat, m, mine, compact, onForward }: { team: TeamS
           {!compact && t('team.toSession')}
         </button>
       </Tooltip>
-      {!!m.text && (
-        <Tooltip content={t('team.copy')}>
-          <button type="button" onClick={copy} className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('team.copy')}>
-            <Copy className="size-3.5" />
+      <DropdownMenu open={menu} onOpenChange={setMenu}>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className={tool} aria-label={t('common.more')}>
+            <MoreHorizontal className="size-4" />
           </button>
-        </Tooltip>
-      )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={mine ? 'start' : 'end'} className="w-48">
+          {!!m.text && (
+            <DropdownMenuItem onSelect={copy}>
+              <Copy className="size-4" /> {t('team.copy')}
+            </DropdownMenuItem>
+          )}
+          {own && m.kind === 'text' && !chat.left && (
+            <DropdownMenuItem onSelect={onEdit}>
+              <Pencil className="size-4" /> {t('team.msg.edit')}
+            </DropdownMenuItem>
+          )}
+          {own && !chat.left && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem destructive onSelect={onDelete}>
+                <Trash2 className="size-4" /> {t('team.msg.delete')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -744,6 +928,9 @@ function Reactions({ team, chat, m }: { team: TeamState | undefined; chat: TeamC
   )
 }
 
+/** A summary may come from another server: no remote picture (it would tell its owner who reads it, and when). */
+const NO_IMAGES = { img: ({ alt }: { alt?: string }) => (alt ? <span className="text-muted-foreground">[{alt}]</span> : null) }
+
 function SummaryCard({ m }: { m: TeamMessage }) {
   const t = useT()
   const s = m.summary
@@ -754,7 +941,7 @@ function SummaryCard({ m }: { m: TeamMessage }) {
         {t('team.summaryBy')}
         {s && <span className="ml-auto font-normal text-muted-foreground">{t('team.summaryOf', { count: s.count })}</span>}
       </div>
-      <Markdown className="min-w-0 px-3.5 py-2.5 text-[13.5px] [overflow-wrap:anywhere] [&_p]:my-1.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:my-1">{m.text}</Markdown>
+      <Markdown components={NO_IMAGES} className="min-w-0 px-3.5 py-2.5 text-[13.5px] [overflow-wrap:anywhere] [&_p]:my-1.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:my-1">{m.text}</Markdown>
     </div>
   )
 }
@@ -820,9 +1007,25 @@ function PollCard({ team, chat, m }: { team: TeamState | undefined; chat: TeamCh
 /* ------------------------------------------------------------------------------------------------ composer */
 type Pending = { key: string; name: string; file?: TeamFile; failed?: boolean }
 
-function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; title: string; compact?: boolean; onPoll: () => void; ref?: React.Ref<{ add: (files: File[]) => void }> }) {
+function Composer({
+  chatId, title, compact, onPoll, replyTo, replyName, onCancelReply, editing, onCancelEdit, onEditLast, ref,
+}: {
+  chatId: string
+  title: string
+  compact?: boolean
+  onPoll: () => void
+  replyTo: TeamMessage | null
+  replyName: string
+  onCancelReply: () => void
+  editing: TeamMessage | null
+  onCancelEdit: () => void
+  onEditLast: () => void
+  ref?: React.Ref<{ add: (files: File[]) => void }>
+}) {
   const t = useT()
   const send = useTeamSend()
+  const edit = useTeamEdit()
+  const draft = React.useRef('')
   const upload = useTeamUpload()
   const typing = useTeamTyping()
   const lastTyping = React.useRef(0)
@@ -835,6 +1038,19 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
     setPending([])
     input.current?.focus()
   }, [chatId])
+  // editing a message: its text in the box (the draft comes back after); replying: the focus
+  React.useEffect(() => {
+    if (editing) {
+      draft.current = text
+      setText(editing.text)
+    }
+    input.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.id, replyTo?.id])
+  const stopEditing = () => {
+    setText(draft.current)
+    onCancelEdit()
+  }
   const add = React.useCallback(
     (files: File[]) => {
       const batch = files.map((f, i) => ({ key: `${Date.now()}-${i}-${f.name}`, name: f.name }))
@@ -851,16 +1067,36 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
   const ready = pending.filter((p) => p.file)
   const submit = () => {
     const v = text.trim()
+    if (editing) {
+      if (!v && !editing.files?.length) return
+      edit.mutate({ cid: chatId, mid: editing.id, text: v })
+      setText(draft.current)
+      onCancelEdit()
+      return
+    }
     if ((!v && !ready.length) || uploading) return
     const files = ready.map((p) => ({ path: p.file!.path }))
     setText('')
     setPending([])
     lastTyping.current = 0
-    send.mutate({ cid: chatId, text: v, files }, { onError: () => setText(v) })
+    send.mutate({ cid: chatId, text: v, files, reply_to: replyTo?.id }, { onError: () => setText(v) })
+    onCancelReply()
   }
   return (
     <div className={cn('shrink-0 border-t bg-background', compact ? 'p-2' : 'px-4 py-3 md:px-8')}>
       <div className={cn('mx-auto flex flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50', !compact && 'max-w-3xl')}>
+        {(editing || replyTo) && (
+          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]">
+            {editing ? <Pencil className="size-3.5 shrink-0 text-primary" /> : <Reply className="size-3.5 shrink-0 text-primary" />}
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-medium">{editing ? t('team.msg.editing') : t('team.msg.replyingTo', { name: replyName })}</span>
+              {!editing && replyTo && <span className="text-muted-foreground"> · {replyTo.text || replyTo.poll?.question || replyTo.files?.map((f) => f.name).join(', ')}</span>}
+            </span>
+            <button type="button" onClick={editing ? stopEditing : onCancelReply} className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('common.cancel')}>
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
         {!!pending.length && (
           <div className="flex flex-wrap gap-1.5 px-1 pt-0.5 pb-1.5">
             {pending.map((p) => (
@@ -902,7 +1138,7 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
             onChange={(e) => {
               setText(e.target.value)
               const now = Date.now()
-              if (e.target.value.trim() && now - lastTyping.current > 2500) {
+              if (!editing && e.target.value.trim() && now - lastTyping.current > 2500) {
                 lastTyping.current = now
                 typing.mutate(chatId)
               }
@@ -918,6 +1154,13 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 submit()
+              } else if (e.key === 'Escape' && (editing || replyTo)) {
+                e.preventDefault()
+                if (editing) stopEditing()
+                else onCancelReply()
+              } else if (e.key === 'ArrowUp' && !text && !editing && !pending.length) {
+                e.preventDefault()
+                onEditLast()
               }
             }}
             minRows={1}
@@ -925,8 +1168,8 @@ function Composer({ chatId, title, compact, onPoll, ref }: { chatId: string; tit
             placeholder={t('team.placeholder', { chat: title })}
             className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
-          <Button size="icon-sm" onClick={submit} disabled={(!text.trim() && !ready.length) || uploading} aria-label={t('team.send')}>
-            <Send />
+          <Button size="icon-sm" onClick={submit} disabled={editing ? !text.trim() && !editing.files?.length : (!text.trim() && !ready.length) || uploading} aria-label={editing ? t('team.msg.save') : t('team.send')}>
+            {editing ? <Check /> : <Send />}
           </Button>
         </div>
       </div>

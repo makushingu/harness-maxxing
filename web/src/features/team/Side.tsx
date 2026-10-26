@@ -22,7 +22,7 @@ export function TeamSide({ team, active, onOpen, compact }: { team: TeamState | 
   const tab = useTeamUI((s) => s.tab)
   const setTab = useTeamUI((s) => s.setTab)
   const { data: cx } = useTeamConnections()
-  const unread = team?.chats.reduce((n, c) => n + c.unread, 0) || 0
+  const unread = team?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   const requests = cx?.contacts.filter((x) => x.status === 'request').length || 0
   const open = (id: string) => {
     setTab('chats')

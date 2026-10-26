@@ -19,7 +19,7 @@ export default function TeamPage() {
   const wide = useMediaQuery('(min-width: 768px)')
   const chatId = params.get('chat') || (wide ? team?.chats[0]?.id : null) || null
   const open = (id: string | null) => setParams(id ? { chat: id } : {}, { replace: true })
-  const unread = team?.chats.reduce((n, c) => n + c.unread, 0) || 0
+  const unread = team?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader title={t('team.title')} description={unread ? t('team.unread', { count: unread }) : t('team.desc')} />

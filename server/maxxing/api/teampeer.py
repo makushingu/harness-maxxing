@@ -2,6 +2,8 @@
 with the link key of a contact (or of a group). Nothing answers while Team is off."""
 from __future__ import annotations
 
+import logging
+
 import asyncio
 import json
 
@@ -9,6 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from .. import config, security, team, teampeer
+
+log = logging.getLogger("maxxing.teampeer")
 
 router = APIRouter(prefix="/api/team-peer", tags=["team-peer"])
 
@@ -54,7 +58,11 @@ async def inbox(request: Request):
         raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
     if not isinstance(event, dict):
         raise HTTPException(400, detail={"error": "bad_request", "message": "Object expected"})
-    return await _call(teampeer.receive, frm, event, scope)
+    try:
+        return await _call(teampeer.receive, frm, event, scope)
+    except (TypeError, ValueError, AttributeError) as e:   # a malformed event: refused for good (never retried)
+        log.info("team: malformed event from %s (%s)", frm, type(e).__name__)
+        raise HTTPException(400, detail={"error": "bad_event", "message": "Malformed event"}) from None
 
 
 @router.get("/files/{fid}")

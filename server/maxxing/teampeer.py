@@ -31,6 +31,7 @@ import secrets
 import socket
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -233,7 +234,7 @@ def people() -> dict:
         seen = now - float(p.get("last_seen") or 0)
         out[pid(addr)] = {"name": p.get("name") or urlsplit(addr).hostname, "emoji": p.get("emoji", ""),
                           "color": p.get("color") or "zinc", "server": urlsplit(addr).hostname, "address": addr,
-                          "status": "online" if seen < 300 else "away" if seen < 3600 else "offline",
+                          "status": "online" if seen < ONLINE_S + SEEN_WRITE_S else "away" if seen < 3600 else "offline",
                           "contact": p.get("status") == "accepted", "peer": True,
                           "last_seen": float(p.get("last_seen") or 0)}
     return out
@@ -417,12 +418,21 @@ def _drop_link(doc: dict, address: str) -> dict | None:
 
 
 # ---- signing --------------------------------------------------------------------------------------------------
+def _key_ok(k: object) -> bytes | None:
+    """A link or pair key: 32 bytes in url-safe base64, else None."""
+    try:
+        b = _unb64(str(k))
+    except (ValueError, TypeError):
+        return None
+    return b if len(b) == 32 else None
+
+
 def _scopes(p: dict) -> list[tuple[str, bytes]]:
     """(scope, key) a sender may sign with: "" = its contact link, else the id of the one group the key is for."""
     out = []
-    if p.get("key") and p.get("status") in ("accepted", "waiting", "request"):
+    if p.get("key") and p.get("status") in ("accepted", "waiting", "request") and _key_ok(p["key"]):
         out.append(("", _unb64(p["key"])))
-    out += [(cid, _unb64(k)) for cid, k in (p.get("group_keys") or {}).items()]
+    out += [(cid, k) for cid, k in ((cid, _key_ok(v)) for cid, v in (p.get("group_keys") or {}).items()) if k]
     return out
 
 
@@ -464,12 +474,29 @@ def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> tuple
         return frm, scope
 
 
+SEEN_WRITE_S = 30                                          # last_seen is written at most this often per peer
+ONLINE_S = 300                                             # seen within this = online
+PRESENCE_EVERY = 120                                       # the user's own presence goes out at most this often
+_presence_sent = [0.0]
+_batches = threading.BoundedSemaphore(4)                   # batches of passing signals in flight; more are dropped
+SIGNAL_TIMEOUT = 4.0
+
+
 def touch(address: str) -> None:
+    """The peer just talked to us (presence). Written at most every SEEN_WRITE_S; coming back online refreshes the UI."""
+    now = time.time()
     with _lock:
         doc = _load()
-        if address in doc["peers"]:
-            doc["peers"][address]["last_seen"] = time.time()
-            config.write_json(_path(), doc, mode=0o600)
+        p = doc["peers"].get(address)
+        if not p:
+            return
+        last = float(p.get("last_seen") or 0)
+        if now - last < SEEN_WRITE_S:
+            return
+        p["last_seen"] = now
+        config.write_json(_path(), doc, mode=0o600)
+    if now - last >= ONLINE_S:
+        bus.invalidate("team_live")
 
 
 def receive(frm: str, event: dict, scope: str = "") -> dict:
@@ -477,7 +504,7 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
     group key is limited to (see verify)."""
     from . import team
     kind = event.get("type")
-    if scope and (kind not in ("message", "vote", "react", "typing") or str(event.get("chat") or "") != scope):
+    if scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave") or str(event.get("chat") or "") != scope):
         raise PeerError(403, "forbidden", "A group key only works in its own group")
     with _lock:
         doc = _load()
@@ -497,23 +524,63 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
             p.update(_clean_profile(event.get("profile")))
             _save(doc)
             return {"ok": True}
+        if kind == "presence":                 # "my Harness is open": nothing but last_seen (contacts only)
+            if p.get("status") != "accepted":
+                raise PeerError(403, "forbidden", "Not a contact")
+            presence = True
+        else:
+            presence = False
+    if presence:
+        touch(frm)
+        return {"ok": True}
     touch(frm)
     team.apply_remote(frm, p.get("status") == "accepted" and not scope, event)
     return {"ok": True}
 
 
-def add_group_peer(address: str, chat: str, key: str, profile: dict) -> None:
-    """A member of a group we were added to: we may talk with it about that chat only. A contact (or a pending
-    request) keeps its own link key: a key handed by the group's creator would let the creator speak as it."""
-    address = normalize(address)
+GROUP_PEERS_MAX = 500                                      # people known only through groups, at most
+
+
+def add_group_peers(chat: str, members: list[tuple[str, str, dict]]) -> None:
+    """Members of a group we are in: we may talk with each about that chat only - (address, key, profile), one
+    write. A contact (or a pending request) keeps its own link key: a key handed by the group's creator would let
+    the creator speak as it. A key that is not 32 bytes is skipped; a known person's name is not changed (one
+    group's creator cannot rename them for the others)."""
     with _lock:
         doc = _load()
-        p = doc["peers"].setdefault(address, {"status": "group"})
-        if p.get("status") != "group":
-            return
-        p.setdefault("group_keys", {})[chat] = key
-        p.update(_clean_profile(profile))
-        _save(doc)
+        known = sum(1 for p in doc["peers"].values() if p.get("status") == "group")
+        changed = False
+        for address, key, profile in members:
+            if not _key_ok(key):
+                continue
+            p = doc["peers"].get(address)
+            if p is None:
+                if known >= GROUP_PEERS_MAX:
+                    continue
+                known += 1
+                p = doc["peers"][address] = {"status": "group", **_clean_profile(profile)}
+            if p.get("status") != "group":
+                continue
+            p.setdefault("group_keys", {})[chat] = key
+            changed = True
+        if changed:
+            _save(doc)
+
+
+def drop_chat_keys(chat: str) -> None:
+    """We are out of a group: every key for it goes (group-only people with no group left are forgotten)."""
+    with _lock:
+        doc = _load()
+        changed = False
+        for a in list(doc["peers"]):
+            p = doc["peers"][a]
+            if chat in (p.get("group_keys") or {}):
+                p["group_keys"].pop(chat)
+                changed = True
+                if p.get("status") == "group" and not p["group_keys"]:
+                    doc["peers"].pop(a)
+        if changed:
+            _save(doc)
 
 
 def new_pair_key() -> str:
@@ -532,20 +599,24 @@ def _key_to(address: str, chat: str | None) -> bytes:
     raise PeerError(404, "no_key", "Not connected with " + address)
 
 
-def _post(address: str, event: dict, key: bytes) -> httpx.Response:
+def _post(address: str, event: dict, key: bytes, timeout: float = TIMEOUT) -> httpx.Response:
     me = own_address()
     path = "/api/team-peer/inbox"
     body = json.dumps(event, separators=(",", ":")).encode()
     headers = _sign(key, "POST", path, me, address, body) | {"Content-Type": "application/json"}
-    return _http().post(address + path, content=body, headers=headers, timeout=TIMEOUT, follow_redirects=False)
+    return _http().post(address + path, content=body, headers=headers, timeout=timeout, follow_redirects=False)
 
 
-def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: bytes | None = None) -> bool | None:
+def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: bytes | None = None,
+                 timeout: float = TIMEOUT) -> bool | None:
     """True = delivered, False = to retry, None = never deliverable (no key any more)."""
     try:
-        r = _post(_check_target(address), event, key or _key_to(address, event.get("chat")))
+        r = _post(_check_target(address), event, key or _key_to(address, event.get("chat")), timeout)
         if r.status_code == 200:
             return True
+        if r.status_code in (400, 413) and not raise_on_error:   # malformed: retrying changes nothing
+            log.info("team: %s refused an event for good (%s)", address, r.status_code)
+            return None                        # never deliverable: dropped from the outbox
         err = f"{address} answered {r.status_code}"
     except httpx.HTTPError as e:
         err = f"{address} does not answer ({type(e).__name__})"
@@ -559,18 +630,75 @@ def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: b
 
 
 def signal(address: str, event: dict) -> None:
-    """A passing event ("is writing"): one try now, never queued nor retried."""
+    """A passing event ("is writing", "read", "online"): one try now, never queued nor retried."""
     try:
-        _deliver_now(address, event)
+        _deliver_now(address, event, timeout=SIGNAL_TIMEOUT)
     except Exception:                          # best effort: a signal that does not arrive is no loss
         log.debug("team signal to %s failed", address, exc_info=True)
 
 
-def share_profile() -> None:
-    """The user changed their name, emoji or color: every contact gets it (queued like a message)."""
+def signal_all(addresses: list[str], event: dict) -> None:
+    """The same passing event to several people: one thread, 8 at a time. At most 4 batches in flight (a burst
+    while servers do not answer): the next ones are dropped."""
+    if not addresses or not _batches.acquire(blocking=False):
+        return
+
+    def run() -> None:
+        try:
+            with ThreadPoolExecutor(max_workers=min(8, len(addresses))) as pool:
+                list(pool.map(lambda a: signal(a, event), addresses))
+        finally:
+            _batches.release()
+    threading.Thread(target=run, daemon=True).start()
+
+
+def presence() -> None:
+    """The user has Harness open: tell the contacts, at most every PRESENCE_EVERY s."""
+    now = time.time()
     with _lock:
+        if now - _presence_sent[0] < PRESENCE_EVERY or not readiness()["ok"]:
+            return
+        _presence_sent[0] = now
         addrs = [a for a, p in _load()["peers"].items() if p.get("status") == "accepted"]
+    signal_all(addrs, {"type": "presence"})
+
+
+def share_profile() -> None:
+    """The user changed their name, emoji or color: every contact gets it (queued like a message; a newer change
+    replaces one still waiting)."""
+    with _lock:
+        doc = _load()
+        addrs = [a for a, p in doc["peers"].items() if p.get("status") == "accepted"]
+        doc["outbox"] = [o for o in doc["outbox"] if (o.get("event") or {}).get("type") != "profile"]
+        config.write_json(_path(), doc, mode=0o600)
     send(addrs, {"type": "profile", "profile": _profile()})
+
+
+def has_link(address: str, chat: str) -> bool:
+    """We can talk with this address about this chat (a contact, or a key of that group)."""
+    with _lock:
+        p = _load()["peers"].get(address) or {}
+    return p.get("status") == "accepted" or chat in (p.get("group_keys") or {})
+
+
+def drop_group_key(address: str, chat: str) -> None:
+    """A member left a group (or was removed): its key for that group goes; a peer with no group left is forgotten."""
+    with _lock:
+        doc = _load()
+        p = doc["peers"].get(address)
+        if not p or chat not in (p.get("group_keys") or {}):
+            return
+        p["group_keys"].pop(chat)
+        if p.get("status") == "group" and not p["group_keys"]:
+            doc["peers"].pop(address)
+        _save(doc)
+
+
+def unshare_file(fid: str) -> None:
+    with _lock:
+        doc = _load()
+        if doc["files"].pop(fid, None):
+            config.write_json(_path(), doc, mode=0o600)
 
 
 def send(addresses: list[str], event: dict, msg: str | None = None) -> None:

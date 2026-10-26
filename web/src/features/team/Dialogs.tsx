@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { Check, MessageSquarePlus, MessagesSquare, Plus, Trash2, UserPlus, X } from 'lucide-react'
-import { useSessions, useTeamCreateChat, useTeamForward, useTeamPoll, useTopics, type TeamMessage, type TeamState } from '@/lib/queries'
+import { useSessions, useTeamCreateChat, useTeamForward, useTeamGroup, useTeamPoll, useTopics, type TeamChat, type TeamMessage, type TeamState } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label, Segmented, Textarea, toast } from '@/components/ui'
@@ -319,6 +319,94 @@ export function NewChatDialog({
                   : t('team.writeTo', { name: personOf(team, members[0]).name })}
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/* ------------------------------------------------------------------------------------------------ manage a group */
+/** Its creator renames the group, adds friends, removes members (the others are told). */
+export function GroupDialog({ open, onOpenChange, team, chat }: { open: boolean; onOpenChange: (o: boolean) => void; team: TeamState | undefined; chat: TeamChat }) {
+  const t = useT()
+  const presence = usePresence()
+  const save = useTeamGroup()
+  const [name, setName] = React.useState('')
+  const [emoji, setEmoji] = React.useState('')
+  const [add, setAdd] = React.useState<string[]>([])
+  const [remove, setRemove] = React.useState<string[]>([])
+  React.useEffect(() => {
+    if (open) {
+      setName(chat.name)
+      setEmoji(chat.emoji)
+      setAdd([])
+      setRemove([])
+    }
+  }, [open, chat.name, chat.emoji])
+  const others = friendsOf(team).filter(([id]) => !chat.members.includes(id))
+  const kept = chat.members.length - remove.length + add.length
+  const changed = name.trim() !== chat.name || emoji.trim() !== chat.emoji || add.length > 0 || remove.length > 0
+  const toggle = (list: string[], set: (v: string[]) => void, id: string) => set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
+  const submit = () =>
+    save.mutate(
+      { cid: chat.id, name: name.trim(), emoji: emoji.trim(), add, remove },
+      { onSuccess: () => onOpenChange(false) },
+    )
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="gap-3">
+        <DialogHeader>
+          <DialogTitle>{t('team.group.manage')}</DialogTitle>
+          <DialogDescription>{t('team.group.manageDesc')}</DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2">
+          <Input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🚀" className="w-14 text-center" maxLength={8} aria-label="Emoji" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
+        </div>
+        <div className="flex max-h-[min(50vh,380px)] flex-col gap-0.5 overflow-y-auto">
+          <div className="px-1 pb-1 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.members', { count: kept + 1 })}</div>
+          {chat.members.map((id) => {
+            const p = personOf(team, id)
+            const out = remove.includes(id)
+            return (
+              <div key={id} className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5', out && 'opacity-50')}>
+                <PersonAvatar person={p} status />
+                <span className="min-w-0 flex-1">
+                  <span className={cn('block truncate text-[14px] font-medium', out && 'line-through')}>{p.name}</span>
+                  <span className="block truncate text-[12px] text-muted-foreground">{presence(p)}</span>
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => toggle(remove, setRemove, id)} disabled={!out && kept <= 1}>
+                  {out ? t('team.group.keep') : t('team.group.remove')}
+                </Button>
+              </div>
+            )
+          })}
+          {others.length > 0 && <div className="px-1 pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.group.addFriends')}</div>}
+          {others.map(([id, p]) => {
+            const on = add.includes(id)
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => toggle(add, setAdd, id)}
+                className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent/60', on && 'bg-primary/[0.06]')}
+              >
+                <PersonAvatar person={p} status />
+                <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{p.name}</span>
+                <span className={cn('inline-flex size-5 items-center justify-center rounded-full border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+                  {on && <Check className="size-3" strokeWidth={3} />}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={submit} disabled={!changed} loading={save.isPending}>
+            {t('common.save')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
