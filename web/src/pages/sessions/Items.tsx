@@ -17,6 +17,7 @@ import type { Seed } from './store'
 import { useOpenPreview } from './FilePreview'
 import { MediaPlayer } from '@/features/files/MediaPlayer'
 import { QuotedFile } from './QuotedFile'
+import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
 import { authServerOf, McpAuthButton } from '@/features/mcp/AuthButton'
 import { audioPaths, baseName, diffStats, FILE_HREF, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
 
@@ -107,11 +108,12 @@ export type MsgActions = {
 }
 
 /** Right click (a long press on a phone) on a message: a menu at the pointer (placed inside the row - the thread scroller is a containing block).
- *  A selection keeps the browser's own menu (copy it, or Quote from the pill), and so does a link. */
+ *  A selection keeps the browser's own menu (copy it, or Quote from the pill), and so does a link. With Team on, "Send to" a friend. */
 function useMessageMenu({ text, onFork, onEdit, onDelete }: MsgActions) {
   const t = useT()
   const [menuAt, setMenuAt] = React.useState<{ x: number; y: number } | null>(null)
   const after = React.useRef<(() => void) | undefined>(undefined)
+  const [sendTo, setSendTo] = React.useState<SendTarget | null>(null)
   const any = !!(onFork || onEdit || onDelete)
   const onContextMenu = any
     ? (e: React.MouseEvent<HTMLElement>) => {
@@ -187,6 +189,7 @@ function useMessageMenu({ text, onFork, onEdit, onDelete }: MsgActions) {
             <MessageSquarePlus /> {t('sessions.msg.newSession')}
           </DropdownMenuItem>
         )}
+        {text?.trim() && <SendToSub onPick={(target) => (after.current = () => setSendTo(target))} />}
         {onEdit && (
           <DropdownMenuItem onSelect={() => (after.current = onEdit)} data-testid="msg-edit">
             <Pencil /> {t('sessions.msg.edit')}
@@ -200,7 +203,16 @@ function useMessageMenu({ text, onFork, onEdit, onDelete }: MsgActions) {
       </DropdownMenuContent>
     </DropdownMenu>
   ) : null
-  return { onContextMenu, touch, menu }
+  return {
+    onContextMenu,
+    touch,
+    menu: menu && (
+      <>
+        {menu}
+        {sendTo && <SendToDialog target={sendTo} text={text || ''} onClose={() => setSendTo(null)} />}
+      </>
+    ),
+  }
 }
 
 /* ---------------------------------------------------------------- user */
