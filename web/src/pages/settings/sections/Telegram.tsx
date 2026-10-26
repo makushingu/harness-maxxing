@@ -1,9 +1,9 @@
 import * as React from 'react'
 import { Link2, RefreshCw, Send, Unlink } from 'lucide-react'
-import { useTelegram, useTelegramSettings, useTelegramSync, useTelegramTest, useTelegramUnlink } from '@/lib/queries'
+import { useSessions, useTelegram, useTelegramSettings, useTelegramSync, useTelegramTest, useTelegramUnlink } from '@/lib/queries'
 import { useLang, useT } from '@/i18n'
 import { fmtRelative } from '@/lib/format'
-import type { TelegramSettings, TelegramTestResult } from '@/lib/types'
+import type { Session, TelegramSettings, TelegramStatus, TelegramTestResult } from '@/lib/types'
 import { Badge, Button, Segmented, Sensitive, Skeleton, StatusDot, Switch, confirm, toast } from '@/components/ui'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
 import { ChangeBot, LinkPanel, TelegramErrors, TelegramSetup, ThreadList, TokenRejected, TopicsNotice, telegramStage, tokenRejected } from '@/features/telegram/TelegramSetup'
@@ -37,6 +37,7 @@ export function TelegramSection() {
   const sync = useTelegramSync()
   const [relink, setRelink] = React.useState(false)
   const [report, setReport] = React.useState<TelegramTestResult | null>(null)
+  const { data: sessions } = useSessions(undefined, false, !!s && telegramStage(s) === 'done')
   if (!s) return <Skeleton className="h-72 rounded-xl" />
   const stage = telegramStage(s)
   if (stage !== 'done')
@@ -162,7 +163,12 @@ export function TelegramSection() {
           <SettingRow label={t('telegram.threadDays')} description={t('telegram.threadDaysDesc')}>
             <Segmented
               value={String(s.settings.thread_days ?? 30)}
-              onChange={(v) => set({ thread_days: Number(v) })}
+              onChange={async (v) => {
+                const days = Number(v)
+                const lost = threadsLost(s, sessions, days)
+                if (lost > 0 && !(await confirm({ title: t('telegram.threadDaysConfirm', { count: lost }), description: t('telegram.threadDaysConfirmDesc'), destructive: true, confirmText: t('telegram.threadDaysConfirmOk') }))) return
+                set({ thread_days: days })
+              }}
               aria-label={t('telegram.threadDays')}
               options={[7, 14, 30, 90].map((d) => ({ value: String(d), label: t('telegram.days', { count: d }) }))}
             />
@@ -178,7 +184,7 @@ export function TelegramSection() {
         }
         description={t('telegram.threadsDesc')}
         actions={
-          <Button variant="outline" size="sm" loading={sync.isPending} onClick={() => sync.mutate(undefined, { onSuccess: (r) => toast.success(t('telegram.created', { count: r.created })) })}>
+          <Button variant="outline" size="sm" loading={sync.isPending} onClick={() => sync.mutate(undefined, { onSuccess: (r) => (r.error ? toast.error(r.error) : toast.success(t('telegram.created', { count: r.created }))) })}>
             <RefreshCw /> {t('telegram.sync')}
           </Button>
         }
@@ -191,3 +197,14 @@ export function TelegramSection() {
   )
 }
 
+
+/** Session threads the sync would delete with a shorter `thread_days` (idle sessions, not running). */
+function threadsLost(s: TelegramStatus, sessions: Session[] | undefined, days: number): number {
+  if (days >= (s.settings.thread_days ?? 30) || !sessions) return 0
+  const cutoff = Date.now() / 1000 - days * 86400
+  const byId = new Map(sessions.map((x) => [x.id, x]))
+  return s.threads.filter((th) => {
+    const x = th.session_id ? byId.get(th.session_id) : undefined
+    return !!x && x.state !== 'running' && (x.updated || 0) < cutoff
+  }).length
+}

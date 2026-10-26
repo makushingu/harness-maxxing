@@ -29,6 +29,8 @@ SYSTEM_PROMPT = ("You name chat sessions. Reply with only a short title (2 to 5 
                  "user's message, in the language of the message. No quotes, no trailing punctuation, no "
                  "'Session about'. Never answer the message itself.")
 _slots = threading.BoundedSemaphore(2)  # at most two title calls at a time
+_running: set[str] = set()              # sessions whose short title is being made (see pending)
+_running_lock = threading.Lock()
 
 # Leading filler removed by the heuristic (repeatedly, case-insensitive), French and English.
 _FILLER = re.compile(r"""^(?:
@@ -144,6 +146,8 @@ def schedule(sid: str, current: str, message: str) -> threading.Thread | None:
     """Start `refine` in a daemon thread (never blocks the caller). None when short titles are off."""
     if not (message or "").strip() or not enabled():
         return None
+    with _running_lock:
+        _running.add(sid)
     t = threading.Thread(target=_safe_refine, args=(sid, current, message.strip()), name=f"title-{sid[:8]}",
                          daemon=True)
     t.start()
@@ -174,3 +178,15 @@ def _safe_refine(sid: str, current: str, message: str) -> None:
         refine(sid, current, message)
     except Exception:  # noqa: BLE001 - a title is never worth a crash
         log.exception("short title failed for %s", sid)
+    finally:
+        with _running_lock:
+            _running.discard(sid)
+
+
+def pending(sid: str) -> bool:
+    """The session's title is still provisional: a short title is being made, or the session waits for its
+    first message to get one (meta `title_auto`). Telegram waits for it before naming the session's thread."""
+    with _running_lock:
+        if sid in _running:
+            return True
+    return "title_auto" in (store.read_cached(sid) or {})

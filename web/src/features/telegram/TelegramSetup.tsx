@@ -343,7 +343,7 @@ export function ThreadList({ status }: { status: TelegramStatus }) {
             </Link>
           ) : (
             <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-              {th.path === '' ? t('telegram.thread.general') : th.path === '#crons' ? t('telegram.thread.crons') : th.path === '#alerts' ? t('telegram.thread.alerts') : <Sensitive>{th.path}</Sensitive>}
+              {th.path === '' ? t('telegram.thread.general') : th.path === '#crons' ? t('telegram.thread.crons') : th.path === '#alerts' ? t('telegram.thread.alerts') : th.path === '#feed' ? t('telegram.thread.feed') : <Sensitive>{th.path}</Sensitive>}
             </span>
           )}
         </li>

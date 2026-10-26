@@ -11,7 +11,7 @@ program to install.
   (job reports), *Alerts* (sign-in alerts, and problems of the server itself: an update that failed or was
   rolled back, an update available, a known vulnerability, Claude Code that could not update; on by default,
   setting `notify_system` of `PUT /api/telegram/settings`) and *Notifications* (the [notifications feed](feed): sales, orders,
-  your scripts… per the rules you set, posted by the bot itself, with an *Ask Harness* button). A thread is named `<project>/<topic> · <session title>`, with the project's emoji in front when it has one (project **…** menu in Sessions -> *Set an emoji…*), e.g. `🛒 acme/blog · Launch plan`. Changing the emoji renames the threads.
+  your scripts… per the rules you set, posted by the bot itself, with an *Ask Harness* button). A thread is named `<project>/<topic> · <session title>`, with the project's emoji in front when it has one (project **…** menu in Sessions -> *Set an emoji…*), e.g. `🛒 acme/blog · Launch plan`. Changing only the emoji does not rename existing threads (each rename posts a notice in the chat); new threads get it.
 - A thread is the session itself: what you write on the phone appears in the web UI and you can
   continue there, and the other way round.
 - Write in the **main chat** (or create a thread) to start a new session: the bot asks in which topic.
@@ -49,7 +49,7 @@ are. Successful reports arrive silently; failures ring.
 
 | You do | Telegram |
 |---|---|
-| Open or start a session in the web UI | its thread appears (a few seconds later) |
+| Open or start a session in the web UI | its thread appears (a few seconds later; a new session waits for its short title, up to a minute, so the thread is named once) |
 | Rename a session | its thread is renamed |
 | **Archive** a session (session menu -> Archive), or send `/close` in its thread | its thread is deleted - the conversation stays in the web UI (Archived) |
 | Un-archive it | the thread comes back (new, empty) |
@@ -64,7 +64,10 @@ Mirrored sessions: the ones you talk to (not those started by scheduled jobs - t
 7, 14, 30 or 90 days), at most 50. An older session simply gets its thread back when it is used
 again. The sync runs a few seconds after any change and every 10 minutes; nothing to schedule. If Telegram
 refuses to delete a thread for a moment (too many requests, no connection), the next sync deletes it.
-Renaming a session renames its thread: Telegram shows a small "topic renamed" line in the thread.
+Renaming a session renames its thread: Telegram shows a small "topic renamed" line in the thread. To keep the
+chat quiet, a new session's thread is renamed at most once in its first two minutes (the last name is applied
+after that). Choosing a shorter *Keep a thread for* asks for confirmation and says how many threads (with their
+messages) it deletes.
 
 ## Using it
 
@@ -73,7 +76,17 @@ Renaming a session renames its thread: Telegram shows a small "topic renamed" li
   gets its own answer (a turn started from the web UI or an automatic summary is never sent as the answer);
   "typing…" stops as soon as the queue is stopped or cleared.
 - Send photos and files: they are saved in `<topic>/attachments/telegram/YYYY-MM/` and passed to
-  Claude with your caption.
+  Claude with your caption. An album is one message to Claude, and what you send right after it comes after
+  it. Audio files (music, recordings sent as files) are files too; only voice notes and round video notes are
+  transcribed. A caption is never a command: a photo captioned `/new` is a photo.
+- Replies, quotes and forwards keep their context: replying to a message (or quoting part of it) sends
+  Claude the quoted part in front of your text, a forwarded message says where it comes from, and links
+  hidden behind a word are passed as "word (link)".
+- A very long text that Telegram splits into several messages (over 4,096 characters) is put back together
+  and sent as one message.
+- Editing a message you already sent does nothing: the bot says so once - send a new message instead.
+- The bot answers in the language of the web UI (English or French), and the command menu is
+  translated.
 - Commands:
 
 | Command | Effect |
@@ -82,7 +95,7 @@ Renaming a session renames its thread: Telegram shows a small "topic renamed" li
 | `/sessions` | list the open sessions |
 | `/stop` | stop the running turn |
 | `/close` | close this session: archived (kept in the web UI) and its thread deleted |
-| `/model [id]` | show or change the model of the session |
+| `/model [id]` | show or change the model of the session (an id, a name such as `Sonnet 5.5`, or `opus` / `sonnet` / `haiku` for the newest of that family; an unknown name lists the choices) |
 | `/status` | state, model, cost, queue, link to the web UI |
 | `/topic` | (main chat, threads off) choose the topic |
 | `/help` | list the commands |

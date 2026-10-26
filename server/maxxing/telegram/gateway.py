@@ -154,7 +154,11 @@ def render_status(steps: list[dict], todos: list[dict], elapsed: float, final: s
     while len(lines) > 1 and len(head) + len(quote) + sum(len(x) + 1 for x in lines) > 4000:
         lines.pop(0)                                 # drop whole lines: a cut would lose </blockquote>
     return head + "\n" + quote + "\n".join(lines) + "</blockquote>"
-MEDIA_GROUP_WAIT = 1.5
+MEDIA_GROUP_WAIT = 1.5           # an album is complete when no item came for this long...
+MEDIA_GROUP_MAX = 6.0            # ...or this long after its first item
+PASTE_MIN = 3500                 # a text this long may be the first part of a longer one Telegram split
+PASTE_WAIT = 1.5                 # the next part comes within this delay
+QUOTE_CHARS = 500                # quoted part of a replied-to message given to Claude
 NOTIFY_PREVIEW = 300
 THREAD_DAYS = 30               # default of config.telegram.thread_days
 MAX_THREADS = 50               # open sessions mirrored as threads (most recent first)
@@ -163,6 +167,9 @@ SYNC_DEBOUNCE = 3.0            # session changes come in bursts
 RECONCILE_EVERY = 600          # periodic sync (idle sessions leaving the thread_days window)
 SHOWN_TOPICS = 6               # topic buttons before "More…"
 CREATE_PAUSE = 1.0             # between thread creations after the first few
+TITLE_WAIT = 60.0              # a new session's thread waits (at most) this long for its short title
+RENAME_QUIET = 120.0           # one rename at most in a session's first seconds (each one posts a notice)
+_early_renames: set[str] = set()
 
 WORDS = {
     "en": {"where": "Where should this session live?", "more": "More topics…",
@@ -175,7 +182,7 @@ WORDS = {
            "notify_only": "This thread only receives notifications - write in a session thread or in the main chat.",
            "in_thread": "/{cmd} is about one session: send it in that session's thread.",
            "start_failed": "Could not start the session: {err}. Your messages are kept - choose a topic again (buttons above).",
-           "restarted": "Harness restarted before your new session was started: {n} message(s) not handled - send them again, please."},
+           "restarted_new": "Harness restarted before your new session was started: {n} message(s) not handled - send them again, please."},
     "fr": {"where": "Où mettre cette session ?", "more": "Autres topics…",
            "started": "🆕 <b>{title}</b> · {where}", "moved": "🆕 <b>{title}</b> · {where}\n→ la suite dans le fil <b>{name}</b>",
            "auto": " (sans réponse : topic par défaut)", "ready": "Écris ton message ici.",
@@ -186,8 +193,132 @@ WORDS = {
            "notify_only": "Ce fil ne reçoit que des notifications - écris dans le fil d'une session ou dans le chat principal.",
            "in_thread": "/{cmd} concerne une session : envoyez-la dans le fil de cette session.",
            "start_failed": "Impossible de démarrer la session : {err}. Vos messages sont gardés - choisissez à nouveau un topic (boutons au-dessus).",
-           "restarted": "Harness a redémarré avant de créer votre nouvelle session : {n} message(s) non traité(s) - renvoyez-les, s'il vous plaît."},
+           "restarted_new": "Harness a redémarré avant de créer votre nouvelle session : {n} message(s) non traité(s) - renvoyez-les, s'il vous plaît."},
 }
+
+# Bot texts beyond the "new session" flow (same languages as WORDS; English is the fallback of _w).
+WORDS["en"].update({
+    "help": ("<b>Harness Maxxing</b> - this chat: <i>{topic}</i>\n\n"
+             "Write a message (text, voice note, photo or file) to talk to Harness in this topic. Each thread is one "
+             "topic of your workspace; the conversation is the same session you see in the web UI.\n\n"
+             "/new [title] - new session in this topic\n"
+             "/sessions - choose which session this chat talks to\n"
+             "/stop - stop the running turn\n"
+             "/model [id] - choose the model\n"
+             "/status - state, model, cost, queue\n"
+             "/topic - pick the topic of the main chat (when threads are off)"),
+    "help_threads": ("<b>Harness Maxxing</b> - here: {here}\n\n"
+                     "Every open session of the web UI has its own thread here (same conversation, both ways). "
+                     "Write in a session's thread to talk to Harness there; write in the main chat (or create a "
+                     "thread) to start a new session - you choose its topic. /close (or archiving the session in "
+                     "the web UI) closes it: the thread goes away, the conversation stays in the web UI.\n\n"
+                     "/new [title] - new session (its own thread)\n"
+                     "/sessions - list the open sessions\n"
+                     "/stop - stop the running turn\n"
+                     "/close - close this session (archived, thread deleted)\n"
+                     "/model [id] - choose the model\n"
+                     "/status - state, model, cost, queue"),
+    "main_chat": "main chat", "general": "General", "general_root": "General (workspace root)",
+    "untitled": "Untitled", "default": "default",
+    "cmd_new": "Start a new session (its own thread)", "cmd_sessions": "List the open sessions",
+    "cmd_stop": "Stop the running turn", "cmd_close": "Close this session (archived, thread deleted)",
+    "cmd_model": "Choose the model of the session", "cmd_status": "Session status: state, model, cost, queue",
+    "cmd_topic": "Pick the topic (when threads are off)", "cmd_help": "What this bot can do",
+    "queued": "⏳ Queued - Harness is still working on the previous message.",
+    "nothing_running": "Nothing is running.", "stopped": "⏹ Stopped.",
+    "unsupported": "This kind of message is not supported yet - send text, a photo or a file.",
+    "notify_only_topic": "This thread only receives notifications - write in a topic thread.",
+    "edited": "Edits are not sent to Harness - send a new message.",
+    "no_sessions": "⚠️ Sessions are not available on this server yet.",
+    "save_failed": "⚠️ Could not save the file: {error}",
+    "voice_off": "🎤 Voice messages are off. Turn them on in the web UI: Settings → Voice.",
+    "voice_not_ready": "🎤 Voice messages are not ready ({reason}). Open Settings → Voice in the web UI.",
+    "voice_download": "⚠️ Could not download the audio: {error}",
+    "voice_failed": "⚠️ Transcription failed: {error}",
+    "voice_empty": "🎤 I could not hear any speech in this message.",
+    "restarted": "Harness restarted while your last message was being handled: send it again, please.",
+    "restarted_voice": "Harness restarted while your last voice note was being handled: send it again, please.",
+    "model_set": "Model set to <b>{model}</b>.", "model_of": "Model of this session: {model}{note}",
+    "model_last": " (last answer: {model})",
+    "model_unknown": "Unknown model \"{model}\". Choose one of: {choices} (or \"default\").",
+    "st_topic": "Topic: {v}", "st_state": "State: {v}", "st_queued": " · {n} queued", "st_model": "Model: {v}",
+    "st_turns": "Turns: {n} · cost {cost}", "st_context": "Context: {n} tokens", "st_error": "Last error: {v}",
+    "cb_not_allowed": "Not allowed.", "cb_not_here": "Not available here.",
+    "cb_session_gone": "This session no longer exists.", "cb_switched": "Switched.", "cb_model": "Model changed.",
+    "cb_topic_gone": "This topic no longer exists.", "cb_topic": "Topic changed.", "cb_unknown": "Unknown action.",
+    "cb_done": "Already done.", "cb_error": "Error: {error}",
+    "no_session_topic": "No session in this topic yet - just write a message.", "running": " · running",
+    "which_session": "Which session should this chat talk to?", "no_session_here": "No session here.",
+    "stop_first": "Harness is still working - /stop first, then /close.", "archived": "🗄 <b>{title}</b> archived.",
+    "archived_kept": "🗄 Archived (Telegram did not delete this thread - delete it by hand).",
+    "which_topic": "Which topic should the main chat talk to?",
+    "topic_note": "(Threads are on: each thread already maps to its topic; this only affects the main chat.)",
+})
+WORDS["fr"].update({
+    "ready": "Écrivez votre message ici.",
+    "intro": "💬 <b>{title}</b> · {where}\nÉcrivez ici pour continuer cette session - la même conversation que dans l'interface web.",
+    "pick_first": "Choisissez d'abord où mettre la session (boutons au-dessus).",
+    "none_open": "Aucune session ouverte - écrivez dans le chat principal pour en démarrer une.",
+    "threads_on": "Les fils sont activés : chaque session ouverte a son propre fil. Écrivez dans le chat principal pour en démarrer une.",
+    "notify_only": "Ce fil ne reçoit que des notifications - écrivez dans le fil d'une session ou dans le chat principal.",
+    "help": ("<b>Harness Maxxing</b> - ce chat : <i>{topic}</i>\n\n"
+             "Écrivez un message (texte, message vocal, photo ou fichier) pour parler à Harness dans ce topic. Chaque "
+             "fil est un topic de votre workspace ; la conversation est la même session que dans l'interface web.\n\n"
+             "/new [titre] - nouvelle session dans ce topic\n"
+             "/sessions - choisir la session à laquelle ce chat parle\n"
+             "/stop - arrêter le tour en cours\n"
+             "/model [id] - choisir le modèle\n"
+             "/status - état, modèle, coût, file d'attente\n"
+             "/topic - choisir le topic du chat principal (fils désactivés)"),
+    "help_threads": ("<b>Harness Maxxing</b> - ici : {here}\n\n"
+                     "Chaque session ouverte de l'interface web a son propre fil ici (même conversation, dans les deux "
+                     "sens). Écrivez dans le fil d'une session pour parler à Harness ; écrivez dans le chat principal (ou "
+                     "créez un fil) pour démarrer une nouvelle session - vous choisissez son topic. /close (ou archiver "
+                     "la session dans l'interface web) la ferme : le fil disparaît, la conversation reste dans "
+                     "l'interface web.\n\n"
+                     "/new [titre] - nouvelle session (son propre fil)\n"
+                     "/sessions - lister les sessions ouvertes\n"
+                     "/stop - arrêter le tour en cours\n"
+                     "/close - fermer cette session (archivée, fil supprimé)\n"
+                     "/model [id] - choisir le modèle\n"
+                     "/status - état, modèle, coût, file d'attente"),
+    "main_chat": "chat principal", "general": "Général", "general_root": "Général (racine du workspace)",
+    "untitled": "Sans titre", "default": "par défaut",
+    "cmd_new": "Démarrer une nouvelle session (son propre fil)", "cmd_sessions": "Lister les sessions ouvertes",
+    "cmd_stop": "Arrêter le tour en cours", "cmd_close": "Fermer cette session (archivée, fil supprimé)",
+    "cmd_model": "Choisir le modèle de la session", "cmd_status": "État de la session : modèle, coût, file",
+    "cmd_topic": "Choisir le topic (fils désactivés)", "cmd_help": "Ce que ce bot sait faire",
+    "queued": "⏳ En file d'attente - Harness travaille encore sur le message précédent.",
+    "nothing_running": "Rien n'est en cours.", "stopped": "⏹ Arrêté.",
+    "unsupported": "Ce type de message n'est pas encore pris en charge - envoyez du texte, une photo ou un fichier.",
+    "notify_only_topic": "Ce fil ne reçoit que des notifications - écrivez dans le fil d'un topic.",
+    "edited": "Les modifications ne sont pas transmises à Harness - envoyez un nouveau message.",
+    "no_sessions": "⚠️ Les sessions ne sont pas encore disponibles sur ce serveur.",
+    "save_failed": "⚠️ Impossible d'enregistrer le fichier : {error}",
+    "voice_off": "🎤 Les messages vocaux sont désactivés. Activez-les dans l'interface web : Réglages → Voix.",
+    "voice_not_ready": "🎤 Les messages vocaux ne sont pas prêts ({reason}). Ouvrez Réglages → Voix dans l'interface web.",
+    "voice_download": "⚠️ Impossible de télécharger l'audio : {error}",
+    "voice_failed": "⚠️ La transcription a échoué : {error}",
+    "voice_empty": "🎤 Aucune parole entendue dans ce message.",
+    "restarted": "Harness a redémarré pendant le traitement de votre dernier message : renvoyez-le, s'il vous plaît.",
+    "restarted_voice": "Harness a redémarré pendant le traitement de votre dernier message vocal : renvoyez-le, s'il vous plaît.",
+    "model_set": "Modèle choisi : <b>{model}</b>.", "model_of": "Modèle de cette session : {model}{note}",
+    "model_last": " (dernière réponse : {model})",
+    "model_unknown": "Modèle inconnu « {model} ». Choisissez parmi : {choices} (ou « default »).",
+    "st_topic": "Topic : {v}", "st_state": "État : {v}", "st_queued": " · {n} en attente", "st_model": "Modèle : {v}",
+    "st_turns": "Tours : {n} · coût {cost}", "st_context": "Contexte : {n} tokens", "st_error": "Dernière erreur : {v}",
+    "cb_not_allowed": "Non autorisé.", "cb_not_here": "Indisponible ici.",
+    "cb_session_gone": "Cette session n'existe plus.", "cb_switched": "Session changée.", "cb_model": "Modèle changé.",
+    "cb_topic_gone": "Ce topic n'existe plus.", "cb_topic": "Topic changé.", "cb_unknown": "Action inconnue.",
+    "cb_done": "Déjà fait.", "cb_error": "Erreur : {error}",
+    "no_session_topic": "Aucune session dans ce topic pour l'instant - écrivez simplement un message.",
+    "running": " · en cours", "which_session": "À quelle session ce chat doit-il parler ?",
+    "no_session_here": "Aucune session ici.", "stop_first": "Harness travaille encore - /stop d'abord, puis /close.",
+    "archived": "🗄 <b>{title}</b> archivée.",
+    "archived_kept": "🗄 Archivée (Telegram n'a pas supprimé ce fil - supprimez-le à la main).",
+    "which_topic": "À quel topic le chat principal doit-il parler ?",
+    "topic_note": "(Les fils sont activés : chaque fil correspond déjà à son topic ; ceci ne concerne que le chat principal.)",
+})
 
 TOPICS_HELP = ("Telegram refused to create topic threads in this chat, so everything goes to the main "
                "chat. To get one thread per topic, enable topics (\"threaded mode\") for your bot in "
@@ -386,8 +517,9 @@ def _lang() -> str:
     return "fr" if config.load_config().get("language") == "fr" else "en"
 
 
-def _w(key: str, **kw: Any) -> str:
-    return WORDS[_lang()][key].format(**kw)
+def _w(key: str, lang: str | None = None, **kw: Any) -> str:
+    words = WORDS.get(lang or _lang()) or WORDS["en"]
+    return (words.get(key) or WORDS["en"][key]).format(**kw)
 
 
 def threaded() -> bool:
@@ -536,6 +668,103 @@ def _models() -> list[tuple[str, str]]:
     return list(FALLBACK_MODELS)
 
 
+def _expand_entities(text: str, entities: list | None) -> str:
+    """Hidden links stay visible to Claude: a text_link "label" -> "label (url)", a text_mention -> "label
+    (tg://user?id=…)". Entity offsets count UTF-16 code units."""
+    links = []
+    for e in entities or []:
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") == "text_link" and e.get("url"):
+            target = str(e["url"])
+        elif e.get("type") == "text_mention" and isinstance(e.get("user"), dict) and e["user"].get("id"):
+            u = e["user"]
+            target = f"@{u['username']}" if u.get("username") else f"tg://user?id={u['id']}"
+        else:
+            continue
+        try:
+            links.append((int(e["offset"]), int(e["length"]), target))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not links:
+        return text
+    raw = text.encode("utf-16-le")
+    out, pos = [], 0
+    for off, length, target in sorted(links):
+        if off < pos or length <= 0 or (off + length) * 2 > len(raw):
+            continue
+        end = (off + length) * 2
+        label = raw[off * 2:end].decode("utf-16-le", "replace")
+        out.append(raw[pos * 2:end].decode("utf-16-le", "replace"))
+        if target not in label:
+            out.append(f" ({target})")
+        pos = off + length
+    out.append(raw[pos * 2:].decode("utf-16-le", "replace"))
+    return "".join(out)
+
+
+def _origin_name(o: dict) -> str:
+    """Display name of a forward_origin (Bot API 7) or of the older forward_* fields."""
+    t = o.get("type")
+    if t == "user":
+        u = o.get("sender_user") or {}
+        return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x) or u.get("username") or "a user"
+    if t == "hidden_user":
+        return o.get("sender_user_name") or "a user"
+    chat = o.get("sender_chat") if t == "chat" else o.get("chat")
+    name = (chat or {}).get("title") or (chat or {}).get("username") or "a chat"
+    return f"{name} ({o['author_signature']})" if o.get("author_signature") else name
+
+
+def _with_context(msg: dict, text: str) -> str:
+    """The prompt of a message: its text (hidden links expanded), after a short note for a reply ("> quoted
+    part") or a forward ("Forwarded from X"), which the text alone would lose."""
+    if text and text == msg.get("text"):
+        text = _expand_entities(text, msg.get("entities"))
+    elif text and text == msg.get("caption"):
+        text = _expand_entities(text, msg.get("caption_entities"))
+    head: list[str] = []
+    origin = msg.get("forward_origin")
+    if isinstance(origin, dict):
+        head.append(f"Forwarded from {_origin_name(origin)}:")
+    elif msg.get("forward_from") or msg.get("forward_from_chat") or msg.get("forward_sender_name"):
+        f = msg.get("forward_from") or {}
+        name = (" ".join(x for x in (f.get("first_name"), f.get("last_name")) if x)
+                or (msg.get("forward_from_chat") or {}).get("title") or msg.get("forward_sender_name") or "someone")
+        head.append(f"Forwarded from {name}:")
+    rep = msg.get("reply_to_message")
+    # in a forum thread every message "replies" to the thread's first (service) message: not a reply
+    if isinstance(rep, dict) and not rep.get("forum_topic_created") and \
+            rep.get("message_id") != msg.get("message_thread_id"):
+        quote = (msg.get("quote") or {}).get("text") if isinstance(msg.get("quote"), dict) else None
+        if not quote:
+            quote = rep.get("text") or rep.get("caption") or ""
+            quote = quote[:QUOTE_CHARS] + ("…" if len(quote) > QUOTE_CHARS else "")
+        if not quote.strip():
+            kind = next((k for k in ("photo", "document", "video", "audio", "voice", "video_note", "sticker")
+                         if rep.get(k)), "message")
+            quote = f"[{kind.replace('_', ' ')}]"
+        who = "your earlier message" if (rep.get("from") or {}).get("is_bot") else "this message"
+        head.append(f"(Replying to {who}:)\n" + "\n".join("> " + line for line in quote.strip().splitlines()))
+    if not head:
+        return text
+    return "\n".join(head) + ("\n\n" + text if text else "")
+
+
+def resolve_model(arg: str, models: list[tuple[str, str]] | None = None) -> str | None:
+    """`/model <arg>` -> a model id ("" = default), or None when it matches nothing. Accepts an id, a label
+    ("Opus 5.5", any case) or a family alias ("opus", "sonnet", "haiku", "fable": the newest known)."""
+    a = " ".join((arg or "").split()).lower()
+    if a in ("default", "-", "auto", ""):
+        return ""
+    models = [m for m in (models if models is not None else _models()) if m[0]]
+    for mid, label in models:
+        if a in (mid.lower(), label.lower(), label.lower().replace(" ", "-")):
+            return mid
+    fam = [mid for mid, _ in models if a.isalpha() and f"-{a}-" in f"-{mid.lower()}-"]
+    return fam[0] if fam else None
+
+
 # =============================================================================================
 # Command parsing helpers
 # =============================================================================================
@@ -605,6 +834,9 @@ class Gateway:
         self._tasks: set[asyncio.Task] = set()
         self._pending: dict[str, dict] = {}               # sid -> {chat, thread, count, offset, task, tools}
         self._groups: dict[str, list[dict]] = {}          # media_group_id -> messages
+        self._group_seen: dict[str, tuple[float, float]] = {}   # media_group_id -> (first, last) arrival
+        self._pastes: dict[str, dict] = {}                # chat:thread -> long text split by Telegram, being merged
+        self._edits_told: dict[str, None] = {}            # chat:message of edits already answered (bounded)
         self._sync_lock: asyncio.Lock | None = None
         self._sync_handle: asyncio.TimerHandle | None = None
         self._new: dict[int, dict] = {}                   # thread id (0 = main chat) -> session to create (_new_path)
@@ -759,7 +991,7 @@ class Gateway:
             try:
                 updates = await self.client.call(
                     "getUpdates", http_timeout=to + 15, offset=offset or None, timeout=to,
-                    allowed_updates=["message", "callback_query"])
+                    allowed_updates=["message", "edited_message", "callback_query"])
             except TelegramError as e:
                 self._poll_err = True
                 if e.code in (401, 404):
@@ -881,16 +1113,23 @@ class Gateway:
         return await self.send_html(chat, thread, text if html else fmt.escape(text), silent, markup)
 
     async def set_commands(self) -> None:
-        try:
-            await self.client.call("setMyCommands", commands=[{"command": c, "description": d}
-                                                              for c, d in COMMANDS])
-        except TelegramError as e:
-            log.info("setMyCommands failed: %s", e.description)
+        """The command menu in every language of WORDS (language_code) + a default in the UI language."""
+        for code in [None, *WORDS]:
+            lang = code or _lang()
+            try:
+                await self.client.call("setMyCommands", language_code=code,
+                                       commands=[{"command": c, "description": _w(f"cmd_{c}", lang=lang)[:256]}
+                                                 for c, _ in COMMANDS])
+            except TelegramError as e:
+                log.info("setMyCommands (%s) failed: %s", code or "default", e.description)
 
     # ---- update routing ---------------------------------------------------------------------
     async def handle_update(self, u: dict) -> None:
         if "callback_query" in u:
             await self._on_callback(u["callback_query"])
+            return
+        if "edited_message" in u:
+            await self._on_edited(u["edited_message"])
             return
         msg = u.get("message")
         if not msg or not isinstance(msg.get("chat"), dict):
@@ -900,7 +1139,8 @@ class Gateway:
         if frm.get("is_bot"):
             return
         text = msg.get("text") or msg.get("caption") or ""
-        cmd, arg = parse_command(text, tg.get("bot_username", ""))
+        # a caption is never a command: "/new" under a photo must not drop the photo
+        cmd, arg = (None, text) if self._has_media(msg) else parse_command(text, tg.get("bot_username", ""))
         if cmd == "start" and arg and await self._try_link(msg, arg):
             return
         if not self.authorized(msg["chat"].get("id"), frm.get("id")):
@@ -936,13 +1176,26 @@ class Gateway:
             sid = None
             path = self._path_for(msg)
             if path is None:
-                await self._reply(msg, "This thread only receives notifications - write in a topic thread.",
-                                  silent=True)
+                await self._reply(msg, _w("notify_only_topic"), silent=True)
                 return
         if known:
             await self._command(cmd, arg, msg, path, sid)
             return
         await self._dispatch(msg, path, sid, text)
+
+    async def _on_edited(self, msg: dict) -> None:
+        """An edited message never reaches the session (the turn may be over): say so once per message."""
+        if not isinstance(msg, dict) or not isinstance(msg.get("chat"), dict) or (msg.get("from") or {}).get("is_bot"):
+            return
+        if not self.authorized(msg["chat"].get("id"), (msg.get("from") or {}).get("id")):
+            return
+        mark = self._inflight_mark(msg)
+        if mark in self._edits_told:
+            return
+        self._edits_told[mark] = None
+        while len(self._edits_told) > 200:
+            self._edits_told.pop(next(iter(self._edits_told)))
+        await self._reply(msg, _w("edited"), silent=True)
 
     async def _open_session(self, sid: str) -> dict | None:
         """The session of a thread (un-archived when the user writes in its thread); None if gone."""
@@ -957,27 +1210,86 @@ class Gateway:
 
     async def _dispatch(self, msg: dict, path: str, sid: str | None, text: str) -> None:
         """A user message (text, media, voice) for the session `sid` (None: the topic's Telegram session)."""
+        key = sid or path
+        pk = self._paste_key(msg)
+        if pk in self._pastes:
+            p = self._pastes[pk]
+            if (text and not self._has_media(msg) and p["key"] == key and p["size"] >= PASTE_MIN
+                    and time.monotonic() - p["last"] <= PASTE_WAIT):
+                p["msgs"].append(msg)                      # the next part of a long text Telegram split
+                p["texts"].append(_with_context(msg, text))
+                p["size"], p["last"] = len(text), time.monotonic()
+                return
+            await self._paste_flush(pk)                    # anything else comes after the merged text
         if msg.get("media_group_id"):
+            # An album arrives as one message per item: collected, then sent as one turn in the session's lane
+            # (a text sent right after the album stays after it).
             gid = str(msg["media_group_id"])
             first = gid not in self._groups
             self._groups.setdefault(gid, []).append(msg)
             self._inflight_add(msg, "message")           # a restart before the flush: asked again at the next start
+            now = time.monotonic()
+            self._group_seen[gid] = ((self._group_seen.get(gid) or (now, now))[0], now)
             if first:
-                self.spawn(self._flush_group(gid, path, sid), "media-group")
+                self._lane(key, lambda: self._flush_group(gid, path, sid), "media-group", msg)
             return
         if not text and not self._has_media(msg):
-            await self._reply(msg, "This kind of message is not supported yet - send text, a photo or a file.",
-                              silent=True)
+            await self._reply(msg, _w("unsupported"), silent=True)
             return
+        if not self._has_media(msg) and len(text) >= PASTE_MIN:
+            # Telegram splits a text over 4096 characters into several messages: wait for the rest
+            self._pastes[pk] = {"key": key, "path": path, "sid": sid, "msgs": [msg], "texts": [_with_context(msg, text)],
+                                "size": len(text), "last": time.monotonic(),
+                                "marks": [self._inflight_add(msg, "message")]}
+            self.spawn(self._paste_wait(pk), "paste")
+            return
+        text = _with_context(msg, text)
         # A download or a transcription can take minutes: in the background, so that the other threads
         # (and commands such as /stop) are not frozen; one lane per session keeps its messages in order.
-        key = sid or path
         if self._is_voice(msg):
             self._lane(key, lambda: self._voice(msg, path, text, sid), "voice", msg)
         elif self._has_media(msg) or key in self._lanes:
             self._lane(key, lambda: self._converse([msg], path, text, sid=sid), "message", msg)
         else:
             await self._converse([msg], path, text, sid=sid)
+
+    @staticmethod
+    def _paste_key(msg: dict) -> str:
+        return f"{(msg.get('chat') or {}).get('id')}:{_msg_thread(msg)}"
+
+    async def _paste_wait(self, pk: str) -> None:
+        while True:
+            p = self._pastes.get(pk)
+            if p is None:
+                return
+            delay = p["last"] + PASTE_WAIT - time.monotonic()
+            if delay <= 0:
+                break
+            await asyncio.sleep(delay)
+        await self._paste_flush(pk)
+
+    async def _paste_flush(self, pk: str) -> None:
+        """One turn for the parts of a long text (in the session's lane when it has work queued)."""
+        p = self._pastes.pop(pk, None)
+        if p is None:
+            return
+        msgs, text, key, marks = p["msgs"], "\n".join(p["texts"]), p["key"], p["marks"]
+
+        async def run() -> None:
+            try:
+                await self._converse(msgs, p["path"], text, sid=p["sid"])
+            except asyncio.CancelledError:                  # stopping: told at the next start
+                raise
+            except BaseException:
+                for m in marks:
+                    self._inflight_drop(m)
+                raise
+            for m in marks:
+                self._inflight_drop(m)
+        if key in self._lanes:
+            self._lane(key, run, "message")
+        else:
+            await run()
 
     def _lane(self, key: str, make: Callable[[], Awaitable[Any]], name: str, msg: dict | None = None) -> None:
         """Run make() in the background after the work already queued for `key`."""
@@ -1039,14 +1351,13 @@ class Gateway:
         for item in left.values():
             if not isinstance(item, dict) or not isinstance(item.get("chat"), int):
                 continue
-            what = "voice note" if item.get("kind") == "voice" else "message"
+            what = "restarted_voice" if item.get("kind") == "voice" else "restarted"
             if (item["chat"], item.get("thread"), what) in told:     # an album: one notice
                 continue
             told.add((item["chat"], item.get("thread"), what))
             try:
                 await self.send_html(item["chat"], item.get("thread") if isinstance(item.get("thread"), int) else None,
-                                     fmt.escape(f"Harness restarted while your last {what} was being handled: "
-                                                "send it again, please."), silent=False)
+                                     fmt.escape(_w(what)), silent=False)
             except Exception:
                 log.warning("telegram inflight notice failed", exc_info=True)
 
@@ -1122,7 +1433,7 @@ class Gateway:
         for p in lost:
             if p.get("msgs"):
                 self.spawn(self.send_html(p["chat"], p.get("thread") if isinstance(p.get("thread"), int) else None,
-                                          fmt.escape(_w("restarted", n=len(p["msgs"])))), "new-lost")
+                                          fmt.escape(_w("restarted_new", n=len(p["msgs"])))), "new-lost")
 
     async def _recent_topics(self) -> list[str]:
         svc = _service()
@@ -1350,16 +1661,25 @@ class Gateway:
 
     @staticmethod
     def _is_voice(msg: dict) -> bool:
-        """Voice note, audio file or round video note -> transcribed (Settings -> Voice)."""
-        return bool(msg.get("voice") or msg.get("audio") or msg.get("video_note"))
+        """Voice note or round video note -> transcribed (Settings -> Voice). An audio file (music, a recording
+        sent as a file) is an attachment like a document."""
+        return bool(msg.get("voice") or msg.get("video_note"))
 
     async def _flush_group(self, gid: str, path: str, sid: str | None = None) -> None:
-        await asyncio.sleep(MEDIA_GROUP_WAIT)
+        """Wait until no item of the album came for MEDIA_GROUP_WAIT (MEDIA_GROUP_MAX at most), then one turn."""
+        while True:
+            now = time.monotonic()
+            first, last = self._group_seen.get(gid) or (now, now)
+            delay = min(last + MEDIA_GROUP_WAIT, first + MEDIA_GROUP_MAX) - now
+            if delay <= 0:
+                break
+            await asyncio.sleep(delay)
+        self._group_seen.pop(gid, None)
         msgs = self._groups.pop(gid, [])
         try:
             if msgs:
-                text = next((m.get("caption") for m in msgs if m.get("caption")), "") or ""
-                await self._converse(msgs, path, text, sid=sid)
+                cap = next((m for m in msgs if m.get("caption")), msgs[0])
+                await self._converse(msgs, path, _with_context(cap, cap.get("caption") or ""), sid=sid)
         except asyncio.CancelledError:                  # stopping: kept in flight, told at the next start
             raise
         finally:
@@ -1398,15 +1718,13 @@ class Gateway:
         from .. import voice
         ready, reason = await asyncio.to_thread(voice.readiness)
         if not ready:
-            hint = ("🎤 Voice messages are off. Turn them on in the web UI: Settings → Voice."
-                    if reason == "off" else
-                    f"🎤 Voice messages are not ready ({reason}). Open Settings → Voice in the web UI.")
+            hint = _w("voice_off") if reason == "off" else _w("voice_not_ready", reason=reason)
             await self._reply(msg, hint, silent=True)
             return
         try:
             saved = await self._download(msg, path)
         except (TelegramError, OSError, ValueError) as e:
-            await self._reply(msg, f"⚠️ Could not download the audio: {getattr(e, 'description', e)}")
+            await self._reply(msg, _w("voice_download", error=getattr(e, "description", e)))
             return
         if not saved:
             return
@@ -1419,15 +1737,15 @@ class Gateway:
         try:
             res = await asyncio.to_thread(voice.transcribe_file, Path(saved[0]))
         except voice.VoiceError as e:
-            await self._reply(msg, f"⚠️ Transcription failed: {e.message}")
+            await self._reply(msg, _w("voice_failed", error=e.message))
             return
         except Exception as e:  # noqa: BLE001
             log.exception("voice transcription failed")
-            await self._reply(msg, f"⚠️ Transcription failed: {e}")
+            await self._reply(msg, _w("voice_failed", error=e))
             return
         heard = (res.get("text") or "").strip()
         if not heard:
-            await self._reply(msg, "🎤 I could not hear any speech in this message.", silent=True)
+            await self._reply(msg, _w("voice_empty"), silent=True)
             return
         await self._reply(msg, f"🎤 <blockquote><i>{fmt.escape(heard)}</i></blockquote>", html=True, silent=True)
         text = f"{caption.strip()}\n\n{heard}" if caption.strip() else heard
@@ -1438,14 +1756,14 @@ class Gateway:
         first = msgs[0]
         svc = _service()
         if svc is None:
-            await self._reply(first, "⚠️ Sessions are not available on this server yet.")
+            await self._reply(first, _w("no_sessions"))
             return
         attachments: list[str] = list(saved or [])
         try:
             for m in ([] if saved is not None else msgs):
                 attachments += await self._download(m, path)
         except (TelegramError, OSError, ValueError) as e:
-            await self._reply(first, f"⚠️ Could not save the file: {getattr(e, 'description', e)}")
+            await self._reply(first, _w("save_failed", error=getattr(e, "description", e)))
             if not text:
                 return
         if not text:
@@ -1479,7 +1797,7 @@ class Gateway:
         finally:
             p["sending"].discard(ref)
         if isinstance(res, dict) and res.get("queued"):
-            await self._reply(first, "⏳ Queued - Harness is still working on the previous message.", silent=True)
+            await self._reply(first, _w("queued"), silent=True)
 
     async def _session_for(self, path: str, fresh: bool = False, title: str = "Telegram") -> str:
         """The session Telegram talks to in this topic (created when missing or deleted)."""
@@ -1766,12 +2084,12 @@ class Gateway:
         if cmd in ("help", "start"):
             if threaded():
                 s = await _svc(svc.get_session, sid) if (svc is not None and sid) else None
-                here = (f"<b>{fmt.escape(s.get('title') or 'Untitled')}</b> · "
-                        f"{fmt.escape(topic_label(path) if path else 'General')}") if s else "main chat"
-                await self._reply(msg, HELP_THREADS.format(here=here), html=True)
+                here = (f"<b>{fmt.escape(s.get('title') or _w('untitled'))}</b> · "
+                        f"{fmt.escape(topic_label(path) if path else _w('general'))}") if s else _w("main_chat")
+                await self._reply(msg, _w("help_threads", here=here), html=True)
                 return
-            label = topic_label(path) if path else "General (workspace root)"
-            await self._reply(msg, HELP.format(topic=fmt.escape(label)), html=True)
+            label = topic_label(path) if path else _w("general_root")
+            await self._reply(msg, _w("help", topic=fmt.escape(label)), html=True)
             return
         if cmd == "topic":
             if threaded():
@@ -1780,7 +2098,7 @@ class Gateway:
                 await self._cmd_topic(msg)
             return
         if svc is None:
-            await self._reply(msg, "⚠️ Sessions are not available on this server yet.")
+            await self._reply(msg, _w("no_sessions"))
             return
         try:
             if cmd == "new" and threaded():
@@ -1803,11 +2121,11 @@ class Gateway:
                 sid = sid or (tg_config().get("sessions") or {}).get(path)
                 s = await _svc(svc.get_session, sid) if sid else None
                 if not s or s.get("state") != "running":
-                    await self._reply(msg, "Nothing is running.", silent=True)
+                    await self._reply(msg, _w("nothing_running"), silent=True)
                 else:
                     await _svc(svc.stop, sid)
                     self._untrack(sid)                  # the queue is gone too: no more 'typing'
-                    await self._reply(msg, "⏹ Stopped.")
+                    await self._reply(msg, _w("stopped"))
             elif cmd == "close":
                 await self._cmd_close(msg, path, sid)
             elif cmd == "model":
@@ -1825,15 +2143,15 @@ class Gateway:
         sessions = await _svc(svc.list_sessions, path, False) or []
         sessions = sorted(sessions, key=lambda s: s.get("updated") or 0, reverse=True)[:8]
         if not sessions:
-            await self._reply(msg, "No session in this topic yet - just write a message.", silent=True)
+            await self._reply(msg, _w("no_session_topic"), silent=True)
             return
         cur = (tg_config().get("sessions") or {}).get(path)
         rows = []
         for s in sessions:
             mark = "● " if s["id"] == cur else ""
-            run = " · running" if s.get("state") == "running" else ""
-            rows.append([(f"{mark}{(s.get('title') or 'Untitled')[:40]}{run}", f"s:{s['id']}")])
-        await self._reply(msg, "Which session should this chat talk to?", markup=keyboard(rows))
+            run = _w("running") if s.get("state") == "running" else ""
+            rows.append([(f"{mark}{(s.get('title') or _w('untitled'))[:40]}{run}", f"s:{s['id']}")])
+        await self._reply(msg, _w("which_session"), markup=keyboard(rows))
 
     async def _cmd_close(self, msg: dict, path: str, sid: str | None) -> None:
         """Archive the thread's session (data kept, shown under Archived in the web UI) and delete the thread."""
@@ -1841,22 +2159,22 @@ class Gateway:
         sid = sid or (tg_config().get("sessions") or {}).get(path)
         s = await _svc(svc.get_session, sid) if sid else None
         if not s:
-            await self._reply(msg, "No session here.", silent=True)
+            await self._reply(msg, _w("no_session_here"), silent=True)
             return
         if s.get("state") == "running":
-            await self._reply(msg, "Harness is still working - /stop first, then /close.", silent=True)
+            await self._reply(msg, _w("stop_first"), silent=True)
             return
         tid = thread_of(sid) if threaded() else None
         await _svc(svc.update_session, sid, archived=True)
         if tid is None:
-            await self._reply(msg, f"🗄 <b>{fmt.escape(s.get('title') or 'Session')}</b> archived.", html=True)
+            await self._reply(msg, _w("archived", title=fmt.escape(s.get("title") or "Session")), html=True)
             return
         _drop_session_thread(sid)
         try:
             await self.client.call("deleteForumTopic", chat_id=msg["chat"]["id"], message_thread_id=tid)
         except TelegramError as e:
             log.info("deleteForumTopic %s failed: %s", tid, e.description)
-            await self._reply(msg, "🗄 Archived (Telegram did not delete this thread - delete it by hand).", silent=True)
+            await self._reply(msg, _w("archived_kept"), silent=True)
         bus.invalidate("telegram")
 
     async def _cmd_open_sessions(self, msg: dict) -> None:
@@ -1874,17 +2192,23 @@ class Gateway:
     async def _cmd_model(self, msg: dict, path: str, arg: str, sid: str | None = None) -> None:
         svc = _service()
         sid = sid or await self._session_for(path)
+        models = _models()
         if arg:
-            model = "" if arg.lower() in ("default", "-") else arg.strip()
+            model = resolve_model(arg, models)
+            if model is None:                           # a typo would only fail at the next turn: say it now
+                choices = ", ".join(mid for mid, _ in models if mid)
+                await self._reply(msg, _w("model_unknown", model=arg.strip()[:60], choices=choices), silent=True,
+                                  markup=keyboard([[(label, f"m:{mid}")] for mid, label in models]))
+                return
             await self._set_model(sid, model)
-            await self._reply(msg, f"Model set to <b>{fmt.escape(model or 'default')}</b>.", html=True)
+            await self._reply(msg, _w("model_set", model=fmt.escape(model or _w("default"))), html=True)
             return
         s = await _svc(svc.get_session, sid) or {}
         cur = s.get("model") or ""
-        rows = [[(("● " if mid == cur else "") + label, f"m:{mid}")] for mid, label in _models()]
+        rows = [[(("● " if mid == cur else "") + label, f"m:{mid}")] for mid, label in models]
         real = s.get("real_model")
-        note = f" (last answer: {real})" if real else ""
-        await self._reply(msg, f"Model of this session: {cur or 'default'}{note}", markup=keyboard(rows))
+        note = _w("model_last", model=real) if real else ""
+        await self._reply(msg, _w("model_of", model=cur or _w("default"), note=note), markup=keyboard(rows))
 
     async def _set_model(self, sid: str, model: str) -> None:
         svc = _service()
@@ -1895,11 +2219,10 @@ class Gateway:
 
     async def _cmd_topic(self, msg: dict) -> None:
         topics = _topics()
-        rows = [[("General (workspace root)", f"t:{_path_hash(ROOT)}")]]
+        rows = [[(_w("general_root"), f"t:{_path_hash(ROOT)}")]]
         rows += [[(topic_label(t["path"]), f"t:{_path_hash(t['path'])}")] for t in topics[:30]]
-        note = "" if not (tg_config().get("threads") or {}) else \
-            "\n(Threads are on: each thread already maps to its topic; this only affects the main chat.)"
-        await self._reply(msg, "Which topic should the main chat talk to?" + note, markup=keyboard(rows))
+        note = "" if not (tg_config().get("threads") or {}) else "\n" + _w("topic_note")
+        await self._reply(msg, _w("which_topic") + note, markup=keyboard(rows))
 
     async def _on_callback(self, cq: dict) -> None:
         msg = cq.get("message") or {}
@@ -1908,7 +2231,7 @@ class Gateway:
         answer = ""
         try:
             if not msg or not self.authorized((msg.get("chat") or {}).get("id"), frm.get("id")):
-                answer = "Not allowed."
+                answer = _w("cb_not_allowed")
                 return
             kind, _, val = data.partition(":")
             if kind == "w":
@@ -1930,36 +2253,36 @@ class Gateway:
             else:
                 path = self._path_for(msg)
             if path is None:
-                answer = "Not available here."
+                answer = _w("cb_not_here")
                 return
             svc = _service()
             if kind == "s" and svc is not None:
                 s = await _svc(svc.get_session, val)
                 if not s or s.get("path") != path:
-                    answer = "This session no longer exists."
+                    answer = _w("cb_session_gone")
                     return
                 mutate_tg(lambda tg: tg.setdefault("sessions", {}).__setitem__(path, val))
                 bus.invalidate("telegram")
-                answer = "Switched."
+                answer = _w("cb_switched")
                 await self._edit(msg, f"This chat now talks to <b>{fmt.escape(s.get('title') or 'Untitled')}</b>.")
             elif kind == "m" and svc is not None:
                 sid = sid or await self._session_for(path)
                 await self._set_model(sid, val)
-                answer = "Model changed."
-                await self._edit(msg, f"Model set to <b>{fmt.escape(val or 'default')}</b>.")
+                answer = _w("cb_model")
+                await self._edit(msg, _w("model_set", model=fmt.escape(val or _w("default"))))
             elif kind == "t":
                 target = next((p for p in [ROOT] + [t["path"] for t in _topics()] if _path_hash(p) == val), None)
                 if target is None:
-                    answer = "This topic no longer exists."
+                    answer = _w("cb_topic_gone")
                     return
                 update_state(fallback_path=target)
-                answer = "Topic changed."
+                answer = _w("cb_topic")
                 await self._edit(msg, f"The main chat now talks to <b>{fmt.escape(topic_label(target) if target else 'General')}</b>.")
             else:
-                answer = "Unknown action."
+                answer = _w("cb_unknown")
         except Exception as e:
             log.exception("telegram callback failed")
-            answer = f"Error: {e}"[:190]
+            answer = _w("cb_error", error=e)[:190]
         finally:
             try:
                 await self.client.call("answerCallbackQuery", callback_query_id=cq.get("id"),
@@ -1999,9 +2322,9 @@ class Gateway:
         try:
             key = int(key_s)
         except ValueError:
-            return "Unknown action."
+            return _w("cb_unknown")
         if key not in self._new or self._new[key].get("starting"):
-            return "Already done."
+            return _w("cb_done")
         if h == "+":
             try:
                 await self.client.call("editMessageReplyMarkup", chat_id=msg["chat"]["id"],
@@ -2012,7 +2335,7 @@ class Gateway:
             return ""
         target = next((p for p in [ROOT] + [t["path"] for t in _topics()] if _path_hash(p) == h), None)
         if target is None:
-            return "This topic no longer exists."
+            return _w("cb_topic_gone")
         self.spawn(self._start_new(key, target), "new-session")
         return "OK"
 
@@ -2032,43 +2355,19 @@ class Gateway:
                 log.warning("telegram edit failed: %s", e.description)
 
 
-HELP = ("<b>Harness Maxxing</b> - this chat: <i>{topic}</i>\n\n"
-        "Write a message (text, voice note, photo or file) to talk to Harness in this topic. Each thread is one "
-        "topic of your workspace; the conversation is the same session you see in the web UI.\n\n"
-        "/new [title] - new session in this topic\n"
-        "/sessions - choose which session this chat talks to\n"
-        "/stop - stop the running turn\n"
-        "/model [id] - choose the model\n"
-        "/status - state, model, cost, queue\n"
-        "/topic - pick the topic of the main chat (when threads are off)")
-
-
-HELP_THREADS = ("<b>Harness Maxxing</b> - here: {here}\n\n"
-                "Every open session of the web UI has its own thread here (same conversation, both ways). "
-                "Write in a session's thread to talk to Harness there; write in the main chat (or create a "
-                "thread) to start a new session - you choose its topic. /close (or archiving the session in "
-                "the web UI) closes it: the thread goes away, the conversation stays in the web UI.\n\n"
-                "/new [title] - new session (its own thread)\n"
-                "/sessions - list the open sessions\n"
-                "/stop - stop the running turn\n"
-                "/close - close this session (archived, thread deleted)\n"
-                "/model [id] - choose the model\n"
-                "/status - state, model, cost, queue")
-
-
 def status_text(s: dict, path: str) -> str:
     """HTML /status reply for a session."""
     e = fmt.escape
-    lines = [f"<b>{e(s.get('title') or 'Untitled')}</b>",
-             f"Topic: {e(topic_label(path) if path else 'General')}",
-             f"State: {e(str(s.get('state') or '?'))}" + (f" · {s.get('queue')} queued" if s.get("queue") else ""),
-             f"Model: {e(s.get('model') or 'default')}"
-             + (f" (last answer: {e(s['real_model'])})" if s.get("real_model") else ""),
-             f"Turns: {s.get('turns') or 0} · cost {_fmt_cost(s.get('cost_usd'))}"]
+    lines = [f"<b>{e(s.get('title') or _w('untitled'))}</b>",
+             _w("st_topic", v=e(topic_label(path) if path else _w("general"))),
+             _w("st_state", v=e(str(s.get("state") or "?"))) + (_w("st_queued", n=s.get("queue")) if s.get("queue") else ""),
+             _w("st_model", v=e(s.get("model") or _w("default")))
+             + (_w("model_last", model=e(s["real_model"])) if s.get("real_model") else ""),
+             _w("st_turns", n=s.get("turns") or 0, cost=_fmt_cost(s.get("cost_usd")))]
     if s.get("context_tokens"):
-        lines.append(f"Context: {int(s['context_tokens']):,} tokens")
+        lines.append(_w("st_context", n=f"{int(s['context_tokens']):,}"))
     if s.get("error"):
-        lines.append(f"Last error: {e(str(s['error'])[:300])}")
+        lines.append(_w("st_error", v=e(str(s["error"])[:300])))
     return "\n".join(lines)
 
 
@@ -2204,6 +2503,7 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
     topics = [t["path"] for t in _topics()]
     mapped = session_threads()
     exists = getattr(svc, "session_exists", None)
+    later = float("inf")                               # seconds before a postponed creation / rename is due
     for sid, info in mapped.items():
         if sid in want:
             continue
@@ -2225,6 +2525,10 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
         sid, name = s["id"], session_label(s, topics)
         info = mapped.get(sid)
         if info is None:
+            wait = _title_wait(s)
+            if wait > 0:                               # its short title comes in a moment: name the thread once
+                later = min(later, wait)
+                continue
             try:
                 r = await call("createForumTopic", chat_id=chat, name=name)
             except TelegramError as e:
@@ -2241,7 +2545,10 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
             if res["created"] > 3:
                 await asyncio.sleep(CREATE_PAUSE)       # first link / migration: stay under flood limits
             continue
-        if info.get("name") == name:
+        wait = _rename_wait(sid, s, info, name)
+        if wait:
+            if wait > 0:
+                later = min(later, wait)
             continue
         try:
             await call("editForumTopic", chat_id=chat, message_thread_id=info["tid"], name=name)
@@ -2266,7 +2573,55 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
                 break
             else:
                 log.info("editForumTopic %s failed: %s", info["tid"], e.description)
+    if later != float("inf") and _gw is not None:
+        _gw.schedule_sync(later + 0.5)
     return res
+
+
+def _age(s: dict) -> float:
+    try:
+        return time.time() - float(s.get("created") or 0)
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def _title_wait(s: dict) -> float:
+    """Seconds to wait before creating the thread of a new session whose short title is not known yet
+    (0 = now): the thread is named once instead of "Bot changed topic name to …" right after."""
+    left = TITLE_WAIT - _age(s)
+    if left <= 0:
+        return 0
+    try:
+        from ..sessions import titles
+        return left if titles.pending(s["id"]) else 0
+    except Exception:  # noqa: BLE001 - never blocks a thread
+        return 0
+
+
+_EMOJI_CATS = {"So", "Sk", "Cn", "Cf", "Mn", "Me"}
+
+
+def _name_text(name: str) -> str:
+    """A thread name without its emoji (the project icon): changing only the icon does not rename threads."""
+    import unicodedata
+    return " ".join("".join(c for c in name if unicodedata.category(c) not in _EMOJI_CATS).split())
+
+
+def _rename_wait(sid: str, s: dict, info: dict, name: str) -> float:
+    """0 = rename now; -1 = no rename needed; > 0 = seconds before the rename is allowed. Each rename posts
+    a service message in the chat: none when only the emoji changed, one at most in a session's first
+    RENAME_QUIET seconds (the provisional then the short title)."""
+    old = info.get("name") or ""
+    if old == name or (old and _name_text(old) == _name_text(name)):
+        return -1
+    left = RENAME_QUIET - _age(s)
+    if left <= 0:
+        _early_renames.discard(sid)
+    elif old:
+        if sid in _early_renames:
+            return left
+        _early_renames.add(sid)
+    return 0
 
 
 async def _intro(call: Callable[..., Awaitable[Any]], chat: int, tid: int, s: dict) -> None:
