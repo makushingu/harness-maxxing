@@ -286,7 +286,7 @@ async def test_flood_limit_at_setup_does_not_turn_topics_off(api, tg, svc):
     link = (await api.post("/api/telegram/link")).json()
     tg.message(f"/start {link['code']}")
     await wait_for(lambda: gateway.link_status()["linked"], what="link")
-    await wait_for(lambda: gateway.load_state().get("last_error"), timeout=20, what="sync error")
+    await wait_for(lambda: gateway.load_state().get("sync_error"), timeout=20, what="sync error")
     assert gateway.load_state().get("topics_enabled") is not False and gateway.threaded()
     tg.fail.clear()
     r = await api.post("/api/telegram/sync")

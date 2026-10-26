@@ -169,6 +169,9 @@ class FakeTelegram:
                              "username": "maxxing_test_bot", "has_topics_enabled": self.topics_enabled})
         if method == "getWebhookInfo":
             return self._ok({"url": self.webhook, "pending_update_count": 0})
+        if method == "deleteWebhook":
+            self.webhook = ""
+            return self._ok(True)
         if method == "getUpdates":
             off = int(params.get("offset") or 0)
             deadline = time.time() + min(float(params.get("timeout") or 0), 1.0)
