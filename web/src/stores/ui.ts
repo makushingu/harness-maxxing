@@ -38,6 +38,8 @@ type UIState = {
   notifyDone: boolean
   /** Notifications panel next to the dashboard widgets (wide screens). */
   feedPanel: boolean
+  /** Notification for a new Team message (a chat that is not on screen, not muted). */
+  notifyTeam: boolean
   /** Short sound with that notification. */
   notifySound: boolean
   /** The unread badges (sidebar, tab bar, tree) pulse. */
@@ -58,7 +60,7 @@ type UIState = {
   setTouchHome: (h: TouchHome) => void
   setPresentation: (on: boolean) => void
   setTourDone: (done: boolean) => void
-  setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifySound' | 'badgePulse'>>) => void
+  setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'notifySound' | 'badgePulse'>>) => void
   setFeedPanel: (v: boolean) => void
   setHud: (on: boolean) => void
   adoptLook: (look: Look) => void
@@ -85,6 +87,7 @@ export const useUI = create<UIState>()(
       presentation: false,
       tourDone: false,
       notifyDone: false,
+      notifyTeam: true,
       feedPanel: true,
       notifySound: true,
       badgePulse: false,

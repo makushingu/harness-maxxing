@@ -41,7 +41,7 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   const { data } = useTeam()
   const open = useTeamUI((s) => s.open)
   const setOpen = useTeamUI((s) => s.setOpen)
-  const unread = data?.chats.reduce((n, c) => n + c.unread, 0) || 0
+  const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   if (collapsed) return unread ? <span className="absolute top-0.5 right-1 flex size-4 items-center justify-center"><CountDot tone="unread" /></span> : null
   return (
     <span className="flex items-center gap-1">

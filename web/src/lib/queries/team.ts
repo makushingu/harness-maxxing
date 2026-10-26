@@ -12,8 +12,12 @@ export type TeamMessage = {
   author: string
   at: number
   text: string
-  kind: 'text' | 'summary' | 'poll'
+  /** info: a local line ("Léa left the group"), never sent */
+  kind: 'text' | 'summary' | 'poll' | 'info'
+  info?: 'joined' | 'removed' | 'left'
   reply_to?: string
+  edited?: number
+  deleted?: boolean
   files?: (TeamFile & { pending?: boolean; failed?: boolean })[]
   /** people it was not delivered to yet (chats with real people) */
   pending?: string[]
@@ -33,7 +37,12 @@ export type TeamChat = {
   remote?: boolean
   /** the group's creator (only they can change it) */
   admin?: string | null
-  last: { author: string; at: number; kind: TeamMessage['kind']; text: string; files: number } | null
+  muted?: boolean
+  /** the user left this group, or was removed: read-only */
+  left?: boolean | 'self' | 'removed'
+  /** person -> read up to (their "Seen") */
+  seen?: Record<string, number>
+  last: { author: string; at: number; kind: TeamMessage['kind']; text: string; files: number; deleted?: boolean } | null
   unread: number
   updated: number
 }
@@ -47,7 +56,8 @@ export const teamKeys = {
 }
 
 export function useTeam(enabled = true) {
-  return useQuery({ queryKey: teamKeys.state, queryFn: () => api.get<TeamState>('/api/team'), enabled })
+  // every minute too: presence (online / seen 5 min ago) ages without any event
+  return useQuery({ queryKey: teamKeys.state, queryFn: () => api.get<TeamState>('/api/team'), enabled, refetchInterval: 60_000 })
 }
 export function useTeamChat(id: string | null) {
   return useQuery({
@@ -69,6 +79,25 @@ export function useTeamSend() {
 export function useTeamTyping() {
   return useMut((cid: string) => api.post<Ok>(`${chatUrl(cid)}/typing`), { errorToast: false })
 }
+export function useTeamEdit() {
+  return useMut(({ cid, mid, text }: { cid: string; mid: string; text: string }) => api.post<TeamMessage>(`${chatUrl(cid)}/messages/${seg(mid)}/edit`, { text }), { invalidate: inv })
+}
+export function useTeamDelete() {
+  return useMut(({ cid, mid }: { cid: string; mid: string }) => api.post<TeamMessage>(`${chatUrl(cid)}/messages/${seg(mid)}/delete`), { invalidate: inv })
+}
+export function useTeamGroup() {
+  return useMut(({ cid, ...b }: { cid: string; name?: string; emoji?: string; add?: string[]; remove?: string[] }) => api.post<TeamChat>(`${chatUrl(cid)}/group`, b), {
+    invalidate: inv,
+  })
+}
+export function useTeamLeave() {
+  return useMut((cid: string) => api.post<TeamChat>(`${chatUrl(cid)}/leave`), { invalidate: inv })
+}
+export function useTeamMute() {
+  return useMut(({ cid, muted }: { cid: string; muted: boolean }) => api.post<TeamChat>(`${chatUrl(cid)}/mute`, { muted }), { invalidate: inv })
+}
+/** "This Harness is open" for the contacts (the server sends it at most every 2 min). */
+export const teamPresence = () => api.post<Ok>('/api/team/presence').catch(() => undefined)
 export function useTeamRead() {
   return useMut((cid: string) => api.post<Ok>(`${chatUrl(cid)}/read`), { invalidate: [teamKeys.state], errorToast: false })
 }

@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { BellRing } from 'lucide-react'
 import { useUI } from '@/stores/ui'
+import { useSettings } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { Button, CountBadge, Switch, toast } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
@@ -23,6 +24,8 @@ export function NotificationsSection() {
   const t = useT()
   const notifyDone = useUI((s) => s.notifyDone)
   const notifySound = useUI((s) => s.notifySound)
+  const notifyTeam = useUI((s) => s.notifyTeam)
+  const { data: settings } = useSettings()
   const badgePulse = useUI((s) => s.badgePulse)
   const setNotify = useUI((s) => s.setNotify)
   const [perm, ask] = usePermission()
@@ -55,8 +58,20 @@ export function NotificationsSection() {
           <SettingRow label={t('notify.done')} description={t('notify.doneDesc')} htmlFor="mx-notify-done">
             <Switch id="mx-notify-done" checked={notifyDone} onCheckedChange={(v) => void toggleDone(v)} />
           </SettingRow>
+          {settings?.team_page && (
+            <SettingRow label={t('team.notifySetting')} description={t('team.notifySettingDesc')} htmlFor="mx-notify-team">
+              <Switch
+                id="mx-notify-team"
+                checked={notifyTeam}
+                onCheckedChange={async (v) => {
+                  setNotify({ notifyTeam: v })
+                  if (v && perm === 'default') await ask()
+                }}
+              />
+            </SettingRow>
+          )}
           <SettingRow label={t('notify.sound')} description={t('notify.soundDesc')} htmlFor="mx-notify-sound">
-            <Switch id="mx-notify-sound" checked={notifySound} disabled={!notifyDone} onCheckedChange={(v) => setNotify({ notifySound: v })} />
+            <Switch id="mx-notify-sound" checked={notifySound} disabled={!notifyDone && !(settings?.team_page && notifyTeam)} onCheckedChange={(v) => setNotify({ notifySound: v })} />
           </SettingRow>
         </div>
         {notifyDone && perm === 'denied' && (

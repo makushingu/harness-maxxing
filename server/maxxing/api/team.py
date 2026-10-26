@@ -96,6 +96,53 @@ async def read(cid: str):
     return {"ok": True}
 
 
+class EditIn(BaseModel):
+    text: str
+
+
+class GroupIn(BaseModel):
+    name: Optional[str] = None
+    emoji: Optional[str] = None
+    add: list[str] = Field(default_factory=list)
+    remove: list[str] = Field(default_factory=list)
+
+
+class MuteIn(BaseModel):
+    muted: bool
+
+
+@router.post("/presence")
+async def presence():
+    """The UI is open (sent every few minutes while visible): contacts see the user online."""
+    await asyncio.to_thread(teampeer.presence)
+    return {"ok": True}
+
+
+@router.post("/chats/{cid}/messages/{mid}/edit")
+async def edit(cid: str, mid: str, body: EditIn):
+    return await _call(team.edit_message, cid, mid, body.text)
+
+
+@router.post("/chats/{cid}/messages/{mid}/delete")
+async def delete(cid: str, mid: str):
+    return await _call(team.delete_message, cid, mid)
+
+
+@router.post("/chats/{cid}/group")
+async def group(cid: str, body: GroupIn):
+    return await _call(team.update_group, cid, body.name, body.emoji, body.add, body.remove)
+
+
+@router.post("/chats/{cid}/leave")
+async def leave(cid: str):
+    return await _call(team.leave_group, cid)
+
+
+@router.post("/chats/{cid}/mute")
+async def mute(cid: str, body: MuteIn):
+    return await _call(team.set_muted, cid, body.muted)
+
+
 @router.post("/chats/{cid}/typing")
 async def typing(cid: str):
     await _call(team.typing, cid)
