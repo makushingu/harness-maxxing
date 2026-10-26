@@ -63,3 +63,12 @@ def test_index_gzipped_without_a_proxy(client):
     assert "content-security-policy" in r.headers and r.headers["cache-control"] == "no-store"
     r = client.get("/", headers={"Accept-Encoding": "gzip", "X-Forwarded-For": "1.2.3.4"})
     assert "content-encoding" not in r.headers                      # behind Caddy: its `encode` compresses
+
+
+def test_missing_asset_is_a_404_not_the_app_page(spa):
+    c, _ = spa
+    for method, url in (("GET", "/assets/nope.js"), ("GET", "/assets/x.css"), ("HEAD", "/assets/gone.js")):
+        r = c.request(method, url)
+        assert r.status_code == 404, url
+        assert not r.headers.get("content-type", "").startswith("text/html"), url
+    assert c.get("/sessions").headers["content-type"].startswith("text/html")
