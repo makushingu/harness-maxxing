@@ -1917,6 +1917,12 @@ def cmd_update(a) -> int:
         line(OK, f"code already up to date ({old[:8]})")
     elif not mine:
         code, out = _git("merge", "--ff-only", "-q", f"origin/{branch}")
+        if code != 0 and customs.same_code_upstream(branch):
+            # The repository's history was rewritten upstream (same code, new commits): nothing local to keep, the
+            # code directory follows the new history (the rollback point stays the old commit).
+            code, out = _git("reset", "-q", "--hard", f"origin/{branch}")
+            if code == 0:
+                line(OK, "the history of the repository was rewritten upstream: this server now follows it")
         if code != 0:
             line(FAIL, "cannot fast-forward", out.strip()[-300:] + f" | inspect: git -C {config.CODE} status")
             return 1
