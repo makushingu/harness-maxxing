@@ -212,3 +212,31 @@ def test_branch_switch_rollback_keeps_the_auto_saved_changes_running(code, monke
     assert "LIMIT = 99" in (clone / "server/maxxing/rules.py").read_text()
     assert [c["title"] for c in customs.list_customs("main")] == ["Unsaved changes found by the update"]
     assert _rev(clone, customs.PRE_UPDATE_REF) == _head(clone)
+
+
+def test_branch_switch_carries_the_customizations(code, capsys):
+    """`--branch dev` from main with a customization: it runs on dev too (it stayed behind on main)."""
+    clone, work = code["clone"], code["work"]
+    (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    it = customs.save("Raise the limit")
+    _push_dev(work, "1.9.0")
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 0
+    assert "1 customization(s) carried to branch dev" in capsys.readouterr().out
+    assert _branch(clone) == "dev"
+    assert [c["id"] for c in customs.list_customs("dev")] == [it["id"]]
+    assert "LIMIT = 50" in (clone / "server" / "maxxing" / "rules.py").read_text()
+    assert run_cli("update", "--no-restart") == 0                       # the next update keeps it, once
+    assert [c["id"] for c in customs.list_customs("dev")] == [it["id"]]
+
+
+def test_branch_switch_with_a_customization_that_does_not_fit_changes_nothing(code, capsys):
+    clone, work = code["clone"], code["work"]
+    (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    customs.save("Raise the limit")
+    before = _head(clone)
+    _push_dev(work, "1.9.0", rules="LIMIT = 20\nNAME = 'dev'\n")       # conflicts with the customization
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 3
+    out = capsys.readouterr().out
+    assert "cannot be carried to branch dev" in out and "nothing changed" in out
+    assert _branch(clone) == "main" and _head(clone) == before
+    assert "LIMIT = 50" in (clone / "server" / "maxxing" / "rules.py").read_text()
