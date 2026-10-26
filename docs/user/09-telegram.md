@@ -29,6 +29,11 @@ program to install.
    status message updated while Claude works with its task list and each step, folded into a summary
    at the end; *final answer* = only the answer). Press **Send test**.
 
+Cron reports arrive in *Crons*: a Claude job's answer is shown from its beginning, formatted like a normal reply
+(bold, lists, code; tables become one bullet per row), split over several messages and cut after about 12,000
+characters (the whole answer stays on the Crons page). A command job shows the end of its output, where errors
+are. Successful reports arrive silently; failures ring.
+
 ## Threads = open sessions
 
 | You do | Telegram |

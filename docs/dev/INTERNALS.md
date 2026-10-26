@@ -143,7 +143,9 @@ Python modules call each other only through these functions. Keep signatures sta
   and other 4xx (no right to manage topics, bot removed) drop it (a refusal is not retried at every sync).
   `mirror_web()` (opt-in: `mirror_web` and `mirror_web_chosen`): `on_turn_end` without a pending Telegram turn copies the web turn into the thread
   (`service.last_user_message` + the answer, silent unless `notify`).
-- `notify_cron(text)` - message in the "Crons" thread.
+- `notify_cron(text)` - plain message in the "Crons" thread. `notify_cron_report(header, body, markdown, loud)` - a
+  cron run's report: bold header + the Claude answer rendered by `fmt.render` (from its start, `fmt.head` at
+  `REPORT_MAX` = 12000) or command output in `<pre>` (`fmt.code`); body packed with room for the header.
 - `status() -> dict` - the GET /api/telegram payload.
 - `start()/stop()/restart()` (async, server loop) and `install_hooks()` (registers
   `sessions.service.on_turn_end` + `workspace.on_change`), called by maxxing.api.telegram.

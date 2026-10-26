@@ -202,12 +202,42 @@ def blocks(md: str) -> list[Block]:
     return out
 
 
+def _cells(row: str) -> list[str]:
+    """Cells of one `| a | b |` row (a `\\|` stays inside its cell)."""
+    row = row.strip()
+    row = row[1:] if row.startswith("|") else row
+    row = row[:-1] if row.endswith("|") and not row.endswith("\\|") else row
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", row)]
+
+
+def _table_lines(table: str) -> list[str]:
+    """A markdown table as a list readable on a phone: one bullet per row, its first cell in bold,
+    the other cells on their own lines as "header: value". Telegram has no tables, and a <pre> grid
+    of long cells wraps into an unreadable wall of pipes."""
+    rows = [r for r in table.split("\n") if r.strip() and not _TABLE_SEP.match(r)]
+    if not rows:
+        return []
+    head, out = _cells(rows[0]), []
+    for r in rows[1:] or rows[:1]:
+        cells = _cells(r)
+        first = next((i for i, c in enumerate(cells) if c), None)
+        if first is None:
+            continue
+        out.append(f"• <b>{inline(cells[first])}</b>")
+        for i, c in enumerate(cells[first + 1:], first + 1):
+            if not c:
+                continue
+            h = head[i] if i < len(head) and rows[1:] else ""
+            out.append(f"   <i>{inline(h)}</i>: {inline(c)}" if h else f"   {inline(c)}")
+    return out
+
+
 def _render_block(b: Block) -> str:
     kind, payload = b
     if kind == "code":
         return _code_block(payload[1], payload[0])
     if kind == "table":
-        return f"<pre>{escape(payload)}</pre>"
+        return "\n".join(_table_lines(payload))
     if kind == "quote":
         return "<blockquote>" + "\n".join(_line(x) for x in payload) + "</blockquote>"
     return "\n".join(_line(x) for x in payload)
@@ -221,8 +251,25 @@ def to_html(md: str) -> str:
 def _split_big(b: Block, limit: int) -> list[str]:
     """Render a block that does not fit into one message as several valid fragments."""
     kind, payload = b
-    if kind in ("code", "table"):
-        lang, code = payload if kind == "code" else ("", payload)
+    if kind == "table":                                      # rendered lines, packed like text
+        frags: list[str] = []
+        cur = ""
+        for r in _table_lines(payload):
+            if len(r) > limit - 30:                          # a monster cell: its text, escaped, in pieces
+                plain_r = strip_tags(r)
+                step = max(1, (limit - 30) // 5)
+                pieces = [escape(plain_r[k:k + step]) for k in range(0, len(plain_r), step)]
+            else:
+                pieces = [r]
+            for x in pieces:
+                if cur and len(cur) + 1 + len(x) > limit:
+                    frags.append(cur)
+                    cur = x
+                else:
+                    cur = f"{cur}\n{x}" if cur else x
+        return frags + ([cur] if cur else [])
+    if kind == "code":
+        lang, code = payload
         overhead = len(_code_block("", lang))
         pieces: list[str] = []
         cur = ""
@@ -270,25 +317,38 @@ def render(md: str, limit: int = LIMIT) -> list[str]:
     Messages are cut between blocks (paragraphs, lists, code blocks) whenever possible, so
     every message is valid HTML on its own.
     """
-    frags: list[str] = []
+    frags: list[tuple[str, str]] = []                  # (html, separator before it)
     for b in blocks(md or ""):
         r = _render_block(b)
-        frags.extend([r] if len(r) <= limit else _split_big(b, limit))
+        if len(r) <= limit:
+            frags.append((r, "\n\n"))
+        elif b[0] in ("text", "table"):                 # lines stand alone: fill the current message first
+            frags.extend((x, "\n\n" if k == 0 else "\n")
+                         for k, x in enumerate(y for f in _split_big(b, limit) for y in f.split("\n")))
+        else:
+            frags.extend((f, "\n\n") for f in _split_big(b, limit))
     msgs: list[str] = []
     cur = ""
-    for f in frags:
+    for f, sep in frags:
         if not f.strip():
             continue
         if not cur:
             cur = f
-        elif len(cur) + 2 + len(f) <= limit:
-            cur += "\n\n" + f
+        elif len(cur) + len(sep) + len(f) <= limit:
+            cur += sep + f
         else:
             msgs.append(cur)
             cur = f
     if cur:
         msgs.append(cur)
     return msgs
+
+
+def code(text: str, limit: int = LIMIT) -> list[str]:
+    """Verbatim text (command output) as <pre> blocks, split on lines to fit `limit`."""
+    b = ("code", ("", text or ""))
+    r = _render_block(b)
+    return [r] if len(r) <= limit else _split_big(b, limit)
 
 
 def plain(text: str, limit: int = LIMIT) -> list[str]:
@@ -308,6 +368,54 @@ def plain(text: str, limit: int = LIMIT) -> list[str]:
     if cur:
         out.append(cur)
     return out or [""]
+
+
+def head(text: str, n: int) -> str:
+    """The start of `text`, at most `n` characters, cut at a line (or else a word) boundary, with a
+    visible "…" when something was dropped. Long reports keep their beginning: the title and summary."""
+    text = (text or "").strip()
+    if len(text) <= n:
+        return text
+    cut = text[:n]
+    nl = cut.rfind("\n")
+    if nl >= n // 2:
+        return cut[:nl].rstrip() + "\n…"
+    if " " in cut[n // 2:]:
+        cut = cut[:cut.rfind(" ")]
+    return cut.rstrip() + "…"
+
+
+def tail(text: str, n: int) -> str:
+    """The end of `text` (command output: the error is at the end), cut at a line boundary."""
+    text = (text or "").strip()
+    if len(text) <= n:
+        return text
+    cut = text[-n:]
+    nl = cut.find("\n")
+    if 0 <= nl <= n // 2:
+        cut = cut[nl + 1:]
+    return "…\n" + cut.lstrip("\n")
+
+
+_MD_MARK = [
+    (re.compile(r"```[\w+#.-]*"), ""), (re.compile(r"!?\[([^\]\n]*)\]\([^)\s]+\)"), r"\1"),
+    (re.compile(r"^\s{0,3}#{1,6}\s+", re.M), ""), (re.compile(r"^\s{0,3}>\s?", re.M), ""),
+    (re.compile(r"^\s*[-*+]\s+(\[[ xX]\]\s+)?", re.M), "• "), (re.compile(r"^\s*\|?\s*:?-{2,}[-:| ]*$", re.M), ""),
+    (re.compile(r"\*\*|__|~~|`"), ""), (re.compile(r"(?<![\w*])\*(?=\S)|(?<=\S)\*(?![\w*])"), ""),
+    (re.compile(r"\s*\|\s*"), " · "),
+]
+
+
+def preview(md: str, n: int) -> str:
+    """One-line plain-text preview of markdown (no markers, no pipes), at most `n` characters."""
+    text = md or ""
+    for rx, rep in _MD_MARK:
+        text = rx.sub(rep, text)
+    text = re.sub(r"(?:\s*·\s*)+", " · ", " ".join(text.split())).strip(" ·")
+    if len(text) > n:
+        text = text[:n - 1]
+        text = (text[:text.rfind(" ")] if " " in text[n // 2:] else text).rstrip(" ·,;:") + "…"
+    return text
 
 
 def strip_tags(html_text: str) -> str:
