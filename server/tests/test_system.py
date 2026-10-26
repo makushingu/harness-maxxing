@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 import types
 
@@ -89,6 +90,8 @@ def test_health_issue_marked_seen(client, org, services, monkeypatch):
     # the same job failing with another exit code keeps its mark (numbers left out); another job is a new issue
     assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Nightly" failed (code 7)'}) == job["id"]
     assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Weekly" failed (code 2)'}) != job["id"]
+    assert health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Backup 1" failed (code 1)'}) \
+        != health.issue_id({"code": "cron_failed", "text": 'Scheduled job "Backup 2" failed (code 1)'})
     # the mark ends after 24 h
     marks = json.loads(health._seen_path().read_text())
     health._seen_path().write_text(json.dumps({job["id"]: marks[job["id"]] - health.SEEN_TTL_S - 1}))
@@ -99,6 +102,25 @@ def test_health_issue_marked_seen(client, org, services, monkeypatch):
     client.post("/api/system/health/seen", json={"id": job["id"]})
     h = client.post("/api/system/health/seen", json={"id": job["id"], "seen": False}).json()
     assert next(i for i in h["issues"] if i["id"] == job["id"])["seen"] is False
+
+
+def test_two_marks_at_once_are_both_kept(mx, monkeypatch):
+    iss = [health._issue("warn", "cron_failed", 'Scheduled job "Alpha" failed (code 1)'),
+           health._issue("warn", "claude_auth", "Claude is not connected")]
+    for i in iss:
+        i["id"] = health.issue_id(i)
+    monkeypatch.setattr(health, "collect", lambda force=False: {"issues": iss})
+    read = health._read_seen
+
+    def slow_read():
+        d = read()
+        time.sleep(0.2)                                     # both marks read the file before either writes
+        return d
+    monkeypatch.setattr(health, "_read_seen", slow_read)
+    ts = [threading.Thread(target=health.mark_seen, args=(i["id"],)) for i in iss]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert set(json.loads(health._seen_path().read_text())) == {i["id"] for i in iss}
 
 
 def test_health_backup_never_and_ok(org, services):

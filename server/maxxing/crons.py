@@ -25,6 +25,7 @@ import datetime as dt
 import fcntl
 import json
 import logging
+import math
 import os
 import re
 import secrets as _secrets
@@ -330,14 +331,30 @@ def runs_path() -> Path:
     return _dir() / "runs.jsonl"
 
 
+def _read_raw() -> list[dict] | None:
+    """The jobs of jobs.json ([] when there is no file yet); None when the file exists but cannot be read
+    (damaged, truncated): that is not an empty list, nothing may be archived as vanished from it."""
+    try:
+        with open(jobs_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError):
+        return None
+    jobs = data.get("jobs", []) if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return None
+    return [j for j in jobs if isinstance(j, dict) and j.get("id")]
+
+
 def _load_raw() -> list[dict]:
-    data = config.read_json(jobs_path(), {"version": 1, "jobs": []})
-    jobs = data.get("jobs") if isinstance(data, dict) else None
-    return [j for j in (jobs or []) if isinstance(j, dict) and j.get("id")]
+    return _read_raw() or []
 
 
 def _save_raw(jobs: list[dict], reason: str = "removed") -> None:
-    _remember(_load_raw(), "vanished (jobs.json edited outside Harness Maxxing)")
+    old = _read_raw()
+    if old is not None:
+        _remember(old, "vanished (jobs.json edited outside Harness Maxxing)")
     config.write_json(jobs_path(), {"version": 1, "jobs": jobs})
     _remember(jobs, reason)
 
@@ -382,8 +399,14 @@ def deleted_jobs() -> list[dict]:
         except ValueError:
             continue
         if isinstance(d, dict) and isinstance(d.get("job"), dict) and d["job"].get("id"):
+            at = d.get("at")
+            if not isinstance(at, (int, float)) or isinstance(at, bool) or not math.isfinite(at):
+                d["at"] = 0
             out.append(d)
     return out
+
+
+SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 def restore_job(cid: str) -> dict:
@@ -392,10 +415,12 @@ def restore_job(cid: str) -> dict:
         jobs = _load_raw()
         if any(j["id"] == cid for j in jobs):
             raise CronError(f"job {cid} exists", "exists")
+        if not SAFE_ID.fullmatch(str(cid)):              # the id goes into a crontab line: never shell syntax
+            raise CronError(f"invalid job id {cid!r}", "invalid_id")
         job = next((d["job"] for d in deleted_jobs() if d["job"]["id"] == cid), None)
         if job is None:
             raise CronError(f"no removed job {cid}", "not_found")
-        jobs.append({**job, "updated": time.time()})
+        jobs.append({**_clean(job), "id": cid, "updated": time.time()})   # checked like a new job
         _save_raw(jobs)
         sync_crontab(jobs)
     return get_job(cid)  # type: ignore[return-value]
@@ -785,7 +810,7 @@ def managed_lines(jobs: list[dict]) -> list[str]:
     whole = guard and _whole_hours_apart()
     out = []
     for j in jobs:
-        if not j.get("enabled", True):
+        if not j.get("enabled", True) or not SAFE_ID.fullmatch(str(j.get("id"))):
             continue
         try:
             sched = validate(j.get("schedule", ""))
@@ -805,8 +830,11 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
     (except a trailing blank line). Returns the new crontab text."""
     with _lock:
         if jobs is None:
-            jobs = _load_raw()
-            _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
+            jobs = _read_raw()
+            if jobs is None:
+                jobs = []
+            else:
+                _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
         outside, _ = split_crontab(read_crontab())
         while outside and not outside[-1].strip():
             outside.pop()

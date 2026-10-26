@@ -13,6 +13,7 @@ verifying and importing archives is gone from this code: those servers never nee
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
 import platform
@@ -85,7 +86,7 @@ def _post(path: str, body: dict, timeout: float = 25) -> dict:
         except ValueError:
             j = {}
         raise LicenseError(j.get("message") or f"license server answered HTTP {e.code}", j.get("error") or f"http_{e.code}", j) from None
-    except (urllib.error.URLError, OSError, ValueError) as e:
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
         raise LicenseError(f"cannot reach the license server ({API}): {e}", "network") from None
 
 
@@ -103,7 +104,7 @@ def status() -> dict:
     is recorded (fair source: the key is a right of use, it changes nothing in how the server runs)."""
     info = dict(config.load_config().get("license") or {})
     key = config.get_secret(KEY)
-    info.update(enabled=enabled(), has_key=bool(key), key_hint=(key[:7] + "…" + key[-4:]) if key else "", api=API)
+    info.update(enabled=enabled(), has_key=bool(key), key_hint=("HM-…" + key[-4:]) if key else "", api=API)
     return info
 
 
@@ -124,6 +125,8 @@ def activate(key: str, version: str | None = None) -> dict:
     the seat later (SEAT), it no longer switches the server to signed archives (TOKEN)."""
     r = _post("/v1/activate", {"key": key.strip(), "machine_id": machine_id(), "hostname": socket.gethostname(),
                                "os": os_name(), "version": version or disk_version()})
+    if not isinstance(r.get("token"), str) or not r["token"]:
+        raise LicenseError("the license server sent no activation token", "bad_answer", r)
     config.set_secret(KEY, key.strip().upper())
     if enabled():
         config.set_secret(TOKEN, r["token"])          # still on archives (a pre-a87 install): moves to git soon
@@ -144,9 +147,10 @@ def remove_key() -> dict:
             pass
     config.set_secret(KEY, None)
     config.set_secret(SEAT, None)
-    cfg = config.load_config()
-    lic = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
-    config.update_config(license=lic)
+    with config._lock:                     # replaced, not merged: update_config would keep the old info
+        cfg = config.load_config()
+        cfg["license"] = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
+        config.save_config(cfg)
     return {"ok": True, "freed": freed}
 
 

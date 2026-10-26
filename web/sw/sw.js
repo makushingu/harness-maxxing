@@ -73,7 +73,8 @@ self.addEventListener('fetch', (event) => {
         const hit = await cache.match(req)
         if (hit) return hit
         const res = await fetch(req)
-        if (res.ok) cache.put(req, res.clone()).catch(() => {})
+        if (res.ok && !(res.headers.get('content-type') || '').startsWith('text/html'))
+          cache.put(req, res.clone()).catch(() => {})
         return res
       })(),
     )

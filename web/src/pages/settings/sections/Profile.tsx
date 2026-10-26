@@ -57,7 +57,7 @@ export function ProfileSection() {
                     aria-label={c}
                     onClick={() => put({ color: c as ProfileColor })}
                     className={cn(
-                      'inline-flex size-7 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-background transition-transform duration-150 hover:scale-110 active:scale-95',
+                      'inline-flex size-7 pointer-coarse:size-10 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-background transition-transform duration-150 hover:scale-110 active:scale-95',
                       on && 'ring-2 ring-foreground/60',
                     )}
                     style={{ background: projectColor(c) }}

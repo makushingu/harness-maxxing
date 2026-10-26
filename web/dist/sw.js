@@ -8,8 +8,8 @@
  *   other static files      stale-while-revalidate (icons, fonts, manifest, favicon)
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  */
-const VERSION = "3644fdd07826"
-const PRECACHE = ["/assets/index-BE1G4Pf5.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-CATZNyVw.js","/assets/createLucideIcon-Bl3st4bB.js","/assets/code-block-CgNiI25z.js","/assets/vendor-router-B8kuLWb3.js","/assets/vendor-ui-D63TVlIK.js","/assets/ui-DSexrcVD.js","/assets/folder-BERr9CuD.js","/assets/compass-DClv-X2T.js","/assets/vendor-query-CthOliPc.js","/assets/files-BN0RpvlH.js","/assets/queries-BGsovI4T.js","/assets/store-fPIEi-KJ.js","/assets/chevron-right-GKW0K5MI.js","/assets/folder-open-DAgsONbC.js","/assets/hand-heart-oQYvXUqf.js","/assets/store-CATYdUzt.js","/assets/index-DZiizGYI.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "7bd3b7eda4d8"
+const PRECACHE = ["/assets/index-C-SVL7Ml.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-K_Ak52ge.js","/assets/createLucideIcon-BD38Wc05.js","/assets/code-block-B-zsTKot.js","/assets/vendor-router-DgO_1_AU.js","/assets/vendor-ui-ERQjD4hH.js","/assets/ui-DJ3Lh4uq.js","/assets/folder-BRYIf7Vn.js","/assets/compass-XGBSfLH0.js","/assets/vendor-query-B15ndlvG.js","/assets/files-ANOS_4th.js","/assets/queries-DXBeUspQ.js","/assets/store-CBCFcPcr.js","/assets/chevron-right-A6QLDXCW.js","/assets/folder-open-CcoCGkof.js","/assets/hand-heart-DYGHeenh.js","/assets/store-DZNZ_vt3.js","/assets/index-DSAuKFaf.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
@@ -73,7 +73,8 @@ self.addEventListener('fetch', (event) => {
         const hit = await cache.match(req)
         if (hit) return hit
         const res = await fetch(req)
-        if (res.ok) cache.put(req, res.clone()).catch(() => {})
+        if (res.ok && !(res.headers.get('content-type') || '').startsWith('text/html'))
+          cache.put(req, res.clone()).catch(() => {})
         return res
       })(),
     )
