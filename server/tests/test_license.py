@@ -140,7 +140,8 @@ def test_activate_stores_the_seat_and_the_license(server, mx, capsys):
     assert config.get_secret(license.KEY) == "HM-ABCD-EFGH-JKMN-PQRS"
     st = license.status()
     assert not st["enabled"] and st["has_key"] and st["email"] == "buyer@example.com" and st["kind"] == "paid"
-    assert st["key_hint"].startswith("HM-ABCD")
+    assert st["key_hint"] == "HM-…PQRS"  # 4 of the 16 secret characters at most
+    assert not any(part in st["key_hint"] for part in ("ABCD", "EFGH", "JKMN"))
     assert "Enterprise key recorded" in capsys.readouterr().out
     path, body = server.calls[0]
     assert path == "/v1/activate" and len(body["machine_id"]) == 64 and body["hostname"]
@@ -184,6 +185,24 @@ def test_removing_the_key_frees_its_seat(server, mx, capsys):
     assert server.calls[-1][0] == "/v1/release"
     assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
     assert not license.status()["has_key"]
+
+
+def test_remove_key_forgets_the_license_info(server, mx):
+    config.set_secret(license.KEY, "HM-ABCD-EFGH-JKMN-PQRS")
+    license._save_info({"email": "boss@example.com", "kind": "enterprise", "status": "active", "max_servers": 3},
+                       activation_id="a1", moved_to_git=True)
+    license.remove_key()
+    lic = config.load_config().get("license") or {}
+    assert lic == {"moved_to_git": True}, lic
+    assert "email" not in license.status()
+
+
+def test_activate_without_token_leaves_no_key(mx, monkeypatch):
+    monkeypatch.setattr(license, "_post", lambda *a, **k: {"ok": True, "license": {"email": "boss@example.com"}})
+    with pytest.raises(license.LicenseError):
+        license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
+    assert not (config.load_config().get("license") or {}).get("email")
 
 
 def test_the_key_from_the_api(server, client):

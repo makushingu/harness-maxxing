@@ -470,6 +470,23 @@ def test_removed_jobs_are_kept_and_restored(org, monkeypatch, capsys):
     assert {j["id"] for j in crons.list_jobs()} == {keep["id"], a["id"]}
 
 
+def test_restore_refuses_an_id_or_a_job_that_is_not_safe(org, monkeypatch):
+    """deleted.jsonl is only a file: what comes back from it is checked before it reaches the crontab."""
+    monkeypatch.setattr(crons, "maxxing_bin", lambda: "/usr/local/bin/maxxing")
+    bad = "x >/dev/null; touch /tmp/PWN #"
+    job = {"name": "Old", "schedule": "0 5 * * *", "kind": "shell", "command": "echo old", "enabled": True}
+    crons.deleted_path().write_text(
+        json.dumps({"at": 1, "reason": "deleted", "job": {**job, "id": bad}}) + "\n"
+        + json.dumps({"at": 2, "reason": "deleted", "job": {"id": "c_bad000", "schedule": "nope"}}) + "\n")
+    with pytest.raises(crons.CronError) as e:
+        crons.restore_job(bad)
+    assert e.value.code == "invalid_id"
+    with pytest.raises(crons.CronError):
+        crons.restore_job("c_bad000")
+    assert crons.list_jobs() == []
+    assert "touch /tmp/PWN" not in "\n".join(crons.managed_lines([{**job, "id": bad}]))
+
+
 def test_a_hand_edit_noticed_at_the_next_save(org):
     """No `maxxing cron sync` after the hand edit: the next save through the API still archives the lost job."""
     a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
@@ -478,3 +495,34 @@ def test_a_hand_edit_noticed_at_the_next_save(org):
     crons.jobs_path().write_text(json.dumps(data))
     crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
     assert [d["job"]["id"] for d in crons.deleted_jobs()] == [a["id"]]
+
+
+def test_an_unreadable_jobs_json_is_not_an_empty_list(org):
+    """A damaged or truncated jobs.json archives nothing as vanished and keeps jobs.seen.json: once the file
+    is repaired, nothing was lost from the archive and no job comes back twice."""
+    a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
+    b = crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
+    good = crons.jobs_path().read_text()
+    seen = (crons._dir() / "jobs.seen.json").read_text()
+    for bad in ("{trunc", '["not", "a", "dict"]', '{"version": 1, "jobs": 3}'):
+        crons.jobs_path().write_text(bad)
+        crons.sync_crontab()
+        assert crons.deleted_jobs() == []
+        assert (crons._dir() / "jobs.seen.json").read_text() == seen
+    crons.jobs_path().write_text(good)
+    crons.sync_crontab()
+    assert crons.deleted_jobs() == []
+    assert {j["id"] for j in crons.list_jobs()} == {a["id"], b["id"]}
+
+
+def test_deleted_lists_even_with_a_bad_date(org, capsys):
+    """deleted.jsonl is only a file: a date that is not a number (or out of range) does not break the list."""
+    from maxxing import cmd_cron
+    job = {"name": "Old", "schedule": "0 5 * * *", "kind": "shell", "command": "echo old", "enabled": True}
+    crons.deleted_path().write_text("".join(
+        json.dumps({"at": at, "reason": "deleted", "job": {**job, "id": f"c_old00{i}"}}) + "\n"
+        for i, at in enumerate(["yesterday", 1e300, None, [1], True, 1700000000])))
+    assert all(d["at"] in (0, 1e300, 1700000000) for d in crons.deleted_jobs())
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="deleted")) == 0
+    out = capsys.readouterr().out
+    assert all(f"c_old00{i}" in out for i in range(6))
