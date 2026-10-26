@@ -6,6 +6,80 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.102 - 2026-10-26
+
+Integration of #23, the port of the pre-squash `fix/telegram-all` (a76-a79 there, never merged). `web/dist`
+rebuilt here.
+
+Formatting of every outgoing message kind:
+- `crons._run_claude` returns the whole answer; `run_job` stores `output_tail = fmt.head(answer, OUTPUT_TAIL)` for
+  Claude jobs (the start, cut on a line/word) and passes the answer to `_notify(job, run, answer)`. Shell jobs keep
+  their tail; reports and the feed body use `fmt.tail` (cut on a line). `_notify` calls
+  `gateway.notify_cron_report(header, body, markdown, loud=not ok)` (falls back to `notify_cron(text)` if absent).
+- `format.py`: tables -> `_table_lines` (bullet per row, `<i>header</i>: value`, `\|` kept); `render()` packs the lines
+  of an oversized text/table block into the current message (separator `\n`) instead of starting a new one;
+  new `head`, `tail`, `preview`, `code`.
+- `feed_message` renders the body (`fmt.render(fmt.head(body, 700))`); `finished_message` uses `fmt.preview`.
+- `render_status` drops whole lines instead of slicing at 4000 (the slice could remove `</blockquote>`);
+  `_progress` and `_edit` retry a refused HTML edit as plain text, `_edit` logs instead of `pass`.
+- Tests `test_telegram_format.py`; `test_blocks` expects the table as a list. Real-chat check script (not shipped):
+  every kind sent to a thread, entities checked.
+
+Reliability:
+- Turn refs: `service.send_message(..., ref=)` -> runner `turn_refs` -> `last_turn` (passed to session callbacks, not
+  in the public API); steer merges refs; `service.live_refs(sid)`. `on_turn_end` answers only turns carrying a pending
+  ref; compact / handoff / seed turns are never answered nor mirrored. The typing loop drops refs no longer live (5 s
+  grace); `/stop` clears them.
+- `_thread_gone` no longer matches "closed": TOPIC_CLOSED -> `reopenForumTopic` + resend (`send_html`, `_send_sync`,
+  twofactor `_send`). `reopen_thread` takes `_sync_lock` and re-checks the mapping (`new_session` sends its quote after
+  releasing the lock).
+- `gateway.system_alert(text, loud)` -> "Alerts", setting `notify_system` (default true; config, API, backup keys; no
+  UI toggle yet). Used by claude_update (when `feed.system` did not dedupe; it now returns the event), smartupdate,
+  cmd_deps, backup, `cmd_core.notify_update` / `_notify`, `deps.notify_vulnerable` (were `notify_cron`).
+- "Where?" entries persisted in `state/telegram/new.json` (timers re-armed at start; an entry being created at a stop
+  gets a "send again" notice); albums use the in-flight list; `_start_new` catches errors and keeps the messages; a
+  "starting" marker appends messages typed meanwhile.
+- `_is_service` ignores service messages (except `forum_topic_created`). Topics turned off only on explicit refusals
+  (not a forum / not enough rights / topics disabled), never on 429/5xx/network; a 429 on create/rename ends the sync
+  pass. `call_sync(max_wait=)` (60 s for notifications); `_send_sync` retries each part; `send_html` waits out
+  429/5xx/network twice.
+- `crons.run_job`: `_notify` after the flock is released. `service.session_exists`: the sync keeps the thread of a
+  session whose file exists but cannot be read. Gateway re-syncs on "feed" changes when the Notifications thread is missing.
+- Tests `test_telegram_reliability.py` (25); `FakeService` models refs/queue/steer.
+
+Setup and linking:
+- State: `poll_error` (+ `poll_error_code`: `conflict`, `unauthorized`…) set only by the poller (`_set_poll_error`), `sync_error`
+  set only by the sync, `topics_notice` (threads off: not an error, doctor OK with a note), heartbeat `last_poll_ok` +
+  `poller_pid` (≤ every 30 s). `last_error` kept for old readers (poll error first, else sync error; old state files read).
+- Linking: updates dated before the link was created are skipped; a pending link (or one expired < 24 h) answers a
+  wrong/expired/missing code with `LINK_WORDS` (en/fr) and never adds the chat to `refused`; a new link clears `refused`.
+- Token save: `getWebhookInfo` failure -> `webhook_check_failed`; webhook -> `webhook_set`; 2 s `getUpdates` probe -> 409
+  `conflict` (our own poller paused during the probe); `unreachable`, `bad_token`.
+- API: new `POST /api/telegram/webhook/remove {token?}`; `GET /api/telegram` + `link, poll_error, poll_error_code,
+  sync_error, topics_notice, last_poll_ok, last_poll_age`; `POST /api/telegram/link` + `expires_at, expires_in`;
+  `GET /api/telegram/link` + `pending`; `POST /api/telegram/sync` + `notice`; `POST /api/telegram/test` ->
+  `{ok, sent, poller, webhook, problems}`.
+- CLI/doctor read the heartbeat from the state file: warn when the poller is not running, last poll > 5 min, token
+  rejected or sync failed. UI: setup done = chat linked; Change bot / Link another chat / Disconnect at every stage.
+  Showcase `telegram-setup`. Tests `test_telegram_connect.py`.
+
+Incoming side and polish:
+- `_with_context(msg, text)` (in `_dispatch` / `_flush_group`): reply (`quote.text` or 500 chars of the replied message;
+  the implicit reply to a forum thread's first message is ignored), forward origin, `text_link`/`text_mention`
+  expanded (UTF-16 offsets).
+- `allowed_updates` + `edited_message` -> `_on_edited` (one silent notice per message, owner only).
+- Long pastes: a text ≥ 3500 chars waits 1.5 s and merges the next text parts of the same chat/thread (`_pastes`, in the
+  in-flight list). Albums go through the session lane; the wait restarts per item, cap `MEDIA_GROUP_MAX` = 6 s.
+- `_is_voice` = `voice` / `video_note` only (audio = document). Media messages are never parsed as commands.
+  `resolve_model()` (id, label, family word, `default`).
+- Bot texts moved to `WORDS` (en/fr; French uses "vous"); `HELP` / `HELP_THREADS` constants removed; `setMyCommands`
+  default + `en` + `fr`.
+- Threads: created once `titles.pending(sid)` is false (60 s max); at most one rename in a session's first 2 min;
+  an emoji-only change does not rename.
+- UI: sync error toast, `#feed` labelled, confirmation with a count before lowering `thread_days`.
+  Tests `test_telegram_polish.py`.
+
+
 ## 2.0.0-alpha.101 - 2026-10-26
 
 #22: `cmd_core.claude_settings_defaults()` (called by `maxxing init` only) also sets `attribution` to

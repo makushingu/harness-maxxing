@@ -3,6 +3,64 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.102 - 2026-10-26
+
+New:
+- **Telegram connects, or tells you why.** [Show me](#show:telegram-setup) The setup is complete as soon as your chat is
+  linked: a bot without BotFather "Threaded Mode" gets a notice with a Retry button instead of a wizard stuck on a red
+  error. Change bot, Link another chat and Disconnect are available at every stage, and after a revoked token the token
+  field appears right away.
+
+Fixes:
+- **Cron reports in Telegram are readable.** A Claude job's report kept only the last 1,500 characters of its answer,
+  so it started in the middle of a word, and its formatting showed as raw `**`, backticks and `|`. It now starts at the
+  beginning, is formatted like a normal reply and is split over several messages when long. Successful reports no
+  longer ring.
+- **Tables are readable in Telegram.** They arrived as a grid of `|` that wrapped on a phone; each row is now a bullet
+  with its first cell in bold and the other cells below it.
+- **Notifications and "session finished" messages are formatted.** Their text showed raw markdown; the notification
+  is now formatted and the finished-session preview is one clean line.
+- **The live progress message no longer freezes.** If Telegram refused an update of it, it stayed on the old state; it
+  now falls back to plain text.
+- **Each Telegram message gets its own answer.** A message sent while a turn from the web was running received the web
+  turn's answer, and its own answer was never sent; an automatic summary could also arrive as your reply. "Typing…" now
+  stops as soon as a turn is stopped or steered, instead of lasting up to 3 hours.
+- **Closing a thread no longer creates a duplicate.** The bot treated a closed thread as deleted and opened a new one
+  (sessions, Crons, Alerts); it now reopens the same thread.
+- **Server problems reach the Alerts thread.** A failed or rolled-back update, an available update, a known
+  vulnerability, a failed Claude Code or dependency update and items held by a restore were silent, or only sent when
+  cron reports were on.
+- **Sessions started from the phone are more reliable.** Messages waiting for the "where?" buttons survive a restart, a
+  failed start keeps them and says so, and a message typed while the session is being created goes to that session
+  instead of starting a second one.
+- **Telegram's flood limits no longer break things.** One limit during the first setup turned threads off for good, and
+  bursts of reports lost parts; reports are now retried part by part, in order, and the cron job no longer waits for
+  Telegram before its next run can start.
+- **Commands work in the main chat.** `/sessions`, `/status`, `/stop` and the others answered "choose where first"
+  without any buttons; pinned or renamed thread notices no longer get "not supported", and a session whose file is
+  briefly unreadable keeps its thread.
+- **Pressing Start too early no longer blocks the link.** A /start sent before the link existed, or an expired or wrong
+  code, got "private assistant" and then silence. Old messages are now ignored and an expired link gets a clear "create
+  a new link" reply. The link shows a countdown and a New link button, and survives leaving the page.
+- **A bot already used elsewhere is detected.** Saving the token spots a webhook (with a one-click Remove the webhook)
+  and another program reading the bot (n8n, Hermes, OpenClaw…), which used to take your messages.
+- **Telegram checks look at the receiving side.** Send test, `maxxing telegram status|test` and `maxxing doctor` now say
+  whether Harness receives your messages (poller running, last answer from Telegram, webhook). A thread sync no longer
+  hides a receiving error.
+- **Telegram keeps the context of what you send.** Claude now sees the part you reply to or quote, where a forwarded
+  message comes from, and links hidden behind words.
+- **Long texts and albums arrive whole and in order.** A long text that Telegram splits into several messages is sent to
+  Claude as one message, and an album stays before what you send right after it.
+- **Audio files are attachments.** Only voice notes and round video notes are transcribed; a music or mp3 file reaches
+  Claude as a file. A photo captioned `/new` stays a photo, and `/model` accepts `opus`, `sonnet` or `haiku` and lists
+  the valid choices on a typo.
+- **The bot speaks your language.** Its replies and command menu follow the language of the web UI (English or
+  French), and editing a sent message gets a short "send a new message" notice instead of silence.
+- **Fewer "topic renamed" notices.** A new session's thread is named once its short title is known, and changing a
+  project emoji no longer renames every thread.
+- **Settings → Telegram:** sync errors are shown, the Notifications thread is labelled, and shortening "Keep a thread
+  for" asks first and says how many threads it will delete.
+
 ## 2.0.0-alpha.101 - 2026-10-26
 
 Changes:
