@@ -295,6 +295,10 @@ def _mount_spa(app: FastAPI) -> None:
             else:
                 cache = "public, max-age=3600"
             return FileResponse(f, headers={"Cache-Control": cache})
+        # A missing hashed asset (a tab still on an older build) must fail as such: answering with the app page
+        # would raise a MIME error and let the service worker cache HTML under the script's name.
+        if path.startswith("assets/"):
+            raise HTTPException(404, detail={"error": "not_found", "message": path})
         if not index.exists():
             return JSONResponse({"error": "no_ui", "message": "web/dist is missing - build the UI"},
                                 status_code=503)
