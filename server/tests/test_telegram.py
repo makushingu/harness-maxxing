@@ -47,7 +47,7 @@ def test_blocks():
     assert '<pre><code class="language-python">if a &lt; b:\n    print(\'**no**\')</code></pre>' in html
     assert "• one\n• two\n1. first" in html
     assert "<blockquote>quoted</blockquote>" in html
-    assert "<pre>| a | b |" in html
+    assert "• <b>1</b>\n   <i>b</i>: 2" in html and "|" not in html          # tables become lists
 
 
 def _balanced(h: str) -> bool:

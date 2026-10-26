@@ -142,7 +142,9 @@ def render_status(steps: list[dict], todos: list[dict], elapsed: float, final: s
     if not lines:
         return head
     quote = "<blockquote expandable>" if final is not None else "<blockquote>"
-    return (head + "\n" + quote + "\n".join(lines) + "</blockquote>")[:4000]
+    while len(lines) > 1 and len(head) + len(quote) + sum(len(x) + 1 for x in lines) > 4000:
+        lines.pop(0)                                 # drop whole lines: a cut would lose </blockquote>
+    return head + "\n" + quote + "\n".join(lines) + "</blockquote>"
 MEDIA_GROUP_WAIT = 1.5
 NOTIFY_PREVIEW = 300
 THREAD_DAYS = 30               # default of config.telegram.thread_days
@@ -1352,7 +1354,14 @@ class Gateway:
             await self.client.call("editMessageText", chat_id=p["chat"], message_id=p["msg_id"], text=html,
                                    parse_mode="HTML", link_preview_options={"is_disabled": True})
         except TelegramError as e:
-            if "not modified" not in (e.description or ""):
+            if _bad_html(e):                         # never leave the status frozen on a parse error
+                try:
+                    await self.client.call("editMessageText", chat_id=p["chat"], message_id=p["msg_id"],
+                                           text=fmt.strip_tags(html)[:4096],
+                                           link_preview_options={"is_disabled": True})
+                except TelegramError as e2:
+                    log.warning("telegram status edit failed: %s", e2.description)
+            elif "not modified" not in (e.description or ""):
                 log.warning("telegram status edit failed: %s", e.description)
 
     async def on_turn_end(self, session: dict, result: dict | None) -> None:
@@ -1692,8 +1701,16 @@ class Gateway:
         try:
             await self.client.call("editMessageText", chat_id=msg["chat"]["id"],
                                    message_id=msg.get("message_id"), text=html, parse_mode="HTML")
-        except TelegramError:
-            pass
+        except TelegramError as e:
+            if _bad_html(e):
+                try:
+                    await self.client.call("editMessageText", chat_id=msg["chat"]["id"],
+                                           message_id=msg.get("message_id"), text=fmt.strip_tags(html)[:4096])
+                    return
+                except TelegramError as e2:
+                    e = e2
+            if "not modified" not in (e.description or ""):
+                log.warning("telegram edit failed: %s", e.description)
 
 
 HELP = ("<b>Harness Maxxing</b> - this chat: <i>{topic}</i>\n\n"
@@ -1742,7 +1759,7 @@ def finished_message(session: dict) -> str:
     if session.get("state") == "error":
         head = f"⚠️ <b>{title}</b> - {fmt.escape(str(session.get('error') or 'error')[:NOTIFY_PREVIEW])}"
     else:
-        preview = (session.get("last_text") or "").strip().replace("\n", " ")[:NOTIFY_PREVIEW]
+        preview = fmt.preview(session.get("last_text") or "", NOTIFY_PREVIEW)   # markdown -> one clean line
         head = f"✅ <b>{title}</b>" + (f" - {fmt.escape(preview)}" if preview else "")
     base = (config.load_config().get("public_url") or "").rstrip("/")
     if base and session.get("id"):
@@ -2254,8 +2271,8 @@ FEED_ICON = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "
 def feed_message(ev: dict) -> tuple[str, dict]:
     """HTML text + buttons of a feed event in the "Notifications" thread."""
     title = fmt.escape(ev["title"]) + (f" ×{ev['count']}" if ev.get("count", 1) > 1 else "")
-    raw = ev.get("body") or ""                          # cut before escaping: a cut "&amp;" breaks the HTML
-    body = fmt.escape(raw[:700]) + ("…" if len(raw) > 700 else "")
+    raw = ev.get("body") or ""                          # cut before rendering: a cut "&amp;" breaks the HTML
+    body = "\n\n".join(fmt.render(fmt.head(raw, 700)))   # markdown (a Claude answer, a report) rendered
     text = f"{FEED_ICON.get(ev['level'], 'ℹ️')} <b>{title}</b>" + (f"\n{body}" if body else "") + \
         f"\n<i>{fmt.escape(ev['source'])}</i>"
     row = [{"text": "🤖 Ask Harness", "callback_data": f"f:{ev['id']}"}]
@@ -2286,6 +2303,31 @@ def notify_cron(text: str) -> None:
             _post(CRONS, fmt.plain(text), silent=False)
     except Exception:
         log.exception("telegram notify_cron failed")
+
+
+REPORT_MAX = 12000             # a cron report longer than this (3 messages) is cut, the full text stays in Crons
+
+
+def notify_cron_report(header: str, body: str = "", markdown: bool = True, loud: bool = True) -> None:
+    """Cron report into the "Crons" thread (if notify_crons): a plain header, then the job's output -
+    a Claude answer rendered from markdown (whole, from its start), or command output as code."""
+    try:
+        if not tg_config().get("notify_crons", True):
+            return
+        head = f"<b>{fmt.escape(header)}</b>"
+        body = (body or "").strip()
+        room = fmt.LIMIT - len(head) - 2                # the header always shares the first message
+        if markdown:
+            parts = fmt.render(fmt.head(body, REPORT_MAX), room) if body else []
+        else:                                          # command output: verbatim, in a code block
+            parts = fmt.code(body, room) if body else []
+        if parts and len(head) + 2 + len(parts[0]) <= fmt.LIMIT:
+            parts[0] = f"{head}\n\n{parts[0]}" if markdown else f"{head}\n{parts[0]}"
+        else:
+            parts.insert(0, head)
+        _post(CRONS, parts, silent=not loud)
+    except Exception:
+        log.exception("telegram notify_cron_report failed")
 
 
 def send_test() -> bool:
