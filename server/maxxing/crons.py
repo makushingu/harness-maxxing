@@ -1110,13 +1110,13 @@ def run_job(cid: str) -> dict | None:
                "ok": ok, "code": code, "duration_s": round(time.time() - start, 2),
                "output_tail": tail, "session_id": session_id}
         append_run(run)
-        _notify(job, run, answer)
-        return run
     finally:
         try:
             fcntl.flock(lockf, fcntl.LOCK_UN)
         finally:
             lockf.close()
+    _notify(job, run, answer)                            # after the lock: a slow Telegram never holds the job
+    return run
 
 
 def _feed(job: dict, run: dict) -> None:

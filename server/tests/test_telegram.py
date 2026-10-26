@@ -751,9 +751,10 @@ async def test_commands(api, tg, svc):
     tg.message("hello", thread=_thread("#crons"))
     await wait_for(lambda: any("only receives notifications" in p["text"] for p in tg.sent()), what="crons thread")
     assert not svc.sent
-    # a command before the topic is chosen
+    # a session command in the main chat: where to send it (no "where?" question left behind)
     tg.message("/status")
-    await wait_for(lambda: any("Choose where" in p["text"] for p in tg.sent()), what="pick first")
+    await wait_for(lambda: any("send it in that session's thread" in p["text"] for p in tg.sent()), what="in a thread")
+    assert gateway.gateway()._new == {}
 
 
 # =============================================================================================

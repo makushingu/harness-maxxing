@@ -495,7 +495,7 @@ def sanitized_config() -> dict:
     cfg = config.load_config()
     out = {k: cfg.get(k) for k in RESTORABLE_CONFIG if k in cfg}
     tg = cfg.get("telegram") or {}
-    out["telegram"] = {k: tg.get(k) for k in ("notify_crons", "login_alerts", "reply_mode", "reply_mode_chosen")}
+    out["telegram"] = {k: tg.get(k) for k in ("notify_crons", "notify_system", "login_alerts", "reply_mode", "reply_mode_chosen")}
     b = cfg.get("backup") or {}
     out["backup"] = {"schedule": b.get("schedule"), "include": b.get("include")}
     return out
@@ -901,7 +901,7 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
             changes = {k: saved[k] for k in RESTORABLE_CONFIG if k in saved}
             if isinstance(saved.get("telegram"), dict):
                 changes["telegram"] = {k: v for k, v in saved["telegram"].items()
-                                       if k in ("notify_crons", "login_alerts", "reply_mode", "reply_mode_chosen") and v is not None}
+                                       if k in ("notify_crons", "notify_system", "login_alerts", "reply_mode", "reply_mode_chosen") and v is not None}
             if isinstance(saved.get("backup"), dict):
                 with config._lock:                                       # noqa: SLF001
                     cfg = config.load_config()
@@ -953,10 +953,12 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
                 f"{trash / 'outside'})" if outside else ""]
         try:
             from . import feed
-            feed.system("Restored but turned off - check them first",
-                        "The backup brought code that runs on this server; it stays off until you turn it on: "
-                        + "; ".join(w for w in what if w) + ". Crons and Extensions pages.",
-                        "warning", "security", group="backup-restore-held")
+            body = ("The backup brought code that runs on this server; it stays off until you turn it on: "
+                    + "; ".join(w for w in what if w) + ". Crons and Extensions pages.")
+            feed.system("Restored but turned off - check them first", body, "warning", "security",
+                        group="backup-restore-held")
+            from .telegram import gateway
+            gateway.system_alert("Restored but turned off - check them first\n" + body)
         except Exception:                          # the notice is a convenience: the restore itself is done
             log.warning("restore: notice not posted", exc_info=True)
     from . import trash as trash_mod

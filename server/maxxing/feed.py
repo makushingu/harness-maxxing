@@ -31,7 +31,7 @@ RETENTION_DAYS = 30
 GROUP_WINDOW_S = 24 * 3600
 TITLE_MAX, BODY_MAX = 200, 4000
 SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,39}$")
-# Built-in sources: they already report in their own Telegram thread (Crons, Alerts).
+# Built-in sources: they already report in their own Telegram thread (Crons; Alerts: gateway.alert / system_alert).
 BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins"}
 OWN_THREAD = {"crons", "system", "security"}
 
@@ -255,9 +255,11 @@ def _to_telegram(ev: dict) -> None:
 
 
 def system(title: str, body: str = "", level: str = "info", source: str = "system", url: str = "",
-           group: str | None = None, dedupe: str | None = None) -> None:
-    """Built-in events: never raise (the feed must not break a cron run, an update or a sign-in)."""
+           group: str | None = None, dedupe: str | None = None) -> dict | None:
+    """Built-in events: never raise (the feed must not break a cron run, an update or a sign-in). Returns the
+    event (None when `dedupe` says it was already posted, or it could not be recorded)."""
     try:
-        post(title, body, level, source, url, dedupe=dedupe, group=group)
+        return post(title, body, level, source, url, dedupe=dedupe, group=group)
     except Exception:  # noqa: BLE001
         log.exception("feed: could not record %r", title)
+        return None

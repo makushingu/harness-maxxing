@@ -23,6 +23,7 @@ class TokenIn(BaseModel):
 
 class SettingsIn(BaseModel):
     notify_crons: bool | None = None
+    notify_system: bool | None = None
     login_alerts: bool | None = None
     reply_mode: Literal["final", "progress"] | None = None
     thread_days: int | None = None

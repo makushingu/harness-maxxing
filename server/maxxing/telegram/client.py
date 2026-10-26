@@ -139,8 +139,9 @@ class Client:
         await self._http.aclose()
 
 
-def call_sync(token: str, method: str, http_timeout: float = 15.0, **params: Any) -> Any:
-    """Blocking one-shot call (worker threads, `maxxing cron run`, CLI)."""
+def call_sync(token: str, method: str, http_timeout: float = 15.0, max_wait: float = 10.0, **params: Any) -> Any:
+    """Blocking one-shot call (worker threads, `maxxing cron run`, CLI). A 429 is retried once when Telegram asks
+    to wait `max_wait` seconds at most."""
     for attempt in (0, 1):
         try:
             with httpx.Client(timeout=httpx.Timeout(http_timeout, connect=10.0)) as c:
@@ -150,7 +151,7 @@ def call_sync(token: str, method: str, http_timeout: float = 15.0, **params: Any
         try:
             return _parse(resp, token)
         except TelegramError as e:
-            if e.code == 429 and attempt == 0 and (e.retry_after or 0) <= 10:
+            if e.code == 429 and attempt == 0 and (e.retry_after or 0) <= max_wait:
                 time.sleep(e.retry_after or 1)
                 continue
             raise
