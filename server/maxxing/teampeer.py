@@ -234,7 +234,8 @@ def people() -> dict:
         out[pid(addr)] = {"name": p.get("name") or urlsplit(addr).hostname, "emoji": p.get("emoji", ""),
                           "color": p.get("color") or "zinc", "server": urlsplit(addr).hostname, "address": addr,
                           "status": "online" if seen < 300 else "away" if seen < 3600 else "offline",
-                          "contact": p.get("status") == "accepted", "peer": True}
+                          "contact": p.get("status") == "accepted", "peer": True,
+                          "last_seen": float(p.get("last_seen") or 0)}
     return out
 
 
@@ -476,7 +477,7 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
     group key is limited to (see verify)."""
     from . import team
     kind = event.get("type")
-    if scope and (kind not in ("message", "vote", "react") or str(event.get("chat") or "") != scope):
+    if scope and (kind not in ("message", "vote", "react", "typing") or str(event.get("chat") or "") != scope):
         raise PeerError(403, "forbidden", "A group key only works in its own group")
     with _lock:
         doc = _load()
@@ -555,6 +556,21 @@ def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: b
     if raise_on_error:
         raise PeerError(502, "unreachable", err)
     return False
+
+
+def signal(address: str, event: dict) -> None:
+    """A passing event ("is writing"): one try now, never queued nor retried."""
+    try:
+        _deliver_now(address, event)
+    except Exception:                          # best effort: a signal that does not arrive is no loss
+        log.debug("team signal to %s failed", address, exc_info=True)
+
+
+def share_profile() -> None:
+    """The user changed their name, emoji or color: every contact gets it (queued like a message)."""
+    with _lock:
+        addrs = [a for a, p in _load()["peers"].items() if p.get("status") == "accepted"]
+    send(addrs, {"type": "profile", "profile": _profile()})
 
 
 def send(addresses: list[str], event: dict, msg: str | None = None) -> None:

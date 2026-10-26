@@ -110,3 +110,36 @@ def test_summary_of_chosen_messages(client, sent):
 def test_team_page_setting(client):
     assert client.get("/api/settings").json()["team_page"] is False
     assert client.put("/api/settings", json={"team_page": True}).json()["team_page"] is True
+
+
+def test_typing_is_a_passing_signal(client, sent, monkeypatch):
+    lea = teampeer.pid(LEA)
+    signals: list[tuple[str, dict]] = []
+    monkeypatch.setattr(teampeer, "signal", lambda a, e: signals.append((a, e)))
+    monkeypatch.setattr(team.threading, "Timer", lambda *a, **k: type("T", (), {"daemon": True, "start": lambda self: None})())
+    team._typing.clear()
+    team._typing_sent.clear()
+    dm = client.post("/api/team/chats", json={"kind": "dm", "members": [lea]}).json()
+    n = len(sent)
+    for _ in range(3):                                   # several keystrokes: one signal, never queued
+        assert client.post(f"/api/team/chats/{dm['id']}/typing").status_code == 200
+    import time as _t
+    for _ in range(50):
+        if signals:
+            break
+        _t.sleep(0.02)
+    assert signals == [(LEA, {"type": "typing", "chat": dm["id"]})] and len(sent) == n
+    # Lea writes: shown in the state until her message arrives
+    team.apply_remote(LEA, True, {"type": "typing", "chat": dm["id"]})
+    assert client.get("/api/team").json()["typing"] == {dm["id"]: [lea]}
+    team.apply_remote(LEA, True, {"type": "typing", "chat": "d_unknown"})    # not a chat of ours: ignored
+    team.apply_remote(LEA, True, {"type": "message", "chat": dm["id"], "message": {"id": "m_0123abcd", "at": 1, "text": "hi", "kind": "text"}})
+    assert client.get("/api/team").json()["typing"] == {}
+
+
+def test_profile_change_goes_to_contacts(client, sent):
+    client.put("/api/settings/profile", json={"name": "Romy", "color": "teal", "emoji": ""})
+    addrs, event = sent[-1]
+    assert set(addrs) == {LEA, TOM} and event == {"type": "profile", "profile": {"name": "Romy", "emoji": "", "color": "teal"}}
+    st = client.get("/api/team").json()
+    assert st["people"][teampeer.pid(LEA)]["last_seen"] == 0

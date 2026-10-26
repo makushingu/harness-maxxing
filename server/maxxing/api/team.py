@@ -96,6 +96,12 @@ async def read(cid: str):
     return {"ok": True}
 
 
+@router.post("/chats/{cid}/typing")
+async def typing(cid: str):
+    await _call(team.typing, cid)
+    return {"ok": True}
+
+
 @router.post("/chats/{cid}/messages")
 async def send(cid: str, body: MessageIn):
     return await _call(team.send, cid, body.text, body.reply_to, [f.model_dump() for f in body.files])

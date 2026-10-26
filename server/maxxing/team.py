@@ -42,6 +42,10 @@ _lock = threading.RLock()
 _slots = threading.BoundedSemaphore(4)          # files of the others: 4 downloads at a time
 _queued = [0]                                   # downloads started or waiting (at most QUEUE_MAX, the others fail)
 QUEUE_MAX = 100
+TYPING_S = 6                    # "is writing" lasts this long after the last signal
+TYPING_EVERY = 3                # the user's own signal goes out at most this often per chat
+_typing: dict[str, dict[str, float]] = {}       # chat -> person -> until (memory only, never saved)
+_typing_sent: dict[str, float] = {}             # chat -> when the user's last signal went out
 
 
 class TeamError(Exception):
@@ -115,7 +119,35 @@ def state() -> dict:
         doc = _load()
         people = teampeer.people() | {ME: _me()}
         chats = sorted((_summary(c, doc) for c in doc["chats"]), key=lambda c: -c["updated"])
-        return {"me": ME, "people": people, "chats": chats, "reactions": list(REACTIONS)}
+        return {"me": ME, "people": people, "chats": chats, "reactions": list(REACTIONS), "typing": _typing_now()}
+
+
+def _typing_now() -> dict:
+    now = time.time()
+    return {cid: [p for p, until in d.items() if until > now] for cid, d in _typing.items()
+            if any(until > now for until in d.values())}
+
+
+def typing(cid: str) -> None:
+    """The user is writing in a chat: tell its members, best effort (never queued, at most every TYPING_EVERY s)."""
+    now = time.time()
+    with _lock:
+        chat = _chat(_load(), cid)
+        if not chat.get("remote") or now - _typing_sent.get(cid, 0) < TYPING_EVERY:
+            return
+        _typing_sent[cid] = now
+        addrs = _addresses(chat)
+    for a in addrs:
+        threading.Thread(target=teampeer.signal, args=(a, {"type": "typing", "chat": cid}), daemon=True).start()
+
+
+def _remote_typing(cid: str, who: str) -> None:
+    with _lock:
+        _typing.setdefault(cid, {})[who] = time.time() + TYPING_S
+    bus.invalidate("team")
+    timer = threading.Timer(TYPING_S + 0.3, bus.invalidate, ("team",))   # the UI drops it when it expires
+    timer.daemon = True
+    timer.start()
 
 
 def messages(cid: str) -> dict:
@@ -471,6 +503,10 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
     with _lock:
         doc = _load()
         chat = next((c for c in doc["chats"] if c["id"] == cid), None)
+        if kind == "typing":
+            if chat and chat.get("remote") and who in chat["members"]:
+                _remote_typing(cid, who)
+            return
         if kind == "chat":
             if not contact or not cid.startswith("g_") or (chat and chat.get("admin") != who):
                 raise TeamError(403, "forbidden", "Only a contact may add you to a group, only its creator may change it")
@@ -512,6 +548,7 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
                 return
             chat["messages"].append(msg)
             chat["messages"].sort(key=lambda m: m["at"])
+            _typing.get(cid, {}).pop(who, None)     # the message is there: no more "is writing"
             fetch = [(msg["id"], f) for f in msg.get("files") or []]
         elif kind == "vote":
             msg = _message(chat, str(event.get("msg"))[:40])
