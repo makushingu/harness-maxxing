@@ -6,6 +6,13 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.101 - 2026-10-26
+
+#22: `cmd_core.claude_settings_defaults()` (called by `maxxing init` only) also sets `attribution` to
+`{"commit": "", "pr": ""}` when neither `attribution` nor `includeCoAuthoredBy` is in Claude Code's settings.json.
+`.githooks/commit-msg` = the cloud repo's hook (AI author, signature or AI co-author refused; people allowed);
+CONTRIBUTING: `git config core.hooksPath .githooks`.
+
 ## 2.0.0-alpha.100 - 2026-10-26
 
 Integration of #12, #14, #16, #19 and #21 (Radar: 20 findings, one commit each with its test; the PR body has the
