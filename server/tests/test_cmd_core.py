@@ -77,7 +77,9 @@ def test_init_creates_state_config_workspace_skills(env, capsys):
     assert "memory" in names and "memory-compaction" in names and "maxxing-setup" in names
     for n in names:
         assert (home / ".claude" / "skills" / n / "SKILL.md").is_file()
-    assert json.loads((home / ".claude" / "settings.json").read_text())["cleanupPeriodDays"] == 3650
+    st = json.loads((home / ".claude" / "settings.json").read_text())
+    assert st["cleanupPeriodDays"] == 3650
+    assert st["attribution"] == {"commit": "", "pr": ""}   # no Co-Authored-By / "Generated with" in commits and PRs
     out = capsys.readouterr().out
     assert "/setup?token=" in out                         # password not set -> setup link
     assert security.ensure_setup_token() in out
@@ -98,6 +100,16 @@ def test_init_claude_dir_keeps_home_claude_untouched(env, tmp_path):
     assert config.claude_dir() == own.resolve()
 
 
+def test_an_attribution_chosen_by_the_user_is_kept(env):
+    settings = env["home"] / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    for chosen in ({"includeCoAuthoredBy": True}, {"attribution": {"commit": "Made by me"}}):
+        settings.write_text(json.dumps(chosen))
+        assert run_cli("init", "--workspace", str(env["ws"]), "--quiet") == 0
+        st = json.loads(settings.read_text())
+        assert {k: st[k] for k in chosen} == chosen and ("attribution" in chosen or "attribution" not in st)
+
+
 def test_default_claude_dir_is_home_claude(env):
     assert run_cli("init", "--workspace", str(env["ws"]), "--quiet") == 0
     assert config.claude_dir() == env["home"] / ".claude"
@@ -116,7 +128,8 @@ def test_init_is_idempotent_and_never_clobbers(env):
     assert (ws / "memory.md").read_text() == "# mine\n"
     cfg = config.load_config()
     assert cfg["language"] == "fr" and cfg["timezone"] == "UTC"
-    assert json.loads(settings.read_text()) == {"cleanupPeriodDays": 30, "model": "x"}
+    assert json.loads(settings.read_text()) == {"cleanupPeriodDays": 30, "model": "x",       # the user's choices kept
+                                                "attribution": {"commit": "", "pr": ""}}     # + no AI credit
     # an explicit flag wins
     assert run_cli("init", "--timezone", "Asia/Tokyo", "--public-url", "https://ui.example.com/", "--quiet") == 0
     cfg = config.load_config()
