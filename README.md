@@ -1,6 +1,7 @@
 # Harness Maxxing
 
 [![License: Fair Source](https://img.shields.io/badge/license-Fair%20Source-blue)](LICENSE)
+[![Installs](https://img.shields.io/endpoint?url=https%3A%2F%2Fapi.harness-maxxing.com%2Fv1%2Fbadge%2Finstalls)](#install)
 [![GitHub stars](https://img.shields.io/github/stars/makushingu/harness-maxxing?style=social)](https://github.com/makushingu/harness-maxxing/stargazers)
 [![X (Twitter)](https://img.shields.io/badge/X-@HarnessMaxxing-black?logo=x)](https://x.com/HarnessMaxxing)
 
