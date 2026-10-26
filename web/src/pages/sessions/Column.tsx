@@ -815,7 +815,7 @@ function ColumnHeader({
       </header>
     )
   return (
-    <header className={cn('shrink-0 border-b bg-background/95 px-3 py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
+    <header data-col-head className={cn('shrink-0 border-b bg-background/95 px-3 py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
       <div className="flex h-9 min-w-0 items-center gap-1 pointer-coarse:h-10">
         {variant === 'column' && <DragGrip colKey={col.key} />}
         {session ? <InlineTitle value={session.title} onSave={onRename} /> : <Skeleton className="h-4 w-40" />}
@@ -1069,7 +1069,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
           composer.current?.addFiles(Array.from(e.dataTransfer.files))
         }}
       >
-        <header className={cn('shrink-0 border-b px-3 py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
+        <header data-col-head className={cn('shrink-0 border-b px-3 py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
           <div className="flex h-9 items-center gap-1">
             {variant === 'mobile' && <TouchSessionsButton className="-ml-2" />}
             {variant === 'column' && <DragGrip colKey={col.key} />}

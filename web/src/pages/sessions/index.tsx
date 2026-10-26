@@ -296,7 +296,8 @@ function Workspace() {
     return keys.map((k) => byKey.get(k)!)
   }, [shownCols])
   const strip = React.useRef<HTMLDivElement>(null)
-  // Mouse: the wheel over the strip but on no session (gap, empty cell, edge) scrolls it sideways.
+  // Mouse: the wheel over the strip but on no session (gap, empty cell, edge) or over a session's header scrolls it
+  // sideways, and so does Shift + wheel anywhere on the strip (columns side by side leave no gap to aim at).
   // Trackpad: a sideways swipe anywhere over the columns scrolls the strip. The threads inside contain their
   // overscroll (vertical lists), which swallowed horizontal wheel deltas unless the pointer sat below them.
   // The strip snaps to columns: a programmatic scroll of a few pixels is snapped straight back, so snapping is
@@ -309,9 +310,9 @@ function Workspace() {
       const el = strip.current
       if (!el || !(e.target instanceof Node) || !el.contains(e.target)) return
       if (e.ctrlKey || el.scrollWidth <= el.clientWidth) return
-      // Mouse wheel (a pointer that hovers) over the strip but on no session: the wheel scrolls the strip sideways.
-      const offColumn = e.target instanceof Element && !e.target.closest('[data-col]')
-      const wheelSideways = offColumn && Math.abs(e.deltaY) > Math.abs(e.deltaX) && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+      // Mouse wheel (a pointer that hovers) on no session, on a session's header, or with Shift: the strip scrolls sideways.
+      const onHead = e.target instanceof Element && (!e.target.closest('[data-col]') || !!e.target.closest('[data-col-head]'))
+      const wheelSideways = (onHead || e.shiftKey) && Math.abs(e.deltaY) > Math.abs(e.deltaX) && window.matchMedia('(hover: hover) and (pointer: fine)').matches
       if (!wheelSideways && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
       const delta = wheelSideways ? e.deltaY : e.deltaX
       // leave it to an inner element that can still scroll sideways (code blocks, tables, tab bars)
