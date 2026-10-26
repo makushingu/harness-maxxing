@@ -328,7 +328,8 @@ contact key, else the one group its key is for; signature, time ±300 s, nonce c
 `_outbox_round()` (`RETRY` backoff, `OUTBOX_DAYS`; a failing address waits, the others go; no key = dropped),
 `share_file` / `file_for` (scope checked) / `fetch_file` (signed GET, ≤ `upload_max_mb`, keeps
 `upload_min_free_mb` free, `FETCH_DEADLINE`; `team._fetch` reserves the name, 4 downloads at a time).
-`team_insecure` / MAXXING_TEAM_INSECURE=1 allows http and local addresses (tests only).
+Outgoing calls go through `_http()`: `_PublicBackend` resolves the name once and connects to that IP, refused
+unless public (no DNS rebinding to a local address). `team_insecure` / MAXXING_TEAM_INSECURE=1 allows http and local addresses (tests only).
 
 ## maxxing.infra  (owner: organisation)
 - `probe.py`: stdlib-only, Python >= 3.8, one JSON on stdout; run locally as a subprocess and remotely with
