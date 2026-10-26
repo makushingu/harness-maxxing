@@ -376,12 +376,33 @@ export type TelegramStatus = {
   settings: TelegramSettings
   /** A link code is pending (/start <code>). */
   linking: boolean
+  /** The last link code (pending or expired), kept by the server: the page can be left and opened again. */
+  link?: TelegramLink | null
+  /** Error of the poller (getUpdates), cleared by its next success. `token_rejected` = 401, the poller stopped. */
+  poll_error?: string | null
+  poll_error_code?: 'token_rejected' | 'conflict' | 'unreachable' | null
+  /** Error of the last thread sync. */
+  sync_error?: string | null
+  /** Threads are off for this bot (BotFather "Threaded Mode"): everything goes to the main chat. Not an error. */
+  topics_notice?: string | null
+  /** Last successful getUpdates (Unix seconds) and its age in seconds. */
+  last_poll_ok?: number | null
+  last_poll_age?: number | null
+  /** Older field: poll_error or sync_error. */
   last_error: string | null
 }
+export type TelegramLink = { code: string; deep_link: string; expires_at: number; expires_in: number; expired: boolean }
 export type TelegramTokenResult = { ok: boolean; bot?: TelegramBot; error?: string }
-export type TelegramLinkStart = { code: string; deep_link: string }
-export type TelegramLinkState = { linked: boolean; chat: TelegramChat | null }
-export type TelegramSyncResult = { created: number; deleted?: number; topics_enabled: boolean; error: string | null }
+export type TelegramLinkStart = { code: string; deep_link: string; expires_at: number; expires_in: number }
+export type TelegramLinkState = { linked: boolean; chat: TelegramChat | null; pending?: TelegramLink | null }
+export type TelegramSyncResult = { created: number; deleted?: number; topics_enabled: boolean; error: string | null; notice?: string | null }
+export type TelegramTestResult = {
+  ok: boolean
+  sent: boolean
+  poller: { running: boolean; last_poll_ok: number | null; last_poll_age: number | null; error: string | null; error_code: string | null }
+  webhook: { url: string; pending_updates: number; last_error: string | null } | null
+  problems: string[]
+}
 
 /* ---------------------------------------------------------------- Backup */
 export type BackupRun = { at: number; ok: boolean; commit: string | null; files: number; changed?: number; error: string | null; code?: string; duration_s?: number }
