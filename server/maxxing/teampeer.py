@@ -51,6 +51,7 @@ HELLO_FAILS = 5                                            # wrong invitations p
 INBOX_PER_MIN = 240                                        # requests per sender IP and minute
 
 _lock = threading.RLock()
+_STARTED = time.time()                                     # nonces live in memory: nothing signed before this is taken
 _nonces: dict[str, float] = {}
 _fails: dict[str, list[float]] = {}
 _hits: dict[str, list[float]] = {}
@@ -445,7 +446,7 @@ def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> tuple
             raise PeerError(401, "unsigned", "Unsigned request") from None
         nonce, sig = headers.get("x-team-nonce", "")[:64], headers.get("x-team-sig", "")
         now = time.time()
-        if abs(now - ts) > CLOCK_SKEW or not nonce or not sig:
+        if abs(now - ts) > CLOCK_SKEW or ts < int(_STARTED) or not nonce or not sig:
             raise PeerError(401, "stale", "Request too old or unsigned")
         for n, t in list(_nonces.items()):
             if now - t > NONCE_TTL:
