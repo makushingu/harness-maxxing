@@ -6,6 +6,23 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.100 - 2026-10-26
+
+Integration of #12, #14, #16, #19 and #21 (Radar: 20 findings, one commit each with its test; the PR body has the
+table). `web/dist` rebuilt here, not merged.
+- #12 `cmd_core`: `maxxing update --branch` replays the `custom:` commits on the new branch.
+- #14 `pages/sessions/index.tsx`: wheel over `[data-col-head]` or Shift + wheel scrolls the strip (fine pointer only).
+- #16 `pwa`: `announceUpdate` applies the waiting service worker unless a field has focus (then on focusout / tab
+  hidden); the stream reconnect calls `checkForUpdate()`; Settings -> Update reloads when done.
+- #19 `MediaPlayer`: touch volume (tap = open, 2nd tap = mute; iOS read-only `volume` -> Web Audio gain); Auto
+  switches to the ready copy only on stalls / dropped frames, never on a refetch.
+- #21: `license.remove_key()` replaces the section, hint `HM-…` + 4; `license.activate()` checks `token`;
+  `feedback` email ≤ 254; `http.client.HTTPException` = network error; `register` under an RLock;
+  `health.issue_id()` keeps digits in quotes, `mark_seen` under `ProcessLock("health-seen")`; `read_back()` carries
+  the agent kind from `task_started`; `crons._read_raw()` = None on an unreadable file, `restore_job()` validates the
+  id and the job, `managed_lines()` skips unsafe ids; `maxxingStats.rewind()`; SPA fallback 404 under `assets/`,
+  `sw.js` never caches HTML for `/assets/`; `fold()` copies `tasks` once per fold; touch sizes (`pointer-coarse`).
+
 ## 2.0.0-alpha.99 - 2026-10-25
 
 Team (`team_page`, off by default; plan: chats between people, never between Claudes).
