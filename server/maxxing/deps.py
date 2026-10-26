@@ -1199,7 +1199,7 @@ def notify_vulnerable(result: dict) -> bool:
         return False                                   # already reported (same advisories)
     try:
         from .telegram import gateway
-        gateway.notify_cron(f"Known vulnerability in {len(lines)} dependency(ies) of Harness Maxxing:\n" + "\n".join(lines[:10]))
+        gateway.system_alert(f"Known vulnerability in {len(lines)} dependency(ies) of Harness Maxxing:\n" + "\n".join(lines[:10]))
     except Exception:  # noqa: BLE001 - Telegram is optional
         pass
     return True

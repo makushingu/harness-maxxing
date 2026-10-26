@@ -1132,17 +1132,40 @@ def check_telegram(cfg: dict) -> Check:
     chat = (st or {}).get("chat") or ({"id": tg.get("chat_id")} if tg.get("chat_id") else None)
     if not configured:
         return _c("telegram", INFO, "Telegram not configured (optional)", "", "Settings -> Telegram")
+    st = st or {}
+    if st.get("poll_error_code") == "token_rejected":
+        return _c("telegram", WARN, "Telegram rejected the bot token: the bot is offline", str(st.get("poll_error") or ""),
+                  "Settings -> Telegram -> enter the new token from @BotFather")
     if not chat:
+        link = st.get("link") or {}
+        if link and not link.get("expired"):
+            return _c("telegram", INFO, "Telegram bot set, link waiting for /start in Telegram", "",
+                      "open the link shown in Settings -> Telegram")
         return _c("telegram", WARN, "Telegram bot set but no chat linked", "", "Settings -> Telegram -> Link")
     if not tg.get("user_ids"):
         return _c("telegram", WARN, "Telegram chat linked without its owner: the bot answers nobody",
                   "linked by hand or by a very old version", "Settings -> Telegram -> Link again")
-    err = (st or {}).get("last_error")
     two = " · two-step sign-in on" if tg.get("two_factor") else ""
+    age = st.get("last_poll_age")
+    seen = "never" if age is None else f"{int(age)} s ago" if age < 120 else f"{int(age // 60)} min ago"
+    if st and not st.get("running", True):
+        return _c("telegram", WARN, "Telegram linked but the server is not reading its messages" + two,
+                  f"poller stopped; last answer from Telegram {seen}"
+                  + (f"; {st['poll_error']}" if st.get("poll_error") else ""),
+                  f"systemctl restart {SERVICE} ; maxxing telegram status")
+    if st.get("poll_error"):
+        return _c("telegram", WARN, "Telegram linked, the poller reports an error" + two, str(st["poll_error"]),
+                  "maxxing telegram test")
+    if age is not None and age > 300:
+        return _c("telegram", WARN, f"Telegram linked but no answer from Telegram for {int(age // 60)} min" + two,
+                  "the poller runs but getUpdates has not succeeded lately", "maxxing telegram test")
+    err = st.get("sync_error") if ("sync_error" in st or "poll_error" in st) else st.get("last_error")
     if err:
-        return _c("telegram", WARN, "Telegram linked, last error reported" + two, str(err),
+        return _c("telegram", WARN, "Telegram linked, last thread sync failed" + two, str(err),
                   "maxxing telegram test" + (" (sign-in blocked? maxxing 2fa off)" if two else ""))
-    return _c("telegram", OK, f"Telegram linked (chat {chat.get('title') or chat.get('id')}){two}")
+    note = " · threads off (Threaded Mode in @BotFather)" if st.get("topics_notice") else ""
+    return _c("telegram", OK, f"Telegram linked (chat {chat.get('title') or chat.get('id')}){two}{note}",
+              f"last answer from Telegram {seen}" if age is not None else "")
 
 
 def backup_info(cfg: dict) -> dict:
@@ -1584,7 +1607,7 @@ def check_update(branch: str | None = None) -> dict:
 
 
 def notify_update(info: dict) -> bool:
-    """Telegram message (Crons thread) about an available update; no-op when not configured."""
+    """Telegram message ("Alerts" thread) about an available update; no-op when not configured."""
     from . import feed
     feed.system(f"Update available: {info['latest']}", f"Installed: {info['current']}. Open the topic {update_topic()} "
                 "and say: update.", "info", "system", f"/sessions?path=projects/{update_topic().replace('/', '/topics/')}",
@@ -1595,8 +1618,7 @@ def notify_update(info: dict) -> bool:
             + (f" ({url}/sessions)" if url else "") + " and say: update")
     try:
         from .telegram import gateway
-        gateway.notify_cron(text)
-        return True
+        return gateway.system_alert(text, loud=False)
     except Exception:  # noqa: BLE001 - never fail the check because of Telegram
         return False
 
@@ -1753,7 +1775,7 @@ def _notify(text: str) -> None:
     feed.system("Update needs attention", text, "warning", "system", f"/sessions?path=projects/{update_topic().replace('/', '/topics/')}")
     try:
         from .telegram import gateway
-        gateway.notify_cron(text)
+        gateway.system_alert(text)
     except Exception:  # noqa: BLE001 - Telegram is optional
         pass
 
