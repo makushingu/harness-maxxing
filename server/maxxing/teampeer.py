@@ -12,7 +12,9 @@ Connecting (one-time invitation, the code never travels):
 Requests between servers: headers X-Team-From / -Time / -Nonce / -Sig, Sig = HMAC(K, method|path|from|to|time|nonce|
 sha256(body)); refused when the time is off by more than 5 min, the nonce was seen, or no key of that sender checks.
 Groups (no host): the creator sends the group to every member with, for each other member, a key for that pair (unless
-they are already contacts); each member then sends its events straight to every other member.
+they are already contacts: a key handed by someone else is never stored for a contact); each member then sends its
+events straight to every other member. A group key only signs messages, votes and reactions of its own group, and only
+its files: never contact events (accept, refuse, bye, profile) nor a group change.
 Files stay on the sender's server: the event carries their ids, every member downloads them with a signed GET.
 Outgoing requests go only to https addresses with public IPs (`team_insecure` / MAXXING_TEAM_INSECURE=1: local tests).
 """
@@ -152,7 +154,7 @@ def _load() -> dict:
     if not isinstance(doc, dict):
         doc = {}
     doc.setdefault("peers", {})       # address -> {key, status, name, emoji, color, fingerprint, last_seen, group_keys}
-    doc.setdefault("invites", [])     # [{hash, expires}]
+    doc.setdefault("invites", [])     # [{code, expires}]
     doc.setdefault("files", {})       # file id -> {path, chat, name, size, mime}
     doc.setdefault("outbox", [])      # [{id, to, event, tries, next, created, chat, msg}]
     return doc
@@ -261,6 +263,9 @@ def join(invitation: str) -> dict:
         r = httpx.post(f"{addr}/api/team-peer/hello", json=body, timeout=TIMEOUT, follow_redirects=False)
     except httpx.HTTPError as e:
         raise PeerError(502, "unreachable", f"{addr} does not answer ({type(e).__name__})") from None
+    if r.status_code == 409:
+        raise PeerError(409, "already_connected", f"{addr} already has you as a contact or a request: ask them to remove "
+                                                  "you, then use a new invitation")
     if r.status_code != 200:
         msg = "The invitation was refused (used, expired or wrong)" if r.status_code in (403, 404, 410) else f"{addr} answered {r.status_code}"
         raise PeerError(400 if r.status_code < 500 else 502, "refused", msg)
@@ -286,6 +291,9 @@ def _mac_b(key: bytes, *parts: str) -> str:
 
 def _rate(table: dict[str, list[float]], ip: str, limit: int, window: float) -> bool:
     now = time.time()
+    if len(table) > 5000:                                  # many senders: forget those quiet for a whole window
+        for k in [k for k, v in table.items() if not v or now - v[-1] >= window]:
+            del table[k]
     hits = [t for t in table.get(ip, []) if now - t < window]
     table[ip] = hits
     return len(hits) >= limit
@@ -310,13 +318,18 @@ def hello(body: dict, ip: str) -> dict:
         if to != me or not found or frm == me:
             _fails.setdefault(ip, []).append(now)
             raise PeerError(403, "refused", "Unknown or expired invitation")
+        old = doc["peers"].get(frm, {})
+        if old.get("status") in ("accepted", "waiting", "request"):
+            # The key of a contact is never replaced through an invitation: whoever got the invitation could
+            # otherwise speak as that contact (and cut the real one off). Remove the contact first.
+            raise PeerError(409, "already_connected", "Already connected with this address: remove it first")
+        if not insecure():
+            _check_target(frm)                             # an address we could never answer (or refuse) is not stored
         doc["invites"].remove(found)
         key0 = _unb64(found["code"])
         nonce_a = _b64(secrets.token_bytes(16))
         key = _unb64(_mac_b(key0, "key", me, frm, nonce_a, nonce_b))
-        old = doc["peers"].get(frm, {})
-        doc["peers"][frm] = {**old, **_clean_profile(body.get("profile")), "key": _b64(key),
-                             "status": "accepted" if old.get("status") == "accepted" else "request",
+        doc["peers"][frm] = {**old, **_clean_profile(body.get("profile")), "key": _b64(key), "status": "request",
                              "fingerprint": fingerprint(key), "since": now, "last_seen": now}
         _save(doc)
     return {"nonce": nonce_a, "proof": _mac(key0, "welcome", me, frm, nonce_a, nonce_b), "profile": _profile()}
@@ -346,8 +359,7 @@ def forget(address: str) -> None:
     address = normalize(address)
     with _lock:
         doc = _load()
-        p = doc["peers"].pop(address, None)
-        doc["outbox"] = [o for o in doc["outbox"] if o["to"] != address]
+        p = _drop_link(doc, address)
         _save(doc)
     if p and p.get("status") == "accepted":
         try:
@@ -356,17 +368,25 @@ def forget(address: str) -> None:
             pass
 
 
+def _drop_link(doc: dict, address: str) -> dict | None:
+    """The contact link with an address goes (caller holds the lock and saves). Shared groups stay: it becomes a
+    group member again, and only what goes to those groups stays in the outbox."""
+    p = doc["peers"].pop(address, None)
+    gk = (p or {}).get("group_keys") or {}
+    doc["outbox"] = [o for o in doc["outbox"] if o["to"] != address or (o.get("chat") or "") in gk]
+    if gk:
+        doc["peers"][address] = {k: v for k, v in p.items() if k not in ("key", "fingerprint", "since")} | {"status": "group"}
+    return p
+
+
 # ---- signing --------------------------------------------------------------------------------------------------
-def _keys_for(p: dict, chat: str | None = None) -> list[bytes]:
-    keys = []
+def _scopes(p: dict) -> list[tuple[str, bytes]]:
+    """(scope, key) a sender may sign with: "" = its contact link, else the id of the one group the key is for."""
+    out = []
     if p.get("key") and p.get("status") in ("accepted", "waiting", "request"):
-        keys.append(_unb64(p["key"]))
-    gk = p.get("group_keys") or {}
-    if chat and chat in gk:
-        keys.append(_unb64(gk[chat]))
-    elif not chat:
-        keys += [_unb64(k) for k in gk.values()]
-    return keys
+        out.append(("", _unb64(p["key"])))
+    out += [(cid, _unb64(k)) for cid, k in (p.get("group_keys") or {}).items()]
+    return out
 
 
 def _sign(key: bytes, method: str, path: str, frm: str, to: str, body: bytes) -> dict:
@@ -375,8 +395,9 @@ def _sign(key: bytes, method: str, path: str, frm: str, to: str, body: bytes) ->
     return {"X-Team-From": frm, "X-Team-Time": ts, "X-Team-Nonce": nonce, "X-Team-Sig": sig}
 
 
-def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> str:
-    """-> the sender's address, or PeerError 401/403/429."""
+def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> tuple[str, str]:
+    """-> (the sender's address, scope: "" = signed with its contact key, else the group its key is limited to),
+    or PeerError 401/403/429."""
     me = own_address()
     with _lock:
         if _rate(_hits, ip, INBOX_PER_MIN, 60):
@@ -398,11 +419,12 @@ def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> str:
             raise PeerError(401, "replay", "Request already seen")
         p = _load()["peers"].get(frm)
         digest = hashlib.sha256(body).hexdigest()
-        ok = p and any(hmac.compare_digest(sig, _mac(k, method, path, frm, me, str(ts), nonce, digest)) for k in _keys_for(p))
-        if not ok:
+        scope = next((s for s, k in _scopes(p or {})
+                      if hmac.compare_digest(sig, _mac(k, method, path, frm, me, str(ts), nonce, digest))), None)
+        if scope is None:
             raise PeerError(403, "unknown", "Unknown sender")
         _nonces[f"{frm}|{nonce}"] = now
-        return frm
+        return frm, scope
 
 
 def touch(address: str) -> None:
@@ -413,10 +435,13 @@ def touch(address: str) -> None:
             config.write_json(_path(), doc, mode=0o600)
 
 
-def receive(frm: str, event: dict) -> dict:
-    """An event from a verified sender: contact life here, chat events in team.apply_remote()."""
+def receive(frm: str, event: dict, scope: str = "") -> dict:
+    """An event from a verified sender: contact life here, chat events in team.apply_remote(). `scope`: the group a
+    group key is limited to (see verify)."""
     from . import team
     kind = event.get("type")
+    if scope and (kind not in ("message", "vote", "react") or str(event.get("chat") or "") != scope):
+        raise PeerError(403, "forbidden", "A group key only works in its own group")
     with _lock:
         doc = _load()
         p = doc["peers"].get(frm) or {}
@@ -428,7 +453,7 @@ def receive(frm: str, event: dict) -> dict:
             return {"ok": True}
         if kind in ("refuse", "bye"):
             if p.get("status") in ("waiting", "accepted", "request"):
-                doc["peers"].pop(frm, None)
+                _drop_link(doc, frm)
                 _save(doc)
             return {"ok": True}
         if kind == "profile" and p.get("status") == "accepted":
@@ -436,19 +461,21 @@ def receive(frm: str, event: dict) -> dict:
             _save(doc)
             return {"ok": True}
     touch(frm)
-    team.apply_remote(frm, p.get("status") == "accepted", event)
+    team.apply_remote(frm, p.get("status") == "accepted" and not scope, event)
     return {"ok": True}
 
 
 def add_group_peer(address: str, chat: str, key: str, profile: dict) -> None:
-    """A member of a group we were added to: we may talk with it about that chat only."""
+    """A member of a group we were added to: we may talk with it about that chat only. A contact (or a pending
+    request) keeps its own link key: a key handed by the group's creator would let the creator speak as it."""
     address = normalize(address)
     with _lock:
         doc = _load()
         p = doc["peers"].setdefault(address, {"status": "group"})
+        if p.get("status") != "group":
+            return
         p.setdefault("group_keys", {})[chat] = key
-        if p.get("status") == "group":
-            p.update(_clean_profile(profile))
+        p.update(_clean_profile(profile))
         _save(doc)
 
 
@@ -476,7 +503,8 @@ def _post(address: str, event: dict, key: bytes) -> httpx.Response:
     return httpx.post(address + path, content=body, headers=headers, timeout=TIMEOUT, follow_redirects=False)
 
 
-def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: bytes | None = None) -> bool:
+def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: bytes | None = None) -> bool | None:
+    """True = delivered, False = to retry, None = never deliverable (no key any more)."""
     try:
         r = _post(_check_target(address), event, key or _key_to(address, event.get("chat")))
         if r.status_code == 200:
@@ -484,6 +512,10 @@ def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: b
         err = f"{address} answered {r.status_code}"
     except httpx.HTTPError as e:
         err = f"{address} does not answer ({type(e).__name__})"
+    except PeerError as e:                     # no key any more, or the address does not resolve right now
+        if raise_on_error:
+            raise
+        return None if e.code == "no_key" else False
     if raise_on_error:
         raise PeerError(502, "unreachable", err)
     return False
@@ -504,33 +536,46 @@ def send(addresses: list[str], event: dict, msg: str | None = None) -> None:
 
 
 def _run_outbox() -> None:
-    from . import team
     while True:
         _wake.wait(5)
         _wake.clear()
         try:
-            if not readiness()["ok"]:
-                continue
-            now = time.time()
-            with _lock:
-                due = [o for o in _load()["outbox"] if o["next"] <= now]
-            for o in due:
-                ok = _deliver_now(o["to"], o["event"])
-                with _lock:
-                    doc = _load()
-                    cur = next((x for x in doc["outbox"] if x["id"] == o["id"]), None)
-                    if cur is None:
-                        continue
-                    if ok or now - cur["created"] > OUTBOX_DAYS * 86400:
-                        doc["outbox"].remove(cur)
-                    else:
-                        cur["tries"] += 1
-                        cur["next"] = now + RETRY[min(cur["tries"] - 1, len(RETRY) - 1)]
-                    config.write_json(_path(), doc, mode=0o600)
-                if ok and o.get("msg"):
-                    team.delivered(o["chat"], o["msg"], pid(o["to"]))
+            if readiness()["ok"]:
+                _outbox_round()
         except Exception:                      # never let the worker die
             log.exception("team outbox")
+
+
+def _outbox_round() -> None:
+    """One pass over the due events. A failed address waits for its next try, the others still go."""
+    from . import team
+    now = time.time()
+    with _lock:
+        due = [o for o in _load()["outbox"] if o["next"] <= now]
+    down: set[str] = set()                     # failed this round: its other events wait
+    for o in due:
+        if o["to"] in down:
+            continue
+        try:
+            ok = _deliver_now(o["to"], o["event"])
+        except Exception:                      # one bad entry never stops the others
+            log.exception("team outbox entry %s", o.get("id"))
+            ok = False
+        if ok is False:
+            down.add(o["to"])
+        with _lock:
+            doc = _load()
+            cur = next((x for x in doc["outbox"] if x["id"] == o["id"]), None)
+            if cur is None:
+                continue
+            if ok is not False or now - cur["created"] > OUTBOX_DAYS * 86400:
+                doc["outbox"].remove(cur)      # delivered, never deliverable (None) or too old
+            else:
+                cur["tries"] += 1
+                cur["next"] = now + RETRY[min(cur["tries"] - 1, len(RETRY) - 1)]
+            config.write_json(_path(), doc, mode=0o600)
+        if ok and o.get("msg"):
+            team.delivered(o["chat"], o["msg"], pid(o["to"]))
 
 
 def start() -> None:
@@ -550,35 +595,44 @@ def share_file(path: str, chat: str, meta: dict) -> str:
     return fid
 
 
-def file_for(frm: str, fid: str) -> dict:
-    """A file we shared, asked by a verified member of its chat."""
+def file_for(frm: str, fid: str, scope: str = "") -> dict:
+    """A file we shared, asked by a verified member of its chat (with a group key: a file of that group only)."""
     from . import team
     with _lock:
         f = _load()["files"].get(fid)
-    if not f or not team.is_member(f["chat"], pid(frm)) or not Path(f["path"]).is_file():
+    if not f or (scope and f["chat"] != scope) or not team.is_member(f["chat"], pid(frm)) or not Path(f["path"]).is_file():
         raise PeerError(404, "not_found", "No such file")
     return f
 
 
-def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str) -> bool:
-    """Download a file of a member (signed GET), at most max_bytes. False on any failure."""
+FETCH_DEADLINE = 30 * 60                                   # a download that takes longer is dropped
+
+
+def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, reserve: int = 0) -> bool:
+    """Download a file of a member (signed GET) into `dest`, at most max_bytes, leaving `reserve` bytes free on the
+    disk, within FETCH_DEADLINE. False on any failure (nothing left behind but `dest` as the caller made it)."""
+    from .uploads import free_bytes
     path = f"/api/team-peer/files/{fid}"
+    tmp = dest.with_name(dest.name + ".part")
+    end = time.monotonic() + FETCH_DEADLINE
     try:
         headers = _sign(_key_to(address, chat), "GET", path, own_address(), address, b"")
         with httpx.stream("GET", _check_target(address) + path, headers=headers, timeout=60, follow_redirects=False) as r:
             if r.status_code != 200:
                 return False
-            n = 0
-            tmp = dest.with_suffix(dest.suffix + ".part")
+            n = checked = 0
             with open(tmp, "wb") as out:
                 for chunk in r.iter_bytes(1 << 16):
                     n += len(chunk)
-                    if max_bytes and n > max_bytes:
-                        out.close()
-                        tmp.unlink(missing_ok=True)
-                        return False
+                    if (max_bytes and n > max_bytes) or time.monotonic() > end:
+                        raise OSError("too large or too slow")
+                    if n - checked >= 32 << 20 or checked == 0:  # the disk, now and every 32 MB
+                        checked = n
+                        if free_bytes(dest.parent) - len(chunk) < reserve:
+                            raise OSError("disk full")
                     out.write(chunk)
-            tmp.rename(dest)
+            tmp.replace(dest)
             return True
     except (httpx.HTTPError, PeerError, OSError):
+        tmp.unlink(missing_ok=True)
         return False
