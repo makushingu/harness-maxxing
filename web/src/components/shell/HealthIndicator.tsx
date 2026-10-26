@@ -55,7 +55,7 @@ export function HealthSummary({ compact }: { compact?: boolean }) {
                     type="button"
                     onClick={() => mark.mutate({ id: i.id!, seen: !i.seen })}
                     aria-label={i.seen ? t('health.unsee') : t('health.markSeen')}
-                    className="-my-0.5 flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="-my-0.5 flex h-6 shrink-0 pointer-coarse:h-10 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     {i.seen ? <Undo2 className="size-3.5" /> : <><Check className="size-3.5" /> {t('health.markSeen')}</>}
                   </button>

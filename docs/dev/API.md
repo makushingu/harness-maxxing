@@ -126,7 +126,9 @@ Session = {
 | POST | `/api/uploads?path=<topic path>` | multipart `file` (multi) | `{files:[{path, name, size, mime}]}` saved in `<topic>/attachments/YYYY-MM/` · each file `413 too_large` over `upload_max_mb`, `507 disk_full` when it would leave less than `upload_min_free_mb` free on the destination disk (files saved before it in the same request are kept); the whole request is capped too (see Conventions) |
 
 `from`/`next`/`start`/`before` = byte offsets in the raw log (always line boundaries). Backward reads scan at
-most 64 MB per call (then `more_before` with the `start` reached). The runner clips tool outputs before
+most 64 MB per call (then `more_before` with the `start` reached). A `task` whose `task_started` line is before the
+page gets that line's `kind`/`background`/`description`/`agent_type` on its first event of the page (looked up at
+most 32 MB further back). The runner clips tool outputs before
 writing them (2 000 characters per tool result, images → `[image]`, Write/Edit inputs beyond 20 kB; the block
 gets `mx_clipped`), keeps only `cwd, session_id, model, permissionMode, apiKeySource, claude_code_version,
 output_style, fast_mode_state, mcp_servers, uuid` of `system/init` lines (the tool / skill / slash-command

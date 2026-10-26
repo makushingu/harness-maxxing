@@ -72,7 +72,10 @@ def _handler(a) -> int:
             print("no removed jobs")
         for d in rows:
             j = d["job"]
-            when = dt.datetime.fromtimestamp(d.get("at") or 0, zone).strftime("%Y-%m-%d %H:%M")
+            try:
+                when = dt.datetime.fromtimestamp(d["at"], zone).strftime("%Y-%m-%d %H:%M")
+            except (OverflowError, OSError, ValueError):
+                when = "????-??-?? ??:??"
             print(f"{j['id']}  {when}  {j.get('name', '')}  - {d.get('reason', '')}")
         return 0
     if a.cron_cmd == "restore":

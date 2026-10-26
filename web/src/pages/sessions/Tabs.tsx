@@ -79,12 +79,12 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
               role="tab"
               aria-selected={on}
               className={cn(
-                'group flex h-8 max-w-56 shrink-0 items-center gap-1.5 rounded-full border pr-1 pl-2.5 text-[13px] transition-colors',
+                'group flex h-8 max-w-56 shrink-0 items-center gap-1.5 rounded-full border pr-1 pl-2.5 pointer-coarse:h-10 pointer-coarse:pr-0 text-[13px] transition-colors',
                 on ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               data-tab={c.key}
             >
-              <button type="button" className="flex min-w-0 items-center gap-1.5 outline-none focus-visible:underline" onClick={() => onPick(c)} title={s ? topicLabel(s.path, t('sessions.root')) : undefined}>
+              <button type="button" className="flex min-w-0 items-center gap-1.5 outline-none pointer-coarse:self-stretch focus-visible:underline" onClick={() => onPick(c)} title={s ? topicLabel(s.path, t('sessions.root')) : undefined}>
                 {s?.state === 'running' ? (
                   <StatusDot tone="running" pulse label={t('sessions.state.running')} />
                 ) : s?.state === 'error' ? (
@@ -102,7 +102,7 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
                 type="button"
                 aria-label={t('tabs.close')}
                 onClick={() => close(c)}
-                className={cn('flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground', !on && 'md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100')}
+                className={cn('flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground pointer-coarse:size-10 hover:bg-foreground/10 hover:text-foreground', !on && 'md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100')}
               >
                 <X className="size-3.5" />
               </button>

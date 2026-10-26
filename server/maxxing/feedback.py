@@ -7,6 +7,7 @@ sent: no logs, no files, no session content.
 """
 from __future__ import annotations
 
+import http.client
 import re
 import urllib.error
 
@@ -14,6 +15,7 @@ from . import config, license, register
 
 TYPES = ("bug", "idea", "other")
 MAX_MESSAGE = 4000
+MAX_EMAIL = 254                    # as register.save
 _EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 LANGS = ("en", "fr", "es", "de", "it", "pt")
 
@@ -32,7 +34,7 @@ def defaults() -> dict:
 def send(email: str, kind: str, message: str) -> dict:
     """Send one message; raises FeedbackError (code, message, http status) when it did not go."""
     email, message = (email or "").strip(), (message or "").strip()
-    if not _EMAIL.match(email):
+    if len(email) > MAX_EMAIL or not _EMAIL.match(email):
         raise FeedbackError("invalid_email", "Enter a valid email address")
     if len(message) < 3:
         raise FeedbackError("message_required", "Write your message")
@@ -46,7 +48,7 @@ def send(email: str, kind: str, message: str) -> dict:
             "lang": lang if lang in LANGS else "en", "name": ((cfg.get("profile") or {}).get("name") or "")[:100]}
     try:
         r = register._call("POST", "/v1/feedback", body)
-    except (urllib.error.URLError, OSError, ValueError):
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError):
         raise FeedbackError("unreachable", "The Harness Maxxing cloud cannot be reached, try again later", 502) from None
     if not r.get("ok"):
         code = r.get("error") or "failed"
