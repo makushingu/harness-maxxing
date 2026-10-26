@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.101 - 2026-10-26
+
+Changes:
+- **New installs: the commits and pull requests Claude makes carry no AI credit** (no "Co-Authored-By" line, no
+  "Generated with" signature): the work is yours. Set when Harness is installed, only if you had chosen nothing;
+  existing installs keep their setting (Claude Code's `attribution` in `~/.claude/settings.json`).
+
 ## 2.0.0-alpha.100 - 2026-10-26
 
 Changes:
