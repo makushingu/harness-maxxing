@@ -655,7 +655,7 @@ def test_update_check_notify(env, released, monkeypatch, capsys):
     import types
     sent = []
     gw = types.ModuleType("maxxing.telegram.gateway")
-    gw.notify_cron = sent.append
+    gw.system_alert = lambda text, loud=True: sent.append(text) or True       # "Alerts" thread
     monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
     import maxxing.telegram as tpkg
     monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
@@ -669,7 +669,7 @@ def test_update_check_notify(env, released, monkeypatch, capsys):
     assert "https://ui.example.com" in sent[0]
     assert "Telegram notified" in capsys.readouterr().out
     # a broken notifier never fails the check
-    gw.notify_cron = lambda text: (_ for _ in ()).throw(RuntimeError("down"))
+    gw.system_alert = lambda text, loud=True: (_ for _ in ()).throw(RuntimeError("down"))
     assert run_cli("update", "--check", "--notify") == 0
 
 

@@ -182,6 +182,7 @@ class Runner:
                 m["pid"], m["state"] = None, ("error" if failed else "idle")
                 m.pop("runner_caps", None)
                 m.pop("turn_id", None)
+                m.pop("turn_refs", None)
                 return None
             item = q.pop(0)
             item.pop("held", None)
@@ -199,6 +200,7 @@ class Runner:
             self.stop_flag.clear()
             self.interrupted = False
             m["turn_kind"] = item.get("kind") or "user"
+            m["turn_refs"] = list(item.get("refs") or [])     # the caller's ids of this message (Telegram)
             self.current = item
         if idle:
             hours, tokens = idle
@@ -530,6 +532,9 @@ class Runner:
                 m["last_text"] = a.final_text.strip()[:200]
             m["error"] = err
             m["updated"] = m["finished_at"] = time.time()
+            # which item this turn ran: on_turn_end callbacks answer only their own turns (never a summary)
+            m["last_turn"] = {"id": self.turn_id, "kind": item.get("kind") or "user",
+                              "source": item.get("source") or "web", "refs": list(item.get("refs") or [])}
             if not m.get("title"):
                 m["title"] = " ".join((item.get("text") or "").split())[:60] or "Untitled"
             if m.get("cron") and err is None and not m.get("queue"):

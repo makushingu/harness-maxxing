@@ -59,7 +59,7 @@ Language) if you always speak the same one, or for very short or noisy notes.
   took.
 
 ## On Telegram
-Send a **voice note**, an **audio file** or a **round video note** in a session thread:
+Send a **voice note** or a **round video note** in a session thread (an audio file sent as a file - music, a recording - is passed as an attachment, not transcribed):
 1. the bot replies with `🎤 <transcript>`,
 2. the transcript is sent to the topic's session as your message (the audio file is attached, saved
    under `<topic>/attachments/voice/YYYY-MM/`),

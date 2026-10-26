@@ -322,12 +322,18 @@ def _send(c: Challenge) -> bool:
     markup = client.keyboard([[(_w("allow"), f"a:{c.id}:y"), (_w("deny"), f"a:{c.id}:n")]])
     params = {"chat_id": chat, "message_thread_id": tid, "text": c.text, "parse_mode": "HTML",
               "reply_markup": markup, "link_preview_options": {"is_disabled": True}}
-    for _ in range(2):
+    reopened = False
+    for _ in range(3):
         try:
             res = client.call_sync(tok, "sendMessage", **params)
             c.msg = (chat, int(res["message_id"]))
             return True
         except client.TelegramError as e:
+            if gateway._thread_closed(e) and params.get("message_thread_id") and not reopened:  # noqa: SLF001
+                reopened = True                                        # closed by the user: open it again
+                if not gateway.reopen_sync(tok, chat, params["message_thread_id"]):
+                    params["message_thread_id"] = None
+                continue
             if gateway._thread_gone(e) and params.get("message_thread_id"):    # noqa: SLF001
                 gateway._forget_thread(params["message_thread_id"])           # noqa: SLF001
                 params["message_thread_id"] = None

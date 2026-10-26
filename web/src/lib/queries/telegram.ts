@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import type { Ok, TelegramLinkStart, TelegramLinkState, TelegramSettings, TelegramStatus, TelegramSyncResult, TelegramTokenResult } from '../types'
+import type { Ok, TelegramLinkStart, TelegramLinkState, TelegramSettings, TelegramStatus, TelegramSyncResult, TelegramTestResult, TelegramTokenResult } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -22,7 +22,20 @@ export function useTelegramToken() {
   return useMut((token: string) => api.post<TelegramTokenResult>('/api/telegram/token', { token }), { invalidate: inv, errorToast: false })
 }
 export function useTelegramLinkStart() {
-  return useMut(() => api.post<TelegramLinkStart>('/api/telegram/link'), {})
+  const qc = useQueryClient()
+  return useMut(() => api.post<TelegramLinkStart>('/api/telegram/link'), {
+    // the new code shows at once (the status query carries it, so leaving the page does not lose it)
+    onSuccess: (l) => {
+      const link = { ...l, expired: false }
+      qc.setQueryData(qk.telegram.status, (s: TelegramStatus | undefined) => (s ? { ...s, linking: true, link } : s))
+      qc.setQueryData(qk.telegram.link, (s: TelegramLinkState | undefined) => ({ linked: false, chat: null, ...s, pending: link }))
+    },
+    invalidate: [qk.telegram.all],
+  })
+}
+/** Removes the webhook of the bot being saved (the token is then saved again). */
+export function useTelegramRemoveWebhook() {
+  return useMut((token: string) => api.post<Ok>('/api/telegram/webhook/remove', { token }), { errorToast: false })
 }
 export function useTelegramSync() {
   return useMut(() => api.post<TelegramSyncResult>('/api/telegram/sync'), { invalidate: [...inv, qk.workspace] })
@@ -34,7 +47,7 @@ export function useTelegramSettings() {
   })
 }
 export function useTelegramTest() {
-  return useMut(() => api.post<Ok>('/api/telegram/test'), {})
+  return useMut(() => api.post<TelegramTestResult>('/api/telegram/test'), { invalidate: [qk.telegram.status] })
 }
 export function useTelegramUnlink() {
   return useMut(() => api.del<Ok>('/api/telegram'), { invalidate: inv })

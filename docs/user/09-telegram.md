@@ -8,8 +8,10 @@ program to install.
 
 - One bot, linked to **your** private chat only.
 - **One thread per open session** - the Telegram chat mirrors the Sessions page - plus *Crons*
-  (job reports), *Alerts* (sign-in alerts) and *Notifications* (the [notifications feed](feed): sales, orders,
-  your scripts… per the rules you set, posted by the bot itself, with an *Ask Harness* button). A thread is named `<project>/<topic> · <session title>`, with the project's emoji in front when it has one (project **…** menu in Sessions -> *Set an emoji…*), e.g. `🛒 acme/blog · Launch plan`. Changing the emoji renames the threads.
+  (job reports), *Alerts* (sign-in alerts, and problems of the server itself: an update that failed or was
+  rolled back, an update available, a known vulnerability, Claude Code that could not update; on by default,
+  setting `notify_system` of `PUT /api/telegram/settings`) and *Notifications* (the [notifications feed](feed): sales, orders,
+  your scripts… per the rules you set, posted by the bot itself, with an *Ask Harness* button). A thread is named `<project>/<topic> · <session title>`, with the project's emoji in front when it has one (project **…** menu in Sessions -> *Set an emoji…*), e.g. `🛒 acme/blog · Launch plan`. Changing only the emoji does not rename existing threads (each rename posts a notice in the chat); new threads get it.
 - A thread is the session itself: what you write on the phone appears in the web UI and you can
   continue there, and the other way round.
 - Write in the **main chat** (or create a thread) to start a new session: the bot asks in which topic.
@@ -18,27 +20,42 @@ program to install.
 
 1. In Telegram, open **@BotFather**, send `/newbot`, choose a name and a username ending in `bot`.
    Copy the token it gives you (`123456789:AA...`).
-2. In BotFather, open your bot's settings and **enable topics (threads) for private chats**, so
+2. In BotFather, send `/mybots`, pick your bot, then **Bot Settings -> Threaded Mode -> turn it on**, so
    each open session gets its own thread. Without it everything works in the main chat (use
-   `/topic` to choose which topic it talks to).
-3. Paste the token in Settings -> Telegram. The server checks it.
-4. Click **Link**, open the `t.me/<bot>?start=<code>` link on your phone and press **Start**. The
-   code is valid 15 minutes. From then on, messages from any other chat are ignored.
-5. Click **Sync threads** (afterwards it is automatic: see below).
+   `/topic` to choose which topic it talks to) and Settings -> Telegram shows a notice with a
+   **Retry** button.
+3. Paste the token in Settings -> Telegram and press **Verify token**. The server checks it, and checks
+   that no other program uses the bot (a webhook, or another program reading its messages).
+4. Click **Link my Telegram**, open the `t.me/<bot>?start=<code>` link on your phone (or scan the QR code)
+   and press **Start**. The code is valid 15 minutes (the countdown shows under it; then **New link**).
+   You can leave the page: the code is still there when you come back. From then on, messages from any
+   other chat are ignored.
+5. The threads are created right after linking (and kept in sync automatically: see below). Setup is done
+   as soon as the chat is linked.
 6. Choose the options: cron reports, sign-in alerts, [two-step sign-in](#two-step-sign-in), reply mode (*live progress*, the default = one
    status message updated while Claude works with its task list and each step, folded into a summary
-   at the end; *final answer* = only the answer). Press **Send test**.
+   at the end; *final answer* = only the answer). Press **Send a test message**: it sends a message
+   and checks that the server receives messages too (poller running, last answer from Telegram, no webhook).
+
+At every stage, **Change bot** takes the token of another bot (or a new token of the same bot) - nothing
+changes until it is verified - and, once linked, **Link another chat** replaces the linked chat.
+
+Cron reports arrive in *Crons*: a Claude job's answer is shown from its beginning, formatted like a normal reply
+(bold, lists, code; tables become one bullet per row), split over several messages and cut after about 12,000
+characters (the whole answer stays on the Crons page). A command job shows the end of its output, where errors
+are. Successful reports arrive silently; failures ring.
 
 ## Threads = open sessions
 
 | You do | Telegram |
 |---|---|
-| Open or start a session in the web UI | its thread appears (a few seconds later) |
+| Open or start a session in the web UI | its thread appears (a few seconds later; a new session waits for its short title, up to a minute, so the thread is named once) |
 | Rename a session | its thread is renamed |
 | **Archive** a session (session menu -> Archive), or send `/close` in its thread | its thread is deleted - the conversation stays in the web UI (Archived) |
 | Un-archive it | the thread comes back (new, empty) |
-| Write in the **main chat** | the bot asks *where* (topic buttons); the session is created there with its own thread and your message goes to it. No answer within 5 minutes: `general/inbox` |
+| Write in the **main chat** | the bot asks *where* (topic buttons); the session is created there with its own thread and your message goes to it (and the ones you write while it is being created). No answer within 5 minutes: `general/inbox`. A server restart meanwhile keeps the question and your messages |
 | Create a thread yourself | same question; that thread becomes the session's thread |
+| **Close** a thread in Telegram (not delete) | nothing changes: the next message for it reopens the same thread (no duplicate) |
 | Delete a thread by hand in Telegram | the session stays open (Telegram does not tell bots) and gets a new thread the next time it is used - e.g. you write in it from the web UI. To really close it: `/close` |
 | Write in a session from the **web UI** | optional (off by default): Settings -> Telegram -> *Show web conversations in Telegram* copies your message ("🖥 …") and Claude's answer into its thread, silently; the session's **bell** makes its answers ring on the phone |
 
@@ -47,14 +64,29 @@ Mirrored sessions: the ones you talk to (not those started by scheduled jobs - t
 7, 14, 30 or 90 days), at most 50. An older session simply gets its thread back when it is used
 again. The sync runs a few seconds after any change and every 10 minutes; nothing to schedule. If Telegram
 refuses to delete a thread for a moment (too many requests, no connection), the next sync deletes it.
-Renaming a session renames its thread: Telegram shows a small "topic renamed" line in the thread.
+Renaming a session renames its thread: Telegram shows a small "topic renamed" line in the thread. To keep the
+chat quiet, a new session's thread is renamed at most once in its first two minutes (the last name is applied
+after that). Choosing a shorter *Keep a thread for* asks for confirmation and says how many threads (with their
+messages) it deletes.
 
 ## Using it
 
 - Write in a session's thread: Claude answers in that thread. While it works you see "typing…" and,
-  for longer tasks, the live status message.
+  for longer tasks, the live status message. A message sent while the session is busy waits its turn and
+  gets its own answer (a turn started from the web UI or an automatic summary is never sent as the answer);
+  "typing…" stops as soon as the queue is stopped or cleared.
 - Send photos and files: they are saved in `<topic>/attachments/telegram/YYYY-MM/` and passed to
-  Claude with your caption.
+  Claude with your caption. An album is one message to Claude, and what you send right after it comes after
+  it. Audio files (music, recordings sent as files) are files too; only voice notes and round video notes are
+  transcribed. A caption is never a command: a photo captioned `/new` is a photo.
+- Replies, quotes and forwards keep their context: replying to a message (or quoting part of it) sends
+  Claude the quoted part in front of your text, a forwarded message says where it comes from, and links
+  hidden behind a word are passed as "word (link)".
+- A very long text that Telegram splits into several messages (over 4,096 characters) is put back together
+  and sent as one message.
+- Editing a message you already sent does nothing: the bot says so once - send a new message instead.
+- The bot answers in the language of the web UI (English or French), and the command menu is
+  translated.
 - Commands:
 
 | Command | Effect |
@@ -63,7 +95,7 @@ Renaming a session renames its thread: Telegram shows a small "topic renamed" li
 | `/sessions` | list the open sessions |
 | `/stop` | stop the running turn |
 | `/close` | close this session: archived (kept in the web UI) and its thread deleted |
-| `/model [id]` | show or change the model of the session |
+| `/model [id]` | show or change the model of the session (an id, a name such as `Sonnet 5.5`, or `opus` / `sonnet` / `haiku` for the newest of that family; an unknown name lists the choices) |
 | `/status` | state, model, cost, queue, link to the web UI |
 | `/topic` | (main chat, threads off) choose the topic |
 | `/help` | list the commands |
@@ -102,18 +134,27 @@ maxxing 2fa status          # on / off
 ## Troubleshooting
 
 ```bash
-maxxing telegram status     # bot, chat, threads, settings, last error
-maxxing telegram test       # sends a test message
+maxxing telegram status     # bot, chat, poller (running, last answer from Telegram), pending link, poll / sync errors, threads
+maxxing telegram test       # sends a test message and checks the receiving side (poller, webhook)
 ```
+
+Settings -> Telegram shows the same: **Gateway** (running / stopped), **Last answer from Telegram**,
+*Receiving messages* errors (the poller) apart from *Thread sync* errors.
 
 | Problem | Fix |
 |---|---|
-| Token rejected | revoked or mistyped: get a new one from BotFather (`/token`) and paste it again |
-| "Conflict: terminated by other getUpdates" | another program (an old bot, another server) uses the same bot: stop it or create a new bot |
-| Nothing answers | the message comes from another chat than the linked one: re-link |
-| Everything lands in one chat | topics not enabled for the bot in BotFather; enable, then Sync threads |
+| "Telegram rejected the bot token" | the token was revoked or replaced in BotFather (`/revoke`, `/token`): Settings -> Telegram shows the token field right away - paste the new token. Same bot: the chat and the threads are kept |
+| "This bot sends its messages to a webhook" | another program (n8n, Make, an old script…) receives the bot's messages through a webhook: press **Remove the webhook** (that program stops receiving them) or create a dedicated bot |
+| "Another program (n8n, Hermes, OpenClaw…) is already using this bot" | Telegram gives a bot's messages to one program only (error 409 Conflict): stop the other program, or create a bot dedicated to Harness Maxxing |
+| "This link expired or is not valid" in Telegram | the code is older than 15 minutes, or Start was pressed before the link was created: Settings -> Telegram -> **New link**, then open that link (or scan its QR code). A Start pressed before the link exists is ignored |
+| Nothing answers | the message comes from another chat than the linked one: **Link another chat** |
+| Everything lands in one chat ("Threads are disabled for this bot") | Threaded Mode is off for the bot: in BotFather `/mybots` -> your bot -> Bot Settings -> Threaded Mode, then **Retry** in Settings -> Telegram. Not an error: the main chat works meanwhile |
 | A session vanished from Telegram | archived (in the web UI: Sessions tree -> topic -> Archived), or idle longer than *Keep a thread for* - it comes back when you use it |
-| A special thread (Crons, Alerts) was deleted | Sync threads recreates it |
+| A special thread (Crons, Alerts) was deleted | **Sync threads** (Settings -> Telegram -> Threads) recreates it |
 | Two-step sign-in: no message, you cannot sign in | on the server: `maxxing 2fa off`, then sign in with the password |
 
-To disconnect: Settings -> Telegram -> **Unlink** (forgets the token and the chat).
+`maxxing doctor` warns when the bot is configured but the server is not reading its messages (poller
+stopped, or no answer from Telegram for 5 minutes), when the token was rejected, or when the last thread
+sync failed. Threads being off is shown as a note, not a warning.
+
+To disconnect: Settings -> Telegram -> **Disconnect Telegram** (forgets the token, the chat and the threads).

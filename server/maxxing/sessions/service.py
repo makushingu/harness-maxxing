@@ -184,6 +184,11 @@ def list_sessions(path: str | None = None, archived: bool | None = None) -> list
     return sorted(out, key=lambda s: s.get("updated") or 0, reverse=True)
 
 
+def session_exists(sid: str) -> bool:
+    """The session's file is there (get_session may still return None: unreadable just now)."""
+    return store.is_valid_id(sid) and store.meta_path(sid).exists()
+
+
 def get_session(sid: str) -> dict | None:
     m = store.read_cached(sid) if store.is_valid_id(sid) else None
     return public(m) if m else None
@@ -332,13 +337,17 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 
 
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
-                 hud: bool = False, voice_path: str | None = None) -> dict:
+                 hud: bool = False, voice_path: str | None = None, ref: str | None = None) -> dict:
+    """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
+    (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
     if not (text or "").strip() and not files and not audio:
         raise SessionError(400, "empty", "Empty message")
-    extra = {"hud": True} if hud else {}
+    extra: dict[str, Any] = {"hud": True} if hud else {}
+    if ref:
+        extra["refs"] = [str(ref)]
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)
@@ -479,7 +488,8 @@ def steer(sid: str) -> dict:
                        **({"voice": [v for x in mine for v in x.get("voice") or []]}
                           if any(x.get("voice") for x in mine) else {}),
                        **({"hud": True} if all(x.get("hud") for x in mine) else {}),
-                       **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}))
+                       **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
+                       **({"refs": refs} if (refs := [r for x in mine for r in x.get("refs") or []]) else {}))
         m["queue"] = [merged] + [x for i, x in enumerate(q) if i not in set(idx)]
         m["updated"] = time.time()
         pid, caps, turn = int(m.get("pid") or 0), m.get("runner_caps") or [], m.get("turn_id")
@@ -492,6 +502,17 @@ def steer(sid: str) -> dict:
         _signal(pid, signal.SIGUSR1 if "steer" in caps and turn else signal.SIGTERM)
     bus.invalidate("sessions")
     return {"steered": True, "interrupted": interrupt, "session": get_session(sid)}
+
+
+def live_refs(sid: str) -> set[str]:
+    """Refs (send_message `ref`) of the messages still to answer: queued, or in the turn running now."""
+    m = store.read(sid) if store.is_valid_id(sid) else None
+    if not m:
+        return set()
+    out = {str(r) for x in m.get("queue") or [] if isinstance(x, dict) for r in x.get("refs") or []}
+    if m.get("state") == "running":
+        out |= {str(r) for r in m.get("turn_refs") or []}
+    return out
 
 
 def _signal(pid: int, sig: int) -> None:
@@ -1047,6 +1068,12 @@ def release_handoff(sid: str) -> None:
         _spawn(sid)
 
 
+def _ended(s: dict, m: dict) -> dict:
+    """The Session given to on_turn_end callbacks, plus `last_turn`: which item the ended turn ran (id, kind,
+    source, refs) - not part of the API Session."""
+    return {**s, "last_turn": m.get("last_turn") if isinstance(m.get("last_turn"), dict) else {}}
+
+
 def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
     """One pass over the meta files -> (turn ends, sessions changed, workspace changed)."""
     ends: list[tuple[dict, dict | None]] = []
@@ -1089,7 +1116,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
             if not primed:                    # first pass: baseline - except turns that ended while the server was down
                 _known[sid] = cur
                 if s["state"] != "running" and _num(m.get("finished_at")) > since:
-                    ends.append((s, last_result(sid)))
+                    ends.append((_ended(s, m), last_result(sid)))
                 continue
             prev = (0, 0, "idle", False)      # new session: its turns all happened since
             ws_changed = True
@@ -1102,7 +1129,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
         # a turn ended, or failed to start (error without a new turn - also when it failed before this watcher
         # ever saw it running: systemd-run refusing within one pass)
         if cur[1] > prev[1] or (prev[2] != "error" and cur[2] == "error" and cur[1] == prev[1]):
-            ends.append((s, last_result(sid)))
+            ends.append((_ended(s, m), last_result(sid)))
     for sid in [k for k, until in _held.items() if k not in alive or until <= time.time()]:
         _held.pop(sid, None)
         if sid in alive:
