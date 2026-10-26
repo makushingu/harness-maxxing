@@ -34,6 +34,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import httpcore
 import httpx
 
 from . import bus, config
@@ -50,6 +51,7 @@ HELLO_FAILS = 5                                            # wrong invitations p
 INBOX_PER_MIN = 240                                        # requests per sender IP and minute
 
 _lock = threading.RLock()
+_STARTED = time.time()                                     # nonces live in memory: nothing signed before this is taken
 _nonces: dict[str, float] = {}
 _fails: dict[str, list[float]] = {}
 _hits: dict[str, list[float]] = {}
@@ -137,6 +139,40 @@ def _check_target(addr: str) -> str:
     if _ip_kind(urlsplit(addr).hostname or "") != "public":
         raise PeerError(400, "not_public", "This address is not reachable from the internet")
     return addr
+
+
+class _PublicBackend(httpcore.SyncBackend):
+    """Resolves the host once and connects to that very IP, refused unless public: a name that answers a public IP
+    to _check_target then 127.0.0.1 to the connection (DNS rebinding) never reaches this server. TLS still checks the
+    host name (httpcore passes it as server_hostname)."""
+
+    def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        try:
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except OSError as e:
+            raise httpcore.ConnectError(str(e)) from None
+        ips = [i[4][0] for i in infos]
+        if not ips or any(_ip_kind(ip) != "public" for ip in ips):
+            raise httpcore.ConnectError(f"{host} does not resolve to a public address")
+        return super().connect_tcp(ips[0], port, timeout, local_address, socket_options)
+
+
+_client_lock = threading.Lock()
+_public_client: httpx.Client | None = None
+
+
+def _http():
+    """What calls other servers: the plain httpx functions in insecure mode, else a client that only connects to the
+    public IP it checked."""
+    global _public_client
+    if insecure():
+        return httpx
+    with _client_lock:
+        if _public_client is None:
+            t = httpx.HTTPTransport()
+            t._pool._network_backend = _PublicBackend()
+            _public_client = httpx.Client(transport=t)
+        return _public_client
 
 
 def pid(address: str) -> str:
@@ -260,7 +296,7 @@ def join(invitation: str) -> dict:
     nonce_b = _b64(secrets.token_bytes(16))
     body = {"from": me, "to": addr, "nonce": nonce_b, "proof": _mac(key0, "hello", me, addr, nonce_b), "profile": _profile()}
     try:
-        r = httpx.post(f"{addr}/api/team-peer/hello", json=body, timeout=TIMEOUT, follow_redirects=False)
+        r = _http().post(f"{addr}/api/team-peer/hello", json=body, timeout=TIMEOUT, follow_redirects=False)
     except httpx.HTTPError as e:
         raise PeerError(502, "unreachable", f"{addr} does not answer ({type(e).__name__})") from None
     if r.status_code == 409:
@@ -410,7 +446,7 @@ def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> tuple
             raise PeerError(401, "unsigned", "Unsigned request") from None
         nonce, sig = headers.get("x-team-nonce", "")[:64], headers.get("x-team-sig", "")
         now = time.time()
-        if abs(now - ts) > CLOCK_SKEW or not nonce or not sig:
+        if abs(now - ts) > CLOCK_SKEW or ts < int(_STARTED) or not nonce or not sig:
             raise PeerError(401, "stale", "Request too old or unsigned")
         for n, t in list(_nonces.items()):
             if now - t > NONCE_TTL:
@@ -500,7 +536,7 @@ def _post(address: str, event: dict, key: bytes) -> httpx.Response:
     path = "/api/team-peer/inbox"
     body = json.dumps(event, separators=(",", ":")).encode()
     headers = _sign(key, "POST", path, me, address, body) | {"Content-Type": "application/json"}
-    return httpx.post(address + path, content=body, headers=headers, timeout=TIMEOUT, follow_redirects=False)
+    return _http().post(address + path, content=body, headers=headers, timeout=TIMEOUT, follow_redirects=False)
 
 
 def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: bytes | None = None) -> bool | None:
@@ -617,7 +653,7 @@ def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, re
     end = time.monotonic() + FETCH_DEADLINE
     try:
         headers = _sign(_key_to(address, chat), "GET", path, own_address(), address, b"")
-        with httpx.stream("GET", _check_target(address) + path, headers=headers, timeout=60, follow_redirects=False) as r:
+        with _http().stream("GET", _check_target(address) + path, headers=headers, timeout=60, follow_redirects=False) as r:
             if r.status_code != 200:
                 return False
             n = checked = 0

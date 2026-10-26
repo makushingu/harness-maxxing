@@ -32,6 +32,33 @@ def test_targets_must_be_public_https(mx, monkeypatch):
     assert teampeer._check_target("https://1.1.1.1/some/path") == "https://1.1.1.1"
 
 
+def test_dns_rebinding_never_reaches_a_local_address(mx, monkeypatch):
+    import socket
+    monkeypatch.delenv("MAXXING_TEAM_INSECURE", raising=False)
+    monkeypatch.setattr(teampeer, "_public_client", None, raising=False)
+    config.update_config(public_url="https://1.1.1.1")
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(4)
+    srv.setblocking(False)
+    port = srv.getsockname()[1]
+    answers = ["93.184.216.34"]                                  # checked once as public, then the name points here
+    real = socket.getaddrinfo
+
+    def fake(host, *a, **kw):
+        if host != "rebind.example.com":
+            return real(host, *a, **kw)
+        ip = answers.pop(0) if answers else "127.0.0.1"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+    monkeypatch.setattr(socket, "getaddrinfo", fake)
+    with pytest.raises(teampeer.PeerError) as e:
+        teampeer.join(f"https://rebind.example.com:{port}#" + teampeer._b64(b"k" * 32))
+    assert e.value.code == "unreachable"
+    with pytest.raises(BlockingIOError):
+        srv.accept()
+    srv.close()
+
+
 def _setup(monkeypatch):
     monkeypatch.setenv("MAXXING_TEAM_INSECURE", "1")
     for table in ("_fails", "_hits", "_nonces"):                 # rate limits and nonces of earlier tests
@@ -47,6 +74,17 @@ def _setup(monkeypatch):
 def _signed(key, body: bytes, frm="http://127.0.0.1:8802", path="/api/team-peer/inbox", **over):
     h = teampeer._sign(key, "POST", path, frm, "http://127.0.0.1:8801", body)
     return {**h, **over, "Content-Type": "application/json"}
+
+
+def test_a_request_signed_before_a_restart_is_refused(client, monkeypatch):
+    key = _setup(monkeypatch)
+    body = json.dumps({"type": "message", "chat": team.dm_id("http://127.0.0.1:8801", "http://127.0.0.1:8802"),
+                       "message": {"id": "m_0123abce", "at": time.time(), "text": "hi", "kind": "text"}}).encode()
+    h = _signed(key, body)
+    assert client.post("/api/team-peer/inbox", content=body, headers=h).status_code == 200
+    monkeypatch.setattr(teampeer, "_nonces", {})                  # a restart forgets the nonces seen
+    monkeypatch.setattr(teampeer, "_STARTED", time.time() + 1, raising=False)
+    assert client.post("/api/team-peer/inbox", content=body, headers=h).status_code == 401
 
 
 def test_inbox_signatures(client, monkeypatch):
