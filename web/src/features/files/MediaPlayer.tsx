@@ -1,7 +1,8 @@
 // Light video / audio player in the app's style (theme accent), no dependency.
 // - video: poster (server thumbnail) shown at once, big play button, controls that fade out while playing;
 // - progress bar with buffered range and hover time, drag to seek (mouse, touch, keyboard);
-// - volume / mute, speed (0.5x-4x), picture-in-picture, fullscreen;
+// - volume / mute, speed (0.5x-4x), picture-in-picture, fullscreen; on a touch screen the volume button opens the
+//   slider (a second tap mutes); where the browser ignores `volume` (iPhone, iPad) the slider drives a Web Audio gain;
 // - keys when focused: Space/K play, ←/→ ±5 s, J/L ±10 s, ↑/↓ volume, M mute, F fullscreen, 0-9 jump, </> speed.
 // `preload="metadata"`: nothing but the header is downloaded before Play (Range requests on /raw).
 // - video quality (videoQuality.ts): Auto / Original / lighter copies made by the server; switching keeps the time.
@@ -17,6 +18,42 @@ import { basename } from './kinds'
 import { useVideoQuality, type VideoInfo } from './videoQuality'
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]
+
+/** iPhone / iPad: `volume` is read-only (always 1, the hardware buttons rule). */
+let volumeWorks: boolean | null = null
+function canSetVolume() {
+  if (volumeWorks == null) {
+    const a = document.createElement('audio')
+    try {
+      a.volume = 0.5
+    } catch {
+      /* read-only */
+    }
+    volumeWorks = Math.abs(a.volume - 0.5) < 0.01
+  }
+  return volumeWorks
+}
+/** Where `volume` is read-only: the element's sound goes through a gain node, made on the first slider move only
+ *  (an untouched player keeps the plain media path). One per element: an element can be routed only once. */
+let audioCtx: AudioContext | null = null
+const gains = new WeakMap<HTMLMediaElement, GainNode>()
+function gainFor(m: HTMLMediaElement): GainNode | null {
+  try {
+    let g = gains.get(m)
+    if (!g) {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!Ctx) return null
+      audioCtx ??= new Ctx()
+      g = audioCtx.createGain()
+      audioCtx.createMediaElementSource(m).connect(g).connect(audioCtx.destination)
+      gains.set(m, g)
+    }
+    if (audioCtx?.state === 'suspended') void audioCtx.resume().catch(() => {})
+    return g
+  } catch {
+    return null
+  }
+}
 
 function fmt(t: number) {
   if (!Number.isFinite(t) || t < 0) return '0:00'
@@ -41,6 +78,10 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
   const [buffered, setBuffered] = React.useState(0)
   const [volume, setVolume] = React.useState(1)
   const [muted, setMuted] = React.useState(false)
+  // touch screens: the volume button opens the slider (no hover there), closed again after a few seconds
+  const [volOpen, setVolOpen] = React.useState(false)
+  const volTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const gainVol = React.useRef<number | null>(null)
   const [speed, setSpeed] = React.useState(1)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [hover, setHover] = React.useState<{ x: number; t: number } | null>(null)
@@ -53,7 +94,20 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
   const vq = useVideoQuality(path, video, version, started)
   const [copyFailed, setCopyFailed] = React.useState(false)
   const copy = video && vq.src && !copyFailed ? vq.src : null
-  const src = copy ?? fileRawUrl(path, false, version)
+  const wanted = copy ?? fileRawUrl(path, false, version)
+  // Auto: a copy that gets ready while the original already plays waits for the next opening - switching source
+  // empties the picture and reloads it mid-way (the jerk seen when coming back to the page and resuming). It takes
+  // over at once only when the original struggles (long buffering, many dropped frames). A quality the user picks,
+  // an error, or a copy ready before anything played switch straight away.
+  const [src, setSrc] = React.useState(wanted)
+  const played = React.useRef(false)
+  const [rough, setRough] = React.useState(false)
+  React.useEffect(() => {
+    if (wanted === src) return
+    if (vq.choice === 'auto' && copy && wanted === copy && played.current && !rough) return
+    setSrc(wanted)
+  }, [wanted, src, copy, vq.choice, rough])
+  const onCopy = !!copy && src === copy
   // Switching source (another quality): resume at the same time, playing if it was.
   const resume = React.useRef<{ t: number; play: boolean } | null>(null)
   const last = React.useRef({ t: 0, play: false, src })
@@ -69,7 +123,26 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     clearTimeout(idleTimer.current)
     idleTimer.current = setTimeout(() => setIdle(true), 2500)
   }, [])
-  React.useEffect(() => () => clearTimeout(idleTimer.current), [])
+  React.useEffect(() => () => {
+    clearTimeout(idleTimer.current)
+    clearTimeout(volTimer.current)
+    clearTimeout(waitTimer.current)
+  }, [])
+  // The original struggles while a lighter copy is ready or coming: buffering > 1.5 s, or > 20 % frames dropped.
+  const waitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const watchRough = video && vq.choice === 'auto' && vq.target != null && !rough
+  React.useEffect(() => {
+    if (!watchRough || !playing) return
+    let prev = media.current?.getVideoPlaybackQuality?.()
+    const id = setInterval(() => {
+      const q = media.current?.getVideoPlaybackQuality?.()
+      if (!q || !prev) return
+      const total = q.totalVideoFrames - prev.totalVideoFrames
+      if (total >= 20 && (q.droppedVideoFrames - prev.droppedVideoFrames) / total > 0.2) setRough(true)
+      prev = q
+    }, 2000)
+    return () => clearInterval(id)
+  }, [watchRough, playing])
   React.useEffect(() => {
     const onFs = () => setFullscreen(document.fullscreenElement === root.current)
     document.addEventListener('fullscreenchange', onFs)
@@ -94,8 +167,36 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
   const setVol = (v: number) => {
     const m = el()
     if (!m) return
-    m.volume = Math.max(0, Math.min(1, v))
-    m.muted = m.volume === 0
+    v = Math.max(0, Math.min(1, v))
+    if (!canSetVolume()) {
+      const g = gainFor(m)
+      if (g) {
+        g.gain.value = v
+        gainVol.current = v
+        setVolume(v)
+      }
+      m.muted = v === 0
+      return
+    }
+    m.volume = v
+    m.muted = v === 0
+  }
+  const coarse = () => window.matchMedia('(pointer: coarse)').matches
+  const keepVolOpen = () => {
+    clearTimeout(volTimer.current)
+    volTimer.current = setTimeout(() => setVolOpen(false), 3500)
+  }
+  const onVolButton = () => {
+    const m = el()
+    if (!m) return
+    if (coarse() && !volOpen) {
+      setVolOpen(true)
+      keepVolOpen()
+      poke()
+      return
+    }
+    m.muted = !m.muted
+    if (volOpen) keepVolOpen()
   }
   const setRate = (r: number) => {
     const m = el()
@@ -154,8 +255,8 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     else if (k === 'arrowright') seek(m.currentTime + 5)
     else if (k === 'j') seek(m.currentTime - 10)
     else if (k === 'l') seek(m.currentTime + 10)
-    else if (k === 'arrowup') setVol(m.volume + 0.1)
-    else if (k === 'arrowdown') setVol(m.volume - 0.1)
+    else if (k === 'arrowup') setVol((m.muted ? 0 : volume) + 0.1)
+    else if (k === 'arrowdown') setVol((m.muted ? 0 : volume) - 0.1)
     else if (k === 'm') m.muted = !m.muted
     else if (k === 'f' && video) toggleFullscreen()
     else if (/^[0-9]$/.test(k)) seek((Number(k) / 10) * (m.duration || 0))
@@ -168,7 +269,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
   }
 
   const pct = duration ? (time / duration) * 100 : 0
-  const showControls = !video || !playing || !idle || dragging.current
+  const showControls = !video || !playing || !idle || dragging.current || volOpen
   const VolIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
 
   const controls = (
@@ -207,7 +308,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
           {playing ? <Pause className="size-[18px] fill-current" /> : ended ? <RotateCcw className="size-[18px]" /> : <Play className="size-[18px] fill-current" />}
         </CtrlButton>
         <div className="group/vol flex items-center">
-          <CtrlButton label={muted ? t('media.unmute') : t('media.mute')} onClick={() => el() && (el()!.muted = !el()!.muted)} video={video}>
+          <CtrlButton label={muted ? t('media.unmute') : t('media.mute')} onClick={onVolButton} video={video}>
             <VolIcon className="size-[18px]" />
           </CtrlButton>
           <input
@@ -216,12 +317,19 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             max={1}
             step={0.05}
             value={muted ? 0 : volume}
-            onChange={(e) => setVol(Number(e.target.value))}
+            onChange={(e) => {
+              setVol(Number(e.target.value))
+              if (volOpen) keepVolOpen()
+              poke()
+            }}
             aria-label={t('media.volume')}
-            className="h-1 w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all group-focus-within/vol:w-20 group-focus-within/vol:opacity-100 group-hover/vol:w-20 group-hover/vol:opacity-100 max-md:hidden"
+            className={cn(
+              'h-1 w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all pointer-coarse:h-8',
+              volOpen ? 'ml-1 w-24 opacity-100' : 'group-focus-within/vol:w-20 group-focus-within/vol:opacity-100 group-hover/vol:w-20 group-hover/vol:opacity-100 pointer-coarse:hidden',
+            )}
           />
         </div>
-        <span className={cn('ml-1 text-xs tabular-nums', video ? 'text-white/90' : 'text-muted-foreground')}>
+        <span className={cn('ml-1 text-xs tabular-nums', video ? 'text-white/90' : 'text-muted-foreground', volOpen && 'max-sm:hidden')}>
           {fmt(time)} <span className="opacity-60">/ {fmt(duration)}</span>
         </span>
         <span className="flex-1" />
@@ -238,7 +346,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             video={video}
           >
             <span className="relative text-xs font-semibold tabular-nums">
-              {copy ? `${vq.playing}p` : vq.choice === 'auto' ? 'Auto' : `${vq.info.height}p`}
+              {onCopy ? `${vq.playing}p` : vq.choice === 'auto' ? 'Auto' : `${vq.info.height}p`}
               {(vq.targetState?.state === 'queued' || vq.targetState?.state === 'running') && <span className="absolute -top-0.5 -right-1.5 size-1.5 animate-pulse rounded-full bg-primary" />}
             </span>
           </PickButton>
@@ -285,9 +393,20 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
       setPlaying(false)
       setEnded(true)
     },
-    onWaiting: () => setWaiting(true),
-    onPlaying: () => setWaiting(false),
-    onCanPlay: () => setWaiting(false),
+    onWaiting: () => {
+      setWaiting(true)
+      clearTimeout(waitTimer.current)
+      if (watchRough && played.current) waitTimer.current = setTimeout(() => setRough(true), 1500)
+    },
+    onPlaying: () => {
+      played.current = true
+      setWaiting(false)
+      clearTimeout(waitTimer.current)
+    },
+    onCanPlay: () => {
+      setWaiting(false)
+      clearTimeout(waitTimer.current)
+    },
     onTimeUpdate: (e: React.SyntheticEvent<HTMLMediaElement>) => {
       last.current.t = e.currentTarget.currentTime
       if (!dragging.current) setTime(e.currentTarget.currentTime)
@@ -310,12 +429,12 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
       for (let i = 0; i < b.length; i++) if (b.start(i) <= now + 0.5) setBuffered(b.end(i))
     },
     onVolumeChange: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      setVolume(e.currentTarget.volume)
+      setVolume(gainVol.current ?? e.currentTarget.volume) // the gain's level where `volume` is read-only
       setMuted(e.currentTarget.muted)
     },
     onRateChange: (e: React.SyntheticEvent<HTMLMediaElement>) => setSpeed(e.currentTarget.playbackRate),
     onError: () => {
-      if (copy) return setCopyFailed(true)
+      if (onCopy) return setCopyFailed(true)
       setStarted(true) // an original this browser cannot read (HEVC, ProRes): the Auto copy is the way to play it
       onError?.()
     },
