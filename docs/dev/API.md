@@ -217,7 +217,7 @@ Cron = {id, name, schedule,            // 5-field cron expression
         enabled, notify:"never"|"failure"|"always", timeout_s,
         last_run:{at, ok, code, duration_s}|null, next_run:float|null, human:string,
         running:bool}                  // a run is in progress (flock held); overlapping runs are skipped
-Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|null}
+Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|null}   (output_tail: a Claude job keeps the first 2048 characters of its answer, a command the last 2048 of its output)
 ```
 | GET | `/api/crons` | – | `{jobs:[Cron], external:[{schedule, command, human}]}` (external = crontab lines outside the managed block, read-only) |
 | POST | `/api/crons` | Cron fields | `Cron` (validates expression; syncs crontab) |
