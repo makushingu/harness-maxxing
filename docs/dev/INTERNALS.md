@@ -310,12 +310,15 @@ listing (`clear_cache()` in tests). Web: `features/git/` (GitGraph = lane layout
 ## maxxing.team  (owner: organisation)
 Chats between people, `<state>/team/team.json` (format in the docstring), one lock (`_lock`), atomic writes, bus
 topic `team`. `state()`, `messages(cid)`, `create_chat`, `send`, `react`, `create_poll`, `vote`, `mark_read`,
-`mark_sent` (a "to a session" click), `summarize(cid, ids, since)` (one `claude -p` without tools, Sonnet,
+`mark_sent` (a "to a session" click), `edit_message` / `delete_message`, `update_group` / `leave_group` / `set_muted`,
+`typing` and the read receipt (signals through `teampeer.signal_all`, never queued), `summarize(cid, ids, since)` (one `claude -p` without tools, Sonnet,
 prompt `SUMMARY_PROMPT`, titles in the chat's language). Every local change is `_broadcast` to the other members
 through `teampeer.send` (message `pending` = ids not reached yet, cleared by `delivered()`); remote events come in
 through `apply_remote(frm, contact, event)` which checks membership and authorship; their messages keep `recv`
 (arrival time here, unread counts on it) and an `at` never in the future. People ids = `teampeer.pid(address)`;
-the user is `ME`. Web: `features/team/` (page `/team`, right panel `TeamPanel`).
+the user is `ME`. Numbers from peers go through `_finite`; a group roster is stored only if we are in it.
+Web: `features/team/` (page `/team`, right panel `TeamPanel`, `Live.tsx` presence + notifications, `SendTo.tsx` from
+the session message menu).
 
 ## maxxing.teampeer  (owner: organisation)
 Server-to-server transport, stdlib + httpx, protocol in the docstring. `<state>/team/peers.json` (600): peers,
