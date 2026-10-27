@@ -78,6 +78,8 @@ def resolve(path: str | None, *, follow: bool = True, new: bool = False) -> Path
     if not raw.is_absolute():
         raise _err(400, "bad_path", "Paths must be absolute")
     raw = _unshow(raw.parent) / raw.name if new and raw.name else _unshow(raw)
+    if any(len(os.fsencode(part)) > 255 for part in raw.parts):   # ENAMETOOLONG in mkdir/write/move: a 500
+        raise _err(400, "bad_path", "A name is longer than 255 bytes")
     try:
         p = raw.resolve() if follow else raw.parent.resolve() / raw.name
         if raw.name in ("", ".", ".."):
