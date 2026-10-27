@@ -132,8 +132,18 @@ def readiness() -> dict:
     return {"ok": True, "address": addr, "reason": ""}
 
 
+OWN_TTL = 60.0                                             # own_address() resolves the public URL at most this often
+_own: tuple[tuple, float, dict] | None = None
+
+
 def own_address() -> str:
-    r = readiness()
+    """This server's address (readiness() is cached OWN_TTL s per public URL: it resolves the host name)."""
+    global _own
+    key = ((config.load_config().get("public_url") or "").strip(), insecure())
+    now = time.monotonic()
+    if _own is None or _own[0] != key or now - _own[1] > OWN_TTL:
+        _own = (key, now, readiness())
+    r = _own[2]
     if not r["ok"]:
         raise PeerError(409, "not_reachable", "This server cannot connect: " + r["reason"])
     return r["address"]
@@ -206,8 +216,28 @@ def _load() -> dict:
     return doc
 
 
+_peeked: tuple[tuple | None, dict] | None = None
+
+
+def _peek() -> dict:
+    """peers.json for reading only (never change what it returns): parsed again only when the file changed."""
+    global _peeked
+    try:
+        st = _path().stat()
+        sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = None
+    cached = _peeked
+    if sig is None or cached is None or cached[0] != sig:
+        cached = (sig, _load())
+        _peeked = cached
+    return cached[1]
+
+
 def _save(doc: dict) -> None:
+    global _peeked
     config.write_json(_path(), doc, mode=0o600)
+    _peeked = None
     bus.invalidate("team")
 
 
@@ -237,7 +267,7 @@ def people() -> dict:
     """Contacts as Team people (accepted ones, and members of shared groups), keyed by person id."""
     out = {}
     now = time.time()
-    for addr, p in peers().items():
+    for addr, p in _peek()["peers"].items():
         if p.get("status") not in ("accepted", "group"):
             continue
         seen = now - float(p.get("last_seen") or 0)
@@ -386,7 +416,7 @@ def answer(address: str, accept: bool) -> dict:
     """A accepts (the `accept` event must reach B: a fake address fails here) or refuses a request."""
     address = normalize(address)
     with _lock:
-        p = _load()["peers"].get(address)
+        p = _peek()["peers"].get(address)
     if not p or p.get("status") != "request":
         raise PeerError(404, "not_found", "No request from this address")
     if not accept:
@@ -473,7 +503,7 @@ def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> tuple
                 del _nonces[n]
         if f"{frm}|{nonce}" in _nonces:
             raise PeerError(401, "replay", "Request already seen")
-        p = _load()["peers"].get(frm)
+        p = _peek()["peers"].get(frm)
         digest = hashlib.sha256(body).hexdigest()
         scope = next((s for s, k in _scopes(p or {})
                       if _same(sig, _mac(k, method, path, frm, me, str(ts), nonce, digest))), None)
@@ -493,8 +523,12 @@ SIGNAL_TIMEOUT = 4.0
 
 def touch(address: str) -> None:
     """The peer just talked to us (presence). Written at most every SEEN_WRITE_S; coming back online refreshes the UI."""
+    global _peeked
     now = time.time()
     with _lock:
+        p = _peek()["peers"].get(address)
+        if not p or now - float(p.get("last_seen") or 0) < SEEN_WRITE_S:
+            return
         doc = _load()
         p = doc["peers"].get(address)
         if not p:
@@ -504,6 +538,7 @@ def touch(address: str) -> None:
             return
         p["last_seen"] = now
         config.write_json(_path(), doc, mode=0o600)
+        _peeked = None
     if now - last >= ONLINE_S:
         bus.invalidate("team_live")
 
@@ -516,7 +551,7 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
     if scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave") or str(event.get("chat") or "") != scope):
         raise PeerError(403, "forbidden", "A group key only works in its own group")
     with _lock:
-        doc = _load()
+        doc = _load() if kind in ("accept", "refuse", "bye", "profile") else _peek()   # the others only read
         p = doc["peers"].get(frm) or {}
         if kind == "accept":
             if p.get("status") != "waiting":
@@ -599,7 +634,7 @@ def new_pair_key() -> str:
 # ---- delivery -------------------------------------------------------------------------------------------------
 def _key_to(address: str, chat: str | None) -> bytes:
     with _lock:
-        p = _load()["peers"].get(address) or {}
+        p = _peek()["peers"].get(address) or {}
     if p.get("status") == "accepted" or (p.get("status") in ("waiting", "request") and p.get("key")):
         return _unb64(p["key"])
     gk = (p.get("group_keys") or {}).get(chat or "")
@@ -668,7 +703,7 @@ def presence() -> None:
         if now - _presence_sent[0] < PRESENCE_EVERY or not readiness()["ok"]:
             return
         _presence_sent[0] = now
-        addrs = [a for a, p in _load()["peers"].items() if p.get("status") == "accepted"]
+        addrs = [a for a, p in _peek()["peers"].items() if p.get("status") == "accepted"]
     signal_all(addrs, {"type": "presence"})
 
 
@@ -686,7 +721,7 @@ def share_profile() -> None:
 def has_link(address: str, chat: str) -> bool:
     """We can talk with this address about this chat (a contact, or a key of that group)."""
     with _lock:
-        p = _load()["peers"].get(address) or {}
+        p = _peek()["peers"].get(address) or {}
     return p.get("status") == "accepted" or chat in (p.get("group_keys") or {})
 
 
@@ -740,7 +775,7 @@ def _outbox_round() -> None:
     from . import team
     now = time.time()
     with _lock:
-        due = [o for o in _load()["outbox"] if o["next"] <= now]
+        due = [o for o in _peek()["outbox"] if o["next"] <= now]
     down: set[str] = set()                     # failed this round: its other events wait
     for o in due:
         if o["to"] in down:
@@ -788,7 +823,7 @@ def file_for(frm: str, fid: str, scope: str = "") -> dict:
     """A file we shared, asked by a verified member of its chat (with a group key: a file of that group only)."""
     from . import team
     with _lock:
-        f = _load()["files"].get(fid)
+        f = _peek()["files"].get(fid)
     if not f or (scope and f["chat"] != scope) or not team.is_member(f["chat"], pid(frm)) or not Path(f["path"]).is_file():
         raise PeerError(404, "not_found", "No such file")
     return f
