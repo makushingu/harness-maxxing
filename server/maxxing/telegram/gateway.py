@@ -3104,11 +3104,14 @@ FEED_ICON = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "
 
 def feed_message(ev: dict) -> tuple[str, dict]:
     """HTML text + buttons of a feed event in the "Notifications" thread."""
-    title = fmt.escape(ev["title"]) + (f" ×{ev['count']}" if ev.get("count", 1) > 1 else "")
+    title = fmt.escape(fmt.head(ev["title"], 300)) + (f" ×{ev['count']}" if ev.get("count", 1) > 1 else "")
+    top = f"{FEED_ICON.get(ev['level'], 'ℹ️')} <b>{title}</b>"
+    foot = f"\n<i>{fmt.escape(fmt.head(ev['source'], 200))}</i>"
     raw = ev.get("body") or ""                          # cut before rendering: a cut "&amp;" breaks the HTML
-    body = "\n\n".join(fmt.render(fmt.head(raw, 700)))   # markdown (a Claude answer, a report) rendered
-    text = f"{FEED_ICON.get(ev['level'], 'ℹ️')} <b>{title}</b>" + (f"\n{body}" if body else "") + \
-        f"\n<i>{fmt.escape(ev['source'])}</i>"
+    # markdown (a Claude answer, a report) rendered; escaping grows it ("&" -> "&amp;"): one message at most
+    parts = fmt.render(fmt.head(raw, 700), fmt.LIMIT - len(top) - len(foot) - 3)
+    body = (parts[0] + "\n…" if len(parts) > 1 else parts[0]) if parts else ""
+    text = top + (f"\n{body}" if body else "") + foot
     row = [{"text": "🤖 Ask Harness", "callback_data": f"f:{ev['id']}"}]
     url = ev.get("url") or ""
     if url.startswith("/"):
