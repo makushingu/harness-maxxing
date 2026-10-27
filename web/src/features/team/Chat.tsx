@@ -658,12 +658,13 @@ function MessageRow({
     <div
       id={`tm-${m.id}`}
       className={cn(
-        'group/msg relative flex gap-2 rounded-xl',
+        'group/msg relative flex gap-2 rounded-xl outline-none',
         tight ? 'mt-0.5' : 'mt-3',
         selecting && 'cursor-pointer select-none -mx-2 px-2 py-0.5 transition-colors hover:bg-accent/40',
         selecting && selected && 'bg-primary/[0.07] hover:bg-primary/10',
       )}
       onClick={selecting ? (e) => onSelect(e.shiftKey) : undefined}
+      tabIndex={selecting ? undefined : -1}
     >
       {selecting && (
         <span className="flex w-5 shrink-0 items-center self-center">
@@ -842,15 +843,15 @@ function MessageTools({
   const react = useTeamReact()
   const [open, setOpen] = React.useState(false)
   const [menu, setMenu] = React.useState(false)
-  const tool = 'inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
+  const tool = 'inline-flex size-7 shrink-0 pointer-coarse:size-10 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
   const copy = () => {
     void navigator.clipboard?.writeText(m.text).then(() => toast.success(t('team.copied')))
   }
   return (
     <div
       className={cn(
-        'absolute -top-3.5 z-10 flex items-center gap-0.5 rounded-lg border bg-popover p-0.5 opacity-0 shadow-sm transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100',
-        (open || menu) && 'opacity-100',
+        'absolute -top-3.5 z-10 flex w-max items-center gap-0.5 rounded-lg border bg-popover p-0.5 opacity-0 shadow-sm transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 group-focus-within/msg:opacity-100 pointer-coarse:pointer-events-none pointer-coarse:group-focus-within/msg:pointer-events-auto',
+        (open || menu) && 'pointer-events-auto opacity-100',
         mine ? 'left-1' : 'right-1',
       )}
     >
@@ -863,7 +864,7 @@ function MessageTools({
       )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button type="button" className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('team.react')}>
+          <button type="button" className={tool} aria-label={t('team.react')}>
             <Smile className="size-4" />
           </button>
         </PopoverTrigger>
@@ -884,7 +885,7 @@ function MessageTools({
         </PopoverContent>
       </Popover>
       <Tooltip content={t('team.forward')}>
-        <button type="button" onClick={onForward} className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[12px] font-medium text-primary hover:bg-primary/10" aria-label={t('team.forward')}>
+        <button type="button" onClick={onForward} className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[12px] font-medium text-primary hover:bg-primary/10 shrink-0 pointer-coarse:h-10 pointer-coarse:px-3" aria-label={t('team.forward')}>
           <MessageSquareShare className="size-4" />
           {!compact && t('team.toSession')}
         </button>
