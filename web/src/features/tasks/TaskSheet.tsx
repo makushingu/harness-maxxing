@@ -357,7 +357,7 @@ function TaskEditor({
             {task.topic_path && (
               <Link
                 to={`/sessions?path=${encodeURIComponent(task.topic_path)}`}
-                className="inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex w-fit items-center pointer-coarse:min-h-10 gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
               >
                 {t('tasks.openTopic')}
                 <ArrowUpRight className="size-3.5" />
