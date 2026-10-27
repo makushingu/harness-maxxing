@@ -18,6 +18,7 @@ import json
 import math
 import os
 import re
+import logging
 import mimetypes
 import secrets
 import subprocess
@@ -28,6 +29,8 @@ from pathlib import Path
 import hashlib
 
 from . import bus, config, teampeer
+
+log = logging.getLogger(__name__)
 
 ME = "me"
 TEXT_MAX = 8000
@@ -65,6 +68,13 @@ def _path() -> Path:
 def _load() -> dict:
     doc = config.read_json(_path(), None)
     if not isinstance(doc, dict):
+        if doc is not None or _path().exists():      # unreadable: moved aside (never overwritten, no chat lost)
+            dest = _path().with_name(f"team.json.damaged-{time.strftime('%Y%m%d-%H%M%S')}")
+            try:
+                os.replace(_path(), dest)
+                log.error("team.json is damaged: kept as %s", dest)
+            except OSError:
+                pass
         doc = {"me": ME, "chats": []}
     doc.setdefault("chats", [])
     return doc
