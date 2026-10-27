@@ -298,3 +298,16 @@ def test_a_stuck_card_holds_one_thread_however_often_it_is_reloaded(client, org,
         time.sleep(0.05)
     assert extensions._stuck == 0 and not extensions._stuck_keys
     assert client.get("/api/dashboard/widgets/slow").json()["card"] is not None
+
+
+def test_a_card_with_nan_fails_alone(client, org, fakes):
+    for eid, value in (("nan", "float('nan')"), ("fine", "1")):
+        d = org.ws / "extensions" / eid
+        d.mkdir(parents=True)
+        (d / "manifest.json").write_text(json.dumps({"type": "widget"}))
+        (d / "api.py").write_text("def card(ctx):\n    return {'blocks': [{'type': 'stat', 'label': 'x', "
+                                  f"'value': {value}}}]}}\n")
+    r = client.get("/api/dashboard")
+    assert r.status_code == 200
+    widgets = _by_id(client)
+    assert widgets["nan"]["error"] and widgets["fine"]["card"] is not None

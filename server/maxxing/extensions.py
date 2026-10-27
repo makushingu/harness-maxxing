@@ -394,7 +394,8 @@ def clean_card(card: Any) -> dict:
     out["blocks"] = [b for b in blocks if isinstance(b, dict) and b.get("type") in BLOCK_TYPES]
     if out.get("status") not in (None, "ok", "warn", "error"):
         out.pop("status")
-    json.dumps(out)                                    # must be JSON serialisable
+    json.dumps(out, allow_nan=False)                   # JSON serialisable as the answer is (NaN/inf: this card fails,
+                                                       # not the whole dashboard)
     return out
 
 
