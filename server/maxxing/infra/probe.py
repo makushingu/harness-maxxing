@@ -118,7 +118,7 @@ def repo_of(path):
             cfg = read(os.path.join(p, ".git", "config"))
             m = re.search(r'\[remote "origin"\][^\[]*?url\s*=\s*(\S+)', cfg, re.S)
             head = read(os.path.join(p, ".git", "HEAD")).strip()
-            return {"path": p, "remote": re.sub(r"//[^/@]+@", "//", m.group(1)) if m else None,
+            return {"path": p, "remote": re.sub(r"//[^/?#]*@", "//", m.group(1)) if m else None,
                     "branch": head[16:] if head.startswith("ref: refs/heads/") else None}
         p = os.path.dirname(p)
     return None
