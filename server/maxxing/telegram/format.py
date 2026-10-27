@@ -280,10 +280,11 @@ def _split_big(b: Block, limit: int) -> list[str]:
                 cur = ln
             else:
                 cur = add
-            while len(escape(cur)) + overhead > limit:        # one gigantic line
+            if len(escape(cur)) + overhead > limit:           # one gigantic line: cut it all at once
                 cut = max(1, (limit - overhead) // 5)          # worst case: every char -> &amp;
-                pieces.append(cur[:cut])
-                cur = cur[cut:]
+                chunks = [cur[k:k + cut] for k in range(0, len(cur), cut)]
+                pieces.extend(chunks[:-1])
+                cur = chunks[-1]
         if cur:
             pieces.append(cur)
         return [_code_block(p, lang) for p in pieces]
