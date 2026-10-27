@@ -188,11 +188,44 @@ def list_events(source: str | None = None, unread: bool = False, before: int | N
     with _conn() as c:
         rows = c.execute(f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ?",
                          (*args, limit + 1)).fetchall()
-        srcs = c.execute("SELECT source, COUNT(*) total, SUM(read=0) unread FROM events WHERE at>? "
-                         "GROUP BY source ORDER BY MAX(at) DESC", (time.time() - RETENTION_DAYS * 86400,)).fetchall()
-    sources = [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0} for r in srcs]
+    sources = source_counts()
     return {"events": [_row(r) for r in rows[:limit]], "more": len(rows) > limit,
             "unread": sum(s["unread"] for s in sources), "sources": sources}
+
+
+_counts: dict = {}
+
+
+def _db_stamp(path: Path) -> tuple:
+    out = []
+    for suffix in ("", "-wal"):
+        try:
+            st = os.stat(f"{path}{suffix}")
+        except OSError:
+            st = None
+        # An empty WAL is re-created by every new connection: only a WAL holding pages says something changed.
+        out.append((st.st_mtime_ns, st.st_size, st.st_ino) if st and (st.st_size or not suffix) else None)
+    return tuple(out)
+
+
+def _aggregate(c: sqlite3.Connection, cutoff: float) -> list[dict]:
+    srcs = c.execute("SELECT source, COUNT(*) total, SUM(read=0) unread FROM events WHERE at>? "
+                     "GROUP BY source ORDER BY MAX(at) DESC", (cutoff,)).fetchall()
+    return [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0} for r in srcs]
+
+
+def source_counts() -> list[dict]:
+    """Per-source totals for the chips. Counting the whole journal is linear in its size, so the result is kept
+    until feed.db (or its WAL) changes - written by this process or another one - or a minute passes (retention)."""
+    path = db_path()
+    with _conn() as c:
+        key = (str(path), _db_stamp(path), int(time.time() // 60))
+        hit = _counts.get(key[0])
+        if hit and hit[0] == key:
+            return [dict(x) for x in hit[1]]
+        sources = _aggregate(c, time.time() - RETENTION_DAYS * 86400)
+    _counts[key[0]] = (key, sources)
+    return [dict(x) for x in sources]
 
 
 def unread_count() -> int:
