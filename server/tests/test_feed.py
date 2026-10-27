@@ -270,3 +270,13 @@ def test_an_unreadable_feed_db_is_set_aside_and_replaced(mx):
     assert [e["title"] for e in feed.list_events()["events"]] == ["after the crash"]
     kept = list(path.parent.glob("feed.db.damaged-*"))
     assert len(kept) == 1 and kept[0].read_bytes().startswith(b"this is not a database")
+
+
+def test_event_ids_too_big_for_sqlite_are_not_a_500(client, mx):
+    ev = client.post("/api/feed", json={"title": "kept"}).json()["event"]
+    big = 10**30
+    r = client.get("/api/feed", params={"before": big})
+    assert r.status_code == 200 and [e["id"] for e in r.json()["events"]] == [ev["id"]]
+    assert client.post("/api/feed/read", json={"ids": [big, ev["id"]]}).status_code == 200
+    assert client.delete(f"/api/feed/{big}").status_code < 500
+    assert feed.get(big) is None and feed.get(ev["id"])["read"] is True
