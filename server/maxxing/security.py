@@ -92,11 +92,11 @@ def _setup_token_fresh() -> bool:
 
 def ensure_setup_token() -> str:
     """The current setup link token; a new one when there is none or it expired."""
-    tok = config.get_secret("setup_token")
-    if not tok or not _setup_token_fresh():
-        tok = secrets.token_urlsafe(24)
-        config.set_secret("setup_token", tok)
-        config.set_secret("setup_token_at", int(time.time()))
+    with config._lock:                    # noqa: SLF001 - two callers at once (setup-link, doctor) share one token
+        tok = config.get_secret("setup_token")
+        if not tok or not _setup_token_fresh():
+            tok = secrets.token_urlsafe(24)
+            config.set_secrets({"setup_token": tok, "setup_token_at": int(time.time())})
     return tok
 
 
