@@ -256,3 +256,13 @@ def test_bulk_over_the_limit_is_refused_not_cut(client, org):
         tasks_api.BULK_MAX = old
     assert r.status_code == 400 and "too_many_ids" in r.text
     assert all(t["status"] == "todo" for t in client.get("/api/tasks").json()["tasks"])
+
+
+def test_identical_hand_written_tasks_get_distinct_ids(client, org):
+    from maxxing.api import tasks as tasks_api
+    tasks_api.tasks_path().write_text(json.dumps({"version": 1, "projects": [],
+                                                  "tasks": [{"title": "same"}, {"title": "same"}]}))
+    ids = [t["id"] for t in client.get("/api/tasks").json()["tasks"]]
+    assert len(set(ids)) == 2
+    assert client.delete(f"/api/tasks/{ids[0]}").status_code in (200, 204)
+    assert [t["id"] for t in client.get("/api/tasks").json()["tasks"]] == [ids[1]]
