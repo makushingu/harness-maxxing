@@ -373,3 +373,21 @@ def test_a_download_that_raises_is_marked_failed(client, sent, monkeypatch):
     team.fail_stale_downloads()
     f = team.messages(dm)["messages"][0]["files"][0]
     assert f.get("failed") and not f.get("pending")
+
+
+def test_reading_typing_and_seen_do_not_reload_or_rewrite_team_json(client, sent, monkeypatch):
+    lea = teampeer.pid(LEA)
+    monkeypatch.setattr(teampeer, "signal", lambda a, e: None)
+    dm = client.post("/api/team/chats", json={"kind": "dm", "members": [lea]}).json()["id"]
+    client.post(f"/api/team/chats/{dm}/messages", json={"text": "hi"})
+    client.post(f"/api/team/chats/{dm}/read")
+    reads, writes = [], []
+    real_read, real_write = config.read_json, config.write_json
+    monkeypatch.setattr(config, "read_json", lambda p, *a, **k: (p == team._path() and reads.append(p)) or real_read(p, *a, **k))
+    monkeypatch.setattr(config, "write_json", lambda p, *a, **k: (p == team._path() and writes.append(p)) or real_write(p, *a, **k))
+    for _ in range(5):
+        team.state()
+        team.messages(dm)
+        team.typing(dm)
+        team.mark_read(dm)
+    assert len(reads) <= 1 and writes == []
