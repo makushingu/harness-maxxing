@@ -129,6 +129,9 @@ async def _challenge(purpose: str, request: Request) -> dict:
 @router.post("/two-factor")
 async def two_factor(body: TwoFactorIn, request: Request, response: Response):
     """Poll a challenge (or send its code): pending -> {status}; approved -> the cookie (sign-in) or on (enable)."""
+    # before check(): a caller without a session must not consume an approved "enable" request (or spend its code tries)
+    if twofactor.purpose(body.challenge) == "enable" and not security.is_authenticated(request):
+        raise HTTPException(401, detail={"error": "auth_required", "message": "Sign in required"})
     status, c = twofactor.check(body.challenge, body.code)
     if c is not None and c.purpose == "enable" and not security.is_authenticated(request):
         raise HTTPException(401, detail={"error": "auth_required", "message": "Sign in required"})

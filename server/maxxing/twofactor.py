@@ -230,6 +230,13 @@ def _not_before() -> float:
         return 0.0
 
 
+def purpose(cid: str) -> str | None:
+    """What a waiting challenge is for ("login" | "enable"), without touching it; None when there is none."""
+    with _lock:
+        c = _ch.get(cid or "")
+        return c.purpose if c else None
+
+
 def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:
     """-> (status, challenge): "pending", "approved" (consumed: only once), "denied", "expired", "bad_code"."""
     now = time.time()
