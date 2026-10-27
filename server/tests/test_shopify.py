@@ -62,3 +62,24 @@ def test_refused_token_is_a_readable_error(mx, monkeypatch):
     monkeypatch.setattr(shopify.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(lambda r: httpx.Response(401)), **kw))
     c = shopify.card(force=True)
     assert c["status"] == "error" and "refused the token" in c["blocks"][0]["text"] and "myshop.myshopify.com:" in c["blocks"][0]["text"]
+
+
+def test_a_malformed_answer_is_a_readable_error(mx, monkeypatch):
+    vault.put("SHOPIFY_STORE", "myshop.myshopify.com")
+    vault.put("SHOPIFY_ADMIN_TOKEN", "shpat_test")
+    real = httpx.Client
+    answers = {
+        "html": httpx.Response(200, text="<html>proxy</html>"),
+        "list": httpx.Response(200, json=[1, 2]),
+        "null_date": httpx.Response(200, json={"data": {"shop": {"name": "S", "currencyCode": "EUR"}, "orders": {
+            "pageInfo": {"hasNextPage": False}, "edges": [{"node": {"name": None, "createdAt": None}}]}}}),
+    }
+    for name, answer in answers.items():
+        shopify._cache.update(at=0, key=None, card=None)
+        monkeypatch.setattr(shopify.httpx, "Client",
+                            lambda answer=answer, **kw: real(transport=httpx.MockTransport(lambda r: answer), **kw))
+        c = shopify.card(force=True)
+        if name == "null_date":
+            assert c["title"] == "Shopify · S" and c["blocks"][2]["items"][0]["subtitle"] == ""
+        else:
+            assert c["status"] == "error" and "unreadable answer" in c["blocks"][0]["text"], name
