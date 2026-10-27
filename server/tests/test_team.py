@@ -419,3 +419,22 @@ def test_no_reaction_on_a_deleted_message(client, sent):
     assert r.status_code == 409
     msg = next(m for m in client.get(f"/api/team/chats/{c['id']}").json()["messages"] if m["id"] == mid)
     assert not msg.get("reactions")
+
+
+def test_a_contact_cannot_flood_us_with_groups(client, sent):
+    """Each new g_ id from a contact used to create a group here, without limit (team.json grew with each one)."""
+    def roster(i):
+        return [{"address": LEA}, {"address": ME}, {"address": f"http://127.0.0.1:{20000 + i}", "name": f"p{i}"}]
+
+    for i in range(team.GROUPS_PER_CREATOR):
+        team.apply_remote(LEA, True, {"type": "chat", "chat": "g_%016x" % i, "name": "x", "members": roster(i),
+                                      "keys": {f"http://127.0.0.1:{20000 + i}": teampeer._b64(b"x" * 32)}})
+    with pytest.raises(team.TeamError) as e:
+        team.apply_remote(LEA, True, {"type": "chat", "chat": "g_%016x" % 999, "name": "x", "members": roster(999),
+                                      "keys": {"http://127.0.0.1:20999": teampeer._b64(b"x" * 32)}})
+    assert e.value.status == 429
+    assert len(client.get("/api/team").json()["chats"]) == team.GROUPS_PER_CREATOR
+    assert "http://127.0.0.1:20999" not in teampeer._load()["peers"]
+    team.apply_remote(LEA, True, {"type": "chat", "chat": "g_%016x" % 0, "name": "renamed", "members": roster(0),
+                                  "keys": {"http://127.0.0.1:20000": teampeer._b64(b"x" * 32)}})    # a known group still changes
+    assert any(c["name"] == "renamed" for c in client.get("/api/team").json()["chats"])
