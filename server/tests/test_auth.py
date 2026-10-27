@@ -181,6 +181,15 @@ def test_non_ascii_setup_token_is_refused_not_500(mx):
         assert r.status_code == 403, (r.status_code, r.text)
 
 
+def test_setup_token_with_a_lone_surrogate_is_refused_not_500(mx):
+    security.ensure_setup_token()
+    assert security.check_setup_token("\ud800") is False
+    with TestClient(_app(), raise_server_exceptions=False) as c:
+        body = b'{"token": "\\ud800", "password": "longenough-pass"}'
+        r = c.post("/api/auth/setup", content=body, headers={"X-Maxxing": "1", "Content-Type": "application/json"})
+        assert r.status_code == 403, (r.status_code, r.text)
+
+
 def test_logout_with_corrupted_cookie_key_is_not_a_500(mx):
     from maxxing import config, twofactor
     security.set_password("rightpassword")

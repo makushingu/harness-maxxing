@@ -115,8 +115,10 @@ def setup_token_expires_at() -> float | None:
 
 def check_setup_token(tok: str) -> bool:
     cur = config.get_secret("setup_token")
-    # bytes: a non-ASCII token is a 403, not a 500 (compare_digest refuses non-ASCII str)
-    return bool(cur) and _setup_token_fresh() and hmac.compare_digest(str(cur).encode(), (tok or "").encode())
+    # bytes: a non-ASCII token is a 403, not a 500 (compare_digest refuses non-ASCII str); surrogatepass: a lone
+    # surrogate from the JSON body ("\ud800") cannot be encoded otherwise
+    return bool(cur) and _setup_token_fresh() and hmac.compare_digest(
+        str(cur).encode(), (tok or "").encode("utf-8", "surrogatepass"))
 
 
 # ---- cookie --------------------------------------------------------------------------------
