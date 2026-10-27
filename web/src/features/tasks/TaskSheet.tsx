@@ -357,7 +357,7 @@ function TaskEditor({
             {task.topic_path && (
               <Link
                 to={`/sessions?path=${encodeURIComponent(task.topic_path)}`}
-                className="inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex w-fit items-center pointer-coarse:min-h-10 gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
               >
                 {t('tasks.openTopic')}
                 <ArrowUpRight className="size-3.5" />
@@ -418,7 +418,7 @@ function TaskEditor({
           <Tabs defaultValue={task.notes ? 'preview' : 'write'}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{t('tasks.field.notes')}</span>
-              <TabsList className="h-8 max-md:h-10">
+              <TabsList className="h-8 max-md:h-12 pointer-coarse:h-12">
                 <TabsTrigger value="write" className="text-[13px]">
                   {t('tasks.notes.write')}
                 </TabsTrigger>
