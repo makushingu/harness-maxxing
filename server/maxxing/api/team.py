@@ -188,8 +188,10 @@ async def forward(cid: str, mid: str, body: ForwardIn):
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(400, detail={"error": "empty", "message": "Empty message"})
-    msg = (await _call(team.messages, cid))["messages"]
-    files = [f["path"] for m in msg if m["id"] == mid for f in m.get("files") or []]
+    found = [m for m in (await _call(team.messages, cid))["messages"] if m["id"] == mid]
+    if not found:                                   # checked before anything reaches the session
+        raise HTTPException(404, detail={"error": "not_found", "message": "Message not found"})
+    files = [f["path"] for f in found[0].get("files") or [] if f.get("path")]   # not a file still downloading / failed
     if body.session:
         r = await _call(service.send_message, body.session, text, files, "web")
         s = r["session"]

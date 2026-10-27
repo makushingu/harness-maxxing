@@ -338,3 +338,24 @@ def test_a_file_path_with_a_nul_byte_is_a_400(client, sent):
     c = client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).json()
     r = client.post(f"/api/team/chats/{c['id']}/messages", json={"text": "x", "files": [{"path": "/tmp/a\u0000b"}]})
     assert r.status_code == 400
+
+
+def _received_file(monkeypatch, fetch) -> tuple[str, str]:
+    import time
+    monkeypatch.setattr(teampeer, "fetch_file", fetch)
+    dm = team.dm_id(ME, LEA)
+    team.apply_remote(LEA, True, {"type": "message", "chat": dm, "message": {
+        "id": "m_0000000a", "at": time.time(), "kind": "text", "text": "see", "files": [{"id": "f0", "name": "a.txt", "size": 3}]}})
+    _wait(lambda: not any(f.get("pending") for m in team.messages(dm)["messages"] for f in m["files"]))
+    return dm, "m_0000000a"
+
+
+def test_forward_checks_the_message_first_and_skips_files_not_received(client, topic, sent, monkeypatch):
+    from maxxing.sessions import store
+    dm, mid = _received_file(monkeypatch, lambda *a, **k: False)
+    before = len(store.list_ids())
+    r = client.post(f"/api/team/chats/{dm}/messages/m_ffffffff/forward", json={"text": "x", "path": topic})
+    assert r.status_code == 404 and len(store.list_ids()) == before     # nothing reached a session
+    r = client.post(f"/api/team/chats/{dm}/messages/{mid}/forward", json={"text": "Read this", "path": topic})
+    assert r.status_code == 200, r.text
+    wait_idle(client, r.json()["session"]["id"])
