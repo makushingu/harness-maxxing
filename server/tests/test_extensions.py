@@ -337,3 +337,9 @@ def test_requests_after_one_edit_share_a_single_rescan(client, org):
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert count.read_text() == "x"
+
+
+def test_a_folder_name_ending_with_a_newline_is_refused(client, org):
+    _ext(org, "abc\n", {"type": "widget"}, "def card(ctx):\n    return {}\n")
+    ext = next(e for e in extensions.all_extensions() if e.id == "abc\n")
+    assert "lowercase slug" in (ext.error or "")
