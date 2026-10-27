@@ -142,7 +142,10 @@ def ensure_backup_job() -> dict | None:
 
 
 def _rotate(prefix: str) -> None:
-    files = sorted(backup_dir().glob(f"{prefix}-*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    # exact names only: "pg-app-*" would also match pg-app-v2-…, and [ or * in a name are glob wildcards
+    own = re.compile(re.escape(prefix) + r"-\d{8}-\d{4}\.(dump|db)")
+    files = sorted((p for p in backup_dir().iterdir() if own.fullmatch(p.name)), key=lambda p: p.stat().st_mtime,
+                   reverse=True)
     for old in files[KEEP_BACKUPS:]:
         old.unlink(missing_ok=True)
 
