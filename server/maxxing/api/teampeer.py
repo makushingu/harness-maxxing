@@ -60,7 +60,7 @@ async def inbox(request: Request):
         raise HTTPException(400, detail={"error": "bad_request", "message": "Object expected"})
     try:
         return await _call(teampeer.receive, frm, event, scope)
-    except (TypeError, ValueError, AttributeError) as e:   # a malformed event: refused for good (never retried)
+    except (TypeError, ValueError, AttributeError, OverflowError) as e:   # a malformed event: refused for good
         log.info("team: malformed event from %s (%s)", frm, type(e).__name__)
         raise HTTPException(400, detail={"error": "bad_event", "message": "Malformed event"}) from None
 

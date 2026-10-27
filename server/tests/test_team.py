@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+import time
 
 import pytest
 from conftest import wait_idle
@@ -401,3 +402,10 @@ def test_summary_skips_a_deleted_poll(client, sent):
     b = client.post(f"/api/team/chats/{c['id']}/messages", json={"text": "two"}).json()["id"]
     r = client.post(f"/api/team/chats/{c['id']}/summarize", json={"ids": [a, p["id"], b]})
     assert r.status_code == 200 and r.json()["kind"] == "summary"
+
+
+def test_a_huge_integer_from_a_contact_is_not_a_500(mx):
+    assert team._finite(10 ** 400, 5.0) == 5.0
+    msg = team._remote_message(teampeer.pid(LEA), {"id": "m_0123abcd", "kind": "text", "text": "hi", "at": 10 ** 400,
+                                                   "files": [{"name": "a.txt", "size": 10 ** 400}]})
+    assert msg["at"] <= time.time() and all(f["size"] == 0 for f in msg.get("files") or [])
