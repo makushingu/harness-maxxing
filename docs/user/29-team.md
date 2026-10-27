@@ -36,7 +36,8 @@ new invitation: an invitation never replaces an existing contact.
 
 - **New chat** (the **+** of the list): pick one friend for a private chat, several for a group. A group
   has no host: each member's server sends straight to the others, so it keeps working when its creator is offline.
-  Members of a group who are not your contacts can still talk in the group.
+  Members of a group who are not your contacts can still talk in the group; their name shows **not a contact**:
+  the group's creator vouches for who they are (it hands out the keys), so it could also write in their name.
 - **Files**: the paperclip, drag and drop or paste. Up to the upload limit of your server (2 GB by default). A file
   stays on the sender's server until the others download it.
 - **Polls**: the poll button of the message box. Round options = one answer; tick **Several answers allowed** for square

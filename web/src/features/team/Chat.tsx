@@ -686,6 +686,9 @@ function MessageRow({
               <span className="font-semibold" style={{ color: mine ? undefined : projectColor(author.color || 'zinc') }}>
                 {mine ? t('team.you') : author.name}
               </span>
+              {!mine && author.peer && !author.contact && (
+                <span className="text-muted-foreground" title={t('team.notContactHint')}>{t('team.notContact')}</span>
+              )}
               {card && <span className="text-muted-foreground tabular-nums">{clock(m.at, lang)}</span>}
             </span>
           )}

@@ -2527,6 +2527,8 @@ export const en = {
   'team.noMatch': "No chat with that name.",
   'team.noMessage': "No message yet",
   'team.you': "You",
+  'team.notContact': "not a contact",
+  'team.notContactHint': "Not one of your contacts: the group's creator vouches for who this is and could write in their name.",
   'team.today': "Today",
   'team.yesterday': "Yesterday",
   'team.status.online': "Online",
