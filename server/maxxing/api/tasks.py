@@ -33,7 +33,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import bus, config
 from ..security import require_auth
@@ -158,11 +158,19 @@ def load(copy_: bool = True) -> dict:
             if "workspace" in proj and not isinstance(proj["workspace"], str):   # a list is not a dict key: _sync failed
                 proj.pop("workspace")
         tasks = []
+        taken = {t.get("id") for t in data.get("tasks") or [] if isinstance(t, dict) and t.get("id")}
         for t in data.get("tasks") or []:
             if isinstance(t, dict):
                 if not t.get("id"):                    # hand-written task: stable id until saved
-                    digest = hashlib.sha1(json.dumps(t, sort_keys=True, default=str).encode()).hexdigest()
+                    base = json.dumps(t, sort_keys=True, default=str)
+                    n = 0                              # two identical tasks must not share an id
+                    while True:
+                        digest = hashlib.sha1((base + (f"#{n}" if n else "")).encode()).hexdigest()
+                        if f"t_{digest[:6]}" not in taken:
+                            break
+                        n += 1
                     t = {**t, "id": f"t_{digest[:6]}"}
+                    taken.add(t["id"])
                 tasks.append(_norm_task(t))
         data["tasks"] = tasks
         _cache["sig"], _cache["data"] = sig, (copy.deepcopy(data) if copy_ else data)
@@ -360,7 +368,7 @@ class TaskIn(BaseModel):
     project_id: Optional[str] = None
     topic_path: Optional[str] = None
     labels: Optional[list[str]] = None
-    order: Optional[float] = None
+    order: Optional[float] = Field(None, allow_inf_nan=False)   # inf/NaN broke every later listing
 
 
 class ProjectIn(BaseModel):
@@ -559,9 +567,11 @@ BULK_MAX = 1000
 @_retry_on_change
 def bulk_tasks(body: BulkIn):
     """Same change on many tasks in one atomic write (or delete them). Unknown ids are ignored."""
-    ids = list(dict.fromkeys(str(x) for x in body.ids if x))[:BULK_MAX]
+    ids = list(dict.fromkeys(str(x) for x in body.ids if x))
     if not ids:
         raise _err(400, "invalid_ids", "ids must list at least one task id")
+    if len(ids) > BULK_MAX:                             # never apply part of the change in silence
+        raise _err(400, "too_many_ids", f"at most {BULK_MAX} tasks per request")
     patch = body.patch or TaskIn()
     fields = set(patch.model_fields_set) - {"title", "notes", "order"}
     add = list(dict.fromkeys(str(x).strip()[:40] for x in body.labels_add or [] if str(x).strip()))

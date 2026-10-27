@@ -783,7 +783,16 @@ def _path_hash(path: str) -> str:
 
 
 def _safe_name(name: str, default: str) -> str:
-    name = re.sub(r"[^\w.\- ]+", "_", os.path.basename(name or "")).strip(" .")[:120]
+    name = re.sub(r"[^\w.\- ]+", "_", os.path.basename(name or "")).strip(" .")
+    # at most 120 characters and 200 bytes (Linux allows 255 per name, minus "-N" and ".part"; 120 CJK
+    # characters are 360 bytes), the extension kept
+    if len(name) > 120 or len(name.encode()) > 200:
+        stem, dot, ext = name.rpartition(".")
+        if not dot or not stem or len(ext) > 16:
+            stem, ext = name, ""
+        room = 200 - (len(ext.encode()) + 1 if ext else 0)
+        stem = stem[:120 - (len(ext) + 1 if ext else 0)].encode()[:room].decode("utf-8", "ignore").rstrip(" .")
+        name = f"{stem}.{ext}" if ext and stem else stem
     return name or default
 
 
@@ -3104,11 +3113,14 @@ FEED_ICON = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "
 
 def feed_message(ev: dict) -> tuple[str, dict]:
     """HTML text + buttons of a feed event in the "Notifications" thread."""
-    title = fmt.escape(ev["title"]) + (f" ×{ev['count']}" if ev.get("count", 1) > 1 else "")
+    title = fmt.escape(fmt.head(ev["title"], 300)) + (f" ×{ev['count']}" if ev.get("count", 1) > 1 else "")
+    top = f"{FEED_ICON.get(ev['level'], 'ℹ️')} <b>{title}</b>"
+    foot = f"\n<i>{fmt.escape(fmt.head(ev['source'], 200))}</i>"
     raw = ev.get("body") or ""                          # cut before rendering: a cut "&amp;" breaks the HTML
-    body = "\n\n".join(fmt.render(fmt.head(raw, 700)))   # markdown (a Claude answer, a report) rendered
-    text = f"{FEED_ICON.get(ev['level'], 'ℹ️')} <b>{title}</b>" + (f"\n{body}" if body else "") + \
-        f"\n<i>{fmt.escape(ev['source'])}</i>"
+    # markdown (a Claude answer, a report) rendered; escaping grows it ("&" -> "&amp;"): one message at most
+    parts = fmt.render(fmt.head(raw, 700), fmt.LIMIT - len(top) - len(foot) - 3)
+    body = (parts[0] + "\n…" if len(parts) > 1 else parts[0]) if parts else ""
+    text = top + (f"\n{body}" if body else "") + foot
     row = [{"text": "🤖 Ask Harness", "callback_data": f"f:{ev['id']}"}]
     url = ev.get("url") or ""
     if url.startswith("/"):

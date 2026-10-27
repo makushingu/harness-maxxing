@@ -526,3 +526,57 @@ def test_deleted_lists_even_with_a_bad_date(org, capsys):
     assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="deleted")) == 0
     out = capsys.readouterr().out
     assert all(f"c_old00{i}" in out for i in range(6))
+
+
+def test_job_with_a_non_text_id_is_ignored(org):
+    good = crons.create_job({"name": "good", "command": "true"})
+    p = crons.jobs_path()
+    data = json.loads(p.read_text())
+    data["jobs"].append({"id": ["a"], "name": "odd", "command": "true"})
+    p.write_text(json.dumps(data))
+    assert [j["id"] for j in crons.list_jobs()] == [good["id"]]
+
+
+def test_append_run_survives_lone_surrogate(org, monkeypatch):
+    sent = []
+    monkeypatch.setattr(crons, "_notify", lambda job, run, answer=None: sent.append(run))
+    j = crons.create_job({"name": "emoji", "command": "true"})
+    monkeypatch.setattr(crons, "_run_shell", lambda job: (True, 0, "cut \ud83d here"))
+    r = crons.run_job(j["id"])
+    assert r and sent == [r]
+    runs = crons.read_runs()
+    assert len(runs) == 1 and runs[0]["output_tail"] == "cut ? here"
+
+
+def test_truncated_utf8_line_does_not_break_history(org):
+    j = crons.create_job({"name": "cut", "command": "true"})
+    crons.append_run({"id": "r_1", "cron_id": j["id"], "name": "cut", "at": 1.0, "ok": True})
+    with open(crons.runs_path(), "ab") as f:
+        f.write(b'{"id": "r_2", "name": "caf\xc3')
+    crons.append_run({"id": "r_3", "cron_id": j["id"], "name": "cut", "at": 2.0, "ok": True})
+    assert [r["id"] for r in crons.read_runs()] == ["r_3", "r_1"]
+    assert crons.list_jobs()[0]["id"] == j["id"]
+
+
+def test_killed_run_is_recorded_as_interrupted_on_the_next_run(org, monkeypatch):
+    import subprocess
+    import time as _time
+    sent = []
+    monkeypatch.setattr(crons, "_notify", lambda job, run, answer=None: sent.append(run))
+    j = crons.create_job({"name": "big", "command": "true"})
+    lock = crons._lock_path(j["id"])
+    lock.write_text("12345")                                        # older lock file: a bare pid, ignored
+    crons.run_job(j["id"])
+    assert len(crons.read_runs()) == 1 and lock.read_text() == ""   # a normal end clears the mark
+    orphan = subprocess.Popen(["sleep", "600"], start_new_session=True)
+    try:
+        lock.write_text(json.dumps({"pid": 999999, "at": _time.time() - 5, "pgid": orphan.pid}))
+        r = crons.run_job(j["id"])
+        assert r["ok"]
+        runs = crons.read_runs()
+        assert len(runs) == 3 and not runs[1]["ok"] and "interrupted" in runs[1]["output_tail"]
+        assert [x["ok"] for x in sent] == [True, False, True]
+        assert orphan.wait(timeout=5) == -9                          # the orphan job shell is killed
+    finally:
+        if orphan.poll() is None:
+            orphan.kill()
