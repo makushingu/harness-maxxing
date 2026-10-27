@@ -164,3 +164,19 @@ def test_stats_survive_non_numeric_meta_values(client, mx):
     assert r.status_code == 200
     t = r.json()["totals"]
     assert t["sessions"] == 2 and t["input"] == 0 and t["output"] == 5 and t["cost_usd"] == 0.0
+
+
+def test_stats_survive_badly_typed_meta_fields(client, mx):
+    """One hand-edited meta (days as a list, path as a number, NaN latency / title / date) must not break the page."""
+    cases = [{"days": [1, 2]}, {"days": "x"}, {"path": 5}, {"path": ["a"]}, {"latency": 5},
+             {"latency": [[float("nan"), 1]]}, {"latency": [[float("inf"), float("inf")]]}, {"latency": [[True, 1]]},
+             {"title": float("nan")}, {"title": [1]}, {"updated": float("nan")}, {"updated": [1]}]
+    for over in cases:
+        with store.edit(_session("projects/acme/topics/blog", "Bad")) as m:
+            m.update(over)
+    _session("projects/acme/topics/shop", "Good")
+    r = client.get("/api/stats/tokens?force=1")
+    assert r.status_code == 200, r.text[:200]
+    d = r.json()
+    assert d["totals"]["sessions"] == len(cases) + 1 and d["latency"]["turns"] == 0
+    assert all(isinstance(s["title"], str) and isinstance(s["path"], str) for s in d["sessions"])

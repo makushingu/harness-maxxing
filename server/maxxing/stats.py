@@ -73,6 +73,15 @@ def _tokens(sid: str, m: dict) -> dict:
     return tk
 
 
+def _finite(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _when(v):
+    """A date of a meta (Unix seconds or ISO text); anything else (NaN, a list...) would break the JSON answer."""
+    return v if isinstance(v, str) or _finite(v) else None
+
+
 def _project_of(path: str) -> str:
     parts = (path or "").split("/")
     return parts[1] if len(parts) >= 2 and parts[0] == "projects" else ""
@@ -110,22 +119,24 @@ def compute() -> dict:
         tk = _tokens(sid, m)
         cost = _float(m.get("cost_usd"))
         turns = _int(m.get("turns"))
-        for pair in m.get("latency") or []:
-            if isinstance(pair, list) and pair and isinstance(pair[0], (int, float)):
+        latency = m.get("latency")
+        for pair in latency if isinstance(latency, list) else []:
+            if isinstance(pair, list) and pair and _finite(pair[0]):
                 starts.append(float(pair[0]))
-                if len(pair) > 1 and isinstance(pair[1], (int, float)):
+                if len(pair) > 1 and _finite(pair[1]):
                     firsts.append(float(pair[1]))
-        path = m.get("path") or ""
+        path = m.get("path") if isinstance(m.get("path"), str) else ""
         _add(totals, tk, cost, turns)
         _add(projects.setdefault(_project_of(path), {"name": _project_of(path)}), tk, cost, turns)
         _add(topics.setdefault(path, {"path": path}), tk, cost, turns)
-        for day, d in (m.get("days") or {}).items():
+        for day, d in (m.get("days") if isinstance(m.get("days"), dict) else {}).items():
             if isinstance(d, dict):
                 cur = days.setdefault(day, {"date": day, "tokens": 0, "cost_usd": 0.0})
                 cur["tokens"] += _int(d.get("tokens"))
                 cur["cost_usd"] = round(cur["cost_usd"] + _float(d.get("cost")), 6)
-        sessions.append({"id": sid, "title": m.get("title") or "Untitled", "path": path,
-                         "archived": bool(m.get("archived")), "updated": m.get("updated") or m.get("created"),
+        title = m.get("title") if isinstance(m.get("title"), str) else ""
+        sessions.append({"id": sid, "title": title or "Untitled", "path": path,
+                         "archived": bool(m.get("archived")), "updated": _when(m.get("updated")) or _when(m.get("created")),
                          **tk, "total": sum(tk.values()), "cost_usd": round(cost, 6), "turns": turns})
     by_total = lambda x: (x.get("total", 0), x.get("cost_usd", 0))  # noqa: E731
     sessions.sort(key=by_total, reverse=True)
