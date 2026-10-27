@@ -272,3 +272,29 @@ def test_dashboard_scans_the_extensions_folder_once_per_request(client, org, fak
     assert len(calls) == 1                             # was 1 + one per extension widget
     assert _by_id(client) and len(calls) == 2
     assert client.get("/api/dashboard/widgets/w0").json()["card"] is not None and len(calls) == 3
+
+
+def test_a_stuck_card_holds_one_thread_however_often_it_is_reloaded(client, org, fakes, monkeypatch, tmp_path):
+    from maxxing import extensions
+    from maxxing.api import dashboard
+    monkeypatch.setattr(dashboard, "TIMEOUT_S", 0.2)
+    flag = tmp_path / "release"
+    d = org.ws / "extensions" / "slow"
+    d.mkdir(parents=True)
+    (d / "manifest.json").write_text(json.dumps({"type": "widget"}))
+    (d / "api.py").write_text("import os, time\n\ndef card(ctx):\n    end = time.time() + 10\n"
+                              f"    while not os.path.exists({str(flag)!r}) and time.time() < end:\n"
+                              "        time.sleep(0.02)\n    return {'blocks': []}\n")
+    try:
+        errors = [client.get("/api/dashboard/widgets/slow").json()["error"]
+                  for _ in range(extensions.EXT_WORKERS + 1)]
+        assert errors[0].startswith("timed out") and all("previous call" in e for e in errors[1:])
+        assert extensions._stuck == 1                  # was one more taken thread per reload, then "busy"
+    finally:
+        flag.write_text("")
+    for _ in range(100):
+        if extensions._stuck == 0:
+            break
+        time.sleep(0.05)
+    assert extensions._stuck == 0 and not extensions._stuck_keys
+    assert client.get("/api/dashboard/widgets/slow").json()["card"] is not None
