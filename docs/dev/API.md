@@ -205,7 +205,7 @@ the change is re-applied on the fresh file (3 tries), then `409 conflict`. Not v
 | POST | `/api/tasks` | partial Task (title required) | `Task` · `422` when `order` is not a finite number |
 | PATCH | `/api/tasks/{id}` | partial Task | `Task` · `422` when `order` is not a finite number |
 | DELETE | `/api/tasks/{id}` | – | `{ok}` |
-| POST | `/api/tasks/bulk` | `{ids:[id], patch?:{status?, priority?, project_id?, due?, topic_path?, labels?}, labels_add?:[str], labels_remove?:[str], delete?:bool}` | `{ok, updated, deleted}` — one atomic write; unknown ids ignored (max 1000); tasks entering a column keep their relative order (top of `done`, bottom elsewhere) · `400 invalid_ids`/`invalid_labels` (more than 50 labels on a task)/validation codes of PATCH |
+| POST | `/api/tasks/bulk` | `{ids:[id], patch?:{status?, priority?, project_id?, due?, topic_path?, labels?}, labels_add?:[str], labels_remove?:[str], delete?:bool}` | `{ok, updated, deleted}` — one atomic write; unknown ids ignored; tasks entering a column keep their relative order (top of `done`, bottom elsewhere) · `400 invalid_ids`/`too_many_ids` (more than 1000 ids)/`invalid_labels` (more than 50 labels on a task)/validation codes of PATCH |
 | POST / PATCH / DELETE | `/api/tasks/projects[/{id}]` | `{name, color, hidden?}` | `TaskProject` · DELETE `409 linked_project` |
 
 ## Crons
