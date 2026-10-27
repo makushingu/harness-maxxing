@@ -1049,3 +1049,44 @@ def test_two_sqlite_files_with_the_same_name_keep_their_own_backups(org, monkeyp
         with sqlite3.connect(r["file"]) as c:
             got.add(c.execute("select x from t").fetchone()[0])
     assert got == {0, 1}
+
+
+def test_bucket_create_undoes_its_steps_when_one_fails(fake_caddy, monkeypatch):
+    calls = []
+
+    def fake_garage(*args, timeout=60):
+        calls.append(args)
+        if args[:2] == ("key", "create"):
+            return 0, "Key ID:              GK123\nSecret key:          s3cr3t\n", ""
+        if args[:2] == ("bucket", "website"):
+            return 1, "", "boom"
+        return 0, "", ""
+    monkeypatch.setattr(actions, "garage_installed", lambda: True)
+    monkeypatch.setattr(actions, "_garage", fake_garage)
+    with pytest.raises(actions.ActionError):
+        actions.bucket_create("media", public=True)
+    assert ("key", "delete", "--yes", "media-key") in calls and ("bucket", "delete", "--yes", "media") in calls
+    assert vault.get("S3_MEDIA_ACCESS_KEY_ID") is None and vault.get("S3_MEDIA_BUCKET") is None
+    # a taken site name is refused before anything is created
+    (fake_caddy / "maxxing-paths").mkdir(exist_ok=True)
+    (fake_caddy / "maxxing-paths" / "photos.caddy").write_text("")
+    calls.clear()
+    with pytest.raises(caddy.CaddyError):
+        actions.bucket_create("photos", public=True)
+    assert calls == []
+
+
+def test_pg_create_drops_the_role_when_the_database_fails(org, monkeypatch):
+    sql = []
+
+    def fake_psql(q, *a, **k):
+        sql.append(q)
+        if q.startswith("create database"):
+            return 1, "", "no space"
+        return 0, "", ""
+    monkeypatch.setattr(actions, "pg_installed", lambda: True)
+    monkeypatch.setattr(actions, "pg_databases", lambda: [])
+    monkeypatch.setattr(actions, "_psql", fake_psql)
+    with pytest.raises(actions.ActionError):
+        actions.pg_create("shop")
+    assert sql[-1] == 'drop role if exists "shop";'

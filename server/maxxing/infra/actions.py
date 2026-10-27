@@ -121,6 +121,7 @@ def pg_create(name: str, project: str | None = None) -> dict:
         raise ActionError("cannot create the role: " + _err(out, err), "psql_failed")
     code, out, err = _psql(f'create database "{name}" owner "{name}";')
     if code != 0:
+        _psql(f'drop role if exists "{name}";')        # else the next try stops on "a role named … exists"
         raise ActionError("cannot create the database: " + _err(out, err), "psql_failed")
     key = f"DB_{name.upper()}_URL"
     vault.put(key, f"postgresql://{name}:{pw}@127.0.0.1:5432/{name}", note=f"PostgreSQL database {name} (maxxing infra)",
@@ -328,32 +329,51 @@ def bucket_create(name: str, public: bool = False, project: str | None = None) -
         raise ActionError("bucket names use a-z, 0-9 and -, 3 to 63 characters", "invalid_name")
     if not garage_installed():
         raise ActionError("Garage is not installed: run `maxxing infra bucket install` first", "not_installed")
-    code, out, err = _garage("bucket", "create", name)
-    if code != 0:
-        raise ActionError("garage bucket create failed: " + _err(out, err), "garage_failed")
-    code, out, err = _garage("key", "create", f"{name}-key")
-    if code != 0:
-        raise ActionError("garage key create failed: " + _err(out, err), "garage_failed")
-    kid = re.search(r"Key ID:\s*(\S+)", out)
-    sec = re.search(r"Secret key:\s*(\S+)", out)
-    if not (kid and sec):
-        raise ActionError("could not read the new key from garage's output", "garage_failed")
-    code, out, err = _garage("bucket", "allow", "--read", "--write", "--owner", name, "--key", f"{name}-key")
-    if code != 0:
-        raise ActionError("garage bucket allow failed: " + _err(out, err), "garage_failed")
-    up = name.upper().replace("-", "_")
-    keys = {f"S3_{up}_ACCESS_KEY_ID": kid.group(1), f"S3_{up}_SECRET_ACCESS_KEY": sec.group(1),
-            f"S3_{up}_ENDPOINT": "http://127.0.0.1:3900", f"S3_{up}_BUCKET": name, f"S3_{up}_REGION": "garage"}
-    for k, v in keys.items():
-        vault.put(k, v, note=f"Garage bucket {name} (maxxing infra)", expose=False)
-    urls: list[str] = []
-    if public:
-        code, out, err = _garage("bucket", "website", "--allow", name)
-        if code != 0:
-            raise ActionError("garage bucket website failed: " + _err(out, err), "garage_failed")
+    if public:                                          # the site name is checked before anything is created
         from . import caddy
-        site = caddy.add_site(name, port=3902, upstream_host=f"{name}.web.garage.localhost", project=project, kind="bucket")
-        urls.append(site["url"])
+        caddy.check_name(name, project)
+    done: list[str] = []                                # undone in reverse order when a later step fails
+    keys: dict[str, str] = {}
+    try:
+        code, out, err = _garage("bucket", "create", name)
+        if code != 0:
+            raise ActionError("garage bucket create failed: " + _err(out, err), "garage_failed")
+        done.append("bucket")
+        code, out, err = _garage("key", "create", f"{name}-key")
+        if code != 0:
+            raise ActionError("garage key create failed: " + _err(out, err), "garage_failed")
+        done.append("key")
+        kid = re.search(r"Key ID:\s*(\S+)", out)
+        sec = re.search(r"Secret key:\s*(\S+)", out)
+        if not (kid and sec):
+            raise ActionError("could not read the new key from garage's output", "garage_failed")
+        code, out, err = _garage("bucket", "allow", "--read", "--write", "--owner", name, "--key", f"{name}-key")
+        if code != 0:
+            raise ActionError("garage bucket allow failed: " + _err(out, err), "garage_failed")
+        up = name.upper().replace("-", "_")
+        keys = {f"S3_{up}_ACCESS_KEY_ID": kid.group(1), f"S3_{up}_SECRET_ACCESS_KEY": sec.group(1),
+                f"S3_{up}_ENDPOINT": "http://127.0.0.1:3900", f"S3_{up}_BUCKET": name, f"S3_{up}_REGION": "garage"}
+        done.append("vault")
+        for k, v in keys.items():
+            vault.put(k, v, note=f"Garage bucket {name} (maxxing infra)", expose=False)
+        urls: list[str] = []
+        if public:
+            code, out, err = _garage("bucket", "website", "--allow", name)
+            if code != 0:
+                raise ActionError("garage bucket website failed: " + _err(out, err), "garage_failed")
+            site = caddy.add_site(name, port=3902, upstream_host=f"{name}.web.garage.localhost", project=project,
+                                  kind="bucket")
+            urls.append(site["url"])
+    except Exception:
+        # a half-made bucket blocked the next try ("bucket already exists") and left keys in the vault
+        if "vault" in done:
+            for k in keys:
+                vault.delete(k)
+        if "key" in done:
+            _garage("key", "delete", "--yes", f"{name}-key")
+        if "bucket" in done:
+            _garage("bucket", "delete", "--yes", name)
+        raise
     rid = f"bucket:local:garage:{name}"
     registry.declare(rid, kind="bucket", name=name, server="local", project=project, urls=urls, vault_keys=sorted(keys),
                      recipe={"engine": "garage", "public": public})
