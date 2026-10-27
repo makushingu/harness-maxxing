@@ -343,7 +343,8 @@ def summary() -> dict:
     overdue = [t for t in open_ if t["due"] and t["due"] < today]
     due_today = [t for t in open_ if t["due"] == today]
     doing = [t for t in open_ if t["status"] == "doing"]
-    items = sorted(overdue, key=lambda t: t["due"]) + due_today + [t for t in doing if t not in overdue + due_today]
+    listed = {id(t) for t in overdue} | {id(t) for t in due_today}
+    items = sorted(overdue, key=lambda t: t["due"]) + due_today + [t for t in doing if id(t) not in listed]
     return {"open": len(open_), "doing": len(doing), "due_today": len(due_today),
             "overdue": len(overdue), "items": items, "today": today}
 
