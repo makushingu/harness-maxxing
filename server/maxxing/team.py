@@ -785,6 +785,8 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
                 chat = {"id": cid, "kind": "dm", "name": "", "emoji": "", "members": [who], "created": time.time(),
                         "read_at": 0, "messages": [], "remote": True, "admin": None}
                 doc["chats"].append(chat)
+            elif kind in ("vote", "react", "edit", "delete"):   # gone here: nothing to change (a 404 is retried)
+                return
             else:
                 raise TeamError(404, "not_found", "Unknown chat")
         if not chat.get("remote") or chat.get("left") or who not in chat["members"]:
@@ -825,7 +827,9 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
             _typing_gen.pop((cid, who), None)
             fetch = [(msg["id"], f) for f in msg.get("files") or []]
         elif kind == "vote":
-            msg = _message(chat, str(event.get("msg"))[:40])
+            msg = next((m for m in chat["messages"] if m["id"] == str(event.get("msg"))[:40]), None)
+            if msg is None:                      # never arrived or deleted here: nothing to change
+                return
             opts = event.get("options") if isinstance(event.get("options"), list) else []
             chosen = {str(x) for x in opts[:12]}
             poll = msg.get("poll") or {"options": []}
@@ -840,7 +844,9 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
             emoji = event.get("emoji")
             if emoji not in REACTIONS:
                 raise TeamError(400, "invalid_emoji", "Unknown reaction")
-            msg = _message(chat, str(event.get("msg"))[:40])
+            msg = next((m for m in chat["messages"] if m["id"] == str(event.get("msg"))[:40]), None)
+            if msg is None:                      # never arrived or deleted here: nothing to change
+                return
             who_list = msg.setdefault("reactions", {}).setdefault(emoji, [])
             if event.get("on") and who not in who_list:
                 who_list.append(who)
