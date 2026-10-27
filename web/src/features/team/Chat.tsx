@@ -1109,7 +1109,7 @@ function Composer({
               <span className="font-medium">{editing ? t('team.msg.editing') : t('team.msg.replyingTo', { name: replyName })}</span>
               {!editing && replyTo && <span className="text-muted-foreground"> · {replyTo.text || replyTo.poll?.question || replyTo.files?.map((f) => f.name).join(', ')}</span>}
             </span>
-            <button type="button" onClick={editing ? stopEditing : onCancelReply} className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('common.cancel')}>
+            <button type="button" onClick={editing ? stopEditing : onCancelReply} className="rounded p-1 pointer-coarse:grid pointer-coarse:size-10 pointer-coarse:place-items-center text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('common.cancel')}>
               <X className="size-3.5" />
             </button>
           </div>
