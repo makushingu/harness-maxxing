@@ -52,14 +52,36 @@ def db_path() -> Path:
 
 def _conn() -> sqlite3.Connection:
     path = db_path()
+    key = str(path)
+    try:
+        return _open(path, key)
+    except sqlite3.DatabaseError:
+        if key in _ready:
+            raise
+    # Unreadable feed.db (not a database, corrupted): set it aside and start a fresh one, or the feed and every
+    # system notification (crons, updates, sign-ins) would fail from now on.
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    for suffix in ("", "-wal", "-shm"):
+        try:
+            os.replace(f"{path}{suffix}", f"{path}.damaged-{stamp}{suffix}")
+        except OSError:
+            pass
+    log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
+    return _open(path, key)
+
+
+def _open(path: Path, key: str) -> sqlite3.Connection:
     if not Path(path).exists():
         os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))     # private from the first byte
     c = sqlite3.connect(path, timeout=10)
     c.row_factory = sqlite3.Row
-    key = str(path)
     if key not in _ready:
         with _lock:
-            c.execute("PRAGMA journal_mode=WAL")
+            try:
+                c.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.DatabaseError:
+                c.close()
+                raise
             c.executescript("""
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
