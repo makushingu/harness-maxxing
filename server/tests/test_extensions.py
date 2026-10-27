@@ -320,3 +320,20 @@ def test_sys_exit_in_extension_code_never_escapes(client, org):
     _ext(org, "cx", {"type": "widget"}, "def card(ctx):\n    raise SystemExit(2)\n")
     r = client.get("/api/dashboard/widgets/cx")
     assert r.status_code == 200 and "SystemExit" in r.json()["error"]
+
+
+def test_requests_after_one_edit_share_a_single_rescan(client, org):
+    import os
+    import threading
+    count = org.ws / "imports.txt"
+    count.write_text("")
+    d = _ext(org, "slow", {"type": "widget"},
+             f"import time\nopen({str(count)!r}, 'a').write('x')\ntime.sleep(0.5)\ndef card(ctx):\n    return {{}}\n")
+    extensions.all_extensions()
+    count.write_text("")
+    st = (d / "manifest.json").stat()
+    os.utime(d / "manifest.json", ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    threads = [threading.Thread(target=extensions.all_extensions) for _ in range(5)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert count.read_text() == "x"
