@@ -6,9 +6,10 @@ import { Send } from 'lucide-react'
 import { useSettings, useTeam, useTeamCreateChat, useTeamSend } from '@/lib/queries'
 import { useT } from '@/i18n'
 import {
-  Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub,
+  Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, Textarea, toast,
 } from '@/components/ui'
+import { useCompact } from '@/stores/media'
 import { ChatAvatar, chatTitle, friendsOf, PersonAvatar } from './people'
 
 /** A friend (person id: their direct chat, created if needed) or a group (chat id). */
@@ -16,33 +17,48 @@ export type SendTarget = { person: string; name: string } | { chat: string; name
 
 const TEXT_MAX = 8000 // team.TEXT_MAX
 
-/** The "Send to" sub-menu: friends (online first), then the groups still open. Nothing when Team is off or empty. */
+/** The "Send to" sub-menu: friends (online first), then the groups still open. Nothing when Team is off or empty.
+ *  On touch the menu is a full-width sheet with no room beside it: the targets are listed in it instead. */
 export function SendToSub({ onPick }: { onPick: (target: SendTarget) => void }) {
   const t = useT()
+  const compact = useCompact()
   const { data: s } = useSettings()
   const { data: team } = useTeam(!!s?.team_page)
   if (!s?.team_page || !team) return null
   const friends = friendsOf(team)
   const groups = team.chats.filter((c) => c.kind === 'group' && !c.left)
   if (!friends.length && !groups.length) return null
+  const items = (
+    <>
+      {friends.map(([id, p]) => (
+        <DropdownMenuItem key={id} onSelect={() => onPick({ person: id, name: p.name })}>
+          <PersonAvatar person={p} size="sm" status /> <span className="truncate">{p.name}</span>
+        </DropdownMenuItem>
+      ))}
+      {!!friends.length && !!groups.length && <DropdownMenuSeparator />}
+      {groups.map((c) => (
+        <DropdownMenuItem key={c.id} onSelect={() => onPick({ chat: c.id, name: chatTitle(team, c) })}>
+          <ChatAvatar team={team} chat={c} size="md" /> <span className="truncate">{chatTitle(team, c)}</span>
+        </DropdownMenuItem>
+      ))}
+    </>
+  )
+  if (compact)
+    return (
+      <>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel data-testid="msg-send-to" className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Send className="size-3.5" /> {t('sessions.msg.sendTo')}
+        </DropdownMenuLabel>
+        {items}
+      </>
+    )
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger data-testid="msg-send-to">
         <Send /> {t('sessions.msg.sendTo')}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="max-h-80 min-w-48 overflow-y-auto">
-        {friends.map(([id, p]) => (
-          <DropdownMenuItem key={id} onSelect={() => onPick({ person: id, name: p.name })}>
-            <PersonAvatar person={p} size="sm" status /> <span className="truncate">{p.name}</span>
-          </DropdownMenuItem>
-        ))}
-        {!!friends.length && !!groups.length && <DropdownMenuSeparator />}
-        {groups.map((c) => (
-          <DropdownMenuItem key={c.id} onSelect={() => onPick({ chat: c.id, name: chatTitle(team, c) })}>
-            <ChatAvatar team={team} chat={c} size="md" /> <span className="truncate">{chatTitle(team, c)}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuSubContent>
+      <DropdownMenuSubContent className="max-h-80 min-w-48 overflow-y-auto">{items}</DropdownMenuSubContent>
     </DropdownMenuSub>
   )
 }
