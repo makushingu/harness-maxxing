@@ -280,3 +280,9 @@ def test_event_ids_too_big_for_sqlite_are_not_a_500(client, mx):
     assert client.post("/api/feed/read", json={"ids": [big, ev["id"]]}).status_code == 200
     assert client.delete(f"/api/feed/{big}").status_code < 500
     assert feed.get(big) is None and feed.get(ev["id"])["read"] is True
+
+
+def test_stripe_timestamp_with_thousands_of_digits_is_a_401(client, mx):
+    tok = feedhooks.create("stp", "stripe", "sek")["url"].rsplit("/", 1)[1]
+    r = feedhooks.deliver(tok, {"Stripe-Signature": "t=" + "9" * 5000 + ",v1=ab"}, b'{"type": "charge.succeeded"}')
+    assert r == (401, {"error": "bad_signature"})
