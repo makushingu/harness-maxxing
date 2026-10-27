@@ -130,7 +130,7 @@ function RunRow({ run, tz, showName, defaultOpen }: { run: CronRun; tz?: string;
             </Sensitive>
           )}
           {run.session_id && (
-            <Link to={`/sessions?session=${encodeURIComponent(run.session_id)}`} className="inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline">
+            <Link to={`/sessions?session=${encodeURIComponent(run.session_id)}`} className="inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline pointer-coarse:-my-2.5 pointer-coarse:min-h-10">
               {t('crons.openSession')}
               <ArrowUpRight className="size-3.5" />
             </Link>
