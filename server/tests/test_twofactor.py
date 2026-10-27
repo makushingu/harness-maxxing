@@ -192,3 +192,17 @@ def test_cli_password_or_forget_kills_approved_challenge(tg, cmd):
             cid = _login(c)["two_factor"]["challenge"]
             twofactor.decide(cid, True)
             assert c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H).json()["status"] == "approved"
+
+
+def test_a_call_without_session_does_not_consume_an_approved_enable_request(tg):
+    with TestClient(_app()) as c:
+        assert _login(c) == {"ok": True}
+        cid = c.put("/api/auth/two-factor", json={"enabled": True}, headers=H).json()["two_factor"]["challenge"]
+        twofactor.decide(cid, True)
+        cookies = dict(c.cookies)
+        c.cookies.clear()                                          # the session cookie expired meanwhile
+        r = c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H)
+        assert r.status_code == 401 and not twofactor.is_on()
+        c.cookies.update(cookies)                                  # signed in again: the approval is still there
+        assert c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H).json()["status"] == "approved"
+        assert twofactor.is_on()
