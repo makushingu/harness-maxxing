@@ -289,7 +289,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
         onPointerUp={onBarUp}
         onPointerCancel={onBarUp}
         onPointerLeave={() => setHover(null)}
-        className="group/bar relative flex h-4 cursor-pointer max-md:h-8 pointer-coarse:h-8 touch-none items-center"
+        className="group/bar relative flex h-4 cursor-pointer max-md:h-10 pointer-coarse:h-10 touch-none items-center"
       >
         <div className={cn('relative h-1 w-full overflow-hidden rounded-full transition-[height] group-hover/bar:h-1.5', video ? 'bg-white/25' : 'bg-muted')}>
           <div className={cn('absolute inset-y-0 left-0', video ? 'bg-white/35' : 'bg-foreground/15')} style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }} />
