@@ -131,6 +131,21 @@ def test_wrong_invitations_are_refused_then_blocked(client, monkeypatch):
     assert codes[:5] == [403] * 5 and codes[5] == 429
 
 
+def test_malformed_peer_input_is_refused_not_a_crash(client, monkeypatch):
+    """A port out of range, a proof or a signature that is not ASCII: 400 / 403, never a 500."""
+    key = _setup(monkeypatch)
+    teampeer.create_invite()
+    with pytest.raises(teampeer.PeerError):
+        teampeer.normalize("https://a.example.com:99999")
+    hello = {"from": "http://127.0.0.1:8803", "to": "http://127.0.0.1:8801", "nonce": "n", "proof": "\u00e9", "profile": {}}
+    assert client.post("/api/team-peer/hello", json=hello).status_code == 403
+    hello |= {"from": "https://a.example.com:99999", "proof": "0" * 64}
+    assert client.post("/api/team-peer/hello", json=hello).status_code == 400
+    body = b"{}"
+    h = {k: v.encode("latin-1") for k, v in _signed(key, body).items()} | {"X-Team-Sig": "\u00e9".encode("latin-1")}
+    assert client.post("/api/team-peer/inbox", content=body, headers=h).status_code == 403
+
+
 MALLORY = "http://127.0.0.1:8803"
 LEA = "http://127.0.0.1:8802"
 

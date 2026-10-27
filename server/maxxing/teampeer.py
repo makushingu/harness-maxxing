@@ -92,12 +92,21 @@ def _ip_kind(host: str) -> str:
     return "public"
 
 
+def _same(given: str, expected: str) -> bool:
+    """Constant-time check of a proof or signature sent by another server (text that is not ASCII is simply wrong:
+    hmac.compare_digest would raise TypeError on it)."""
+    return hmac.compare_digest(given.encode("utf-8", "surrogatepass"), expected.encode())
+
+
 def normalize(address: str) -> str:
     """'https://Ui.Example.com/' -> 'https://ui.example.com' (scheme + host + port, nothing else)."""
-    u = urlsplit((address or "").strip())
+    try:
+        u = urlsplit((address or "").strip())
+        port = f":{u.port}" if u.port else ""          # a port out of 0-65535 raises ValueError
+    except ValueError:
+        raise PeerError(400, "bad_address", "An address looks like https://ui.example.com") from None
     if u.scheme not in ("https", "http") or not u.hostname or u.username or u.password:
         raise PeerError(400, "bad_address", "An address looks like https://ui.example.com")
-    port = f":{u.port}" if u.port else ""
     return f"{u.scheme}://{u.hostname.lower()}{port}"
 
 
@@ -312,7 +321,7 @@ def join(invitation: str) -> dict:
         nonce_a, proof_a = str(data["nonce"]), str(data["proof"])
     except (ValueError, KeyError, TypeError):
         raise PeerError(502, "bad_answer", "Unexpected answer") from None
-    if not hmac.compare_digest(proof_a, _mac(key0, "welcome", addr, me, nonce_a, nonce_b)):
+    if not _same(proof_a, _mac(key0, "welcome", addr, me, nonce_a, nonce_b)):
         raise PeerError(502, "bad_answer", "The other server could not prove it made this invitation")
     key = _unb64(_mac_b(key0, "key", addr, me, nonce_a, nonce_b))
     with _lock:
@@ -351,7 +360,7 @@ def hello(body: dict, ip: str) -> dict:
         now = time.time()
         found = None
         for inv in doc["invites"]:
-            if inv["expires"] > now and hmac.compare_digest(proof, _mac(_unb64(inv["code"]), "hello", frm, me, nonce_b)):
+            if inv["expires"] > now and _same(proof, _mac(_unb64(inv["code"]), "hello", frm, me, nonce_b)):
                 found = inv
         if to != me or not found or frm == me:
             _fails.setdefault(ip, []).append(now)
@@ -467,7 +476,7 @@ def verify(method: str, path: str, headers: dict, body: bytes, ip: str) -> tuple
         p = _load()["peers"].get(frm)
         digest = hashlib.sha256(body).hexdigest()
         scope = next((s for s, k in _scopes(p or {})
-                      if hmac.compare_digest(sig, _mac(k, method, path, frm, me, str(ts), nonce, digest))), None)
+                      if _same(sig, _mac(k, method, path, frm, me, str(ts), nonce, digest))), None)
         if scope is None:
             raise PeerError(403, "unknown", "Unknown sender")
         _nonces[f"{frm}|{nonce}"] = now
