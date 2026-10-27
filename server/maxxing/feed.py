@@ -96,6 +96,15 @@ def _open(path: Path, key: str) -> sqlite3.Connection:
     return c
 
 
+_ID_MAX = 2**63 - 1                                                   # SQLite INTEGER
+
+
+def _id(v) -> int | None:
+    """An event id SQLite can hold, else None (a bigger int raises OverflowError: a 500)."""
+    v = int(v)
+    return v if -_ID_MAX <= v <= _ID_MAX else None
+
+
 def _row(r: sqlite3.Row) -> dict:
     return {"id": r["id"], "at": r["at"], "source": r["source"], "level": r["level"], "title": r["title"],
             "body": r["body"], "url": r["url"], "count": r["count"], "read": bool(r["read"])}
@@ -175,7 +184,7 @@ def list_events(source: str | None = None, unread: bool = False, before: int | N
         where.append("read=0")
     if before:
         where.append("id<?")
-        args.append(int(before))
+        args.append(min(max(int(before), -_ID_MAX), _ID_MAX))
     with _conn() as c:
         rows = c.execute(f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ?",
                          (*args, limit + 1)).fetchall()
@@ -205,18 +214,22 @@ def mark_read(ids: list[int] | None = None, source: str | None = None, everythin
         elif source:
             c.execute("UPDATE events SET read=1 WHERE read=0 AND source=?", (source,))
         elif ids:
-            c.executemany("UPDATE events SET read=1 WHERE id=?", [(int(i),) for i in ids[:500]])
+            c.executemany("UPDATE events SET read=1 WHERE id=?", [(i,) for i in map(_id, ids[:500]) if i is not None])
     bus.invalidate("feed")
     return unread_count()
 
 
 def delete(event_id: int) -> None:
+    if _id(event_id) is None:
+        return
     with _conn() as c:
         c.execute("DELETE FROM events WHERE id=?", (int(event_id),))
     bus.invalidate("feed")
 
 
 def get(event_id: int) -> dict | None:
+    if _id(event_id) is None:
+        return None
     with _conn() as c:
         r = c.execute("SELECT * FROM events WHERE id=?", (int(event_id),)).fetchone()
     return _row(r) if r else None
