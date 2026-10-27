@@ -852,7 +852,7 @@ function MessageTools({
       className={cn(
         'absolute -top-3.5 z-10 flex w-max items-center gap-0.5 rounded-lg border bg-popover p-0.5 opacity-0 shadow-sm transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 group-focus-within/msg:opacity-100 pointer-coarse:pointer-events-none pointer-coarse:group-focus-within/msg:pointer-events-auto',
         (open || menu) && 'pointer-events-auto opacity-100',
-        mine ? 'left-1' : 'right-1',
+        mine ? 'right-1' : 'left-1',
       )}
     >
       {onReply && !chat.left && (
@@ -896,7 +896,7 @@ function MessageTools({
             <MoreHorizontal className="size-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align={mine ? 'start' : 'end'} className="w-48">
+        <DropdownMenuContent align={mine ? 'end' : 'start'} className="w-48">
           {!!m.text && (
             <DropdownMenuItem onSelect={copy}>
               <Copy className="size-4" /> {t('team.copy')}
