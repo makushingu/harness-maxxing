@@ -1030,3 +1030,22 @@ def test_rotation_keeps_the_backups_of_a_database_sharing_the_prefix(monkeypatch
     assert sum(n.startswith("pg-app-v2-") for n in names) == actions.KEEP_BACKUPS + 2
     assert sum(n.startswith("pg-app-2") for n in names) == actions.KEEP_BACKUPS
     assert sum(n.startswith("sqlite-a[1]-") for n in names) == actions.KEEP_BACKUPS
+
+
+def test_two_sqlite_files_with_the_same_name_keep_their_own_backups(org, monkeypatch, tmp_path):
+    import sqlite3
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(tmp_path / "bk"))
+    monkeypatch.setattr(actions, "pg_installed", lambda: False)
+    for n, folder in enumerate(("one", "two")):
+        (tmp_path / folder).mkdir()
+        with sqlite3.connect(tmp_path / folder / "app.db") as c:
+            c.execute("create table t(x)")
+            c.execute("insert into t values (?)", (n,))
+        actions.declare_sqlite(str(tmp_path / folder / "app.db"))
+    res = actions.backup_all()
+    assert len(res) == 2 and all(r["ok"] for r in res) and res[0]["file"] != res[1]["file"]
+    got = set()
+    for r in res:
+        with sqlite3.connect(r["file"]) as c:
+            got.add(c.execute("select x from t").fetchone()[0])
+    assert got == {0, 1}

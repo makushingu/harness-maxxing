@@ -180,7 +180,8 @@ def backup_all() -> list[dict]:
         p = (r.get("details") or {}).get("path")
         if not rid.startswith("db:local:sqlite:") or not p:
             continue
-        safe = re.sub(r"[^A-Za-z0-9_.-]", "_", Path(p).name)
+        # the name and a short hash of the path: two app.db files in two folders must not share their backups
+        safe = re.sub(r"[^A-Za-z0-9_.-]", "_", Path(p).name) + "-" + hashlib.sha1(str(p).encode()).hexdigest()[:8]
         target = d / f"sqlite-{safe}-{stamp}.db"
         try:
             src = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=30)
