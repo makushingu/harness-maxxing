@@ -38,6 +38,7 @@ SUMMARY_MODEL = "claude-sonnet-5-5"
 SUMMARY_TIMEOUT_S = 120
 SUMMARY_MESSAGES = 200         # at most this many messages are summarized
 FILES_MAX = 10                  # files per message
+GROUPS_PER_CREATOR = 50         # groups another server's user may open here (they all live in team.json)
 COLORS = ("clay", "blue", "violet", "green", "amber", "rose", "teal", "zinc")
 _ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}$")         # message and poll option ids (the same on every server)
 REACTIONS = ("👍", "❤️", "😂", "🎉", "🤔", "👀")
@@ -760,6 +761,8 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
                     _save(doc)
                 teampeer.drop_chat_keys(cid)
                 return
+            if chat is None and sum(1 for c in doc["chats"] if c.get("remote") and c.get("admin") == who and not c.get("left")) >= GROUPS_PER_CREATOR:
+                raise TeamError(429, "too_many_groups", "Too many groups from this contact")
             teampeer.add_group_peers(cid, [(a, keys[a], m) for a, m in addrs if a not in (me, frm) and isinstance(keys.get(a), str)])
             members = [teampeer.pid(a) for a, _ in addrs if a != me and (a == frm or teampeer.has_link(a, cid))]
             doc = _load()
