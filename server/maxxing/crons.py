@@ -634,7 +634,8 @@ def append_run(run: dict) -> None:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             with open(p, "a+") as f:
-                f.write(json.dumps(run, ensure_ascii=False) + "\n")
+                # a lone surrogate (an answer cut inside an emoji) cannot be written as UTF-8: replace it
+                f.write(json.dumps(run, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8") + "\n")
                 f.flush()
                 f.seek(0)
                 lines = f.readlines()
@@ -1109,7 +1110,10 @@ def run_job(cid: str) -> dict | None:
         run = {"id": "r_" + _secrets.token_hex(4), "cron_id": cid, "name": job["name"], "at": start,
                "ok": ok, "code": code, "duration_s": round(time.time() - start, 2),
                "output_tail": tail, "session_id": session_id}
-        append_run(run)
+        try:
+            append_run(run)
+        except Exception:                                # the report still goes out
+            log.exception("cron %s: cannot record the run", cid)
     finally:
         try:
             fcntl.flock(lockf, fcntl.LOCK_UN)

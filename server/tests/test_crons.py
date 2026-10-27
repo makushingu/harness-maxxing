@@ -535,3 +535,14 @@ def test_job_with_a_non_text_id_is_ignored(org):
     data["jobs"].append({"id": ["a"], "name": "odd", "command": "true"})
     p.write_text(json.dumps(data))
     assert [j["id"] for j in crons.list_jobs()] == [good["id"]]
+
+
+def test_append_run_survives_lone_surrogate(org, monkeypatch):
+    sent = []
+    monkeypatch.setattr(crons, "_notify", lambda job, run, answer=None: sent.append(run))
+    j = crons.create_job({"name": "emoji", "command": "true"})
+    monkeypatch.setattr(crons, "_run_shell", lambda job: (True, 0, "cut \ud83d here"))
+    r = crons.run_job(j["id"])
+    assert r and sent == [r]
+    runs = crons.read_runs()
+    assert len(runs) == 1 and runs[0]["output_tail"] == "cut ? here"
