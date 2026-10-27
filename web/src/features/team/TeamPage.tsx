@@ -40,7 +40,7 @@ export default function TeamPage() {
       ) : (
         <div className="flex min-h-0 flex-1">
           {(wide || !chatId) && (
-            <aside className="flex w-full min-w-0 shrink-0 flex-col border-r md:w-80">
+            <aside className={`flex min-w-0 shrink-0 flex-col border-r ${wide ? 'w-80' : 'w-full'}`}>
               <TeamSide team={team} active={chatId} onOpen={open} />
             </aside>
           )}
