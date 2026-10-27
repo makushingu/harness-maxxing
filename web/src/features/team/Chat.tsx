@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import {
-  ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, Clock, Copy, FileText, Loader2, LogOut, MessageSquareShare, MoreHorizontal, Paperclip, Pencil, Reply, Search,
+  ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, Clock, Copy, FileText, Loader2, LogOut, MessageCircleMore, MessageSquareShare, MoreHorizontal, Paperclip, Pencil, RefreshCw, Reply, Search,
   Send, Settings2, Smile, Sparkles, SquarePen, Trash2, UserPlus, Users, X,
 } from 'lucide-react'
 import {
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
 import {
-  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner,
+  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner,
   Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { openFileViewer } from '@/features/files/viewerStore'
@@ -197,7 +197,8 @@ type Preset = 'hour' | 'two' | 'day' | 'last' | 'all'
 
 export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team: TeamState | undefined; chatId: string; onBack?: () => void; compact?: boolean; headerExtra?: React.ReactNode }) {
   const t = useT()
-  const { data, isLoading } = useTeamChat(chatId)
+  const { data, isLoading, isError, isFetching, refetch } = useTeamChat(chatId)
+  const failed = isError && !data
   const read = useTeamRead()
   const summarize = useTeamSummarize()
   const [forward, setForward] = React.useState<Forward | null>(null)
@@ -276,7 +277,21 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
     return t('team.fwd.fromMessage', { chat: title, name: who }) + quoted + files + '\n\n'
   }
 
-  if (!chat) return <div className="flex flex-1 items-center justify-center">{isLoading ? <Spinner /> : null}</div>
+  const retry = failed ? (
+    <EmptyState
+      compact
+      tone="error"
+      icon={MessageCircleMore}
+      title={t('team.chatLoadError')}
+      action={
+        <Button variant="outline" size="sm" className="gap-1.5" disabled={isFetching} onClick={() => refetch()}>
+          <RefreshCw className="size-3.5" />
+          {t('common.retry')}
+        </Button>
+      }
+    />
+  ) : null
+  if (!chat) return <div className="flex flex-1 items-center justify-center">{isLoading ? <Spinner /> : retry}</div>
   const writing = team?.typing?.[chatId] || []
   // "Seen" under the user's last message: who read up to it
   const lastMine = [...msgs].reverse().find((m) => m.kind !== 'info')
@@ -326,6 +341,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
       <div ref={scroller} className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto', compact ? 'px-2.5 py-3' : 'px-4 py-4 md:px-8')}>
         <div className={cn('mx-auto flex min-w-0 flex-col', !compact && 'max-w-3xl')}>
           {isLoading && <Skeleton className="h-40" />}
+          {retry}
           {msgs.map((m, i) => {
             const prev = msgs[i - 1]
             const next = msgs[i + 1]
@@ -378,7 +394,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
 
       {sel ? (
         <SelectBar count={sel.size} preset={preset} compact={compact} onPreset={choose} onNone={() => (setSel(new Set()), setPreset(null))} onCancel={() => setSel(null)} onRun={runSummary} />
-      ) : chat.left ? (
+      ) : failed ? null : chat.left ? (
         <div className={cn('shrink-0 border-t bg-muted/30 text-center text-[13px] text-muted-foreground', compact ? 'p-3' : 'p-4')}>{t('team.group.leftNotice')}</div>
       ) : (
         <Composer
