@@ -230,9 +230,10 @@ function RepoList({ onOpen }: { onOpen: (repo: string) => void }) {
   )
   const accounts = gh?.accounts || []
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Segmented
+          className="min-w-0"
           value={tab}
           onChange={setTab}
           aria-label={t('git.source')}
