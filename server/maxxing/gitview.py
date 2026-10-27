@@ -373,14 +373,30 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
     return {"repo": {**s, "kind": "local", "id": str(repo)}, "commits": commits[:limit], "truncated": truncated}
 
 
+def _object_commit(repo: Path, prefix: str) -> str:
+    """The commit of the one object whose id starts with `prefix` (an annotated tag gives the commit it points to)."""
+    out = set()
+    for obj in _git(repo, "rev-parse", "--disambiguate=" + prefix).split():
+        try:
+            out.add(_git(repo, "rev-parse", "--verify", "--quiet", obj + "^{commit}").strip())
+        except GitError:
+            pass                                          # a tree or blob
+    if len(out) != 1:
+        raise GitError(404, "no_commit", "no such commit")
+    return out.pop()
+
+
 def commit(path: str, sha: str) -> dict:
     repo = resolve(path)
     if not SHA_RE.match(sha or ""):
         raise GitError(400, "bad_sha", "invalid commit id")
     try:  # a tree, blob or annotated tag id would be "shown" as raw content with an empty author
-        sha = _git(repo, "rev-parse", "--verify", "--quiet", sha + "^{commit}").strip()
+        found = _git(repo, "rev-parse", "--verify", "--quiet", sha + "^{commit}").strip()
+        if not found.startswith(sha.lower()):     # a branch or tag named like the id won: look the id itself up
+            found = _object_commit(repo, sha.lower())
     except GitError:
         raise GitError(404, "no_commit", "no such commit") from None
+    sha = found
     head = _git(repo, "show", "-s", "--no-show-signature", f"--format=%H{FMT_SEP}%P{FMT_SEP}%an{FMT_SEP}%ae{FMT_SEP}%ct{FMT_SEP}%B", sha)
     h, parents, an, ae, ct, body = (head.split(SEP, 5) + [""] * 6)[:6]
     files = []
