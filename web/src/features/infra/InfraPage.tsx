@@ -74,7 +74,7 @@ function Row({ r, onOpen }: { r: InfraResource; onOpen: () => void }) {
           {r.urls.length > 0 && (
             <span className="flex flex-wrap gap-x-3 text-xs">
               {r.urls.slice(0, 3).map((u) => (
-                <a key={u} href={u} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex min-w-0 max-w-full items-center gap-0.5 truncate text-primary hover:underline pointer-coarse:min-h-10">
+                <a key={u} href={u} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex min-w-0 max-w-full items-center justify-center gap-0.5 truncate text-primary hover:underline pointer-coarse:min-h-10 pointer-coarse:min-w-10">
                   {u.replace(/^https?:\/\//, '').replace(/\/$/, '')} <ArrowUpRight className="size-3" />
                 </a>
               ))}
