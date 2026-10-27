@@ -999,3 +999,16 @@ def test_rdap_lookup_is_capped_and_redirects_stay_on_https(monkeypatch):
         assert providers.rdap_expiry("example.com")["expires"] == "2030-01-01T00:00:00Z"
     finally:
         srv.close()
+
+
+def test_names_with_a_trailing_newline_are_refused():
+    for rx in (actions.DB_NAME_RE, actions.BUCKET_RE, registry.NAME_RE, registry.DOMAIN_RE):
+        assert not rx.match("abcd\n") and not rx.match("abc.com\n")
+    with pytest.raises(actions.ActionError):
+        actions.pg_create("app\n")
+    with pytest.raises(actions.ActionError):
+        actions.bucket_create("media\n")
+    with pytest.raises(registry.RegistryError):
+        registry.check_server("srv\n", "1.2.3.4", key_must_exist=False)
+    with pytest.raises(registry.RegistryError):
+        registry.check_server("srv", "1.2.3.4\n", key_must_exist=False)

@@ -26,8 +26,8 @@ import httpx
 
 from .. import config
 
-DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
-BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}$")
+DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}\Z")
+BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}\Z")
 KEEP_BACKUPS = 7
 GARAGE_VERSION = "v2.1.0"
 GARAGE_URL = "https://garagehq.deuxfleurs.fr/_releases/{v}/{arch}-unknown-linux-musl/garage"
