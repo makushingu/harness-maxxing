@@ -289,7 +289,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
         onPointerUp={onBarUp}
         onPointerCancel={onBarUp}
         onPointerLeave={() => setHover(null)}
-        className="group/bar relative flex h-4 cursor-pointer max-md:h-8 pointer-coarse:h-8 touch-none items-center"
+        className="group/bar relative flex h-4 cursor-pointer max-md:h-10 pointer-coarse:h-10 touch-none items-center"
       >
         <div className={cn('relative h-1 w-full overflow-hidden rounded-full transition-[height] group-hover/bar:h-1.5', video ? 'bg-white/25' : 'bg-muted')}>
           <div className={cn('absolute inset-y-0 left-0', video ? 'bg-white/35' : 'bg-foreground/15')} style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }} />
@@ -329,7 +329,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             )}
           />
         </div>
-        <span className={cn('ml-1 text-xs tabular-nums', video ? 'text-white/90' : 'text-muted-foreground', volOpen && 'max-sm:hidden')}>
+        <span className={cn('ml-1 text-xs whitespace-nowrap tabular-nums', video ? 'text-white/90' : 'text-muted-foreground', volOpen && 'max-sm:hidden')}>
           {fmt(time)} <span className="opacity-60">/ {fmt(duration)}</span>
         </span>
         <span className="flex-1" />
@@ -362,7 +362,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
           {speed === 1 ? <Gauge className="size-[18px]" /> : <span className="text-xs font-semibold tabular-nums">{speed}×</span>}
         </PickButton>
         {video && typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && (
-          <CtrlButton label={t('media.pip')} onClick={pip} video={video}>
+          <CtrlButton label={t('media.pip')} onClick={pip} video={video} className="max-[399px]:hidden">
             <PictureInPicture2 className="size-[18px]" />
           </CtrlButton>
         )}
@@ -509,7 +509,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
   )
 }
 
-function CtrlButton({ label, onClick, video, children }: { label: string; onClick: () => void; video: boolean; children: React.ReactNode }) {
+function CtrlButton({ label, onClick, video, className, children }: { label: string; onClick: () => void; video: boolean; className?: string; children: React.ReactNode }) {
   return (
     <Tooltip content={label}>
       <button
@@ -517,8 +517,9 @@ function CtrlButton({ label, onClick, video, children }: { label: string; onClic
         onClick={onClick}
         aria-label={label}
         className={cn(
-          'flex size-8 items-center justify-center rounded-md transition-colors max-md:size-10 pointer-coarse:size-10 focus-visible:ring-2 focus-visible:outline-none',
+          'flex size-8 shrink-0 items-center justify-center rounded-md transition-colors max-md:size-10 pointer-coarse:size-10 focus-visible:ring-2 focus-visible:outline-none',
           video ? 'text-white/90 hover:bg-white/15 hover:text-white focus-visible:ring-white/70' : 'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring',
+          className,
         )}
       >
         {children}
@@ -534,7 +535,7 @@ function PickButton({ label, testid, value, options, onPick, video, children }: 
       <span
         data-testid={`${testid}-button`}
         className={cn(
-          'relative flex h-8 min-w-8 items-center max-md:h-10 max-md:min-w-10 pointer-coarse:h-10 pointer-coarse:min-w-10 justify-center rounded-md px-1 transition-colors has-[select:focus-visible]:ring-2',
+          'relative flex h-8 min-w-8 shrink-0 items-center max-md:h-10 max-md:min-w-10 pointer-coarse:h-10 pointer-coarse:min-w-10 justify-center rounded-md px-1 transition-colors has-[select:focus-visible]:ring-2',
           video ? 'text-white/90 hover:bg-white/15 hover:text-white has-[select:focus-visible]:ring-white/70' : 'text-muted-foreground hover:bg-accent hover:text-foreground has-[select:focus-visible]:ring-ring',
         )}
       >
