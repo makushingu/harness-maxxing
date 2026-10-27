@@ -418,7 +418,7 @@ function TaskEditor({
           <Tabs defaultValue={task.notes ? 'preview' : 'write'}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{t('tasks.field.notes')}</span>
-              <TabsList className="h-8 max-md:h-10">
+              <TabsList className="h-8 max-md:h-12 pointer-coarse:h-12">
                 <TabsTrigger value="write" className="text-[13px]">
                   {t('tasks.notes.write')}
                 </TabsTrigger>
