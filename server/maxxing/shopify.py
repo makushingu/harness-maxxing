@@ -75,7 +75,12 @@ def fetch(store: str, token: str, since: dt.date) -> dict[str, Any]:
                 raise RuntimeError("the store refused the token (check SHOPIFY_ADMIN_TOKEN and the read_orders scope)")
             if r.status_code >= 400:
                 raise RuntimeError(f"Shopify answered HTTP {r.status_code}")
-            body = r.json()
+            try:
+                body = r.json()
+            except ValueError:
+                body = None
+            if not isinstance(body, dict):
+                raise RuntimeError("Shopify sent an unreadable answer")
             if body.get("errors"):
                 raise RuntimeError(str(body["errors"])[:200])
             data = body.get("data") or {}
@@ -87,7 +92,7 @@ def fetch(store: str, token: str, since: dt.date) -> dict[str, Any]:
                 if n.get("cancelledAt"):
                     continue
                 money = ((n.get("totalPriceSet") or {}).get("shopMoney") or {})
-                orders.append({"name": n.get("name", ""), "at": n.get("createdAt", ""),
+                orders.append({"name": str(n.get("name") or ""), "at": str(n.get("createdAt") or ""),
                                "total": float(money.get("amount") or 0),
                                "fulfilled": n.get("displayFulfillmentStatus") == "FULFILLED"})
             info = page.get("pageInfo") or {}
