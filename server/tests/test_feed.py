@@ -259,3 +259,14 @@ def test_webhook_fields_of_another_type_are_text_not_a_500(client, mx):
     assert signed("stripe", big, {})[0] == 200
     events = feed.list_events()["events"]
     assert len(events) == 3 and "5" in [e["body"] for e in events]
+
+
+def test_an_unreadable_feed_db_is_set_aside_and_replaced(mx):
+    path = feed.db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"this is not a database" * 100)
+    feed._ready.discard(str(path))
+    assert feed.post("after the crash")["title"] == "after the crash"
+    assert [e["title"] for e in feed.list_events()["events"]] == ["after the crash"]
+    kept = list(path.parent.glob("feed.db.damaged-*"))
+    assert len(kept) == 1 and kept[0].read_bytes().startswith(b"this is not a database")
