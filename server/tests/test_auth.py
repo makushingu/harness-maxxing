@@ -103,7 +103,10 @@ def test_revocation_list_is_bounded(mx, monkeypatch):
     from maxxing import config
     security.set_password("rightpassword")
     monkeypatch.setattr(security, "REVOKED_MAX", 3)
+    import time
     keep = security.make_cookie()
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 5)    # the overflow comes a few seconds later
     for _ in range(4):
         security.revoke_cookie(security.make_cookie())
     assert not security.cookie_valid(keep)                    # overflow -> every older cookie refused
@@ -291,3 +294,21 @@ def test_cookies_made_at_once_while_the_keys_are_missing_all_stay_valid(mx, monk
         for t in threads:
             t.join()
         assert len(got) == 8 and all(valid(v) for v in got), make.__name__
+
+
+def test_a_cookie_issued_in_the_second_of_the_overflow_still_works(mx, monkeypatch):
+    import time
+    from maxxing import config
+    security.set_password("rightpassword")
+    monkeypatch.setattr(security, "REVOKED_MAX", 3)
+    old = [security.make_cookie() for _ in range(3)]
+    for v in old:
+        security.revoke_cookie(v)
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 5)
+    last = security.make_cookie()
+    security.revoke_cookie(last)                              # overflow
+    assert config.get_secret("sessions_not_before")
+    fresh = security.make_cookie()                            # signed in again within the same second
+    assert security.cookie_valid(fresh)
+    assert not any(security.cookie_valid(v) for v in [*old, last])   # this second's revocation is kept
