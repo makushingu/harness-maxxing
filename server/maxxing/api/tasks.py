@@ -559,9 +559,11 @@ BULK_MAX = 1000
 @_retry_on_change
 def bulk_tasks(body: BulkIn):
     """Same change on many tasks in one atomic write (or delete them). Unknown ids are ignored."""
-    ids = list(dict.fromkeys(str(x) for x in body.ids if x))[:BULK_MAX]
+    ids = list(dict.fromkeys(str(x) for x in body.ids if x))
     if not ids:
         raise _err(400, "invalid_ids", "ids must list at least one task id")
+    if len(ids) > BULK_MAX:                             # never apply part of the change in silence
+        raise _err(400, "too_many_ids", f"at most {BULK_MAX} tasks per request")
     patch = body.patch or TaskIn()
     fields = set(patch.model_fields_set) - {"title", "notes", "order"}
     add = list(dict.fromkeys(str(x).strip()[:40] for x in body.labels_add or [] if str(x).strip()))

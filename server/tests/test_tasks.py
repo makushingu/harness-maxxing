@@ -244,3 +244,15 @@ def test_infinite_order_is_refused_and_the_list_still_loads(client, org):
     r = client.patch(f"/api/tasks/{a['id']}", content='{"order": 1e999}', headers={"content-type": "application/json"})
     assert r.status_code == 422
     assert client.get("/api/tasks").status_code == 200
+
+
+def test_bulk_over_the_limit_is_refused_not_cut(client, org):
+    from maxxing.api import tasks as tasks_api
+    ids = [client.post("/api/tasks", json={"title": f"t{i}"}).json()["id"] for i in range(3)]
+    tasks_api.BULK_MAX, old = 2, tasks_api.BULK_MAX
+    try:
+        r = client.post("/api/tasks/bulk", json={"ids": ids, "patch": {"status": "done"}})
+    finally:
+        tasks_api.BULK_MAX = old
+    assert r.status_code == 400 and "too_many_ids" in r.text
+    assert all(t["status"] == "todo" for t in client.get("/api/tasks").json()["tasks"])
