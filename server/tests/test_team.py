@@ -391,3 +391,13 @@ def test_reading_typing_and_seen_do_not_reload_or_rewrite_team_json(client, sent
         team.typing(dm)
         team.mark_read(dm)
     assert len(reads) <= 1 and writes == []
+
+
+def test_summary_skips_a_deleted_poll(client, sent):
+    c = client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).json()
+    a = client.post(f"/api/team/chats/{c['id']}/messages", json={"text": "one"}).json()["id"]
+    p = client.post(f"/api/team/chats/{c['id']}/polls", json={"question": "When?", "options": ["Mon", "Tue"]}).json()
+    assert client.post(f"/api/team/chats/{c['id']}/messages/{p['id']}/delete").status_code == 200
+    b = client.post(f"/api/team/chats/{c['id']}/messages", json={"text": "two"}).json()["id"]
+    r = client.post(f"/api/team/chats/{c['id']}/summarize", json={"ids": [a, p["id"], b]})
+    assert r.status_code == 200 and r.json()["kind"] == "summary"

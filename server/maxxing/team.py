@@ -615,13 +615,13 @@ def _transcript(doc: dict, msgs: list[dict]) -> str:
     lines = []
     for m in msgs:
         who = (people.get(m["author"]) or {}).get("name") or m["author"]
+        if m.get("kind") in ("summary", "info") or m.get("deleted"):   # a deleted poll has no "poll" left
+            continue
         if m.get("kind") == "poll":
             p = m["poll"]
             opts = "; ".join(f"{o['label']} ({', '.join((people.get(v) or {}).get('name') or v for v in o['votes']) or 'no vote'})"
                              for o in p["options"])
             lines.append(f"{who} [poll] {p['question']}: {opts}")
-        elif m.get("kind") in ("summary", "info") or m.get("deleted"):
-            continue
         else:
             names = ", ".join(f["name"] for f in m.get("files") or [])
             lines.append(f"{who}: {m['text']}" + (f" [files: {names}]" if names else ""))
