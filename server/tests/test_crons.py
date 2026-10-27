@@ -526,3 +526,12 @@ def test_deleted_lists_even_with_a_bad_date(org, capsys):
     assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="deleted")) == 0
     out = capsys.readouterr().out
     assert all(f"c_old00{i}" in out for i in range(6))
+
+
+def test_job_with_a_non_text_id_is_ignored(org):
+    good = crons.create_job({"name": "good", "command": "true"})
+    p = crons.jobs_path()
+    data = json.loads(p.read_text())
+    data["jobs"].append({"id": ["a"], "name": "odd", "command": "true"})
+    p.write_text(json.dumps(data))
+    assert [j["id"] for j in crons.list_jobs()] == [good["id"]]

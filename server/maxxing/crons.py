@@ -344,7 +344,7 @@ def _read_raw() -> list[dict] | None:
     jobs = data.get("jobs", []) if isinstance(data, dict) else None
     if not isinstance(jobs, list):
         return None
-    return [j for j in jobs if isinstance(j, dict) and j.get("id")]
+    return [j for j in jobs if isinstance(j, dict) and j.get("id") and isinstance(j["id"], str)]
 
 
 def _load_raw() -> list[dict]:
