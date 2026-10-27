@@ -31,7 +31,7 @@ that shows ...". Hide the card with **Edit layout** once you have yours.
 | Server | CPU, memory, disk, uptime, health issues |
 | Memory backup | last run, age, repository |
 | Telegram | bot and link status |
-| Shopify | revenue today and over 7 days (vs the week before), orders today, orders to ship, 14-day revenue chart, latest orders — once a store is connected (below) |
+| Shopify | revenue today and over 7 days (vs the week before), orders today, orders to ship, 14-day revenue chart, latest orders — once a store is connected (below); beyond 5000 orders in 14 days it warns that older days are incomplete |
 | Make it yours | how to get your own widgets, with examples that open a session ready to send |
 | Claude usage | *off by default* (Settings -> Features): plan usage windows, the same as the bars at the bottom of the sidebar (read from the last Claude answer; when none came for 10 minutes it asks an undocumented Anthropic endpoint, which may stop working; when that endpoint fails or asks to wait, the last figures read from Claude stay shown). |
 

@@ -83,3 +83,25 @@ def test_a_malformed_answer_is_a_readable_error(mx, monkeypatch):
             assert c["title"] == "Shopify · S" and c["blocks"][2]["items"][0]["subtitle"] == ""
         else:
             assert c["status"] == "error" and "unreadable answer" in c["blocks"][0]["text"], name
+
+
+def test_a_window_with_too_many_orders_says_it_is_incomplete(mx, monkeypatch):
+    shopify._cache.update(at=0, key=None, card=None)
+    vault.put("SHOPIFY_STORE", "myshop.myshopify.com")
+    vault.put("SHOPIFY_ADMIN_TOKEN", "shpat_test")
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(1)
+        return httpx.Response(200, json={"data": {"shop": {"name": "Big", "currencyCode": "EUR"}, "orders": {
+            "pageInfo": {"hasNextPage": True, "endCursor": f"c{len(calls)}"},
+            "edges": [_order(f"#{len(calls)}-{i}", 0, 1) for i in range(250)]}}})
+    real = httpx.Client
+    monkeypatch.setattr(shopify.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    c = shopify.card(force=True)
+    assert len(calls) == shopify.MAX_PAGES and c["status"] == "warn"
+    assert f"latest {250 * shopify.MAX_PAGES} orders" in c["blocks"][-1]["text"]
+    calls.clear()
+    monkeypatch.setattr(shopify, "MAX_PAGES", 3)
+    data = shopify.fetch("myshop.myshopify.com", "shpat_test", dt.date(2026, 10, 1))
+    assert data["truncated"] is True and len(data["orders"]) == 750

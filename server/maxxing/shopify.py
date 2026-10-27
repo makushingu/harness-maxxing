@@ -22,6 +22,7 @@ from . import config
 API_VERSION = "2025-01"
 CACHE_S = 120
 DAYS = 14
+MAX_PAGES = 20                                           # 250 orders a page: up to 5000 over the window
 STORE_KEY, TOKEN_KEY = "SHOPIFY_STORE", "SHOPIFY_ADMIN_TOKEN"
 QUERY = """query($q: String!, $after: String) {
   shop { name currencyCode }
@@ -36,7 +37,10 @@ _T = {"fr": {"Shopify": "Shopify", "Revenue today": "CA du jour", "Orders today"
              "To ship": "À expédier", "Last 7 days": "7 derniers jours", "Revenue": "Chiffre d'affaires",
              "Latest orders": "Dernières commandes", "No order yet": "Aucune commande pour l'instant",
              "Connect your store": "Connecter votre boutique", "unfulfilled": "à expédier",
-             "fulfilled": "expédiée", "vs previous 7 days": "vs 7 jours précédents"}}
+             "fulfilled": "expédiée", "vs previous 7 days": "vs 7 jours précédents",
+             "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
+                 "Seules les {n} dernières commandes sont comptées : les jours plus anciens et la comparaison "
+                 "sur 7 jours sont incomplets."}}
 _cache: dict[str, Any] = {"at": 0.0, "key": None, "card": None}
 _lock = threading.Lock()
 
@@ -62,10 +66,11 @@ def _url(store: str) -> str:
 
 
 def fetch(store: str, token: str, since: dt.date) -> dict[str, Any]:
-    """-> {shop, currency, orders:[{name, at, total, fulfilled}]} (raises RuntimeError with a readable reason)."""
-    orders, after, shop, cur = [], None, store, ""
+    """-> {shop, currency, orders:[{name, at, total, fulfilled}], truncated} (raises RuntimeError with a readable
+    reason). `truncated`: the window holds more than MAX_PAGES pages, the oldest orders are missing."""
+    orders, after, shop, cur, truncated = [], None, store, "", False
     with httpx.Client(timeout=12) as c:
-        for _ in range(4):                                   # up to 1000 orders over the window
+        for page_no in range(MAX_PAGES):
             try:
                 r = c.post(_url(store), json={"query": QUERY, "variables": {"q": f"created_at:>={since.isoformat()}", "after": after}},
                            headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
@@ -98,8 +103,9 @@ def fetch(store: str, token: str, since: dt.date) -> dict[str, Any]:
             info = page.get("pageInfo") or {}
             if not info.get("hasNextPage"):
                 break
+            truncated = page_no == MAX_PAGES - 1
             after = info.get("endCursor")
-    return {"shop": shop, "currency": cur, "orders": orders}
+    return {"shop": shop, "currency": cur, "orders": orders, "truncated": truncated}
 
 
 def _money(v: float, cur: str) -> str:
@@ -129,18 +135,22 @@ def build_card(data: dict[str, Any], today: dt.date, tz: ZoneInfo) -> dict:
     points = [[d.isoformat(), round(by_day[d], 2)] for d in sorted(by_day)]
     latest = [{"title": o["name"], "subtitle": o["at"][:16].replace("T", " "), "value": _money(o["total"], cur),
                "status": "ok" if o["fulfilled"] else "warn"} for o in data["orders"][:4]]
+    blocks = [
+        {"type": "stats", "items": [
+            {"type": "stat", "label": t("Revenue today"), "value": _money(by_day[today], cur)},
+            {"type": "stat", "label": t("Orders today"), "value": count_today},
+            {"type": "stat", "label": t("To ship"), "value": to_ship, "tone": "warn" if to_ship else None},
+            {"type": "stat", "label": t("Last 7 days"), "value": _money(last7, cur), "delta": delta,
+             "hint": t("vs previous 7 days") if delta else None}]},
+        {"type": "chart", "kind": "bar", "series": [{"name": t("Revenue"), "points": points}], "unit": cur},
+        {"type": "list", "items": latest, "empty": t("No order yet")},
+    ]
+    if data.get("truncated"):
+        blocks.append({"type": "markdown", "text": t(
+            "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete."
+        ).format(n=len(data["orders"]))})
     return {"title": f"{t('Shopify')} · {data['shop']}", "link": "/settings/keys",
-            "status": "warn" if to_ship > 10 else "ok",
-            "blocks": [
-                {"type": "stats", "items": [
-                    {"type": "stat", "label": t("Revenue today"), "value": _money(by_day[today], cur)},
-                    {"type": "stat", "label": t("Orders today"), "value": count_today},
-                    {"type": "stat", "label": t("To ship"), "value": to_ship, "tone": "warn" if to_ship else None},
-                    {"type": "stat", "label": t("Last 7 days"), "value": _money(last7, cur), "delta": delta,
-                     "hint": t("vs previous 7 days") if delta else None}]},
-                {"type": "chart", "kind": "bar", "series": [{"name": t("Revenue"), "points": points}], "unit": cur},
-                {"type": "list", "items": latest, "empty": t("No order yet")},
-            ]}
+            "status": "warn" if to_ship > 10 or data.get("truncated") else "ok", "blocks": blocks}
 
 
 def connect_card() -> dict:
