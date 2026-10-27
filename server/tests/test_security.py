@@ -203,7 +203,9 @@ def test_site_token_dies_with_sessions_not_before(client, tree, monkeypatch):  #
     url = _site_url(client, tree / "report" / "index.html")
     assert client.get(url).status_code == 200
     monkeypatch.setattr(security, "REVOKED_MAX", 0)
-    assert client.post("/api/auth/logout").status_code == 200      # overflow: list dropped, not_before = now + 1
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 5)          # the overflow comes a few seconds later
+    assert client.post("/api/auth/logout").status_code == 200      # overflow: list dropped, not_before = now
     from maxxing import config
     assert config.load_secrets().get("revoked_sessions") is None
     assert client.get(url).status_code == 403
