@@ -266,3 +266,28 @@ def test_setup_links_made_at_once_share_one_token(mx, monkeypatch):
     for t in threads:
         t.join()
     assert len(set(got)) == 1 and security.check_setup_token(got[0])
+
+
+def test_cookies_made_at_once_while_the_keys_are_missing_all_stay_valid(mx, monkeypatch):
+    import secrets
+    import threading
+    import time as _time
+
+    from maxxing import config, twofactor
+    security.set_password("rightpassword")
+    config.set_secrets({"cookie_key": None, "device_key": None})       # password changed / browsers forgotten
+    real = secrets.token_hex
+    monkeypatch.setattr(secrets, "token_hex", lambda n=None: _time.sleep(0.05) or real(n))
+    for make, valid in ((security.make_cookie, security.cookie_valid),
+                        (twofactor.make_device_cookie, twofactor.device_trusted)):
+        gate, got = threading.Barrier(8), []
+
+        def one():
+            gate.wait()
+            got.append(make())
+        threads = [threading.Thread(target=one) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(got) == 8 and all(valid(v) for v in got), make.__name__
