@@ -158,11 +158,19 @@ def load(copy_: bool = True) -> dict:
             if "workspace" in proj and not isinstance(proj["workspace"], str):   # a list is not a dict key: _sync failed
                 proj.pop("workspace")
         tasks = []
+        taken = {t.get("id") for t in data.get("tasks") or [] if isinstance(t, dict) and t.get("id")}
         for t in data.get("tasks") or []:
             if isinstance(t, dict):
                 if not t.get("id"):                    # hand-written task: stable id until saved
-                    digest = hashlib.sha1(json.dumps(t, sort_keys=True, default=str).encode()).hexdigest()
+                    base = json.dumps(t, sort_keys=True, default=str)
+                    n = 0                              # two identical tasks must not share an id
+                    while True:
+                        digest = hashlib.sha1((base + (f"#{n}" if n else "")).encode()).hexdigest()
+                        if f"t_{digest[:6]}" not in taken:
+                            break
+                        n += 1
                     t = {**t, "id": f"t_{digest[:6]}"}
+                    taken.add(t["id"])
                 tasks.append(_norm_task(t))
         data["tasks"] = tasks
         _cache["sig"], _cache["data"] = sig, (copy.deepcopy(data) if copy_ else data)
