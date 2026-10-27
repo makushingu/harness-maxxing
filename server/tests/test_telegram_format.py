@@ -151,3 +151,15 @@ def test_cron_notify_shell_failure_keeps_the_end_on_a_line(report_job):
     header, body, markdown, loud = report_job[-1]
     assert header.startswith("FAILED (code 1) - backup") and not markdown and loud
     assert body.startswith("…\nstep ") and body.endswith("ERROR: disk full") and len(body) <= 603
+
+
+def test_link_label_with_code_keeps_the_code():
+    out = fmt.inline("see [`config.py`](https://e.com/a)")
+    assert out == 'see <a href="https://e.com/a"><code>config.py</code></a>'
+    out = fmt.inline("[the `x` **file**](https://e.com/b)")
+    assert out == '<a href="https://e.com/b">the <code>x</code> <b>file</b></a>'
+
+
+def test_table_cell_link_with_code():
+    html = "".join(fmt.render("| a | b |\n|---|---|\n| [`c.py`](https://e.com/c) | 1 |"))
+    assert "c.py" in html and ">0<" not in html
