@@ -55,7 +55,7 @@ function Row({ r, onOpen }: { r: InfraResource; onOpen: () => void }) {
         data-testid="infra-row"
       >
         <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
-        <div className="grid min-w-0 flex-1 gap-0.5">
+        <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 flex-1 gap-0.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <StatusDot tone={STATUS_TONE[r.status]} label={statusText(r, t)} />
             <span className="truncate font-medium">{r.name}</span>
@@ -74,7 +74,7 @@ function Row({ r, onOpen }: { r: InfraResource; onOpen: () => void }) {
           {r.urls.length > 0 && (
             <span className="flex flex-wrap gap-x-3 text-xs">
               {r.urls.slice(0, 3).map((u) => (
-                <a key={u} href={u} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-0.5 truncate text-primary hover:underline pointer-coarse:min-h-10">
+                <a key={u} href={u} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex min-w-0 max-w-full items-center gap-0.5 truncate text-primary hover:underline pointer-coarse:min-h-10">
                   {u.replace(/^https?:\/\//, '').replace(/\/$/, '')} <ArrowUpRight className="size-3" />
                 </a>
               ))}
@@ -130,7 +130,7 @@ function Overview({ v, items, all, onOpen, onTab, how }: { v: InfraView; items: 
   const t = useT()
   const problems = items.filter((r) => r.status === 'down' || r.status === 'warn').sort((a, b) => ORDER[a.status] - ORDER[b.status])
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       {!how.hidden && <HowItWorks onHide={how.hide} />}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {TABS.map((tab) => {
@@ -153,10 +153,10 @@ function Overview({ v, items, all, onOpen, onTab, how }: { v: InfraView; items: 
           )
         })}
       </div>
-      <section className="grid gap-2">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 className="text-sm font-semibold">{t('infra.problems')}</h2>
         {problems.length ? (
-          <ul className="grid gap-2 lg:grid-cols-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
             {problems.map((r) => (
               <Row key={r.id} r={r} onOpen={() => onOpen(r.id)} />
             ))}
@@ -563,9 +563,9 @@ export default function InfraPage() {
                 )
               if (tab === 'servers')
                 return (
-                  <div className="grid gap-3">
+                  <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
                     <p className="text-[13px] text-muted-foreground">{t('infra.srv.tabHint')}</p>
-                    <ul className="grid gap-3 lg:grid-cols-2">
+                    <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
                       {items
                         .slice()
                         .sort((a, b) => Number(!!b.details.this) - Number(!!a.details.this) || Number(!!a.details.not_connected) - Number(!!b.details.not_connected) || a.name.localeCompare(b.name))
@@ -576,7 +576,7 @@ export default function InfraPage() {
                   </div>
                 )
               return (
-                <div className="grid gap-5">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
                   {tab === 'domains' && (
                     <div className="flex flex-wrap items-center gap-3">
                       <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">{t('infra.dom.tabHint')}</p>
@@ -586,12 +586,12 @@ export default function InfraPage() {
                   {groupByLocation(items).map(([loc, list]) => {
                     const LIcon = LOCATION_ICON(loc)
                     return (
-                      <section key={loc} className="grid gap-2">
+                      <section key={loc} className="grid grid-cols-[minmax(0,1fr)] gap-2">
                         <h2 className="flex items-center gap-2 text-sm font-semibold">
                           <LIcon className="size-4 text-muted-foreground" /> {locationLabel(loc, t)}
                           <span className="text-xs font-normal text-muted-foreground">{list.length}</span>
                         </h2>
-                        <ul className="grid gap-2 lg:grid-cols-2">
+                        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
                           {list
                             .slice()
                             .sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.name.localeCompare(b.name))
