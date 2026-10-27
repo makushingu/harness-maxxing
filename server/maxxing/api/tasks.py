@@ -369,6 +369,9 @@ class ProjectIn(BaseModel):
     hidden: Optional[bool] = None
 
 
+LABELS_MAX = 50
+
+
 def _err(status: int, code: str, msg: str) -> HTTPException:
     return HTTPException(status, detail={"error": code, "message": msg})
 
@@ -410,11 +413,9 @@ def _apply(task: dict, body: TaskIn, data: dict, fields: set[str]) -> None:
             if proj:
                 task["project_id"] = proj["id"]
     if "labels" in fields:
-        labels = []
-        for x in body.labels or []:
-            x = str(x).strip()[:40]
-            if x and x not in labels:
-                labels.append(x)
+        labels = list(dict.fromkeys(x for x in (str(x).strip()[:40] for x in body.labels or []) if x))
+        if len(labels) > LABELS_MAX:
+            raise _err(400, "invalid_labels", f"at most {LABELS_MAX} labels per task")
         task["labels"] = labels
     if "status" in fields and body.status:
         if body.status == "done" and task.get("status") != "done":
@@ -563,7 +564,9 @@ def bulk_tasks(body: BulkIn):
         raise _err(400, "invalid_ids", "ids must list at least one task id")
     patch = body.patch or TaskIn()
     fields = set(patch.model_fields_set) - {"title", "notes", "order"}
-    add = [str(x).strip()[:40] for x in body.labels_add or [] if str(x).strip()]
+    add = list(dict.fromkeys(str(x).strip()[:40] for x in body.labels_add or [] if str(x).strip()))
+    if len(add) > LABELS_MAX:
+        raise _err(400, "invalid_labels", f"at most {LABELS_MAX} labels per task")
     remove = {str(x).strip() for x in body.labels_remove or []}
     with _lock:
         data = _guard()
@@ -583,7 +586,10 @@ def bulk_tasks(body: BulkIn):
             _apply(t, patch, data, fields)
             if add or remove:
                 labels = [x for x in t["labels"] if x not in remove]
-                t["labels"] = labels + [x for x in add if x not in labels]
+                kept = set(labels)
+                t["labels"] = labels + [x for x in add if x not in kept]
+                if len(t["labels"]) > LABELS_MAX:
+                    raise _err(400, "invalid_labels", f"at most {LABELS_MAX} labels per task")
             t["updated"] = now
         # Tasks entering a column keep their relative order: on top of "done", at the bottom elsewhere.
         if moving:
