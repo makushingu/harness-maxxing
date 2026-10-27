@@ -2509,6 +2509,8 @@ export const fr: Record<keyof typeof en, string> = {
   'team.noMatch': "Aucune discussion de ce nom.",
   'team.noMessage': "Pas encore de message",
   'team.you': "Vous",
+  'team.notContact': "pas un contact",
+  'team.notContactHint': "Pas un de vos contacts : c'est le créateur du groupe qui garantit son identité, et il pourrait écrire à sa place.",
   'team.today': "Aujourd’hui",
   'team.yesterday': "Hier",
   'team.status.online': "En ligne",
