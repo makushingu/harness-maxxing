@@ -435,7 +435,7 @@ Between servers (public, no cookie, `404` while `team_page` is off; protocol in 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/api/team-peer/hello` | `{from, to, nonce_b, proof, profile}` | `{nonce_a, proof_a, profile}` · `403` no matching invitation · `429` after 5 bad hellos/h/IP |
-| POST | `/api/team-peer/inbox` | signed event `{type: accept\|refuse\|bye\|profile\|presence\|chat\|message\|vote\|react\|typing\|read\|edit\|delete\|leave, …}` | `{ok}` · `401` unsigned / stale / replayed · `403` bad signature |
+| POST | `/api/team-peer/inbox` | signed event `{type: accept\|refuse\|bye\|profile\|presence\|chat\|message\|vote\|react\|typing\|read\|edit\|delete\|leave, …}` | `{ok}` · `401` unsigned / stale / replayed · `403` bad signature · `429` `too_many_groups` (a new group past 50 open groups from that sender) |
 | GET | `/api/team-peer/files/{fid}` | signed | the file, when the sender is a member of a chat where it was shared |
 
 ## Dashboard & extensions
