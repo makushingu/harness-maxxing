@@ -85,7 +85,7 @@ export function ChatList({
         <button
           type="button"
           onClick={onFriends}
-          className="mx-2 mb-1 flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/[0.06] px-3 py-2 text-left text-[12.5px] font-medium hover:bg-primary/10"
+          className="mx-2 mb-1 flex items-center gap-2 rounded-lg border border-primary/40 pointer-coarse:min-h-10 bg-primary/[0.06] px-3 py-2 text-left text-[12.5px] font-medium hover:bg-primary/10"
         >
           <UserPlus className="size-4 text-primary" />
           {t('team.cx.pending', { count: requests })}
