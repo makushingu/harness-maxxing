@@ -235,3 +235,12 @@ def test_system_project_hidden_by_default(client, org):
     (org.ws / "projects" / "system").mkdir(parents=True, exist_ok=True)       # created by hand
     proj = next(p for p in client.get("/api/tasks").json()["projects"] if p.get("workspace") == "system")
     assert proj["hidden"] is True
+
+
+def test_infinite_order_is_refused_and_the_list_still_loads(client, org):
+    a = client.post("/api/tasks", json={"title": "a"}).json()
+    raw = '{"title": "b", "order": 1e999}'
+    assert client.post("/api/tasks", content=raw, headers={"content-type": "application/json"}).status_code == 422
+    r = client.patch(f"/api/tasks/{a['id']}", content='{"order": 1e999}', headers={"content-type": "application/json"})
+    assert r.status_code == 422
+    assert client.get("/api/tasks").status_code == 200

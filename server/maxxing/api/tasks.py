@@ -33,7 +33,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import bus, config
 from ..security import require_auth
@@ -360,7 +360,7 @@ class TaskIn(BaseModel):
     project_id: Optional[str] = None
     topic_path: Optional[str] = None
     labels: Optional[list[str]] = None
-    order: Optional[float] = None
+    order: Optional[float] = Field(None, allow_inf_nan=False)   # inf/NaN broke every later listing
 
 
 class ProjectIn(BaseModel):
