@@ -631,7 +631,10 @@ def _write(p: Path, content: str, expected: float | None) -> dict:
     tmp = Path(name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
+            try:
+                f.write(content)
+            except UnicodeEncodeError:                  # a lone surrogate (\ud800) passes JSON, not UTF-8
+                raise _err(400, "bad_content", "The text holds a character that cannot be saved") from None
         os.chmod(tmp, mode if mode is not None else 0o666 & ~config._UMASK)   # noqa: SLF001 (umask read once)
         os.replace(tmp, p)
     finally:
