@@ -745,7 +745,7 @@ function MessageRow({
                 <Link
                   key={i}
                   to={`/sessions/${s.session}`}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  className="relative inline-flex max-w-full items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] pointer-coarse:before:absolute pointer-coarse:before:-inset-y-2 pointer-coarse:before:inset-x-0 text-muted-foreground hover:border-primary/50 hover:text-foreground"
                 >
                   <MessageSquareShare className="size-3 text-primary" />
                   <span className="truncate">{t('team.sentTo', { title: s.title || s.session })}</span>
