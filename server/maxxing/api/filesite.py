@@ -129,6 +129,8 @@ async def site(token: str, rel: str):
     folder, only = tok
     base = folder.resolve()
     root = _root()
+    if "\x00" in rel:                                # resolve() raises ValueError on a NUL byte: a 500
+        raise _err(404, "not_found", "File not found")
     if _hidden(Path(rel)):
         raise _err(403, "forbidden", "Hidden files are not served")
     if only is not None:                           # single-file token: that file, nothing else

@@ -221,3 +221,34 @@ def test_write_file_with_a_long_name(client, mx):
     p.write_text("old")
     assert client.put("/api/files/write", json={"path": str(p), "content": "new"}).status_code == 200
     assert p.read_text() == "new" and [x.name for x in mx["files"].iterdir()] == [p.name]
+
+
+def test_names_over_255_bytes_are_refused_not_500(client, tree):
+    long = "é" * 130                                                # 260 bytes
+    assert client.post("/api/files/mkdir", json={"path": str(tree / long)}).status_code == 400
+    assert client.put("/api/files/write", json={"path": str(tree / long), "content": "x"}).status_code == 400
+    (tree / "a.md").write_text("a")
+    r = client.post("/api/files/move", json={"from": str(tree / "a.md"), "to": str(tree / long)})
+    assert r.status_code == 400 and (tree / "a.md").exists()
+
+
+def test_tar_listing_with_a_latin1_name(client, tree):
+    import io
+    import tarfile
+    p = tree / "old.tar"
+    with tarfile.open(p, "w", format=tarfile.GNU_FORMAT, encoding="latin-1") as tf:
+        info = tarfile.TarInfo("caf\xe9.txt")
+        info.size = 2
+        tf.addfile(info, io.BytesIO(b"hi"))
+    r = client.get("/api/files/archive", params={"path": str(p)})
+    assert r.status_code == 200
+    assert [e["name"] for e in r.json()["entries"]] == ["caf�.txt"]
+
+
+def test_write_with_a_lone_surrogate_is_a_400(client, tree):
+    p = tree / "s.md"
+    p.write_text("before")
+    r = client.put("/api/files/write", content='{"path": "%s", "content": "a\\ud800b"}' % p,
+                   headers={"content-type": "application/json"})
+    assert r.status_code == 400 and "bad_content" in r.text
+    assert p.read_text() == "before" and not [x for x in tree.iterdir() if x.name.startswith(".mx-")]

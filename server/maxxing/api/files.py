@@ -78,6 +78,8 @@ def resolve(path: str | None, *, follow: bool = True, new: bool = False) -> Path
     if not raw.is_absolute():
         raise _err(400, "bad_path", "Paths must be absolute")
     raw = _unshow(raw.parent) / raw.name if new and raw.name else _unshow(raw)
+    if any(len(os.fsencode(part)) > 255 for part in raw.parts):   # ENAMETOOLONG in mkdir/write/move: a 500
+        raise _err(400, "bad_path", "A name is longer than 255 bytes")
     try:
         p = raw.resolve() if follow else raw.parent.resolve() / raw.name
         if raw.name in ("", ".", ".."):
@@ -531,7 +533,7 @@ def _archive(p: Path) -> dict:
                         if count > ARCHIVE_MAX:
                             truncated = True
                             break
-                        entries.append({"name": m.name + ("/" if m.isdir() else ""), "size": m.size,
+                        entries.append({"name": _shown(m.name) + ("/" if m.isdir() else ""), "size": m.size,
                                         "dir": m.isdir(), "mtime": m.mtime or None})
                 except _ReadCap:
                     truncated = True
@@ -629,7 +631,10 @@ def _write(p: Path, content: str, expected: float | None) -> dict:
     tmp = Path(name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
+            try:
+                f.write(content)
+            except UnicodeEncodeError:                  # a lone surrogate (\ud800) passes JSON, not UTF-8
+                raise _err(400, "bad_content", "The text holds a character that cannot be saved") from None
         os.chmod(tmp, mode if mode is not None else 0o666 & ~config._UMASK)   # noqa: SLF001 (umask read once)
         os.replace(tmp, p)
     finally:

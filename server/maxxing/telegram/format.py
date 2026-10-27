@@ -55,10 +55,15 @@ def inline(text: str) -> str:
     # inline code (``a`b`` or `a`) - content is verbatim
     text = re.sub(r"(`+)(.+?)\1", lambda m: keep(f"<code>{escape(m.group(2).strip())}</code>"), text)
 
+    def _label(src: str) -> str:
+        # the label may hold code slots already: render the text around them, keep the slots
+        parts = re.split(r"\x00(\d+)\x00", src)
+        return "".join(slots[int(x)] if i % 2 else inline(x) for i, x in enumerate(parts))
+
     # links [label](url) and autolinks <https://…>
     def _link(m: re.Match) -> str:
         url = _safe_url(m.group(2))
-        label = inline(m.group(1)) if m.group(1) else escape(m.group(2))
+        label = _label(m.group(1)) if m.group(1) else escape(m.group(2))
         return keep(f'<a href="{url}">{label}</a>') if url else keep(escape(m.group(0)))
 
     text = re.sub(r"!?\[([^\]\n]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", _link, text)
