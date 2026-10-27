@@ -81,7 +81,7 @@ async def delete_event(event_id: int):
 
 def _settings_view() -> dict:
     s = feed.settings()
-    seen = {x["source"] for x in feed.list_events(limit=1)["sources"]}
+    seen = {x["source"] for x in feed.source_counts()}
     names = list(feed.BUILTIN) + [h["name"] for h in s["hooks"]]
     names += sorted(seen - set(names))
     sources = [{"source": n, "label": feed.BUILTIN.get(n, n), "builtin": n in feed.BUILTIN,
