@@ -337,7 +337,7 @@ def join(invitation: str) -> dict:
     nonce_b = _b64(secrets.token_bytes(16))
     body = {"from": me, "to": addr, "nonce": nonce_b, "proof": _mac(key0, "hello", me, addr, nonce_b), "profile": _profile()}
     try:
-        r = _http().post(f"{addr}/api/team-peer/hello", json=body, timeout=TIMEOUT, follow_redirects=False)
+        r = _request("POST", f"{addr}/api/team-peer/hello", TIMEOUT, json=body)
     except httpx.HTTPError as e:
         raise PeerError(502, "unreachable", f"{addr} does not answer ({type(e).__name__})") from None
     if r.status_code == 409:
@@ -643,12 +643,29 @@ def _key_to(address: str, chat: str | None) -> bytes:
     raise PeerError(404, "no_key", "Not connected with " + address)
 
 
+ANSWER_MAX = 64 * 1024                                     # a peer's answer to hello / inbox is a few bytes
+
+
+def _request(method: str, url: str, timeout: float, **kw) -> httpx.Response:
+    """A call to a peer whose answer is capped in size (ANSWER_MAX) and in total time (not only per read)."""
+    end = time.monotonic() + timeout
+    with _http().stream(method, url, timeout=timeout, follow_redirects=False, **kw) as r:
+        data = bytearray()
+        for chunk in r.iter_bytes():
+            data += chunk
+            if len(data) > ANSWER_MAX:
+                raise httpx.ReadError("answer too large", request=r.request)
+            if time.monotonic() > end:
+                raise httpx.ReadTimeout("answer too slow", request=r.request)
+        return httpx.Response(r.status_code, content=bytes(data), request=r.request)
+
+
 def _post(address: str, event: dict, key: bytes, timeout: float = TIMEOUT) -> httpx.Response:
     me = own_address()
     path = "/api/team-peer/inbox"
     body = json.dumps(event, separators=(",", ":")).encode()
     headers = _sign(key, "POST", path, me, address, body) | {"Content-Type": "application/json"}
-    return _http().post(address + path, content=body, headers=headers, timeout=timeout, follow_redirects=False)
+    return _request("POST", address + path, timeout, content=body, headers=headers)
 
 
 def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: bytes | None = None,

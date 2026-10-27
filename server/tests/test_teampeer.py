@@ -296,3 +296,33 @@ def test_messages_from_a_contact_do_not_reparse_peers_json_every_time(client, mo
                            "message": {"id": f"m_0123abc{i}", "at": time.time(), "text": "hi", "kind": "text"}}).encode()
         assert client.post("/api/team-peer/inbox", content=body, headers=_signed(key, body)).status_code == 200
     assert len(reads) <= 3 and len(ready) <= 1        # last_seen written once (SEEN_WRITE_S), the address resolved once
+
+
+def test_a_peer_answer_is_capped_in_size_and_in_total_time(mx, monkeypatch):
+    import httpx
+    _setup(monkeypatch)
+    sent = [0]
+
+    def huge():
+        while sent[0] < 50_000_000:
+            sent[0] += 1_000_000
+            yield b"x" * 1_000_000
+
+    def drip():
+        for _ in range(40):
+            time.sleep(0.1)
+            yield b" "
+
+    body = {"gen": huge}
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, content=body["gen"]())))
+    monkeypatch.setattr(teampeer, "_http", lambda: client)
+    invitation = "http://127.0.0.1:8803#" + teampeer._b64(b"i" * 32)
+    with pytest.raises(teampeer.PeerError) as e:
+        teampeer.join(invitation)
+    assert e.value.code == "unreachable" and sent[0] <= 2_000_000
+    body["gen"] = drip
+    monkeypatch.setattr(teampeer, "TIMEOUT", 0.5)
+    t0 = time.monotonic()
+    with pytest.raises(teampeer.PeerError):
+        teampeer.join(invitation)
+    assert time.monotonic() - t0 < 2
