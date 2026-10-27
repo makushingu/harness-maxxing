@@ -134,8 +134,11 @@ def set_on(on: bool) -> None:
 def _device_key() -> bytes:
     k = config.get_secret("device_key")
     if not k:
-        k = secrets.token_hex(32)
-        config.set_secret("device_key", k)
+        with config._lock:                    # noqa: SLF001 - re-read: a key made meanwhile must not be replaced
+            k = config.get_secret("device_key")
+            if not k:
+                k = secrets.token_hex(32)
+                config.set_secret("device_key", k)
     return str(k).encode()                    # str(): a hand-edited secrets.json (a number) is not a 500
 
 
