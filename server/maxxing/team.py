@@ -425,6 +425,8 @@ def react(cid: str, mid: str, emoji: str) -> dict:
     with _lock:
         doc = _load()
         msg = _message(_writable(doc, cid), mid)
+        if msg.get("deleted"):
+            raise TeamError(409, "deleted", "This message was deleted")
         who = msg.setdefault("reactions", {}).setdefault(emoji, [])
         who.remove(ME) if ME in who else who.append(ME)
         msg["reactions"] = {e: w for e, w in msg["reactions"].items() if w}
@@ -845,7 +847,7 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
             if emoji not in REACTIONS:
                 raise TeamError(400, "invalid_emoji", "Unknown reaction")
             msg = next((m for m in chat["messages"] if m["id"] == str(event.get("msg"))[:40]), None)
-            if msg is None:                      # never arrived or deleted here: nothing to change
+            if msg is None or msg.get("deleted"):   # never arrived or deleted here: nothing to change
                 return
             who_list = msg.setdefault("reactions", {}).setdefault(emoji, [])
             if event.get("on") and who not in who_list:
