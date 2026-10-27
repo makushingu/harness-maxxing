@@ -1,6 +1,7 @@
 """Infra page: probe parsing, resource building and links, providers (fake APIs), checks, recipes (fake caddy,
 psql and garage), API and CLI. Never touches the real web server, databases or provider accounts."""
 import json
+import os
 import stat
 import time
 
@@ -1012,3 +1013,20 @@ def test_names_with_a_trailing_newline_are_refused():
         registry.check_server("srv\n", "1.2.3.4", key_must_exist=False)
     with pytest.raises(registry.RegistryError):
         registry.check_server("srv", "1.2.3.4\n", key_must_exist=False)
+
+
+def test_rotation_keeps_the_backups_of_a_database_sharing_the_prefix(monkeypatch, tmp_path):
+    bk = tmp_path / "bk"
+    bk.mkdir()
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(bk))
+    for i in range(actions.KEEP_BACKUPS + 2):
+        for name in ("pg-app", "pg-app-v2", "sqlite-a[1]"):
+            f = bk / f"{name}-202610{10 + i:02d}-0330.dump"
+            f.write_bytes(b"x")
+            os.utime(f, (1_000_000 + i, 1_000_000 + i))
+    actions._rotate("pg-app")
+    actions._rotate("sqlite-a[1]")
+    names = [p.name for p in bk.iterdir()]
+    assert sum(n.startswith("pg-app-v2-") for n in names) == actions.KEEP_BACKUPS + 2
+    assert sum(n.startswith("pg-app-2") for n in names) == actions.KEEP_BACKUPS
+    assert sum(n.startswith("sqlite-a[1]-") for n in names) == actions.KEEP_BACKUPS
