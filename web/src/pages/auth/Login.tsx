@@ -91,7 +91,7 @@ export default function LoginPage() {
           {t('login.submit')} <ArrowRight />
         </Button>
         <details className="group text-[13px] text-muted-foreground">
-          <summary className="cursor-pointer list-none text-center hover:text-foreground">{t('login.forgot')}</summary>
+          <summary className="cursor-pointer list-none text-center hover:text-foreground pointer-coarse:flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:justify-center">{t('login.forgot')}</summary>
           <div className="mt-3 grid gap-2">
             <p>{t('login.forgotHelp')}</p>
             <CodeBlock inline code="maxxing password" />
