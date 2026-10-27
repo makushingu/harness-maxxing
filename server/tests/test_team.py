@@ -359,3 +359,17 @@ def test_forward_checks_the_message_first_and_skips_files_not_received(client, t
     r = client.post(f"/api/team/chats/{dm}/messages/{mid}/forward", json={"text": "Read this", "path": topic})
     assert r.status_code == 200, r.text
     wait_idle(client, r.json()["session"]["id"])
+
+
+def test_a_download_that_raises_is_marked_failed(client, sent, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("bug")
+    dm, mid = _received_file(monkeypatch, boom)
+    f = team.messages(dm)["messages"][0]["files"][0]
+    assert f.get("failed") and not f.get("pending")
+    doc = team._load()                                  # a download cut by a restart
+    doc["chats"][0]["messages"][0]["files"][0] |= {"pending": True, "failed": False}
+    team._save(doc)
+    team.fail_stale_downloads()
+    f = team.messages(dm)["messages"][0]["files"][0]
+    assert f.get("failed") and not f.get("pending")

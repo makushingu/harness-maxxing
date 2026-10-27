@@ -846,7 +846,10 @@ def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
             with _slots:
                 dest, fd = reserve_path(d, f["name"])  # the name is taken at once: two "image.png" never collide
                 os.close(fd)
-                ok = teampeer.fetch_file(frm, f["fid"], dest, max_b, cid, reserve)
+                try:
+                    ok = teampeer.fetch_file(frm, f["fid"], dest, max_b, cid, reserve)
+                except Exception:                       # the file is then marked failed, never pending forever
+                    log.exception("team: download of %s", f["fid"])
                 if not ok:
                     dest.unlink(missing_ok=True)
     finally:
@@ -870,3 +873,18 @@ def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
                 else:
                     x["failed"] = True
         _save(doc)
+
+
+def fail_stale_downloads() -> None:
+    """At start-up: a received file still pending was being downloaded when the server stopped, nothing resumes it."""
+    with _lock:
+        doc = _load()
+        changed = False
+        for chat in doc["chats"]:
+            for msg in chat.get("messages") or []:
+                for f in msg.get("files") or []:
+                    if f.get("pending"):
+                        f.pop("pending")
+                        f["failed"] = changed = True
+        if changed:
+            _save(doc)
