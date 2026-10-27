@@ -109,7 +109,7 @@ def _finite(x: object, default: float) -> float:
     """A number from another server: NaN / infinity / junk would break every page of Team once saved."""
     try:
         v = float(x)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):     # float(10**400) overflows
         return default
     return v if math.isfinite(v) else default
 
