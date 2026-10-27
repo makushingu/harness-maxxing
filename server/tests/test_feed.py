@@ -286,3 +286,20 @@ def test_stripe_timestamp_with_thousands_of_digits_is_a_401(client, mx):
     tok = feedhooks.create("stp", "stripe", "sek")["url"].rsplit("/", 1)[1]
     r = feedhooks.deliver(tok, {"Stripe-Signature": "t=" + "9" * 5000 + ",v1=ab"}, b'{"type": "charge.succeeded"}')
     assert r == (401, {"error": "bad_signature"})
+
+
+def test_source_counts_are_not_recomputed_while_the_feed_is_unchanged(client, mx, monkeypatch):
+    feed.post("a", source="custom")
+    feed.post("b", source="github")
+    calls = []
+    real = feed._aggregate
+    monkeypatch.setattr(feed, "_aggregate", lambda c, cutoff: calls.append(1) or real(c, cutoff))
+    for _ in range(3):
+        assert client.get("/api/feed").json()["unread"] == 2
+        assert client.get("/api/feed/settings").status_code == 200
+    assert len(calls) == 1                                # one count of the whole journal, not one per request
+    feed.post("c", source="github")
+    assert {s["source"]: s["total"] for s in client.get("/api/feed").json()["sources"]}["github"] == 2
+    feed.mark_read(everything=True)
+    assert client.get("/api/feed").json()["unread"] == 0
+    assert len(calls) == 3
