@@ -405,6 +405,22 @@ def test_non_finite_limits_from_a_turn_do_not_break_usage(client, org, monkeypat
     health._usage.update(at=0.0, data=None, blocked_until=0.0)
 
 
+def test_a_bad_seen_at_in_the_limits_does_not_break_usage(client, org, monkeypatch):
+    """A hand-edited "at" ("x", NaN, 1e999, a list) in claude-limits.json: /api/usage answers 200, seen_at null."""
+    import httpx
+    from maxxing import claude_auth
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no call")))
+    for at in ('"x"', "NaN", "1e999", "[1]", "true"):
+        health._usage.update(at=0.0, data=None, blocked_until=0.0)
+        claude_auth.limits_file().write_text(
+            '{"at": %s, "five_hour": {"utilization": 0.5, "resets_at": %f}}' % (at, time.time() + 3600))
+        r = client.get("/api/usage")
+        assert r.status_code == 200, (at, r.text[:200])
+        assert claude_auth.limits()["seen_at"] is None
+    claude_auth.limits_file().unlink()
+    health._usage.update(at=0.0, data=None, blocked_until=0.0)
+
+
 def test_parallel_forced_usage_makes_one_upstream_call(org, monkeypatch):
     import threading
     import time as _time
