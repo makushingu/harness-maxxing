@@ -124,6 +124,7 @@ IMPORT_TIMEOUT_S = 10.0
 _pool = ThreadPoolExecutor(max_workers=EXT_WORKERS, thread_name_prefix="mx-ext")
 _stuck = 0
 _busy_lock = threading.Lock()
+_stuck_keys: set[str] = set()                      # call keys whose timed-out call still holds a thread
 
 
 class ExtensionBusy(RuntimeError):
@@ -141,12 +142,15 @@ def _guarded(fn: Callable[..., Any], *args: Any) -> Any:
         raise RuntimeError(f"extension stopped ({type(e).__name__})") from None
 
 
-async def call(fn: Callable[..., Any], *args: Any, timeout: float) -> Any:
+async def call(fn: Callable[..., Any], *args: Any, timeout: float, key: str | None = None) -> Any:
     """Run extension code on the extension threads, queued when they are all working; TimeoutError after
     `timeout` (waiting included; the thread stays taken until the code returns), ExtensionBusy at once when every
-    thread is stuck."""
+    thread is stuck, or when the call `key` timed out earlier and has not returned yet (a stuck card() reloaded
+    again and again would otherwise take every thread)."""
     global _stuck
     with _busy_lock:
+        if key is not None and key in _stuck_keys:
+            raise ExtensionBusy("timed out: the previous call has not returned yet")
         if _stuck >= EXT_WORKERS:
             raise ExtensionBusy("extensions are busy (earlier calls never returned)")
     cf = _pool.submit(_guarded, fn, *args)
@@ -156,11 +160,15 @@ async def call(fn: Callable[..., Any], *args: Any, timeout: float) -> Any:
         if not cf.cancel():                          # still queued: dropped; running: holds a thread until it returns
             with _busy_lock:
                 _stuck += 1
+                if key is not None:
+                    _stuck_keys.add(key)
 
             def done(_f: Any) -> None:
                 global _stuck
                 with _busy_lock:
                     _stuck -= 1
+                    if key is not None:
+                        _stuck_keys.discard(key)
             cf.add_done_callback(done)
         raise
 
