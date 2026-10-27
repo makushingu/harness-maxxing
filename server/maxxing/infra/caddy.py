@@ -168,12 +168,21 @@ def _block(name: str, root: str | None, port: int | None, upstream_host: str | N
     return "\n".join("\t" + ln for ln in inner)
 
 
+def check_name(name: str, project: str | None = None) -> None:
+    """The checks of add_site on the name and project, for a caller that must know before creating anything."""
+    if not NAME_RE.match(name or ""):
+        raise CaddyError("names use a-z, 0-9 and -, start with a letter or digit (max 63)", "invalid_name")
+    if (paths_dir() / f"{name}.caddy").exists() or (sites_dir() / f"{name}.caddy").exists():
+        raise CaddyError(f"a site named {name} already exists (maxxing infra site remove {name} first)", "exists")
+    if project and not SAFE_PATH_RE.match(project):
+        raise CaddyError("the project may only use letters, digits, '.', '_', '-' and '/'", "invalid_project")
+
+
 def add_site(name: str, root: str | None = None, port: int | None = None, host: str | None = None,
              project: str | None = None, keep_prefix: bool = False, upstream_host: str | None = None,
              kind: str = "site") -> dict:
     """Create a path site (no host) or a host site. Returns {name, url, file, mode}."""
-    if not NAME_RE.match(name or ""):
-        raise CaddyError("names use a-z, 0-9 and -, start with a letter or digit (max 63)", "invalid_name")
+    check_name(name, project)
     if bool(root) == bool(port):
         raise CaddyError("give either a folder (--dir) or a local port (--port)", "invalid_target")
     if root:
@@ -191,10 +200,6 @@ def add_site(name: str, root: str | None = None, port: int | None = None, host: 
         root = str(rp)
     if port is not None and not 1 <= int(port) <= 65535:
         raise CaddyError("invalid port", "invalid_target")
-    if (paths_dir() / f"{name}.caddy").exists() or (sites_dir() / f"{name}.caddy").exists():
-        raise CaddyError(f"a site named {name} already exists (maxxing infra site remove {name} first)", "exists")
-    if project and not SAFE_PATH_RE.match(project):
-        raise CaddyError("the project may only use letters, digits, '.', '_', '-' and '/'", "invalid_project")
     cfg = config.load_config()
     from .build import harness_host
     hh = harness_host(cfg.get("public_url"))
