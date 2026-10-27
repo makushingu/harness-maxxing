@@ -1,6 +1,7 @@
 """Infra page: probe parsing, resource building and links, providers (fake APIs), checks, recipes (fake caddy,
 psql and garage), API and CLI. Never touches the real web server, databases or provider accounts."""
 import json
+import os
 import stat
 import time
 
@@ -999,3 +1000,93 @@ def test_rdap_lookup_is_capped_and_redirects_stay_on_https(monkeypatch):
         assert providers.rdap_expiry("example.com")["expires"] == "2030-01-01T00:00:00Z"
     finally:
         srv.close()
+
+
+def test_names_with_a_trailing_newline_are_refused():
+    for rx in (actions.DB_NAME_RE, actions.BUCKET_RE, registry.NAME_RE, registry.DOMAIN_RE):
+        assert not rx.match("abcd\n") and not rx.match("abc.com\n")
+    with pytest.raises(actions.ActionError):
+        actions.pg_create("app\n")
+    with pytest.raises(actions.ActionError):
+        actions.bucket_create("media\n")
+    with pytest.raises(registry.RegistryError):
+        registry.check_server("srv\n", "1.2.3.4", key_must_exist=False)
+    with pytest.raises(registry.RegistryError):
+        registry.check_server("srv", "1.2.3.4\n", key_must_exist=False)
+
+
+def test_rotation_keeps_the_backups_of_a_database_sharing_the_prefix(monkeypatch, tmp_path):
+    bk = tmp_path / "bk"
+    bk.mkdir()
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(bk))
+    for i in range(actions.KEEP_BACKUPS + 2):
+        for name in ("pg-app", "pg-app-v2", "sqlite-a[1]"):
+            f = bk / f"{name}-202610{10 + i:02d}-0330.dump"
+            f.write_bytes(b"x")
+            os.utime(f, (1_000_000 + i, 1_000_000 + i))
+    actions._rotate("pg-app")
+    actions._rotate("sqlite-a[1]")
+    names = [p.name for p in bk.iterdir()]
+    assert sum(n.startswith("pg-app-v2-") for n in names) == actions.KEEP_BACKUPS + 2
+    assert sum(n.startswith("pg-app-2") for n in names) == actions.KEEP_BACKUPS
+    assert sum(n.startswith("sqlite-a[1]-") for n in names) == actions.KEEP_BACKUPS
+
+
+def test_two_sqlite_files_with_the_same_name_keep_their_own_backups(org, monkeypatch, tmp_path):
+    import sqlite3
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(tmp_path / "bk"))
+    monkeypatch.setattr(actions, "pg_installed", lambda: False)
+    for n, folder in enumerate(("one", "two")):
+        (tmp_path / folder).mkdir()
+        with sqlite3.connect(tmp_path / folder / "app.db") as c:
+            c.execute("create table t(x)")
+            c.execute("insert into t values (?)", (n,))
+        actions.declare_sqlite(str(tmp_path / folder / "app.db"))
+    res = actions.backup_all()
+    assert len(res) == 2 and all(r["ok"] for r in res) and res[0]["file"] != res[1]["file"]
+    got = set()
+    for r in res:
+        with sqlite3.connect(r["file"]) as c:
+            got.add(c.execute("select x from t").fetchone()[0])
+    assert got == {0, 1}
+
+
+def test_bucket_create_undoes_its_steps_when_one_fails(fake_caddy, monkeypatch):
+    calls = []
+
+    def fake_garage(*args, timeout=60):
+        calls.append(args)
+        if args[:2] == ("key", "create"):
+            return 0, "Key ID:              GK123\nSecret key:          s3cr3t\n", ""
+        if args[:2] == ("bucket", "website"):
+            return 1, "", "boom"
+        return 0, "", ""
+    monkeypatch.setattr(actions, "garage_installed", lambda: True)
+    monkeypatch.setattr(actions, "_garage", fake_garage)
+    with pytest.raises(actions.ActionError):
+        actions.bucket_create("media", public=True)
+    assert ("key", "delete", "--yes", "media-key") in calls and ("bucket", "delete", "--yes", "media") in calls
+    assert vault.get("S3_MEDIA_ACCESS_KEY_ID") is None and vault.get("S3_MEDIA_BUCKET") is None
+    # a taken site name is refused before anything is created
+    (fake_caddy / "maxxing-paths").mkdir(exist_ok=True)
+    (fake_caddy / "maxxing-paths" / "photos.caddy").write_text("")
+    calls.clear()
+    with pytest.raises(caddy.CaddyError):
+        actions.bucket_create("photos", public=True)
+    assert calls == []
+
+
+def test_pg_create_drops_the_role_when_the_database_fails(org, monkeypatch):
+    sql = []
+
+    def fake_psql(q, *a, **k):
+        sql.append(q)
+        if q.startswith("create database"):
+            return 1, "", "no space"
+        return 0, "", ""
+    monkeypatch.setattr(actions, "pg_installed", lambda: True)
+    monkeypatch.setattr(actions, "pg_databases", lambda: [])
+    monkeypatch.setattr(actions, "_psql", fake_psql)
+    with pytest.raises(actions.ActionError):
+        actions.pg_create("shop")
+    assert sql[-1] == 'drop role if exists "shop";'

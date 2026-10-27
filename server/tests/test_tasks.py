@@ -235,3 +235,34 @@ def test_system_project_hidden_by_default(client, org):
     (org.ws / "projects" / "system").mkdir(parents=True, exist_ok=True)       # created by hand
     proj = next(p for p in client.get("/api/tasks").json()["projects"] if p.get("workspace") == "system")
     assert proj["hidden"] is True
+
+
+def test_infinite_order_is_refused_and_the_list_still_loads(client, org):
+    a = client.post("/api/tasks", json={"title": "a"}).json()
+    raw = '{"title": "b", "order": 1e999}'
+    assert client.post("/api/tasks", content=raw, headers={"content-type": "application/json"}).status_code == 422
+    r = client.patch(f"/api/tasks/{a['id']}", content='{"order": 1e999}', headers={"content-type": "application/json"})
+    assert r.status_code == 422
+    assert client.get("/api/tasks").status_code == 200
+
+
+def test_bulk_over_the_limit_is_refused_not_cut(client, org):
+    from maxxing.api import tasks as tasks_api
+    ids = [client.post("/api/tasks", json={"title": f"t{i}"}).json()["id"] for i in range(3)]
+    tasks_api.BULK_MAX, old = 2, tasks_api.BULK_MAX
+    try:
+        r = client.post("/api/tasks/bulk", json={"ids": ids, "patch": {"status": "done"}})
+    finally:
+        tasks_api.BULK_MAX = old
+    assert r.status_code == 400 and "too_many_ids" in r.text
+    assert all(t["status"] == "todo" for t in client.get("/api/tasks").json()["tasks"])
+
+
+def test_identical_hand_written_tasks_get_distinct_ids(client, org):
+    from maxxing.api import tasks as tasks_api
+    tasks_api.tasks_path().write_text(json.dumps({"version": 1, "projects": [],
+                                                  "tasks": [{"title": "same"}, {"title": "same"}]}))
+    ids = [t["id"] for t in client.get("/api/tasks").json()["tasks"]]
+    assert len(set(ids)) == 2
+    assert client.delete(f"/api/tasks/{ids[0]}").status_code in (200, 204)
+    assert [t["id"] for t in client.get("/api/tasks").json()["tasks"]] == [ids[1]]

@@ -66,7 +66,7 @@ def _task(d: dict, force: bool) -> asyncio.Task:
     if task is None or force:
         # extension cards on the extension threads (a stuck card() never takes the server's shared pool)
         run = (asyncio.wait_for(asyncio.to_thread(_compute, d, force), TIMEOUT_S) if d["source"] == "builtin"
-               else extensions.call(_compute, d, force, timeout=TIMEOUT_S))
+               else extensions.call(_compute, d, force, timeout=TIMEOUT_S, key=f"card:{wid}"))
         task = asyncio.ensure_future(run)
         _inflight[wid] = task
 

@@ -151,3 +151,30 @@ def test_cron_notify_shell_failure_keeps_the_end_on_a_line(report_job):
     header, body, markdown, loud = report_job[-1]
     assert header.startswith("FAILED (code 1) - backup") and not markdown and loud
     assert body.startswith("…\nstep ") and body.endswith("ERROR: disk full") and len(body) <= 603
+
+
+def test_link_label_with_code_keeps_the_code():
+    out = fmt.inline("see [`config.py`](https://e.com/a)")
+    assert out == 'see <a href="https://e.com/a"><code>config.py</code></a>'
+    out = fmt.inline("[the `x` **file**](https://e.com/b)")
+    assert out == '<a href="https://e.com/b">the <code>x</code> <b>file</b></a>'
+
+
+def test_table_cell_link_with_code():
+    html = "".join(fmt.render("| a | b |\n|---|---|\n| [`c.py`](https://e.com/c) | 1 |"))
+    assert "c.py" in html and ">0<" not in html
+
+
+def test_feed_message_stays_under_the_telegram_limit(mx_state):
+    for body in ("&" * 700, "<>" * 350, "a & b " * 120):
+        text, _ = gateway.feed_message({"id": 1, "title": "T" * 5000, "body": body, "level": "info",
+                                        "source": "s" * 5000})
+        assert len(text) <= fmt.LIMIT
+
+
+def test_long_non_latin_file_name_is_cut_in_bytes(tmp_path):
+    name = gateway._safe_name("文" * 150 + ".pdf", "file")
+    assert name.endswith(".pdf") and len(name.encode()) <= 200
+    p = gateway._unique(tmp_path / name)
+    p.with_name(p.name + ".part").write_bytes(b"x")                # still a valid name with the suffix
+    assert gateway._safe_name("a" * 50 + ".txt", "file") == "a" * 50 + ".txt"

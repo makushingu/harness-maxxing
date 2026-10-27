@@ -156,3 +156,14 @@ def test_a_name_that_is_not_utf8_can_be_opened_renamed_and_deleted(client, mx):
     r = client.post("/api/files/move", json={"from": e["path"], "to": str(root / "cafe.txt")})
     assert r.status_code == 200 and (root / "cafe.txt").read_bytes() == b"hello"
     assert client.post("/api/files/delete", json={"path": str(root / "cafe.txt")}).status_code == 200
+
+
+def test_site_path_with_a_nul_byte_is_a_404(client, tree):  # noqa: F811
+    site = tree / "nulsite"
+    site.mkdir()
+    (site / "index.html").write_text("hi")
+    (site / "a.css").write_text("b")
+    url = client.get("/api/files/site-url", params={"path": str(site / "index.html")}).json()["url"]
+    base = url.rsplit("/", 1)[0]
+    assert client.get(base + "/a%00.css").status_code == 404
+    assert client.get(base + "/a.css").status_code == 200

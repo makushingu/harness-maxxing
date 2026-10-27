@@ -344,7 +344,7 @@ def _read_raw() -> list[dict] | None:
     jobs = data.get("jobs", []) if isinstance(data, dict) else None
     if not isinstance(jobs, list):
         return None
-    return [j for j in jobs if isinstance(j, dict) and j.get("id")]
+    return [j for j in jobs if isinstance(j, dict) and j.get("id") and isinstance(j["id"], str)]
 
 
 def _load_raw() -> list[dict]:
@@ -588,8 +588,8 @@ def _all_runs() -> list[dict]:
         if _runs_cache and _runs_cache[0] == ident:
             return _runs_cache[1]
     try:
-        with open(p) as f:
-            lines = f.readlines()
+        with open(p, encoding="utf-8", errors="replace") as f:   # a line cut inside a character must not
+            lines = f.readlines()                                # hide the whole history
     except OSError:
         return []
     runs: list[dict] = []
@@ -633,14 +633,22 @@ def append_run(run: dict) -> None:
     with open(p.with_name(p.name + ".lock"), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            with open(p, "a+") as f:
-                f.write(json.dumps(run, ensure_ascii=False) + "\n")
+            # bytes: a line cut inside a character (killed writer, full disk) must not break the history
+            with open(p, "a+b") as f:
+                f.seek(0, os.SEEK_END)
+                cut = False
+                if f.tell():
+                    f.seek(-1, os.SEEK_END)
+                    cut = f.read(1) != b"\n"            # start on a new line after a cut one
+                # a lone surrogate (an answer cut inside an emoji) cannot be written as UTF-8: replace it
+                line = json.dumps(run, ensure_ascii=False).encode("utf-8", "replace") + b"\n"
+                f.write((b"\n" if cut else b"") + line)
                 f.flush()
                 f.seek(0)
                 lines = f.readlines()
             if len(lines) > MAX_RUNS + 200:            # trim in batches, not on every append
                 tmp = p.with_suffix(".tmp")
-                tmp.write_text("".join(lines[-MAX_RUNS:]))
+                tmp.write_bytes(b"".join(lines[-MAX_RUNS:]))
                 os.replace(tmp, p)
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
@@ -979,6 +987,7 @@ def _run_shell(job: dict) -> tuple[bool, int, str]:
                                 cwd=str(cwd) if cwd.is_dir() else None, start_new_session=True)
     except OSError as e:
         return False, 127, f"cannot start bash: {e}"
+    _note_group(job.get("id"), proc.pid)
     tail, size = bytearray(), [0]
 
     def pump() -> None:                                # only the tail is kept: a chatty job never fills /tmp (RAM)
@@ -1080,6 +1089,49 @@ def _turn_ok(res: dict) -> bool:
     return res.get("state") == "idle" and not res.get("error")
 
 
+_live_locks: dict[str, tuple] = {}                   # cron id -> (open lock file, start) while it runs here
+
+
+def _mark(lockf, start: float, pgid: int | None = None) -> None:
+    """Write the running run into its lock file: a run killed before its end (SIGKILL, out of memory) leaves it."""
+    lockf.seek(0)
+    lockf.truncate()
+    lockf.write(json.dumps({"pid": os.getpid(), "at": start, "pgid": pgid}))
+    lockf.flush()
+
+
+def _note_group(cid, pgid: int) -> None:
+    live = _live_locks.get(cid) if isinstance(cid, str) else None
+    if live:
+        try:
+            _mark(live[0], live[1], pgid)
+        except OSError:
+            pass
+
+
+def _interrupted(cid: str, job: dict, lockf) -> dict | None:
+    """The run left in the lock file by a killed run_job (we hold the lock now, so it is dead): kill its
+    orphan job shell and return a failed Run for it. Older lock files hold a bare pid: ignored."""
+    try:
+        lockf.seek(0)
+        mark = json.loads(lockf.read() or "null")
+    except (OSError, ValueError):
+        return None
+    if not isinstance(mark, dict) or not isinstance(mark.get("at"), (int, float)):
+        return None
+    pgid = mark.get("pgid")
+    if isinstance(pgid, int) and pgid > 1 and _group_alive(pgid):
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except OSError:
+            pass
+    at = float(mark["at"])
+    return {"id": "r_" + _secrets.token_hex(4), "cron_id": cid, "name": job["name"], "at": at,
+            "ok": False, "code": -9, "duration_s": round(max(0.0, time.time() - at), 2),
+            "output_tail": "interrupted: the run was killed before it ended (out of memory, restart or kill)",
+            "session_id": None}
+
+
 def run_job(cid: str) -> dict | None:
     """Execute one job now (blocking), record the Run and send the Telegram report.
     Returns the Run, or None when the job does not exist or is already running."""
@@ -1087,15 +1139,22 @@ def run_job(cid: str) -> dict | None:
     if job is None:
         return None
     job = {**DEFAULTS, **job}
-    lockf = open(_lock_path(cid), "w")
+    lockf = open(_lock_path(cid), "a+")                 # not "w": the mark of a killed run is read first
+    lost = run = None
     try:
         try:
             fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return None
-        lockf.write(str(os.getpid()))
-        lockf.flush()
+        lost = _interrupted(cid, job, lockf)
+        if lost:
+            try:
+                append_run(lost)
+            except Exception:
+                log.exception("cron %s: cannot record the interrupted run", cid)
         start = time.time()
+        _mark(lockf, start)
+        _live_locks[cid] = (lockf, start)
         session_id = None
         answer = None
         try:
@@ -1109,12 +1168,22 @@ def run_job(cid: str) -> dict | None:
         run = {"id": "r_" + _secrets.token_hex(4), "cron_id": cid, "name": job["name"], "at": start,
                "ok": ok, "code": code, "duration_s": round(time.time() - start, 2),
                "output_tail": tail, "session_id": session_id}
-        append_run(run)
-    finally:
         try:
+            append_run(run)
+        except Exception:                                # the report still goes out
+            log.exception("cron %s: cannot record the run", cid)
+    finally:
+        _live_locks.pop(cid, None)
+        try:
+            if run is not None:                          # ended normally: nothing left to report
+                lockf.seek(0)
+                lockf.truncate()
+                lockf.flush()
             fcntl.flock(lockf, fcntl.LOCK_UN)
         finally:
             lockf.close()
+    if lost:
+        _notify(job, lost)
     _notify(job, run, answer)                            # after the lock: a slow Telegram never holds the job
     return run
 

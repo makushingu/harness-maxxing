@@ -20,8 +20,8 @@ from pathlib import Path
 
 from .. import config
 
-NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
-DOMAIN_RE = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}\Z")
+DOMAIN_RE = re.compile(r"^(?=.{4,253}\Z)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}\Z")
 _lock = threading.Lock()
 
 
@@ -85,9 +85,9 @@ def _server_ok(s: dict) -> bool:
 def check_server(name: str, host: str, user: str = "root", port: int = 22, key: str = "", key_must_exist: bool = True) -> None:
     if not NAME_RE.match(name or "") or name == "local":
         raise RegistryError("server names use a-z, 0-9 and -, max 40 characters (not 'local')", "invalid_name")
-    if not re.match(r"^[A-Za-z0-9.:\[\]][A-Za-z0-9.:\-\[\]]{0,252}$", host or ""):
+    if not re.match(r"^[A-Za-z0-9.:\[\]][A-Za-z0-9.:\-\[\]]{0,252}\Z", host or ""):
         raise RegistryError("host must be an IP address or a host name", "invalid_host")
-    if not re.match(r"^[a-z_][a-z0-9_.-]{0,31}$", user or ""):
+    if not re.match(r"^[a-z_][a-z0-9_.-]{0,31}\Z", user or ""):
         raise RegistryError("invalid SSH user", "invalid_user")
     if not 1 <= int(port) <= 65535:
         raise RegistryError("invalid SSH port", "invalid_port")
