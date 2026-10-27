@@ -2,6 +2,7 @@
 from _conn_helpers import _Server
 from _org_helpers import client, org  # noqa: F401
 from maxxing import config, infra, vault
+from maxxing.infra import probe
 
 
 def test_vercel_pagination_stops_on_empty_pages(org, monkeypatch):
@@ -42,3 +43,13 @@ def test_add_domain_bad_unicode_is_a_400(org, monkeypatch, client):  # noqa: F81
     config.update_config(infra_page=True)
     for bad in ("é" * 64 + ".com", "é..com"):
         assert client.post("/api/infra/domains", json={"name": bad}).status_code == 400, bad
+
+
+def test_repo_of_hides_a_password_holding_an_at_sign(tmp_path):
+    git = tmp_path / "site" / ".git"
+    git.mkdir(parents=True)
+    (git / "config").write_text('[remote "origin"]\n\turl = https://bob:p4ss@word123@github.com/o/r.git\n')
+    (git / "HEAD").write_text("ref: refs/heads/main\n")
+    repo = probe.repo_of(str(tmp_path / "site"))
+    assert repo["remote"] == "https://github.com/o/r.git"
+    assert repo["branch"] == "main"
