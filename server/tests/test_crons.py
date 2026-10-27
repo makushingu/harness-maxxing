@@ -556,3 +556,27 @@ def test_truncated_utf8_line_does_not_break_history(org):
     crons.append_run({"id": "r_3", "cron_id": j["id"], "name": "cut", "at": 2.0, "ok": True})
     assert [r["id"] for r in crons.read_runs()] == ["r_3", "r_1"]
     assert crons.list_jobs()[0]["id"] == j["id"]
+
+
+def test_killed_run_is_recorded_as_interrupted_on_the_next_run(org, monkeypatch):
+    import subprocess
+    import time as _time
+    sent = []
+    monkeypatch.setattr(crons, "_notify", lambda job, run, answer=None: sent.append(run))
+    j = crons.create_job({"name": "big", "command": "true"})
+    lock = crons._lock_path(j["id"])
+    lock.write_text("12345")                                        # older lock file: a bare pid, ignored
+    crons.run_job(j["id"])
+    assert len(crons.read_runs()) == 1 and lock.read_text() == ""   # a normal end clears the mark
+    orphan = subprocess.Popen(["sleep", "600"], start_new_session=True)
+    try:
+        lock.write_text(json.dumps({"pid": 999999, "at": _time.time() - 5, "pgid": orphan.pid}))
+        r = crons.run_job(j["id"])
+        assert r["ok"]
+        runs = crons.read_runs()
+        assert len(runs) == 3 and not runs[1]["ok"] and "interrupted" in runs[1]["output_tail"]
+        assert [x["ok"] for x in sent] == [True, False, True]
+        assert orphan.wait(timeout=5) == -9                          # the orphan job shell is killed
+    finally:
+        if orphan.poll() is None:
+            orphan.kill()
