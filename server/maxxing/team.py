@@ -258,9 +258,12 @@ def _clean_files(files: list[dict] | None) -> list[dict]:
     root = (config.workspace() / "team" / "attachments").resolve()
     out = []
     for f in (files or [])[:FILES_MAX]:
-        p = Path(str((f or {}).get("path") or "")).resolve()
-        if root not in p.parents or not p.is_file():
-            raise TeamError(400, "bad_file", "Unknown file")
+        try:
+            p = Path(str((f or {}).get("path") or "")).resolve()
+            if root not in p.parents or not p.is_file():
+                raise ValueError
+        except (OSError, ValueError):                   # also a NUL byte in the path
+            raise TeamError(400, "bad_file", "Unknown file") from None
         out.append({"path": str(p), "name": p.name, "size": p.stat().st_size,
                     "mime": mimetypes.guess_type(p.name)[0] or "application/octet-stream"})
     return out
