@@ -2550,6 +2550,8 @@ export const en = {
   'team.sentTo': "Sent to “{title}”",
   'team.placeholder': "Message {chat}",
   'team.send': "Send",
+  'team.loadError': "Team could not be loaded",
+  'team.chatLoadError': "This chat could not be loaded",
   'team.pick': "Choose a chat",
   'team.fullPage': "Open the Team page",
   'team.poll.question': "Question",

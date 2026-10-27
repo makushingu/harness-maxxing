@@ -2532,6 +2532,8 @@ export const fr: Record<keyof typeof en, string> = {
   'team.sentTo': "Envoyé à « {title} »",
   'team.placeholder': "Écrire à {chat}",
   'team.send': "Envoyer",
+  'team.loadError': "Impossible de charger Team",
+  'team.chatLoadError': "Impossible de charger cette discussion",
   'team.pick': "Choisissez une discussion",
   'team.fullPage': "Ouvrir la page Team",
   'team.poll.question': "Question",
