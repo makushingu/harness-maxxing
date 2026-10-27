@@ -326,3 +326,14 @@ def test_a_peer_answer_is_capped_in_size_and_in_total_time(mx, monkeypatch):
     with pytest.raises(teampeer.PeerError):
         teampeer.join(invitation)
     assert time.monotonic() - t0 < 2
+
+
+def test_vote_or_react_on_an_unknown_message_is_ignored_not_retried(client, monkeypatch):
+    lea_key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    assert _post(client, lea_key, _msg(dm)).status_code == 200
+    for chat in (dm, "g_00000000beefbeef"):
+        assert _post(client, lea_key, {"type": "react", "chat": chat, "msg": "m_99999999", "emoji": "👍",
+                                       "on": True}).status_code == 200
+        assert _post(client, lea_key, {"type": "vote", "chat": chat, "msg": "m_99999999",
+                                       "options": ["o_1"]}).status_code == 200
