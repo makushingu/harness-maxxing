@@ -80,8 +80,28 @@ def _load() -> dict:
     return doc
 
 
+_peeked: tuple[tuple | None, dict] | None = None
+
+
+def _peek() -> dict:
+    """team.json for reading only (never change what it returns): parsed again only when the file changed."""
+    global _peeked
+    try:
+        st = _path().stat()
+        sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = None
+    cached = _peeked
+    if sig is None or cached is None or cached[0] != sig:
+        cached = (sig, _load())
+        _peeked = cached
+    return cached[1]
+
+
 def _save(doc: dict) -> None:
+    global _peeked
     config.write_json(_path(), doc)
+    _peeked = None
     bus.invalidate("team")
 
 
@@ -139,7 +159,7 @@ def _summary(chat: dict, doc: dict) -> dict:
 def state() -> dict:
     """People (the user under "me") and the chats, most recent first, without their messages."""
     with _lock:
-        doc = _load()
+        doc = _peek()
         people = teampeer.people() | {ME: _me()}
         chats = sorted((_summary(c, doc) for c in doc["chats"]), key=lambda c: -c["updated"])
         return {"me": ME, "people": people, "chats": chats, "reactions": list(REACTIONS), "typing": _typing_now()}
@@ -155,7 +175,7 @@ def typing(cid: str) -> None:
     """The user is writing in a chat: tell its members, best effort (never queued, at most every TYPING_EVERY s)."""
     now = time.time()
     with _lock:
-        chat = _chat(_load(), cid)
+        chat = _chat(_peek(), cid)
         if not chat.get("remote") or now - _typing_sent.get(cid, 0) < TYPING_EVERY:
             return
         _typing_sent[cid] = now
@@ -202,7 +222,7 @@ def _typing_ends(cid: str, who: str, gen: int) -> None:
 
 def messages(cid: str) -> dict:
     with _lock:
-        doc = _load()
+        doc = _peek()
         chat = _chat(doc, cid)
         return {"chat": _summary(chat, doc), "messages": chat["messages"]}
 
@@ -210,10 +230,13 @@ def messages(cid: str) -> dict:
 def mark_read(cid: str) -> None:
     now = time.time()
     with _lock:
-        doc = _load()
-        chat = _chat(doc, cid)
-        chat["read_at"] = now
-        _save(doc)
+        chat = _chat(_peek(), cid)
+        newest = max((m.get("recv", m["at"]) for m in chat["messages"]), default=0)
+        if chat.get("read_at", 0) < newest:              # something new to mark: written, else nothing to write
+            doc = _load()
+            chat = _chat(doc, cid)
+            chat["read_at"] = now
+            _save(doc)
         if not chat.get("remote") or chat.get("left") or now - _read_sent.get(cid, 0) < READ_EVERY:
             return
         _read_sent[cid] = now
@@ -391,7 +414,7 @@ def delivered(cid: str, mid: str, who: str) -> None:
 def is_member(cid: str, who: str) -> bool:
     with _lock:
         try:
-            return who in _chat(_load(), cid)["members"]
+            return who in _chat(_peek(), cid)["members"]
         except TeamError:
             return False
 
