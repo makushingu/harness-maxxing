@@ -588,8 +588,8 @@ def _all_runs() -> list[dict]:
         if _runs_cache and _runs_cache[0] == ident:
             return _runs_cache[1]
     try:
-        with open(p) as f:
-            lines = f.readlines()
+        with open(p, encoding="utf-8", errors="replace") as f:   # a line cut inside a character must not
+            lines = f.readlines()                                # hide the whole history
     except OSError:
         return []
     runs: list[dict] = []
@@ -633,15 +633,22 @@ def append_run(run: dict) -> None:
     with open(p.with_name(p.name + ".lock"), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            with open(p, "a+") as f:
+            # bytes: a line cut inside a character (killed writer, full disk) must not break the history
+            with open(p, "a+b") as f:
+                f.seek(0, os.SEEK_END)
+                cut = False
+                if f.tell():
+                    f.seek(-1, os.SEEK_END)
+                    cut = f.read(1) != b"\n"            # start on a new line after a cut one
                 # a lone surrogate (an answer cut inside an emoji) cannot be written as UTF-8: replace it
-                f.write(json.dumps(run, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8") + "\n")
+                line = json.dumps(run, ensure_ascii=False).encode("utf-8", "replace") + b"\n"
+                f.write((b"\n" if cut else b"") + line)
                 f.flush()
                 f.seek(0)
                 lines = f.readlines()
             if len(lines) > MAX_RUNS + 200:            # trim in batches, not on every append
                 tmp = p.with_suffix(".tmp")
-                tmp.write_text("".join(lines[-MAX_RUNS:]))
+                tmp.write_bytes(b"".join(lines[-MAX_RUNS:]))
                 os.replace(tmp, p)
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)

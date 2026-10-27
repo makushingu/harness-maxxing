@@ -546,3 +546,13 @@ def test_append_run_survives_lone_surrogate(org, monkeypatch):
     assert r and sent == [r]
     runs = crons.read_runs()
     assert len(runs) == 1 and runs[0]["output_tail"] == "cut ? here"
+
+
+def test_truncated_utf8_line_does_not_break_history(org):
+    j = crons.create_job({"name": "cut", "command": "true"})
+    crons.append_run({"id": "r_1", "cron_id": j["id"], "name": "cut", "at": 1.0, "ok": True})
+    with open(crons.runs_path(), "ab") as f:
+        f.write(b'{"id": "r_2", "name": "caf\xc3')
+    crons.append_run({"id": "r_3", "cron_id": j["id"], "name": "cut", "at": 2.0, "ok": True})
+    assert [r["id"] for r in crons.read_runs()] == ["r_3", "r_1"]
+    assert crons.list_jobs()[0]["id"] == j["id"]
