@@ -409,3 +409,13 @@ def test_a_huge_integer_from_a_contact_is_not_a_500(mx):
     msg = team._remote_message(teampeer.pid(LEA), {"id": "m_0123abcd", "kind": "text", "text": "hi", "at": 10 ** 400,
                                                    "files": [{"name": "a.txt", "size": 10 ** 400}]})
     assert msg["at"] <= time.time() and all(f["size"] == 0 for f in msg.get("files") or [])
+
+
+def test_no_reaction_on_a_deleted_message(client, sent):
+    c = client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).json()
+    mid = client.post(f"/api/team/chats/{c['id']}/messages", json={"text": "oops"}).json()["id"]
+    assert client.post(f"/api/team/chats/{c['id']}/messages/{mid}/delete").status_code == 200
+    r = client.post(f"/api/team/chats/{c['id']}/messages/{mid}/react", json={"emoji": "👍"})
+    assert r.status_code == 409
+    msg = next(m for m in client.get(f"/api/team/chats/{c['id']}").json()["messages"] if m["id"] == mid)
+    assert not msg.get("reactions")
