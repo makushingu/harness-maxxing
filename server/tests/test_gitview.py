@@ -380,3 +380,16 @@ def test_graph_of_a_branch_named_like_a_file(repo):
     _git(repo, "commit", "-qm", "add main file")
     gitview.clear_cache()
     assert gitview.graph(str(repo), branches=["main"])["commits"][0]["subject"] == "add main file"
+
+
+def test_an_author_with_a_unit_separator_does_not_break_the_graph(repo):
+    (repo / "odd.txt").write_text("x")
+    _git(repo, "add", "odd.txt")
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "odd \x1e subject"], check=True, capture_output=True,
+                   env={"GIT_AUTHOR_NAME": "ev\x1fil", "GIT_AUTHOR_EMAIL": "e@example.com", "GIT_COMMITTER_NAME": "Ann",
+                        "GIT_COMMITTER_EMAIL": "a@example.com", "HOME": str(repo), "PATH": "/usr/bin:/bin"})
+    gitview.clear_cache()
+    top = gitview.graph(str(repo))["commits"][0]
+    assert top["author"] == "ev\x1fil" and top["subject"] == "odd \x1e subject" and top["date"] > 0
+    detail = gitview.commit(str(repo), top["sha"])
+    assert detail["author"] == "ev\x1fil" and detail["email"] == "e@example.com" and detail["date"] == top["date"]

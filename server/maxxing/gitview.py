@@ -46,7 +46,8 @@ GH_PATH_RE = re.compile(r"/*([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?")
 SCP_REMOTE_RE = re.compile(r"(?:[^@/:]+@)?([^/:]+):(.*)")
 GH_HOSTS = ("github.com", "www.github.com")
 TOKEN_KEYS = ("GITHUB_TOKEN", "GH_TOKEN")
-SEP = "\x1f"
+SEP = "\x00"              # field separator of our git log formats (written %x00): git keeps \x1f in names
+FMT_SEP = "%x00"
 MAX_BRANCHES = 20
 
 _lock = threading.Lock()
@@ -226,7 +227,7 @@ def summary(repo: Path) -> dict:
             elif ln.strip():
                 out["changed"] += 1
         try:
-            last = _git(repo, "log", "-1", "--no-show-signature", f"--format=%ct{SEP}%s").strip()
+            last = _git(repo, "log", "-1", "--no-show-signature", f"--format=%ct{FMT_SEP}%s").strip()
             if last:
                 ts, subj = last.split(SEP, 1)
                 out["last_commit"], out["last_subject"] = int(ts), subj
@@ -352,7 +353,7 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
             pass
     try:
         raw = _git(repo, "log", "--no-show-signature", *sel, "--topo-order", "--decorate=full", f"-n{limit + 1}",
-                   f"--format=%H{SEP}%P{SEP}%D{SEP}%an{SEP}%ct{SEP}%s", "--decorate-refs-exclude=refs/stash",
+                   f"--format=%H{FMT_SEP}%P{FMT_SEP}%D{FMT_SEP}%an{FMT_SEP}%ct{FMT_SEP}%s", "--decorate-refs-exclude=refs/stash",
                    "--")  # refs only: a file named like a branch must not make them ambiguous
     except GitError as e:
         if any(m in e.message for m in ("does not have any commits", "bad default revision", "unknown revision")):
@@ -360,13 +361,13 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
         else:
             raise
     commits = []
-    for ln in raw.splitlines():
+    for ln in raw.split("\n"):                    # not splitlines(): \x1c-\x1e or \x85 in a subject are not line ends
         parts = ln.split(SEP)
         if len(parts) < 6:
             continue
         sha, parents, deco, author, ts, subject = parts[0], parts[1], parts[2], parts[3], parts[4], SEP.join(parts[5:])
         commits.append({"sha": sha, "parents": parents.split(), "refs": _refs(deco), "author": author,
-                        "date": int(ts or 0), "subject": subject})
+                        "date": int(ts) if ts.isdecimal() and ts.isascii() else 0, "subject": subject})
     truncated = len(commits) > limit
     s = summary(repo)
     return {"repo": {**s, "kind": "local", "id": str(repo)}, "commits": commits[:limit], "truncated": truncated}
@@ -380,7 +381,7 @@ def commit(path: str, sha: str) -> dict:
         sha = _git(repo, "rev-parse", "--verify", "--quiet", sha + "^{commit}").strip()
     except GitError:
         raise GitError(404, "no_commit", "no such commit") from None
-    head = _git(repo, "show", "-s", "--no-show-signature", f"--format=%H{SEP}%P{SEP}%an{SEP}%ae{SEP}%ct{SEP}%B", sha)
+    head = _git(repo, "show", "-s", "--no-show-signature", f"--format=%H{FMT_SEP}%P{FMT_SEP}%an{FMT_SEP}%ae{FMT_SEP}%ct{FMT_SEP}%B", sha)
     h, parents, an, ae, ct, body = (head.split(SEP, 5) + [""] * 6)[:6]
     files = []
     stat = _git(repo, "show", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--format=", "--numstat", "-M", "--diff-merges=first-parent", sha)
@@ -390,7 +391,8 @@ def commit(path: str, sha: str) -> dict:
             add, rem, name = cols
             files.append({"path": name, "additions": int(add) if add.isdigit() else None,
                           "deletions": int(rem) if rem.isdigit() else None})
-    return {"sha": h, "parents": parents.split(), "author": an, "email": ae, "date": int(ct or 0),
+    return {"sha": h, "parents": parents.split(), "author": an, "email": ae,
+            "date": int(ct) if ct.isdecimal() and ct.isascii() else 0,
             "message": body.strip(), "files": files[:300], "files_total": len(files)}
 
 
