@@ -105,6 +105,36 @@ def test_summary(client, org):
     assert [t["title"] for t in s["items"]] == ["late", "today", "doing"]
 
 
+def test_summary_does_not_compare_every_doing_task_with_every_listed_one(monkeypatch):
+    from maxxing.api import tasks
+    compared = [0]
+
+    class Task(dict):
+        def __eq__(self, other):
+            compared[0] += 1
+            return dict.__eq__(self, other)
+        __hash__ = None
+
+    today = tasks._today().isoformat()
+    rows = [Task(id=f"t{i}", status="doing", due="2000-01-01" if i % 2 else None) for i in range(400)]
+    monkeypatch.setattr(tasks, "load", lambda copy_=True: {"tasks": rows, "projects": []})
+    s = tasks.summary()
+    assert (s["doing"], s["overdue"], len(s["items"])) == (400, 200, 400) and today
+    assert compared[0] < 400
+
+
+def test_labels_are_capped(client):
+    many = [f"l{i}" for i in range(51)]
+    r = client.post("/api/tasks", json={"title": "t", "labels": many})
+    assert r.status_code == 400 and "invalid_labels" in r.text
+    t = client.post("/api/tasks", json={"title": "t", "labels": many[:50] + many[:50]}).json()
+    assert t["labels"] == many[:50]
+    r = client.post("/api/tasks/bulk", json={"ids": [t["id"]], "labels_add": ["extra"]})
+    assert r.status_code == 400 and "invalid_labels" in r.text
+    r = client.post("/api/tasks/bulk", json={"ids": [t["id"]], "labels_add": many[:10]})
+    assert r.status_code == 200
+
+
 def test_bulk(client, org):
     p = client.post("/api/tasks/projects", json={"name": "Site", "color": "blue"}).json()
     ids = [client.post("/api/tasks", json={"title": f"T{i}", "labels": ["old"]}).json()["id"] for i in range(3)]

@@ -54,6 +54,22 @@ def test_huge_table_is_split_into_valid_messages():
     assert "row 0" in msgs[0] and "row 199" in msgs[-1]
 
 
+def test_one_gigantic_code_line_is_cut_without_escaping_the_rest_again(monkeypatch):
+    escaped = [0]
+    real = fmt.escape
+
+    def counting(text, *a, **k):
+        escaped[0] += len(text)
+        return real(text, *a, **k)
+
+    monkeypatch.setattr(fmt, "escape", counting)
+    line = "a<b&c " * 20000
+    msgs = fmt.render(f"```\n{line}\n```")
+    assert len(msgs) > 1 and all(len(m) <= fmt.LIMIT and _balanced(m) for m in msgs)
+    assert "".join(fmt.strip_tags(m) for m in msgs).count("b") == 20000
+    assert escaped[0] < 20 * len(line)
+
+
 def test_head_and_tail_cut_on_boundaries():
     text = "\n".join(f"line {i} with words" for i in range(100))
     h = fmt.head(text, 200)

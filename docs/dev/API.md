@@ -188,7 +188,7 @@ Everything deleted (files, folders, topics and projects with their sessions, sin
 ## Tasks (`<workspace>/tasks.json`)
 ```
 Task    = {id, title, notes, status:"todo"|"doing"|"done", priority:0|1|2|3, due:"YYYY-MM-DD"|null,
-           project_id|null, topic_path|null, labels:[str], created, updated, done_at|null, order:float}
+           project_id|null, topic_path|null, labels:[str] (max 50, 40 chars each), created, updated, done_at|null, order:float}
 TaskProject = {id, name, color, workspace?: str, hidden?: true}
 ```
 Workspace link: every workspace project has one task project with `workspace = <project folder name>`. `GET` creates the
@@ -205,7 +205,7 @@ the change is re-applied on the fresh file (3 tries), then `409 conflict`. Not v
 | POST | `/api/tasks` | partial Task (title required) | `Task` |
 | PATCH | `/api/tasks/{id}` | partial Task | `Task` |
 | DELETE | `/api/tasks/{id}` | – | `{ok}` |
-| POST | `/api/tasks/bulk` | `{ids:[id], patch?:{status?, priority?, project_id?, due?, topic_path?, labels?}, labels_add?:[str], labels_remove?:[str], delete?:bool}` | `{ok, updated, deleted}` — one atomic write; unknown ids ignored (max 1000); tasks entering a column keep their relative order (top of `done`, bottom elsewhere) · `400 invalid_ids`/validation codes of PATCH |
+| POST | `/api/tasks/bulk` | `{ids:[id], patch?:{status?, priority?, project_id?, due?, topic_path?, labels?}, labels_add?:[str], labels_remove?:[str], delete?:bool}` | `{ok, updated, deleted}` — one atomic write; unknown ids ignored (max 1000); tasks entering a column keep their relative order (top of `done`, bottom elsewhere) · `400 invalid_ids`/`invalid_labels` (more than 50 labels on a task)/validation codes of PATCH |
 | POST / PATCH / DELETE | `/api/tasks/projects[/{id}]` | `{name, color, hidden?}` | `TaskProject` · DELETE `409 linked_project` |
 
 ## Crons
