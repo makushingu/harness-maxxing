@@ -29,6 +29,7 @@ async def _call(fn: Callable[..., Any], *args: Any, **kw: Any) -> Any:
 
 async def startup() -> None:
     teampeer.start()        # the outbox worker (idle while nothing is queued)
+    await asyncio.to_thread(team.fail_stale_downloads)   # downloads cut by the restart: failed, never pending forever
 
 
 class ChatIn(BaseModel):
