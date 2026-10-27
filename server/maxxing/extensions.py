@@ -36,7 +36,7 @@ from typing import Any, Callable
 
 from . import config
 
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")              # \Z: "$" also matches before a final "\n"
 TYPES = ("widget", "page")
 DEFAULT_TTL = 300
 # The extension contract (Card schema, ctx, page ctx, maxxing.api bridge, CSS variables). An extension declares
@@ -321,13 +321,18 @@ def _signature() -> tuple:
     return tuple(out)
 
 
-def scan() -> list[Extension]:
-    """(Re)load every extension folder. Blocking (imports user code)."""
+def scan(only_if_stale: bool = False) -> list[Extension]:
+    """(Re)load every extension folder. Blocking (imports user code). `only_if_stale`: requests that saw the same
+    change and waited behind the first one's rescan get its registry instead of importing everything again."""
     global _scanned, _last_sig
-    sig = _signature()
     exts: dict[str, Extension] = {}
     r = root()
     with publishing():
+        sig = _signature()
+        if only_if_stale:
+            with _lock:
+                if _scanned and sig == _last_sig:
+                    return list(_registry.values())
         if r.is_dir():
             for d in sorted(p for p in r.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
                 exts[d.name] = _load_one(d)
@@ -345,7 +350,7 @@ def all_extensions() -> list[Extension]:
     with _lock:
         if _scanned and sig == _last_sig:
             return list(_registry.values())
-    return scan()
+    return scan(only_if_stale=True)
 
 
 def get(eid: str) -> Extension | None:
