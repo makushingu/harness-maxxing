@@ -320,7 +320,7 @@ def test_malformed_event_is_a_400(client, sent, monkeypatch):
     monkeypatch.setattr(teampeer, "verify", lambda *a, **k: (LEA, ""))
     dm = client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).json()["id"]
     r = client.post("/api/team-peer/inbox", json={"type": "vote", "chat": dm, "msg": "m_00000000", "options": 5})
-    assert r.status_code in (400, 404)
+    assert r.status_code in (200, 400)                 # an unknown message: ignored (a 404 was retried)
     r = client.post("/api/team-peer/inbox", json={"type": "message", "chat": dm, "message": {"id": "m_11112222", "text": "x", "kind": "poll", "poll": {"options": 3}}})
     assert r.status_code == 400
     assert api_peer.log.name == "maxxing.teampeer"
