@@ -97,7 +97,8 @@ async def forward(eid: str, path: str, request: Request):
     ctx = extensions.make_ctx(ext)
     query = dict(request.query_params)
     try:
-        result = await extensions.call(fn, ctx, request.method, path, query, body, timeout=HANDLE_TIMEOUT_S)
+        result = await extensions.call(fn, ctx, request.method, path, query, body, timeout=HANDLE_TIMEOUT_S,
+                                       key=f"handle:{eid}")    # a stuck handle() takes one thread, not all
     except extensions.ExtensionBusy as e:
         raise _err(503, "extension_busy", str(e)) from None
     except asyncio.TimeoutError:

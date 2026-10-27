@@ -210,20 +210,23 @@ def test_bad_import_never_blocks_startup(client, org, monkeypatch):
 
 
 def test_stuck_extension_never_takes_the_shared_pool(client, org, monkeypatch):
-    """handle() that never returns: 504, then 503 once every extension thread is taken; the rest of the API
-    (shared thread pool) keeps answering (C2)."""
+    """handle() that never returns: 504, then 503 at once while it has not returned, so it holds one extension
+    thread and the other extensions keep answering; the rest of the API (shared thread pool) too (C2)."""
     import threading
     from maxxing.api import extensions as api_ext
     monkeypatch.setattr(api_ext, "HANDLE_TIMEOUT_S", 0.2)
     release = threading.Event()
     _ext(org, "stuck", {"type": "page"}, "def handle(ctx, method, path, query, body):\n    ctx['wait']()\n    return {}\n",
          "export function mount(){}")
+    _ext(org, "fine", {"type": "page"}, "def handle(ctx, method, path, query, body):\n    return {'ok': 1}\n",
+         "export function mount(){}")
     real = extensions.make_ctx
     monkeypatch.setattr(extensions, "make_ctx", lambda ext: {**real(ext), "wait": lambda: release.wait(10)})
     try:
-        codes = [client.get("/api/ext/stuck/x").status_code for _ in range(extensions.EXT_WORKERS + 1)]
-        assert codes[:extensions.EXT_WORKERS] == [504] * extensions.EXT_WORKERS
-        assert codes[-1] == 503
+        codes = [client.get("/api/ext/stuck/x").status_code for _ in range(extensions.EXT_WORKERS + 2)]
+        assert codes == [504] + [503] * (extensions.EXT_WORKERS + 1)
+        assert extensions._stuck == 1
+        assert client.get("/api/ext/fine/x").json() == {"ok": 1}
         assert client.get("/api/extensions").status_code == 200
         assert client.get("/api/dashboard").status_code == 200
     finally:
