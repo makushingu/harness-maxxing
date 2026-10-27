@@ -248,3 +248,21 @@ def test_a_password_with_a_lone_surrogate_is_a_400(mx):
         r = c.post("/api/auth/setup", content=body.encode(), headers=h)
         assert r.status_code == 400 and r.json()["error"] == "bad_password"
         assert security.password_is_set() is False
+
+
+def test_setup_links_made_at_once_share_one_token(mx, monkeypatch):
+    import threading
+    import time as _time
+    real = security.secrets.token_urlsafe
+    monkeypatch.setattr(security.secrets, "token_urlsafe", lambda n: _time.sleep(0.05) or real(n))
+    gate, got = threading.Barrier(8), []
+
+    def one():
+        gate.wait()
+        got.append(security.ensure_setup_token())
+    threads = [threading.Thread(target=one) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(set(got)) == 1 and security.check_setup_token(got[0])
