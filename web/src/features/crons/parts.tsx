@@ -37,10 +37,10 @@ export function LastRun({ run, tz, now }: { run: CronLastRun | null; tz?: string
   const lang = useLang()
   if (!run) return <span className="text-[13px] text-muted-foreground">{t('crons.neverRun')}</span>
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px]" title={fmtDate(run.at, lang, tz)}>
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] max-md:flex-wrap" title={fmtDate(run.at, lang, tz)}>
       <StatusDot tone={run.ok ? 'ok' : 'error'} label={run.ok ? t('crons.ok') : t('crons.failed')} />
       <span className={cn('font-medium', run.ok ? 'text-foreground' : 'text-destructive')}>{run.ok ? t('crons.ok') : t('crons.failedCode', { code: run.code ?? '?' })}</span>
-      <span className="truncate text-muted-foreground">
+      <span className="truncate text-muted-foreground max-md:whitespace-normal max-md:break-words">
         {fmtRelative(run.at, lang, now)} · {fmtDuration(run.duration_s)}
       </span>
     </span>
