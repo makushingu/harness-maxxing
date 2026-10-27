@@ -163,3 +163,10 @@ def test_link_label_with_code_keeps_the_code():
 def test_table_cell_link_with_code():
     html = "".join(fmt.render("| a | b |\n|---|---|\n| [`c.py`](https://e.com/c) | 1 |"))
     assert "c.py" in html and ">0<" not in html
+
+
+def test_feed_message_stays_under_the_telegram_limit(mx_state):
+    for body in ("&" * 700, "<>" * 350, "a & b " * 120):
+        text, _ = gateway.feed_message({"id": 1, "title": "T" * 5000, "body": body, "level": "info",
+                                        "source": "s" * 5000})
+        assert len(text) <= fmt.LIMIT
