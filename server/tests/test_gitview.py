@@ -393,3 +393,10 @@ def test_an_author_with_a_unit_separator_does_not_break_the_graph(repo):
     assert top["author"] == "ev\x1fil" and top["subject"] == "odd \x1e subject" and top["date"] > 0
     detail = gitview.commit(str(repo), top["sha"])
     assert detail["author"] == "ev\x1fil" and detail["email"] == "e@example.com" and detail["date"] == top["date"]
+
+
+def test_a_short_id_is_the_commit_even_with_a_branch_of_that_name(repo):
+    first = subprocess.run(["git", "-C", str(repo), "rev-list", "--max-parents=0", "HEAD"], capture_output=True,
+                           text=True, check=True).stdout.strip()
+    _git(repo, "branch", first[:7], "HEAD")             # a branch named like the first commit's short id
+    assert gitview.commit(str(repo), first[:7])["sha"] == first
