@@ -533,7 +533,7 @@ def _archive(p: Path) -> dict:
                         if count > ARCHIVE_MAX:
                             truncated = True
                             break
-                        entries.append({"name": m.name + ("/" if m.isdir() else ""), "size": m.size,
+                        entries.append({"name": _shown(m.name) + ("/" if m.isdir() else ""), "size": m.size,
                                         "dir": m.isdir(), "mtime": m.mtime or None})
                 except _ReadCap:
                     truncated = True

@@ -230,3 +230,16 @@ def test_names_over_255_bytes_are_refused_not_500(client, tree):
     (tree / "a.md").write_text("a")
     r = client.post("/api/files/move", json={"from": str(tree / "a.md"), "to": str(tree / long)})
     assert r.status_code == 400 and (tree / "a.md").exists()
+
+
+def test_tar_listing_with_a_latin1_name(client, tree):
+    import io
+    import tarfile
+    p = tree / "old.tar"
+    with tarfile.open(p, "w", format=tarfile.GNU_FORMAT, encoding="latin-1") as tf:
+        info = tarfile.TarInfo("caf\xe9.txt")
+        info.size = 2
+        tf.addfile(info, io.BytesIO(b"hi"))
+    r = client.get("/api/files/archive", params={"path": str(p)})
+    assert r.status_code == 200
+    assert [e["name"] for e in r.json()["entries"]] == ["caf�.txt"]
