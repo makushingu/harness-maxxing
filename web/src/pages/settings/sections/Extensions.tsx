@@ -61,7 +61,7 @@ export function ExtensionsSection() {
                   )}
                   {x.type === 'page' && x.enabled && !x.error && (
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                      <Link to={`/x/${x.id}`} className="inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary hover:underline">
+                      <Link to={`/x/${x.id}`} className="inline-flex w-fit items-center gap-1 pointer-coarse:min-h-10 text-[13px] font-medium text-primary hover:underline">
                         {t('ext.open')} <ExternalLink className="size-3" />
                       </Link>
                       <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
