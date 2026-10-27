@@ -48,7 +48,14 @@ GH_HOSTS = ("github.com", "www.github.com")
 TOKEN_KEYS = ("GITHUB_TOKEN", "GH_TOKEN")
 SEP = "\x00"              # field separator of our git log formats (written %x00): git keeps \x1f in names
 FMT_SEP = "%x00"
+SUBJECT_MAX = 500           # a subject or author name longer than this is cut (a 1 MB subject would weigh on every graph)
+MESSAGE_MAX = 50_000        # same for the message of the commit detail
 MAX_BRANCHES = 20
+
+
+def _clip(text: str, n: int) -> str:
+    return text if len(text) <= n else text[:n] + "…"
+
 
 _lock = threading.Lock()
 _cache: dict[str, tuple[float, Any]] = {}
@@ -230,7 +237,7 @@ def summary(repo: Path) -> dict:
             last = _git(repo, "log", "-1", "--no-show-signature", f"--format=%ct{FMT_SEP}%s").strip()
             if last:
                 ts, subj = last.split(SEP, 1)
-                out["last_commit"], out["last_subject"] = int(ts), subj
+                out["last_commit"], out["last_subject"] = int(ts), _clip(subj, SUBJECT_MAX)
         except GitError:
             pass                                          # empty repository
         try:
@@ -366,8 +373,8 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
         if len(parts) < 6:
             continue
         sha, parents, deco, author, ts, subject = parts[0], parts[1], parts[2], parts[3], parts[4], SEP.join(parts[5:])
-        commits.append({"sha": sha, "parents": parents.split(), "refs": _refs(deco), "author": author,
-                        "date": int(ts) if ts.isdecimal() and ts.isascii() else 0, "subject": subject})
+        commits.append({"sha": sha, "parents": parents.split(), "refs": _refs(deco), "author": _clip(author, SUBJECT_MAX),
+                        "date": int(ts) if ts.isdecimal() and ts.isascii() else 0, "subject": _clip(subject, SUBJECT_MAX)})
     truncated = len(commits) > limit
     s = summary(repo)
     return {"repo": {**s, "kind": "local", "id": str(repo)}, "commits": commits[:limit], "truncated": truncated}
@@ -409,7 +416,7 @@ def commit(path: str, sha: str) -> dict:
                           "deletions": int(rem) if rem.isdigit() else None})
     return {"sha": h, "parents": parents.split(), "author": an, "email": ae,
             "date": int(ct) if ct.isdecimal() and ct.isascii() else 0,
-            "message": body.strip(), "files": files[:300], "files_total": len(files)}
+            "message": _clip(body.strip(), MESSAGE_MAX), "files": files[:300], "files_total": len(files)}
 
 
 # ---- GitHub -------------------------------------------------------------------------------
@@ -648,7 +655,7 @@ def github_graph(full_name: str, limit: int = DEFAULT_LIMIT, branches: list[str]
             by_sha[c["sha"]] = {"sha": c["sha"], "parents": [p["sha"] for p in c.get("parents") or []], "refs": [],
                                 "author": ((cm.get("author") or {}).get("name") or (c.get("author") or {}).get("login") or ""),
                                 "date": _ts((cm.get("committer") or cm.get("author") or {}).get("date")),
-                                "subject": (cm.get("message") or "").split("\n", 1)[0]}
+                                "subject": _clip((cm.get("message") or "").split("\n", 1)[0], SUBJECT_MAX)}
     for b, sha in heads.items():
         if sha in by_sha:
             by_sha[sha]["refs"].append({"name": b, "kind": "branch", **({"current": True} if b == default else {})})
@@ -693,7 +700,7 @@ def github_commit(full_name: str, sha: str) -> dict:
              for f in c.get("files") or []]
     return {"sha": c["sha"], "parents": [p["sha"] for p in c.get("parents") or []],
             "author": (cm.get("author") or {}).get("name") or "", "email": (cm.get("author") or {}).get("email") or "",
-            "date": _ts((cm.get("author") or {}).get("date")), "message": (cm.get("message") or "").strip(),
+            "date": _ts((cm.get("author") or {}).get("date")), "message": _clip((cm.get("message") or "").strip(), MESSAGE_MAX),
             "files": files[:300], "files_total": len(files), "url": c.get("html_url")}
 
 
