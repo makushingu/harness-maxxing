@@ -210,20 +210,23 @@ def test_bad_import_never_blocks_startup(client, org, monkeypatch):
 
 
 def test_stuck_extension_never_takes_the_shared_pool(client, org, monkeypatch):
-    """handle() that never returns: 504, then 503 once every extension thread is taken; the rest of the API
-    (shared thread pool) keeps answering (C2)."""
+    """handle() that never returns: 504, then 503 at once while it has not returned, so it holds one extension
+    thread and the other extensions keep answering; the rest of the API (shared thread pool) too (C2)."""
     import threading
     from maxxing.api import extensions as api_ext
     monkeypatch.setattr(api_ext, "HANDLE_TIMEOUT_S", 0.2)
     release = threading.Event()
     _ext(org, "stuck", {"type": "page"}, "def handle(ctx, method, path, query, body):\n    ctx['wait']()\n    return {}\n",
          "export function mount(){}")
+    _ext(org, "fine", {"type": "page"}, "def handle(ctx, method, path, query, body):\n    return {'ok': 1}\n",
+         "export function mount(){}")
     real = extensions.make_ctx
     monkeypatch.setattr(extensions, "make_ctx", lambda ext: {**real(ext), "wait": lambda: release.wait(10)})
     try:
-        codes = [client.get("/api/ext/stuck/x").status_code for _ in range(extensions.EXT_WORKERS + 1)]
-        assert codes[:extensions.EXT_WORKERS] == [504] * extensions.EXT_WORKERS
-        assert codes[-1] == 503
+        codes = [client.get("/api/ext/stuck/x").status_code for _ in range(extensions.EXT_WORKERS + 2)]
+        assert codes == [504] + [503] * (extensions.EXT_WORKERS + 1)
+        assert extensions._stuck == 1
+        assert client.get("/api/ext/fine/x").json() == {"ok": 1}
         assert client.get("/api/extensions").status_code == 200
         assert client.get("/api/dashboard").status_code == 200
     finally:
@@ -317,3 +320,26 @@ def test_sys_exit_in_extension_code_never_escapes(client, org):
     _ext(org, "cx", {"type": "widget"}, "def card(ctx):\n    raise SystemExit(2)\n")
     r = client.get("/api/dashboard/widgets/cx")
     assert r.status_code == 200 and "SystemExit" in r.json()["error"]
+
+
+def test_requests_after_one_edit_share_a_single_rescan(client, org):
+    import os
+    import threading
+    count = org.ws / "imports.txt"
+    count.write_text("")
+    d = _ext(org, "slow", {"type": "widget"},
+             f"import time\nopen({str(count)!r}, 'a').write('x')\ntime.sleep(0.5)\ndef card(ctx):\n    return {{}}\n")
+    extensions.all_extensions()
+    count.write_text("")
+    st = (d / "manifest.json").stat()
+    os.utime(d / "manifest.json", ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    threads = [threading.Thread(target=extensions.all_extensions) for _ in range(5)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert count.read_text() == "x"
+
+
+def test_a_folder_name_ending_with_a_newline_is_refused(client, org):
+    _ext(org, "abc\n", {"type": "widget"}, "def card(ctx):\n    return {}\n")
+    ext = next(e for e in extensions.all_extensions() if e.id == "abc\n")
+    assert "lowercase slug" in (ext.error or "")

@@ -158,7 +158,7 @@ def verify(kind: str, secret: str, headers: dict, body: bytes) -> bool:
         parts = dict(p.split("=", 1) for p in h.get("stripe-signature", "").split(",") if "=" in p)
         t = parts.get("t", "")
         sigs = [v for k, v in (p.split("=", 1) for p in h.get("stripe-signature", "").split(",") if "=" in p) if k == "v1"]
-        if not (t.isascii() and t.isdigit()) or abs(time.time() - int(t)) > STRIPE_TOLERANCE_S:   # "²" is a digit
+        if not (t.isascii() and t.isdigit() and len(t) <= 12) or abs(time.time() - int(t)) > STRIPE_TOLERANCE_S:   # "²" is a digit; int() of 4300+ digits raises
             return False
         want = hmac.new(secret.encode(), f"{t}.".encode() + body, hashlib.sha256).hexdigest()
         return any(_same(want, s) for s in sigs)
