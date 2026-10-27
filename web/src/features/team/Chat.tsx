@@ -601,14 +601,14 @@ function SelectBar({
               type="button"
               onClick={() => onPreset(p)}
               className={cn(
-                'h-7 rounded-full border px-2.5 text-[12px] font-medium transition-colors',
+                'h-7 rounded-full border px-2.5 text-[12px] font-medium transition-colors pointer-coarse:h-10',
                 preset === p ? 'border-primary bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
               )}
             >
               {label}
             </button>
           ))}
-          <button type="button" onClick={onNone} className="h-7 px-1.5 text-[12px] text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onNone} className="h-7 px-1.5 pointer-coarse:h-10 text-[12px] text-muted-foreground hover:text-foreground">
             {t('team.sum.none')}
           </button>
         </div>
@@ -932,7 +932,7 @@ function Reactions({ team, chat, m }: { team: TeamState | undefined; chat: TeamC
             type="button"
             onClick={() => react.mutate({ cid: chat.id, mid: m.id, emoji: e })}
             className={cn(
-              'inline-flex h-6 items-center gap-1 rounded-full border px-1.5 text-[12px] tabular-nums transition-colors',
+              'inline-flex h-6 items-center gap-1 rounded-full border px-1.5 text-[12px] tabular-nums transition-colors pointer-coarse:h-10 pointer-coarse:px-2.5',
               who.includes(me) ? 'border-primary/50 bg-primary/10 text-foreground' : 'bg-background text-muted-foreground hover:bg-accent',
             )}
           >
@@ -987,7 +987,7 @@ function PollCard({ team, chat, m }: { team: TeamState | undefined; chat: TeamCh
               key={o.id}
               type="button"
               onClick={() => vote.mutate({ cid: chat.id, mid: m.id, option: o.id })}
-              className={cn('relative flex items-center gap-2.5 overflow-hidden rounded-lg border px-3 py-2 text-left transition-colors hover:border-primary/50', mineVote && 'border-primary/60')}
+              className={cn('relative flex items-center gap-2.5 overflow-hidden rounded-lg border px-3 py-2 text-left transition-colors pointer-coarse:min-h-10 hover:border-primary/50', mineVote && 'border-primary/60')}
             >
               <span
                 className={cn('absolute inset-y-0 left-0 transition-[width] duration-500', mineVote ? 'bg-primary/15' : 'bg-muted', o.votes.length === max && voters > 0 && !mineVote && 'bg-muted-foreground/15')}
