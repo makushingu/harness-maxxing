@@ -323,3 +323,12 @@ def test_malformed_event_is_a_400(client, sent, monkeypatch):
     r = client.post("/api/team-peer/inbox", json={"type": "message", "chat": dm, "message": {"id": "m_11112222", "text": "x", "kind": "poll", "poll": {"options": 3}}})
     assert r.status_code == 400
     assert api_peer.log.name == "maxxing.teampeer"
+
+
+def test_a_damaged_team_file_is_kept_aside(client, sent):
+    team._path().parent.mkdir(parents=True, exist_ok=True)
+    team._path().write_text('{"chats": [ broken')
+    assert client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).status_code == 200
+    kept = list(team._path().parent.glob("team.json.damaged-*"))
+    assert len(kept) == 1 and kept[0].read_text() == '{"chats": [ broken'
+    assert len(team.state()["chats"]) == 1
