@@ -1,3 +1,4 @@
+import json
 import time
 import subprocess
 from urllib.parse import parse_qs, urlparse
@@ -400,3 +401,18 @@ def test_a_short_id_is_the_commit_even_with_a_branch_of_that_name(repo):
                            text=True, check=True).stdout.strip()
     _git(repo, "branch", first[:7], "HEAD")             # a branch named like the first commit's short id
     assert gitview.commit(str(repo), first[:7])["sha"] == first
+
+
+def test_huge_subjects_and_messages_are_cut(repo):
+    (repo / "big.txt").write_text("x")
+    _git(repo, "add", "big.txt")
+    msg = repo.parent / "big-message.txt"                # too long for a command line
+    msg.write_text("S" * 200_000 + "\n\n" + "B" * 200_000)
+    _git(repo, "commit", "-q", "-F", str(msg))
+    gitview.clear_cache()
+    graph = gitview.graph(str(repo))
+    top = graph["commits"][0]
+    assert top["subject"] == "S" * gitview.SUBJECT_MAX + "…"
+    assert len(json.dumps(graph)) < 50_000
+    message = gitview.commit(str(repo), top["sha"])["message"]
+    assert len(message) == gitview.MESSAGE_MAX + 1 and message.endswith("…")
