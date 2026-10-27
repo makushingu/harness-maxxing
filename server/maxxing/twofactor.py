@@ -134,8 +134,11 @@ def set_on(on: bool) -> None:
 def _device_key() -> bytes:
     k = config.get_secret("device_key")
     if not k:
-        k = secrets.token_hex(32)
-        config.set_secret("device_key", k)
+        with config._lock:                    # noqa: SLF001 - re-read: a key made meanwhile must not be replaced
+            k = config.get_secret("device_key")
+            if not k:
+                k = secrets.token_hex(32)
+                config.set_secret("device_key", k)
     return str(k).encode()                    # str(): a hand-edited secrets.json (a number) is not a 500
 
 
@@ -225,6 +228,13 @@ def _not_before() -> float:
         return float(config.get_secret("challenges_not_before") or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def purpose(cid: str) -> str | None:
+    """What a waiting challenge is for ("login" | "enable"), without touching it; None when there is none."""
+    with _lock:
+        c = _ch.get(cid or "")
+        return c.purpose if c else None
 
 
 def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:

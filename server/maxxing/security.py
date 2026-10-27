@@ -5,8 +5,9 @@
   before 2.0.0a32 are "<issued_at>.<hmac>" and stay valid). Changing the password rotates the key
   (every existing cookie dies). Sign out revokes that one cookie server-side: its id (sha256 of the
   value) goes to secrets.revoked_sessions {id: expires_at} until it would have expired anyway; past
-  REVOKED_MAX entries the list is replaced by secrets.sessions_not_before = now (every cookie issued
-  before is refused - all browsers signed out, never a cookie that comes back to life).
+  REVOKED_MAX entries the list is replaced by secrets.sessions_not_before = now, in whole seconds (every cookie issued
+  before is refused - all browsers signed out, never a cookie that comes back to life; the revocations of cookies
+  issued in that same second stay listed, and a cookie issued right after still works).
 - Throttle: per client key (socket peer), failures in a 15-min window -> delay 1,2,4,8 s,
   then 429 for the rest of the window, checked BEFORE the password (no scrypt, even a correct
   password is refused). Every attempt counts as a failure up front (parallel requests count too),
@@ -92,11 +93,11 @@ def _setup_token_fresh() -> bool:
 
 def ensure_setup_token() -> str:
     """The current setup link token; a new one when there is none or it expired."""
-    tok = config.get_secret("setup_token")
-    if not tok or not _setup_token_fresh():
-        tok = secrets.token_urlsafe(24)
-        config.set_secret("setup_token", tok)
-        config.set_secret("setup_token_at", int(time.time()))
+    with config._lock:                    # noqa: SLF001 - two callers at once (setup-link, doctor) share one token
+        tok = config.get_secret("setup_token")
+        if not tok or not _setup_token_fresh():
+            tok = secrets.token_urlsafe(24)
+            config.set_secrets({"setup_token": tok, "setup_token_at": int(time.time())})
     return tok
 
 
@@ -115,16 +116,21 @@ def setup_token_expires_at() -> float | None:
 
 def check_setup_token(tok: str) -> bool:
     cur = config.get_secret("setup_token")
-    # bytes: a non-ASCII token is a 403, not a 500 (compare_digest refuses non-ASCII str)
-    return bool(cur) and _setup_token_fresh() and hmac.compare_digest(str(cur).encode(), (tok or "").encode())
+    # bytes: a non-ASCII token is a 403, not a 500 (compare_digest refuses non-ASCII str); surrogatepass: a lone
+    # surrogate from the JSON body ("\ud800") cannot be encoded otherwise
+    return bool(cur) and _setup_token_fresh() and hmac.compare_digest(
+        str(cur).encode(), (tok or "").encode("utf-8", "surrogatepass"))
 
 
 # ---- cookie --------------------------------------------------------------------------------
 def _cookie_key() -> bytes:
     k = config.get_secret("cookie_key")
     if not k:
-        k = secrets.token_hex(32)
-        config.set_secret("cookie_key", k)
+        with config._lock:                    # noqa: SLF001 - re-read: a key made meanwhile must not be replaced
+            k = config.get_secret("cookie_key")
+            if not k:
+                k = secrets.token_hex(32)
+                config.set_secret("cookie_key", k)
     return str(k).encode()                    # str(): a hand-edited secrets.json (a number) is not a 500
 
 
@@ -193,9 +199,15 @@ def revoke_cookie(value: str | None) -> bool:
                    if isinstance(v, (int, float)) and v > now}
         revoked[_cookie_id(value)] = ts + COOKIE_MAX_AGE
         if len(revoked) > REVOKED_MAX:          # never drop a revocation: refuse every older cookie instead
-            config.set_secret("sessions_not_before", int(now) + 1)
-            revoked = {}
-        config.set_secret("revoked_sessions", revoked or None)
+            # cookie times are whole seconds: one issued later in this same second must still work, so the cutoff is
+            # this second and the revocations of cookies issued in it are kept
+            nb = int(now)
+            revoked = {k: v for k, v in revoked.items() if v - COOKIE_MAX_AGE >= nb}
+            if len(revoked) > REVOKED_MAX:      # that many sign-outs in one second: the list stays bounded
+                nb, revoked = nb + 1, {}
+            config.set_secrets({"sessions_not_before": nb, "revoked_sessions": revoked or None})
+        else:
+            config.set_secret("revoked_sessions", revoked or None)
     return True
 
 

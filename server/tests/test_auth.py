@@ -103,7 +103,10 @@ def test_revocation_list_is_bounded(mx, monkeypatch):
     from maxxing import config
     security.set_password("rightpassword")
     monkeypatch.setattr(security, "REVOKED_MAX", 3)
+    import time
     keep = security.make_cookie()
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 5)    # the overflow comes a few seconds later
     for _ in range(4):
         security.revoke_cookie(security.make_cookie())
     assert not security.cookie_valid(keep)                    # overflow -> every older cookie refused
@@ -181,6 +184,15 @@ def test_non_ascii_setup_token_is_refused_not_500(mx):
         assert r.status_code == 403, (r.status_code, r.text)
 
 
+def test_setup_token_with_a_lone_surrogate_is_refused_not_500(mx):
+    security.ensure_setup_token()
+    assert security.check_setup_token("\ud800") is False
+    with TestClient(_app(), raise_server_exceptions=False) as c:
+        body = b'{"token": "\\ud800", "password": "longenough-pass"}'
+        r = c.post("/api/auth/setup", content=body, headers={"X-Maxxing": "1", "Content-Type": "application/json"})
+        assert r.status_code == 403, (r.status_code, r.text)
+
+
 def test_logout_with_corrupted_cookie_key_is_not_a_500(mx):
     from maxxing import config, twofactor
     security.set_password("rightpassword")
@@ -239,3 +251,64 @@ def test_a_password_with_a_lone_surrogate_is_a_400(mx):
         r = c.post("/api/auth/setup", content=body.encode(), headers=h)
         assert r.status_code == 400 and r.json()["error"] == "bad_password"
         assert security.password_is_set() is False
+
+
+def test_setup_links_made_at_once_share_one_token(mx, monkeypatch):
+    import threading
+    import time as _time
+    real = security.secrets.token_urlsafe
+    monkeypatch.setattr(security.secrets, "token_urlsafe", lambda n: _time.sleep(0.05) or real(n))
+    gate, got = threading.Barrier(8), []
+
+    def one():
+        gate.wait()
+        got.append(security.ensure_setup_token())
+    threads = [threading.Thread(target=one) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(set(got)) == 1 and security.check_setup_token(got[0])
+
+
+def test_cookies_made_at_once_while_the_keys_are_missing_all_stay_valid(mx, monkeypatch):
+    import secrets
+    import threading
+    import time as _time
+
+    from maxxing import config, twofactor
+    security.set_password("rightpassword")
+    config.set_secrets({"cookie_key": None, "device_key": None})       # password changed / browsers forgotten
+    real = secrets.token_hex
+    monkeypatch.setattr(secrets, "token_hex", lambda n=None: _time.sleep(0.05) or real(n))
+    for make, valid in ((security.make_cookie, security.cookie_valid),
+                        (twofactor.make_device_cookie, twofactor.device_trusted)):
+        gate, got = threading.Barrier(8), []
+
+        def one():
+            gate.wait()
+            got.append(make())
+        threads = [threading.Thread(target=one) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(got) == 8 and all(valid(v) for v in got), make.__name__
+
+
+def test_a_cookie_issued_in_the_second_of_the_overflow_still_works(mx, monkeypatch):
+    import time
+    from maxxing import config
+    security.set_password("rightpassword")
+    monkeypatch.setattr(security, "REVOKED_MAX", 3)
+    old = [security.make_cookie() for _ in range(3)]
+    for v in old:
+        security.revoke_cookie(v)
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 5)
+    last = security.make_cookie()
+    security.revoke_cookie(last)                              # overflow
+    assert config.get_secret("sessions_not_before")
+    fresh = security.make_cookie()                            # signed in again within the same second
+    assert security.cookie_valid(fresh)
+    assert not any(security.cookie_valid(v) for v in [*old, last])   # this second's revocation is kept
