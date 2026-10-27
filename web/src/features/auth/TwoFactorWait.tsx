@@ -95,7 +95,7 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
           <Input value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, '').slice(0, 7))} inputMode="numeric" autoComplete="one-time-code" placeholder="123456" className="font-mono tracking-widest" />
         </FormField>
         {trustOption && (
-          <Label className="gap-2 font-normal">
+          <Label className="gap-2 font-normal pointer-coarse:min-h-10">
             <Checkbox checked={trust} onCheckedChange={(v) => setTrust(v === true)} /> {t('twofa.trust')}
           </Label>
         )}
@@ -109,7 +109,7 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
         </div>
       </form>
       <details className="text-[13px] text-muted-foreground">
-        <summary className="cursor-pointer list-none text-center hover:text-foreground">{t('twofa.noAnswer')}</summary>
+        <summary className="cursor-pointer list-none text-center hover:text-foreground pointer-coarse:flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:justify-center">{t('twofa.noAnswer')}</summary>
         <div className="mt-3 grid gap-2">
           <p>{t('twofa.noAnswerHelp')}</p>
           <CodeBlock inline code="maxxing 2fa off" />
