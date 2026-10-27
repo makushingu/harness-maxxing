@@ -282,3 +282,17 @@ def test_received_files_with_the_same_name_never_collide(mx, monkeypatch):
     files = [f for m in team.messages(dm)["messages"] for f in m["files"]]
     assert len({f["path"] for f in files}) == 2 and all(not f.get("failed") for f in files)
     assert sorted(open(f["path"]).read() for f in files) == ["f0", "f1"]
+
+
+def test_messages_from_a_contact_do_not_reparse_peers_json_every_time(client, monkeypatch):
+    key = _setup(monkeypatch)
+    reads, ready = [], []
+    real_read, real_ready = config.read_json, teampeer.readiness
+    monkeypatch.setattr(config, "read_json", lambda p, *a, **k: (p == teampeer._path() and reads.append(p)) or real_read(p, *a, **k))
+    monkeypatch.setattr(teampeer, "readiness", lambda: ready.append(1) or real_ready())
+    cid = team.dm_id("http://127.0.0.1:8801", "http://127.0.0.1:8802")
+    for i in range(6):
+        body = json.dumps({"type": "message", "chat": cid,
+                           "message": {"id": f"m_0123abc{i}", "at": time.time(), "text": "hi", "kind": "text"}}).encode()
+        assert client.post("/api/team-peer/inbox", content=body, headers=_signed(key, body)).status_code == 200
+    assert len(reads) <= 3 and len(ready) <= 1        # last_seen written once (SEEN_WRITE_S), the address resolved once
