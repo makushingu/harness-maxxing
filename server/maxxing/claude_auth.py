@@ -171,7 +171,10 @@ def limits(now: float | None = None) -> dict | None:
     if not isinstance(d, dict):
         return None
     now = time.time() if now is None else now
-    out: dict = {"available": False, "five_hour": None, "seven_day": None, "source": "turn", "seen_at": d.get("at")}
+    out: dict = {"available": False, "five_hour": None, "seven_day": None, "source": "turn", "seen_at": None}
+    at = d.get("at")
+    if isinstance(at, (int, float)) and not isinstance(at, bool) and math.isfinite(at):
+        out["seen_at"] = at                             # a hand-edited "x" / NaN / 1e999 would make /api/usage answer 500
     for key in ("five_hour", "seven_day"):
         w = d.get(key)
         if not isinstance(w, dict):
