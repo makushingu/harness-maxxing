@@ -170,3 +170,11 @@ def test_feed_message_stays_under_the_telegram_limit(mx_state):
         text, _ = gateway.feed_message({"id": 1, "title": "T" * 5000, "body": body, "level": "info",
                                         "source": "s" * 5000})
         assert len(text) <= fmt.LIMIT
+
+
+def test_long_non_latin_file_name_is_cut_in_bytes(tmp_path):
+    name = gateway._safe_name("文" * 150 + ".pdf", "file")
+    assert name.endswith(".pdf") and len(name.encode()) <= 200
+    p = gateway._unique(tmp_path / name)
+    p.with_name(p.name + ".part").write_bytes(b"x")                # still a valid name with the suffix
+    assert gateway._safe_name("a" * 50 + ".txt", "file") == "a" * 50 + ".txt"

@@ -783,7 +783,16 @@ def _path_hash(path: str) -> str:
 
 
 def _safe_name(name: str, default: str) -> str:
-    name = re.sub(r"[^\w.\- ]+", "_", os.path.basename(name or "")).strip(" .")[:120]
+    name = re.sub(r"[^\w.\- ]+", "_", os.path.basename(name or "")).strip(" .")
+    # at most 120 characters and 200 bytes (Linux allows 255 per name, minus "-N" and ".part"; 120 CJK
+    # characters are 360 bytes), the extension kept
+    if len(name) > 120 or len(name.encode()) > 200:
+        stem, dot, ext = name.rpartition(".")
+        if not dot or not stem or len(ext) > 16:
+            stem, ext = name, ""
+        room = 200 - (len(ext.encode()) + 1 if ext else 0)
+        stem = stem[:120 - (len(ext) + 1 if ext else 0)].encode()[:room].decode("utf-8", "ignore").rstrip(" .")
+        name = f"{stem}.{ext}" if ext and stem else stem
     return name or default
 
 
