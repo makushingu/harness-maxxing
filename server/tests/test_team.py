@@ -332,3 +332,9 @@ def test_a_damaged_team_file_is_kept_aside(client, sent):
     kept = list(team._path().parent.glob("team.json.damaged-*"))
     assert len(kept) == 1 and kept[0].read_text() == '{"chats": [ broken'
     assert len(team.state()["chats"]) == 1
+
+
+def test_a_file_path_with_a_nul_byte_is_a_400(client, sent):
+    c = client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).json()
+    r = client.post(f"/api/team/chats/{c['id']}/messages", json={"text": "x", "files": [{"path": "/tmp/a\u0000b"}]})
+    assert r.status_code == 400
