@@ -36,7 +36,7 @@ from typing import Any, Callable
 
 from . import config
 
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")              # \Z: "$" also matches before a final "\n"
 TYPES = ("widget", "page")
 DEFAULT_TTL = 300
 # The extension contract (Card schema, ctx, page ctx, maxxing.api bridge, CSS variables). An extension declares
