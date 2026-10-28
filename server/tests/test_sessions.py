@@ -826,3 +826,33 @@ def test_turns_ask_for_foreground_agents(client, topic, mx):
     wait_for(lambda: len(calls(mx)) >= 2)
     wait_idle(client, s["id"])
     assert "--append-system-prompt" not in calls(mx)[-1]["argv"]
+
+
+def test_a_lone_surrogate_in_a_request_is_a_422_not_a_500(client, topic, mx):
+    def send(method, url, raw):
+        return client.request(method, url, content=raw, headers={"content-type": "application/json"})
+    sid = client.post("/api/sessions", json={"path": topic, "title": "ok"}).json()["id"]
+    cut = '"\\ud800x"'
+    for method, url, raw in [("POST", "/api/sessions", f'{{"path": "{topic}", "title": {cut}}}'),
+                             ("POST", "/api/sessions", f'{{"path": "{topic}", "message": {cut}}}'),
+                             ("POST", f"/api/sessions/{sid}/messages", f'{{"text": {cut}}}'),
+                             ("POST", f"/api/sessions/{sid}/messages", f'{{"text": "a", "attachments": [{cut}]}}'),
+                             ("PATCH", f"/api/sessions/{sid}", f'{{"title": {cut}}}'),
+                             ("PATCH", f"/api/sessions/{sid}", f'{{"model": {cut}}}')]:
+        r = send(method, url, raw)
+        assert r.status_code == 422 and r.json()["error"] == "invalid", (url, raw, r.status_code)
+    assert client.get(f"/api/sessions/{sid}").json()["title"] == "ok"
+    emoji = send("PATCH", f"/api/sessions/{sid}", '{"title": "\\ud83d\\ude00 ok"}')
+    assert emoji.status_code == 200 and emoji.json()["title"] == "😀 ok"
+
+
+def test_a_model_id_is_checked_before_it_reaches_the_command_line(client, topic, mx):
+    sid = client.post("/api/sessions", json={"path": topic, "title": "ok"}).json()["id"]
+    for bad in ("a\x00b", "--dangerously-skip-permissions", "opus sonnet", "x" * 101):
+        r = client.patch(f"/api/sessions/{sid}", json={"model": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_model", bad
+        r = client.post("/api/sessions", json={"path": topic, "model": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_model", bad
+    for good in ("claude-opus-5-5[1m]", "sonnet", " opus ", ""):
+        r = client.patch(f"/api/sessions/{sid}", json={"model": good})
+        assert r.status_code == 200 and r.json()["model"] == good.strip()

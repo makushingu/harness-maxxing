@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from typing import Any, Iterable
 
@@ -17,6 +18,10 @@ TOOL_RESULT_MAX = 20_000
 SUMMARY_MAX = 120
 TASK_KINDS = {"local_agent": "agent", "local_bash": "shell"}
 TASK_STATES = {"completed": "completed", "failed": "failed", "stopped": "stopped", "killed": "stopped"}
+# a "\\ud800"-style escape not part of a surrogate pair (a text cut inside an emoji): valid JSON, but the lone
+# surrogate it decodes to cannot be encoded as UTF-8 (the events response and the search index failed on it)
+_LONE_SURROGATE = re.compile(r"\\u[dD][89abAB][0-9a-fA-F]{2}(?!\\u[dD][c-fC-F])"
+                             r"|(?<!\\u[dD][89abAB][0-9a-fA-F]{2})\\u[dD][c-fC-F][0-9a-fA-F]{2}")
 
 
 def normalize_lines(lines: Iterable[str]) -> list[dict]:
@@ -29,12 +34,25 @@ def normalize_lines(lines: Iterable[str]) -> list[dict]:
             ev = json.loads(line)
         except ValueError:
             continue
+        if _LONE_SURROGATE.search(line):
+            ev = _no_surrogates(ev)
         if isinstance(ev, dict):
             try:
                 out.extend(normalize(ev))
             except (AttributeError, TypeError, ValueError):     # a field of an unexpected type: skip that line
                 continue
     return out
+
+
+def _no_surrogates(v: Any) -> Any:
+    """Lone surrogates -> U+FFFD (pairs are already joined by json.loads)."""
+    if isinstance(v, str):
+        return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    if isinstance(v, dict):
+        return {_no_surrogates(k): _no_surrogates(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_no_surrogates(x) for x in v]
+    return v
 
 
 def normalize(ev: dict) -> list[dict]:

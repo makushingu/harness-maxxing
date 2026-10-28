@@ -30,6 +30,15 @@ TASK_START_SCAN_MAX = 32 * 1024 * 1024  # how far back read_back looks for the t
 STOP_WAIT_S = 10.0
 KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"]
 _MODEL_RE = re.compile(rb'"model"\s*:\s*"(claude-[a-z0-9.-]+)"')
+# a model id given by a client: passed to `claude --model`, so no option, no NUL, no control character
+_MODEL_ID = re.compile(r"[A-Za-z0-9._:@/\[\]][A-Za-z0-9._:@/\[\]-]{0,99}")
+
+
+def _check_model(model: str | None) -> str:
+    model = (model or "").strip()
+    if model and not _MODEL_ID.fullmatch(model):
+        raise SessionError(400, "bad_model", "Invalid model id")
+    return model
 _WINDOW_RE = re.compile(rb'"(claude-[a-z0-9.-]+)"\s*:\s*\{[^{}]*?"contextWindow"\s*:\s*(\d+)')
 
 
@@ -272,6 +281,7 @@ def create_session(path: str, message: str | None = None, title: str | None = No
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
     given = (title or "").strip()[:120]
+    model = _check_model(model)
     meta = store.new_meta(p, given or _default_title(p, message), model=model or "",
                           source=source, notify=notify, cron=cron, env=env, timeout_s=timeout_s, plan_mode=plan_mode,
                           permission_mode=permission_mode)
@@ -527,13 +537,15 @@ def update_session(sid: str, title: str | None = None, model: str | None = None,
                    plan_mode: bool | None = None, favorite: bool | None = None,
                    path: str | None = None) -> dict:
     cur = _require(sid)
+    if model is not None:
+        model = _check_model(model)
     if path is not None:
         move_session(sid, path, cur)
     with store.edit(sid) as m:
         if title is not None and title.strip():
             m["title"] = title.strip()[:120]
         if model is not None:
-            m["model"] = model.strip()
+            m["model"] = model
         if archived is not None:
             m["archived"] = bool(archived)
         if notify is not None:
