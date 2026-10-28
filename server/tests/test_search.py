@@ -224,3 +224,25 @@ def test_unchanged_sessions_are_not_read_again(client, mx, monkeypatch):
     assert sorted(reads) == sorted(sids[:2])
     assert search.search("yankee")["results"][0]["id"] == sids[0]
     assert search.search("titre changé")["results"][0]["id"] == sids[1]
+
+
+def test_a_lone_surrogate_in_a_log_breaks_neither_the_session_nor_the_index(client, mx):
+    bad = _session("", "Coupée", [])
+    with open(store.log_path(bad), "a") as fh:      # a text cut inside an emoji: valid JSON, not valid UTF-8
+        fh.write('{"type":"assistant","message":{"role":"assistant","content":[{"type":"text",'
+                 '"text":"cut \\ud800 zebrafish"}]}}\n')
+    good = _session("", "Saine", [("assistant", "fine quokkaword")])
+    for q in ("from=0", "tail=50"):
+        r = client.get(f"/api/sessions/{bad}/events?{q}")
+        assert r.status_code == 200 and "cut � zebrafish" in r.text
+    search.refresh()
+    assert [x["id"] for x in search.search("quokkaword")["results"]] == [good]
+    assert [x["id"] for x in search.search("zebrafish")["results"]] == [bad]
+
+
+def test_a_moved_session_is_found_under_its_new_topic(client, mx):
+    sid = _session("projects/acme/topics/blog", "Déplacée", [("user", "okapiword")])
+    search.refresh()
+    store.update(sid, path="projects/zeta/topics/t2")
+    search.refresh()
+    assert [x["path"] for x in search.search("okapiword")["results"]] == ["projects/zeta/topics/t2"]
