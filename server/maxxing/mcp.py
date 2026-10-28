@@ -189,7 +189,8 @@ def _url_masked(url: str, mask: str = MASK) -> str:
 
 
 SECRET_NAME_RE = re.compile(r"key|token|secret|pass|auth|cred|cookie|session|bearer|signature|private", re.I)
-USERINFO_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://([^/\s@]+)@")
+# the scheme starts a word and is short: on a long run of letters with no "://" each try stops quickly (linear)
+USERINFO_RE = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://([^/\s@]+)@")
 SECRET_FLAG_RE = re.compile(r"(?:key|token|secret|pass|password|auth|credentials?|cookie|bearer)\Z", re.I)
 HEADER_ARG_RE = re.compile(r"\A\s*([A-Za-z0-9-]+)\s*:(.*)\Z", re.S)
 
@@ -434,6 +435,9 @@ def _folder_of(where: str | None) -> str | None:
     return str(p)
 
 
+MAX_VALUE = 8192                                         # one address, argument, header or env value
+
+
 def build(spec: dict) -> dict:
     """Claude Code server config from the UI form: {type, url | command + args, headers, env}."""
     t = spec.get("type") or ("stdio" if spec.get("command") else "http")
@@ -464,6 +468,10 @@ def build(spec: dict) -> dict:
             cfg["env"] = clean(spec.get("env"))
     else:
         raise McpError(400, "bad_type", "type must be http, sse or stdio")
+    values = [cfg.get("url") or cfg.get("command"), *cfg.get("args", []),
+              *[v for d in (cfg.get("headers"), cfg.get("env")) for kv in (d or {}).items() for v in kv]]
+    if any(len(v) > MAX_VALUE for v in values) or sum(map(len, values)) > 4 * MAX_VALUE:
+        raise McpError(400, "too_long", f"each value is limited to {MAX_VALUE} characters")
     return cfg
 
 
