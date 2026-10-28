@@ -335,3 +335,50 @@ def test_cfg_lock_gives_up_on_a_stale_lock_it_cannot_remove(tmp_path, monkeypatc
     t.start()
     t.join(3)
     assert not t.is_alive() and got == [None]
+
+
+def test_userinfo_pattern_is_linear_on_a_long_run_of_letters(env, client):  # noqa: F811
+    """A long argument of letters with no "://" was quadratic (40 000 letters: 1.8 s); a huge value is refused."""
+    from maxxing import mcp
+    t = time.monotonic()
+    assert not mcp._has_userinfo("a" * 200_000)
+    assert time.monotonic() - t < 0.5
+    assert mcp._has_userinfo("x postgres://user:pw@host")
+    r = client.post("/api/mcp", json={"name": "big", "where": "", "type": "stdio", "command": "srv",
+                                      "args": ["a" * 100_000]})
+    assert r.status_code == 400 and "too_long" in r.text
+
+
+def test_removing_a_project_server_never_empties_the_mcp_json(env, client):  # noqa: F811
+    """Another server of the file holds a lone surrogate: the rewrite used to truncate the file, then fail."""
+    f = env.ws / "projects" / "acme" / ".mcp.json"
+    f.write_text('{"mcpServers": {"gone": {"type": "http", "url": "https://x.example/mcp"},'
+                 ' "kept": {"type": "stdio", "command": "srv", "env": {"A": "\\ud800"}}}}')
+    r = client.delete("/api/mcp", params={"id": f"project|{f.parent}|gone"})
+    assert r.status_code == 200
+    data = json.loads(f.read_text())
+    assert list(data["mcpServers"]) == ["kept"] and data["mcpServers"]["kept"]["env"]["A"] == "\ud800"
+    assert [p.name for p in f.parent.iterdir() if "mx-tmp" in p.name] == []
+
+
+def test_a_project_server_named_by_hand_can_be_removed(env, client):  # noqa: F811
+    f = env.ws / "projects" / "acme" / ".mcp.json"
+    f.write_text('{"mcpServers": {"my server é": {"type": "http", "url": "https://x.example/mcp"}}}')
+    from maxxing import mcp
+    sid = {s["name"]: s["id"] for s in mcp.servers()}["my server é"]
+    assert client.delete("/api/mcp", params={"id": sid}).status_code == 200
+    assert json.loads(f.read_text())["mcpServers"] == {}
+    for bad in ("-x", "a\x00b", "a\nb"):
+        assert client.delete("/api/mcp", params={"id": f"project|{f.parent}|{bad}"}).status_code == 400
+
+
+def test_a_fifo_or_huge_mcp_json_does_not_block_the_list(env):  # noqa: F811
+    from maxxing import mcp
+    os.mkfifo(env.ws / "projects" / "acme" / ".mcp.json")
+    big = env.ws / "projects" / "acme" / "topics" / "blog" / ".mcp.json"
+    big.write_text('{"mcpServers": {}, "x": "' + "a" * (2 << 20) + '"}')
+    out: list = []
+    t = threading.Thread(target=lambda: out.append(mcp.servers()), daemon=True)
+    t.start()
+    t.join(5)
+    assert out and not [s for s in out[0] if s["scope"] == "project"]

@@ -274,7 +274,7 @@ McpServer = {id:"<scope>|<folder>|<name>", name, scope:"user"|"local"|"project",
 |---|---|---|---|
 | GET | `/api/mcp` | – | `{servers:[McpServer], checking, checked_at, config_file}` (first call starts a check) |
 | POST | `/api/mcp/check` | – | `{checking:true}` - `claude mcp list` per folder in the background, then bus `mcp` |
-| POST | `/api/mcp` | `{name, where:"" \| "projects/…", type:"http"\|"sse"\|"stdio", url?, command?, args?, headers?, env?}` | `{id, exposed:[vault keys now exposed]}` · `400 bad_name\|bad_url\|bad_command\|bad_type\|bad_where`, `404 folder_missing`, `409 exists` |
+| POST | `/api/mcp` | `{name, where:"" \| "projects/…", type:"http"\|"sse"\|"stdio", url?, command?, args?, headers?, env?}` | `{id, exposed:[vault keys now exposed]}` · `400 bad_name\|bad_url\|bad_command\|bad_type\|bad_where\|too_long` (a value over 8192 characters, or 32768 in all), `404 folder_missing`, `409 exists` |
 | DELETE | `/api/mcp?id=` | – | `{ok}` |
 | POST | `/api/mcp/login` | `{id}` | `{login, url}` - runs `claude mcp login --no-browser` in a pseudo-terminal; replaces an attempt already open for that server · `400 no_login_url`, `404 folder_missing`, `500 no_claude\|cli_failed` |
 | POST | `/api/mcp/login/{login}` | `{redirect}` (the localhost callback URL) | `{ok, message}` · `400 bad_redirect\|login_failed`, `404 login_expired` (also cancelled meanwhile), `409 busy` (already being finished), `504 timeout` |
