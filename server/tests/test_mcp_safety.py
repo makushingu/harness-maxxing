@@ -370,3 +370,15 @@ def test_a_project_server_named_by_hand_can_be_removed(env, client):  # noqa: F8
     assert json.loads(f.read_text())["mcpServers"] == {}
     for bad in ("-x", "a\x00b", "a\nb"):
         assert client.delete("/api/mcp", params={"id": f"project|{f.parent}|{bad}"}).status_code == 400
+
+
+def test_a_fifo_or_huge_mcp_json_does_not_block_the_list(env):  # noqa: F811
+    from maxxing import mcp
+    os.mkfifo(env.ws / "projects" / "acme" / ".mcp.json")
+    big = env.ws / "projects" / "acme" / "topics" / "blog" / ".mcp.json"
+    big.write_text('{"mcpServers": {}, "x": "' + "a" * (2 << 20) + '"}')
+    out: list = []
+    t = threading.Thread(target=lambda: out.append(mcp.servers()), daemon=True)
+    t.start()
+    t.join(5)
+    assert out and not [s for s in out[0] if s["scope"] == "project"]
