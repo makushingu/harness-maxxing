@@ -167,6 +167,19 @@ def test_an_engine_answer_that_is_not_an_object_is_an_engine_error(mx, tmp_path,
         voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
     assert e.value.status == 502 and e.value.code == "engine_error"
 
+
+def test_a_stuck_opus_conversion_falls_back_to_wav(mx, tmp_path, monkeypatch):
+    wav = make_audio(tmp_path / "v.wav", 1.5, [])
+    real = subprocess.run
+
+    def run(args, *a, **kw):
+        if "libopus" in args:
+            raise subprocess.TimeoutExpired(args, 180)
+        return real(args, *a, **kw)
+
+    monkeypatch.setattr(voice.subprocess, "run", run)
+    assert voice._to_ogg(wav, tmp_path / "v.ogg") == wav
+
 # ---- install job ----------------------------------------------------------------------------
 def test_install_job(client, mx, monkeypatch):
     state = {"installed": False}
