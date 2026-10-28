@@ -615,6 +615,30 @@ def _write_cfg(fn) -> None:
                     pass
 
 
+def _write_mcp_json(f: Path, data: dict) -> None:
+    """Rewrite a .mcp.json atomically (a failed write leaves the old file whole); a value that cannot be written
+    as UTF-8 (a lone surrogate) is escaped instead of losing the file."""
+    text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    try:
+        raw = text.encode("utf-8")
+    except UnicodeEncodeError:
+        raw = (json.dumps(data, indent=2) + "\n").encode("ascii")
+    target = f.resolve()                                 # a symlinked file is written through the link
+    tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:12]}.mx-tmp")
+    try:
+        mode = target.stat().st_mode & 0o777
+    except OSError:
+        mode = 0o644
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(raw)
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def remove(sid: str) -> None:
     scope, folder, name = parse_id(sid)
     if scope == "project":
@@ -624,7 +648,7 @@ def remove(sid: str) -> None:
             data.get("mcpServers", {}).pop(name)
         except (OSError, ValueError, KeyError, AttributeError, TypeError):
             raise McpError(404, "not_found", f"no {name} in {f}") from None
-        f.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        _write_mcp_json(f, data)
     elif folder is not None and not Path(folder).is_dir():
         def drop(d: dict) -> bool:
             p = _dict(_dict(d.get("projects")).get(folder))
