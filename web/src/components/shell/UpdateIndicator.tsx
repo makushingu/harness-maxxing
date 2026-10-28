@@ -16,7 +16,7 @@ export function usePendingUpdate(): 'reload' | 'server' | null {
 }
 
 const row =
-  'flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-[12.5px] font-medium text-primary outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring'
+  'flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-[12.5px] font-medium text-primary outline-none pointer-coarse:h-10 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring'
 
 /** One discreet line above the health indicator - nothing at all when everything is up to date. */
 export function UpdateIndicator({ collapsed }: { collapsed?: boolean }) {
