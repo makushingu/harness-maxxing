@@ -29,6 +29,7 @@ import re
 import select
 import shlex
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -291,6 +292,22 @@ def _project_files() -> list[Path]:
     return sorted([*root.glob("*/.mcp.json"), *root.glob("*/topics/*/.mcp.json")])
 
 
+MCP_JSON_MAX = 1 << 20
+
+
+def _read_mcp_json(f: Path) -> str:
+    """A regular file of at most 1 MB only: a FIFO or a huge file in its place would block or stall the page."""
+    fd = os.open(f, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > MCP_JSON_MAX:
+            raise OSError(f"{f}: not a regular file of at most 1 MB")
+        with os.fdopen(fd, "rb", closefd=False) as fh:
+            return fh.read(MCP_JSON_MAX + 1).decode("utf-8")
+    finally:
+        os.close(fd)
+
+
 def servers() -> list[dict]:
     """Every MCP server Claude Code would load in this workspace, with its last known state."""
     d = _read_cfg()
@@ -311,7 +328,7 @@ def servers() -> list[dict]:
             add("local", folder, name, cfg)
     for f in _project_files():
         try:
-            servers_ = _dict(_dict(json.loads(f.read_text(encoding="utf-8"))).get("mcpServers"))
+            servers_ = _dict(_dict(json.loads(_read_mcp_json(f))).get("mcpServers"))
         except (OSError, ValueError):
             continue
         folder = str(f.parent)
@@ -650,7 +667,7 @@ def remove(sid: str) -> None:
     if scope == "project":
         f = Path(folder or "") / ".mcp.json"
         try:
-            data = json.loads(f.read_text(encoding="utf-8"))
+            data = json.loads(_read_mcp_json(f))
             data.get("mcpServers", {}).pop(name)
         except (OSError, ValueError, KeyError, AttributeError, TypeError):
             raise McpError(404, "not_found", f"no {name} in {f}") from None
