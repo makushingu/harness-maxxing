@@ -58,7 +58,7 @@ function Where({ s }: { s: McpServer }) {
   const label = s.where.topic ? `${s.where.project} / ${s.where.topic}` : `${s.where.project}`
   if (!s.where.exists) return <span className="truncate text-muted-foreground line-through">{label}</span>
   return (
-    <Link to={`/sessions?path=${encodeURIComponent(s.where.rel)}`} className="truncate font-medium text-primary underline-offset-4 hover:underline">
+    <Link to={`/sessions?path=${encodeURIComponent(s.where.rel)}`} className="truncate font-medium text-primary underline-offset-4 hover:underline pointer-coarse:leading-10">
       {label}
     </Link>
   )
