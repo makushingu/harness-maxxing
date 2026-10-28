@@ -2278,6 +2278,14 @@ def _is_install_dir(p: Path) -> bool:
             and (p / "install.sh").is_file() and (p / "server" / "maxxing").is_dir())
 
 
+def _is_state_dir(p: Path) -> bool:
+    """--purge deletes the state directory only if it is one (a typo like STATE_DIR=/var/lib must not wipe it)."""
+    p = p.resolve()
+    return (p not in (Path("/"), home().resolve(), Path("/var"), Path("/var/lib"), Path("/opt"), Path("/root"),
+                      Path("/etc"), Path("/usr"), Path("/srv"), Path("/home"))
+            and (p / "config.json").is_file())
+
+
 def cmd_harden(a) -> int:
     """Write (or with --undo remove) the sandboxing drop-in, reload systemd and restart the service.
     If the service does not come back, the drop-in is removed again and the service restarted."""
@@ -2376,9 +2384,11 @@ def cmd_uninstall(a) -> int:
             line(OK, f"code removed ({config.CODE})")
         else:
             line(WARN, f"{config.CODE} does not look like an install directory - kept")
-        if config.STATE.is_dir() and config.STATE.resolve() != Path("/"):
+        if _is_state_dir(config.STATE):
             shutil.rmtree(config.STATE, ignore_errors=True)
             line(OK, f"state removed ({config.STATE})")
+        elif config.STATE.is_dir():
+            line(WARN, f"{config.STATE} does not look like a Harness Maxxing state directory (no config.json) - kept")
     if a.purge_workspace:
         ws = Path(cfg["workspace"]).resolve()
         if ws not in (Path("/"), home().resolve()) and ws.is_dir():
