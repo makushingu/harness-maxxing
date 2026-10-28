@@ -29,6 +29,7 @@ import re
 import select
 import shlex
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -189,7 +190,8 @@ def _url_masked(url: str, mask: str = MASK) -> str:
 
 
 SECRET_NAME_RE = re.compile(r"key|token|secret|pass|auth|cred|cookie|session|bearer|signature|private", re.I)
-USERINFO_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://([^/\s@]+)@")
+# the scheme starts a word and is short: on a long run of letters with no "://" each try stops quickly (linear)
+USERINFO_RE = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://([^/\s@]+)@")
 SECRET_FLAG_RE = re.compile(r"(?:key|token|secret|pass|password|auth|credentials?|cookie|bearer)\Z", re.I)
 HEADER_ARG_RE = re.compile(r"\A\s*([A-Za-z0-9-]+)\s*:(.*)\Z", re.S)
 
@@ -260,12 +262,18 @@ def _id(scope: str, folder: str | None, name: str) -> str:
     return f"{scope}|{folder or ''}|{name}"
 
 
+def _file_name(name: str) -> bool:
+    """A name written by hand in a .mcp.json ("my server", accents): listed, so it can be removed too (it is only
+    ever passed to the CLI after "--")."""
+    return 0 < len(name) <= 200 and name.isprintable() and not name.startswith("-")
+
+
 def parse_id(sid: str) -> tuple[str, str | None, str]:
     try:
         scope, folder, name = sid.split("|", 2)
     except ValueError:
         raise McpError(400, "bad_id", "unknown MCP server id") from None
-    if scope not in ("user", "local", "project") or not NAME_RE.match(name):
+    if scope not in ("user", "local", "project") or not (NAME_RE.match(name) or scope == "project" and _file_name(name)):
         raise McpError(400, "bad_id", "unknown MCP server id")
     if scope == "project":                               # its .mcp.json is rewritten: a folder of the workspace only
         try:
@@ -282,6 +290,22 @@ def _project_files() -> list[Path]:
     if not root.is_dir():
         return []
     return sorted([*root.glob("*/.mcp.json"), *root.glob("*/topics/*/.mcp.json")])
+
+
+MCP_JSON_MAX = 1 << 20
+
+
+def _read_mcp_json(f: Path) -> str:
+    """A regular file of at most 1 MB only: a FIFO or a huge file in its place would block or stall the page."""
+    fd = os.open(f, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > MCP_JSON_MAX:
+            raise OSError(f"{f}: not a regular file of at most 1 MB")
+        with os.fdopen(fd, "rb", closefd=False) as fh:
+            return fh.read(MCP_JSON_MAX + 1).decode("utf-8")
+    finally:
+        os.close(fd)
 
 
 def servers() -> list[dict]:
@@ -304,7 +328,7 @@ def servers() -> list[dict]:
             add("local", folder, name, cfg)
     for f in _project_files():
         try:
-            servers_ = _dict(_dict(json.loads(f.read_text(encoding="utf-8"))).get("mcpServers"))
+            servers_ = _dict(_dict(json.loads(_read_mcp_json(f))).get("mcpServers"))
         except (OSError, ValueError):
             continue
         folder = str(f.parent)
@@ -434,6 +458,9 @@ def _folder_of(where: str | None) -> str | None:
     return str(p)
 
 
+MAX_VALUE = 8192                                         # one address, argument, header or env value
+
+
 def build(spec: dict) -> dict:
     """Claude Code server config from the UI form: {type, url | command + args, headers, env}."""
     t = spec.get("type") or ("stdio" if spec.get("command") else "http")
@@ -464,6 +491,10 @@ def build(spec: dict) -> dict:
             cfg["env"] = clean(spec.get("env"))
     else:
         raise McpError(400, "bad_type", "type must be http, sse or stdio")
+    values = [cfg.get("url") or cfg.get("command"), *cfg.get("args", []),
+              *[v for d in (cfg.get("headers"), cfg.get("env")) for kv in (d or {}).items() for v in kv]]
+    if any(len(v) > MAX_VALUE for v in values) or sum(map(len, values)) > 4 * MAX_VALUE:
+        raise McpError(400, "too_long", f"each value is limited to {MAX_VALUE} characters")
     return cfg
 
 
@@ -607,16 +638,40 @@ def _write_cfg(fn) -> None:
                     pass
 
 
+def _write_mcp_json(f: Path, data: dict) -> None:
+    """Rewrite a .mcp.json atomically (a failed write leaves the old file whole); a value that cannot be written
+    as UTF-8 (a lone surrogate) is escaped instead of losing the file."""
+    text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    try:
+        raw = text.encode("utf-8")
+    except UnicodeEncodeError:
+        raw = (json.dumps(data, indent=2) + "\n").encode("ascii")
+    target = f.resolve()                                 # a symlinked file is written through the link
+    tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:12]}.mx-tmp")
+    try:
+        mode = target.stat().st_mode & 0o777
+    except OSError:
+        mode = 0o644
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(raw)
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def remove(sid: str) -> None:
     scope, folder, name = parse_id(sid)
     if scope == "project":
         f = Path(folder or "") / ".mcp.json"
         try:
-            data = json.loads(f.read_text(encoding="utf-8"))
+            data = json.loads(_read_mcp_json(f))
             data.get("mcpServers", {}).pop(name)
         except (OSError, ValueError, KeyError, AttributeError, TypeError):
             raise McpError(404, "not_found", f"no {name} in {f}") from None
-        f.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        _write_mcp_json(f, data)
     elif folder is not None and not Path(folder).is_dir():
         def drop(d: dict) -> bool:
             p = _dict(_dict(d.get("projects")).get(folder))

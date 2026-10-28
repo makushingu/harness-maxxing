@@ -540,3 +540,29 @@ def test_backtracking_include_pattern_is_refused_and_skipped(ws):
     with pytest.raises(backup.BackupError):                    # single `*`: `[^/]*` backtracks as well
         backup.update_settings(include=["notes/" + "*a" * 30 + "*c"])
     assert backup.glob_re("notes/**/**/x***").pattern == backup.glob_re("notes/**/x**").pattern
+
+
+def test_a_git_folder_in_any_case_is_never_collected(ws):
+    """git refuses a path holding `.GIT` (Windows / macOS copies): it made every backup fail with git_failed."""
+    (ws / "projects/acme/topics/blog/.GIT").mkdir()
+    (ws / "projects/acme/topics/blog/.GIT/config").write_text("[core]\n")
+    (ws / "projects/acme/topics/blog/Node_Modules").mkdir()
+    (ws / "projects/acme/topics/blog/Node_Modules/x.md").write_text("x\n")
+    files = backup.collect(include=["projects/**"])
+    assert "projects/acme/topics/blog/memory.md" in files
+    assert not [f for f in files if ".GIT" in f or "Node_Modules" in f]
+    assert backup.denied("projects/acme/.Git/config")
+
+
+def test_a_secret_in_a_file_name_that_is_not_utf8_is_recorded(gh, ws):
+    """leaks[].file kept os.walk's surrogate: writing the history raised out of run() (a 500, no entry)."""
+    import os
+    gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    backup.update_settings(include=[*backup._settings()["include"], "projects/**/*.md"])
+    with open(os.fsencode(str(ws / "projects/acme/topics/blog")) + b"/caf\xe9.md", "wb") as fh:
+        fh.write(b"token: sk-ant-api03-" + b"Z" * 50 + b"\n")
+    r = backup.run()
+    assert r["ok"] is False and r["code"] == "secret_found"
+    h = backup.history()[0]
+    assert h["ok"] is False and h["leaks"][0]["file"] == "projects/acme/topics/blog/caf?.md"
