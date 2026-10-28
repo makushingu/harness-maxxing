@@ -74,6 +74,9 @@ import {
   Skeleton,
   toast,
   Tooltip,
+  TooltipContent,
+  TooltipRoot,
+  TooltipTrigger,
   useMask,
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
@@ -955,27 +958,40 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
   const mask = useMask()
   const setExpanded = useSessionsUI((s) => s.setExpanded)
   const projects = ws?.projects || []
-  const emoji = projects.find((p) => session.path.startsWith(`projects/${p.name}/`) || session.path === `projects/${p.name}`)?.emoji
+  const m = /^projects\/([^/]+)(?:\/topics\/([^/]+))?$/.exec(session.path)
+  const project = m ? projects.find((p) => p.name === m[1]) : undefined
+  const topic = m?.[2] ? project?.topics.find((tp) => tp.name === m[2]) : undefined
   const options = projects.flatMap((p) => p.topics.map((tp) => ({ value: tp.path, label: mask(`${p.emoji ? p.emoji + ' ' : ''}${p.name} / ${tp.name}`, 10) })))
   const busy = session.state === 'running' || session.queue > 0
-  const label = (
+  const hint = t(busy ? 'sessions.move.busy' : 'where.move')
+  const label = m ? (
     <>
-      {emoji ? <span className="shrink-0 leading-none">{emoji}</span> : <Hash className="size-3 shrink-0" />}
+      <WhereBadge kind="project" name={m[1]} description={project?.description} dir={absTopicDir(ws, `projects/${m[1]}`)} hint={hint}>
+        {project?.emoji ? <span className="shrink-0 leading-none">{project.emoji}</span> : <FolderOpen className="size-3 shrink-0 opacity-70" />}
+      </WhereBadge>
+      {m[2] && (
+        <WhereBadge kind="topic" name={m[2]} description={topic?.description} dir={absTopicDir(ws, session.path)} hint={hint}>
+          <Hash className="size-3 shrink-0 opacity-70" />
+        </WhereBadge>
+      )}
+      {!busy && <ChevronDown className="size-3 shrink-0 opacity-60" />}
+    </>
+  ) : (
+    <>
+      <FolderOpen className="size-3 shrink-0" />
       <span className="truncate">
         <Sensitive length={10}>{topicLabel(session.path, rootLabel)}</Sensitive>
       </span>
-      <ChevronDown className="size-3 shrink-0 opacity-60" />
+      {!busy && <ChevronDown className="size-3 shrink-0 opacity-60" />}
     </>
   )
   // The row stays 20 px on phones (the header must stay short): an invisible 40 px tap area instead of a taller row.
   const cls = "relative inline-flex min-w-0 items-center gap-1 rounded hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-top-1.5 pointer-coarse:before:-bottom-3.5 pointer-coarse:before:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
   if (busy)
     return (
-      <Tooltip content={t('sessions.move.busy')}>
-        <span tabIndex={0} className={cn(cls, 'cursor-not-allowed')} data-testid="session-path">
-          {label}
-        </span>
-      </Tooltip>
+      <span className={cn(cls, 'cursor-not-allowed')} data-testid="session-path">
+        {label}
+      </span>
     )
   return (
     <Combobox
@@ -1003,6 +1019,36 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
         </button>
       }
     />
+  )
+}
+
+/** One part of the session's place (project or topic) as a badge; hovering it explains what it is. */
+export function WhereBadge({ kind, name, description, dir, hint, generic, children }: { kind: 'project' | 'topic'; name: string; description?: string; dir?: string | null; hint: string; /** The word itself (page subtitle): no name, no folder in the card. */ generic?: boolean; children?: React.ReactNode }) {
+  const t = useT()
+  return (
+    <TooltipRoot delayDuration={350}>
+      <TooltipTrigger asChild>
+        <span className="inline-flex h-[18px] min-w-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 text-[11px] font-medium text-foreground/80 max-md:h-5 max-md:text-xs" data-testid={generic ? `where-word-${kind}` : `where-${kind}`} tabIndex={generic ? 0 : undefined}>
+          {children}
+          <span className="truncate">{generic ? name : <Sensitive length={8}>{name}</Sensitive>}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="start" className="block w-72 rounded-lg border bg-popover p-3 text-popover-foreground font-normal">
+        <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          {kind === 'project' ? <FolderOpen className="size-3" /> : <Hash className="size-3" />}
+          {t(kind === 'project' ? 'where.project' : 'where.topic')}
+        </span>
+        {!generic && (
+          <span className="mt-1 block text-sm font-semibold">
+            <Sensitive length={8}>{name}</Sensitive>
+          </span>
+        )}
+        {description && <span className="mt-0.5 block text-xs text-muted-foreground"><Sensitive length={20}>{description.replace(/[*`_]+/g, '')}</Sensitive></span>}
+        <span className="mt-2 block text-xs leading-relaxed">{t(kind === 'project' ? 'where.projectHelp' : generic ? 'where.topicHelpAny' : 'where.topicHelp')}</span>
+        {dir && <span className="mt-2 block truncate font-mono text-[11px] text-muted-foreground"><Sensitive length={16}>{dir}</Sensitive></span>}
+        <span className="mt-2 block border-t pt-2 text-[11px] text-muted-foreground">{hint}</span>
+      </TooltipContent>
+    </TooltipRoot>
   )
 }
 
