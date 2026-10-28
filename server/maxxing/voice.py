@@ -157,7 +157,7 @@ def api_key(engine: str) -> str | None:
     if not name:
         return None
     from . import vault
-    return vault.get(name) or None
+    return (vault.get(name) or "").strip() or None   # a pasted key often ends with a newline
 
 
 def readiness(s: dict | None = None) -> tuple[bool, str | None]:
@@ -341,8 +341,8 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
             mime = "audio/ogg" if audio.suffix == ".ogg" else "audio/wav"
             r = c.post(f"{api_base(engine)}/audio/transcriptions", headers={"Authorization": f"Bearer {key}"},
                        data=data, files={"file": (audio.name, f, mime)})
-    except httpx.HTTPError as e:
-        raise VoiceError(502, "engine_error", f"{engine}: {e}") from None
+    except httpx.HTTPError as e:   # the message may quote the request headers: never echo the key
+        raise VoiceError(502, "engine_error", f"{engine}: {str(e).replace(key, '***')}") from None
     if r.status_code in (401, 403):
         raise VoiceError(502, "bad_key", f"{engine} rejected the key {KEY_NAMES[engine]}")
     if r.status_code >= 400:

@@ -158,6 +158,22 @@ def test_api_engines(mx, tmp_path, monkeypatch, engine, key, expected_model):
 
 
 
+def test_a_pasted_key_is_trimmed_and_never_shown_in_an_engine_error(mx, tmp_path, monkeypatch):
+    seen: list[str] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req.headers["authorization"])
+        raise httpx.LocalProtocolError(f"Illegal header value b'{req.headers['authorization']}'")
+
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(handler))
+    voice.update_settings(engine="groq")
+    vault.put("GROQ_API_KEY", "gsk_SECRET1234567890\n")
+    with pytest.raises(voice.VoiceError) as e:
+        voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    assert seen == ["Bearer gsk_SECRET1234567890"]
+    assert e.value.code == "engine_error" and "gsk_SECRET" not in str(e.value) and "***" in str(e.value)
+
+
 @pytest.mark.parametrize("answer", [["not", "an", "object"], None, "text", {"text": ["a"]}])
 def test_an_engine_answer_that_is_not_an_object_is_an_engine_error(mx, tmp_path, monkeypatch, answer):
     monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(lambda req: httpx.Response(200, json=answer)))
