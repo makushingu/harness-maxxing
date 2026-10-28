@@ -844,3 +844,15 @@ def test_a_lone_surrogate_in_a_request_is_a_422_not_a_500(client, topic, mx):
     assert client.get(f"/api/sessions/{sid}").json()["title"] == "ok"
     emoji = send("PATCH", f"/api/sessions/{sid}", '{"title": "\\ud83d\\ude00 ok"}')
     assert emoji.status_code == 200 and emoji.json()["title"] == "😀 ok"
+
+
+def test_a_model_id_is_checked_before_it_reaches_the_command_line(client, topic, mx):
+    sid = client.post("/api/sessions", json={"path": topic, "title": "ok"}).json()["id"]
+    for bad in ("a\x00b", "--dangerously-skip-permissions", "opus sonnet", "x" * 101):
+        r = client.patch(f"/api/sessions/{sid}", json={"model": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_model", bad
+        r = client.post("/api/sessions", json={"path": topic, "model": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_model", bad
+    for good in ("claude-opus-5-5[1m]", "sonnet", " opus ", ""):
+        r = client.patch(f"/api/sessions/{sid}", json={"model": good})
+        assert r.status_code == 200 and r.json()["model"] == good.strip()
