@@ -335,3 +335,15 @@ def test_cfg_lock_gives_up_on_a_stale_lock_it_cannot_remove(tmp_path, monkeypatc
     t.start()
     t.join(3)
     assert not t.is_alive() and got == [None]
+
+
+def test_userinfo_pattern_is_linear_on_a_long_run_of_letters(env, client):  # noqa: F811
+    """A long argument of letters with no "://" was quadratic (40 000 letters: 1.8 s); a huge value is refused."""
+    from maxxing import mcp
+    t = time.monotonic()
+    assert not mcp._has_userinfo("a" * 200_000)
+    assert time.monotonic() - t < 0.5
+    assert mcp._has_userinfo("x postgres://user:pw@host")
+    r = client.post("/api/mcp", json={"name": "big", "where": "", "type": "stdio", "command": "srv",
+                                      "args": ["a" * 100_000]})
+    assert r.status_code == 400 and "too_long" in r.text
