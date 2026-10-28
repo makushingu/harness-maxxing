@@ -6,6 +6,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.104 - 2026-10-28
+
+Session list (`feat/session-list`, web only):
+- `pages/sessions/Tree.tsx`: `ListHeader` (filter + chips `show: null|running|unread`, touch New session button)
+  and `ViewMenu` replace the bottom bar (`ListBySwitch`, `ModeButton`, `FlatSortButtons`, `ListOptions`, fold
+  button). Touch targets stay at 40 px (FEU's a103 fix of the old footer carried to the new header: clear button,
+  drill back). Topic counters: one `ml-auto` (two pushed them apart); row actions `HOVER_ACTION` / `HOVER_HIDE`
+  take no width until hover.
+- `Column.tsx`: `WhereBadge` (exported; `generic` = the word itself, no name or folder) under the session title;
+  texts `where.*` in their own i18n group `where` (`i18n/groups.ts`), off the first load. The page subtitle
+  (`sessions.description`) marks the badge words with `[brackets]` (`SubtitleWithBadges` in `index.tsx`).
+- `components/shell/Sidebar.tsx`: `ResizeEdge`; `sidebarWidth` in `mx-ui` (`SIDEBAR_W` 220-440, default 264
+  instead of 232; null = default).
+- First-load budget (fr): the dead `soon.*` texts were removed to make room.
+
 ## 2.0.0-alpha.103 - 2026-10-26
 
 Team, three commits (`feat/team-ui`). Mixing versions only loses the new features: an older server answers the new

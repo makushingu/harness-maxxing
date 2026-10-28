@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.104 - 2026-10-28
+
+Changed (Sessions):
+- **One header for the session list**, the same on a computer and on a phone: the filter is always visible, with
+  **All / Running / Unread** chips under it. Every display choice (group by projects or sessions, tree or one level
+  at a time, sort, fold all, Favorites / Recent blocks, new project) is in one **Display** menu; the bottom bar is
+  gone.
+- Topic counters line up on the right, and the + / ⋯ buttons of a row no longer take room until you point at it.
+- **Project and topic badges** under the session title; point at one to see what a project and a topic are, and
+  where its folder is. The same badges explain the two words in the page subtitle.
+- **Resizable sidebar**: drag its right edge (double-click: normal width). It is a little wider by default.
+
 ## 2.0.0-alpha.103 - 2026-10-26
 
 New (Team, Settings -> Features -> Team):
