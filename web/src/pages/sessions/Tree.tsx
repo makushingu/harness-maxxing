@@ -227,7 +227,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
         {touch && <ListBySwitch value={listBy} />}
         {listBy === 'project' && <ModeButton mode={mode} />}
         {!ql && listBy === 'project' && mode === 'tree' && (
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-9" onClick={() => foldAll(anyFolded)} data-testid="tree-quick">
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-10" onClick={() => foldAll(anyFolded)} data-testid="tree-quick">
             {anyFolded ? <ChevronsUpDown /> : <ChevronsDownUp />}
             {anyFolded ? t('sessions.tree.expandAll') : t('sessions.tree.collapseAll')}
           </Button>
@@ -236,7 +236,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
         {listBy === 'session' && <FlatSortButtons />}
         <ListOptions side={touch ? 'bottom' : 'top'} />
         {touch && (
-          <Button variant="ghost" size="icon-sm" className="size-9 shrink-0 text-muted-foreground" aria-label={t('sessions.tree.newProject')} onClick={() => setDialog({ kind: 'project' })}>
+          <Button variant="ghost" size="icon-sm" className="size-10 shrink-0 text-muted-foreground" aria-label={t('sessions.tree.newProject')} onClick={() => setDialog({ kind: 'project' })}>
             <FolderPlus />
           </Button>
         )}
@@ -1349,7 +1349,7 @@ function DrillHeader({ back, onBack, title, hash, onNew, menu }: { back: string;
   const [open, setOpen] = React.useState(false)
   return (
     <div className="mb-1 grid gap-0.5 border-b pb-1.5">
-      <button type="button" onClick={onBack} className="flex h-7 w-fit max-w-full items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-9" data-testid="drill-back">
+      <button type="button" onClick={onBack} className="flex h-7 w-fit max-w-full items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-10" data-testid="drill-back">
         <ChevronLeft className="size-3.5 shrink-0" />
         <span className="truncate">
           <Sensitive length={8}>{back}</Sensitive>
@@ -1442,7 +1442,7 @@ function ModeButton({ mode }: { mode: TreeMode }) {
   const Icon = MODE_ICON[mode]
   return (
     <Tooltip content={t('sessions.mode.next', { mode: t(`sessions.mode.${next}` as const) })}>
-      <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs max-md:h-9" onClick={() => setMode(next)} aria-label={t('sessions.mode.label', { mode: t(`sessions.mode.${mode}` as const) })} data-testid="tree-mode">
+      <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs max-md:h-10" onClick={() => setMode(next)} aria-label={t('sessions.mode.label', { mode: t(`sessions.mode.${mode}` as const) })} data-testid="tree-mode">
         <Icon />
         {t(`sessions.mode.${mode}` as const)}
       </Button>
@@ -1455,7 +1455,7 @@ function DrillBackButton() {
   const drill = useSessionsUI((s) => s.drill)
   const setDrill = useSessionsUI((s) => s.setDrill)
   return (
-    <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-9" disabled={!drill.project} onClick={() => setDrill({ project: null, topic: null })} data-testid="tree-quick">
+    <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-10" disabled={!drill.project} onClick={() => setDrill({ project: null, topic: null })} data-testid="tree-quick">
       <ChevronLeft />
       <span className="truncate">{t('sessions.drill.projects')}</span>
     </Button>
@@ -1498,7 +1498,7 @@ function FlatSortButtons() {
   return (
     <>
       <Tooltip content={t('sessions.sort.next', { sort: t(`sessions.sort.${next}` as const) })}>
-        <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-9" onClick={() => setFlatSort(next)} data-testid="tree-quick">
+        <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-10" onClick={() => setFlatSort(next)} data-testid="tree-quick">
           <Icon />
           <span className="truncate">{t(`sessions.sort.${flatSort}` as const)}</span>
         </Button>
@@ -1517,7 +1517,7 @@ function ListOptions({ side = 'top' }: { side?: 'top' | 'bottom' }) {
     <DropdownMenu>
       <Tooltip content={t('sessions.options')}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="ml-auto size-7 shrink-0 text-muted-foreground max-md:size-9" aria-label={t('sessions.options')} data-testid="tree-options">
+          <Button variant="ghost" size="icon-sm" className="ml-auto size-7 shrink-0 text-muted-foreground max-md:size-10" aria-label={t('sessions.options')} data-testid="tree-options">
             <SlidersHorizontal />
           </Button>
         </DropdownMenuTrigger>
