@@ -157,6 +157,16 @@ def test_api_engines(mx, tmp_path, monkeypatch, engine, key, expected_model):
     assert e.value.code == "bad_key"
 
 
+
+@pytest.mark.parametrize("answer", [["not", "an", "object"], None, "text", {"text": ["a"]}])
+def test_an_engine_answer_that_is_not_an_object_is_an_engine_error(mx, tmp_path, monkeypatch, answer):
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(lambda req: httpx.Response(200, json=answer)))
+    voice.update_settings(engine="groq")
+    vault.put("GROQ_API_KEY", "secret-key-123")
+    with pytest.raises(voice.VoiceError) as e:
+        voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    assert e.value.status == 502 and e.value.code == "engine_error"
+
 # ---- install job ----------------------------------------------------------------------------
 def test_install_job(client, mx, monkeypatch):
     state = {"installed": False}
