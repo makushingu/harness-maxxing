@@ -43,6 +43,7 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
         }
       }
       const start = (e: TouchEvent) => {
+        if (state === 'drag') set(0, true) // a second finger mid-drag: the sheet springs back, the gesture ends
         state = 'idle'
         if (e.touches.length !== 1 || !active()) return
         const target = e.target as Element
