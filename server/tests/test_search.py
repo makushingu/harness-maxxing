@@ -238,3 +238,11 @@ def test_a_lone_surrogate_in_a_log_breaks_neither_the_session_nor_the_index(clie
     search.refresh()
     assert [x["id"] for x in search.search("quokkaword")["results"]] == [good]
     assert [x["id"] for x in search.search("zebrafish")["results"]] == [bad]
+
+
+def test_a_moved_session_is_found_under_its_new_topic(client, mx):
+    sid = _session("projects/acme/topics/blog", "Déplacée", [("user", "okapiword")])
+    search.refresh()
+    store.update(sid, path="projects/zeta/topics/t2")
+    search.refresh()
+    assert [x["path"] for x in search.search("okapiword")["results"]] == ["projects/zeta/topics/t2"]
