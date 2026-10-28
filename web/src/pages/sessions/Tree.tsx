@@ -98,6 +98,8 @@ import { FLAT_SORTS, RECENT_COUNTS, saveDraft, saveQuotes, TREE_MODES, useSessio
 import { absTopicDir, modelLabel, topicLabel } from './util'
 
 const SESSIONS_SHOWN = 8
+/** While filtering, topics open by themselves: still cap their rows so a broad match does not mount thousands at once. */
+const SESSIONS_SHOWN_FILTERED = 30
 const FLAT_SHOWN = 60
 /** "Open all" of a badge filter opens at most this many columns. */
 const SHOW_OPEN_MAX = 6
@@ -783,7 +785,8 @@ function TopicNode({
   React.useEffect(() => {
     if (active) row.current?.scrollIntoView({ block: 'nearest' })
   }, [active])
-  const shown = all || forceOpen ? sessions : sessions.slice(0, SESSIONS_SHOWN)
+  const cap = forceOpen ? SESSIONS_SHOWN_FILTERED : SESSIONS_SHOWN
+  const shown = all ? sessions : sessions.slice(0, cap)
   const dnd = useReorderRow(dndTopic(topic.project), topic.name, onMove)
   const drop = useSessionDrop(topic.path)
   const press = useLongPress(() => setMenu(true))
@@ -833,9 +836,9 @@ function TopicNode({
             </button>
           )}
           <SessionRows sessions={shown} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} still={forceOpen} />
-          {!all && !forceOpen && sessions.length > SESSIONS_SHOWN && (
+          {!all && sessions.length > cap && (
             <button type="button" onClick={() => setAll(true)} className="ml-9 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground">
-              {t('sessions.tree.showMore', { count: sessions.length - SESSIONS_SHOWN })}
+              {t('sessions.tree.showMore', { count: sessions.length - cap })}
             </button>
           )}
           {archived.length > 0 && (
@@ -887,6 +890,8 @@ function SessionRows({
   const ms = still ? 0 : PRESENCE_MS
   const rows = usePresence(sessions, (s) => s.id, ms)
   const box = React.useRef<HTMLDivElement>(null)
+  // Read once per list, not once per row (each reader subscribes to the media queries).
+  const touchLayout = useCompact()
   useFlip(
     () => new Map([...(box.current?.querySelectorAll<HTMLElement>(':scope > [data-row]:not([data-leaving])') ?? [])].map((el) => [el.dataset.row!, el])),
     [sessions.map((s) => s.id).join(' ')],
@@ -897,7 +902,7 @@ function SessionRows({
     <div ref={box} className="relative">
       {rows.map((p, i) => (
         <RowPresence key={p.key} id={p.key} leaving={p.leaving} appear={p.appear} rise={rise ? Math.min(i, 10) : undefined}>
-          <SessionRow s={p.item} open={openIds.has(p.item.id)} focused={focusedId === p.item.id} onOpen={onOpen} depth={depth} label={labelOf?.(p.item)} compact={compact} />
+          <SessionRow s={p.item} open={openIds.has(p.item.id)} focused={focusedId === p.item.id} onOpen={onOpen} depth={depth} label={labelOf?.(p.item)} compact={compact} touchLayout={touchLayout} />
         </RowPresence>
       ))}
     </div>
@@ -920,7 +925,26 @@ function RowPresence({ id, leaving, appear, rise, children }: { id: string; leav
   )
 }
 
-const SessionRow = React.memo(function SessionRow({ s, open, focused, onOpen, depth = 2, label, compact }: { s: Session; open: boolean; focused: boolean; onOpen: (s: Session) => void; depth?: number; label?: string; compact?: boolean }) {
+const SessionRow = React.memo(function SessionRow({
+  s,
+  open,
+  focused,
+  onOpen,
+  depth = 2,
+  label,
+  compact,
+  touchLayout,
+}: {
+  s: Session
+  open: boolean
+  focused: boolean
+  onOpen: (s: Session) => void
+  depth?: number
+  label?: string
+  compact?: boolean
+  /** Touch layout: two lines (title, then where and when) even in the Favorites / Recent blocks. */
+  touchLayout: boolean
+}) {
   const t = useT()
   const lang = useLang()
   const { data: claude } = useClaudeStatus()
@@ -933,8 +957,6 @@ const SessionRow = React.memo(function SessionRow({ s, open, focused, onOpen, de
   const model = s.real_model || s.model
   const drop = useSessionDrop(s.path)
   const press = useLongPress(() => setMenu(true))
-  // Touch layout: two lines (title, then where and when) even in the Favorites / Recent blocks.
-  const touchLayout = useCompact()
   const oneLine = compact && !touchLayout
   return (
     <div
