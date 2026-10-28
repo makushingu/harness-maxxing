@@ -423,10 +423,13 @@ def glob_re(pattern: str) -> re.Pattern[str]:
     return re.compile("^" + out + "$")
 
 
+_PRUNE = {d.lower() for d in PRUNE_DIRS}
+
+
 def denied(rel: str) -> bool:
     """Hard deny-list (applies to whitelisted files too)."""
     parts = rel.split("/")
-    return bool(_DENY.match(parts[-1])) or any(p in PRUNE_DIRS for p in parts[:-1])
+    return bool(_DENY.match(parts[-1])) or any(p.lower() in _PRUNE for p in parts[:-1])
 
 
 def _patterns(include: Any) -> list[str]:
@@ -448,7 +451,7 @@ def collect(root: Path | None = None, include: list[str] | None = None) -> dict[
     if not root.is_dir():
         return out
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = sorted(d for d in dirnames if d not in PRUNE_DIRS
+        dirnames[:] = sorted(d for d in dirnames if d.lower() not in _PRUNE        # git refuses .GIT too
                              and not (Path(dirpath) / d).is_symlink())
         base = Path(dirpath)
         for fn in sorted(filenames):
