@@ -127,6 +127,36 @@ def test_domains_are_validated(value, ok):
     assert (sh('valid_domain "$V" && echo fine', V=value).stdout.strip() == "fine") is ok
 
 
+@pytest.mark.parametrize("value, ok", [("/opt/claude-maxxing", True), ("/var/lib/claude-maxxing", True),
+                                       ("/root/.claude", True), ("/workspace", True), ("/", False), ("//", False),
+                                       ("/var/lib", False), ("/var/lib/", False), ("/etc", False), ("/etc/maxxing", False),
+                                       ("/usr/local", False), ("/root", False), ("/home/bob", False), ("/opt", False)])
+def test_system_directories_are_refused(value, ok):
+    """STATE_DIR=/var/lib by mistake: chmod 700 on it broke every service reading it, and --purge deleted it."""
+    r = sh('(not_system_dir STATE_DIR "$V") && echo fine', V=value)
+    assert ("fine" in r.stdout) is ok, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("fn, value", [("valid_domain", "ui.example.com\n:80 { file_server browse }"),
+                                       ("valid_domain", "ui.example.com\r"),
+                                       ("valid_tz_name", "Europe/Paris\nx")])
+def test_a_second_line_never_passes_a_check(fn, value):
+    """grep -E checks each line alone: a DOMAIN with a newline put a whole Caddy site in the root-owned Caddyfile."""
+    assert "fine" not in sh(f'{fn} "$(printf "$V")" && echo fine', V=value).stdout
+    r = sh('REPO="$(printf "a/b\nc")"; check_inputs', INSTALL_DIR="/opt/claude-maxxing", WORKSPACE="/root/maxxing",
+           STATE_DIR="/var/lib/claude-maxxing")
+    assert r.returncode != 0 and "one line" in (r.stdout + r.stderr)
+
+
+def test_a_public_udp_service_keeps_the_firewall_off(tmp_path):
+    """A server whose only public service is UDP (WireGuard...) looked fresh: the automatic firewall cut it off."""
+    fake = ('ss() { case "$1" in -lunpH) printf "%s\\n" \'UNCONN 0 0 0.0.0.0:51820 0.0.0.0:* users:(("wg",pid=1,fd=3))\' '
+            '"UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*" "UNCONN 0 0 0.0.0.0:68 0.0.0.0:*" ;; *) : ;; esac; }; '
+            'ssh_ports() { echo 22; }; our_unit_active() { return 1; }; ')
+    r = sh(fake + 'PUBLIC_OTHER=""; detect_server >/dev/null 2>&1; echo "[$PUBLIC_OTHER]"', HOME=str(tmp_path))
+    assert "[51820/udp/wg]" in r.stdout, r.stdout + r.stderr
+
+
 def test_fail2ban_jail_names_the_real_ssh_ports():
     """F11: the jail used to name no port (fail2ban's default "ssh" = 22): a server on 2222 was not protected."""
     r = sh('ssh_ports() { printf "22\\n2222\\n"; }; f2b_jail')
