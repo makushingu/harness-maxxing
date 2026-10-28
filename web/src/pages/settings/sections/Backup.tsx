@@ -69,7 +69,7 @@ function ScheduleAndInclude() {
             <li key={g}>
               <Badge variant="outline" className="h-7 gap-1.5 pr-1 pl-2.5 font-mono text-xs">
                 {g}
-                <button type="button" onClick={() => setInclude(include.filter((x) => x !== g))} aria-label={`${t('common.remove')} ${g}`} className="relative rounded p-0.5 before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent">
+                <button type="button" onClick={() => setInclude(include.filter((x) => x !== g))} aria-label={`${t('common.remove')} ${g}`} className="relative rounded p-0.5 before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent pointer-coarse:before:-inset-3">
                   <X className="size-3" />
                 </button>
               </Badge>
