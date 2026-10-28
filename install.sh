@@ -289,8 +289,12 @@ git_tok() {
   fi
 }
 
-# apt_get ARGS... - apt with the usual umask (package scripts create files other users must read)
-apt_get() { (umask 022; DEBIAN_FRONTEND=noninteractive apt-get "$@"); }
+# apt_get ARGS... - apt with the usual umask (package scripts create files other users must read). A fresh VPS often
+# has unattended-upgrades or cloud-init holding the dpkg lock for minutes: wait for it (10 min max) instead of failing
+apt_get() {
+  (umask 022; DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -o Acquire::Retries=3 \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@")
+}
 
 # reset_env - a root shell of its own: HOME and PATH of root, whatever the caller had (sudo -E, su without -)
 reset_env() {
@@ -362,7 +366,8 @@ fetch_verified() {
   printf '%s' "$sum" | grep -Eq '^[0-9a-f]{64}$' || { warn "no valid sha256 pinned for $url"; return 1; }
   if [ -f "$dest" ] && [ "$(sha256sum "$dest" | cut -d' ' -f1)" = "$sum" ]; then return 0; fi
   rm -f "$dest.part"
-  curl -fsSL --proto "$proto" --retry 3 --connect-timeout 20 -o "$dest.part" "$url" || { rm -f "$dest.part"; warn "download failed: $url"; return 1; }
+  curl -fsSL --proto "$proto" --retry 3 --retry-connrefused --connect-timeout 20 --speed-limit 10240 --speed-time 60 \
+    -o "$dest.part" "$url" || { rm -f "$dest.part"; warn "download failed: $url"; return 1; }
   if [ "$(sha256sum "$dest.part" | cut -d' ' -f1)" != "$sum" ]; then
     rm -f "$dest.part"; warn "checksum mismatch: $url (expected sha256 $sum)"; return 1
   fi
@@ -376,6 +381,16 @@ dep_fetch() {
 }
 
 # ---- input checks (every value below ends up in files, units and commands run as root) --------
+one_line() { case "$1" in *$'\n'*|*$'\r'*) return 1 ;; esac; }   # the grep -E checks below test each line alone
+not_system_dir() { # not_system_dir NAME VALUE - never / nor a system directory (chmod 700 on it, --purge deletes it)
+  local d=$2
+  while [ "${d%/}" != "$d" ]; do d=${d%/}; done
+  if [ -z "$d" ] || [[ $d =~ ^/(bin|boot|dev|etc|home|lib|lib32|lib64|libx32|media|mnt|opt|proc|root|run|sbin|snap|srv|sys|tmp|usr|var)$ ]] \
+     || [[ $d =~ ^/(bin|boot|dev|etc|lib|lib32|lib64|libx32|proc|run|sbin|sys|usr)/ ]] \
+     || [[ $d =~ ^/var/(lib|log|cache|tmp|spool|www|mail|backups|opt|local|run|lock)$ ]] || [[ $d =~ ^/home/[^/]+$ ]]; then
+    die "$1 cannot be / or a system directory (got '$2')"
+  fi
+}
 safe_path() { # safe_path NAME VALUE - absolute, no whitespace, quotes, %, $, backslash, backtick or ..
   case "$2" in
     /*) ;;
@@ -388,6 +403,12 @@ safe_path() { # safe_path NAME VALUE - absolute, no whitespace, quotes, %, $, ba
 check_inputs() {
   safe_path INSTALL_DIR "$INSTALL_DIR"; safe_path WORKSPACE "$WORKSPACE"; safe_path STATE_DIR "$STATE_DIR"
   [ -z "$CLAUDE_DIR" ] || safe_path CLAUDE_DIR "$CLAUDE_DIR"
+  not_system_dir INSTALL_DIR "$INSTALL_DIR"; not_system_dir WORKSPACE "$WORKSPACE"; not_system_dir STATE_DIR "$STATE_DIR"
+  [ -z "$CLAUDE_DIR" ] || not_system_dir CLAUDE_DIR "$CLAUDE_DIR"
+  local v
+  for v in BRANCH REPO RESTORE_FROM TIMEZONE DOMAIN LICENSE_API; do
+    one_line "${!v:-}" || die "$v must be on one line"
+  done
   case "$PORT" in ''|*[!0-9]*) die "PORT must be a number" ;; esac
   [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "PORT must be between 1 and 65535"
   case "$BRANCH" in -*|*..*|*//*|/*|*/) die "BRANCH is not a valid branch name (got '$BRANCH')" ;; esac
@@ -406,8 +427,8 @@ check_inputs() {
   [ -z "$SOURCE_DIR" ] || safe_path SOURCE_DIR "$SOURCE_DIR"
   [ -z "$TIMEZONE" ] || valid_tz_name "$TIMEZONE" || die "TIMEZONE is not a time zone name (got '$TIMEZONE')"
 }
-valid_tz_name() { case "$1" in ""|/*|*..*) return 1 ;; esac; printf '%s' "$1" | grep -Eq '^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$'; }
-valid_domain() { [ ${#1} -le 253 ] && printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$'; }
+valid_tz_name() { one_line "$1" || return 1; case "$1" in ""|/*|*..*) return 1 ;; esac; printf '%s' "$1" | grep -Eq '^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$'; }
+valid_domain() { one_line "$1" && [ ${#1} -le 253 ] && printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$'; }
 valid_tz() {
   case "$1" in UTC|Etc/UTC) return 0 ;; esac
   valid_tz_name "$1" && [ -f "/usr/share/zoneinfo/$1" ]
@@ -474,6 +495,14 @@ listeners() { # "addr port process" for every listening TCP socket
     print a, p, n }'
 }
 
+udp_listeners() { # "addr port process" for every UDP socket bound for listening
+  command -v ss >/dev/null 2>&1 || return 0
+  ss -lunpH 2>/dev/null | awk '{
+    a=$4; p=a; sub(/.*:/, "", p); sub(/:[0-9]+$/, "", a); sub(/%.*/, "", a); gsub(/[\[\]]/, "", a)
+    n="?"; if (match($0, /users:\(\("[^"]+"/)) { n=substr($0, RSTART+9, RLENGTH-10) }
+    print a, p, n }'
+}
+
 detect_server() {
   local addr port name ssh_p seen=" "
   ssh_p=" $(ssh_ports | tr '\n' ' ') "
@@ -492,6 +521,15 @@ detect_server() {
     if [ "$name" = "?" ]; then PUBLIC_OTHER="${PUBLIC_OTHER:+$PUBLIC_OTHER }$port"
     else PUBLIC_OTHER="${PUBLIC_OTHER:+$PUBLIC_OTHER }$port/$name"; fi
   done < <(listeners)
+  while read -r addr port name; do                     # UDP: a VPN (WireGuard, OpenVPN), DNS, a game server...
+    [ -n "$port" ] || continue
+    case "$addr" in 127.*|::1|localhost|100.*|fd7a:115c:a1e0:*|fe80:*) continue ;; esac
+    case "$name" in tailscaled|chronyd|ntpd|systemd-timesyn|dhclient|systemd-network|avahi-daemon|systemd-resolve|caddy) continue ;; esac
+    case "$port" in 68|546|123|323|5353|5355) continue ;; esac   # DHCP, time, mDNS / LLMNR
+    case "$seen" in *" $port/udp "*) continue ;; esac
+    seen="$seen$port/udp "
+    PUBLIC_OTHER="${PUBLIC_OTHER:+$PUBLIC_OTHER }$port/udp${name:+/$name}"
+  done < <(udp_listeners)
   # a Caddy that is not ours on 80/443 is fine: our site is added with an import line
   case "$WEB_BUSY" in caddy) WEB_BUSY="" ;; "?") WEB_BUSY="another web server" ;; esac
 
@@ -1113,7 +1151,7 @@ auto_upgrades_on() {
 
 secure_server() {
   local done=() failed=()
-  if apt_get install -y -qq unattended-upgrades >>"$WORK/apt.log" 2>&1; then
+  if pkg_installed unattended-upgrades || apt_get install -y -qq unattended-upgrades >>"$WORK/apt.log" 2>&1; then
     [ -f /etc/apt/apt.conf.d/20auto-upgrades ] && [ "$EXISTING" = 1 ] \
       || (umask 022; printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' \
            > /etc/apt/apt.conf.d/20auto-upgrades)
@@ -1124,7 +1162,7 @@ secure_server() {
     failed+=("automatic security updates (unattended-upgrades could not be installed)")
   fi
   ssh_key_only
-  if apt_get install -y -qq fail2ban python3-systemd >>"$WORK/apt.log" 2>&1; then
+  if { pkg_installed fail2ban && pkg_installed python3-systemd; } || apt_get install -y -qq fail2ban python3-systemd >>"$WORK/apt.log" 2>&1; then
     rm -f /etc/fail2ban/jail.d/agent-maxxing.local                   # name used by early 2.0.0a5 builds
     local ours=/etc/fail2ban/jail.d/harness-maxxing.local
     if [ ! -f "$ours" ] \
@@ -1171,7 +1209,7 @@ secure_server() {
     else
       info "your $FW_ACTIVE firewall is left as it is${ACCESS:+ - for a domain, ports 80/443 must be open}"; FW_ON=1
     fi
-  elif apt_get install -y -qq ufw >>"$WORK/apt.log" 2>&1; then
+  elif pkg_installed ufw || apt_get install -y -qq ufw >>"$WORK/apt.log" 2>&1; then
     local p ports
     ports=$(ssh_ports)
     for p in $ports; do ufw allow "$p/tcp" comment 'SSH' >/dev/null; done
@@ -1268,13 +1306,13 @@ fetch_code() {
     die "$INSTALL_DIR exists and is not a git clone - move it away or set INSTALL_DIR"
   fi
   mkdir -p "$(dirname "$INSTALL_DIR")"
-  if [ -z "$GH_TOKEN" ] && (umask 022; git clone -q -b "$BRANCH" -- "$url" "$INSTALL_DIR") 2>/dev/null; then
+  if [ -z "$GH_TOKEN" ] && (umask 022; git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 clone -q -b "$BRANCH" -- "$url" "$INSTALL_DIR") 2>/dev/null; then
     ok "cloned into $INSTALL_DIR"
     return
   fi
   rm -rf "$INSTALL_DIR"
   [ -n "$GH_TOKEN" ] || die "cannot clone $url (private repository? set GH_TOKEN)"
-  (umask 022; git_tok clone -q -b "$BRANCH" -- "$url" "$INSTALL_DIR") 2>/dev/null \
+  (umask 022; git_tok -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 clone -q -b "$BRANCH" -- "$url" "$INSTALL_DIR") 2>/dev/null \
     || die "cannot clone $url with this token (needs Contents: read on $REPO)"
   TOKEN_USED=1
   ok "cloned into $INSTALL_DIR (token kept out of .git/config)"
@@ -1328,7 +1366,7 @@ init_state() {
     [ "$LICENSE_API" = https://api.harness-maxxing.com ] || lic_env=(MAXXING_LICENSE_API="$LICENSE_API")
     printf '%s\n' "$LICENSE" | env ${lic_env[@]+"${lic_env[@]}"} MAXXING_STATE="$STATE_DIR" "$BIN" license activate --key-from-stdin --no-fetch >/dev/null \
       && ok "Enterprise key recorded (Settings -> License, maxxing license status)" \
-      || warn "could not record the Enterprise key ${LICENSE:0:7}…${LICENSE: -4} - Settings -> License, or: maxxing license activate"
+      || warn "could not record the Enterprise key (…${LICENSE: -4}) - Settings -> License, or: maxxing license activate"
   fi
   if [ -n "$CLAUDE_TOKEN" ]; then
     printf '%s' "$CLAUDE_TOKEN" | mx init --quiet --no-crons --secret-from-stdin claude_oauth_token && ok "Claude token stored"
@@ -1465,7 +1503,7 @@ caddy_repo() {
     || { warn "Caddy is not described in deps.toml"; return 1; }
   mkdir -p -m 700 "$g"
   case "$url" in https://*) ;; *) return 1 ;; esac
-  curl -fsSL --proto '=https' "$url" -o "$WORK/caddy.key" || return 1
+  curl -fsSL --proto '=https' --retry 3 --connect-timeout 20 --max-time 60 "$url" -o "$WORK/caddy.key" || return 1
   fpr=$(GNUPGHOME="$g" gpg --batch --show-keys --with-colons "$WORK/caddy.key" 2>/dev/null | awk -F: '/^fpr/ {print $10; exit}')
   [ "$fpr" = "$want" ] || { warn "Caddy key fingerprint ${fpr:-?} != $want (deps.toml)"; return 1; }
   (umask 022
@@ -1624,8 +1662,9 @@ EOF
   systemctl enable "$SERVICE" >/dev/null 2>&1
   systemctl restart "$SERVICE"
   local url="http://$BIND:$PORT/api/auth/state" i
-  for i in $(seq 1 30); do
+  for i in $(seq 1 90); do                                # up to ~3 min: first start on a 1 vCPU / 1 GB VPS
     curl -fsS -o /dev/null --max-time 2 "$url" 2>/dev/null && break
+    systemctl is-failed -q "$SERVICE" && break             # crashed: no point in waiting
     sleep 1
   done
   curl -fsS -o /dev/null --max-time 3 "$url" 2>/dev/null \

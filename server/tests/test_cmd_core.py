@@ -338,6 +338,15 @@ def test_uninstall_purge_refuses_non_install_dir(env, tmp_path, monkeypatch):
     assert code.exists() and not env["ws"].exists()
 
 
+def test_uninstall_purge_keeps_a_state_dir_that_is_not_one(env, tmp_path, monkeypatch):
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    (env["state"] / "config.json").unlink()                 # e.g. STATE_DIR=/var/lib by mistake: no config.json there
+    (env["state"] / "other-app").mkdir()
+    monkeypatch.setattr(config, "CODE", tmp_path / "none")
+    assert run_cli("uninstall", "--yes", "--purge") == 0
+    assert (env["state"] / "other-app").is_dir()
+
+
 def test_uninstall_aborts_without_confirmation(env, monkeypatch):
     monkeypatch.setattr(cmd_core, "_confirm", lambda q, y: y)
     cmd_core.UNIT_PATH.write_text("[Unit]\n")
