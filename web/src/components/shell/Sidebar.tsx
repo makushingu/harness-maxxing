@@ -1,7 +1,7 @@
-import type * as React from 'react'
+import * as React from 'react'
 import { NavLink } from 'react-router'
 import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
-import { useUI } from '@/stores/ui'
+import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useTeam, useWorkspace } from '@/lib/queries'
 import { useTeamUI } from '@/features/team/store'
@@ -66,6 +66,49 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   )
 }
 
+/** Right edge: drag to resize the expanded sidebar (double-click: default width). */
+function ResizeEdge({ side }: { side: React.RefObject<HTMLElement | null> }) {
+  const t = useT()
+  const setWidth = useUI((s) => s.setSidebarWidth)
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t('shell.resize')}
+      title={t('shell.resize')}
+      onDoubleClick={() => setWidth(null)}
+      onPointerDown={(e) => {
+        const el = side.current
+        if (!el || e.button !== 0) return
+        e.preventDefault()
+        const target = e.currentTarget
+        target.setPointerCapture(e.pointerId)
+        const startX = e.clientX
+        const startW = el.getBoundingClientRect().width
+        let w = startW
+        const onMove = (ev: PointerEvent) => {
+          w = Math.max(SIDEBAR_W.min, Math.min(SIDEBAR_W.max, startW + ev.clientX - startX))
+          el.style.width = `${w}px`
+        }
+        const onUp = () => {
+          target.removeEventListener('pointermove', onMove)
+          target.removeEventListener('pointerup', onUp)
+          target.removeEventListener('pointercancel', onUp)
+          document.body.style.cursor = ''
+          document.body.style.userSelect = ''
+          setWidth(w)
+        }
+        document.body.style.cursor = 'col-resize'
+        document.body.style.userSelect = 'none'
+        target.addEventListener('pointermove', onMove)
+        target.addEventListener('pointerup', onUp)
+        target.addEventListener('pointercancel', onUp)
+      }}
+      className="absolute inset-y-0 -right-1 z-40 w-2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-[3px] after:w-[3px] after:transition-colors hover:after:bg-primary/40 active:after:bg-primary/60"
+    />
+  )
+}
+
 export function Sidebar() {
   const prefetchLink = usePrefetchLink()
   const t = useT()
@@ -76,15 +119,20 @@ export function Sidebar() {
   const collapsed = tablet || userCollapsed
   const badge = useSessionBadge()
   const showSessions = useShowSessions()
+  const width = useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default
+  const side = React.useRef<HTMLElement>(null)
 
   return (
     <aside
+      ref={side}
       className={cn(
-        'mx-boot-side z-30 hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)] md:flex',
-        collapsed ? 'w-[60px]' : 'w-[232px]',
+        'mx-boot-side relative z-30 hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)] md:flex',
+        collapsed && 'w-[60px]',
       )}
+      style={collapsed ? undefined : { width }}
       aria-label={t('shell.navigation')}
     >
+      {!collapsed && <ResizeEdge side={side} />}
       <div className={cn('flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
         <NavLink to="/" className="min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Harness Maxxing">
           <Logo collapsed={collapsed} className={cn(collapsed && 'justify-center')} />
