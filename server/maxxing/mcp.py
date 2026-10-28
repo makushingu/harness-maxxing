@@ -261,12 +261,18 @@ def _id(scope: str, folder: str | None, name: str) -> str:
     return f"{scope}|{folder or ''}|{name}"
 
 
+def _file_name(name: str) -> bool:
+    """A name written by hand in a .mcp.json ("my server", accents): listed, so it can be removed too (it is only
+    ever passed to the CLI after "--")."""
+    return 0 < len(name) <= 200 and name.isprintable() and not name.startswith("-")
+
+
 def parse_id(sid: str) -> tuple[str, str | None, str]:
     try:
         scope, folder, name = sid.split("|", 2)
     except ValueError:
         raise McpError(400, "bad_id", "unknown MCP server id") from None
-    if scope not in ("user", "local", "project") or not NAME_RE.match(name):
+    if scope not in ("user", "local", "project") or not (NAME_RE.match(name) or scope == "project" and _file_name(name)):
         raise McpError(400, "bad_id", "unknown MCP server id")
     if scope == "project":                               # its .mcp.json is rewritten: a folder of the workspace only
         try:
