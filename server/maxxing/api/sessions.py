@@ -12,7 +12,7 @@ from typing import Any, AsyncIterator, Callable
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .. import media, security, streamcap
 from .. import uploads as upload_limits
@@ -29,7 +29,22 @@ POLL_QUIET_S = 0.25            # a running session silent for QUIET_AFTER_S (thi
 QUIET_AFTER_S = 3.0
 
 
-class CreateIn(BaseModel):
+class _Text(BaseModel):
+    """A lone surrogate ("\\ud800" is valid JSON) cannot be written as UTF-8 to the session's files: a 422, not a 500."""
+
+    @field_validator("*")
+    @classmethod
+    def _utf8(cls, v: Any) -> Any:
+        for s in v if isinstance(v, list) else (v,):
+            if isinstance(s, str) and not s.isascii():
+                try:
+                    s.encode("utf-8")
+                except UnicodeEncodeError:
+                    raise ValueError("text cut inside a character (lone surrogate)") from None
+        return v
+
+
+class CreateIn(_Text):
     path: str = ""
     message: str | None = None
     title: str | None = None
@@ -39,7 +54,7 @@ class CreateIn(BaseModel):
     voice: str | None = None          # absolute path of a voice message sent directly (transcribed afterwards)
 
 
-class PatchIn(BaseModel):
+class PatchIn(_Text):
     title: str | None = None
     model: str | None = None
     archived: bool | None = None
@@ -49,11 +64,11 @@ class PatchIn(BaseModel):
     plan_mode: bool | None = None
 
 
-class AskIn(BaseModel):
+class AskIn(_Text):
     question: str = ""
 
 
-class ApproveIn(BaseModel):
+class ApproveIn(_Text):
     text: str = ""      # what the conversation shows (the client's language), e.g. "Plan validated - go ahead."
 
 
@@ -62,7 +77,7 @@ class HideIn(BaseModel):
     hidden: bool = True
 
 
-class MessageIn(BaseModel):
+class MessageIn(_Text):
     text: str = ""
     attachments: list[str] = Field(default_factory=list)
     hud: bool = False  # sent from the HUD: Claude is told to answer short and may annotate the screen capture
