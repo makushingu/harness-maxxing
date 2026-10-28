@@ -1,8 +1,8 @@
 // Left pane: project → topic → sessions, with live badges, search filter, folding (persisted),
 // per-topic "+", context menus (rename / delete / new topic…) and an archived fold per topic.
-// Grouped by project (header switch; footer button: tree or drill-down, one level at a time) or by session
-// (sessions only, most used first, each labelled project › topic); optional Favorites / Recent blocks on top.
-// The filter hides behind the search icon of the header.
+// Grouped by project (tree or drill-down, one level at a time) or by session (sessions only, most used first, each
+// labelled project › topic); optional Favorites / Recent blocks on top. The header is the same on a computer and
+// on a phone: filter field, All / Running / Unread chips, one view menu holding every display choice.
 import * as React from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useNavigate } from 'react-router'
@@ -98,8 +98,6 @@ import { FLAT_SORTS, RECENT_COUNTS, saveDraft, saveQuotes, TREE_MODES, useSessio
 import { absTopicDir, modelLabel, topicLabel } from './util'
 
 const SESSIONS_SHOWN = 8
-/** While filtering, topics open by themselves: still cap their rows so a broad match does not mount thousands at once. */
-const SESSIONS_SHOWN_FILTERED = 30
 const FLAT_SHOWN = 60
 /** "Open all" of a badge filter opens at most this many columns. */
 const SHOW_OPEN_MAX = 6
@@ -120,8 +118,7 @@ type Props = {
   focusedId: string | null
   /** Fold the tree (desktop): the button sits next to "New project". */
   onHide?: () => void
-  /** Touch layout drawer: a big search field, New session and filter chips at the top; the view switches move to
-   *  the footer, the row menus open with a long press. */
+  /** Touch layout drawer: bigger header with New session next to the filter; the row menus open with a long press. */
   touch?: boolean
   className?: string
 }
@@ -134,9 +131,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   const live = useSessions(undefined, false)
   const archived = useSessions(undefined, true)
   const [q, setQ] = React.useState('')
-  const [searchOpen, setSearchOpen] = React.useState(false)
   const [dialog, setDialog] = React.useState<DialogState>(null)
-  const search = React.useRef<HTMLInputElement>(null)
 
   const byPath = React.useMemo(() => group(live.data), [live.data])
   const archivedByPath = React.useMemo(() => group(archived.data), [archived.data])
@@ -221,124 +216,47 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     return out
   }, [projects, byPath, archivedByPath, ql, show, shows]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // touch: right under the search; desktop: at the bottom of the list
-  const toolbar = projects.length > 0 && (!show || touch) && (
-      <div className={cn('flex shrink-0 items-center gap-0.5 px-1.5 py-1 max-md:gap-1 max-md:px-2 max-md:py-1.5', touch ? 'border-b' : 'border-t')} data-testid="tree-footer">
-        {touch && <ListBySwitch value={listBy} />}
-        {listBy === 'project' && <ModeButton mode={mode} />}
-        {!ql && listBy === 'project' && mode === 'tree' && (
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-10" onClick={() => foldAll(anyFolded)} data-testid="tree-quick">
-            {anyFolded ? <ChevronsUpDown /> : <ChevronsDownUp />}
-            {anyFolded ? t('sessions.tree.expandAll') : t('sessions.tree.collapseAll')}
-          </Button>
-        )}
-        {!ql && listBy === 'project' && mode === 'drill' && <DrillBackButton />}
-        {listBy === 'session' && <FlatSortButtons />}
-        <ListOptions side={touch ? 'bottom' : 'top'} />
-        {touch && (
-          <Button variant="ghost" size="icon-sm" className="size-10 shrink-0 text-muted-foreground" aria-label={t('sessions.tree.newProject')} onClick={() => setDialog({ kind: 'project' })}>
-            <FolderPlus />
-          </Button>
-        )}
-      </div>
+  const header = (
+    <ListHeader
+      touch={touch}
+      q={q}
+      onQ={(v) => {
+        setQ(v)
+        if (v && useSessionsUI.getState().show) setShow(null)
+      }}
+      show={show}
+      onShow={setShow}
+      sessions={live.data || []}
+      onNew={touch ? (newHere === null ? undefined : () => onNewSession(newHere)) : undefined}
+      onHide={onHide}
+      menu={
+        projects.length > 0 && (
+          <ViewMenu
+            fold={!ql && !show && listBy === 'project' && mode === 'tree' ? { anyFolded, onFold: () => foldAll(anyFolded) } : null}
+            onNewProject={() => setDialog({ kind: 'project' })}
+          />
+        )
+      }
+    />
   )
 
   return (
     <nav aria-label={t('sessions.tree.label')} data-tour="tree" className={cn('flex min-h-0 flex-col', className)}>
-      {touch ? (
-        <>
-        <TouchHeader
-          q={q}
-          onQ={(v) => {
-            setQ(v)
-            if (v && useSessionsUI.getState().show) setShow(null)
-          }}
-          show={show}
-          onShow={setShow}
-          sessions={live.data || []}
-          onNew={newHere === null ? undefined : () => onNewSession(newHere)}
-        />
-        {toolbar}
-        </>
-      ) : (
-      <div className="flex shrink-0 items-center gap-1.5 p-2">
-        {onHide && (
-          <Tooltip content={t('sessions.tree.hide')}>
-            <Button variant="ghost" size="icon-sm" aria-label={t('sessions.tree.hide')} onClick={onHide} className="shrink-0 text-muted-foreground">
-              <PanelLeftClose />
-            </Button>
-          </Tooltip>
-        )}
-        {searchOpen || q ? (
-          <div className="relative min-w-0 flex-1 animate-in">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={search}
-              autoFocus
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value)
-                if (e.target.value && useSessionsUI.getState().show) setShow(null)
-              }}
-              onKeyDown={(e) => e.key === 'Escape' && (setQ(''), setSearchOpen(false))}
-              onBlur={() => !q && setSearchOpen(false)}
-              placeholder={t('sessions.tree.filter')}
-              aria-label={t('sessions.tree.filter')}
-              className="h-8 pr-7 pl-8 text-[13px] max-md:h-10"
-              data-testid="tree-filter"
-            />
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => (setQ(''), setSearchOpen(false))}
-              aria-label={t('sessions.tree.clearFilter')}
-              className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 animate-in">
-            <ListBySwitch value={listBy} />
-            <Tooltip content={t('sessions.tree.search')}>
-              <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={t('sessions.tree.search')} onClick={() => setSearchOpen(true)} data-testid="tree-search">
-                <Search />
-              </Button>
-            </Tooltip>
-          </div>
-        )}
-        <Tooltip content={t('sessions.tree.newProject')}>
-          <Button variant="ghost" size="icon-sm" className="shrink-0" aria-label={t('sessions.tree.newProject')} onClick={() => setDialog({ kind: 'project' })}>
-            <FolderPlus />
+      {header}
+      {show && !touch && shown.length > 1 && (
+        <div className="mx-2 mb-1 flex shrink-0 items-center gap-1.5 px-1 text-xs text-muted-foreground animate-in" role="status">
+          <span className="tabular-nums">{t('sessions.tree.shownCount', { count: shown.length })}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-6 px-1.5 text-xs"
+            onClick={() => {
+              // Oldest first: the most recent ends up focused; the columns already open stay.
+              for (const s of shown.slice(0, SHOW_OPEN_MAX).reverse()) onOpenSession(s)
+            }}
+          >
+            {t('sessions.tree.showOpenAll')}
           </Button>
-        </Tooltip>
-      </div>
-      )}
-      {show && !touch && (
-        <div className="mx-2 mb-1 flex shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2 py-1 text-xs animate-in" role="status">
-          <StatusDot tone={show === 'running' ? 'running' : 'unread'} pulse={show === 'running'} className="size-1.5" />
-          <span className="min-w-0 truncate font-medium">{t(show === 'running' ? 'sessions.tree.showRunning' : 'sessions.tree.showUnread')}</span>
-          <span className="text-muted-foreground tabular-nums">· {shown.length}</span>
-          <span className="ml-auto flex shrink-0 items-center gap-0.5">
-            {shown.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1.5 text-xs"
-                onClick={() => {
-                  // Oldest first: the most recent ends up focused; the columns already open stay.
-                  for (const s of shown.slice(0, SHOW_OPEN_MAX).reverse()) onOpenSession(s)
-                }}
-              >
-                {t('sessions.tree.showOpenAll')}
-              </Button>
-            )}
-            <Tooltip content={t('sessions.tree.showClear')}>
-              <button type="button" onClick={() => setShow(null)} aria-label={t('sessions.tree.showClear')} className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                <X className="size-3.5" />
-              </button>
-            </Tooltip>
-          </span>
         </div>
       )}
       <TreeIntro.Provider value={intro}>
@@ -439,61 +357,99 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
         )}
       </div>
       </TreeIntro.Provider>
-      {!touch && toolbar}
       <TreeDialogs state={dialog} onClose={() => setDialog(null)} onTopicCreated={(tp) => onNewSession(tp.path)} />
     </nav>
   )
 }
 
-/** Touch layout drawer: search, New session, and the All / Running / Unread chips. */
-function TouchHeader({ q, onQ, show, onShow, sessions, onNew }: { q: string; onQ: (v: string) => void; show: 'running' | 'unread' | null; onShow: (s: 'running' | 'unread' | null) => void; sessions: Session[]; onNew?: () => void }) {
+/** Top of the list, the same on a computer and on a phone: the filter field (with New session on touch, the fold
+ *  button on a computer), then the All / Running / Unread chips and the view menu. */
+function ListHeader({
+  touch,
+  q,
+  onQ,
+  show,
+  onShow,
+  sessions,
+  onNew,
+  onHide,
+  menu,
+}: {
+  touch?: boolean
+  q: string
+  onQ: (v: string) => void
+  show: 'running' | 'unread' | null
+  onShow: (s: 'running' | 'unread' | null) => void
+  sessions: Session[]
+  onNew?: () => void
+  onHide?: () => void
+  menu: React.ReactNode
+}) {
   const t = useT()
   const running = sessions.filter((s) => s.state === 'running').length
   const unread = sessions.filter((s) => s.unread).length
   const chip = (on: boolean) =>
     cn(
-      'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] max-md:h-10 font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground active:bg-accent',
+      'flex shrink-0 items-center gap-1.5 rounded-full font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+      touch ? 'h-10 px-3 text-[13px]' : 'h-6 px-2.5 text-xs',
+      on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:text-foreground active:bg-accent',
     )
   return (
-    <div className="grid shrink-0 gap-2.5 px-3 pt-3 pb-2" data-testid="touch-tree-header">
-      <div className="flex items-center gap-2">
+    <div className={cn('grid shrink-0', touch ? 'gap-2.5 px-3 pt-3 pb-2' : 'gap-2 px-2 pt-2 pb-1.5')} data-testid="tree-header">
+      <div className={cn('flex items-center', touch ? 'gap-2' : 'gap-1')}>
+        {onHide && (
+          <Tooltip content={t('sessions.tree.hide')}>
+            <Button variant="ghost" size="icon-sm" aria-label={t('sessions.tree.hide')} onClick={onHide} className="shrink-0 text-muted-foreground">
+              <PanelLeftClose />
+            </Button>
+          </Tooltip>
+        )}
         <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-[18px] -translate-y-1/2 text-muted-foreground" />
+          <Search className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground', touch ? 'left-3 size-[18px]' : 'left-2.5 size-3.5')} />
           <Input
             value={q}
             onChange={(e) => onQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && onQ('')}
+            onKeyDown={(e) => e.key === 'Escape' && (onQ(''), e.currentTarget.blur())}
             placeholder={t('sessions.tree.filter')}
             aria-label={t('sessions.tree.filter')}
-            className="h-11 rounded-xl border-0 bg-muted pr-10 pl-10 dark:bg-muted"
+            className={cn('border-0 bg-muted dark:bg-muted', touch ? 'h-11 rounded-xl pr-10 pl-10' : 'h-8 rounded-lg pr-7 pl-8 text-[13px]')}
             data-testid="tree-filter"
           />
           {q && (
-            <button type="button" onClick={() => onQ('')} aria-label={t('sessions.tree.clearFilter')} className="absolute top-1/2 right-1.5 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground">
-              <X className="size-4" />
+            <button
+              type="button"
+              onClick={() => onQ('')}
+              aria-label={t('sessions.tree.clearFilter')}
+              className={cn('absolute top-1/2 -translate-y-1/2 flex items-center justify-center text-muted-foreground hover:text-foreground', touch ? 'right-0.5 size-10 rounded-lg' : 'right-1 size-6 rounded-md')}
+            >
+              <X className={touch ? 'size-4' : 'size-3.5'} />
             </button>
           )}
         </div>
-        <Button size="icon" className="size-11 shrink-0 rounded-xl [&_svg]:size-5" aria-label={t('sessions.newSession')} disabled={!onNew} onClick={onNew} data-tour="new-session">
-          <SquarePen />
-        </Button>
+        {touch && (
+          <Button size="icon" className="size-11 shrink-0 rounded-xl [&_svg]:size-5" aria-label={t('sessions.newSession')} disabled={!onNew} onClick={onNew} data-tour="new-session">
+            <SquarePen />
+          </Button>
+        )}
       </div>
-      {!q && (
-        <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3" role="group" aria-label={t('sessions.filter.label')}>
-          <button type="button" className={chip(!show)} aria-pressed={!show} onClick={() => onShow(null)}>
-            {t('sessions.filter.all')}
-          </button>
-          <button type="button" className={chip(show === 'running')} aria-pressed={show === 'running'} onClick={() => onShow(show === 'running' ? null : 'running')}>
-            <StatusDot tone="running" pulse={running > 0} className="size-1.5" /> {t('sessions.filter.running')}
-            {running > 0 && <span className="tabular-nums opacity-70">{running}</span>}
-          </button>
-          <button type="button" className={chip(show === 'unread')} aria-pressed={show === 'unread'} onClick={() => onShow(show === 'unread' ? null : 'unread')}>
-            <StatusDot tone="unread" className="size-1.5" /> {t('sessions.filter.unread')}
-            {unread > 0 && <span className="tabular-nums opacity-70">{unread}</span>}
-          </button>
-        </div>
-      )}
+      <div className="flex min-w-0 items-center gap-1.5">
+        {!q && (
+          <div className="-my-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-1" role="group" aria-label={t('sessions.filter.label')} data-hscroll-ok>
+            <button type="button" className={chip(!show)} aria-pressed={!show} onClick={() => onShow(null)}>
+              {t('sessions.filter.all')}
+            </button>
+            <button type="button" className={chip(show === 'running')} aria-pressed={show === 'running'} onClick={() => onShow(show === 'running' ? null : 'running')} data-testid="chip-running">
+              <StatusDot tone="running" pulse={running > 0} className="size-1.5" /> {t('sessions.filter.running')}
+              {running > 0 && <span className="tabular-nums opacity-70">{running}</span>}
+            </button>
+            <button type="button" className={chip(show === 'unread')} aria-pressed={show === 'unread'} onClick={() => onShow(show === 'unread' ? null : 'unread')} data-testid="chip-unread">
+              <StatusDot tone="unread" className="size-1.5" /> {t('sessions.filter.unread')}
+              {unread > 0 && <span className="tabular-nums opacity-70">{unread}</span>}
+            </button>
+          </div>
+        )}
+        <div className="ml-auto shrink-0">{menu}</div>
+      </div>
     </div>
   )
 }
@@ -719,7 +675,12 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
   )
 }
 
-function Badges({ running, unread }: { running: number; unread: number }) {
+/** Mouse: the row actions (+, ⋯) take no room until the row is hovered or focused, so the counters stay flush right;
+ *  they swap with the counters. Touch keeps them in place. */
+const HOVER_ACTION = 'md:pointer-fine:w-0 md:pointer-fine:overflow-hidden md:pointer-fine:group-hover/row:w-7 md:pointer-fine:group-has-[:focus-visible]/row:w-7 md:pointer-fine:data-[state=open]:w-7'
+const HOVER_HIDE = 'md:pointer-fine:group-hover/row:hidden md:pointer-fine:group-has-[[data-state=open]]/row:hidden'
+
+function Badges({ running, unread, count = 0 }: { running: number; unread: number; /** Sessions in the folded topic, shown when nothing runs nor waits. */ count?: number }) {
   const t = useT()
   const setShow = useSessionsUI((s) => s.setShow)
   // Inside the row's fold button: a click on a counter filters the tree instead of folding the row.
@@ -729,7 +690,8 @@ function Badges({ running, unread }: { running: number; unread: number }) {
     setShow(show)
   }
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
+    <span className={cn('ml-auto flex shrink-0 items-center gap-1.5 pl-1', HOVER_HIDE)}>
+      {count > 0 && !running && !unread && <span className="text-[11px] text-muted-foreground tabular-nums">{count}</span>}
       {running > 0 && (
         <span onClick={pick('running')} className="inline-flex cursor-pointer items-center gap-1 rounded text-[11px] text-primary tabular-nums hover:underline" title={t('sessions.showRunning', { count: running })}>
           <StatusDot tone="running" pulse className="size-1.5" />
@@ -785,8 +747,7 @@ function TopicNode({
   React.useEffect(() => {
     if (active) row.current?.scrollIntoView({ block: 'nearest' })
   }, [active])
-  const cap = forceOpen ? SESSIONS_SHOWN_FILTERED : SESSIONS_SHOWN
-  const shown = all ? sessions : sessions.slice(0, cap)
+  const shown = all || forceOpen ? sessions : sessions.slice(0, SESSIONS_SHOWN)
   const dnd = useReorderRow(dndTopic(topic.project), topic.name, onMove)
   const drop = useSessionDrop(topic.path)
   const press = useLongPress(() => setMenu(true))
@@ -809,8 +770,7 @@ function TopicNode({
           <span className="truncate">
             <Sensitive length={8}>{topic.name}</Sensitive>
           </span>
-          {!open && topic.session_count > 0 && !topic.running && !topic.unread && <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{topic.session_count}</span>}
-          {(!open || topic.running > 0 || topic.unread > 0) && <Badges running={topic.running} unread={topic.unread} />}
+          {(!open || topic.running > 0 || topic.unread > 0) && <Badges running={topic.running} unread={topic.unread} count={open ? 0 : topic.session_count} />}
         </button>
         <Tooltip content={t('sessions.newIn')}>
           <Button
@@ -818,7 +778,7 @@ function TopicNode({
             size="icon-sm"
             aria-label={t('sessions.newIn')}
             onClick={() => onNewSession(topic.path)}
-            className="size-7 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 max-md:size-10 max-md:opacity-100 pointer-coarse:opacity-100"
+            className={cn('size-7 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 max-md:size-10 max-md:opacity-100 pointer-coarse:opacity-100', HOVER_ACTION)}
           >
             <Plus />
           </Button>
@@ -836,9 +796,9 @@ function TopicNode({
             </button>
           )}
           <SessionRows sessions={shown} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} still={forceOpen} />
-          {!all && sessions.length > cap && (
+          {!all && !forceOpen && sessions.length > SESSIONS_SHOWN && (
             <button type="button" onClick={() => setAll(true)} className="ml-9 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground">
-              {t('sessions.tree.showMore', { count: sessions.length - cap })}
+              {t('sessions.tree.showMore', { count: sessions.length - SESSIONS_SHOWN })}
             </button>
           )}
           {archived.length > 0 && (
@@ -890,8 +850,6 @@ function SessionRows({
   const ms = still ? 0 : PRESENCE_MS
   const rows = usePresence(sessions, (s) => s.id, ms)
   const box = React.useRef<HTMLDivElement>(null)
-  // Read once per list, not once per row (each reader subscribes to the media queries).
-  const touchLayout = useCompact()
   useFlip(
     () => new Map([...(box.current?.querySelectorAll<HTMLElement>(':scope > [data-row]:not([data-leaving])') ?? [])].map((el) => [el.dataset.row!, el])),
     [sessions.map((s) => s.id).join(' ')],
@@ -902,7 +860,7 @@ function SessionRows({
     <div ref={box} className="relative">
       {rows.map((p, i) => (
         <RowPresence key={p.key} id={p.key} leaving={p.leaving} appear={p.appear} rise={rise ? Math.min(i, 10) : undefined}>
-          <SessionRow s={p.item} open={openIds.has(p.item.id)} focused={focusedId === p.item.id} onOpen={onOpen} depth={depth} label={labelOf?.(p.item)} compact={compact} touchLayout={touchLayout} />
+          <SessionRow s={p.item} open={openIds.has(p.item.id)} focused={focusedId === p.item.id} onOpen={onOpen} depth={depth} label={labelOf?.(p.item)} compact={compact} />
         </RowPresence>
       ))}
     </div>
@@ -925,26 +883,7 @@ function RowPresence({ id, leaving, appear, rise, children }: { id: string; leav
   )
 }
 
-const SessionRow = React.memo(function SessionRow({
-  s,
-  open,
-  focused,
-  onOpen,
-  depth = 2,
-  label,
-  compact,
-  touchLayout,
-}: {
-  s: Session
-  open: boolean
-  focused: boolean
-  onOpen: (s: Session) => void
-  depth?: number
-  label?: string
-  compact?: boolean
-  /** Touch layout: two lines (title, then where and when) even in the Favorites / Recent blocks. */
-  touchLayout: boolean
-}) {
+const SessionRow = React.memo(function SessionRow({ s, open, focused, onOpen, depth = 2, label, compact }: { s: Session; open: boolean; focused: boolean; onOpen: (s: Session) => void; depth?: number; label?: string; compact?: boolean }) {
   const t = useT()
   const lang = useLang()
   const { data: claude } = useClaudeStatus()
@@ -957,6 +896,8 @@ const SessionRow = React.memo(function SessionRow({
   const model = s.real_model || s.model
   const drop = useSessionDrop(s.path)
   const press = useLongPress(() => setMenu(true))
+  // Touch layout: two lines (title, then where and when) even in the Favorites / Recent blocks.
+  const touchLayout = useCompact()
   const oneLine = compact && !touchLayout
   return (
     <div
@@ -1085,7 +1026,7 @@ function RowMenu({ open, onOpenChange, label, children }: { open: boolean; onOpe
           variant="ghost"
           size="icon-sm"
           aria-label={label}
-          className="size-7 shrink-0 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100 max-md:pointer-events-none max-md:invisible max-md:absolute max-md:right-2 max-md:size-px"
+          className={cn('size-7 shrink-0 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100 max-md:pointer-events-none max-md:invisible max-md:absolute max-md:right-2 max-md:size-px', HOVER_ACTION)}
         >
           <MoreHorizontal />
         </Button>
@@ -1432,117 +1373,110 @@ function DrillRow({
 }
 
 /* ---------------------------------------------------------------- footer controls */
-const MODE_ICON: Record<TreeMode, React.ComponentType<{ className?: string }>> = { tree: ListTree, drill: Columns3 }
-
-/** Project list: switches the layout, tree <-> drill-down. */
-function ModeButton({ mode }: { mode: TreeMode }) {
-  const t = useT()
-  const setMode = useSessionsUI((s) => s.setTreeMode)
-  const next = TREE_MODES[(TREE_MODES.indexOf(mode) + 1) % TREE_MODES.length]
-  const Icon = MODE_ICON[mode]
-  return (
-    <Tooltip content={t('sessions.mode.next', { mode: t(`sessions.mode.${next}` as const) })}>
-      <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs max-md:h-10" onClick={() => setMode(next)} aria-label={t('sessions.mode.label', { mode: t(`sessions.mode.${mode}` as const) })} data-testid="tree-mode">
-        <Icon />
-        {t(`sessions.mode.${mode}` as const)}
-      </Button>
-    </Tooltip>
-  )
-}
-
-function DrillBackButton() {
-  const t = useT()
-  const drill = useSessionsUI((s) => s.drill)
-  const setDrill = useSessionsUI((s) => s.setDrill)
-  return (
-    <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-10" disabled={!drill.project} onClick={() => setDrill({ project: null, topic: null })} data-testid="tree-quick">
-      <ChevronLeft />
-      <span className="truncate">{t('sessions.drill.projects')}</span>
-    </Button>
-  )
-}
-
 const SORT_ICON: Record<FlatSort, React.ComponentType<{ className?: string }>> = { used: Flame, recent: Clock, name: ArrowDownAZ, created: CalendarClock }
 
-/** Header switch, one compact button "projects icon / sessions icon": the active side is lit, a click flips it. */
-function ListBySwitch({ value }: { value: ListBy }) {
+/** The one view menu of the list: group by projects or sessions, how projects show (tree or one level at a time),
+ *  the session sort, fold / unfold all, the Favorites / Recent blocks, and New project. */
+function ViewMenu({ fold, onNewProject }: { fold: { anyFolded: boolean; onFold: () => void } | null; onNewProject: () => void }) {
   const t = useT()
-  const setListBy = useSessionsUI((s) => s.setListBy)
-  const next: ListBy = value === 'project' ? 'session' : 'project'
-  const side = (by: ListBy) => cn('size-3.5 transition-colors', value === by ? 'text-foreground' : 'text-muted-foreground/50')
-  return (
-    <Tooltip content={t('sessions.listBy.next', { by: t(`sessions.listBy.${next}` as const) })}>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 shrink-0 gap-1 px-1.5 max-md:h-10"
-        onClick={() => setListBy(next)}
-        aria-label={t('sessions.listBy.current', { by: t(`sessions.listBy.${value}` as const) })}
-        data-testid="list-by"
-        data-value={value}
-      >
-        <ListTree className={side('project')} />
-        <span aria-hidden className="text-xs text-muted-foreground/50">/</span>
-        <List className={side('session')} />
-      </Button>
-    </Tooltip>
+  const ui = useSessionsUI(
+    useShallow((s) => ({
+      listBy: s.listBy,
+      setListBy: s.setListBy,
+      mode: s.treeMode,
+      setMode: s.setTreeMode,
+      flatSort: s.flatSort,
+      setFlatSort: s.setFlatSort,
+      showFavorites: s.showFavorites,
+      showRecent: s.showRecent,
+      recentCount: s.recentCount,
+      setBlocks: s.setBlocks,
+    })),
   )
-}
-
-/** Session list: the button cycles the sort (most used, recent activity, A to Z, creation date), each in its natural order. */
-function FlatSortButtons() {
-  const t = useT()
-  const { flatSort, setFlatSort } = useSessionsUI(useShallow((s) => ({ flatSort: s.flatSort, setFlatSort: s.setFlatSort })))
-  const next = FLAT_SORTS[(FLAT_SORTS.indexOf(flatSort) + 1) % FLAT_SORTS.length]
-  const Icon = SORT_ICON[flatSort]
-  return (
-    <>
-      <Tooltip content={t('sessions.sort.next', { sort: t(`sessions.sort.${next}` as const) })}>
-        <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground max-md:h-10" onClick={() => setFlatSort(next)} data-testid="tree-quick">
-          <Icon />
-          <span className="truncate">{t(`sessions.sort.${flatSort}` as const)}</span>
-        </Button>
-      </Tooltip>
-    </>
-  )
-}
-
-/** Favorites / Recent blocks and how many recent sessions to show. */
-function ListOptions({ side = 'top' }: { side?: 'top' | 'bottom' }) {
-  const t = useT()
-  const { showFavorites, showRecent, recentCount, setBlocks } = useSessionsUI(
-    useShallow((s) => ({ showFavorites: s.showFavorites, showRecent: s.showRecent, recentCount: s.recentCount, setBlocks: s.setBlocks })),
-  )
+  const keep = (e: Event) => e.preventDefault()
   return (
     <DropdownMenu>
       <Tooltip content={t('sessions.options')}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="ml-auto size-7 shrink-0 text-muted-foreground max-md:size-10" aria-label={t('sessions.options')} data-testid="tree-options">
+          <Button variant="ghost" size="icon-sm" className="size-7 shrink-0 text-muted-foreground max-md:size-10" aria-label={t('sessions.options')} data-testid="tree-options">
             <SlidersHorizontal />
           </Button>
         </DropdownMenuTrigger>
       </Tooltip>
-      <DropdownMenuContent align="end" side={side} className="w-56">
-        <DropdownMenuLabel>{t('sessions.options.blocks')}</DropdownMenuLabel>
-        <DropdownMenuCheckboxItem checked={showFavorites} onCheckedChange={(v) => setBlocks({ showFavorites: !!v })} onSelect={(e) => e.preventDefault()} data-testid="opt-favorites">
-          {t('sessions.fav.title')}
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem checked={showRecent} onCheckedChange={(v) => setBlocks({ showRecent: !!v })} onSelect={(e) => e.preventDefault()} data-testid="opt-recent">
-          {t('sessions.recent.title')}
-        </DropdownMenuCheckboxItem>
-        {showRecent && (
+      <DropdownMenuContent align="end" className="max-h-[min(80vh,var(--radix-dropdown-menu-content-available-height))] w-60 overflow-y-auto">
+        <DropdownMenuLabel>{t('sessions.view.groupBy')}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={ui.listBy} onValueChange={(v) => ui.setListBy(v as ListBy)}>
+          <DropdownMenuRadioItem value="project" onSelect={keep} data-testid="list-by-project">
+            <ListTree /> {t('sessions.view.projects')}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="session" onSelect={keep} data-testid="list-by-session">
+            <List /> {t('sessions.view.sessions')}
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        {ui.listBy === 'project' ? (
           <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>{t('sessions.recent.count')}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={String(recentCount)} onValueChange={(v) => setBlocks({ recentCount: Number(v) })}>
-              {RECENT_COUNTS.map((n) => (
-                <DropdownMenuRadioItem key={n} value={String(n)} onSelect={(e) => e.preventDefault()}>
-                  {n}
-                </DropdownMenuRadioItem>
-              ))}
+            <DropdownMenuLabel>{t('sessions.view.layout')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={ui.mode} onValueChange={(v) => ui.setMode(v as TreeMode)}>
+              {TREE_MODES.map((m) => {
+                const Icon = m === 'tree' ? ListTree : Columns3
+                return (
+                  <DropdownMenuRadioItem key={m} value={m} onSelect={keep} data-testid={`tree-mode-${m}`}>
+                    <Icon /> {t(`sessions.mode.${m}` as const)}
+                  </DropdownMenuRadioItem>
+                )
+              })}
+            </DropdownMenuRadioGroup>
+            {fold && (
+              <DropdownMenuItem onSelect={fold.onFold} data-testid="tree-fold">
+                {fold.anyFolded ? <ChevronsUpDown /> : <ChevronsDownUp />}
+                {fold.anyFolded ? t('sessions.tree.expandAll') : t('sessions.tree.collapseAll')}
+              </DropdownMenuItem>
+            )}
+          </>
+        ) : (
+          <>
+            <DropdownMenuLabel>{t('sessions.view.sort')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={ui.flatSort} onValueChange={(v) => ui.setFlatSort(v as FlatSort)}>
+              {FLAT_SORTS.map((f) => {
+                const Icon = SORT_ICON[f]
+                return (
+                  <DropdownMenuRadioItem key={f} value={f} onSelect={keep}>
+                    <Icon /> {t(`sessions.sort.${f}` as const)}
+                  </DropdownMenuRadioItem>
+                )
+              })}
             </DropdownMenuRadioGroup>
           </>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>{t('sessions.options.blocks')}</DropdownMenuLabel>
+        <DropdownMenuCheckboxItem checked={ui.showFavorites} onCheckedChange={(v) => ui.setBlocks({ showFavorites: !!v })} onSelect={keep} data-testid="opt-favorites">
+          {t('sessions.fav.title')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={ui.showRecent} onCheckedChange={(v) => ui.setBlocks({ showRecent: !!v })} onSelect={keep} data-testid="opt-recent">
+          {t('sessions.recent.title')}
+        </DropdownMenuCheckboxItem>
+        {ui.showRecent && (
+          <div className="flex items-center gap-1 px-2 py-1.5 text-xs text-muted-foreground">
+            <span className="mr-auto pl-6">{t('sessions.recent.count')}</span>
+            {RECENT_COUNTS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => ui.setBlocks({ recentCount: n })}
+                aria-pressed={ui.recentCount === n}
+                className={cn('h-6 min-w-6 rounded-md px-1.5 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring', ui.recentCount === n ? 'bg-foreground text-background' : 'hover:bg-accent hover:text-foreground')}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onNewProject}>
+          <FolderPlus /> {t('sessions.tree.newProject')}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
