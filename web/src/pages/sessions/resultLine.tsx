@@ -53,7 +53,7 @@ export function ResultLineMenu() {
           aria-label={t('sessions.result.choose')}
           data-testid="result-line-menu"
           className={cn(
-            'inline-flex size-4 items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:opacity-100',
+            "relative inline-flex size-4 items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:opacity-100 pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']",
             'max-md:size-6 max-md:opacity-60 md:opacity-0 md:group-hover/result:opacity-100',
           )}
         >
