@@ -526,7 +526,7 @@ function Workspace() {
       description={t('sessions.description')}
       actions={
         <>
-          {!mobile && <TabsToggle />}
+          {!mobile && <TabsToggle compact />}
           {!mobile && !tabs && cols.length >= 2 && (
             <LayoutPicker count={cols.length}>
               <Button
