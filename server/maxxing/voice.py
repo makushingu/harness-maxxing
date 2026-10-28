@@ -230,8 +230,12 @@ def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
 def _to_ogg(wav: Path, dest: Path) -> Path:
     """Compact Opus copy for the API engines (25 MB upload limits): ~3 MB for 15 minutes."""
     ff = ffmpeg_bin() or "ffmpeg"
-    p = subprocess.run([ff, "-nostdin", "-loglevel", "error", "-y", "-i", str(wav), "-c:a", "libopus",
-                        "-b:a", "24k", "-application", "voip", str(dest)], capture_output=True, text=True, timeout=180)
+    try:
+        p = subprocess.run([ff, "-nostdin", "-loglevel", "error", "-y", "-i", str(wav), "-c:a", "libopus",
+                            "-b:a", "24k", "-application", "voip", str(dest)], capture_output=True, text=True,
+                           timeout=180)
+    except (subprocess.SubprocessError, OSError):      # ffmpeg stuck or missing
+        return wav
     if p.returncode != 0 or not dest.is_file():
         return wav                                     # WAV is accepted too (just bigger)
     return dest
