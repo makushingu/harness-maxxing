@@ -347,3 +347,15 @@ def test_userinfo_pattern_is_linear_on_a_long_run_of_letters(env, client):  # no
     r = client.post("/api/mcp", json={"name": "big", "where": "", "type": "stdio", "command": "srv",
                                       "args": ["a" * 100_000]})
     assert r.status_code == 400 and "too_long" in r.text
+
+
+def test_removing_a_project_server_never_empties_the_mcp_json(env, client):  # noqa: F811
+    """Another server of the file holds a lone surrogate: the rewrite used to truncate the file, then fail."""
+    f = env.ws / "projects" / "acme" / ".mcp.json"
+    f.write_text('{"mcpServers": {"gone": {"type": "http", "url": "https://x.example/mcp"},'
+                 ' "kept": {"type": "stdio", "command": "srv", "env": {"A": "\\ud800"}}}}')
+    r = client.delete("/api/mcp", params={"id": f"project|{f.parent}|gone"})
+    assert r.status_code == 200
+    data = json.loads(f.read_text())
+    assert list(data["mcpServers"]) == ["kept"] and data["mcpServers"]["kept"]["env"]["A"] == "\ud800"
+    assert [p.name for p in f.parent.iterdir() if "mx-tmp" in p.name] == []
