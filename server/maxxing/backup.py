@@ -423,10 +423,13 @@ def glob_re(pattern: str) -> re.Pattern[str]:
     return re.compile("^" + out + "$")
 
 
+_PRUNE = {d.lower() for d in PRUNE_DIRS}
+
+
 def denied(rel: str) -> bool:
     """Hard deny-list (applies to whitelisted files too)."""
     parts = rel.split("/")
-    return bool(_DENY.match(parts[-1])) or any(p in PRUNE_DIRS for p in parts[:-1])
+    return bool(_DENY.match(parts[-1])) or any(p.lower() in _PRUNE for p in parts[:-1])
 
 
 def _patterns(include: Any) -> list[str]:
@@ -448,7 +451,7 @@ def collect(root: Path | None = None, include: list[str] | None = None) -> dict[
     if not root.is_dir():
         return out
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = sorted(d for d in dirnames if d not in PRUNE_DIRS
+        dirnames[:] = sorted(d for d in dirnames if d.lower() not in _PRUNE        # git refuses .GIT too
                              and not (Path(dirpath) / d).is_symlink())
         base = Path(dirpath)
         for fn in sorted(filenames):
@@ -629,9 +632,11 @@ def _record(entry: dict) -> None:
         lines = p.read_text().splitlines() if p.exists() else []
     except OSError:
         lines = []
-    lines = (lines + [json.dumps(entry, ensure_ascii=False)])[-HISTORY_MAX:]
+    # a file name that is not UTF-8 (a lone surrogate from os.walk) is written as "?", not raised from run()
+    line = json.dumps(entry, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8")
+    lines = (lines + [line])[-HISTORY_MAX:]
     tmp = p.with_suffix(".tmp")
-    tmp.write_text("\n".join(lines) + "\n")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.replace(tmp, p)
     bus.invalidate("backup", "health")
 
