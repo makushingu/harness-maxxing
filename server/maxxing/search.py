@@ -64,6 +64,8 @@ CHECKPOINT_BUSY_MS = 200             # a TRUNCATE checkpoint waits at most this 
 _lock = threading.RLock()          # writer: refreshes (one connection)
 _rlock = threading.Lock()          # reader: queries use their own connection (WAL), never wait on a refresh
 _state = {"sessions_at": 0.0, "full_at": 0.0, "files_at": 0.0}
+# session key -> (meta stat, log stat) when it was last fully indexed: an unchanged session is skipped
+_seen: dict[str, tuple] = {}
 
 
 # ---- storage ---------------------------------------------------------------------------------
@@ -116,6 +118,7 @@ def _db() -> sqlite3.Connection:
             _con.close()
         _con, _con_path = _connect(), db_path()
         _state.update(sessions_at=0.0, full_at=0.0, files_at=0.0)   # another index: nothing is fresh
+        _seen.clear()
     return _con
 
 
@@ -135,6 +138,14 @@ def _log_ident(p: Path) -> str:
         return ""
 
 
+def _stat_key(p: Path) -> tuple | None:
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return st.st_ino, st.st_mtime_ns, st.st_size
+
+
 def _index_sessions(con: sqlite3.Connection) -> None:
     from .sessions import normalize, store
     known = {k for (k,) in con.execute("SELECT key FROM src WHERE key LIKE 's:%'")}
@@ -142,12 +153,13 @@ def _index_sessions(con: sqlite3.Connection) -> None:
     for sid in store.list_ids():
         key = f"s:{sid}"
         alive.add(key)
-        m = store.read(sid)
         p = store.log_path(sid)
-        try:
-            size = p.stat().st_size
-        except OSError:
-            size = -1
+        stamp = (_stat_key(store.meta_path(sid)), _stat_key(p))
+        if key in known and _seen.get(key) == stamp and None not in stamp:
+            continue                                         # neither the meta nor the log changed
+        _seen.pop(key, None)
+        m = store.read(sid)
+        size = stamp[1][2] if stamp[1] else -1
         if m is None or size < 0:                            # unreadable / no log: drop its rows
             alive.discard(key)
             continue
@@ -184,8 +196,11 @@ def _index_sessions(con: sqlite3.Connection) -> None:
                             (key, "session", sid, path, title, ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
                 sig["offset"] += end
         con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
+        if sig["offset"] >= size:                            # all read: skipped until something changes
+            _seen[key] = stamp
     for key in known - alive:
         _drop(con, key)
+        _seen.pop(key, None)
 
 
 def _skip_line(p: Path, pos: int) -> int:
@@ -397,6 +412,7 @@ def refresh(full: bool = True, deep: bool | None = True) -> None:
             con.commit()
         except Exception:
             con.rollback()
+            _seen.clear()                                    # what was marked as indexed was rolled back
             log.exception("search index refresh failed")
             return
         if vacuum:                                          # rules changed and rows went away: give the space back
