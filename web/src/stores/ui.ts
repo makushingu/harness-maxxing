@@ -18,6 +18,10 @@ export type TouchHome = 'session' | 'dashboard'
 export const ACCENTS = ['blue', 'clay', 'violet', 'green', 'amber', 'rose'] as const
 export type Accent = (typeof ACCENTS)[number]
 
+/** Expanded sidebar width (px): dragged by its right edge, double-click = default. */
+export const SIDEBAR_W = { min: 220, max: 440, default: 264 }
+const clampSidebar = (w: number) => Math.round(Math.max(SIDEBAR_W.min, Math.min(SIDEBAR_W.max, w)))
+
 type UIState = {
   theme: Theme
   accent: Accent
@@ -28,6 +32,8 @@ type UIState = {
   monoFont: MonoFont
   language: Language
   sidebarCollapsed: boolean
+  /** Width of the expanded sidebar dragged by the user (desktop); null = the default (SIDEBAR_W). */
+  sidebarWidth: number | null
   layout: Layout
   touchHome: TouchHome
   /** Presentation mode: every <Sensitive> renders a mask instead of its content. */
@@ -56,6 +62,7 @@ type UIState = {
   setMonoFont: (f: MonoFont) => void
   setLanguage: (l: Language) => void
   toggleSidebar: () => void
+  setSidebarWidth: (w: number | null) => void
   setLayout: (l: Layout) => void
   setTouchHome: (h: TouchHome) => void
   setPresentation: (on: boolean) => void
@@ -82,6 +89,7 @@ export const useUI = create<UIState>()(
       monoFont: 'system',
       language: initialLang(),
       sidebarCollapsed: false,
+      sidebarWidth: null,
       layout: 'auto',
       touchHome: 'session',
       presentation: false,
@@ -101,6 +109,7 @@ export const useUI = create<UIState>()(
       setMonoFont: (monoFont) => set({ monoFont }),
       setLanguage: (language) => set({ language }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setSidebarWidth: (w) => set({ sidebarWidth: w == null ? null : clampSidebar(w) }),
       setLayout: (layout) => set({ layout }),
       setTouchHome: (touchHome) => set({ touchHome }),
       setPresentation: (presentation) => set({ presentation }),

@@ -7,7 +7,7 @@
 // (browsers without Document Picture-in-Picture) · /sessions/<id> → redirect.
 import * as React from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
-import { Columns2, Keyboard, LayoutGrid, MessageSquarePlus, MessagesSquare, PanelLeftOpen } from 'lucide-react'
+import { Columns2, FolderOpen, Hash, Keyboard, LayoutGrid, MessageSquarePlus, MessagesSquare, PanelLeftOpen } from 'lucide-react'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
@@ -20,7 +20,7 @@ import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogT
 import { focusComposer, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
 import { SessionTree } from './Tree'
 import { LayoutDropBar, LayoutPicker } from './LayoutPicker'
-import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, StripContext, type ColumnVariant, type Place } from './Column'
+import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, WhereBadge, StripContext, type ColumnVariant, type Place } from './Column'
 import { PreviewProvider } from './FilePreview'
 import { HudBar } from './Hud'
 import { topicLabel, useIsMobile } from './util'
@@ -523,7 +523,7 @@ function Workspace() {
   const header = (
     <PageHeader
       title={t('nav.sessions')}
-      description={t('sessions.description')}
+      description={<SubtitleWithBadges text={t('sessions.description')} />}
       actions={
         <>
           {!mobile && <TabsToggle />}
@@ -795,5 +795,26 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         </ul>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Page subtitle: the words in [brackets] (project, then topic) become badges that explain them on hover. */
+function SubtitleWithBadges({ text }: { text: string }) {
+  const t = useT()
+  const kinds = ['project', 'topic'] as const
+  let n = 0
+  return (
+    <>
+      {text.split(/(\[[^\]]+\])/).map((part, i) => {
+        const m = /^\[(.+)\]$/.exec(part)
+        if (!m) return part
+        const kind = kinds[Math.min(n++, 1)]
+        return (
+          <WhereBadge key={i} kind={kind} name={m[1]} hint={t('where.howTo')} generic>
+            {kind === 'project' ? <FolderOpen className="size-3 shrink-0 opacity-70" /> : <Hash className="size-3 shrink-0 opacity-70" />}
+          </WhereBadge>
+        )
+      })}
+    </>
   )
 }

@@ -49,32 +49,37 @@ The session moves there (the list updates) and Claude continues the same convers
 new topic's folder with that topic's context. Possible once Claude has finished (not during a turn or while
 messages wait). Its Telegram thread is renamed. Files it created stay where they are.
 
+The project and the topic of a session show as two badges under its title. Hover one to see what it is (its
+description, what a project or a topic means for Harness, its folder); click them to move the session to
+another topic.
+
 ## The sessions list
 
-At the top of the list:
+On a computer, drag the right edge of the app's sidebar to widen or narrow it (double-click: normal width).
 
-- **Projects / Sessions** (the button with two icons, the lit one is the current view): click to switch.
-  - **Projects**: the sessions grouped by project and topic (the default).
-  - **Sessions**: every session in one list, whatever its project, **most used first**: the sessions you talk
-    to the most lately come first (a long session used this week before a one-off from this morning; an old
-    one slowly goes down). One line each: the title and its `# topic` on the right; hover it for
-    `project › topic`.
-- **Search** (the magnifier): opens the filter; type to narrow the list, **Esc** or **×** closes it.
-- **New project** (the folder with a +).
+The top of the list is the same on a computer and on a phone:
 
-The bar at the bottom of the list:
+- **Filter** (always visible): type to narrow the list (projects, topics, titles, the last message, archived
+  sessions included); **Esc** or **×** clears it. On a phone a **New session** button sits next to it (in the
+  topic of the session on screen); on a computer the button on its left hides the list.
+- **All / Running / Unread**: the chips show every session, or only those working right now, or only the
+  answers you have not read yet (unfolded, with their count). On a computer, **Open all** opens them next to
+  the columns already open.
+- **Display** (the sliders icon at the end of the chips): every display choice in one menu.
+  - **Group by**: **Projects and topics** (the default: the tree) or **Sessions only**: every session in one
+    list, whatever its project, sorted as you choose (**most used** first by default: the sessions you talk to
+    the most lately come first; then recent activity, A → Z, creation date). One line each: the title and its
+    `# topic` on the right; hover it for `project › topic`.
+  - **Show projects as**: **Tree** (projects, topics, sessions, each folds; drag a project or a topic within its
+    project to reorder, drag a session onto another topic to move it) or **One level at a time** (the projects;
+    click one for its topics, a topic for its sessions; the small arrow at the top goes back one level).
+    **Fold all folders** / **Unfold all folders** (tree only).
+  - **Blocks on top**: tick **Favorites** and **Recent** to show them at the top of the list, and how many
+    recent sessions to show (3, 5, 10 or 20). The Favorites block only shows once you have a favorite.
+  - **New project**.
 
-1. In **Projects**, the **layout** - click to switch:
-
-   | Layout | What you see | Quick button next to it |
-   |---|---|---|
-   | **Vertical** | the tree: projects, topics, sessions, each folds; drag a project or a topic (within its project) to reorder, drag a session onto another topic to move it | **Close all** / **Open all** |
-   | **Horizontal** | one level at a time: the projects; click one for its topics, a topic for its sessions; the small arrow at the top goes back one level | **Projects** (back to the projects) |
-
-   In **Sessions**, the **sort** instead: most used, recent activity, A → Z, creation date (click to change).
-2. **List options** (the sliders icon): tick the **Favorites** and **Recent** blocks to show them at the top of
-   the list, and how many recent sessions to show (3, 5, 10 or 20). The Favorites block only shows once you have
-   a favorite.
+With a mouse, the **+** (new session in this topic) and **…** of a row show when you hover it, in place of its
+counters; on a touch screen **+** stays visible and a long press opens the menu.
 
 - **Project emoji**: the **…** menu of a project -> *Set an emoji…* (a list of common ones, or type / paste any emoji). It shows before the project in the list and labels, and its Telegram threads (`🛒 acme/blog · Launch plan`). It is saved with the project folder (kept by renames, the trash and the backup).
 - **Favorites**: add a session with its **…** menu (or a right-click) -> **Add to favorites**; same menu to
@@ -295,8 +300,9 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
   it works in this browser. Unread answers show a green round counter in the sidebar, on the ☰ button and
   the tree; it can pulse until you read them (*Pulsing badge*).
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -
-  and the session tree shows only those sessions, unfolded. **Open all** opens them next to the columns
-  already open; **×** brings the whole tree back (typing a search does too). The **Sessions** link
+  and the session tree shows only those sessions, unfolded (the **Running** or **Unread** chip lights up).
+  **Open all** opens them next to the columns already open; the **All** chip brings the whole tree back
+  (typing a search does too). The **Sessions** link
   itself brings back your last layout.
 - **Archive** hides a session from the list without deleting it (see the Archived filter).
 - **Delete** stops a running turn and removes the session files.
@@ -344,4 +350,4 @@ A Telegram session can be continued from the web UI and the other way round.
   you already chose something there (`attribution` or `includeCoAuthoredBy`).
 
 
-**Close all / Open all** (Vertical layout): the quick button at the bottom of the session list folds every project and topic as soon as something is open, and unfolds everything when all is folded.
+**Fold all / Unfold all folders** (tree layout, in the **Display** menu of the session list): folds every project and topic as soon as something is open, and unfolds everything when all is folded.
