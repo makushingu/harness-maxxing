@@ -23,11 +23,11 @@ stopped.
   layouts appear, click the zone where it should go (the others fill the rest). Or drag the session by its grip: a
   layouts bar slides down at the top of the sessions, drop it on a zone. Rest the pointer on the grid button to
   arrange every open session at once. With the keyboard: **…** menu > **Layouts…**.
-- **Tabs view**: the **Tabs** button at the top right of the Sessions page (Alt+T) shows one session at a time,
+- **Tabs view**: the **Tabs** button (window icon) at the top right of the Sessions page (Alt+T) shows one session at a time,
   full width, with every open session as a chip above it. A chip shows whether its session is working, finished
   with an unread answer or stopped on an error; click it to show that session, or use the arrows on the left and
   right edges (Alt+← / Alt+→). Its cross closes the session. **Waiting** jumps to the next session that finished and
-  waits for your answer. Click **Tabs** again: your columns come back exactly as they were. On a phone, the same
+  waits for your answer. Click the **Tabs** button again: your columns come back exactly as they were. On a phone, the same
   button sits in the session's header; the chips show under the top bar, and a sideways swipe on the session
   shows the previous or next one.
 - Fold the sidebar with the button at its bottom; fold the session tree with the button at its top left
