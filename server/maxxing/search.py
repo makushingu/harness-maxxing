@@ -171,13 +171,13 @@ def _index_sessions(con: sqlite3.Connection) -> None:
             _drop(con, key)                                  # log rewritten: start over
             sig = None
         if sig is None:
-            sig = {"offset": 0, "ident": ident, "title": title}
+            sig = {"offset": 0, "ident": ident, "title": title, "path": path}
             # a title row, so a session is found by its name even before any message is indexed
             con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
                         (key, "session", sid, path, title, "", m.get("updated") or m.get("created")))
-        elif sig.get("title") != title:
-            con.execute("UPDATE items SET title=? WHERE src=?", (title, key))
-            sig["title"] = title
+        elif sig.get("title") != title or sig.get("path") != path:   # renamed, or moved to another topic
+            con.execute("UPDATE items SET title=?, path=? WHERE src=?", (title, path, key))
+            sig["title"], sig["path"] = title, path
         if sig["offset"] < size:
             with open(p, "rb") as f:
                 f.seek(sig["offset"])

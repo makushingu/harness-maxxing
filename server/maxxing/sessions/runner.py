@@ -394,7 +394,7 @@ class Runner:
         try:
             p = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, text=True, bufsize=1, start_new_session=True)
-        except OSError as e:
+        except (OSError, ValueError) as e:                # ValueError: a NUL in an argument (an old session's model)
             a.stderr = f"Cannot start Claude ({args[0]}): {e}"
             return a
         with self.lock:
