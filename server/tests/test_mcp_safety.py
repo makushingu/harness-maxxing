@@ -359,3 +359,14 @@ def test_removing_a_project_server_never_empties_the_mcp_json(env, client):  # n
     data = json.loads(f.read_text())
     assert list(data["mcpServers"]) == ["kept"] and data["mcpServers"]["kept"]["env"]["A"] == "\ud800"
     assert [p.name for p in f.parent.iterdir() if "mx-tmp" in p.name] == []
+
+
+def test_a_project_server_named_by_hand_can_be_removed(env, client):  # noqa: F811
+    f = env.ws / "projects" / "acme" / ".mcp.json"
+    f.write_text('{"mcpServers": {"my server é": {"type": "http", "url": "https://x.example/mcp"}}}')
+    from maxxing import mcp
+    sid = {s["name"]: s["id"] for s in mcp.servers()}["my server é"]
+    assert client.delete("/api/mcp", params={"id": sid}).status_code == 200
+    assert json.loads(f.read_text())["mcpServers"] == {}
+    for bad in ("-x", "a\x00b", "a\nb"):
+        assert client.delete("/api/mcp", params={"id": f"project|{f.parent}|{bad}"}).status_code == 400
