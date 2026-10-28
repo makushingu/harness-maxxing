@@ -632,9 +632,11 @@ def _record(entry: dict) -> None:
         lines = p.read_text().splitlines() if p.exists() else []
     except OSError:
         lines = []
-    lines = (lines + [json.dumps(entry, ensure_ascii=False)])[-HISTORY_MAX:]
+    # a file name that is not UTF-8 (a lone surrogate from os.walk) is written as "?", not raised from run()
+    line = json.dumps(entry, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8")
+    lines = (lines + [line])[-HISTORY_MAX:]
     tmp = p.with_suffix(".tmp")
-    tmp.write_text("\n".join(lines) + "\n")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.replace(tmp, p)
     bus.invalidate("backup", "health")
 
