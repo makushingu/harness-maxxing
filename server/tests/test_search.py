@@ -205,3 +205,22 @@ def test_background_pass_reads_memory_but_walks_rarely(client, mx):
     search._state["files_at"] = 0.0                             # FILES_EVERY_S elapsed
     search.refresh(True, None)
     assert _q(client, "okapi")
+
+
+def test_unchanged_sessions_are_not_read_again(client, mx, monkeypatch):
+    sids = [_session("", f"Session {i}", [("user", f"message {i}")]) for i in range(5)]
+    search.refresh()
+    reads = []
+    real = store.read
+    monkeypatch.setattr(store, "read", lambda sid: reads.append(sid) or real(sid))
+    search.refresh()
+    search.search("message")
+    assert reads == []                                   # nothing changed: no meta parsed again
+    with open(store.log_path(sids[0]), "a") as fh:
+        fh.write(json.dumps({"type": "mx_user", "text": "nouveau yankee", "attachments": [], "source": "web", "at": 2.0}) + "\n")
+    store.update(sids[1], title="Titre changé")
+    reads.clear()                                        # (update() reads the meta itself)
+    search.refresh()
+    assert sorted(reads) == sorted(sids[:2])
+    assert search.search("yankee")["results"][0]["id"] == sids[0]
+    assert search.search("titre changé")["results"][0]["id"] == sids[1]
