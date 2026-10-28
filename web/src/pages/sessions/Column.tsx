@@ -967,8 +967,8 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
       <ChevronDown className="size-3 shrink-0 opacity-60" />
     </>
   )
-  // The row stays 20 px on phones (the header must stay short): an invisible 38 px tap area instead of a taller row.
-  const cls = "relative inline-flex min-w-0 items-center gap-1 rounded hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-top-1.5 pointer-coarse:before:-bottom-3 pointer-coarse:before:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+  // The row stays 20 px on phones (the header must stay short): an invisible 40 px tap area instead of a taller row.
+  const cls = "relative inline-flex min-w-0 items-center gap-1 rounded hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-top-1.5 pointer-coarse:before:-bottom-3.5 pointer-coarse:before:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
   if (busy)
     return (
       <Tooltip content={t('sessions.move.busy')}>
