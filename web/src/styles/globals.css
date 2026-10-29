@@ -265,6 +265,7 @@ html[data-kbd] {
  *                         (sidebar, nav items, main) assembles itself instead of popping in
  *  .mx-pop                a check / badge that confirms an action (scale 0.6 -> 1, 220 ms)
  *  .mx-cv                 content-visibility: off-screen rows of long lists are not laid out/painted
+ *  .mx-cv-tile            the same for the tiles of a big folder grid
  *  Dashboard widgets (after .mx-card-in, so a card's content builds itself once the card is in place):
  *  .mx-grow-y             a chart bar grows from its base (--i: bar index, 24 ms apart)
  *  .mx-draw               a chart line draws itself (needs pathLength="1"; one stroke, no layout)
@@ -284,6 +285,7 @@ html[data-boot] .mx-boot-side { animation: mx-slide-right 340ms cubic-bezier(0.1
 html[data-boot] .mx-boot-item { animation: mx-slide-right 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 30ms); }
 html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 .mx-cv { content-visibility: auto; contain-intrinsic-size: auto 44px; }
+.mx-cv-tile { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .mx-grow-y { transform-box: fill-box; transform-origin: 50% 100%; animation: mx-grow-y 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(140ms + var(--i, 0) * 24ms); }
 .mx-draw { stroke-dasharray: 1; animation: mx-draw 640ms cubic-bezier(0.45, 0, 0.2, 1) 140ms backwards; }
 .mx-sweep { transform-origin: left center; animation: mx-sweep 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(120ms + var(--i, 0) * 40ms); }
@@ -423,3 +425,8 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 /* Chart series (dashboard). Single-series charts use the accent; multi-series use these slots in order. */
 :root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4; --series-6: #4a3aa7; }
 .dark { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; --series-6: #9085e9; }
+
+/* An entry of a folder that a long press selects (features/files/selection.tsx): no iOS callout ("Save image",
+ * link preview), no text selection, no native image drag under the finger. */
+.mx-tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.mx-tile img { -webkit-user-drag: none; }

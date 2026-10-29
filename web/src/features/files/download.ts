@@ -7,9 +7,10 @@
 // AirDrop...) up to 50 MB, else it opens inside the app, where the system offers to save or share it.
 import type * as React from 'react'
 import { toast } from '@/components/ui'
-import { api, errorMessage, isApiError } from '@/lib/api'
+import { api, errorMessage, isApiError, withQuery } from '@/lib/api'
 import { useT } from '@/i18n'
 import { fileRawUrl, fileZipUrl, knownFileStamp } from '@/lib/queries/files'
+import type { FileEntry } from '@/lib/types'
 import { isIOS, isStandalone } from '@/pwa'
 import { basename, kindOf } from './kinds'
 
@@ -136,4 +137,22 @@ export function useDownloadZip() {
   const t = useT()
   return (path: string) =>
     void downloadZip(path).catch((e) => toast.error(isApiError(e, 'too_large') ? t('files.zipTooLarge') : errorMessage(e)))
+}
+
+/** Several files and folders in one zip. The server checks them first (POST: paths, caps, a 413 with its reason)
+ * and answers a short-lived link of this session, which the browser downloads like any file. */
+export async function downloadZipMany(paths: string[]): Promise<void> {
+  const r = await api.post<{ token: string; name: string }>('/api/files/zip', { paths })
+  save(withQuery('/api/files/zip', { token: r.token }), r.name)
+}
+
+/** Download entries of a listing: one file as it is, one folder as its zip, several entries as one zip. */
+export function useDownloadEntries() {
+  const t = useT()
+  return (entries: FileEntry[]) => {
+    const [one] = entries
+    if (!one) return
+    const job = entries.length > 1 ? downloadZipMany(entries.map((e) => e.path)) : one.type === 'dir' ? downloadZip(one.path) : downloadFile(one.path, { version: one.mtime, size: one.size })
+    void job.catch((e) => toast.error(isApiError(e, 'too_large') ? t('files.sel.zipTooLarge') : errorMessage(e)))
+  }
 }

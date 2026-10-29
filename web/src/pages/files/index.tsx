@@ -35,6 +35,7 @@ import {
   useMask,
 } from '@/components/ui'
 import { basename, crumbs, dirname, iconFor, isInside, kindOf, resolvePath } from '@/features/files/kinds'
+import { useRemoveEntries } from '@/features/files/selection'
 import { Listing, MX_PATH_TYPE, canDropInto, fileDrag, hasPathDrag, type EntryActions } from './Listing'
 import { FileView, type FileViewActions } from './FileView'
 import { NameDialog, type NameDialogState } from './dialogs'
@@ -109,6 +110,16 @@ export default function FilesPage() {
       return true
     },
     [go, mask, path, qc, t],
+  )
+
+  const removeEntries = useRemoveEntries()
+  const removeMany = React.useCallback(
+    async (paths: string[]) => {
+      const done = await removeEntries(paths)
+      const gone = done.find((p) => path === p || path.startsWith(p + '/'))
+      if (gone) go(dirname(gone), 'dir', true)
+    },
+    [go, path, removeEntries],
   )
 
   const rename = React.useCallback(
@@ -227,10 +238,11 @@ export default function FilesPage() {
       rename: (e) => rename(e.path),
       remove: (e) => void remove(e.path),
       copyPath: (e) => void copyPath(e.path),
+      removeMany: (paths) => void removeMany(paths),
       moveTo: (from, dir) => void moveTo(from, dir),
       uploadTo: (files, dir) => uploads.add(dir, files),
     }),
-    [copyPath, go, moveTo, remove, rename, uploads],
+    [copyPath, go, moveTo, remove, removeMany, rename, uploads],
   )
   const viewActions: FileViewActions = React.useMemo(
     () => ({ open: (p, k) => go(p, k), rename, remove, copyPath: (p) => void copyPath(p), ask }),

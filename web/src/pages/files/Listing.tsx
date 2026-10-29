@@ -1,4 +1,5 @@
-// Left pane: directory listing (list / grid with thumbnails), filter, sort, hidden files, drag & drop upload.
+// Left pane: directory listing (list / grid with thumbnails), filter, sort, hidden files, drag & drop upload,
+// several entries at once (long press, Shift / Ctrl+click, right click: features/files/selection.tsx).
 import * as React from 'react'
 import {
   Clock,
@@ -50,12 +51,17 @@ import {
 import { hasThumb, iconFor, iconTone } from '@/features/files/kinds'
 import { sortEntries, useFilePrefs, type SortKey, type UploadItem } from './state'
 import { downloadProps, useDownloadZip } from '@/features/files/download'
+import { EntriesMenu, SelectCheck, SelectionBar, useEntrySelection, type SelectionActions } from '@/features/files/selection'
+
+const NO_ENTRIES: FileEntry[] = []
 
 export type EntryActions = {
   open: (e: FileEntry) => void
   rename: (e: FileEntry) => void
   remove: (e: FileEntry) => void
   copyPath: (e: FileEntry) => void
+  /** Several entries to the trash, one confirmation. */
+  removeMany: (paths: string[]) => void
   /** Drag & drop: move a file/folder into a folder (same window). */
   moveTo: (from: string, dir: string) => void
   /** Drag & drop: files from the computer dropped on a folder row. */
@@ -79,7 +85,10 @@ export function canDropInto(dir: string): boolean {
   const parent = p.slice(0, p.lastIndexOf('/')) || '/'
   return dir !== p && !dir.startsWith(p + '/') && dir !== parent
 }
+/** Mouse and trackpad only: on a touch screen a long press selects (iOS would start a drag instead). */
+const finePointer = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
 function dragProps(e: FileEntry) {
+  if (!finePointer) return e.type === 'dir' ? { 'data-drop-dir': e.path } : {}
   return {
     draggable: true,
     onDragStart: (ev: React.DragEvent) => {
@@ -131,6 +140,7 @@ export function Listing({
   const [dropDir, setDropDir] = React.useState<string | null>(null)
   const dragDepth = React.useRef(0)
   const scroller = React.useRef<HTMLDivElement>(null)
+  const root = React.useRef<HTMLDivElement>(null)
 
   // Reset the filter and scroll when the folder changes.
   const dirPath = list?.path
@@ -164,6 +174,12 @@ export function Listing({
     return () => io.disconnect()
   }, [more, rendered.length])
   const hiddenCount = list ? list.entries.filter((e) => e.name.startsWith('.')).length : 0
+  const sel = useEntrySelection({ entries, onOpen: actions.open, root })
+  const picked = sel.selecting ? entries.filter((e) => sel.selected.has(e.path)) : NO_ENTRIES
+  const selActions: SelectionActions = React.useMemo(
+    () => ({ open: actions.open, rename: actions.rename, remove: (es) => actions.removeMany(es.map((e) => e.path)) }),
+    [actions],
+  )
 
   // Keep the selected file visible (deep link, prev/next in the image viewer).
   React.useEffect(() => {
@@ -198,6 +214,7 @@ export function Listing({
 
   return (
     <div
+      ref={root}
       className={cn('relative flex min-h-0 flex-col', className)}
       onDragEnter={(e) => {
         if (!hasFiles(e.dataTransfer) && !hasPathDrag(e.dataTransfer)) return
@@ -298,8 +315,18 @@ export function Listing({
         </DropdownMenu>
       </div>
 
+      <SelectionBar entries={picked} actions={selActions} total={entries.length} onSelectAll={sel.selectAll} onClear={sel.clear} />
+
       {/* body */}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onKeyDown={onKeyDown}>
+      <div
+        ref={scroller}
+        className="group/sel min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        {...sel.bind}
+        onKeyDown={(e) => {
+          sel.bind.onKeyDown(e)
+          onKeyDown(e)
+        }}
+      >
         {loading && !list ? (
           <ListingSkeleton grid={prefs.view === 'grid'} />
         ) : error && !list ? (
@@ -335,13 +362,13 @@ export function Listing({
         ) : prefs.view === 'grid' ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2 p-2" role="list" aria-label={t('files.contents')}>
             {rendered.map((e) => (
-              <GridItem key={e.path} entry={e} selected={selected === e.path} dropTarget={dropDir === e.path} actions={actions} />
+              <GridItem key={e.path} entry={e} selected={selected === e.path} checked={sel.selected.has(e.path)} dropTarget={dropDir === e.path} actions={actions} />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-[minmax(0,1fr)] p-1.5" role="list" aria-label={t('files.contents')}>
             {rendered.map((e) => (
-              <Row key={e.path} entry={e} selected={selected === e.path} dropTarget={dropDir === e.path} actions={actions} />
+              <Row key={e.path} entry={e} selected={selected === e.path} checked={sel.selected.has(e.path)} dropTarget={dropDir === e.path} actions={actions} />
             ))}
           </div>
         )}
@@ -361,6 +388,8 @@ export function Listing({
       )}
 
       {uploads.length > 0 && <UploadPanel items={uploads} onClear={onClearUploads} onCancel={onCancelUploads} />}
+
+      <EntriesMenu at={sel.menu} actions={selActions} onClose={sel.closeMenu} />
 
       {drag && !dropDir && (
         <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary bg-background/95 text-center animate-in">
@@ -464,7 +493,9 @@ function useEntryMeta(e: FileEntry) {
   }
 }
 
-function Row({ entry: e, selected, dropTarget, actions }: { entry: FileEntry; selected: boolean; dropTarget: boolean; actions: EntryActions }) {
+type ItemProps = { entry: FileEntry; selected: boolean; checked: boolean; dropTarget: boolean; actions: EntryActions }
+
+const Row = React.memo(function Row({ entry: e, selected, checked, dropTarget, actions }: ItemProps) {
   const Icon = iconFor(e.type, e.name)
   const meta = useEntryMeta(e)
   return (
@@ -472,8 +503,8 @@ function Row({ entry: e, selected, dropTarget, actions }: { entry: FileEntry; se
       role="listitem"
       {...dragProps(e)}
       className={cn(
-        'mx-cv group relative flex h-[var(--row-h,40px)] items-center rounded-md transition-colors max-md:h-12',
-        selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60',
+        'mx-cv mx-tile group relative flex h-[var(--row-h,40px)] items-center rounded-md transition-colors max-md:h-12',
+        checked ? 'bg-primary/10 ring-1 ring-primary/60 ring-inset' : selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60',
         dropTarget && 'bg-primary/10 ring-2 ring-primary ring-inset',
       )}
     >
@@ -482,10 +513,11 @@ function Row({ entry: e, selected, dropTarget, actions }: { entry: FileEntry; se
         data-row
         data-path={e.path}
         aria-current={selected ? 'true' : undefined}
-        onClick={() => actions.open(e)}
+        aria-pressed={checked || undefined}
         className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-md pr-1 pl-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
-        <Icon className={cn('size-4 shrink-0', iconTone(e.type))} />
+        <SelectCheck checked={checked} className="size-4 shrink-0" />
+        <Icon className={cn('size-4 shrink-0 group-data-[selecting]/sel:hidden', iconTone(e.type))} />
         <span className={cn('min-w-0 flex-1 truncate text-sm', e.name.startsWith('.') && 'text-muted-foreground')}>
           <Sensitive length={Math.min(14, Math.max(4, e.name.length))}>{e.name}</Sensitive>
         </span>
@@ -497,32 +529,33 @@ function Row({ entry: e, selected, dropTarget, actions }: { entry: FileEntry; se
       <EntryMenu entry={e} actions={actions} className="mr-1 hidden group-focus-within:inline-flex group-hover:inline-flex data-[state=open]:inline-flex max-md:inline-flex" />
     </div>
   )
-}
+})
 
-function GridItem({ entry: e, selected, dropTarget, actions }: { entry: FileEntry; selected: boolean; dropTarget: boolean; actions: EntryActions }) {
+const GridItem = React.memo(function GridItem({ entry: e, selected, checked, dropTarget, actions }: ItemProps) {
   const Icon = iconFor(e.type, e.name)
   const presentation = usePresentation()
   const [thumbOk, setThumbOk] = React.useState(true)
   const thumb = e.type === 'file' && hasThumb(e.name) && thumbOk && !presentation
   return (
-    <div role="listitem" {...dragProps(e)} className={cn('group relative rounded-lg', dropTarget && 'bg-primary/10 ring-2 ring-primary')}>
+    <div role="listitem" {...dragProps(e)} className={cn('mx-tile group relative rounded-lg', dropTarget && 'bg-primary/10 ring-2 ring-primary')}>
       <button
         type="button"
         data-row
         data-path={e.path}
         aria-current={selected ? 'true' : undefined}
-        onClick={() => actions.open(e)}
+        aria-pressed={checked || undefined}
         className={cn(
           'grid w-full gap-1.5 rounded-lg p-1.5 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-          selected ? 'bg-accent' : 'hover:bg-accent/60',
+          checked ? 'bg-primary/10 ring-2 ring-primary' : selected ? 'bg-accent' : 'hover:bg-accent/60',
         )}
       >
         <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted/40">
           {thumb ? (
-            <img src={fileThumbUrl(e.path, 240, e.mtime)} alt="" loading="lazy" decoding="async" onError={() => setThumbOk(false)} className="size-full object-cover" />
+            <img src={fileThumbUrl(e.path, 240, e.mtime)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setThumbOk(false)} className="size-full object-cover" />
           ) : (
             <Icon className={cn('size-8', iconTone(e.type))} strokeWidth={1.4} />
           )}
+          <SelectCheck checked={checked} className="absolute top-1.5 left-1.5 size-5" />
         </div>
         <span className="line-clamp-2 min-h-[2lh] text-xs leading-snug break-all">
           <Sensitive length={8}>{e.name}</Sensitive>
@@ -531,7 +564,7 @@ function GridItem({ entry: e, selected, dropTarget, actions }: { entry: FileEntr
       <EntryMenu entry={e} actions={actions} className="absolute top-2.5 right-2.5 hidden bg-popover shadow-xs group-focus-within:inline-flex group-hover:inline-flex data-[state=open]:inline-flex max-md:inline-flex" />
     </div>
   )
-}
+})
 
 function UploadPanel({ items, onClear, onCancel }: { items: UploadItem[]; onClear: () => void; onCancel: () => void }) {
   const t = useT()
