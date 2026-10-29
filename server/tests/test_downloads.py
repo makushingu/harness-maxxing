@@ -4,12 +4,14 @@ from __future__ import annotations
 import io
 import os
 import re
+import time
 import zipfile
 from urllib.parse import unquote
 
 import pytest
 
-from maxxing import config, downloads, teampeer
+from maxxing import config, downloads, security, teampeer
+from maxxing.api import files as files_api
 
 
 def _names(header: str) -> tuple[str, str]:
@@ -161,3 +163,86 @@ def test_zip_skips_a_file_swapped_for_a_link_after_the_plan(tree, mx):
     z = zipfile.ZipFile(io.BytesIO(b"".join(downloads.zip_stream(plan))))
     assert "proj/a.txt" not in z.namelist() and "proj/sub/deep/x.md" not in z.namelist()
     assert "proj/sub/pic.png" in z.namelist()
+
+
+# ---- several entries in one zip (POST /zip, then GET /zip?token=) ----------------------------------------------
+def _zip_many(client, paths):
+    r = client.post("/api/files/zip", json={"paths": [str(p) for p in paths]})
+    if r.status_code != 200:
+        return r, None
+    g = client.get("/api/files/zip", params={"token": r.json()["token"]})
+    return g, (zipfile.ZipFile(io.BytesIO(g.content)) if g.status_code == 200 else None)
+
+
+def test_zip_of_several_entries(client, tree):
+    proj = tree / "proj"
+    r = client.post("/api/files/zip", json={"paths": [str(proj / "a.txt"), str(proj / "sub")]})
+    assert r.status_code == 200
+    assert {k: r.json()[k] for k in ("count", "size", "name")} == {"count": 3, "size": 11004, "name": "proj.zip"}
+    g, z = _zip_many(client, [proj / "a.txt", proj / "sub", proj / "empty"])
+    assert _names(g.headers["content-disposition"]) == ("proj.zip", "proj.zip")
+    assert g.headers["cache-control"] == "no-store"
+    assert sorted(z.namelist()) == ["a.txt", "empty/", "sub/", "sub/deep/", "sub/deep/x.md", "sub/pic.png"]
+    assert z.read("a.txt") == (proj / "a.txt").read_bytes()
+
+
+def test_zip_of_several_entries_drops_duplicates_and_nested_ones(client, tree):
+    proj = tree / "proj"
+    g, z = _zip_many(client, [proj / "sub" / "pic.png", proj / "sub", proj / "sub", proj / "sub" / "deep" / "x.md"])
+    assert sorted(z.namelist()) == ["sub/", "sub/deep/", "sub/deep/x.md", "sub/pic.png"]
+    # same name from two folders: the second one is renamed, never overwritten
+    (tree / "other").mkdir()
+    (tree / "other" / "a.txt").write_text("other")
+    g, z = _zip_many(client, [proj / "a.txt", tree / "other" / "a.txt"])
+    assert sorted(z.namelist()) == ["a (2).txt", "a.txt"] and z.read("a (2).txt") == b"other"
+    assert _names(g.headers["content-disposition"])[1] == "files.zip"
+
+
+def test_zip_of_several_entries_refuses_escapes(client, tree, mx):
+    secret = mx["tmp"] / "outside"
+    secret.mkdir()
+    (secret / "key.txt").write_text("secret")
+    os.symlink(secret / "key.txt", tree / "proj" / "link.txt")
+    os.symlink(secret, tree / "proj" / "linkdir")
+    proj = tree / "proj"
+    for bad in ([proj / "a.txt", secret / "key.txt"], [proj / "link.txt"], [proj / "linkdir"],
+                [f"{proj}/../../outside/key.txt"], ["/etc/passwd"]):
+        r, _ = _zip_many(client, bad)
+        assert r.status_code == 403, bad
+    assert client.post("/api/files/zip", json={"paths": ["relative/a.txt"]}).status_code == 400
+    assert client.post("/api/files/zip", json={"paths": [str(proj / "nope.txt")]}).status_code == 404
+    assert client.post("/api/files/zip", json={"paths": []}).status_code == 422
+    # a link to a file inside the root is read through
+    os.symlink(proj / "a.txt", tree / "inside.txt")
+    g, z = _zip_many(client, [tree / "inside.txt"])
+    assert z.namelist() == ["inside.txt"] and b"secret" not in g.content
+
+
+def test_zip_of_several_entries_caps_and_limits(client, tree, monkeypatch):
+    proj = tree / "proj"
+    monkeypatch.setattr(downloads, "ZIP_MAX_BYTES", 8000)          # each fits, together they do not
+    r = client.post("/api/files/zip", json={"paths": [str(proj / "a.txt"), str(proj / "sub")]})
+    assert r.status_code == 413 and r.json()["error"] == "too_large"
+    monkeypatch.setattr(downloads, "ZIP_MAX_BYTES", 1 << 30)
+    many = [str(proj / "a.txt")] * (files_api.ZIP_PATHS_MAX + 1)
+    assert client.post("/api/files/zip", json={"paths": many}).status_code == 422
+    # still checked when it is downloaded: the folder grew past the cap after the POST
+    token = client.post("/api/files/zip", json={"paths": [str(proj)]}).json()["token"]
+    monkeypatch.setattr(downloads, "ZIP_MAX_FILES", 3)
+    assert client.get("/api/files/zip", params={"token": token}).status_code == 413
+
+
+def test_zip_token_is_bound_to_the_session_and_expires(client, tree, monkeypatch):
+    token = client.post("/api/files/zip", json={"paths": [str(tree / "proj" / "a.txt")]}).json()["token"]
+    assert client.get("/api/files/zip", params={"token": "nope"}).status_code == 404
+    mine = client.cookies.get(security.COOKIE)
+    client.cookies.set(security.COOKIE, security.make_cookie())       # another signed-in browser
+    assert client.get("/api/files/zip", params={"token": token}).status_code == 404
+    client.cookies.set(security.COOKIE, mine)
+    assert client.get("/api/files/zip", params={"token": token}).status_code == 200
+    real = time.monotonic
+    monkeypatch.setattr(time, "monotonic", lambda: real() + files_api.ZIP_TOKEN_TTL_S + 1)
+    assert client.get("/api/files/zip", params={"token": token}).status_code == 404
+    # no CSRF header: refused before anything is read
+    r = client.post("/api/files/zip", json={"paths": [str(tree / "proj")]}, headers={"X-Maxxing": ""})
+    assert r.status_code == 403
