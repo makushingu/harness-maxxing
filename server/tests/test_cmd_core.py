@@ -347,6 +347,34 @@ def test_uninstall_purge_keeps_a_state_dir_that_is_not_one(env, tmp_path, monkey
     assert (env["state"] / "other-app").is_dir()
 
 
+@pytest.mark.parametrize("where", ["/usr", "/etc", "/var/lib", "/usr/local/share"])
+def test_uninstall_purge_workspace_keeps_a_system_directory(env, monkeypatch, where):
+    """A workspace set to /usr (or //usr, which the installer once accepted) must not be wiped by --purge-workspace."""
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    cfg = json.loads((env["state"] / "config.json").read_text())
+    cfg["workspace"] = where
+    (env["state"] / "config.json").write_text(json.dumps(cfg))
+    removed = []
+    monkeypatch.setattr(cmd_core.shutil, "rmtree", lambda p, **k: removed.append(str(p)))
+    assert run_cli("uninstall", "--yes", "--purge-workspace") == 0
+    assert not [p for p in removed if p == where or p.startswith(where + "/")]   # product skills are removed
+
+
+def test_uninstall_purge_workspace_keeps_a_linked_workspace_and_a_plain_folder(env, tmp_path):
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    link = tmp_path / "ws-link"
+    link.symlink_to(env["ws"])
+    plain = tmp_path / "plain"
+    (plain / "data").mkdir(parents=True)
+    cfg_path = env["state"] / "config.json"
+    for ws in (link, plain):
+        cfg = json.loads(cfg_path.read_text())
+        cfg["workspace"] = str(ws)
+        cfg_path.write_text(json.dumps(cfg))
+        assert run_cli("uninstall", "--yes", "--purge-workspace") == 0
+    assert (env["ws"] / "CLAUDE.md").is_file() and link.is_symlink() and (plain / "data").is_dir()
+
+
 def test_uninstall_aborts_without_confirmation(env, monkeypatch):
     monkeypatch.setattr(cmd_core, "_confirm", lambda q, y: y)
     cmd_core.UNIT_PATH.write_text("[Unit]\n")
