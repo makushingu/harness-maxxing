@@ -144,6 +144,9 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   const setShow = useSessionsUI((s) => s.setShow)
   const shows = React.useCallback((s: Session) => (show === 'running' ? s.state === 'running' : !!s.unread), [show])
   const narrowed = !!ql || !!show
+  // A new filter unfolds everything again.
+  const setNarrowFolded = useSessionsUI((s) => s.setNarrowFolded)
+  React.useEffect(() => setNarrowFolded({}), [ql, show, setNarrowFolded])
 
   // The rows rise in on the first visit only (coming back to the page shows them at once).
   const [intro, setIntro] = React.useState(!introPlayed)
@@ -478,6 +481,19 @@ function TreeSkeleton() {
 }
 
 /* ---------------------------------------------------------------- nodes */
+// Folding a row: saved in the tree state, or only for the current filter while one unfolds the tree.
+function useFoldToggle(filtered: boolean): (id: string, open: boolean) => void {
+  const toggle = useSessionsUI((s) => s.toggle)
+  return React.useCallback(
+    (id: string, open: boolean) => {
+      if (!filtered) return toggle(id, open)
+      const st = useSessionsUI.getState()
+      st.setNarrowFolded({ ...st.narrowFolded, [id]: !open })
+    },
+    [filtered, toggle],
+  )
+}
+
 function Chevron({ open }: { open: boolean }) {
   return <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-90')} />
 }
@@ -632,8 +648,9 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
   const t = useT()
   const id = `p:${project.name}`
   const stored = useSessionsUI((s) => s.expanded[id])
-  const toggle = useSessionsUI((s) => s.toggle)
-  const open = forceOpen || stored !== false
+  const toggle = useFoldToggle(forceOpen)
+  const folded = useSessionsUI((s) => forceOpen && !!s.narrowFolded[id])
+  const open = forceOpen ? !folded : stored !== false
   const [intro] = React.useState(React.useContext(TreeIntro))
   const [menu, setMenu] = React.useState(false)
   const running = project.topics.reduce((n, tp) => n + tp.running, 0)
@@ -742,8 +759,9 @@ function TopicNode({
   const stored = useSessionsUI((s) => s.expanded[id])
   const archOpen = useSessionsUI((s) => !!s.expanded[`a:${topic.path}`])
   const nArchived = forceOpen ? archived.length : (topic.archived_count ?? archived.length)
-  const toggle = useSessionsUI((s) => s.toggle)
-  const open = forceOpen || (stored ?? (active || sessions.some((s) => openIds.has(s.id))))
+  const toggle = useFoldToggle(forceOpen)
+  const folded = useSessionsUI((s) => forceOpen && !!s.narrowFolded[id])
+  const open = forceOpen ? !folded : (stored ?? (active || sessions.some((s) => openIds.has(s.id))))
   const [intro] = React.useState(React.useContext(TreeIntro))
   const [all, setAll] = React.useState(false)
   const [menu, setMenu] = React.useState(false)
