@@ -221,13 +221,13 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 ## Installer
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | bash          # install / repair (from the public git repository, no key)
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash   # install / repair (from the public git repository, no key)
 bash /opt/claude-maxxing/install.sh --update                # = maxxing update
 bash /opt/claude-maxxing/install.sh --uninstall [--purge] [--purge-workspace]
 bash /opt/claude-maxxing/install.sh --tools                 # (re)install Node.js, Chromium, Remotion, Scrapling (= maxxing deps update)
 SOURCE_DIR=/path/to/copy bash /path/to/copy/install.sh      # install a local copy of the code (no download)
 bash /opt/claude-maxxing/install.sh --secure                # security updates, fail2ban, firewall (FIREWALL=0: no firewall)
-curl -fsSL https://get.harness-maxxing.com | bash -s -- --check   # look at the server first, change nothing
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash -s -- --check   # look at the server first, change nothing
 ```
 Variables: see [Installation](installation).
 
