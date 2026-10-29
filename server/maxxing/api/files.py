@@ -296,8 +296,12 @@ async def video_stream(path: str, q: int, v: str = ""):
     f = await _t(videos.variant_path, p, q)
     if not await _t(f.is_file):
         raise _err(404, "not_ready", "This quality is not ready yet")
-    await _t(os.utime, f)                     # the cache drops the least recently played copies first
-    return FileResponse(f, media_type="video/mp4", headers=_file_headers("video/mp4", _cache(v)))
+    # the cache drops the least recently played copies first: the access time only. A new mtime would change the
+    # ETag / Last-Modified of each response, and the browser's next Range request (If-Range) would get the whole
+    # file again (200) instead of its range (206): the playback restarts or stalls.
+    st = await _t(f.stat)
+    await _t(lambda: os.utime(f, ns=(time.time_ns(), st.st_mtime_ns)))
+    return FileResponse(f, media_type="video/mp4", stat_result=st, headers=_file_headers("video/mp4", _cache(v)))
 
 
 # ---- thumbnails ----------------------------------------------------------------------------
@@ -406,9 +410,15 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
     return p, _mime(p)                        # fallback: the original image
 
 
+GIF_ANIM_MAX = 8 * 1024**2                # anim=1: a GIF up to this size is served as it is (it moves), else a still
+
+
 @router.get("/thumb")
-async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = ""):
-    f, mime = await asyncio.get_running_loop().run_in_executor(_thumb_pool, _thumb, resolve(path), w)
+async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = "", anim: int = 0):
+    p = resolve(path)
+    if anim and p.suffix.lower() == ".gif" and await _t(p.is_file) and (await _t(p.stat)).st_size <= GIF_ANIM_MAX:
+        return _serve(p, v)
+    f, mime = await asyncio.get_running_loop().run_in_executor(_thumb_pool, _thumb, p, w)
     return FileResponse(f, media_type=mime, headers=_file_headers(mime, _cache(v)))
 
 
