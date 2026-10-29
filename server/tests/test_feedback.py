@@ -113,3 +113,43 @@ def test_unreachable_or_offline_cloud(client, mx, monkeypatch):
     assert r.status_code == 502 and r.json()["error"] == "unreachable"
     monkeypatch.setattr(register, "_offline", lambda: True)
     assert client.post("/api/settings/feedback", json={"email": "a@b.io", "message": "hello"}).json()["error"] == "offline"
+
+
+class _Answer:
+    def __init__(self, body: bytes):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return self.body
+
+
+@pytest.mark.parametrize("body", [b"[1]", b'"ok"', b"3"])
+def test_an_answer_that_is_not_an_object_is_a_clean_error(client, mx, monkeypatch, body):
+    """[1] from the cloud: AttributeError on .get -> 500 (feedback, register) or a raw exception (license)."""
+    monkeypatch.setattr(register, "_offline", lambda: False)
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Answer(body))
+    r = client.post("/api/settings/feedback", json={"email": "a@b.io", "message": "hello"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_answer"
+    with pytest.raises(license.LicenseError) as e:
+        license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert e.value.code == "bad_answer" and not config.get_secret(license.KEY)
+    register.save(count=True)
+    assert register.state()["error"] == "bad_answer" and not config.get_secret(register.TOKEN)
+
+
+def test_an_email_with_a_lone_surrogate_is_refused_before_anything_is_sent(client, cloud):
+    """The feedback went out, then writing feedback_email to config.json raised: 500. The register too."""
+    body = b'{"email": "a\\ud800@b.io", "message": "hello there"}'
+    r = client.post("/api/settings/feedback", content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_email"
+    assert cloud.got == []
+    r = client.put("/api/settings/register", content=b'{"email": "a\\ud800@b.io"}',
+                   headers={"Content-Type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_email"
+    assert not (config.load_config().get("register") or {}).get("email")

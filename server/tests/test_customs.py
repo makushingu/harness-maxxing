@@ -186,6 +186,17 @@ def test_drop_needs_a_real_id_not_an_empty_or_tiny_prefix(code):
     assert customs.drop(first["commit"][:7])["dropped"]["title"] == "Raise the limit"
 
 
+def test_check_set_by_a_sha_prefix_is_kept_under_the_customization_id(code):
+    """`custom check <sha prefix>` was stored under the prefix: list_customs never showed it, the update never ran it."""
+    (code["clone"] / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    customs.save("Raise the limit")
+    it = customs.list_customs()[0]
+    customs.set_check(it["commit"][:8], "true")
+    assert customs.check_overrides() == {it["id"]: "true"} and customs.list_customs()[0]["check"] == "true"
+    customs.set_check(it["commit"][:8], "")
+    assert customs.check_overrides() == {}
+
+
 def test_restore_on_a_fresh_install(code, tmp_path, monkeypatch, capsys):
     clone, ws = code["clone"], code["ws"]
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")

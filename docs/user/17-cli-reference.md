@@ -138,7 +138,7 @@ Remotion, the Whisper models, Garage). As root.
 | Option | Effect |
 |---|---|
 | (none) | remove the service, Caddy site, managed crontab block, product skills and `/usr/local/bin/maxxing`; keep code, state and workspace |
-| `--purge` | also delete the code (`/opt/claude-maxxing`), the state (`/var/lib/claude-maxxing`) and the external components of `deps.toml` (uv, Node.js, the tools; Claude Code and Caddy when the installer installed them; its swap file) |
+| `--purge` | also delete the code (`/opt/claude-maxxing`), the state (`/var/lib/claude-maxxing`) and the external components of `deps.toml` (uv, Node.js, the tools; Claude Code and Caddy when the installer installed them; its swap file); a code or state directory that is a link is kept |
 | `--purge-workspace` | also delete the workspace (irreversible; kept if it is a link, a system directory or has no `CLAUDE.md` nor `projects/`) |
 | `--yes` | do not ask for confirmation |
 
