@@ -27,10 +27,9 @@ def display_name(name: str) -> str:
         raw = name.encode("utf-8", "surrogateescape")
     except UnicodeEncodeError:                   # a lone surrogate that is no escaped byte (JSON from a peer)
         raw = name.encode("utf-8", "replace")
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        text = raw.decode("latin-1")
+    # byte by byte: a name mixing both (`caf\xe9 été` - a Latin-1 file renamed later) keeps its UTF-8 part
+    text = "".join(chr(ord(c) - 0xDC00) if "\udc80" <= c <= "\udcff" else c
+                   for c in raw.decode("utf-8", "surrogateescape"))
     out = []
     for ch in text:
         cat = unicodedata.category(ch)

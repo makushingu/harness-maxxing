@@ -32,6 +32,7 @@ def _names(header: str) -> tuple[str, str]:
     ("evil\u202egnp.exe", "evilgnp.exe", "evilgnp.exe"),        # bidi override dropped
     ("報告.pdf", "download.pdf", "報告.pdf"),
     ("caf\udce9.txt", "cafe.txt", "café.txt"),                   # Latin-1 byte on disk (lone surrogate)
+    ("caf\udce9 été.txt", "cafe ete.txt", "café été.txt"),         # Latin-1 byte next to UTF-8 (renamed later)
     ("\ud800x.txt", "?x.txt", "?x.txt"),                         # a surrogate that is no byte (JSON from a peer)
     ("", "download", "download"),
     ("...", "download", "download"),
