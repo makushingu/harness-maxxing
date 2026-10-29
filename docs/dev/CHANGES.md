@@ -65,6 +65,13 @@ you scroll away.
   (`container-type: size`, `min-h-40`); `MediaSkeleton` replaces `CodeSkeleton` for media in the viewer. `Thumb`
   takes `anim`; chat thumbnails sit in a fixed `aspect-[4/3]` box.
 
+Downloads:
+- `downloads.content_disposition(name)` names every download (`/api/files/raw?download=1`, `/api/team-peer/files/{fid}`,
+  `/api/pc/download/{target}`): `attachment; filename="<ASCII>"; filename*=UTF-8''<name>`. Starlette's `filename=`
+  raised `UnicodeEncodeError` (500) on a name that is not UTF-8 on disk (lone surrogates) and sent no plain
+  `filename=`. Such a name is now read as Latin-1 (`caf\xe9` -> `café`); slashes, control and bidi characters are
+  replaced or dropped (a peer's file name is untrusted), names are cut at 200 characters keeping the extension.
+
 ## 2.0.0-alpha.102 - 2026-10-26
 
 Integration of #23, the port of the pre-squash `fix/telegram-all` (a76-a79 there, never merged). `web/dist`

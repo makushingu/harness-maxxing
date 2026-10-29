@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
-from .. import config, pcbridge
+from .. import config, downloads, pcbridge
 from ..security import require_auth
 
 log = logging.getLogger("maxxing.pc")
@@ -168,7 +168,7 @@ async def download(target: str, code: str, request: Request):
     except pcbridge.PcError as e:
         raise _err(e) from None
     return Response(data, media_type="application/octet-stream",
-                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+                    headers={"Content-Disposition": downloads.content_disposition(name), "Cache-Control": "no-store"})
 
 
 @router.get("/install.{kind}")

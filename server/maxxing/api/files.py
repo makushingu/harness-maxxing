@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from .. import config, security, videos, workspace
+from .. import config, downloads, security, videos, workspace
 from ..security import require_auth
 from .sessions import save_upload
 
@@ -213,9 +213,10 @@ def _file_headers(mime: str, cache: str) -> dict[str, str]:
 
 def _serve(p: Path, v: str, download: bool = False) -> FileResponse:
     mime = _mime(p)
-    return FileResponse(p, media_type=mime, filename=p.name if download else None,
-                        content_disposition_type="attachment" if download else "inline",
-                        headers=_file_headers(mime, _cache(v)))
+    headers = _file_headers(mime, _cache(v))
+    if download:
+        headers["Content-Disposition"] = downloads.content_disposition(p.name)
+    return FileResponse(p, media_type=mime, headers=headers)
 
 
 @router.get("/raw")
