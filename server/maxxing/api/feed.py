@@ -131,7 +131,7 @@ async def _watch() -> None:
     last = None
     while True:
         try:
-            cur = await asyncio.to_thread(feed.last_id)
+            cur = await asyncio.to_thread(feed.watch_id)
             if last is not None and cur != last:
                 bus.invalidate("feed")
             last = cur
