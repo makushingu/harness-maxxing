@@ -20,6 +20,15 @@ _EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 LANGS = ("en", "fr", "es", "de", "it", "pt")
 
 
+def utf8(s: str) -> bool:
+    """False for a lone surrogate ("\\ud800" is valid JSON): it cannot be written to config.json."""
+    try:
+        s.encode()
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
 class FeedbackError(Exception):
     def __init__(self, code: str, message: str, status: int = 400):
         super().__init__(message)
@@ -34,7 +43,7 @@ def defaults() -> dict:
 def send(email: str, kind: str, message: str) -> dict:
     """Send one message; raises FeedbackError (code, message, http status) when it did not go."""
     email, message = (email or "").strip(), (message or "").strip()
-    if len(email) > MAX_EMAIL or not _EMAIL.match(email):
+    if len(email) > MAX_EMAIL or not _EMAIL.match(email) or not utf8(email):
         raise FeedbackError("invalid_email", "Enter a valid email address")
     if len(message) < 3:
         raise FeedbackError("message_required", "Write your message")

@@ -33,6 +33,7 @@ from . import config, license
 log = logging.getLogger(__name__)
 
 TOKEN = "register_token"          # secrets.json
+TOKEN_MAX = 256                   # a token the cloud hands out: printable ASCII, at most this long
 _sync_lock = threading.RLock()     # one save / sync / heartbeat at a time: two at once made two rows
 EVERY = 24 * 3600
 DEFAULTS = {"count": True, "email": "", "news": False, "asked": False}
@@ -88,12 +89,13 @@ def _call(method: str, path: str, body: dict) -> dict:
                                  headers={"content-type": "application/json", "user-agent": license.USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read() or b"{}")
+            out = json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         try:
-            return json.loads(e.read() or b"{}") or {"ok": False, "error": f"http_{e.code}"}
+            out = json.loads(e.read() or b"{}") or {"ok": False, "error": f"http_{e.code}"}
         except ValueError:
-            return {"ok": False, "error": f"http_{e.code}"}
+            out = {"ok": False, "error": f"http_{e.code}"}
+    return out if isinstance(out, dict) else {"ok": False, "error": "bad_answer"}   # [1], "x": not an answer
 
 
 def _offline() -> bool:
@@ -177,6 +179,10 @@ def _meta(**kw) -> None:
     config.update_config(register_meta={**(config.load_config().get("register_meta") or {}), **kw})
 
 
+def _token_ok(t) -> bool:
+    return isinstance(t, str) and 0 < len(t) <= TOKEN_MAX and t.isascii() and t.isprintable()
+
+
 @_serialized
 def sync() -> dict:
     """Make the cloud match the settings: create / update the row, or delete it. Never raises."""
@@ -194,9 +200,11 @@ def sync() -> dict:
         if not r.get("ok") and r.get("error") in ("unknown_install", "bad_token") and tok:
             config.set_secret(TOKEN, None)                  # deleted on the cloud side: register again
             r = _call("POST", "/v1/register", _payload(s))
-        if r.get("ok") and r.get("token"):
+        if r.get("ok") and _token_ok(r.get("token")):
             config.set_secret(TOKEN, r["token"])
             _meta(error="", synced_at=time.time(), beat_at=time.time())
+        elif r.get("ok") and r.get("token"):
+            _meta(error="bad_token_answer")                 # a dict, 1 MB...: not stored in secrets.json
         else:
             _meta(error=str(r.get("message") or r.get("error") or "unreachable")[:200])
     except Exception as e:  # noqa: BLE001 - offline: the daily signal tries again
