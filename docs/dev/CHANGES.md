@@ -71,6 +71,12 @@ Downloads:
   raised `UnicodeEncodeError` (500) on a name that is not UTF-8 on disk (lone surrogates) and sent no plain
   `filename=`. Such a name is now read as Latin-1 (`caf\xe9` -> `café`); slashes, control and bidi characters are
   replaced or dropped (a peer's file name is untrusted), names are cut at 200 characters keeping the extension.
+- `GET /api/files/zip?path=`: a folder as a zip, streamed (`downloads.zip_plan` walks it first in a worker thread and
+  refuses with `413 too_large` past `ZIP_MAX_BYTES` 2 GB uncompressed / `ZIP_MAX_FILES` 100,000, before any byte;
+  `downloads.zip_stream` is a sync iterator over a `zipfile.ZipFile` writing into an unseekable sink, so entries use
+  data descriptors and ZIP64 when needed). Symlinked folders are never followed; a symlinked file only when it resolves
+  to a regular file inside the files root; FIFOs, sockets and devices are skipped. A file that grows meanwhile is cut
+  at its planned size; one that became unreadable is left out.
 
 ## 2.0.0-alpha.102 - 2026-10-26
 
