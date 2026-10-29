@@ -588,7 +588,7 @@ function topicObj(p, tp) {
   const pth = topicPath(p.name, tp.name)
   const ss = S.sessions.filter((s) => s.path === pth && !s.archived)
   const th = S.telegram.threads.find((x) => x.path === pth)
-  return { name: tp.name, project: p.name, path: pth, description: tp.description || '', session_count: ss.length,
+  return { name: tp.name, project: p.name, path: pth, description: tp.description || '', session_count: ss.length, archived_count: S.sessions.filter((s) => s.path === pth && s.archived).length,
     running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, telegram_thread: th ? th.thread_id : null }
 }
 function projectObj(p) {

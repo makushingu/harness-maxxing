@@ -201,7 +201,7 @@ def ensure_root() -> Path:
 
 # ---- tree ----------------------------------------------------------------------------------
 def _session_stats() -> dict[str, dict[str, int]]:
-    """path -> {sessions, running, unread} (archived sessions excluded from running/unread)."""
+    """path -> {sessions, archived, running, unread} (archived sessions excluded from sessions/unread)."""
     try:
         from .sessions import service
         sessions = service.list_sessions(archived=None)
@@ -210,9 +210,8 @@ def _session_stats() -> dict[str, dict[str, int]]:
         return {}
     stats: dict[str, dict[str, int]] = {}
     for s in sessions:
-        st = stats.setdefault(s["path"], {"sessions": 0, "running": 0, "unread": 0})
-        if not s["archived"]:
-            st["sessions"] += 1
+        st = stats.setdefault(s["path"], {"sessions": 0, "archived": 0, "running": 0, "unread": 0})
+        st["archived" if s["archived"] else "sessions"] += 1
         st["running"] += s["state"] == "running"
         st["unread"] += bool(s["unread"]) and not s["archived"]
     return stats
@@ -227,7 +226,7 @@ def _topic_obj(project: str, name: str, stats: dict, threads: dict) -> dict:
     return {"name": name, "project": project, "path": path,
             "description": read_description(folder),
             "permission_mode": mode if mode in PERMISSION_MODES else "",
-            "session_count": st.get("sessions", 0), "running": st.get("running", 0),
+            "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0), "running": st.get("running", 0),
             "unread": st.get("unread", 0), "telegram_thread": thread if isinstance(thread, int) else None}
 
 

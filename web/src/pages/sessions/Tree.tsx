@@ -132,15 +132,18 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   const reorderProjects = useReorderProjects()
   const reorderTopics = useReorderTopics()
   const live = useSessions(undefined, false)
-  const archived = useSessions(undefined, true)
   const [q, setQ] = React.useState('')
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [dialog, setDialog] = React.useState<DialogState>(null)
   const search = React.useRef<HTMLInputElement>(null)
 
+  const ql = q.trim().toLowerCase()
+  // The archived sessions (most of them on a server used for a while) load only when an archived fold is open or a
+  // search looks into them; the folds show their count from the tree (topic.archived_count) meanwhile.
+  const archOpen = useSessionsUI((s) => Object.entries(s.expanded).some(([k, v]) => v && k.startsWith('a:')))
+  const archived = useSessions(undefined, true, archOpen || !!ql)
   const byPath = React.useMemo(() => group(live.data), [live.data])
   const archivedByPath = React.useMemo(() => group(archived.data), [archived.data])
-  const ql = q.trim().toLowerCase()
   // A badge was clicked (running / finished): only those sessions, unfolded. Typing a search leaves it.
   const show = useSessionsUI((s) => (ql ? null : s.show))
   const setShow = useSessionsUI((s) => s.setShow)
@@ -776,6 +779,7 @@ function TopicNode({
   const id = `t:${topic.path}`
   const stored = useSessionsUI((s) => s.expanded[id])
   const archOpen = useSessionsUI((s) => !!s.expanded[`a:${topic.path}`])
+  const nArchived = forceOpen ? archived.length : (topic.archived_count ?? archived.length)
   const toggle = useSessionsUI((s) => s.toggle)
   const open = forceOpen || (stored ?? (active || sessions.some((s) => openIds.has(s.id))))
   const [intro] = React.useState(React.useContext(TreeIntro))
@@ -830,7 +834,7 @@ function TopicNode({
       </div>
       {open && (
         <div role="group" className={cn(!intro && 'mx-unfold')}>
-          {sessions.length === 0 && archived.length === 0 && (
+          {sessions.length === 0 && nArchived === 0 && (
             <button type="button" onClick={() => onNewSession(topic.path)} className="ml-9 flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-10">
               <Plus className="size-3.5" /> {t('sessions.newSession')}
             </button>
@@ -841,7 +845,7 @@ function TopicNode({
               {t('sessions.tree.showMore', { count: sessions.length - cap })}
             </button>
           )}
-          {archived.length > 0 && (
+          {nArchived > 0 && (
             <>
               <button
                 type="button"
@@ -850,7 +854,7 @@ function TopicNode({
                 className="ml-7 flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground max-md:h-10"
               >
                 <Chevron open={archOpen} />
-                <Archive className="size-3.5" /> {t('sessions.tree.archived', { count: archived.length })}
+                <Archive className="size-3.5" /> {t('sessions.tree.archived', { count: nArchived })}
               </button>
               {archOpen && <SessionRows sessions={archived} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} depth={3} still={forceOpen} />}
             </>
@@ -1310,6 +1314,7 @@ function DrillView({
 
   const sessions = byPath.get(topic!.path) || []
   const archived = archivedByPath.get(topic!.path) || []
+  const nArchived = topic!.archived_count ?? archived.length
   return (
     <div key={`t:${topic!.path}`} className="animate-in" data-testid="drill-sessions">
       <DrillHeader
@@ -1320,13 +1325,13 @@ function DrillView({
         onNew={() => onNewSession(topic!.path)}
         menu={<TopicMenuItems topic={topic!} rootDir={rootDirOf(topic!.path)} onNewSession={onNewSession} onDialog={onDialog} />}
       />
-      {sessions.length === 0 && archived.length === 0 && (
+      {sessions.length === 0 && nArchived === 0 && (
         <button type="button" onClick={() => onNewSession(topic!.path)} className="ml-2 flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-10">
           <Plus className="size-3.5" /> {t('sessions.newSession')}
         </button>
       )}
       <SessionRows sessions={sessions} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} depth={0} />
-      {archived.length > 0 && (
+      {nArchived > 0 && (
         <>
           <button
             type="button"
@@ -1335,7 +1340,7 @@ function DrillView({
             className="ml-1 flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground max-md:h-10"
           >
             <Chevron open={archOpen} />
-            <Archive className="size-3.5" /> {t('sessions.tree.archived', { count: archived.length })}
+            <Archive className="size-3.5" /> {t('sessions.tree.archived', { count: nArchived })}
           </button>
           {archOpen && <SessionRows sessions={archived} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} depth={1} />}
         </>

@@ -54,8 +54,9 @@ export function prefetchPageData(qc: QueryClient, pathname: string, search = '')
       queries.push(dashboardQuery(), feedQuery(null, false, 30))
       break
     case 'sessions': {
-      // The tree (live + archived), the columns' header data, and the open sessions with their thread.
-      queries.push(sessionsQuery(undefined, false), sessionsQuery(undefined, true), claudeStatusQuery(), telegramQuery())
+      // The tree (its archived folds load their list when opened), the columns' header data, and the open sessions
+      // with their thread.
+      queries.push(sessionsQuery(undefined, false), claudeStatusQuery(), telegramQuery())
       const ids = [params.get('session'), ...(params.get('open') || '').split(',')].filter((x): x is string => !!x)
       for (const id of new Set(ids).values()) {
         queries.push(sessionQuery(id))
