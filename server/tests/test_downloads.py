@@ -147,3 +147,16 @@ def test_team_file_name_from_a_peer_is_sanitized(client, mx, monkeypatch):
     assert r.status_code == 200 and r.content == b"data" and "set-cookie" not in r.headers
     plain, real = _names(r.headers["content-disposition"])
     assert "/" not in real and "\n" not in real and plain == "_evil__Set-Cookie: x=1_.sh"
+
+
+def test_zip_skips_a_file_swapped_for_a_link_after_the_plan(tree, mx):
+    proj, secret = tree / "proj", mx["tmp"] / "secret.txt"
+    secret.write_text("secret")
+    plan = downloads.zip_plan(proj, tree)
+    (proj / "a.txt").unlink()
+    os.symlink(secret, proj / "a.txt")
+    (proj / "sub" / "deep" / "x.md").unlink()
+    os.mkfifo(proj / "sub" / "deep" / "x.md")                      # a FIFO would block a plain open()
+    z = zipfile.ZipFile(io.BytesIO(b"".join(downloads.zip_stream(plan))))
+    assert "proj/a.txt" not in z.namelist() and "proj/sub/deep/x.md" not in z.namelist()
+    assert "proj/sub/pic.png" in z.namelist()
