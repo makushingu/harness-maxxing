@@ -135,6 +135,17 @@ Several files at once (Files page and the folder grid of the file viewer):
   (viewer): same model, rename (NameDialog of the Files page) and delete there too, `onOpenInFiles`; tiles get
   `.mx-cv-tile` (content-visibility) past 300 entries. Texts: `files.sel.*` (group `files`).
 
+Pasted data becomes an attachment (`web/src/pages/sessions/pasteAsFile.ts`, `Composer.onPaste`):
+- `pastedFile(text)` -> `{ext, type}` or null (text). Trimmed text under 400 chars: always text. Valid JSON
+  (`[`/`{` ... `]`/`}` + `JSON.parse`) -> `.json`; 3+ lines all JSON -> `.jsonl`; `<...>` on 3+ lines -> `.html`
+  (doctype/html/head/body) or `.xml`; 4+ lines with the same 2+ count of tab / `,` / `;` on 90 % of them -> `.tsv` /
+  `.csv`. From 2000 chars: 60 % of 10+ lines starting with a date or time -> `.log`; a 200+ char run without space
+  or more than 3 % code signs (`{}[]<>=/\$_`|&*#@^~+%`) -> `.txt`. From 20,000 chars anything -> `.txt`. Prose has
+  ~0 % code signs, so a long prompt stays text.
+- The file (`pasted-YYYY-MM-DD-HHMMSS.ext`, local time) goes through `addFiles` (now returns the local ids). Toast
+  with **Paste as text**: removes that attachment and inserts the text at the selection saved at paste time.
+  Ctrl/⌘+Shift+V within 1 s before the paste skips the check. i18n: new lazy group `paste` (`paste.*`).
+
 Installer speed and re-runs (`install.sh`):
 - Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
   `<state>/logs/install-failed-*` with the other logs); `bg_wait NAME` returns its exit code and prints the log tail
