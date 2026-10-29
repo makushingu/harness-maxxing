@@ -37,9 +37,13 @@ Python modules call each other only through these functions. Keep signatures sta
 - `last_assistant_text(sid) -> str`
 - `on_turn_end(cb)` - `cb(session: dict, result: dict | None)` is awaited/called on the event loop when a
   turn of ANY session finishes, whatever started it (web, Telegram, cron). Fired per turn (the turn counter
-  grows, or running -> error); turns ending within the same ~1 s scan are reported once. `result` = last
+  grows, or running -> error); turns ending within the same scan are reported once. The watcher is woken by any
+  meta change (`sessions/wake.py`: one inotify watch of the sessions folder through `watchfiles`, which also wakes
+  the session SSE streams; `MAXXING_INOTIFY=0` or no inotify: the old polling, 0.25 s while a session runs) and
+  passes at least every 2 s while a session runs, every 1 s otherwise. `result` = last
   normalised `result` event of the turn (None if the turn produced none). The watcher stamps its last pass in
-  `<state>/session-watcher.json` `{at}` (every `PASS_STAMP_S` = 5 s, and at once after reporting): its first pass
+  `<state>/session-watcher.json` `{at}` (after its first pass, at once after reporting, and at most every
+  `PASS_STAMP_S` = 5 s after passes that saw a session change; no fsync): its first pass
   after a start reports the turns whose `finished_at` is later (they ended while the server was stopped or
   restarting); without that file (first start) the first pass is only a baseline.
 - `wait_turn(sid, timeout_s) -> dict` - blocking helper (thread) used by `maxxing cron run`: returns the
