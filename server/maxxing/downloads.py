@@ -197,7 +197,10 @@ def zip_stream(plan: list[tuple[Path, str, os.stat_result | None]]) -> Iterator[
                 fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             except OSError:
                 continue
-            if not stat.S_ISREG(os.fstat(fd).st_mode):
+            now = os.fstat(fd)
+            # O_NOFOLLOW only guards the last part: a folder above it swapped for a link would lead elsewhere, so
+            # the file opened must be the very one planned (same inode), not just any regular file at that path
+            if not stat.S_ISREG(now.st_mode) or (now.st_dev, now.st_ino) != (st.st_dev, st.st_ino):
                 os.close(fd)
                 continue
             f = os.fdopen(fd, "rb")
