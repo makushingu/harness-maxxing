@@ -98,6 +98,9 @@ type State = {
   /** Tree shows only these sessions (a badge was clicked); not persisted. */
   show: SessionShow | null
   setShow: (show: SessionShow | null) => void
+  /** Rows folded by hand while a filter (search, running / unread) unfolds the tree; cleared when the filter changes. */
+  narrowFolded: Record<string, boolean>
+  setNarrowFolded: (nodes: Record<string, boolean>) => void
   /** Column whose layouts picker was opened from its menu (keyboard); not persisted. */
   layoutPicker: string | null
   setLayoutPicker: (key: string | null) => void
@@ -305,6 +308,8 @@ export const useSessionsUI = create<State>()(
       setTabs: (tabs) => set({ tabs }),
       show: null,
       setShow: (show) => set({ show }),
+      narrowFolded: {},
+      setNarrowFolded: (narrowFolded) => set({ narrowFolded }),
       layoutPicker: null,
       setLayoutPicker: (layoutPicker) => set({ layoutPicker }),
       dragging: null,
