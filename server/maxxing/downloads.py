@@ -83,9 +83,50 @@ def zip_plan(folder: Path, root: Path) -> list[tuple[Path, str, os.stat_result |
     """What the zip of `folder` holds: (source, name in the zip, stat; None for a folder), in walk order.
     Symlinked folders are not followed; a symlinked file counts only when its target is a regular file inside `root`.
     Sockets, FIFOs and devices are left out. Raises ZipTooLarge past ZIP_MAX_BYTES / ZIP_MAX_FILES."""
-    base = display_name(folder.name or "files")
-    plan: list[tuple[Path, str, os.stat_result | None]] = [(folder, base + "/", None)]
+    return zip_plan_many([(folder, folder.name or "files")], root)
+
+
+def zip_plan_many(items: list[tuple[Path, str]], root: Path) -> list[tuple[Path, str, os.stat_result | None]]:
+    """zip_plan for several entries side by side at the top of the zip: (resolved path, name shown), files or
+    folders. A name already taken gets ` (2)`, ` (3)`... before its extension. The caps apply to the whole set."""
+    plan: list[tuple[Path, str, os.stat_result | None]] = []
+    taken: set[str] = set()
     total = 0
+    for src, name in items:
+        base = _unique(display_name(name or "files"), taken)
+        if src.is_dir():
+            total = _plan_folder(plan, src, base, root, total)
+            continue
+        try:
+            st = src.stat()
+        except OSError:
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            continue
+        total += st.st_size
+        if total > ZIP_MAX_BYTES:
+            raise ZipTooLarge("size")
+        plan.append((src, base, st))
+        if len(plan) > ZIP_MAX_FILES:
+            raise ZipTooLarge("count")
+    return plan
+
+
+def _unique(name: str, taken: set[str]) -> str:
+    stem, dot, ext = name.rpartition(".")
+    if not (dot and stem):
+        stem, ext = name, ""
+    out, n = name, 1
+    while out.casefold() in taken:               # casefold: the zip may be opened on a case-blind disk
+        n += 1
+        out = f"{stem} ({n})" + (f".{ext}" if ext else "")
+    taken.add(out.casefold())
+    return out
+
+
+def _plan_folder(plan: list[tuple[Path, str, os.stat_result | None]], folder: Path, base: str, root: Path,
+                 total: int) -> int:
+    plan.append((folder, base + "/", None))
     for top, dirs, files in os.walk(folder, followlinks=False):
         dirs.sort()
         here = Path(top)
@@ -114,7 +155,7 @@ def zip_plan(folder: Path, root: Path) -> list[tuple[Path, str, os.stat_result |
             plan.append((src, prefix + display_name(f), st))
             if len(plan) > ZIP_MAX_FILES:
                 raise ZipTooLarge("count")
-    return plan
+    return total
 
 
 class _Sink:
