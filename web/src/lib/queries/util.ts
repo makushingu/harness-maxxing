@@ -3,8 +3,8 @@ import { toast } from '@/components/ui/toast'
 import { errorMessage } from '../api'
 
 type MutOpts<TData, TVars> = Omit<UseMutationOptions<TData, Error, TVars>, 'mutationFn'> & {
-  /** Query key prefixes to invalidate after success. */
-  invalidate?: readonly QueryKey[]
+  /** Query key prefixes to invalidate after success (a function: read when the call succeeds, see unlessBus). */
+  invalidate?: readonly QueryKey[] | (() => readonly QueryKey[])
   /** Toast shown on success (string or builder). */
   successToast?: string | ((data: TData, vars: TVars) => string | null)
   /** Show a toast on error (default true). Set false when the form shows the error inline. */
@@ -48,7 +48,8 @@ export function useMut<TData, TVars = void>(fn: (vars: TVars) => Promise<TData>,
       // The hook's own onSuccess first (it usually writes the server's answer into the cache): the screen shows
       // the result right away instead of after every invalidated query has been fetched again.
       const out = await onSuccess?.(data, vars, ...more)
-      if (invalidate) await Promise.all(invalidate.map((k) => qc.invalidateQueries({ queryKey: k })))
+      const keys = typeof invalidate === 'function' ? invalidate() : invalidate
+      if (keys) await Promise.all(keys.map((k) => qc.invalidateQueries({ queryKey: k })))
       if (successToast) {
         const msg = typeof successToast === 'function' ? successToast(data, vars) : successToast
         if (msg) toast.success(msg)
