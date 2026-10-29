@@ -49,3 +49,25 @@ def test_warm_one_prepares_thumbnails(client, tree):  # noqa: F811
     before = len(list(config.state_dir("thumbs").glob("*.webp")))
     media._warm_one(str(big))
     assert len(list(config.state_dir("thumbs").glob("*.webp"))) == before + 3     # 160, 320, preview
+
+
+@ffmpeg
+def test_chat_thumbnail_of_a_gif_moves(client, tree):  # noqa: F811
+    """anim=1 (chat): a GIF up to 8 MB is served as it is, so it plays; without it (file grids) a still WebP."""
+    gif = tree / "loop.gif"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=120x90:r=5:d=1", str(gif)], check=True)
+    r = client.get("/api/files/thumb", params={"path": str(gif), "w": 320, "anim": 1})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/gif" and r.content == gif.read_bytes()
+    r = client.get("/api/files/thumb", params={"path": str(gif), "w": 320})
+    assert r.headers["content-type"] == "image/webp"
+
+
+@ffmpeg
+def test_chat_thumbnail_of_a_big_gif_stays_still(client, tree, monkeypatch):  # noqa: F811
+    from maxxing.api import files
+    gif = tree / "big.gif"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=120x90:r=5:d=1", str(gif)], check=True)
+    monkeypatch.setattr(files, "GIF_ANIM_MAX", 10)
+    r = client.get("/api/files/thumb", params={"path": str(gif), "w": 320, "anim": 1})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
+    assert client.get("/api/files/thumb", params={"path": str(tree / "none.gif"), "anim": 1}).status_code == 404
