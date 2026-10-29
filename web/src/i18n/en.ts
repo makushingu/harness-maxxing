@@ -2716,4 +2716,7 @@ export const en = {
   'team.cx.pending': "{count} connection requests",
   'team.cx.pending#one': "{count} connection request",
   'drag.dropToQuote': "Drop to quote it in this session",
+  'paste.asFile': 'Pasted as a file',
+  'paste.asFileHint': 'Long or structured data is attached instead of filling the message. Ctrl+Shift+V always pastes as text.',
+  'paste.asText': 'Paste as text',
 }
