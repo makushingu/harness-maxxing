@@ -116,6 +116,7 @@ STEP=0
 IN_STEP=0
 SPIN_PID=""
 STEP_LOG=""
+declare -A BG_PID=()  # background jobs of this run (bg_start / bg_wait): name -> PID
 T_START=$SECONDS
 BIND=127.0.0.1
 PUBLIC_URL=""
@@ -220,8 +221,13 @@ on_exit() {
     printf '\n  %sThe installation stopped.%s Fix the problem above, then run the same command again:\n' "$C_R$C_B" "$C_0"
     printf '  %severy step keeps what is already done.%s\n\n' "$C_D" "$C_0"
   fi
+  # an apt job still running is waited for (dpkg cut halfway leaves the system to repair, and $WORK is its TMPDIR);
   # background downloads of this run die with it
-  local j; for j in $(jobs -p 2>/dev/null); do kill "$j" 2>/dev/null || true; done
+  if [ -n "${BG_PID[apt]:-}" ] && kill -0 "${BG_PID[apt]}" 2>/dev/null; then
+    printf '  %swaiting for the system packages being installed to finish...%s\n' "$C_D" "$C_0"
+    wait "${BG_PID[apt]}" 2>/dev/null || true
+  fi
+  local j; for j in $(jobs -p 2>/dev/null); do kill_tree "$j"; done
   if [ "$rc" != 0 ] && [ -d "$WORK" ] && ls "$WORK"/*.log >/dev/null 2>&1 && [ -d "$STATE_DIR" ]; then
     keep="$STATE_DIR/logs/install-failed-$(date +%Y%m%d-%H%M%S)"
     mkdir -p -m 700 "$STATE_DIR/logs" && mkdir -m 700 "$keep" && cp "$WORK"/*.log "$keep/" 2>/dev/null \
@@ -231,6 +237,11 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
+kill_tree() { # kill_tree PID - a background job and what it started (uv, curl...): none of them outlives the run
+  local c
+  for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done
+  kill "$1" 2>/dev/null || true
+}
 
 # ---- questions (answers come from the terminal even when the script is piped) ---------------
 has_tty() { [ "$ASSUME_YES" != 1 ] && (: </dev/tty) 2>/dev/null; }
@@ -294,6 +305,25 @@ git_tok() {
 apt_get() {
   (umask 022; DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -o Acquire::Retries=3 \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@")
+}
+
+# ---- background jobs ------------------------------------------------------------------------
+# The long independent parts run while the next steps go on: the tool, browser and security packages (one apt job:
+# two apt/dpkg never run at the same time), the uv and Claude Code downloads, the Python environment (only network
+# and uv). bg_start NAME CMD... - CMD in the background, its output in $WORK/bg-NAME.log (kept with the logs of a
+# failed run); bg_wait NAME - waits for it, prints the end of its log when it failed, returns its exit code.
+bg_start() {
+  local name=$1; shift
+  ( set -e; "$@" ) >"$WORK/bg-$name.log" 2>&1 </dev/null 3>&- 4>&- &
+  BG_PID[$name]=$!
+}
+bg_wait() {
+  local name=$1 pid=${BG_PID[$1]:-} rc=0
+  [ -n "$pid" ] || return 0
+  wait "$pid" || rc=$?
+  unset "BG_PID[$name]"
+  [ "$rc" = 0 ] || tail -n 15 "$WORK/bg-$name.log" 2>/dev/null | sed 's/^/      | /'
+  return "$rc"
 }
 
 # reset_env - a root shell of its own: HOME and PATH of root, whatever the caller had (sudo -E, su without -)
@@ -835,8 +865,10 @@ align_tz() {
 }
 
 # ---- packages -------------------------------------------------------------------------------
-# One apt pass: everything this installer and the tools need, checked first (nothing to do on a re-run when all of
-# it is there). Each "a:b" entry takes the first name this release knows (Ubuntu 24.04 renamed libraries to *t64).
+# Checked first (nothing to do on a re-run when all of it is there). The base packages the next steps need (git, curl,
+# python3...) are installed right away; the tool, browser and security ones in ONE background apt job, while the code,
+# uv, Python and Claude Code are set up: apt_wait waits for it before anything else uses apt (Caddy, the security
+# step). Each "a:b" entry takes the first name this release knows (Ubuntu 24.04 renamed libraries to *t64).
 BASE_PKGS="git curl ca-certificates cron openssl python3 gnupg openssh-client xz-utils tzdata"
 TOOL_PKGS="ffmpeg zip unzip jq ripgrep imagemagick poppler-utils"
 SEC_PKGS="unattended-upgrades fail2ban python3-systemd"
@@ -845,6 +877,7 @@ BROWSER_PKGS="libnss3 libnspr4 libdbus-1-3 libatk1.0-0t64:libatk1.0-0 libatk-bri
   libcairo2 libcups2t64:libcups2 libatspi2.0-0t64:libatspi2.0-0 fonts-liberation fonts-noto-color-emoji"
 pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 pkg_known() { apt-cache show -q=0 "$1" >/dev/null 2>&1; }
+APT_UPDATED=0
 
 # ubuntu_universe - ffmpeg, jq, ripgrep, fail2ban... are in Ubuntu's universe component: turned on when an image
 # shipped without it (otherwise every one of them silently fails)
@@ -865,9 +898,15 @@ ubuntu_universe() {
   fi
 }
 
+# apt_install PKG... - one apt-get install, without the recommended packages first (smaller), with them if that fails
+apt_install() {
+  apt_get install -y -qq --no-install-recommends "$@" || apt_get install -y -qq "$@"
+}
+
 install_packages() {
-  local want=() p n missing=() opt_missing=()
+  local p n missing=() opt_missing=()
   local wants_fw=0
+  ensure_swap                                   # first: apt, uv and the Claude Code install then run side by side
   [ "$FIREWALL" = 1 ] && ! systemd-detect-virt -cq 2>/dev/null && wants_fw=1
   for p in $BASE_PKGS; do pkg_installed "$p" || missing+=("$p"); done
   for p in $TOOL_PKGS $SEC_PKGS $BROWSER_PKGS $([ "$wants_fw" = 1 ] && echo ufw); do
@@ -878,24 +917,46 @@ install_packages() {
     ok "system packages already installed"
   else
     ubuntu_universe
-    apt_get update -qq >>"$WORK/apt.log" 2>&1 || warn "apt-get update reported errors (see below if something is missing)"
-    want=("${missing[@]}")
-    local skipped=()
-    for p in "${opt_missing[@]}"; do
-      for n in ${p//:/ }; do
-        if pkg_known "$n"; then want+=("$n"); continue 2; fi
-      done
-      skipped+=("${p%%:*}")
-    done
-    apt_get install -y -qq --no-install-recommends "${want[@]}" >>"$WORK/apt.log" 2>&1 \
-      || apt_get install -y -qq "${want[@]}" >>"$WORK/apt.log" 2>&1 \
-      || { tail -n 15 "$WORK/apt.log"; die "apt-get install failed"; }
-    [ ${#skipped[@]} -eq 0 ] || warn "not available on this system: ${skipped[*]}"
-    ok "${#want[@]} package(s) installed in one pass"
+    if [ ${#missing[@]} -gt 0 ]; then
+      apt_get update -qq >>"$WORK/apt.log" 2>&1 || warn "apt-get update reported errors (see below if something is missing)"
+      APT_UPDATED=1
+      apt_install "${missing[@]}" >>"$WORK/apt.log" 2>&1 || { tail -n 15 "$WORK/apt.log"; die "apt-get install failed"; }
+      ok "${#missing[@]} base package(s) installed"
+    fi
+    if [ ${#opt_missing[@]} -gt 0 ]; then
+      bg_start apt apt_tools "${opt_missing[@]}"
+      ok "${#opt_missing[@]} more (tools, browser libraries, security) installing in the background"
+    fi
   fi
-  command -v ffmpeg >/dev/null 2>&1 || warn "ffmpeg not installed: no video thumbnails in Files, no voice messages"
+  [ -n "${BG_PID[apt]:-}" ] || command -v ffmpeg >/dev/null 2>&1 \
+    || warn "ffmpeg not installed: no video thumbnails in Files, no voice messages"
   systemctl enable --now cron >/dev/null 2>&1 || warn "could not start the cron service"
-  ensure_swap
+}
+
+# apt_tools ENTRY... - the background apt job: names this release knows, one install; skipped ones and the count
+# are left in $WORK for apt_wait to report
+apt_tools() {
+  local p n want=() skipped=()
+  [ "$APT_UPDATED" = 1 ] || apt_get update -qq || echo "apt-get update reported errors"
+  for p in "$@"; do
+    for n in ${p//:/ }; do
+      if pkg_known "$n"; then want+=("$n"); continue 2; fi
+    done
+    skipped+=("${p%%:*}")
+  done
+  printf '%s' "${skipped[*]}" > "$WORK/apt-skipped"
+  if [ ${#want[@]} -gt 0 ]; then apt_install "${want[@]}" || return 1; fi
+  printf '%s' "${#want[@]}" > "$WORK/apt-count"
+}
+
+# apt_wait - the background apt job is done (called before any other apt use, and by the security step); stops the
+# install when it failed, like an apt failure in the foreground did
+apt_wait() {
+  [ -n "${BG_PID[apt]:-}" ] || return 0
+  bg_wait apt || die "apt-get install failed (log above) - fix it, then run the same command again"
+  [ ! -s "$WORK/apt-skipped" ] || warn "not available on this system: $(cat "$WORK/apt-skipped")"
+  ok "$(cat "$WORK/apt-count" 2>/dev/null || echo 0) system package(s) installed in the background"
+  command -v ffmpeg >/dev/null 2>&1 || warn "ffmpeg not installed: no video thumbnails in Files, no voice messages"
 }
 
 # ensure_swap - a small server without swap is killed by the first big turn: 2 GB /swapfile under 4 GB of memory
@@ -925,13 +986,15 @@ ensure_swap() {
 
 # ---- toolchain (pinned in deps.toml, downloaded with fetch_verified) --------------------------
 UV=/usr/local/bin/uv
-# prefetch - start the big downloads in the background as soon as the code (and its deps.toml) is here
+# prefetch - start the downloads in the background as soon as the code (and its deps.toml) is here: Claude Code,
+# and uv when this server does not have the pinned one (install_uv / install_claude wait for them, then check again)
 prefetch() {
-  CLAUDE_DL=""
   if ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/claude" ]; then
-    ( dep_fetch claude "$WORK/claude.bin" ) >"$WORK/claude-download.log" 2>&1 &
-    CLAUDE_DL=$!
+    bg_start claude-download dep_fetch claude "$WORK/claude.bin"
   fi
+  local want
+  want=$(dep uv version 2>/dev/null) || return 0
+  [ "$("$UV" --version 2>/dev/null | awk '{print $2}' || true)" = "$want" ] || bg_start uv-download dep_fetch uv "$WORK/uv.tar.gz"
 }
 
 install_uv() {
@@ -942,6 +1005,7 @@ install_uv() {
   if [ -n "$have" ] && ! grep -qx "uv installed" "$STATE_DIR/install-manifest" 2>/dev/null; then
     ok "uv $have (already on this server, not ours: kept)"; return    # another tool's uv is not replaced nor removed
   fi
+  bg_wait uv-download >/dev/null || true         # its failure: tried again here, with the message
   dep_fetch uv "$WORK/uv.tar.gz" || die "uv download failed or its sha256 does not match deps.toml"
   if ! { mkdir -p "$d" && tar -xzf "$WORK/uv.tar.gz" -C "$d" --strip-components=1 --no-same-owner \
           && install -m 755 -o root -g root "$d/uv" "$d/uvx" /usr/local/bin/; }; then die "uv installation failed"; fi
@@ -955,9 +1019,9 @@ install_claude() {
   local log="$WORK/claude-install.log" v
   if ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/claude" ]; then
     v=$(dep claude version)
-    if [ -n "${CLAUDE_DL:-}" ]; then wait "$CLAUDE_DL" || true; fi
+    bg_wait claude-download >/dev/null || true
     if [ ! -f "$WORK/claude.bin" ]; then dep_fetch claude "$WORK/claude.bin" >>"$log" 2>&1 || true; fi
-    [ -f "$WORK/claude.bin" ] || { cat "$WORK/claude-download.log" >>"$log" 2>/dev/null; claude_install_failed "$log"; }
+    [ -f "$WORK/claude.bin" ] || { cat "$WORK/bg-claude-download.log" >>"$log" 2>/dev/null; claude_install_failed "$log"; }
     chmod 700 "$WORK/claude.bin"
     (cd "$WORK" && CLAUDE_INSTALL_ALLOW_SUDO=1 "$WORK/claude.bin" install "$v") >>"$log" 2>&1 || claude_install_failed "$log"
     rm -f "$WORK/claude.bin"
@@ -995,6 +1059,7 @@ claude_install_failed() { # explain the most common causes, then stop
 DEPS_LOG_NAME=deps-install.log
 install_tools_now() {
   local log="$STATE_DIR/logs/$DEPS_LOG_NAME"
+  apt_wait                                      # Chromium needs the browser libraries
   if mx deps update >"$log" 2>&1; then
     ok "tools ready: $(mx deps list 2>/dev/null | awk '$2 ~ /^(node|chromium|remotion|scrapling)$/ {printf "%s %s · ", $2, $3}' | sed 's/ · $//')"
   else
@@ -1166,6 +1231,7 @@ auto_upgrades_on() {
 
 secure_server() {
   local done=() failed=()
+  apt_wait                                      # unattended-upgrades, fail2ban, ufw come with the background apt job
   if pkg_installed unattended-upgrades || apt_get install -y -qq unattended-upgrades >>"$WORK/apt.log" 2>&1; then
     [ -f /etc/apt/apt.conf.d/20auto-upgrades ] && [ "$EXISTING" = 1 ] \
       || (umask 022; printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' \
@@ -1334,7 +1400,9 @@ fetch_code() {
   ok "cloned into $INSTALL_DIR (token kept out of .git/config)"
 }
 
-setup_python() {
+# python_sync - the Python environment of the server: the pinned Python and every package (uv's own checksums,
+# uv.lock), only downloads and files of its own - so it runs in the background (python_start) while Claude Code installs
+python_sync() {
   local extra=()
   if [ "$VOICE" = local ] || [ -f "$STATE_DIR/voice/extra-installed" ]; then
     extra=(--extra voice)                       # faster-whisper (local voice transcription)
@@ -1343,8 +1411,13 @@ setup_python() {
   # the managed Python goes to <state>/tools/python (not ~/.local: a cleanup there would break the service)
   mkdir -p "$STATE_DIR/tools/python" && chmod 700 "$STATE_DIR"
   (cd "$INSTALL_DIR/server" && UV_PYTHON_INSTALL_DIR="$STATE_DIR/tools/python" UV_PYTHON_PREFERENCE=only-managed \
-     "$UV" sync --frozen --no-dev --quiet --python "$(dep python version || echo 3.12)" "${extra[@]}") \
-    || die "uv sync failed in $INSTALL_DIR/server"
+     "$UV" sync --frozen --no-dev --quiet --python "$(dep python version || echo 3.12)" "${extra[@]}")
+}
+python_start() { bg_start python python_sync; }
+
+setup_python() {
+  if [ -n "${BG_PID[python]:-}" ]; then bg_wait python || die "uv sync failed in $INSTALL_DIR/server"
+  else python_sync || die "uv sync failed in $INSTALL_DIR/server"; fi
   local exe="$INSTALL_DIR/server/.venv/bin/maxxing"
   [ -x "$exe" ] || die "$exe missing after uv sync"
   if [ "$STATE_DIR" = "$DEFAULT_STATE" ]; then
@@ -1455,6 +1528,7 @@ restore_review() {
 
 # ---- access ---------------------------------------------------------------------------------
 setup_caddy() {
+  apt_wait                                      # one apt at a time
   if ! command -v caddy >/dev/null 2>&1; then
     command -v gpg >/dev/null 2>&1 || apt_get install -y -qq gnupg >>"$WORK/apt.log" 2>&1 || true
     caddy_repo || die "Caddy's signing key does not match the expected fingerprint - refused"
@@ -1846,10 +1920,11 @@ main() {
   run_step "System packages" install_packages
   align_tz
   run_step "Harness Maxxing code" fetch_code
-  prefetch
+  prefetch                                    # Claude Code and uv downloads, in the background
   run_step "Python toolchain (uv)" install_uv
-  run_step "Python environment" setup_python
+  python_start                                # Python environment in the background while Claude Code installs
   run_step "Claude Code" install_claude
+  run_step "Python environment" setup_python
   run_step "Workspace, skills and jobs" init_state
   [ -z "$RESTORE_FROM" ] || { run_step "Memory restore" restore_backup; restore_review; }
   case "$ACCESS" in

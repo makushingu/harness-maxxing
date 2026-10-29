@@ -39,16 +39,18 @@ After the questions the installer runs unattended with a live progress display. 
 local engine (on servers with at least 3 GB of RAM) and the time zone is chosen in the web onboarding:
 
 1. checks the server (root, apt, systemd, architecture) and whether it is already in use (see below);
-2. installs every system package it needs **in one pass** (git, curl, python3, gnupg, openssh-client, cron, ffmpeg,
-   jq, ripgrep, ImageMagick, the browser libraries, unattended-upgrades, fail2ban...), turning Ubuntu's `universe`
-   component on if the image shipped without it; on a small server without swap it adds a 2 GB swap file;
+2. installs the system packages it needs: the base ones right away (git, curl, python3, gnupg, openssh-client,
+   cron...), the others (ffmpeg, jq, ripgrep, ImageMagick, the browser libraries, unattended-upgrades, fail2ban...)
+   **in one pass in the background** while the next steps run, turning Ubuntu's `universe` component on if the
+   image shipped without it; on a small server without swap it adds a 2 GB swap file first;
 3. clones the code into `/opt/claude-maxxing`; your customizations sit on top of it, see
    [Customizing](customizing);
 4. installs **uv** (Python toolchain) in `/usr/local/bin`, the Python of the server in
    `/var/lib/claude-maxxing/tools/python`, and the **Claude Code CLI**: each one a pinned version whose checksum is
    in the release's list of components, `deps.toml` - nothing downloaded is run before it is checked (see
    [Security](security), "Downloads");
-5. creates the Python environment and the `maxxing` command, then runs `maxxing init`: configuration, workspace,
+5. creates the Python environment (in the background, while Claude Code installs) and the `maxxing` command, then
+   runs `maxxing init`: configuration, workspace,
    skills, default jobs;
 6. optionally restores your memory from a backup;
 7. sets up access (Caddy for a domain, Tailscale, or local only);

@@ -96,6 +96,21 @@ Downloads:
   returns `(name, agent path, trailer)`; `/api/pc/download/{target}` streams the file then the trailer instead of
   holding a personalised copy of the binary in memory per request.
 
+Installer speed and re-runs (`install.sh`):
+- Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
+  `<state>/logs/install-failed-*` with the other logs); `bg_wait NAME` returns its exit code and prints the log tail
+  on failure. PIDs in `BG_PID` (assoc array). `on_exit` waits for a running `apt` job (never cuts dpkg; `$WORK` is
+  its TMPDIR) and kills the others with their children (`kill_tree`, pgrep -P).
+- Packages: `BASE_PKGS` still in the foreground (git, curl, python3... needed next); `TOOL_PKGS SEC_PKGS
+  BROWSER_PKGS` (+ ufw) in ONE background apt job (`apt_tools`: `apt-get update` there when the foreground did none,
+  `pkg_known` filter, `apt_install` = no-recommends then with). `apt_wait` (in `setup_caddy`, `secure_server`,
+  `install_tools_now`) waits, dies on failure like before, reports skipped names / count / missing ffmpeg. Only one
+  apt/dpkg at a time (the DPkg lock timeout would serialize a missed call anyway). `ensure_swap` moved first.
+- Downloads: `prefetch` starts the Claude Code and (when not the pinned one) uv downloads after the clone;
+  `python_sync` (the `uv sync`) starts in the background right after uv and runs while Claude Code installs; the
+  steps are now ... uv, Claude Code, Python environment, init. Overlap: the apt job (~1-2 min on a fresh VPS) with
+  clone + uv + Claude Code + uv sync + init; uv sync (~20-60 s) with the Claude Code install.
+
 ## 2.0.0-alpha.102 - 2026-10-26
 
 Integration of #23, the port of the pre-squash `fix/telegram-all` (a76-a79 there, never merged). `web/dist`
