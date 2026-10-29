@@ -246,3 +246,20 @@ def test_zip_token_is_bound_to_the_session_and_expires(client, tree, monkeypatch
     # no CSRF header: refused before anything is read
     r = client.post("/api/files/zip", json={"paths": [str(tree / "proj")]}, headers={"X-Maxxing": ""})
     assert r.status_code == 403
+
+
+def test_zip_skips_a_file_whose_folder_was_swapped_for_a_link_after_the_plan(tree, mx):
+    """O_NOFOLLOW only guards the last part of a path: a folder above it turned into a link (to a copy of the same
+    tree outside the root) must not lead the zip there. The opened file must be the very one planned."""
+    proj, outside = tree / "proj", mx["tmp"] / "outside"
+    (outside / "deep").mkdir(parents=True)
+    (outside / "deep" / "x.md").write_text("SECRET")
+    (outside / "pic.png").write_text("SECRET")
+    plan = downloads.zip_plan(proj, tree)
+    os.rename(proj / "sub", proj / "sub.old")
+    os.symlink(outside, proj / "sub")
+    data = b"".join(downloads.zip_stream(plan))
+    assert b"SECRET" not in data
+    z = zipfile.ZipFile(io.BytesIO(data))
+    assert "proj/sub/deep/x.md" not in z.namelist() and "proj/a.txt" in z.namelist()
+
