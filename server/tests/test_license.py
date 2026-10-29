@@ -352,3 +352,12 @@ def test_a_moved_install_keeps_the_seat_of_its_key(code, tmp_path, monkeypatch):
     _git("push", "-q", "origin", "HEAD:stable", cwd=code["work"])
     assert license.move_to_git()["moved"]
     assert config.get_secret(license.SEAT) == "a1.tok" and not license.enabled() and license.status()["has_key"]
+
+
+@pytest.mark.parametrize("lic", [["pro"], "pro", 3])
+def test_activate_with_a_license_that_is_not_an_object_leaves_no_key(mx, monkeypatch, lic):
+    monkeypatch.setattr(license, "_post", lambda *a, **k: {"ok": True, "token": "tok", "license": lic})
+    with pytest.raises(license.LicenseError) as e:
+        license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert e.value.code == "bad_answer"
+    assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
