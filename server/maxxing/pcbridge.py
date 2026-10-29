@@ -975,7 +975,10 @@ def _bad_url(args: dict) -> str | None:
     if url is None:
         return None
     raw = re.sub(r"[\t\n\r]", "", str(url)).strip().replace("\\", "/")   # what the browser drops / reads as "/"
-    u = urlsplit(raw)
+    try:
+        u = urlsplit(raw)
+    except ValueError:                                   # "http://[::1": not an address the browser can open
+        return "Only http(s) pages can be opened in the browser of the PC (no file:, chrome:... addresses)."
     scheme = u.scheme.lower()
     if scheme not in PAGE_SCHEMES or (scheme == "about" and raw.lower() not in ("about:blank",)):
         return "Only http(s) pages can be opened in the browser of the PC (no file:, chrome:... addresses)."
