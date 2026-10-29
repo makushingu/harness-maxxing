@@ -75,7 +75,7 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 
 ```
 Project = {name, path, description, topics:[Topic], session_count}
-Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, running:int, unread:int, telegram_thread:int|null}
+Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null}
 ```
 Names: `^[a-z0-9][a-z0-9-]{0,47}$` (slug); the UI slugifies the label. Description goes into the CLAUDE.md header.
 
