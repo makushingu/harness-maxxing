@@ -121,6 +121,19 @@ Several files at once (Files page and the folder grid of the file viewer):
   streams it (a link download cannot POST). Tokens: in memory (`_zip_tokens`, at most 200, 120 s), bound to a
   sha256 of the session cookie, the paths resolved and planned again at download time. CSRF as every POST
   (`X-Maxxing`).
+- UI `features/files/selection.tsx`: `useEntrySelection({entries, onOpen, root})` keeps the selection (a `Set` of
+  paths, pruned when entries leave the list) and returns delegated handlers (`bind`) for the container: items only
+  carry `data-row` + `data-path` + `.mx-tile` (no iOS callout, no text selection). Long press = one 450 ms timer for
+  the whole container (cancelled past 8 px, on pointercancel / dragstart); the click after it is swallowed; Android's
+  touch `contextmenu` counts as the long press. Escape is caught on `window` in capture (before the viewer's Radix
+  dialog) while something is selected, focus inside the view, no field focused. `EntriesMenu` (point-anchored
+  DropdownMenu), `SelectionBar`, `SelectCheck` (empty circles come from `group/sel` + `data-selecting` on the
+  container: entering selection mode re-renders no item), `useRemoveEntries` (one confirm, deletes one by one),
+  `useCopyPaths`. `download.ts`: `downloadZipMany`, `useDownloadEntries`.
+- Files page `Listing`: `Row` / `GridItem` memoized, no own click handler; `EntryActions.removeMany`. Entries are
+  draggable only with `(hover: hover) and (pointer: fine)` (a long press on iOS started a drag). `FolderView`
+  (viewer): same model, rename (NameDialog of the Files page) and delete there too, `onOpenInFiles`; tiles get
+  `.mx-cv-tile` (content-visibility) past 300 entries. Texts: `files.sel.*` (group `files`).
 
 Installer speed and re-runs (`install.sh`):
 - Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
