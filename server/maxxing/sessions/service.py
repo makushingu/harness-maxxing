@@ -831,7 +831,7 @@ def compact_log(sid: str, dry_run: bool = False) -> dict:
                     line = raw[:-1] if end else raw
                     if clip.drop_line(line):
                         continue
-                    if len(line) > clip.RESULT_MAX:
+                    if clip.worth_clipping(line):
                         new = clip.clip_line(line.decode("utf-8", "replace"))
                         if len(new) < len(line):
                             line = new.encode("utf-8")
