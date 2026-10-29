@@ -134,6 +134,18 @@ composer; quote several passages if you like, and remove one with its **×** (or
 When you send, the quotes go first, as Markdown blockquotes (`> …`), followed by what you typed - you can
 also send the quotes alone. Quotes are kept with the draft and shown as quote blocks in your message.
 
+**Drag from one session into another.** With several sessions side by side (mouse), drag content of one session
+onto another session's column: it lands in that session's **Quote** card, the message box gets the focus, and
+nothing is sent until you send it. You can drag:
+- a whole message: hover it and drag its grip (⋮⋮ at the top right of a reply, next to the time of your message,
+  at the top right of a tool card's output);
+- a piece of text: select it, then drag the selection;
+- a file: a picture or video thumbnail, an attachment, a file path in an answer or a quoted file - it is added as
+  one line with its path, like **Quote** in the file's menu.
+
+While you drag, the other sessions show where to drop; the session the content comes from takes nothing. Dropped
+into another app, the content arrives as plain text (a file as its path).
+
 ## What you see
 
 - Answers stream live (markdown, code, images).

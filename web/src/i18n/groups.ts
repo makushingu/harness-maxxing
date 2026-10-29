@@ -22,6 +22,8 @@ export const GROUPS = {
   feedback: ['feedback'],
   // Maxxing mode (beta, off by default): its texts load only once its controls show
   maxxing: ['maxxing'],
+  // dragging content from one session into another: loaded when a drag starts
+  drag: ['drag'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

@@ -1,16 +1,19 @@
 // Rendered views beyond media: CSV/TSV as a table, HTML as a sandboxed page, archive contents, font
 // specimen and folder grid. Used by FilePreview / FileViewer (read-only) and by the Files page.
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, ExternalLink, File as FileIcon, Folder, RefreshCw, Search, ShieldCheck } from 'lucide-react'
-import { Button, EmptyState, Input, Sensitive, Skeleton, Tooltip } from '@/components/ui'
-import { api, isApiError } from '@/lib/api'
+import { Button, EmptyState, Input, Sensitive, Skeleton, toast, Tooltip } from '@/components/ui'
+import { api, errorMessage, isApiError } from '@/lib/api'
+import { qk } from '@/lib/queries/keys'
 import { fileRawUrl, fileThumbUrl, useFileList } from '@/lib/queries/files'
 import type { FileEntry } from '@/lib/types'
 import { fmtBytes, fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { extOf, hasThumb, iconFor, iconTone } from './kinds'
+import { dirname, extOf, hasThumb, iconFor, iconTone, isInside, resolvePath } from './kinds'
+import { EntriesMenu, SelectCheck, SelectionBar, useEntrySelection, useRemoveEntries, type SelectionActions } from './selection'
+import { NameDialog, type NameDialogState } from '@/pages/files/dialogs'
 import { FileInfoCard } from './viewers'
 
 /* ------------------------------------------------------------------ CSV / TSV */
@@ -286,9 +289,45 @@ export function FontView({ path, version, className }: { path: string; version?:
 }
 
 /* ------------------------------------------------------------------ folder */
-export function FolderView({ path, onOpen, className }: { path: string; onOpen: (e: FileEntry) => void; className?: string }) {
+/** A folder as a grid of tiles. Several at once (selection.tsx): long press, Shift / Ctrl+click, right click;
+ *  rename and delete here too, so the viewer does not have to send the user to the Files page for that. */
+export function FolderView({ path, onOpen, onOpenInFiles, className }: { path: string; onOpen: (e: FileEntry) => void; onOpenInFiles?: (e: FileEntry) => void; className?: string }) {
   const t = useT()
   const list = useFileList(path)
+  const entries = list.data?.entries ?? NO_ENTRIES
+  const root = React.useRef<HTMLDivElement>(null)
+  const sel = useEntrySelection({ entries, onOpen, root })
+  const removeEntries = useRemoveEntries()
+  const [nameDialog, setNameDialog] = React.useState<NameDialogState>(null)
+  const qc = useQueryClient()
+  const actions: SelectionActions = {
+    open: onOpen,
+    openInFiles: onOpenInFiles,
+    rename: (e) =>
+      setNameDialog({
+        title: t('files.renameTitle'),
+        description: t('files.renameDesc'),
+        label: t('files.newNameOrPath'),
+        initial: e.name,
+        confirmText: t('files.rename'),
+        submit: async (v) => {
+          const to = resolvePath(path, v)
+          if (to === e.path) return null
+          if (list.data?.root && !isInside(to, list.data.root)) return t('files.outsideRoot')
+          try {
+            await api.post('/api/files/move', { from: e.path, to })
+          } catch (x) {
+            return isApiError(x, 'exists') ? t('files.exists') : errorMessage(x)
+          }
+          qc.removeQueries({ queryKey: qk.files.read(e.path) })
+          qc.removeQueries({ queryKey: ['files', 'kind', e.path] })
+          await Promise.all([qc.invalidateQueries({ queryKey: qk.files.list(path) }), qc.invalidateQueries({ queryKey: qk.files.list(dirname(to)) })])
+          toast.success(t('files.renamed'))
+          return null
+        },
+      }),
+    remove: (es) => void removeEntries(es.map((e) => e.path)),
+  }
   if (list.isPending)
     return (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-3 p-4">
@@ -298,34 +337,55 @@ export function FolderView({ path, onOpen, className }: { path: string; onOpen: 
       </div>
     )
   if (list.isError) return <EmptyState tone="error" icon={Folder} title={t('files.loadError')} className={cn('flex-1', className)} />
-  const entries = list.data.entries
   if (!entries.length) return <EmptyState icon={Folder} title={t('viewer.folderEmpty')} className={cn('flex-1', className)} />
+  // A big folder: off-screen tiles are not laid out nor painted.
+  const cv = entries.length > 300
+  const picked = sel.selecting ? entries.filter((e) => sel.selected.has(e.path)) : NO_ENTRIES
   return (
-    <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', className)} data-testid="folder-view">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2 p-3">
-        {entries.map((e) => (
-          <FolderTile key={e.path} entry={e} onOpen={onOpen} />
-        ))}
+    <div ref={root} className={cn('flex min-h-0 flex-1 flex-col', className)}>
+      <SelectionBar entries={picked} actions={actions} total={entries.length} onSelectAll={sel.selectAll} onClear={sel.clear} />
+      <div className="group/sel min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="folder-view" {...sel.bind}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2 p-3" role="list" aria-label={t('files.contents')}>
+          {entries.map((e) => (
+            <FolderTile key={e.path} entry={e} checked={sel.selected.has(e.path)} cv={cv} />
+          ))}
+        </div>
       </div>
+      <EntriesMenu at={sel.menu} actions={actions} onClose={sel.closeMenu} />
+      <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />
     </div>
   )
 }
 
-function FolderTile({ entry: e, onOpen }: { entry: FileEntry; onOpen: (e: FileEntry) => void }) {
+const NO_ENTRIES: FileEntry[] = []
+
+const FolderTile = React.memo(function FolderTile({ entry: e, checked, cv }: { entry: FileEntry; checked: boolean; cv: boolean }) {
   const [thumbOk, setThumbOk] = React.useState(true)
   const Icon = e.type === 'dir' ? Folder : iconFor('file', e.name) || FileIcon
   const thumb = e.type === 'file' && hasThumb(e.name) && thumbOk
   return (
     <Tooltip content={e.name.length > 24 ? e.name : null}>
-      <button type="button" onClick={() => onOpen(e)} className="grid gap-1.5 rounded-lg p-1.5 text-center outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring">
+      <button
+        type="button"
+        role="listitem"
+        data-row
+        data-path={e.path}
+        aria-pressed={checked || undefined}
+        className={cn(
+          'mx-tile grid gap-1.5 rounded-lg p-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          checked ? 'bg-primary/10 ring-2 ring-primary' : 'hover:bg-accent/60',
+          cv && 'mx-cv-tile',
+        )}
+      >
         <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted/40">
           <Sensitive placeholder={<Icon className={cn('size-8', iconTone(e.type))} strokeWidth={1.4} />}>
             {thumb ? (
-              <img src={fileThumbUrl(e.path, 240, e.mtime)} alt="" loading="lazy" decoding="async" onError={() => setThumbOk(false)} className={cn('size-full object-cover', extOf(e.name) === 'pdf' && 'object-top')} />
+              <img src={fileThumbUrl(e.path, 240, e.mtime)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setThumbOk(false)} className={cn('size-full object-cover', extOf(e.name) === 'pdf' && 'object-top')} />
             ) : (
               <Icon className={cn('size-8', iconTone(e.type))} strokeWidth={1.4} />
             )}
           </Sensitive>
+          <SelectCheck checked={checked} className="absolute top-1.5 left-1.5 size-5" />
         </div>
         <span className="line-clamp-2 min-h-[2lh] text-xs leading-snug break-all">
           <Sensitive length={8}>{e.name}</Sensitive>
@@ -333,4 +393,4 @@ function FolderTile({ entry: e, onOpen }: { entry: FileEntry; onOpen: (e: FileEn
       </button>
     </Tooltip>
   )
-}
+})

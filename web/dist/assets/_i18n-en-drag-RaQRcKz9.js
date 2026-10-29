@@ -1,0 +1,1 @@
+var e={"drag.dropToQuote":`Drop to quote it in this session`};export{e as default};
