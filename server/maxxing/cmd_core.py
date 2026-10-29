@@ -1847,6 +1847,19 @@ def cmd_update(a) -> int:
     if not ok:
         line(FAIL, "git fetch failed", err)
         return 1
+    target = _rev(f"origin/{branch}")              # checked before any checkout: nothing unsigned on disk
+    if config.load_config().get("update_verify_signature") and target and target != old:
+        ok, detail = verify_target(target)
+        if not ok:
+            line(FAIL, f"update stopped: {target[:8]} has no valid signature (update_verify_signature is on)"
+                 f" - nothing changed, {__version__} keeps running",
+                 f"{detail} | check: git -C {config.CODE} verify-commit {target[:8]} ; import the maintainer's "
+                 "key (gpg --import) or set gpg.ssh.allowedSignersFile ; or turn the check off: "
+                 "update_verify_signature false in config.json")
+            _notify(f"Harness Maxxing update stopped: the new version {target[:8]} is not signed by a trusted "
+                    "key (update_verify_signature). Nothing changed.")
+            return 1
+        line(OK, detail)
     if branch != _current_branch():
         carried = customs.list_customs() if switched else []     # the customizations live on the branch left
         code, out = _git("checkout", "-q", branch)
@@ -1871,19 +1884,6 @@ def cmd_update(a) -> int:
                           "\n  # resolve, git add, GIT_EDITOR=true git cherry-pick --continue, then: maxxing update")
                     return 3
             line(OK, f"{len(todo)} customization(s) carried to branch {branch}")
-    target = _rev(f"origin/{branch}")
-    if config.load_config().get("update_verify_signature") and target and target != old:
-        ok, detail = verify_target(target)
-        if not ok:
-            line(FAIL, f"update stopped: {target[:8]} has no valid signature (update_verify_signature is on)"
-                 f" - nothing changed, {__version__} keeps running",
-                 f"{detail} | check: git -C {config.CODE} verify-commit {target[:8]} ; import the maintainer's "
-                 "key (gpg --import) or set gpg.ssh.allowedSignersFile ; or turn the check off: "
-                 "update_verify_signature false in config.json")
-            _notify(f"Harness Maxxing update stopped: the new version {target[:8]} is not signed by a trusted "
-                    "key (update_verify_signature). Nothing changed.")
-            return 1
-        line(OK, detail)
     web = [f for f in customs.dirty_files() if f.startswith("web/")]
     if web:                                            # the pre-built UI cannot be a customization: kept aside
         code, out = customs.git("stash", "push", "-u", "-q", "-m",
