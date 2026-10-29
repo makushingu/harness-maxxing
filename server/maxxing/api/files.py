@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .. import config, downloads, security, videos, workspace
@@ -225,6 +225,25 @@ async def raw(path: str, download: int = 0, v: str = ""):
     if not await _t(p.is_file):
         raise _err(404, "not_found", "File not found")
     return _serve(p, v, bool(download))
+
+
+@router.get("/zip")
+async def zip_folder(path: str):
+    """A folder as a zip, streamed while it is made (downloads.zip_plan for what goes in)."""
+    p = resolve(path)
+    if not await _t(p.is_dir):
+        raise _err(404, "not_found", "Not a folder")
+    try:
+        plan = await _t(downloads.zip_plan, p, _root())
+    except downloads.ZipTooLarge as e:
+        what = (f"more than {downloads.ZIP_MAX_FILES:,} files" if e.what == "count"
+                else f"more than {downloads.ZIP_MAX_BYTES >> 30} GB")
+        raise _err(413, "too_large", f"This folder holds {what}: too much for one zip") from None
+    except PermissionError:
+        raise _err(403, "forbidden", "Permission denied") from None
+    return StreamingResponse(downloads.zip_stream(plan), media_type="application/zip", headers={
+        "Content-Disposition": downloads.content_disposition((p.name or "files") + ".zip"),
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 PREVIEW_MIN_BYTES = 300 * 1024            # smaller images are shown as they are
