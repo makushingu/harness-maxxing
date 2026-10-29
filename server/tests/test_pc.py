@@ -536,3 +536,8 @@ def test_mcp_config_args_point_at_a_private_file_only_when_paired(tmp_path, monk
     assert args == ["--mcp-config", str(f)] and "topsecret" not in " ".join(args)
     assert json.loads(f.read_text())["mcpServers"]["harness-pc"]["url"].endswith("/api/pc/mcp")
     assert oct(f.stat().st_mode & 0o777) == "0o600"
+
+
+@pytest.mark.parametrize("url", ["http://[::1", "http://[abc/", "https://[/x"])
+def test_malformed_url_is_refused_not_raised(url):
+    assert "Only http(s) pages" in (pcbridge._bad_url({"url": url}) or ""), url
