@@ -77,6 +77,9 @@ Downloads:
   data descriptors and ZIP64 when needed). Symlinked folders are never followed; a symlinked file only when it resolves
   to a regular file inside the files root; FIFOs, sockets and devices are skipped. A file that grows meanwhile is cut
   at its planned size; one that became unreadable is left out.
+- PC agent download: `pcbridge.agent_binary` -> `agent_file` (a path; the cache is hashed in chunks) and `personalised`
+  returns `(name, agent path, trailer)`; `/api/pc/download/{target}` streams the file then the trailer instead of
+  holding a personalised copy of the binary in memory per request.
 
 ## 2.0.0-alpha.102 - 2026-10-26
 

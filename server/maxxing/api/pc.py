@@ -11,9 +11,10 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
@@ -164,11 +165,21 @@ async def pair(body: PairIn, request: Request):
 @router.get("/download/{target}")
 async def download(target: str, code: str, request: Request):
     try:
-        name, data = await asyncio.to_thread(pcbridge.personalised, target, code, _server_url(request))
+        name, agent, trailer = await asyncio.to_thread(pcbridge.personalised, target, code, _server_url(request))
+        f = await asyncio.to_thread(agent.open, "rb")      # opened now: a cache replaced meanwhile does not matter
     except pcbridge.PcError as e:
         raise _err(e) from None
-    return Response(data, media_type="application/octet-stream",
-                    headers={"Content-Disposition": downloads.content_disposition(name), "Cache-Control": "no-store"})
+    size = os.fstat(f.fileno()).st_size
+
+    def body():
+        with f:
+            while chunk := f.read(1 << 20):
+                yield chunk
+        yield trailer
+
+    return StreamingResponse(body(), media_type="application/octet-stream", headers={
+        "Content-Disposition": downloads.content_disposition(name), "Content-Length": str(size + len(trailer)),
+        "Cache-Control": "no-store"})
 
 
 @router.get("/install.{kind}")
