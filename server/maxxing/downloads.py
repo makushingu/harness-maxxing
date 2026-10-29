@@ -81,7 +81,7 @@ class ZipTooLarge(Exception):
 
 
 def zip_plan(folder: Path, root: Path) -> list[tuple[Path, str, os.stat_result | None]]:
-    """What the zip of `folder` holds: (source, name in the zip, stat; None for a folder), folders first.
+    """What the zip of `folder` holds: (source, name in the zip, stat; None for a folder), in walk order.
     Symlinked folders are not followed; a symlinked file counts only when its target is a regular file inside `root`.
     Sockets, FIFOs and devices are left out. Raises ZipTooLarge past ZIP_MAX_BYTES / ZIP_MAX_FILES."""
     base = display_name(folder.name or "files")
@@ -101,8 +101,8 @@ def zip_plan(folder: Path, root: Path) -> list[tuple[Path, str, os.stat_result |
             src = here / f
             try:
                 if src.is_symlink():
-                    target = src.resolve()
-                    if target != root and root not in target.parents:
+                    src = src.resolve()                # read through its target (opened without following links)
+                    if root not in src.parents:
                         continue
                 st = src.stat()
             except (OSError, RuntimeError):
@@ -153,10 +153,14 @@ def zip_stream(plan: list[tuple[Path, str, os.stat_result | None]]) -> Iterator[
                 zi.CRC = zi.compress_size = zi.file_size = 0
                 zf.mkdir(zi)
                 continue
-            try:
-                f = open(src, "rb")
+            try:                               # never a link or a FIFO put there since the plan (O_NONBLOCK: no wait)
+                fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             except OSError:
                 continue
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                os.close(fd)
+                continue
+            f = os.fdopen(fd, "rb")
             with f:
                 zi = zipfile.ZipInfo(name, _date(st.st_mtime))
                 zi.external_attr = (stat.S_IMODE(st.st_mode) | stat.S_IFREG) << 16
