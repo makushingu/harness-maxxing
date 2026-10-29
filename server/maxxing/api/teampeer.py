@@ -8,7 +8,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from .. import config, security, team, teampeer
+from .. import config, downloads, security, team, teampeer
 
 router = APIRouter(prefix="/api/team-peer", tags=["team-peer"])
 
@@ -63,4 +63,6 @@ async def file(fid: str, request: Request):
     path = f"/api/team-peer/files/{fid}"
     frm, scope = await _call(teampeer.verify, "GET", path, dict(request.headers), b"", _ip(request))
     f = await _call(teampeer.file_for, frm, fid, scope)
-    return FileResponse(f["path"], media_type="application/octet-stream", filename=f["name"])
+    return FileResponse(f["path"], media_type="application/octet-stream",
+                        headers={"Content-Disposition": downloads.content_disposition(str(f["name"])),
+                                 "X-Content-Type-Options": "nosniff"})
