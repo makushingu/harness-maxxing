@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { ArrowUp, Clock, CornerDownRight, FileText, MessageCircleQuestion, Paperclip, Pencil, Quote, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useT } from '@/i18n'
+import { loadGroups, useT } from '@/i18n'
 import { Button, Sensitive, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
 import { uploadAttachment } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
@@ -12,6 +12,7 @@ import { fmtBytes } from '@/lib/format'
 import type { QueueItem } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
+import { pastedFile, pastedName } from './pasteAsFile'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 
 const NO_ITEMS: QueueItem[] = []
@@ -113,9 +114,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
   }, [])
 
   const addFiles = React.useCallback(
-    (files: File[]) => {
+    (files: File[]): string[] => {
+      const lids: string[] = []
       for (const f of files) {
         const lid = Math.random().toString(36).slice(2)
+        lids.push(lid)
         const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null
         if (preview) previews.current.add(preview)
         setAtts((a) => [...a, { lid, name: f.name || 'file', size: f.size, path: null, progress: 0, error: null, preview }])
@@ -130,6 +133,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
           })
           .finally(() => ctrls.current.delete(lid))
       }
+      return lids
     },
     [topicPath, t],
   )
@@ -313,8 +317,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
     })
   }
 
+  // Ctrl+Shift+V / ⌘⇧V just before the paste: keep it as text whatever it is.
+  const plainPaste = React.useRef(0)
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
+    if ((e.key === 'v' || e.key === 'V') && e.shiftKey && (e.metaKey || e.ctrlKey)) plainPaste.current = Date.now()
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
       // On touch keyboards Enter inserts a newline (no Shift key); the send button sends.
       if (!e.metaKey && !e.ctrlKey && window.matchMedia('(pointer: coarse)').matches) return
@@ -326,12 +333,31 @@ export const Composer = React.forwardRef<ComposerHandle, {
     }
   }
 
-  const onPaste = (e: React.ClipboardEvent) => {
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(e.clipboardData?.files || [])
     if (files.length) {
       e.preventDefault()
       addFiles(files)
+      return
     }
+    const pasted = e.clipboardData?.getData('text/plain') || ''
+    const as = Date.now() - plainPaste.current < 1000 ? null : pastedFile(pasted)
+    if (!as) return
+    e.preventDefault()
+    const el = e.currentTarget
+    const at = [el.selectionStart, el.selectionEnd]
+    const name = pastedName(as.ext)
+    const [lid] = addFiles([new File([pasted], name, { type: as.type })])
+    void loadGroups(['paste']).then(() =>
+      toast.action(t('paste.asFile'), t('paste.asFileHint'), {
+        label: t('paste.asText'),
+        onClick: () => {
+          removeAtt(lid)
+          setText((cur) => cur.slice(0, Math.min(at[0], cur.length)) + pasted + cur.slice(Math.min(at[1], cur.length)))
+          ta.current?.focus()
+        },
+      }),
+    )
   }
 
   const setRef = React.useCallback(

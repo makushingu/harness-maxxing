@@ -24,6 +24,8 @@ export const GROUPS = {
   maxxing: ['maxxing'],
   // dragging content from one session into another: loaded when a drag starts
   drag: ['drag'],
+  // a pasted text that became a file: loaded on that paste
+  paste: ['paste'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS
