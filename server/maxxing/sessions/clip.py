@@ -6,6 +6,10 @@ compact-logs` applies the same function to existing logs. The stream-json struct
 (same keys, same block types); a clipped value ends with a marker giving the original size and the
 block gets `mx_clipped: <original characters>`.
 
+Thinking blocks lose their `signature` (and redacted ones their encrypted `data`): only the API needs them to
+continue a thread, and Claude Code keeps its own transcript for that; the log is only displayed - they were the
+largest part of the logs (~16 %).
+
 Two kinds of system lines are also slimmed: `system/init` keeps only INIT_KEEP (Claude repeats the whole
 tool / skill / slash-command list there at every turn, ~20 KB, read by nothing) and progress-only lines
 (DROP_SUBTYPES: `system/thinking_tokens`, dropped by normalize.py anyway) are not written at all.
@@ -22,6 +26,7 @@ DUPLICATES = ("tool_use_result", "toolUseResult")   # raw copies of the tool out
 INIT_KEEP = ("type", "subtype", "cwd", "session_id", "model", "permissionMode", "apiKeySource",
              "claude_code_version", "output_style", "fast_mode_state", "mcp_servers", "uuid", "mx_at")
 DROP_SUBTYPES = ("thinking_tokens",)                 # system progress lines: never written
+OPAQUE = {"thinking": "signature", "redacted_thinking": "data"}   # block type -> field read by the API only
 
 
 def keep_event(ev: dict) -> bool:
@@ -101,12 +106,24 @@ def clip_event(ev: dict) -> bool:
                         changed = True
     elif t == "assistant" and isinstance(content, list):
         for b in content:
-            if (isinstance(b, dict) and b.get("type") == "tool_use" and isinstance(b.get("input"), dict)
-                    and not b.get("mx_clipped")):
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use" and isinstance(b.get("input"), dict) and not b.get("mx_clipped"):
                 if _clip_input(b["input"]):
                     b["mx_clipped"] = True
                     changed = True
+            elif b.get("type") in OPAQUE and OPAQUE[b["type"]] in b:
+                del b[OPAQUE[b["type"]]]
+                changed = True
     return changed
+
+
+def worth_clipping(line: bytes | str) -> bool:
+    """Cheap test: can clip_line change this raw line? (long, or carrying a thinking signature)"""
+    if len(line) > RESULT_MAX:
+        return True
+    marker = (b'"signature"', b'"redacted_thinking"') if isinstance(line, bytes) else ('"signature"', '"redacted_thinking"')
+    return marker[0] in line or marker[1] in line
 
 
 def drop_line(line: bytes | str) -> bool:
@@ -123,7 +140,7 @@ def drop_line(line: bytes | str) -> bool:
 
 def clip_line(line: str) -> str:
     """Clip one raw NDJSON line (returned unchanged when it is small, not JSON or untouched)."""
-    if len(line) <= RESULT_MAX:
+    if not worth_clipping(line):
         return line
     try:
         ev = json.loads(line)

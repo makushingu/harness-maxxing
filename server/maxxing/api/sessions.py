@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from .. import media, security, streamcap
 from .. import uploads as upload_limits
 from ..security import require_auth
-from ..sessions import costfix, service
+from ..sessions import costfix, maintenance, service
 from ..sessions.service import SessionError
 
 router = APIRouter(prefix="/api", tags=["sessions"], dependencies=[Depends(require_auth)])
@@ -101,6 +101,7 @@ def _found(s: dict | None) -> dict:
 async def startup() -> None:
     service.start_watcher()
     costfix.start_background()   # one-time repair of costs counted before 2.0.0a32
+    maintenance.start_background()   # nightly: compact the logs written that day, remove unused lock files
 
 
 async def shutdown() -> None:
