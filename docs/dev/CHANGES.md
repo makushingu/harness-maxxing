@@ -135,6 +135,11 @@ Several files at once (Files page and the folder grid of the file viewer):
   (viewer): same model, rename (NameDialog of the Files page) and delete there too, `onOpenInFiles`; tiles get
   `.mx-cv-tile` (content-visibility) past 300 entries. Texts: `files.sel.*` (group `files`).
 
+Session tree: folding works while a filter is on. A search or the running / unread filter passes `forceOpen` to every
+project and topic, which ignored their fold button (the chevron showed, the click did nothing). Now `forceOpen` only
+unfolds by default: a click folds the row in `useSessionsUI.narrowFolded` (not persisted, emptied when the search or
+the filter changes, `useFoldToggle` in Tree.tsx); without a filter, folding stays in `expanded` as before.
+
 Pasted data becomes an attachment (`web/src/pages/sessions/pasteAsFile.ts`, `Composer.onPaste`):
 - `pastedFile(text)` -> `{ext, type}` or null (text). Trimmed text under 400 chars: always text. Valid JSON
   (`[`/`{` ... `]`/`}` + `JSON.parse`) -> `.json`; 3+ lines all JSON -> `.jsonl`; `<...>` on 3+ lines -> `.html`
