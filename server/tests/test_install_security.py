@@ -130,7 +130,10 @@ def test_domains_are_validated(value, ok):
 @pytest.mark.parametrize("value, ok", [("/opt/claude-maxxing", True), ("/var/lib/claude-maxxing", True),
                                        ("/root/.claude", True), ("/workspace", True), ("/", False), ("//", False),
                                        ("/var/lib", False), ("/var/lib/", False), ("/etc", False), ("/etc/maxxing", False),
-                                       ("/usr/local", False), ("/root", False), ("/home/bob", False), ("/opt", False)])
+                                       ("/usr/local", False), ("/root", False), ("/home/bob", False), ("/opt", False),
+                                       ("//etc", False), ("/./usr/lib", False), ("/var//lib", False),
+                                       ("/home/./bob", False), ("/.", False), ("/etc/.", False), ("/./", False),
+                                       ("/srv/./maxxing", True), ("//opt/claude-maxxing", True)])
 def test_system_directories_are_refused(value, ok):
     """STATE_DIR=/var/lib by mistake: chmod 700 on it broke every service reading it, and --purge deleted it."""
     r = sh('(not_system_dir STATE_DIR "$V") && echo fine', V=value)
