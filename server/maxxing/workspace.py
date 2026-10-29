@@ -13,6 +13,9 @@ project and topic context (Claude Code reads every CLAUDE.md of the cwd and its 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import contextvars
+import copy
 import hashlib
 import inspect
 import json
@@ -22,7 +25,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from . import bus, config
 
@@ -41,8 +44,22 @@ class WorkspaceError(Exception):
 
 
 # ---- paths ---------------------------------------------------------------------------------
+_root_now: contextvars.ContextVar[Path | None] = contextvars.ContextVar("workspace_root", default=None)
+
+
 def root() -> Path:
-    return config.workspace()
+    r = _root_now.get()
+    return r if r is not None else config.workspace()
+
+
+@contextlib.contextmanager
+def _one_root() -> Iterator[None]:
+    """Inside: root() is read once (a tree asks for it for every project and topic)."""
+    token = _root_now.set(config.workspace())
+    try:
+        yield
+    finally:
+        _root_now.reset(token)
 
 
 def check_slug(name: str) -> str:
@@ -79,6 +96,40 @@ def topic_path(project: str, topic: str | None = None) -> str:
     return f"projects/{project}" + (f"/topics/{topic}" if topic else "")
 
 
+# ---- small files read on every tree / topic list --------------------------------------------
+# The tree reads each project's and topic's CLAUDE.md and .maxxing.json: a parsed file is kept while its stat
+# (inode, mtime, size, ctime) is unchanged. A file changed less than RACY_S ago is read again (a rewrite within
+# the same timestamp tick and with the same size would look unchanged); the writes made here drop their entry.
+RACY_S = 2.0
+_files: dict[str, tuple[tuple, Any]] = {}
+_FILES_MAX = 4096
+
+
+def _cached(path: Path, parse: Callable[[Path], Any]) -> Any:
+    key = str(path)
+    try:
+        st = os.stat(path)
+        ident: tuple | None = (st.st_ino, st.st_mtime_ns, st.st_size, st.st_ctime_ns)
+        settled = time.time() - max(st.st_mtime, st.st_ctime) > RACY_S
+    except OSError:
+        ident, settled = None, True
+    hit = _files.get(key)
+    if hit is not None and hit[0] == ident:
+        return hit[1]
+    value = parse(path)
+    if settled:
+        if len(_files) >= _FILES_MAX:
+            _files.clear()
+        _files[key] = (ident, value)
+    else:
+        _files.pop(key, None)
+    return value
+
+
+def _forget(path: Path) -> None:
+    _files.pop(str(path), None)
+
+
 # ---- CLAUDE.md -----------------------------------------------------------------------------
 def _heading(kind: str, name: str) -> str:
     return "# Workspace" if kind == "workspace" else f"# {kind.capitalize()} {name}"
@@ -91,8 +142,12 @@ def _render_claude_md(kind: str, name: str, description: str) -> str:
 
 def read_description(folder: Path) -> str:
     """Text between the first heading of CLAUDE.md and the `@memory.md` line (or next ## heading)."""
+    return _cached(folder / "CLAUDE.md", _parse_description)
+
+
+def _parse_description(f: Path) -> str:
     try:
-        lines = (folder / "CLAUDE.md").read_text(errors="replace").splitlines()
+        lines = f.read_text(errors="replace").splitlines()
     except OSError:
         return ""
     out, started = [], False
@@ -114,6 +169,7 @@ def _write_claude_md(folder: Path, kind: str, name: str, description: str | None
     except OSError:
         lines = []
     desc = read_description(folder) if description is None else description
+    _forget(f)
     if not lines or not any(ln.startswith("# ") for ln in lines):
         f.write_text(_render_claude_md(kind, name, desc))
         return
@@ -194,12 +250,15 @@ def _ordered(names: list[str], order: object) -> list[str]:
     return sorted(names, key=lambda n: (0, rank[n]) if n in rank else (1, n))
 
 
-def project_names() -> list[str]:
+def _parse_order(f: Path) -> object:
     try:
-        order = json.loads((root() / "projects" / ORDER_FILE).read_text()).get("projects")
+        return json.loads(f.read_text()).get("projects")
     except (OSError, ValueError, AttributeError):
-        order = None
-    return _ordered(_dirs(root() / "projects"), order)
+        return None
+
+
+def project_names() -> list[str]:
+    return _ordered(_dirs(root() / "projects"), _cached(root() / "projects" / ORDER_FILE, _parse_order))
 
 
 def topic_names(project: str) -> list[str]:
@@ -210,6 +269,7 @@ def set_project_order(names: list[str]) -> list[str]:
     known = set(_dirs(root() / "projects"))
     order = [n for n in dict.fromkeys(names) if isinstance(n, str) and n in known]
     config.write_json(root() / "projects" / ORDER_FILE, {"projects": order})
+    _forget(root() / "projects" / ORDER_FILE)
     bus.invalidate("workspace")                       # order only: no rename/delete for the Telegram hooks
     return project_names()
 
@@ -220,6 +280,7 @@ def set_topic_order(project: str, names: list[str]) -> list[str]:
     known = set(_dirs(project_dir(project) / "topics"))
     meta = _meta(project)
     meta["topics"] = [n for n in dict.fromkeys(names) if isinstance(n, str) and n in known]
+    _forget(project_dir(project) / META_FILE)
     config.write_json(project_dir(project) / META_FILE, meta)
     bus.invalidate("workspace")
     return topic_names(project)
@@ -234,12 +295,17 @@ META_FILE = ".maxxing.json"
 PERMISSION_MODES = ("bypass", "acceptEdits", "default")
 
 
-def _folder_meta(folder: Path) -> dict:
+def _parse_meta(f: Path) -> dict:
     try:
-        data = json.loads((folder / META_FILE).read_text())
+        data = json.loads(f.read_text())
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def _folder_meta(folder: Path) -> dict:
+    """<folder>/.maxxing.json - a copy the caller may change."""
+    return copy.deepcopy(_cached(folder / META_FILE, _parse_meta))
 
 
 def _set_folder_meta(folder: Path, key: str, value: str) -> None:
@@ -248,6 +314,7 @@ def _set_folder_meta(folder: Path, key: str, value: str) -> None:
         meta[key] = value
     else:
         meta.pop(key, None)
+    _forget(folder / META_FILE)
     if meta:
         config.write_json(folder / META_FILE, meta)
     else:
@@ -304,16 +371,18 @@ def _project_obj(name: str, stats: dict, threads: dict) -> dict:
 def tree() -> dict:
     stats = _session_stats()
     threads = config.load_config().get("telegram", {}).get("threads") or {}
-    projects = [_project_obj(p, stats, threads) for p in project_names()]
-    return {"root": str(root()), "projects": projects}
+    with _one_root():
+        projects = [_project_obj(p, stats, threads) for p in project_names()]
+        return {"root": str(root()), "projects": projects}
 
 
 def list_topics() -> list[dict]:
     out = []
-    for p in project_names():
-        for t in topic_names(p):
-            out.append({"path": topic_path(p, t), "project": p, "name": t,
-                        "description": read_description(project_dir(p) / "topics" / t)})
+    with _one_root():
+        for p in project_names():
+            for t in topic_names(p):
+                out.append({"path": topic_path(p, t), "project": p, "name": t,
+                            "description": read_description(project_dir(p) / "topics" / t)})
     return out
 
 
@@ -369,6 +438,7 @@ def update_project(project: str, name: str | None = None, description: str | Non
             f = root() / "projects" / ORDER_FILE
             data = json.loads(f.read_text())
             data["projects"] = _rename_in_order(data.get("projects"), project, new)
+            _forget(f)
             config.write_json(f, data)
         except (OSError, ValueError, AttributeError):
             pass
@@ -394,6 +464,7 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
         meta = _meta(project)
         if isinstance(meta.get("topics"), list):
             meta["topics"] = _rename_in_order(meta["topics"], topic, new)
+            _forget(project_dir(project) / META_FILE)
             config.write_json(project_dir(project) / META_FILE, meta)
     _write_claude_md(project_dir(project) / "topics" / new, "topic", new, description)
     if new != topic:
