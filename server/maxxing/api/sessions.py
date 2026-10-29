@@ -17,16 +17,19 @@ from pydantic import BaseModel, Field, field_validator
 from .. import media, security, streamcap
 from .. import uploads as upload_limits
 from ..security import require_auth
-from ..sessions import costfix, maintenance, service
+from ..sessions import costfix, maintenance, service, wake
 from ..sessions.service import SessionError
 
 router = APIRouter(prefix="/api", tags=["sessions"], dependencies=[Depends(require_auth)])
 
 HEARTBEAT_S = 15.0
+# A change of the session's log or meta wakes its streams at once (sessions/wake.py: inotify, ~0.05-0.1 s); they
+# also look every WAKE_RUNNING_S while it runs, every POLL_IDLE_S otherwise. Without inotify they poll:
 POLL_RUNNING_S = 0.1           # a running session's log is checked this often (a stat): new events show ~0.05 s after
 POLL_IDLE_S = 1.0
 POLL_QUIET_S = 0.25            # a running session silent for QUIET_AFTER_S (thinking, a long tool) is checked less often
 QUIET_AFTER_S = 3.0
+WAKE_RUNNING_S = 2.0
 
 
 class _Text(BaseModel):
@@ -280,6 +283,7 @@ async def _sse(sid: str, offset: int, request: Request) -> AsyncIterator[str]:
             return
         if not auth.ok():                              # signed out / password changed / expired: close
             return
+        ev = wake.mark(sid)                            # before looking: a change from now on ends the wait below
         cur, meta = _probe(sid)                         # two stat() calls: cheaper inline than a thread hop per tick
         if ident and cur and (cur[0] != ident[0] or cur[1] < offset):
             yield _frame("reset", {})                  # log rewritten (compact-logs) or shrunk
@@ -320,7 +324,10 @@ async def _sse(sid: str, offset: int, request: Request) -> AsyncIterator[str]:
         if time.monotonic() - last_out >= HEARTBEAT_S:
             yield ": ping\n\n"
             last_out = time.monotonic()
-        if s and s["state"] == "running":
+        running = bool(s and s["state"] == "running")
+        if ev is not None:
+            await wake.wait(ev, WAKE_RUNNING_S if running else POLL_IDLE_S)
+        elif running:
             await asyncio.sleep(POLL_RUNNING_S if time.monotonic() - changed_at < QUIET_AFTER_S else POLL_QUIET_S)
         else:
             await asyncio.sleep(POLL_IDLE_S)
