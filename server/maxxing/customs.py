@@ -115,14 +115,28 @@ def _trailers(body: str) -> dict[str, str]:
     return out
 
 
+def _local_range(branch: str | None = None) -> list[str]:
+    """git arguments selecting the commits HEAD has and upstream has not, compared by content (patch id), merges
+    left out: when the history of the repository was rewritten upstream (same code, new commits), the old commits
+    are not taken for customizations, even without a common ancestor."""
+    return ["--right-only", "--cherry-pick", "--no-merges", f"{upstream(branch)}...HEAD"]
+
+
+def same_code_upstream(branch: str | None = None) -> bool:
+    """The code that runs is exactly a version of upstream (its tree is the tree of an upstream commit): nothing
+    local to keep, the code directory may follow upstream even when the histories differ."""
+    code, tree = git("rev-parse", "HEAD^{tree}")
+    if code != 0 or not tree.strip():
+        return False
+    code, out = git("log", "--format=%T", upstream(branch))
+    return code == 0 and tree.strip() in out.split()
+
+
 def list_customs(branch: str | None = None) -> list[dict[str, Any]]:
     """Local commits on top of upstream, oldest first -> [{id, title, why, saved, commit, files}]."""
-    if not is_git():
+    if not is_git() or git("rev-parse", "-q", "--verify", upstream(branch))[0] != 0:
         return []
-    base = _base(branch)
-    if not base:
-        return []
-    code, out = git("log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", f"{base}..HEAD")
+    code, out = git("log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", *_local_range(branch))
     if code != 0:
         return []
     overrides = check_overrides()
@@ -191,8 +205,9 @@ def export(branch: str | None = None) -> dict[str, Any]:
             p.unlink()
     if items:
         pdir.mkdir(parents=True, exist_ok=True)
-        base = _base(branch)
-        git("format-patch", "-q", "--zero-commit", "--no-signature", "-o", str(pdir), f"{base}..HEAD")
+        for i, it in enumerate(items, 1):            # one by one: only the customizations, never upstream's commits
+            git("format-patch", "-q", "--zero-commit", "--no-signature", "--start-number", str(i), "-o", str(pdir),
+                "-1", it["commit"])
     elif pdir.is_dir() and not any(pdir.iterdir()):
         pdir.rmdir()
     reg = ws / REGISTRY

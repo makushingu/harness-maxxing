@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 
 import pytest
@@ -226,3 +227,64 @@ def test_version_card_cached_until_the_clone_changes(code, monkeypatch):
     rules.write_text("LIMIT = 60\n")                                                   # uncommitted edit
     monkeypatch.setattr(system_api, "LOCAL_TTL", 0)
     assert system_api.version_info()["custom"]["dirty"] == 1
+
+
+def _rewrite_upstream(work):
+    """The maintainers rewrite the whole history (new authors, same code), with no common ancestor left."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "Maintainer", "GIT_AUTHOR_EMAIL": "maintainer@example.com",
+           "GIT_COMMITTER_NAME": "Maintainer", "GIT_COMMITTER_EMAIL": "maintainer@example.com"}
+
+    def git(*a):
+        return subprocess.run(["git", "-C", str(work), *a], check=True, env=env, capture_output=True, text=True).stdout.strip()
+    parent = None
+    for sha in git("rev-list", "--reverse", "main").split():
+        msg = git("log", "-1", "--format=%B", sha) or "commit"
+        parent = git("commit-tree", f"{sha}^{{tree}}", *(["-p", parent] if parent else []), "-m", msg)
+    git("reset", "-q", "--hard", parent)
+    _git("push", "-q", "-f", "origin", "main", cwd=work)
+
+
+def test_update_follows_a_rewritten_history(code, capsys):
+    clone, work = code["clone"], code["work"]
+    _upstream_release(work, "1.1.0")
+    assert run_cli("update") == 0
+    old = _head(clone)
+    _rewrite_upstream(work)
+    _upstream_release(work, "1.2.0", extra="feature.txt")
+    capsys.readouterr()
+    assert run_cli("update") == 0
+    out = capsys.readouterr().out
+    assert "rewritten upstream" in out and "release 1.2.0" in out
+    assert _head(clone) == _head(work) != old and (clone / "feature.txt").exists()
+    assert customs.list_customs() == []
+
+
+def test_customizations_survive_a_rewritten_history(code, capsys):
+    clone, work, ws = code["clone"], code["work"], code["ws"]
+    (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    customs.save("Raise the limit", "many sessions")
+    _rewrite_upstream(work)
+    _git("fetch", "-q", "origin", cwd=clone)
+    # the old upstream commits are not taken for customizations, before the update either
+    assert [c["title"] for c in customs.list_customs()] == ["Raise the limit"]
+    _upstream_release(work, "1.2.0", extra="feature.txt")
+    assert run_cli("update") == 0
+    assert "1 customization(s) carried over" in capsys.readouterr().out
+    assert (clone / "feature.txt").exists() and "LIMIT = 50" in (clone / "server/maxxing/rules.py").read_text()
+    assert [c["title"] for c in customs.list_customs()] == ["Raise the limit"]
+    patches = list((ws / "customizations").glob("*.patch"))
+    assert len(patches) == 1 and "LIMIT = 50" in patches[0].read_text()
+    log = subprocess.run(["git", "-C", str(clone), "log", "--format=%an"], capture_output=True, text=True).stdout.split("\n")
+    assert "Maintainer" in log                                  # sits on the new history
+
+
+def test_a_local_commit_is_never_dropped_for_a_rewritten_history(code, capsys):
+    """Code that is no upstream version (a hand commit merged with upstream) is never reset away."""
+    clone, work = code["clone"], code["work"]
+    _rewrite_upstream(work)
+    _git("fetch", "-q", "origin", cwd=clone)
+    assert customs.same_code_upstream()
+    (clone / "local.txt").write_text("mine\n")
+    _git("add", "-A", cwd=clone)
+    _git("commit", "-q", "-m", "local", cwd=clone)
+    assert not customs.same_code_upstream()
