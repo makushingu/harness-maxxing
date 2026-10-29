@@ -191,13 +191,22 @@ export default defineConfig(({ mode }) => {
       // Stable vendor chunks: a release that only touches app code keeps these in the browser/service-worker
       // cache (their hashes do not change), and they download in parallel with the entry chunk.
       rolldownOptions: {
+        // The design system files only define components: a barrel import (`@/components/ui`) keeps the ones it uses,
+        // not all of them (and their Radix libraries) in the first load.
+        treeshake: { moduleSideEffects: (id: string) => !/[\\/]src[\\/]components[\\/]ui[\\/][^\\/]+\.tsx?$/.test(id) },
         output: {
           advancedChunks: {
             groups: [
               { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 30 },
               { name: 'vendor-router', test: /node_modules[\\/](react-router|@remix-run|cookie|set-cookie-parser)[\\/]/, priority: 25 },
               { name: 'vendor-query', test: /node_modules[\\/]@tanstack[\\/]/, priority: 25 },
-              { name: 'vendor-ui', test: /node_modules[\\/](@radix-ui|@floating-ui|sonner|react-remove-scroll|aria-hidden|class-variance-authority|tailwind-merge|clsx)[\\/]/, priority: 20 },
+              // The Radix parts no eager screen uses (selects, checkboxes, tabs, scroll areas, avatars...) stay out:
+              // they load with the lazy pages that use them instead of riding in vendor-ui on every first load.
+              {
+                name: 'vendor-ui',
+                test: /node_modules[\\/](@radix-ui[\\/](?!react-(select|checkbox|tabs|scroll-area|avatar|separator|label)[\\/]|number[\\/])|@floating-ui|sonner|react-remove-scroll|aria-hidden|class-variance-authority|tailwind-merge|clsx)/,
+                priority: 20,
+              },
             ],
           },
         },
