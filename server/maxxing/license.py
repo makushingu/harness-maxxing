@@ -131,6 +131,8 @@ def activate(key: str, version: str | None = None) -> dict:
                                "os": os_name(), "version": version or disk_version()})
     if not isinstance(r.get("token"), str) or not r["token"]:
         raise LicenseError("the license server sent no activation token", "bad_answer", r)
+    if not isinstance(r.get("license", {}), dict):                      # checked before anything is written
+        raise LicenseError("the license server sent an answer this version does not read", "bad_answer")
     config.set_secret(KEY, key.strip().upper())
     if enabled():
         config.set_secret(TOKEN, r["token"])          # still on archives (a pre-a87 install): moves to git soon
