@@ -1,8 +1,10 @@
-"""Downloads: the Content-Disposition of every download (files, team files, PC agent)."""
+"""Downloads: the Content-Disposition of every download (files, team files, PC agent) and folders as a zip."""
 from __future__ import annotations
 
+import io
 import os
 import re
+import zipfile
 from urllib.parse import unquote
 
 import pytest
@@ -41,6 +43,79 @@ def test_content_disposition(name, plain, real):
 def test_a_very_long_name_is_cut_and_keeps_its_extension():
     plain, real = _names(downloads.content_disposition("é" * 400 + ".tar.gz"))
     assert len(real) == downloads.NAME_MAX and real.endswith("é.gz") and plain.endswith("e.gz")
+
+
+@pytest.fixture
+def tree(mx):
+    root = mx["files"]
+    d = root / "proj"
+    (d / "sub" / "deep").mkdir(parents=True)
+    (d / "empty").mkdir()
+    (d / "a.txt").write_text("hello " * 1000)
+    (d / "sub" / "pic.png").write_bytes(os.urandom(5000))
+    (d / "sub" / "deep" / "x.md").write_text("# x\n")
+    return root
+
+
+def _get_zip(client, path):
+    r = client.get("/api/files/zip", params={"path": str(path)})
+    return r, (zipfile.ZipFile(io.BytesIO(r.content)) if r.status_code == 200 else None)
+
+
+def test_zip_of_a_folder(client, tree):
+    r, z = _get_zip(client, tree / "proj")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    assert _names(r.headers["content-disposition"]) == ("proj.zip", "proj.zip")
+    assert r.headers["cache-control"] == "no-store"
+    assert z.testzip() is None
+    assert sorted(z.namelist()) == ["proj/", "proj/a.txt", "proj/empty/", "proj/sub/", "proj/sub/deep/",
+                                    "proj/sub/deep/x.md", "proj/sub/pic.png"]
+    assert z.read("proj/a.txt") == (tree / "proj" / "a.txt").read_bytes()
+    assert z.getinfo("proj/a.txt").compress_type == zipfile.ZIP_DEFLATED
+    assert z.getinfo("proj/sub/pic.png").compress_type == zipfile.ZIP_STORED
+    assert z.read("proj/sub/pic.png") == (tree / "proj" / "sub" / "pic.png").read_bytes()
+
+
+def test_zip_refuses_files_and_paths_outside(client, tree, mx):
+    assert client.get("/api/files/zip", params={"path": str(tree / "proj" / "a.txt")}).status_code == 404
+    assert client.get("/api/files/zip", params={"path": str(mx["tmp"])}).status_code == 403
+    assert client.get("/api/files/zip", params={"path": "/etc"}).status_code == 403
+
+
+def test_zip_never_follows_a_link_out_of_the_root(client, tree, mx):
+    secret = mx["tmp"] / "outside"
+    secret.mkdir()
+    (secret / "key.txt").write_text("secret")
+    proj = tree / "proj"
+    os.symlink(secret, proj / "linkdir")
+    os.symlink(secret / "key.txt", proj / "linkfile.txt")
+    os.symlink(proj / "a.txt", proj / "inside.txt")                # a link inside the root is fine
+    os.mkfifo(proj / "pipe")                                       # never read (it would hang)
+    os.symlink("/proc/self/root/etc", proj / "proc")
+    r, z = _get_zip(client, proj)
+    names = z.namelist()
+    assert "proj/inside.txt" in names and z.read("proj/inside.txt") == (proj / "a.txt").read_bytes()
+    assert not [n for n in names if "link" in n or "pipe" in n or "proc" in n]
+    assert b"secret" not in r.content
+    # the folder itself through a link out of the root
+    os.symlink(secret, tree / "out")
+    assert client.get("/api/files/zip", params={"path": str(tree / "out")}).status_code == 403
+
+
+def test_zip_caps(client, tree, monkeypatch):
+    monkeypatch.setattr(downloads, "ZIP_MAX_BYTES", 3000)
+    r = client.get("/api/files/zip", params={"path": str(tree / "proj")})
+    assert r.status_code == 413 and r.json()["error"] == "too_large"
+    monkeypatch.setattr(downloads, "ZIP_MAX_BYTES", 1 << 30)
+    monkeypatch.setattr(downloads, "ZIP_MAX_FILES", 3)
+    assert client.get("/api/files/zip", params={"path": str(tree / "proj")}).status_code == 413
+
+
+def test_zip_names_that_are_not_utf8(client, tree):
+    d = tree / "proj"
+    os.close(os.open(os.fsencode(d) + b"/caf\xe9.txt", os.O_CREAT | os.O_WRONLY))
+    r, z = _get_zip(client, d)
+    assert "proj/café.txt" in z.namelist()
 
 
 def test_raw_download_names(client, mx):
