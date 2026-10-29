@@ -1,0 +1,1 @@
+var e={"paste.asFile":`Pasted as a file`,"paste.asFileHint":`Long or structured data is attached instead of filling the message. Ctrl+Shift+V always pastes as text.`,"paste.asText":`Paste as text`};export{e as default};

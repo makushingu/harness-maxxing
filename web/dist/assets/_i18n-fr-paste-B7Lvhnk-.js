@@ -1,0 +1,1 @@
+var e={"paste.asFile":`Collé comme fichier`,"paste.asFileHint":`Les données longues ou structurées sont jointes au lieu de remplir le message. Ctrl+Maj+V colle toujours en texte.`,"paste.asText":`Coller en texte`};export{e as default};
