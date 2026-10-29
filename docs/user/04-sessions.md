@@ -318,9 +318,9 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
   it works in this browser. Unread answers show a green round counter in the sidebar, on the ☰ button and
   the tree; it can pulse until you read them (*Pulsing badge*).
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -
-  and the session tree shows only those sessions, unfolded (the **Running** or **Unread** chip lights up).
-  **Open all** opens them next to the columns already open; the **All** chip brings the whole tree back
-  (typing a search does too). The **Sessions** link
+  and the session tree shows only those sessions, unfolded (the **Running** or **Unread** chip lights up; a click on a
+  project or topic still folds it, until the filter changes). **Open all** opens them next to the columns already
+  open; the **All** chip brings the whole tree back (typing a search does too). The **Sessions** link
   itself brings back your last layout.
 - **Archive** hides a session from the list without deleting it (see the Archived filter).
 - **Delete** stops a running turn and removes the session files.
