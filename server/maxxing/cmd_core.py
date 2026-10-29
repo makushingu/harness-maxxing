@@ -2284,12 +2284,25 @@ def _is_install_dir(p: Path) -> bool:
             and (p / "install.sh").is_file() and (p / "server" / "maxxing").is_dir())
 
 
+_SYSTEM_DIRS = tuple(Path(d) for d in ("/", "/var", "/var/lib", "/opt", "/root", "/etc", "/usr", "/srv", "/home"))
+_SYSTEM_PREFIXES = tuple(Path(d) for d in ("/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/proc",
+                                           "/run", "/sbin", "/sys", "/usr"))
+
+
 def _is_state_dir(p: Path) -> bool:
     """--purge deletes the state directory only if it is one (a typo like STATE_DIR=/var/lib must not wipe it)."""
     p = p.resolve()
-    return (p not in (Path("/"), home().resolve(), Path("/var"), Path("/var/lib"), Path("/opt"), Path("/root"),
-                      Path("/etc"), Path("/usr"), Path("/srv"), Path("/home"))
-            and (p / "config.json").is_file())
+    return p not in (*_SYSTEM_DIRS, home().resolve()) and (p / "config.json").is_file()
+
+
+def _is_workspace_dir(p: Path) -> bool:
+    """--purge-workspace deletes the workspace only if it is one: never a link (its target would go), a system
+    directory, the home directory nor a folder without CLAUDE.md or projects/ (a workspace set to /usr by mistake)."""
+    if p.is_symlink():
+        return False
+    p = p.resolve()
+    return (p not in (*_SYSTEM_DIRS, home().resolve()) and not any(p.is_relative_to(d) for d in _SYSTEM_PREFIXES)
+            and p.is_dir() and ((p / "CLAUDE.md").is_file() or (p / "projects").is_dir()))
 
 
 def cmd_harden(a) -> int:
@@ -2396,10 +2409,13 @@ def cmd_uninstall(a) -> int:
         elif config.STATE.is_dir():
             line(WARN, f"{config.STATE} does not look like a Harness Maxxing state directory (no config.json) - kept")
     if a.purge_workspace:
-        ws = Path(cfg["workspace"]).resolve()
-        if ws not in (Path("/"), home().resolve()) and ws.is_dir():
-            shutil.rmtree(ws, ignore_errors=True)
+        ws = Path(cfg["workspace"])
+        if _is_workspace_dir(ws):
+            shutil.rmtree(ws.resolve(), ignore_errors=True)
             line(OK, f"workspace removed ({ws})")
+        elif ws.exists() or ws.is_symlink():
+            line(WARN, f"{ws} does not look like a Harness Maxxing workspace (a link, a system directory, or no "
+                       "CLAUDE.md nor projects/) - kept")
     else:
         line(INFO, f"workspace kept: {cfg['workspace']}")
     if not a.purge:
