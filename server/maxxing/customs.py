@@ -175,7 +175,7 @@ def check_overrides() -> dict[str, str]:
 
 
 def set_check(cid: str, command: str) -> dict[str, Any]:
-    _find(cid)
+    cid = _find(cid)["id"]                               # a sha prefix: stored under the customization's own id
     d = check_overrides()
     command = " ".join((command or "").split())
     if command:

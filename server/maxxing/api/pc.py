@@ -262,7 +262,7 @@ async def mcp(request: Request):
         return JSONResponse({"error": "forbidden"}, status_code=403)
     try:
         msg = await request.json()
-    except ValueError:
+    except (ValueError, RecursionError):                # RecursionError: "[[[[…" nested too deep
         return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
     if isinstance(msg, list):
         out = [r for r in [await _rpc(m) for m in msg] if r is not None]

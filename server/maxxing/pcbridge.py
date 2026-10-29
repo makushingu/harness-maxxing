@@ -457,16 +457,21 @@ def _page(url: str) -> str:
     return (f"{u.scheme}://{host}{port}{u.path}" if u.scheme in ("http", "https") else u.scheme + ":")[:200]
 
 
+def _text(v) -> str:
+    """str(v) that UTF-8 can write: a lone surrogate (from a JSON "\\ud800") becomes "?"."""
+    return str(v).encode("utf-8", "replace").decode()
+
+
 def _log_action(tool: str, args: dict, ok: bool, ms: int) -> None:
-    keep = {k: (str(v)[:200] if k not in ("value", "text", "url") else
-                _page(str(v)) if k == "url" else f"<{len(str(v))} chars>")
+    keep = {k: (_text(v)[:200] if k not in ("value", "text", "url") else
+                _page(_text(v)) if k == "url" else f"<{len(str(v))} chars>")
             for k, v in (args or {}).items() if k in ("url", "uid", "value", "text", "type", "key", "pageId", "fullPage")}
     line = json.dumps({"at": time.time(), "tool": tool, "args": keep, "ok": ok, "ms": ms}, ensure_ascii=False)
     p = _dir() / "actions.jsonl"
     try:
         lines = p.read_text().splitlines()[-(MAX_ACTIONS - 1):] if p.exists() else []
         p.write_text("\n".join(lines + [line]) + "\n")
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 
@@ -975,7 +980,10 @@ def _bad_url(args: dict) -> str | None:
     if url is None:
         return None
     raw = re.sub(r"[\t\n\r]", "", str(url)).strip().replace("\\", "/")   # what the browser drops / reads as "/"
-    u = urlsplit(raw)
+    try:
+        u = urlsplit(raw)
+    except ValueError:                                   # "http://[::1": not an address the browser can open
+        return "Only http(s) pages can be opened in the browser of the PC (no file:, chrome:... addresses)."
     scheme = u.scheme.lower()
     if scheme not in PAGE_SCHEMES or (scheme == "about" and raw.lower() not in ("about:blank",)):
         return "Only http(s) pages can be opened in the browser of the PC (no file:, chrome:... addresses)."

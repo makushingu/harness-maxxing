@@ -148,8 +148,8 @@ def get_register():
 @router.put("/register")
 async def put_register(body: RegisterIn):
     """Say hello to the authors or stop (docs/user/23-license.md). Talks to the cloud: in a thread."""
-    from .. import register
-    if body.email and not _EMAIL.match(body.email.strip()):
+    from .. import feedback, register
+    if body.email and (not _EMAIL.match(body.email.strip()) or not feedback.utf8(body.email)):
         raise _err("invalid_email", "email: a valid address or empty")
     st = await asyncio.to_thread(register.save, body.count, body.email, body.news, body.asked)
     bus.invalidate("register")

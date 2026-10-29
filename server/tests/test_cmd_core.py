@@ -347,6 +347,20 @@ def test_uninstall_purge_keeps_a_state_dir_that_is_not_one(env, tmp_path, monkey
     assert (env["state"] / "other-app").is_dir()
 
 
+def test_uninstall_purge_of_a_linked_state_dir_does_not_say_removed(env, tmp_path, monkeypatch, capsys):
+    """rmtree(ignore_errors=True) refuses a link without a word: "state removed" was printed, nothing was."""
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    link = tmp_path / "state-link"
+    link.symlink_to(env["state"])
+    monkeypatch.setattr(config, "STATE", link)
+    monkeypatch.setattr(config, "CODE", tmp_path / "none")
+    capsys.readouterr()
+    assert run_cli("uninstall", "--yes", "--purge") == 0
+    out = capsys.readouterr().out
+    assert "state removed" not in out and "is a link" in out, out
+    assert link.is_symlink() and (env["state"] / "config.json").is_file()
+
+
 @pytest.mark.parametrize("where", ["/usr", "/etc", "/var/lib", "/usr/local/share"])
 def test_uninstall_purge_workspace_keeps_a_system_directory(env, monkeypatch, where):
     """A workspace set to /usr (or //usr, which the installer once accepted) must not be wiped by --purge-workspace."""

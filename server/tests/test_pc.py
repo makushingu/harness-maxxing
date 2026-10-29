@@ -536,3 +536,23 @@ def test_mcp_config_args_point_at_a_private_file_only_when_paired(tmp_path, monk
     assert args == ["--mcp-config", str(f)] and "topsecret" not in " ".join(args)
     assert json.loads(f.read_text())["mcpServers"]["harness-pc"]["url"].endswith("/api/pc/mcp")
     assert oct(f.stat().st_mode & 0o777) == "0o600"
+
+
+@pytest.mark.parametrize("url", ["http://[::1", "http://[abc/", "https://[/x"])
+def test_malformed_url_is_refused_not_raised(url):
+    assert "Only http(s) pages" in (pcbridge._bad_url({"url": url}) or ""), url
+
+
+def test_lone_surrogate_in_args_does_not_break_the_call(mx, monkeypatch):
+    monkeypatch.setattr(pcbridge, "cached_tools", lambda: [{"name": "navigate_page"}])
+    r = asyncio.run(pcbridge.tools_call("navigate_page", {"uid": "a\ud800b", "url": "https://example.com/a\ud800"}))
+    assert r["isError"]                                                       # the PC is offline: said, not raised
+    assert pcbridge.actions()[0]["args"] == {"uid": "a?b", "url": "https://example.com/a"}
+    json.dumps(pcbridge.actions()).encode()
+
+
+def test_deep_json_body_is_a_json_rpc_error(pc, monkeypatch):
+    monkeypatch.setattr(pc_api, "_loopback", lambda conn: True)
+    h = {"Authorization": f"Bearer {pcbridge.load()['mcp_secret']}", "Content-Type": "application/json"}
+    r = pc.post("/api/pc/mcp", content="[" * 100000 + "]" * 100000, headers=h)
+    assert r.status_code == 200 and r.json()["error"]["code"] == -32700
