@@ -23,13 +23,15 @@ We recommend a server dedicated to Harness Maxxing: by default Claude runs with 
 As root on the server (`sudo -i` first if you are logged in as another user):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
 ```
+
+(`--proto '=https' --tlsv1.2`: curl only speaks HTTPS with TLS 1.2 or newer, even if a redirect points elsewhere.)
 
 It asks three questions (access mode, domain, restore a backup), then clones the public git repository
 (`github.com/makushingu/harness-maxxing`, branch `stable` = the published versions) - no key, no account. Updates then come from that branch
 (`maxxing update`). Unattended install:
-`curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
+`curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
 Harness Maxxing is free under a fair source license: see [License](license).
 
 No license key is asked. A company that needs an Enterprise key gives it after the install, in Settings → License
@@ -110,7 +112,7 @@ scheduled jobs, an older Node.js, an existing Claude Code setup, other Telegram 
 that report (nothing is changed):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | bash -s -- --check
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash -s -- --check
 ```
 
 When the server is already in use, the installer asks for confirmation and then:
@@ -147,7 +149,7 @@ The server never listens on `0.0.0.0` or a public address.
 Answer every question with variables and add `ASSUME_YES=1`:
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
 ```
 
 | Variable | Default | Meaning |
@@ -182,7 +184,7 @@ Moving to a new server? Install with your backup repository (with an Enterprise 
 server: Settings → License → Remove the key, see [License](license)):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash
 ```
 
 The installer runs `maxxing backup restore --from owner/memory-backup` after creating the

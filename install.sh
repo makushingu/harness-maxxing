@@ -3,7 +3,7 @@
 #  Harness Maxxing - one-line installer (Ubuntu / Debian with systemd, x86_64 or arm64, as root)
 #
 #  Install from the public git repository (no key needed; updates come from git):
-#    curl -fsSL https://get.harness-maxxing.com | bash
+#    curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
 #  An Enterprise key (optional, companies only) can be given too: LICENSE=HM-XXXX-XXXX-XXXX-XXXX (recorded, nothing else changes)
 #  From a private fork or mirror (read token): GH_TOKEN=$T REPO=owner/name bash install.sh
 #  Install from a local copy of the code (an unpacked archive or a clone, web/dist built), no network
@@ -18,7 +18,7 @@
 #    -h, --help
 #
 #  Unattended: answer with variables and ASSUME_YES=1, e.g.
-#    curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
+#    curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
 #  Variables (default):
 #    LICENSE (optional: an Enterprise key, recorded - or later in Settings -> License)  LICENSE_API (https://api.harness-maxxing.com)
 #    REPO (makushingu/harness-maxxing)  BRANCH (stable)  GH_TOKEN (private fork or mirror only)  INSTALL_DIR (/opt/claude-maxxing)
@@ -497,7 +497,7 @@ mx() { MAXXING_STATE="$STATE_DIR" "$BIN" "$@"; }
 usage() {
   cat <<'USAGE'
 Harness Maxxing installer
-  curl -fsSL https://get.harness-maxxing.com | bash        install or repair from the public git repository (re-runnable)
+  curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash   install or repair from the public git repository (re-runnable)
   ... | LICENSE=HM-XXXX-XXXX-XXXX-XXXX bash                 the same, recording an Enterprise key (companies only)
   GH_TOKEN=<token> REPO=owner/name bash install.sh         from a private fork or mirror
   bash /opt/claude-maxxing/install.sh --update              update (= maxxing update)
@@ -505,7 +505,7 @@ Harness Maxxing installer
   bash /opt/claude-maxxing/install.sh --tools               (re)install Node.js, Chromium, Remotion, Scrapling (= maxxing deps update)
   bash ./install.sh                                          from an unpacked copy of the code (or SOURCE_DIR=DIR)
   bash /opt/claude-maxxing/install.sh --secure              security updates, SSH by key, fail2ban, firewall (FIREWALL=0, SSH_HARDEN=0)
-  curl -fsSL https://get.harness-maxxing.com | bash -s -- --check   look at this server first, change nothing
+  curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash -s -- --check   look at this server first, change nothing
 Variables: LICENSE LICENSE_API REPO BRANCH GH_TOKEN INSTALL_DIR WORKSPACE STATE_DIR PORT ACCESS(domain|tailscale|local)
            FIREWALL(auto|1|0) SSH_HARDEN(auto|1|0) SYSTEM_CLOCK(auto|follow|keep) DOMAIN TIMEZONE ASSUME_YES=1 RESTORE_FROM RESTORE_TOKEN
            CLAUDE_TOKEN ANTHROPIC_API_KEY CLAUDE_DIR (own Claude Code folder, default ~/.claude) VOICE TOOLS SWAP SOURCE_DIR CACHE_DIR

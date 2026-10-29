@@ -121,6 +121,8 @@ Installer speed and re-runs (`install.sh`):
   --ff-only, show, format-patch, rev-list --cherry-pick, cherry-pick). Lazy fetches go to the public origin without
   a token, so a `GH_TOKEN` clone (private fork) stays full. Offline, showing a file of a version never checked out
   fails (needs the network, like the fetch before it).
+- The documented one-liner is `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash`
+  (README, docs/user, skill maxxing-backup, install.sh help). The site (harness-maxxing-cloud) still shows the old one.
 
 ## 2.0.0-alpha.102 - 2026-10-26
 
