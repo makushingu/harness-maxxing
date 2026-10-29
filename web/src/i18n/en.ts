@@ -2652,4 +2652,5 @@ export const en = {
   'team.cx.removeConfirm': "Remove {name}? Your chats stay here, but nothing more is exchanged.",
   'team.cx.pending': "{count} connection requests",
   'team.cx.pending#one': "{count} connection request",
+  'drag.dropToQuote': "Drop to quote it in this session",
 }

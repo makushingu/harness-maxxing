@@ -2634,4 +2634,5 @@ export const fr: Record<keyof typeof en, string> = {
   'team.cx.removeConfirm': "Retirer {name} ? Vos discussions restent ici, mais plus rien n’est échangé.",
   'team.cx.pending': "{count} demandes de connexion",
   'team.cx.pending#one': "{count} demande de connexion",
+  'drag.dropToQuote': "Déposez pour le citer dans cette session",
 }
