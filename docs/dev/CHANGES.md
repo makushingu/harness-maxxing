@@ -6,6 +6,40 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## Unreleased
+
+Server speed fundamentals (measured on a box with 184 sessions: the server used ~5 % of a core with 3 sessions
+running, mostly polling).
+- `config.load_secrets()` is cached like `load_config()` (key: path, inode, mtime_ns, size, ctime_ns; pickled, a
+  fresh copy per call); `set_secrets` and `write_json` of secrets.json drop it. `cookie_valid` no longer parses
+  secrets.json on every request (66 -> ~25 µs). `config.workspace()` / `files_root()` / `claude_dir()` read one
+  setting from the cached merged config (`_setting`) instead of unpickling the whole config.
+- `workspace.py`: CLAUDE.md descriptions, `.maxxing.json` and `projects/.order.json` are cached per file on their stat
+  (`_cached`; a file changed less than `RACY_S` = 2 s ago is read again; the writes here call `_forget`);
+  `_folder_meta` returns a copy. `tree()` / `list_topics()` read the workspace root once (`_one_root`).
+- `store.list_ids()` keeps the ids in memory and lists the folder again only when its mtime changed (or changed less
+  than 1 s ago): 1.1-1.5 ms -> ~10 µs with 652 files. `store.prune_locks()` removes the `.lock` / `.run` of sessions
+  that are gone or idle for an hour, under their lock; `_flock` and `hold_run_lock` check after locking that the
+  file is still the one at the path (fstat vs stat) and start again on a new one. `runner_alive` no longer creates
+  a missing `.run` (no file = nobody holds it).
+- New `sessions/wake.py`: one `watchfiles` RustNotify thread on the sessions folder (not recursive; debounce 100 ms,
+  step 50 ms) wakes the per-session SSE streams (`<id>.log` / `<id>.json`) and the turn-end watcher (`<id>.json`)
+  through asyncio events taken before looking (`mark` then `wait`: nothing missed in between). With it the streams
+  look at least every 2 s while running (`WAKE_RUNNING_S`) / 1 s idle, the watcher every 2 s while running /
+  `interval` idle; without it (no inotify, `MAXXING_INOTIFY=0`, another loop) the old polling (0.1 / 0.25 / 1 s).
+  `watchfiles` is now a declared dependency (it came with `uvicorn[standard]`).
+- `session-watcher.json`: written after the first pass, at once after a report, and at most every 5 s after passes
+  that saw a change (never when nothing changed; was every 5 s with indent + fsync); compact JSON, no fsync.
+- Feed watcher: `feed.watch_id()` reads nothing while feed.db and its WAL are unchanged and keeps one connection
+  (`check_same_thread=False`, under a lock; reopened when feed.db is replaced) instead of a new one every 3 s.
+- Logs: `clip.clip_event` drops `thinking.signature` and `redacted_thinking.data` (~16 % of the logs measured);
+  `clip.worth_clipping` also lets short lines carrying them through `clip_line` / `compact_log`. New
+  `sessions/maintenance.py`: every night at 04:30 (server time) compacts the logs written since the previous pass
+  (`<state>/sessions-maintenance.json {at, retry}`; running ones retried the next night), then `prune_locks()`.
+  Disabled in tests with `MAXXING_SESSION_MAINTENANCE=0`. The first pass after the update compacts every log once.
+- `search.reclaim()`: after a files walk, at most once a day, VACUUM when more than 25 % of search.db is free pages
+  (and it is at least 4 MB).
+
 ## 2.0.0-alpha.102 - 2026-10-26
 
 Integration of #23, the port of the pre-squash `fix/telegram-all` (a76-a79 there, never merged). `web/dist`

@@ -121,7 +121,7 @@ Session = {
 | GET | `/api/sessions/{id}/events?tail=N` | – | last events, read backwards from the end (whole log lines, at least N events when available, max 5000): `{events, start, next, more_before:bool, state}` — `start` = offset of the first line returned, `next` = end offset (start the stream there). What the UI uses to open a thread |
 | GET | `/api/sessions/{id}/events?before=<offset>&limit=N` | – | events strictly before `offset` (backward paging, "Show earlier messages"): `{events, start, next:offset, more_before, state}` · `{events:[], reset:true, state}` when `offset` is not a line boundary of the current log |
 | GET | `/api/sessions/{id}/events?from=0` | – | forward reading `{events:[Event], next:int, state, more:bool}` (≤ 4 MB of log per call; `more` = call again from `next`) · `reset:true` when `from` is beyond the end / not a line boundary |
-| GET | `/api/sessions/{id}/stream?from=0` | – | **SSE**. `event: events` `data: {events, next}` · `event: state` `data: Session` · `event: reset` `data: {}` then end of stream when the log was rewritten or shrank (or `from` is stale): reload with `?tail=` · heartbeat comment every 15 s |
+| GET | `/api/sessions/{id}/stream?from=0` | – | **SSE**. `event: events` `data: {events, next}` · `event: state` `data: Session` · `event: reset` `data: {}` then end of stream when the log was rewritten or shrank (or `from` is stale): reload with `?tail=` · heartbeat comment every 15 s. New lines and state changes are pushed ~0.05-0.15 s after they are written (inotify on the sessions folder; without it the stream polls every 0.1 s while the session runs) |
 | GET | `/api/sessions/search?q=` | – | `[{id, title, path, snippet, at}]` (served by the full-text index, see Search; max 50) |
 | POST | `/api/uploads?path=<topic path>` | multipart `file` (multi) | `{files:[{path, name, size, mime}]}` saved in `<topic>/attachments/YYYY-MM/` · each file `413 too_large` over `upload_max_mb`, `507 disk_full` when it would leave less than `upload_min_free_mb` free on the destination disk (files saved before it in the same request are kept); the whole request is capped too (see Conventions) |
 
@@ -132,9 +132,11 @@ most 32 MB further back). The runner clips tool outputs before
 writing them (2 000 characters per tool result, images → `[image]`, Write/Edit inputs beyond 20 kB; the block
 gets `mx_clipped`), keeps only `cwd, session_id, model, permissionMode, apiKeySource, claude_code_version,
 output_style, fast_mode_state, mcp_servers, uuid` of `system/init` lines (the tool / skill / slash-command
-lists, ~20 kB per turn, are dropped) and does not write `system/thinking_tokens` lines; `maxxing sessions
+lists, ~20 kB per turn, are dropped), drops the `signature` of `thinking` blocks and the `data` of
+`redacted_thinking` blocks (read by the API only) and does not write `system/thinking_tokens` lines; `maxxing sessions
 compact-logs [--dry-run]` applies the same to existing logs (atomic
-rewrite, running sessions skipped) — open streams then receive `reset`. **Event** (normalised):
+rewrite, running sessions skipped), and the server does it every night at 04:30 for the logs written since the
+previous night — open streams then receive `reset`. **Event** (normalised):
 ```
 {type:"user", text, attachments:[path], at, source, voice?:[path]}   // voice: a voice message sent directly (its audio)
 {type:"voice_text", text, error:str|null, stopped?:true, at}   // transcript of the voice message just above (error: not transcribed, nothing sent to Claude)
@@ -531,7 +533,8 @@ the last indexed offset, files on mtime/size change; refreshed every 30 s (sessi
 full walk of the other files every 10 min, and, for sessions, before each query. `GET /api/search/stats` adds
 `files_walked_at` and `files` (last walk: files, buckets, per_bucket, cut, dropped). A refresh (or the hourly `optimize`) that changed rows ends
 with `PRAGMA wal_checkpoint(TRUNCATE)` (200 ms busy timeout; retried next pass when a query holds a snapshot) and
-`journal_size_limit` is 4 MB, so `search.db-wal` does not keep its high-water mark.
+`journal_size_limit` is 4 MB, so `search.db-wal` does not keep its high-water mark. After a files walk, at most once
+a day, `search.db` is VACUUMed when more than 25 % of its pages are free (and it is at least 4 MB).
 
 | Method | Path | Body | Response |
 |---|---|---|---|
