@@ -36,6 +36,7 @@
 #    SWAP (auto - a 2 GB /swapfile when the server has under 4 GB of memory and no swap, on a fresh server only |
 #          1 - the same on a server already in use | 0 never)
 #    SOURCE_DIR (a local copy of the code to install instead of a git download)
+#    CACHE_DIR (/var/cache/harness-maxxing - downloads kept until the install succeeds: a re-run does not download again)
 #    FIREWALL (auto - enabled only on a server with nothing else exposed | 1 always | 0 never)
 #    SSH_HARDEN (auto - SSH password logins are turned off only when this very session is proven to use a key
 #      | 1 also when a key is installed but the session cannot be checked | 0 never touch SSH)
@@ -219,7 +220,7 @@ on_exit() {
   if [ "$IN_STEP" = 1 ]; then
     step_end fail
     printf '\n  %sThe installation stopped.%s Fix the problem above, then run the same command again:\n' "$C_R$C_B" "$C_0"
-    printf '  %severy step keeps what is already done.%s\n\n' "$C_D" "$C_0"
+    printf '  %severy step keeps what is already done, downloads included.%s\n\n' "$C_D" "$C_0"
   fi
   # an apt job still running is waited for (dpkg cut halfway leaves the system to repair, and $WORK is its TMPDIR);
   # background downloads of this run die with it
@@ -388,20 +389,44 @@ dep_url() {
   v=$(dep "$1" version) && a=$(dep "$1" arch "$(machine)") && u=$(dep "$1" url) || return 1
   u=${u//\{version\}/$v}; printf '%s' "${u//\{arch\}/$a}"
 }
+# ---- download cache: a failed install run again does not download again --------------------------
+# Every verified download is kept in CACHE_DIR under its sha256 until an install succeeds (then emptied): a re-run
+# after a failure reuses it, or resumes a transfer that was cut. Root only (700); the sha256 is checked on every use.
+CACHE_DIR="${CACHE_DIR:-/var/cache/harness-maxxing}"
+cache_ready() { # the cache folder exists, is ours and is not a link (otherwise downloads go straight to $WORK)
+  [ ! -L "$CACHE_DIR" ] && mkdir -p -m 700 "$CACHE_DIR" 2>/dev/null && [ -d "$CACHE_DIR" ] && [ -O "$CACHE_DIR" ]
+}
+cache_clear() { # after a successful install: only the files fetch_verified wrote (<sha256>, <sha256>.part)
+  [ -d "$CACHE_DIR" ] && [ ! -L "$CACHE_DIR" ] || return 0
+  find "$CACHE_DIR" -maxdepth 1 -type f -regextype posix-extended -regex '.*/[0-9a-f]{64}(\.part)?' -delete 2>/dev/null || true
+  rmdir "$CACHE_DIR" 2>/dev/null || true
+}
+sha_of() { sha256sum "$1" | cut -d' ' -f1; }
+
 # fetch_verified URL SHA256 DEST - THE way this installer downloads code: HTTPS only (plain http only to this
 # machine, for tests), into DEST (inside $WORK), sha256 checked before the file is used; a mismatch deletes it
 fetch_verified() {
-  local url=$1 sum=$2 dest=$3 proto='=https'
+  local url=$1 sum=$2 dest=$3 proto='=https' keep="" part get
   case "$url" in https://*) ;; *) url_ok "$url" || { warn "refused: $url is not HTTPS"; return 1; }; proto='=https,http' ;; esac
+  get=(curl -fsSL --proto "$proto" --retry 3 --retry-connrefused --connect-timeout 20 --speed-limit 10240 --speed-time 60)
   printf '%s' "$sum" | grep -Eq '^[0-9a-f]{64}$' || { warn "no valid sha256 pinned for $url"; return 1; }
-  if [ -f "$dest" ] && [ "$(sha256sum "$dest" | cut -d' ' -f1)" = "$sum" ]; then return 0; fi
-  rm -f "$dest.part"
-  curl -fsSL --proto "$proto" --retry 3 --retry-connrefused --connect-timeout 20 --speed-limit 10240 --speed-time 60 \
-    -o "$dest.part" "$url" || { rm -f "$dest.part"; warn "download failed: $url"; return 1; }
-  if [ "$(sha256sum "$dest.part" | cut -d' ' -f1)" != "$sum" ]; then
-    rm -f "$dest.part"; warn "checksum mismatch: $url (expected sha256 $sum)"; return 1
+  if [ -f "$dest" ] && [ "$(sha_of "$dest")" = "$sum" ]; then return 0; fi
+  cache_ready && keep="$CACHE_DIR/$sum"
+  if [ -n "$keep" ] && [ -f "$keep" ]; then                 # downloaded by an earlier run
+    if [ "$(sha_of "$keep")" = "$sum" ]; then ln -f "$keep" "$dest" 2>/dev/null || cp -f "$keep" "$dest"; return; fi
+    rm -f "$keep"
   fi
-  mv -f "$dest.part" "$dest"
+  part=${keep:-$dest}.part
+  # a transfer cut on an earlier run goes on where it stopped (-C -); a server that cannot resume: from the start
+  if ! { [ -n "$keep" ] && [ -s "$part" ] && "${get[@]}" -C - -o "$part" "$url" 2>/dev/null; }; then
+    rm -f "$part"
+    "${get[@]}" -o "$part" "$url" || { rm -f "$part"; warn "download failed: $url"; return 1; }
+  fi
+  if [ "$(sha_of "$part")" != "$sum" ]; then
+    rm -f "$part"; warn "checksum mismatch: $url (expected sha256 $sum)"; return 1
+  fi
+  if [ -n "$keep" ]; then mv -f "$part" "$keep"; ln -f "$keep" "$dest" 2>/dev/null || cp -f "$keep" "$dest"
+  else mv -f "$part" "$dest"; fi
 }
 # dep_fetch NAME DEST - fetch_verified with the URL and the sha256 of deps.toml for this machine
 dep_fetch() {
@@ -457,6 +482,7 @@ check_inputs() {
   case "$TOOLS" in background|foreground|0) ;; *) die "TOOLS must be background, foreground or 0" ;; esac
   case "$SWAP" in auto|0|1) ;; *) die "SWAP must be auto, 1 or 0" ;; esac
   [ -z "$SOURCE_DIR" ] || safe_path SOURCE_DIR "$SOURCE_DIR"
+  safe_path CACHE_DIR "$CACHE_DIR"; not_system_dir CACHE_DIR "$CACHE_DIR"
   [ -z "$TIMEZONE" ] || valid_tz_name "$TIMEZONE" || die "TIMEZONE is not a time zone name (got '$TIMEZONE')"
 }
 valid_tz_name() { one_line "$1" || return 1; case "$1" in ""|/*|*..*) return 1 ;; esac; printf '%s' "$1" | grep -Eq '^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$'; }
@@ -482,7 +508,7 @@ Harness Maxxing installer
   curl -fsSL https://get.harness-maxxing.com | bash -s -- --check   look at this server first, change nothing
 Variables: LICENSE LICENSE_API REPO BRANCH GH_TOKEN INSTALL_DIR WORKSPACE STATE_DIR PORT ACCESS(domain|tailscale|local)
            FIREWALL(auto|1|0) SSH_HARDEN(auto|1|0) SYSTEM_CLOCK(auto|follow|keep) DOMAIN TIMEZONE ASSUME_YES=1 RESTORE_FROM RESTORE_TOKEN
-           CLAUDE_TOKEN ANTHROPIC_API_KEY CLAUDE_DIR (own Claude Code folder, default ~/.claude) VOICE TOOLS SWAP SOURCE_DIR
+           CLAUDE_TOKEN ANTHROPIC_API_KEY CLAUDE_DIR (own Claude Code folder, default ~/.claude) VOICE TOOLS SWAP SOURCE_DIR CACHE_DIR
 USAGE
 }
 
@@ -1935,6 +1961,7 @@ main() {
   run_step "Service" setup_service
   start_tools
   banner
+  cache_clear                                 # installed: the kept downloads are no longer needed
 }
 
 # MAXXING_INSTALL_LIB=1: only define the functions (tests source the script; nothing runs)
