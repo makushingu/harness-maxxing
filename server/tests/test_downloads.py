@@ -74,6 +74,7 @@ def test_zip_of_a_folder(client, tree):
     assert z.getinfo("proj/a.txt").compress_type == zipfile.ZIP_DEFLATED
     assert z.getinfo("proj/sub/pic.png").compress_type == zipfile.ZIP_STORED
     assert z.read("proj/sub/pic.png") == (tree / "proj" / "sub" / "pic.png").read_bytes()
+    assert client.get("/api/files/zip", params={"path": str(tree / "proj"), "check": 1}).json() == {"count": 3, "size": 11004}
 
 
 def test_zip_refuses_files_and_paths_outside(client, tree, mx):
@@ -104,8 +105,9 @@ def test_zip_never_follows_a_link_out_of_the_root(client, tree, mx):
 
 def test_zip_caps(client, tree, monkeypatch):
     monkeypatch.setattr(downloads, "ZIP_MAX_BYTES", 3000)
-    r = client.get("/api/files/zip", params={"path": str(tree / "proj")})
+    r = client.get("/api/files/zip", params={"path": str(tree / "proj"), "check": 1})
     assert r.status_code == 413 and r.json()["error"] == "too_large"
+    assert client.get("/api/files/zip", params={"path": str(tree / "proj")}).status_code == 413
     monkeypatch.setattr(downloads, "ZIP_MAX_BYTES", 1 << 30)
     monkeypatch.setattr(downloads, "ZIP_MAX_FILES", 3)
     assert client.get("/api/files/zip", params={"path": str(tree / "proj")}).status_code == 413

@@ -102,7 +102,8 @@ phone).
   tab on a computer, in place on a phone.
 - **Open in Files** opens the file in the Files page - a new tab on a computer (the viewer stays open), in place
   on a phone.
-- **Download** (pictures and PDFs on screen are saved at once, without downloading them again), **Esc** to close.
+- **Download** (also on a phone; a picture on screen is saved at once, without downloading it again); on a folder,
+  **Download as zip**. **Esc** to close.
 
 ## Edit
 
@@ -121,7 +122,15 @@ conflict warning instead of overwriting the other change. Reload, then re-apply 
 - The workspace folder itself (and the folders that hold it) cannot be moved or deleted from here,
   and a topic folder with a running session cannot be moved or deleted until that session is stopped
   (the same rule as the workspace sidebar).
-- Download any file; large files are streamed.
+- Download any file from its menu: the browser saves it with its progress, whatever its size, under its real name
+  (accents included).
+- **Download as zip** in a folder's menu (and in the viewer of a folder) downloads the whole folder, sub-folders
+  included, as one zip made while it downloads. Up to 2 GB (before compression) and 100,000 files; a bigger folder
+  says so, download its sub-folders instead. Links that point outside the files root are left out.
+- **iPhone / iPad, app added to the home screen**: **Download** opens the share sheet (*Save to Files*, AirDrop,
+  Messages...) for files up to 50 MB; a bigger file opens inside the app, where the system offers to save or share
+  it - swipe from the left edge of the screen to come back. *Open the original* also stays in the app (Safari,
+  outside the app, would not be signed in).
 
 ## Tips
 
