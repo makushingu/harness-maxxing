@@ -2648,4 +2648,7 @@ export const fr: Record<keyof typeof en, string> = {
   'team.cx.pending': "{count} demandes de connexion",
   'team.cx.pending#one': "{count} demande de connexion",
   'drag.dropToQuote': "Déposez pour le citer dans cette session",
+  'paste.asFile': 'Collé comme fichier',
+  'paste.asFileHint': 'Les données longues ou structurées sont jointes au lieu de remplir le message. Ctrl+Maj+V colle toujours en texte.',
+  'paste.asText': 'Coller en texte',
 }
