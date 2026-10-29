@@ -173,6 +173,24 @@ def test_ufw_add_mode_sees_existing_ssh_rules():
         assert ("yes" in r.stdout) is has, (rules, port)
 
 
+def test_ufw_add_mode_only_counts_web_ports_open_to_everyone():
+    """443/udp, DENY 80, "22/tcp on tailscale0" or one source address were taken for ports already open."""
+    status = ("Status: active\n\nTo                         Action      From\n"
+              "--                         ------      ----\n"
+              "443/udp                    ALLOW       Anywhere\n"
+              "80/tcp                     DENY        Anywhere\n"
+              "22/tcp on tailscale0       ALLOW       100.64.0.0/10\n"
+              "8443                       ALLOW       203.0.113.5\n"
+              "8080/tcp                   ALLOW OUT   Anywhere\n"
+              "3000/tcp                   ALLOW IN    Anywhere\n"
+              "4000 (v6)                  ALLOW       Anywhere (v6)\n")
+    r = sh('open=$(printf "%s" "$S" | ufw_open_rules); echo $open; for p in 443 80 22 8443 8080 3000 4000; do '
+           'ufw_has_port "$open" $p && echo "open $p"; done', S=status)
+    assert r.stdout.split("\n")[0] == "443/udp 3000/tcp 4000", r.stdout + r.stderr
+    assert [ln for ln in r.stdout.splitlines() if ln.startswith("open")] == ["open 3000", "open 4000"], r.stdout
+    assert "yes" not in sh('ufw_has_port "443/udp" 443 && echo yes').stdout
+
+
 def test_tunnel_instructions_use_the_session_user_address_and_port():
     """F13: `ssh -L ... root@<first address>` was wrong on cloud images (ubuntu@, another port, another address)."""
     r = sh('PORT=8787; tunnel_cmd', SSH_CONNECTION="198.51.100.7 51234 203.0.113.9 2222", SUDO_USER="ubuntu")
