@@ -97,7 +97,8 @@ phone).
 - A **diagram** of an answer opens here too: fitted to the window, **+ / -** or the wheel (5 % per notch) to zoom, drag to move
   around, double-click to switch between fitted and enlarged, **Source** for its code.
 - A **folder** opens as a grid with thumbnails; click a file to open it, then ← / → browse that folder.
-  **Parent folder** goes one level up.
+  **Parent folder** goes one level up. Several files can be selected, downloaded or deleted there too (see
+  [Select several files](#select-several-files)).
 - **Edit** (text files: markdown, txt, code, CSV, HTML) opens the file in the Files page, ready to edit - in a new
   tab on a computer, in place on a phone.
 - **Open in Files** opens the file in the Files page - a new tab on a computer (the viewer stays open), in place
@@ -110,6 +111,22 @@ phone).
 Text files up to 2 MB open in an editor with syntax highlighting. Markdown, CSV and HTML have **Preview / Edit / Split** (the HTML preview shows the saved file). **Save** checks that the file
 did not change on disk meanwhile (for example because Claude edited it): if it did, you get a
 conflict warning instead of overwriting the other change. Reload, then re-apply your edit.
+
+## Select several files
+
+In a folder (the Files page list or grid, and the folder grid of the file viewer):
+
+- **Long press** a file (a finger, or the mouse button held still for half a second) to start a selection; then a
+  **tap** adds or removes a file, and a long press on another file adds every file in between.
+- With a mouse: **Shift + click** selects everything from the last file clicked to this one, **Ctrl + click**
+  (**Cmd + click** on a Mac) adds or removes one file, **Ctrl + A** selects the whole folder.
+- A bar at the top shows how many are selected, with **Download** (several files or folders come as one zip, same
+  limits as below), **Delete** (one confirmation for all of them, with their names) and **...** for the other
+  actions. **Esc** or the cross ends the selection.
+- **Right click** a file (or **Shift + F10** / the menu key on the focused file) for its menu: *Open*, *Download*,
+  *Copy path*, *Rename or move*, *Delete* - and *Open in Files* in the viewer. On a selected file, the menu acts on the
+  whole selection.
+- Without a selection a click opens the file, as before.
 
 ## Rename, move, delete, download
 

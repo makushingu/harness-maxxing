@@ -14,6 +14,7 @@ import { hideMessage } from '@/lib/queries'
 import { reducedMotion } from '@/lib/presence'
 import type { Session } from '@/lib/types'
 import { ItemRow, UserMessage } from './Items'
+import { onThreadDragEnd, onThreadDragStart } from './contentDrag'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { isShownTask, setHiddenLocal, taskStatus, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
 import type { Pending, Seed } from './store'
@@ -287,7 +288,8 @@ export const Thread = React.forwardRef<ThreadHandle, {
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scroller} onScroll={onScroll} className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain [contain:layout_paint] [overflow-anchor:none]" data-thread>
+      {/* one delegated handler for the drags into another session (message grips, files, selected text) */}
+      <div ref={scroller} onScroll={onScroll} onDragStart={(e) => onThreadDragStart(e, sid)} onDragEnd={onThreadDragEnd} className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain [contain:layout_paint] [overflow-anchor:none]" data-thread>
         <div ref={content} className="mx-auto flex min-h-full w-full max-w-[860px] flex-col gap-3 px-4 pt-4 pb-6 max-md:px-3">
           {log.status === 'loading' && <ThreadSkeleton />}
           {log.status === 'error' && (

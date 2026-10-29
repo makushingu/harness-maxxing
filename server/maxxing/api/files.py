@@ -9,6 +9,7 @@ import asyncio
 import bz2
 import gzip
 import hashlib
+import hmac
 import lzma
 import mimetypes
 import os
@@ -227,27 +228,108 @@ async def raw(path: str, download: int = 0, v: str = ""):
     return _serve(p, v, bool(download))
 
 
+def _zip_413(e: downloads.ZipTooLarge, what: str) -> HTTPException:
+    much = (f"more than {downloads.ZIP_MAX_FILES:,} files" if e.what == "count"
+            else f"more than {downloads.ZIP_MAX_BYTES >> 30} GB")
+    return _err(413, "too_large", f"{what} {much}: too much for one zip")
+
+
+def _zip_response(plan: list, name: str) -> StreamingResponse:
+    return StreamingResponse(downloads.zip_stream(plan), media_type="application/zip", headers={
+        "Content-Disposition": downloads.content_disposition(name + ".zip"),
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
 @router.get("/zip")
-async def zip_folder(path: str, check: int = 0):
+async def zip_folder(request: Request, path: str = "", check: int = 0, token: str = ""):
     """A folder as a zip, streamed while it is made (downloads.zip_plan for what goes in). `check=1`: only what it
-    would hold, or its 413 (the UI asks first: a refused link download shows no reason)."""
+    would hold, or its 413 (the UI asks first: a refused link download shows no reason). `token=`: the entries
+    of a POST /zip (several files and folders), planned again from their paths."""
+    if token:
+        held = _zip_tokens.get(token)
+        if not held or held[0] < time.monotonic() or not hmac.compare_digest(held[1], _cookie_tag(request)):
+            raise _err(404, "not_found", "This download link expired")
+        try:
+            items, name = await _t(_zip_items, held[2])
+            plan = await _t(downloads.zip_plan_many, items, _root())
+        except downloads.ZipTooLarge as e:
+            raise _zip_413(e, "These files hold") from None
+        except PermissionError:
+            raise _err(403, "forbidden", "Permission denied") from None
+        return _zip_response(plan, name)
     p = resolve(path)
     if not await _t(p.is_dir):
         raise _err(404, "not_found", "Not a folder")
     try:
         plan = await _t(downloads.zip_plan, p, _root())
     except downloads.ZipTooLarge as e:
-        what = (f"more than {downloads.ZIP_MAX_FILES:,} files" if e.what == "count"
-                else f"more than {downloads.ZIP_MAX_BYTES >> 30} GB")
-        raise _err(413, "too_large", f"This folder holds {what}: too much for one zip") from None
+        raise _zip_413(e, "This folder holds") from None
     except PermissionError:
         raise _err(403, "forbidden", "Permission denied") from None
     if check:
         files = [st for _, _, st in plan if st is not None]
         return {"count": len(files), "size": sum(st.st_size for st in files)}
-    return StreamingResponse(downloads.zip_stream(plan), media_type="application/zip", headers={
-        "Content-Disposition": downloads.content_disposition((p.name or "files") + ".zip"),
-        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    return _zip_response(plan, p.name or "files")
+
+
+# Several entries in one zip: POST checks them and answers a token, the browser downloads GET /zip?token= (a link
+# download cannot POST). The token is a handle, not a credential: the GET still needs the same session cookie.
+ZIP_PATHS_MAX = 1000
+ZIP_TOKEN_TTL_S = 120
+_zip_tokens: dict[str, tuple[float, str, list[str]]] = {}
+
+
+class ZipIn(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=ZIP_PATHS_MAX)
+
+
+def _cookie_tag(request: Request) -> str:
+    return hashlib.sha256((request.cookies.get(security.COOKIE) or "").encode()).hexdigest()
+
+
+def _zip_items(paths: list[str]) -> tuple[list[tuple[Path, str]], str]:
+    """(resolved path, name in the zip) of each entry, in the order given, duplicates and entries inside another
+    one left out; and the zip's name (their folder when they share one). 404 when one is missing."""
+    seen: dict[Path, str] = {}
+    parents: set[Path] = set()
+    for raw in paths:
+        p = resolve(raw)
+        if not p.exists():
+            raise _err(404, "not_found", "Not found")
+        name = Path(raw).name or p.name
+        seen.setdefault(p, name)
+        parents.add(Path(raw).parent)
+    items = [(p, n) for p, n in seen.items() if not any(q in seen for q in p.parents)]
+    root = _root()
+    folder = parents.pop() if len(parents) == 1 else None
+    name = folder.name if folder and folder != root and folder.name else "files"
+    return items, name
+
+
+def _zip_check(paths: list[str]) -> dict:
+    items, name = _zip_items(paths)
+    plan = downloads.zip_plan_many(items, _root())
+    files = [st for _, _, st in plan if st is not None]
+    return {"count": len(files), "size": sum(st.st_size for st in files), "name": name + ".zip"}
+
+
+@router.post("/zip")
+async def zip_many(body: ZipIn, request: Request):
+    """Several files and folders as one zip: checked here (paths, caps), then downloaded by GET /zip?token=."""
+    try:
+        out = await _t(_zip_check, body.paths)
+    except downloads.ZipTooLarge as e:
+        raise _zip_413(e, "These files hold") from None
+    except PermissionError:
+        raise _err(403, "forbidden", "Permission denied") from None
+    now = time.monotonic()
+    for k in [k for k, v in _zip_tokens.items() if v[0] < now]:
+        del _zip_tokens[k]
+    while len(_zip_tokens) >= 200:                       # a burst of requests: the oldest go first
+        del _zip_tokens[next(iter(_zip_tokens))]
+    token = secrets.token_urlsafe(24)
+    _zip_tokens[token] = (now + ZIP_TOKEN_TTL_S, _cookie_tag(request), list(body.paths))
+    return {**out, "token": token, "expires_in": ZIP_TOKEN_TTL_S}
 
 
 PREVIEW_MIN_BYTES = 300 * 1024            # smaller images are shown as they are

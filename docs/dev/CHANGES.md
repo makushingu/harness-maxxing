@@ -96,6 +96,45 @@ Downloads:
   returns `(name, agent path, trailer)`; `/api/pc/download/{target}` streams the file then the trailer instead of
   holding a personalised copy of the binary in memory per request.
 
+Drag content between sessions (`web/src/pages/sessions/contentDrag.ts`):
+- One delegated `dragstart` / `dragend` on each thread scroller (`Thread.tsx`): the target is a message grip
+  (`[data-mx-drag]`, its text registered in a WeakMap by `gripRef`, no listener per row), a file (`[data-mx-file]` /
+  `#mx-file=` link, same lookup as `FileMenu`) or the selection (dragstart on a text node). File elements of the
+  thread carry `draggable`; grips show only on a fine pointer when the strip shows several sessions
+  (`data-multi` + `group/strip` on the strip, `index.tsx`).
+- Data: `application/x-mx-content` = `{v: 1, kind: 'text' | 'file', text | path, from: <session id>, nonce}` and a
+  `text/plain` fallback (a selection keeps the browser's `text/html`). The drag state (`useContentDrag`: `drag.from`,
+  `over`) is a tiny zustand store set one frame after dragstart (like the column grip); only `ContentDropOverlay`
+  (Column.tsx) subscribes to it.
+- Drop (`SessionColumn` / `NewSessionColumn` body, before the OS-file handling): taken only while a drag started in
+  this tab is on and its `nonce` equals the per-tab random one (module memory); otherwise not handled, the browser
+  default stays (plain text into a field). Same session: `dropEffect = 'none'`. Text: control / bidi characters out,
+  20 000 characters at most; path: a string, absolute, `.` / `..` / `//` resolved, 4096 at most, never fetched, only
+  inserted as `fileQuote(path)`. A thread picture also carries `Files`: `isFileDrag` ignores drags with the content type.
+- i18n: new lazy group `drag` (`drag.*`), loaded on the first dragstart.
+
+Several files at once (Files page and the folder grid of the file viewer):
+- `POST /api/files/zip {paths}` (1-1000): every path through `resolve()` (the files guard), must exist; duplicates
+  and entries inside another selected folder dropped; `downloads.zip_plan_many(items, root)` plans them side by side
+  at the top of the zip (`zip_plan` is now its one-folder case), names made unique (` (2)`, casefolded), the
+  2 GB / 100,000 caps on the whole set. Answers `{count, size, name, token, expires_in}`; `GET /api/files/zip?token=`
+  streams it (a link download cannot POST). Tokens: in memory (`_zip_tokens`, at most 200, 120 s), bound to a
+  sha256 of the session cookie, the paths resolved and planned again at download time. CSRF as every POST
+  (`X-Maxxing`).
+- UI `features/files/selection.tsx`: `useEntrySelection({entries, onOpen, root})` keeps the selection (a `Set` of
+  paths, pruned when entries leave the list) and returns delegated handlers (`bind`) for the container: items only
+  carry `data-row` + `data-path` + `.mx-tile` (no iOS callout, no text selection). Long press = one 450 ms timer for
+  the whole container (cancelled past 8 px, on pointercancel / dragstart); the click after it is swallowed; Android's
+  touch `contextmenu` counts as the long press. Escape is caught on `window` in capture (before the viewer's Radix
+  dialog) while something is selected, focus inside the view, no field focused. `EntriesMenu` (point-anchored
+  DropdownMenu), `SelectionBar`, `SelectCheck` (empty circles come from `group/sel` + `data-selecting` on the
+  container: entering selection mode re-renders no item), `useRemoveEntries` (one confirm, deletes one by one),
+  `useCopyPaths`. `download.ts`: `downloadZipMany`, `useDownloadEntries`.
+- Files page `Listing`: `Row` / `GridItem` memoized, no own click handler; `EntryActions.removeMany`. Entries are
+  draggable only with `(hover: hover) and (pointer: fine)` (a long press on iOS started a drag). `FolderView`
+  (viewer): same model, rename (NameDialog of the Files page) and delete there too, `onOpenInFiles`; tiles get
+  `.mx-cv-tile` (content-visibility) past 300 entries. Texts: `files.sel.*` (group `files`).
+
 Installer speed and re-runs (`install.sh`):
 - Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
   `<state>/logs/install-failed-*` with the other logs); `bg_wait NAME` returns its exit code and prints the log tail

@@ -1,7 +1,7 @@
 // Rendering of one thread item. Every row is memoised on the item object (items keep their identity
 // when the log grows, see log.ts), so appending events only renders the new rows.
 import * as React from 'react'
-import { AlertTriangle, Brain, Check, ChevronRight, CircleAlert, Copy, FileText, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Brain, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useLang } from '@/i18n'
 import { fmtDate, fmtNumber } from '@/lib/format'
@@ -18,6 +18,7 @@ import { useOpenPreview } from './FilePreview'
 import { MediaPlayer } from '@/features/files/MediaPlayer'
 import { QuotedFile } from './QuotedFile'
 import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
+import { gripRef } from './contentDrag'
 import { authServerOf, McpAuthButton } from '@/features/mcp/AuthButton'
 import { audioPaths, baseName, diffStats, FILE_HREF, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
 
@@ -215,6 +216,26 @@ function useMessageMenu({ text, onFork, onEdit, onDelete }: MsgActions) {
   }
 }
 
+/** Grip of a whole message: drag it into another session to quote it there (mouse, several sessions side by side;
+ *  the thread's delegated dragstart reads its text, see contentDrag.ts). */
+function MessageGrip({ text, className }: { text: string; className?: string }) {
+  return (
+    <span
+      draggable
+      data-mx-drag
+      ref={gripRef(text)}
+      aria-hidden
+      data-testid="msg-grip"
+      className={cn(
+        'hidden size-5 cursor-grab items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity group-hover/msg:opacity-100 hover:bg-accent hover:text-foreground active:cursor-grabbing group-data-multi/strip:pointer-fine:flex',
+        className,
+      )}
+    >
+      <GripVertical className="size-3.5" />
+    </span>
+  )
+}
+
 /* ---------------------------------------------------------------- user */
 /** `onEdit` / `onDelete`: the message got no answer (stopped) - also shown as buttons on hover. */
 export function UserMessage({
@@ -257,7 +278,7 @@ export function UserMessage({
             {quotes.map((q, i) =>
               quotedFile(q) ? (
                 <div key={i} className="mb-2 border-l-[3px] border-muted-foreground/30 pl-1.5 whitespace-normal last:mb-0">
-                  <QuotedFile path={quotedFile(q)!} className="pr-2 text-muted-foreground" />
+                  <QuotedFile path={quotedFile(q)!} draggable className="pr-2 text-muted-foreground" />
                 </div>
               ) : (
                 <blockquote key={i} className="mb-2 border-l-[3px] border-muted-foreground/30 py-px pl-2.5 text-[13px] text-muted-foreground last:mb-0">
@@ -276,6 +297,7 @@ export function UserMessage({
           </span>
         ) : (
           <>
+            {(text || heard?.text) && <MessageGrip text={[text, heard?.text].filter(Boolean).join('\n\n')} />}
             {source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>}
             {at ? <time className="opacity-0 transition-opacity group-hover/msg:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100">{fmtDate(at, lang, tz, { dateStyle: undefined, timeStyle: 'short' })}</time> : null}
             {onEdit && (
@@ -400,6 +422,7 @@ export function AttachmentStrip({ paths }: { paths: string[] }) {
             key={p}
             type="button"
             data-mx-file={p}
+            draggable
             onClick={() => open(p)}
             onPointerEnter={() => prefetchMedia(p)}
             onFocus={() => prefetchMedia(p)}
@@ -419,6 +442,7 @@ export function AttachmentStrip({ paths }: { paths: string[] }) {
             key={p}
             type="button"
             data-mx-file={p}
+            draggable
             onClick={() => open(p)}
             className="inline-flex h-8 max-w-56 items-center gap-1.5 rounded-lg border bg-card px-2 text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
@@ -460,6 +484,8 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
   return (
     <div className="group/msg relative min-w-0" onContextMenu={onContextMenu} {...touch}>
       {menu}
+      {/* in the thread's right padding, at the first line (the left one is under the resize handle of the column on the left) */}
+      <MessageGrip text={text.trim()} className="absolute top-0.5 -right-4 w-4 max-md:hidden" />
       <Sensitive block placeholder={<MaskedLines />}>
         <Markdown onLink={onLink} className="mx-assistant">
           {md}
@@ -468,7 +494,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
           <div className="mt-2 flex flex-wrap gap-2">
             {media.map((p) => (
               // a box of fixed shape: nothing in the thread moves when the picture arrives
-              <button key={p} type="button" data-mx-file={p} onClick={() => open(p)} onPointerEnter={() => prefetchMedia(p)} onFocus={() => prefetchMedia(p)} className="relative aspect-[4/3] h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <button key={p} type="button" data-mx-file={p} draggable onClick={() => open(p)} onPointerEnter={() => prefetchMedia(p)} onFocus={() => prefetchMedia(p)} className="relative aspect-[4/3] h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 <Thumb path={p} w={320} anim alt={baseName(p)} loading="lazy" className="size-full object-cover" />
                 {isGif(p) && <GifBadge />}
                 {isVideo(p) && (
@@ -629,7 +655,7 @@ function ToolInput({ name, input, diff, display }: { name: string; input: Record
     <div className="grid min-w-0 gap-2">
       {file && (
         <Tooltip content={display && display !== file ? <span className="max-w-[min(80vw,640px)] font-mono break-all">{file}</span> : null}>
-          <button type="button" data-mx-file={file} onClick={() => open(file)} className="inline-flex min-w-0 items-center gap-1.5 justify-self-start font-mono text-xs text-primary hover:underline">
+          <button type="button" data-mx-file={file} draggable onClick={() => open(file)} className="inline-flex min-w-0 items-center gap-1.5 justify-self-start font-mono text-xs text-primary hover:underline">
             <FileText className="size-3.5 shrink-0" />
             <span className="truncate">{display || file}</span>
           </button>
@@ -697,7 +723,8 @@ function ToolOutput({ text, error }: { text: string; error: boolean }) {
   const shown = all || !long ? text : text.slice(0, OUT_PREVIEW)
   if (!text.trim()) return <p className="text-xs text-muted-foreground">{t('sessions.tool.empty')}</p>
   return (
-    <div className="grid gap-1">
+    <div className="group/msg relative grid gap-1">
+      <MessageGrip text={text} className="absolute top-1 right-1 bg-muted" />
       <pre className={cn('max-h-80 overflow-auto rounded-md px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]', error ? 'bg-destructive/10 text-destructive' : 'bg-muted/60')}>
         {shown}
         {long && !all && '…'}

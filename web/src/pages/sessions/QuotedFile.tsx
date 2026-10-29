@@ -8,7 +8,8 @@ import { useOpenPreview } from './FilePreview'
 import { baseName, isImage, isVideo } from './util'
 import { Thumb } from '@/features/files/Thumb'
 
-export function QuotedFile({ path, className }: { path: string; className?: string }) {
+/** `draggable`: in the thread, it can be dragged into another session (contentDrag.ts). */
+export function QuotedFile({ path, className, draggable }: { path: string; className?: string; draggable?: boolean }) {
   const open = useOpenPreview()
   const masked = usePresentation()
   const media = isImage(path) || isVideo(path)
@@ -17,6 +18,7 @@ export function QuotedFile({ path, className }: { path: string; className?: stri
     <button
       type="button"
       data-mx-file={path}
+      draggable={draggable}
       onClick={() => open(path)}
       title={path}
       className={cn('flex max-w-full min-w-0 items-center gap-2 rounded-md text-left outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring', className)}

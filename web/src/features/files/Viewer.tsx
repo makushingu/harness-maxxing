@@ -1,7 +1,7 @@
 // The file viewer: one window for every file and folder, opened from a conversation, the Files page or
 // anywhere (`openFileViewer`). Side panel or fullscreen, ← / → (and a swipe) between the files of the
 // conversation or the folder, "up" to the parent folder, neighbours preloaded. Read-only: editing stays
-// on the Files page ("Open in Files").
+// on the Files page ("Open in Files"); a folder's grid can still select, download, rename and delete entries.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -276,7 +276,14 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             className="flex-1"
           />
         ) : isDir ? (
-          <FolderView path={path} onOpen={openEntry} />
+          <FolderView
+            path={path}
+            onOpen={openEntry}
+            onOpenInFiles={(e) => {
+              close()
+              navigate(`/files?path=${encodeURIComponent(e.path)}`)
+            }}
+          />
         ) : !stamp.ready ? (
           kind === 'video' || kind === 'audio' ? <MediaSkeleton kind={kind} /> : <CodeSkeleton />
         ) : (
