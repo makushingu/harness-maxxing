@@ -80,7 +80,7 @@ It prints the end of Anthropic's installer output and the likely cause above the
 `/tmp/maxxing-claude-install.log`). Usual causes: `downloads.claude.ai` unreachable from the server
 (DNS, the provider's outgoing firewall, a temporary outage - it already retried once), a country
 where Claude is not available (https://www.anthropic.com/supported-countries), a full disk, or an
-architecture other than x86_64 / arm64. Fix it and re-run `curl -fsSL https://get.harness-maxxing.com | bash`:
+architecture other than x86_64 / arm64. Fix it and re-run `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash`:
 finished steps are skipped. (Running it after `sudo -i` is fine: Claude Code is installed for root.)
 
 **The installer says "could not record the Enterprise key".**

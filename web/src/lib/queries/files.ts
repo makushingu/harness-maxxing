@@ -76,7 +76,11 @@ export function useFileSearch(q: string) {
 /** `version` = the file's mtime when known (listing): a versioned URL is cached by the browser for good. */
 const ver = (v?: number | null) => (v ? String(Math.round(v * 1000)) : undefined)
 export const fileRawUrl = (path: string, download = false, version?: number | null) => withQuery('/api/files/raw', { path, download, v: ver(version) })
-export const fileThumbUrl = (path: string, w = 320, version?: number | null) => withQuery('/api/files/thumb', { path, w, v: ver(version) })
+/** A folder as a zip, made while it downloads. `check` = only `{count, size}` or the 413 that the zip would get. */
+export const fileZipUrl = (path: string, check = false) => withQuery('/api/files/zip', { path, check: check ? 1 : undefined })
+/** `anim`: a GIF (up to 8 MB) comes as it is, so it moves (chat); else a still WebP (file grids). */
+export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false) =>
+  withQuery('/api/files/thumb', { path, w, v: ver(version), anim: anim ? 1 : undefined })
 /** Current mtime of the files shown as previews (chat thumbnails, viewer), asked in one batch per tick: it goes in
  *  their URLs, so a file rewritten under the same name shows its new version. Refreshed when a turn writes files
  *  (`refreshFileStamps`), on focus, and by any file mutation (key under `files`). */

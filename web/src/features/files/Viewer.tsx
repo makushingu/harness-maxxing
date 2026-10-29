@@ -6,8 +6,8 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { ChevronLeft, ChevronRight, Code2, Download, Eye, FileQuestion, Folder, FolderOpen, FolderUp, Maximize2, Minimize2, Pencil, Workflow, X } from 'lucide-react'
-import { Button, EmptyState, Segmented, Sensitive, Tooltip } from '@/components/ui'
+import { ChevronLeft, ChevronRight, Code2, Download, Eye, FileQuestion, Folder, FolderDown, FolderOpen, FolderUp, Maximize2, Minimize2, MoreVertical, Pencil, Workflow, X } from 'lucide-react'
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Segmented, Sensitive, Tooltip } from '@/components/ui'
 import { isApiError } from '@/lib/api'
 import { api } from '@/lib/api'
 import { filePreviewUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W, useFileContent, useFileKind, useFileStamp } from '@/lib/queries/files'
@@ -21,11 +21,12 @@ import { basename, dirname, iconFor, isRendered, isTextual, kindOf } from './kin
 import { PreviewBody } from './FilePreview'
 import { TextZoomControl, zoomsText } from './textZoom'
 import { FolderView } from './rich'
-import { CodeSkeleton, DiagramView } from './viewers'
+import { CodeSkeleton, DiagramView, MediaSkeleton } from './viewers'
+import { videoInfoQuery } from './videoQuality'
 import { CodeBlock, CopyButton } from '@/components/ui/code-block'
 import { DIAGRAM_PREFIX, diagramCode } from '@/components/ui/diagram'
 import { useFileViewer } from './viewerStore'
-import { downloadProps } from './download'
+import { downloadProps, useDownloadZip } from './download'
 
 export default function FileViewerHost() {
   const t = useT()
@@ -108,6 +109,14 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
   const editable = !isDir && probe.data === 'file' && isTextual(kind) && kind !== 'binary' && content.data?.editable !== false
   const editUrl = `/files?path=${encodeURIComponent(path)}&edit=1`
   const root = qc.getQueryData<FileList>(qk.files.list(''))?.root
+  /** The file in its folder's listing, when the page has it: size and version for the download. */
+  const listed = qc.getQueryData<FileList>(qk.files.list(parent))?.entries.find((x) => x.path === path)
+  const downloadZip = useDownloadZip()
+  const download = downloadProps(path, { version: stamp.version ?? listed?.mtime, size: listed?.size ?? content.data?.size })
+  const openInFiles = () => {
+    close()
+    navigate(`/files?path=${encodeURIComponent(path)}`)
+  }
   const canUp = path !== '/' && (!root || (parent + '/').startsWith(root.replace(/\/+$/, '') + '/') || parent === root)
 
   return (
@@ -176,10 +185,16 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             </Button>
           </Tooltip>
         )}
-        {!isDir && (
+        {isDir ? (
+          <Tooltip content={t('files.downloadZip')}>
+            <Button variant="ghost" size="icon-sm" onClick={() => downloadZip(path)} aria-label={t('files.downloadZip')} className="max-sm:hidden" data-testid="viewer-zip">
+              <FolderDown />
+            </Button>
+          </Tooltip>
+        ) : (
           <Tooltip content={t('files.download')}>
-            <Button asChild variant="ghost" size="icon-sm" className="max-sm:hidden">
-              <a {...downloadProps(path)} aria-label={t('files.download')}>
+            <Button asChild variant="ghost" size="icon-sm" className="max-sm:hidden" data-testid="viewer-download">
+              <a {...download} aria-label={t('files.download')}>
                 <Download />
               </a>
             </Button>
@@ -187,7 +202,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
         )}
         <Tooltip content={t('files.openInFiles')}>
           {/* A new tab on desktop (the viewer stays open); in place on a phone (PWA). */}
-          <Button asChild variant="ghost" size="icon-sm" data-testid="viewer-open-files">
+          <Button asChild variant="ghost" size="icon-sm" className="max-sm:hidden" data-testid="viewer-open-files">
             <a
               href={`/files?path=${encodeURIComponent(path)}`}
               target={canFull ? '_blank' : undefined}
@@ -196,14 +211,46 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
               onClick={(e) => {
                 if (canFull) return
                 e.preventDefault()
-                close()
-                navigate(`/files?path=${encodeURIComponent(path)}`)
+                openInFiles()
               }}
             >
               <FolderOpen />
             </a>
           </Button>
         </Tooltip>
+        {/* Phone: the header has no room for every button; download, Files and the parent folder go in a menu. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={t('common.more')} className="sm:hidden" data-testid="viewer-more">
+              <MoreVertical />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {isDir ? (
+              <DropdownMenuItem onSelect={() => downloadZip(path)}>
+                <FolderDown />
+                {t('files.downloadZip')}
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem asChild>
+                <a {...download} data-testid="viewer-more-download">
+                  <Download />
+                  {t('files.download')}
+                </a>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={openInFiles}>
+              <FolderOpen />
+              {t('files.openInFiles')}
+            </DropdownMenuItem>
+            {canUp && (
+              <DropdownMenuItem onSelect={up}>
+                <FolderUp />
+                {t('viewer.up')}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {canFull && (
           <Tooltip content={fullscreen ? t('viewer.panel') : t('viewer.fullscreen')}>
             <Button variant="ghost" size="icon-sm" onClick={onFull} aria-label={fullscreen ? t('viewer.panel') : t('viewer.fullscreen')} data-testid="viewer-full">
@@ -231,7 +278,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
         ) : isDir ? (
           <FolderView path={path} onOpen={openEntry} />
         ) : !stamp.ready ? (
-          <CodeSkeleton />
+          kind === 'video' || kind === 'audio' ? <MediaSkeleton kind={kind} /> : <CodeSkeleton />
         ) : (
           <PreviewBody path={path} kind={kind} view={view} content={content} version={stamp.version} />
         )}
@@ -338,7 +385,10 @@ function usePrefetchNeighbours(list: string[], index: number) {
         if (isDiagram(p)) continue
         const k = kindOf(basename(p))
         if (k === 'image') void fileStamp(p).then((v) => prefetchImage(filePreviewUrl(p, PREVIEW_W, v)))
-        else if (k === 'video') void fileStamp(p).then((v) => prefetchImage(fileThumbUrl(p, 1280, v)))
+        else if (k === 'video') {
+          void fileStamp(p).then((v) => prefetchImage(fileThumbUrl(p, 1280, v)))
+          void qc.prefetchQuery(videoInfoQuery(p)) // the player's box gets the video's shape at once
+        }
         else if (k === 'pdf') prefetchImage(fileThumbUrl(p, 240, null))
         else if (k === 'markdown' || k === 'csv' || k === 'code' || k === 'text')
           void qc.prefetchQuery({ queryKey: qk.files.read(p), queryFn: () => api.get<FileContent>('/api/files/read', { path: p }), staleTime: 30_000 })

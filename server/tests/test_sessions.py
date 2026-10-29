@@ -161,6 +161,8 @@ def test_search_patch_delete(client, topic):
     assert client.patch(f"/api/sessions/{s['id']}", json={"favorite": False}).json()["favorite"] is False
     assert client.get("/api/sessions", params={"archived": 0}).json() == []
     assert len(client.get("/api/sessions", params={"archived": 1}).json()) == 1
+    tp = next(t for p in client.get("/api/workspace/tree").json()["projects"] for t in p["topics"] if t["path"] == topic)
+    assert (tp["session_count"], tp["archived_count"]) == (0, 1)     # the tree's archived fold counts without the list
     assert client.delete(f"/api/sessions/{s['id']}").json() == {"ok": True}
     assert client.get(f"/api/sessions/{s['id']}").status_code == 404
     assert client.get("/api/sessions/not-a-uuid").status_code == 404

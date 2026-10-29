@@ -74,6 +74,8 @@ export type Topic = {
   path: string
   description: string
   session_count: number
+  /** Archived sessions of the topic (not in session_count): the tree's archived fold, before its list is loaded. */
+  archived_count?: number
   running: number
   unread: number
   telegram_thread: number | null
