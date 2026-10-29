@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import math
 import os
 import platform
 import socket
@@ -94,10 +95,20 @@ def _post(path: str, body: dict, timeout: float = 25) -> dict:
     return out
 
 
+def _field(v):
+    """A license field as the UI can show it: a short text, a finite number or None (1e999, [..], {..} -> None)."""
+    if isinstance(v, str):
+        return v[:200].encode("utf-8", "replace").decode()
+    if isinstance(v, bool) or (isinstance(v, int) and abs(v) < 10 ** 15) or (isinstance(v, float) and math.isfinite(v)):
+        return v
+    return None
+
+
 def _save_info(lic: dict | None = None, **extra) -> dict:
     cur = config.load_config().get("license") or {}
     if lic:
-        cur.update({k: lic.get(k) for k in ("email", "kind", "status", "max_servers", "updates_until", "expires_at", "channel")})
+        cur.update({k: _field(lic.get(k)) for k in ("email", "kind", "status", "max_servers", "updates_until",
+                                                    "expires_at", "channel")})
     cur.update(extra)
     config.update_config(license=cur)
     return cur
@@ -106,7 +117,7 @@ def _save_info(lic: dict | None = None, **extra) -> dict:
 def status() -> dict:
     """What the UI / doctor show (no secret). `enabled` = still on signed archives; `has_key` = an Enterprise key
     is recorded (fair source: the key is a right of use, it changes nothing in how the server runs)."""
-    info = dict(config.load_config().get("license") or {})
+    info = {k: _field(v) for k, v in (config.load_config().get("license") or {}).items()}   # stored before _field
     key = config.get_secret(KEY)
     info.update(enabled=enabled(), has_key=bool(key), key_hint=("HM-…" + key[-4:]) if key else "", api=API)
     return info
@@ -138,7 +149,7 @@ def activate(key: str, version: str | None = None) -> dict:
         config.set_secret(TOKEN, r["token"])          # still on archives (a pre-a87 install): moves to git soon
     else:
         config.set_secret(SEAT, r["token"])
-    _save_info(r.get("license"), activation_id=r.get("activation_id"), activated_at=time.time(), message="")
+    _save_info(r.get("license"), activation_id=_field(r.get("activation_id")), activated_at=time.time(), message="")
     return r
 
 

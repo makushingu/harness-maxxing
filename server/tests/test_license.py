@@ -361,3 +361,21 @@ def test_activate_with_a_license_that_is_not_an_object_leaves_no_key(mx, monkeyp
         license.activate("HM-ABCD-EFGH-JKMN-PQRS")
     assert e.value.code == "bad_answer"
     assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
+
+
+def test_license_numbers_out_of_range_do_not_break_the_settings(mx, monkeypatch, client):
+    """max_servers 1e999 (inf) was stored as is: GET /api/settings/license answered 500 until the key was removed."""
+    monkeypatch.setattr(license, "_post", lambda *a, **k: {
+        "ok": True, "token": "tok", "activation_id": {"x": 1},
+        "license": {"email": "boss@example.com", "max_servers": float("inf"), "expires_at": float("nan"),
+                    "kind": ["paid"], "updates_until": 10 ** 400}})
+    license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    r = client.get("/api/settings/license")
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["email"] == "boss@example.com" and j["has_key"]
+    assert j["max_servers"] is j["expires_at"] is j["kind"] is None
+    info = license.status()
+    assert info["updates_until"] is info["activation_id"] is None
+    config.update_config(license={"max_servers": float("inf")})           # stored by a version before this one
+    assert client.get("/api/settings/license").json()["max_servers"] is None
