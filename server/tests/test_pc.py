@@ -541,3 +541,11 @@ def test_mcp_config_args_point_at_a_private_file_only_when_paired(tmp_path, monk
 @pytest.mark.parametrize("url", ["http://[::1", "http://[abc/", "https://[/x"])
 def test_malformed_url_is_refused_not_raised(url):
     assert "Only http(s) pages" in (pcbridge._bad_url({"url": url}) or ""), url
+
+
+def test_lone_surrogate_in_args_does_not_break_the_call(mx, monkeypatch):
+    monkeypatch.setattr(pcbridge, "cached_tools", lambda: [{"name": "navigate_page"}])
+    r = asyncio.run(pcbridge.tools_call("navigate_page", {"uid": "a\ud800b", "url": "https://example.com/a\ud800"}))
+    assert r["isError"]                                                       # the PC is offline: said, not raised
+    assert pcbridge.actions()[0]["args"] == {"uid": "a?b", "url": "https://example.com/a"}
+    json.dumps(pcbridge.actions()).encode()
