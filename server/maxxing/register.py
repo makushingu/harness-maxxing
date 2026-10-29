@@ -88,12 +88,13 @@ def _call(method: str, path: str, body: dict) -> dict:
                                  headers={"content-type": "application/json", "user-agent": license.USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read() or b"{}")
+            out = json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         try:
-            return json.loads(e.read() or b"{}") or {"ok": False, "error": f"http_{e.code}"}
+            out = json.loads(e.read() or b"{}") or {"ok": False, "error": f"http_{e.code}"}
         except ValueError:
-            return {"ok": False, "error": f"http_{e.code}"}
+            out = {"ok": False, "error": f"http_{e.code}"}
+    return out if isinstance(out, dict) else {"ok": False, "error": "bad_answer"}   # [1], "x": not an answer
 
 
 def _offline() -> bool:
