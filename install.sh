@@ -384,7 +384,9 @@ dep_fetch() {
 one_line() { case "$1" in *$'\n'*|*$'\r'*) return 1 ;; esac; }   # the grep -E checks below test each line alone
 not_system_dir() { # not_system_dir NAME VALUE - never / nor a system directory (chmod 700 on it, --purge deletes it)
   local d=$2
-  while [ "${d%/}" != "$d" ]; do d=${d%/}; done
+  while [[ $d == *//* ]]; do d=${d//\/\//\/}; done                  # //etc, /var//lib are /etc, /var/lib
+  while [[ $d == */./* ]]; do d=${d//\/.\//\/}; done                # /./usr/lib, /home/./bob
+  while [ "${d%/}" != "$d" ] || [ "${d%/.}" != "$d" ]; do d=${d%/}; d=${d%/.}; done   # /etc/, /etc/., /.
   if [ -z "$d" ] || [[ $d =~ ^/(bin|boot|dev|etc|home|lib|lib32|lib64|libx32|media|mnt|opt|proc|root|run|sbin|snap|srv|sys|tmp|usr|var)$ ]] \
      || [[ $d =~ ^/(bin|boot|dev|etc|lib|lib32|lib64|libx32|proc|run|sbin|sys|usr)/ ]] \
      || [[ $d =~ ^/var/(lib|log|cache|tmp|spool|www|mail|backups|opt|local|run|lock)$ ]] || [[ $d =~ ^/home/[^/]+$ ]]; then

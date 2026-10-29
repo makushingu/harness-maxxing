@@ -347,6 +347,34 @@ def test_uninstall_purge_keeps_a_state_dir_that_is_not_one(env, tmp_path, monkey
     assert (env["state"] / "other-app").is_dir()
 
 
+@pytest.mark.parametrize("where", ["/usr", "/etc", "/var/lib", "/usr/local/share"])
+def test_uninstall_purge_workspace_keeps_a_system_directory(env, monkeypatch, where):
+    """A workspace set to /usr (or //usr, which the installer once accepted) must not be wiped by --purge-workspace."""
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    cfg = json.loads((env["state"] / "config.json").read_text())
+    cfg["workspace"] = where
+    (env["state"] / "config.json").write_text(json.dumps(cfg))
+    removed = []
+    monkeypatch.setattr(cmd_core.shutil, "rmtree", lambda p, **k: removed.append(str(p)))
+    assert run_cli("uninstall", "--yes", "--purge-workspace") == 0
+    assert not [p for p in removed if p == where or p.startswith(where + "/")]   # product skills are removed
+
+
+def test_uninstall_purge_workspace_keeps_a_linked_workspace_and_a_plain_folder(env, tmp_path):
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    link = tmp_path / "ws-link"
+    link.symlink_to(env["ws"])
+    plain = tmp_path / "plain"
+    (plain / "data").mkdir(parents=True)
+    cfg_path = env["state"] / "config.json"
+    for ws in (link, plain):
+        cfg = json.loads(cfg_path.read_text())
+        cfg["workspace"] = str(ws)
+        cfg_path.write_text(json.dumps(cfg))
+        assert run_cli("uninstall", "--yes", "--purge-workspace") == 0
+    assert (env["ws"] / "CLAUDE.md").is_file() and link.is_symlink() and (plain / "data").is_dir()
+
+
 def test_uninstall_aborts_without_confirmation(env, monkeypatch):
     monkeypatch.setattr(cmd_core, "_confirm", lambda q, y: y)
     cmd_core.UNIT_PATH.write_text("[Unit]\n")
@@ -841,6 +869,27 @@ def test_update_signature_required_stops_unsigned(env, repos, monkeypatch, capsy
     assert subprocess.run(["git", "-C", str(clone), "rev-parse", "HEAD"], capture_output=True, text=True).stdout == before
     assert "signed?" not in (clone / "CHANGELOG.md").read_text()
     assert not any(c[:2] == ["/fake/uv", "sync"] for c in seen)
+
+
+def test_update_signature_checked_before_switching_branch(env, repos, monkeypatch, capsys):
+    """--branch X with an unsigned origin/X: the checkout ran before the check and stayed, code unverified on disk."""
+    config.update_config(update_verify_signature=True)
+    work = repos["work"]
+    _git("checkout", "-q", "-b", "beta", cwd=work)
+    (work / "evil.txt").write_text("unsigned")
+    _git("add", "-A", cwd=work)
+    _git("commit", "-q", "-m", "unsigned", cwd=work)
+    _git("push", "-q", "origin", "beta", cwd=work)
+    _git("checkout", "-q", "main", cwd=work)
+    clone, _ = _signed_update_env(env, repos, monkeypatch, verify_commit=1)
+    head = ["git", "-C", str(clone), "rev-parse", "HEAD"]
+    before = subprocess.run(head, capture_output=True, text=True).stdout
+    assert run_cli("update", "--branch", "beta") == 1
+    assert "no valid signature" in capsys.readouterr().out
+    assert subprocess.run(head, capture_output=True, text=True).stdout == before
+    assert subprocess.run(["git", "-C", str(clone), "branch", "--show-current"],
+                          capture_output=True, text=True).stdout.strip() == "main"
+    assert not (clone / "evil.txt").exists()
 
 
 def test_update_signature_good_commit_or_tag(env, repos, monkeypatch, capsys):

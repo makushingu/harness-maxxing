@@ -195,7 +195,7 @@ workspace. See [Backup](backup).
   Caddy site, crontab block, product skills and the `maxxing` command. Add `--purge` to also
   delete the code, the state directory and every external component the installer added (`deps.toml`: uv, Node.js,
   the tools, Claude Code and Caddy when the installer installed them, the swap file it created),
-  `--purge-workspace` to delete the workspace too (irreversible).
+  `--purge-workspace` to delete the workspace too (irreversible; a link, a system directory or a folder without `CLAUDE.md` nor `projects/` is kept).
 
 ## Check the installation
 
