@@ -128,18 +128,51 @@ def test_packages_are_skipped_when_everything_is_installed(tmp_path):
     assert "already installed" in r.stdout and "APT" not in r.stdout
 
 
-def test_packages_one_pass_with_alternatives(tmp_path):
+APT_STUBS = ('ubuntu_universe() { :; }; apt_get() { echo "APT $*"; }; systemctl() { :; }; ensure_swap() { :; }; '
+             'pkg_known() { case "$1" in *t64|fonts-noto-color-emoji) return 1 ;; *) return 0 ;; esac; }; ')
+
+
+def test_packages_base_now_the_rest_in_one_background_job(tmp_path):
+    """The base packages are installed right away; tools, browser libraries and security in ONE background apt
+    job (never two apt at a time), waited for by apt_wait; apt-get update runs once."""
     r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; pkg_installed() {{ case "$1" in git|curl) return 0 ;; *) return 1 ;; esac; }}; '
-           'pkg_known() { case "$1" in *t64|fonts-noto-color-emoji) return 1 ;; *) return 0 ;; esac; }; '
-           'ubuntu_universe() { :; }; apt_get() { echo "APT $*"; }; systemctl() { :; }; ensure_swap() { :; }; '
-           'install_packages; cat "$WORK/apt.log"')
+           + APT_STUBS + 'install_packages; echo "bg=${BG_PID[apt]:+yes}"; apt_wait; echo "waited=${BG_PID[apt]:-none}"; '
+           'cat "$WORK/apt.log" "$WORK/bg-apt.log"')
+    assert "bg=yes" in r.stdout and "waited=none" in r.stdout, r.stdout + r.stderr
     installs = [ln for ln in r.stdout.splitlines() if ln.startswith("APT install")]
-    assert len(installs) == 1, r.stdout                               # one apt-get install
-    line = installs[0]
-    for p in ("python3", "gnupg", "openssh-client", "python3-systemd", "fail2ban", "libasound2", "libatk1.0-0"):
-        assert f" {p} " in line + " ", p
-    assert " git " not in line and "t64" not in line
+    assert len(installs) == 2, r.stdout
+    base, rest = installs
+    for p in ("python3", "gnupg", "openssh-client"):
+        assert f" {p} " in base + " " and f" {p} " not in rest + " ", p
+    for p in ("python3-systemd", "fail2ban", "libasound2", "libatk1.0-0", "ffmpeg"):
+        assert f" {p} " in rest + " ", p
+    assert " git " not in base + rest and "t64" not in rest
+    assert len([ln for ln in r.stdout.splitlines() if ln.startswith("APT update")]) == 1
+    assert "installing in the background" in r.stdout
     assert "not available on this system: fonts-noto-color-emoji" in r.stdout
+
+
+def test_only_optional_packages_missing_updates_in_the_background(tmp_path):
+    r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; '
+           'pkg_installed() { case "$1" in ffmpeg|fail2ban) return 1 ;; *) return 0 ;; esac; }; '
+           + APT_STUBS + 'install_packages; apt_wait; echo ---; cat "$WORK/bg-apt.log"')
+    before, bg = r.stdout.split("---")
+    assert "APT" not in before                                      # nothing in the foreground
+    assert "APT update" in bg and "ffmpeg fail2ban" in bg, r.stdout
+    assert "2 system package(s) installed in the background" in before
+
+
+def test_a_failed_background_apt_stops_the_install(tmp_path):
+    r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; pkg_installed() {{ [ "$1" != ffmpeg ]; }}; '
+           + APT_STUBS + 'apt_get() { case "$1" in install) echo "E: broken ffmpeg"; return 100 ;; esac; }; '
+           'install_packages; apt_wait; echo "not reached"')
+    assert "not reached" not in r.stdout and "E: broken ffmpeg" in r.stdout and "apt-get install failed" in r.stderr
+
+
+def test_background_jobs_report_their_exit_code(tmp_path):
+    r = sh(f'WORK={tmp_path}; job() {{ echo "step one"; false; echo "never"; }}; bg_start j job; '
+           'bg_wait j; echo "rc=$?"; bg_wait j; echo "again=$?"')
+    assert "| step one" in r.stdout and "never" not in r.stdout and "rc=1" in r.stdout and "again=0" in r.stdout
 
 
 def test_local_source_detection(tmp_path):
@@ -229,3 +262,4 @@ def test_a_keyless_clone_uses_no_token(tmp_path):
            REPO="o/n", BRANCH="main", HOME=str(tmp_path), GIT_CONFIG_GLOBAL=str(gitconfig))
     assert "cloned into" in r.stdout and "token_used=0" in r.stdout, r.stdout + r.stderr
     assert (tmp_path / "opt/README.md").is_file()
+
