@@ -220,12 +220,13 @@ export function useCopyPaths() {
   return (paths: string[]) => void copyText(paths.join('\n')).then((ok) => ok && toast.success(t('files.sel.pathsCopied', { count: paths.length })))
 }
 
-/** Move entries to the trash after one confirmation (their count and first names); returns the paths deleted. */
+/** Move entries to the trash after one confirmation (their count and first names); returns the paths deleted.
+ *  A stable function: the Files page's entry actions depend on it, and a new one each render re-rendered every row. */
 export function useRemoveEntries() {
   const t = useT()
   const qc = useQueryClient()
   const mask = useMask()
-  return async (paths: string[]): Promise<string[]> => {
+  return React.useCallback(async (paths: string[]): Promise<string[]> => {
     if (!paths.length) return []
     const names = paths.slice(0, 5).map((p) => mask(basename(p), 8))
     const ok = await confirm(
@@ -263,7 +264,7 @@ export function useRemoveEntries() {
     if (failed) toast.error(t('files.deleteFailed'), errorMessage(failed))
     if (done.length) toast.success(done.length === 1 ? t('files.movedToTrash', { name: mask(basename(done[0]), 8) }) : t('files.sel.movedToTrash', { count: done.length }))
     return done
-  }
+  }, [t, qc, mask])
 }
 
 export type SelectionActions = {

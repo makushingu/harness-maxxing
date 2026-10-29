@@ -232,6 +232,7 @@ export default function FilesPage() {
     [go, mask, path, qc, root, t],
   )
 
+  const addUploads = uploads.add
   const entryActions: EntryActions = React.useMemo(
     () => ({
       open: (e) => go(e.path, e.type),
@@ -240,9 +241,10 @@ export default function FilesPage() {
       copyPath: (e) => void copyPath(e.path),
       removeMany: (paths) => void removeMany(paths),
       moveTo: (from, dir) => void moveTo(from, dir),
-      uploadTo: (files, dir) => uploads.add(dir, files),
+      uploadTo: (files, dir) => addUploads(dir, files),
     }),
-    [copyPath, go, moveTo, remove, removeMany, rename, uploads],
+    // stable pieces only (not `uploads`, a new object each render): the rows are memoized on these actions
+    [addUploads, copyPath, go, moveTo, remove, removeMany, rename],
   )
   const viewActions: FileViewActions = React.useMemo(
     () => ({ open: (p, k) => go(p, k), rename, remove, copyPath: (p) => void copyPath(p), ask }),
