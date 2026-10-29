@@ -48,6 +48,7 @@ def test_pairing_download_and_pair(pc):
     d = pc.get(f"/api/pc/download/windows-amd64?code={p['code']}")
     assert d.status_code == 200 and 'filename="HarnessPC.exe"' in d.headers["content-disposition"]
     data = d.content
+    assert int(d.headers["content-length"]) == len(data)              # streamed, length known up front
     assert data.startswith(b"AGENT-HarnessPC-windows-amd64.exe") and data.endswith(pcbridge.TRAILER_MAGIC)
     n = struct.unpack(">I", data[-12:-8])[0]
     cfg = json.loads(data[-12 - n:-12])

@@ -267,7 +267,7 @@ def _manifest() -> dict:
         return {}
 
 
-def agent_binary(target: str) -> bytes:
+def agent_file(target: str) -> Path:
     """The generic agent for `target`: MAXXING_PC_BIN_DIR (tests / a local build), else the cache, else the GitHub
     release named in pc_agent.json - always checked against its SHA-256 there."""
     name = TARGETS.get(target)
@@ -277,15 +277,17 @@ def agent_binary(target: str) -> bytes:
     if local:
         f = Path(local) / name
         if f.is_file():
-            return f.read_bytes()
+            return f
         raise PcError(404, "not_found", f"{name} is not built")
     man = _manifest()
     want = (man.get("files") or {}).get(name)
     if not want:
         raise PcError(404, "not_found", "this server has no agent for this computer yet")
     cache = _dir() / "bin" / f"{man.get('version')}-{name}"
-    if cache.is_file() and hashlib.sha256(cache.read_bytes()).hexdigest() == want:
-        return cache.read_bytes()
+    if cache.is_file():
+        with cache.open("rb") as f:
+            if hashlib.file_digest(f, "sha256").hexdigest() == want:
+                return cache
     import httpx
     url = str(man.get("url") or "").format(version=man.get("version"), name=name)
     r = httpx.get(url, follow_redirects=True, timeout=60)
@@ -296,18 +298,19 @@ def agent_binary(target: str) -> bytes:
     tmp = cache.with_suffix(".tmp")
     tmp.write_bytes(r.content)
     os.replace(tmp, cache)
-    return r.content
+    return cache
 
 
-def personalised(target: str, code: str, server_url: str) -> tuple[str, bytes]:
-    """The agent with its trailer (server, pairing code, browser): downloading it is pairing it."""
+def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, bytes]:
+    """The agent with its trailer (server, pairing code, browser): downloading it is pairing it.
+    (file name, the generic agent, the trailer to send after it): the agent is streamed, never held in memory."""
     p = _pairing_for(code)
     body = json.dumps({"server": server_url, "code": code.strip().upper(), "browser": p["browser"],
                        "autostart": bool(p.get("autostart", True))}).encode()
-    data = agent_binary(target) + body + struct.pack(">I", len(body)) + TRAILER_MAGIC
+    agent = agent_file(target)
     name = TARGETS[target]
     return (name.replace("-windows-amd64", "").replace("-windows-arm64", "") if name.endswith(".exe") else
-            "harness-pc"), data
+            "harness-pc"), agent, body + struct.pack(">I", len(body)) + TRAILER_MAGIC
 
 
 def install_script(kind: str, code: str, server_url: str, target: str) -> str:
