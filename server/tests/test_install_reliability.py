@@ -78,6 +78,39 @@ def test_installer_fetch_verified_checks_before_use(http_dir, tmp_path):
     assert "refused" in r.stdout and not dest.exists()
 
 
+def test_downloads_are_kept_for_a_re_run(http_dir, tmp_path):
+    """A failed install run again does not download again: verified files stay in CACHE_DIR (named by their
+    sha256, checked on every use) until cache_clear, after a successful install."""
+    d, base = http_dir
+    (d / "tool").write_bytes(b"good build")
+    good = hashlib.sha256(b"good build").hexdigest()
+    cache, work = tmp_path / "cache", tmp_path / "work"
+    work.mkdir()
+    r = sh(f'fetch_verified {base}/tool {good} {work}/a && echo fetched', CACHE_DIR=str(cache))
+    assert "fetched" in r.stdout and (cache / good).read_bytes() == b"good build", r.stdout + r.stderr
+    (d / "tool").unlink()                                           # the network is gone: the cache serves it
+    r = sh(f'fetch_verified {base}/tool {good} {work}/b && echo fetched', CACHE_DIR=str(cache))
+    assert "fetched" in r.stdout and (work / "b").read_bytes() == b"good build"
+    (cache / good).write_bytes(b"tampered")                         # never used without its sha256
+    r = sh(f'fetch_verified {base}/tool {good} {work}/c || echo refused', CACHE_DIR=str(cache))
+    assert "refused" in r.stdout and not (cache / good).exists() and not (work / "c").exists()
+    (d / "tool").write_bytes(b"good build")                         # a cut transfer left a .part: still a good file
+    (cache / f"{good}.part").write_bytes(b"garbage")
+    r = sh(f'fetch_verified {base}/tool {good} {work}/d && echo fetched', CACHE_DIR=str(cache))
+    assert "fetched" in r.stdout and (work / "d").read_bytes() == b"good build"
+    assert not (cache / f"{good}.part").exists()
+    (cache / "mine.txt").write_text("not ours")
+    sh('cache_clear', CACHE_DIR=str(cache))
+    assert [p.name for p in cache.iterdir()] == ["mine.txt"]
+    (cache / "mine.txt").unlink()
+    sh('cache_clear', CACHE_DIR=str(cache))
+    assert not cache.exists()
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path / "elsewhere")
+    r = sh(f'fetch_verified {base}/tool {good} {work}/e && echo fetched', CACHE_DIR=str(link))
+    assert "fetched" in r.stdout and not (tmp_path / "elsewhere").exists()   # a link is never used as the cache
+
+
 # ---- install.sh pieces -----------------------------------------------------------------------------------------
 def _meminfo(tmp_path, mb: int, swap_kb: int = 0) -> Path:
     f = tmp_path / "meminfo"
@@ -128,18 +161,51 @@ def test_packages_are_skipped_when_everything_is_installed(tmp_path):
     assert "already installed" in r.stdout and "APT" not in r.stdout
 
 
-def test_packages_one_pass_with_alternatives(tmp_path):
+APT_STUBS = ('ubuntu_universe() { :; }; apt_get() { echo "APT $*"; }; systemctl() { :; }; ensure_swap() { :; }; '
+             'pkg_known() { case "$1" in *t64|fonts-noto-color-emoji) return 1 ;; *) return 0 ;; esac; }; ')
+
+
+def test_packages_base_now_the_rest_in_one_background_job(tmp_path):
+    """The base packages are installed right away; tools, browser libraries and security in ONE background apt
+    job (never two apt at a time), waited for by apt_wait; apt-get update runs once."""
     r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; pkg_installed() {{ case "$1" in git|curl) return 0 ;; *) return 1 ;; esac; }}; '
-           'pkg_known() { case "$1" in *t64|fonts-noto-color-emoji) return 1 ;; *) return 0 ;; esac; }; '
-           'ubuntu_universe() { :; }; apt_get() { echo "APT $*"; }; systemctl() { :; }; ensure_swap() { :; }; '
-           'install_packages; cat "$WORK/apt.log"')
+           + APT_STUBS + 'install_packages; echo "bg=${BG_PID[apt]:+yes}"; apt_wait; echo "waited=${BG_PID[apt]:-none}"; '
+           'cat "$WORK/apt.log" "$WORK/bg-apt.log"')
+    assert "bg=yes" in r.stdout and "waited=none" in r.stdout, r.stdout + r.stderr
     installs = [ln for ln in r.stdout.splitlines() if ln.startswith("APT install")]
-    assert len(installs) == 1, r.stdout                               # one apt-get install
-    line = installs[0]
-    for p in ("python3", "gnupg", "openssh-client", "python3-systemd", "fail2ban", "libasound2", "libatk1.0-0"):
-        assert f" {p} " in line + " ", p
-    assert " git " not in line and "t64" not in line
+    assert len(installs) == 2, r.stdout
+    base, rest = installs
+    for p in ("python3", "gnupg", "openssh-client"):
+        assert f" {p} " in base + " " and f" {p} " not in rest + " ", p
+    for p in ("python3-systemd", "fail2ban", "libasound2", "libatk1.0-0", "ffmpeg"):
+        assert f" {p} " in rest + " ", p
+    assert " git " not in base + rest and "t64" not in rest
+    assert len([ln for ln in r.stdout.splitlines() if ln.startswith("APT update")]) == 1
+    assert "installing in the background" in r.stdout
     assert "not available on this system: fonts-noto-color-emoji" in r.stdout
+
+
+def test_only_optional_packages_missing_updates_in_the_background(tmp_path):
+    r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; '
+           'pkg_installed() { case "$1" in ffmpeg|fail2ban) return 1 ;; *) return 0 ;; esac; }; '
+           + APT_STUBS + 'install_packages; apt_wait; echo ---; cat "$WORK/bg-apt.log"')
+    before, bg = r.stdout.split("---")
+    assert "APT" not in before                                      # nothing in the foreground
+    assert "APT update" in bg and "ffmpeg fail2ban" in bg, r.stdout
+    assert "2 system package(s) installed in the background" in before
+
+
+def test_a_failed_background_apt_stops_the_install(tmp_path):
+    r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; pkg_installed() {{ [ "$1" != ffmpeg ]; }}; '
+           + APT_STUBS + 'apt_get() { case "$1" in install) echo "E: broken ffmpeg"; return 100 ;; esac; }; '
+           'install_packages; apt_wait; echo "not reached"')
+    assert "not reached" not in r.stdout and "E: broken ffmpeg" in r.stdout and "apt-get install failed" in r.stderr
+
+
+def test_background_jobs_report_their_exit_code(tmp_path):
+    r = sh(f'WORK={tmp_path}; job() {{ echo "step one"; false; echo "never"; }}; bg_start j job; '
+           'bg_wait j; echo "rc=$?"; bg_wait j; echo "again=$?"')
+    assert "| step one" in r.stdout and "never" not in r.stdout and "rc=1" in r.stdout and "again=0" in r.stdout
 
 
 def test_local_source_detection(tmp_path):
@@ -193,6 +259,15 @@ def test_branch_names_are_validated(value, ok):
     assert ("fine" in r.stdout) is ok, r.stderr
 
 
+@pytest.mark.parametrize("value, ok", [("/var/cache/harness-maxxing", True), ("/var/cache", False), ("/etc", False),
+                                       ("relative", False), ("/var/cache/a b", False)])
+def test_cache_dir_is_validated(value, ok):
+    r = sh('check_inputs && echo fine', CACHE_DIR=value, BRANCH="main", INSTALL_DIR="/opt/x", WORKSPACE="/root/w",
+           STATE_DIR="/var/lib/x", PORT="8787", REPO="o/n", LICENSE_API="https://api.example.com", RESTORE_TRUST="0",
+           ALLOW_UNPROTECTED="0", FIREWALL="auto", SSH_HARDEN="auto", TOOLS="background", SWAP="auto")
+    assert ("fine" in r.stdout) is ok, r.stderr
+
+
 def test_a_new_install_needs_no_license_key(tmp_path):
     """Fair source: without LICENSE nor GH_TOKEN a new install clones the public git repository (no question, no
     license server); LICENSE=HM-... too since 2.0.0a88 (the Enterprise key is only recorded at the end); an existing
@@ -229,3 +304,44 @@ def test_a_keyless_clone_uses_no_token(tmp_path):
            REPO="o/n", BRANCH="main", HOME=str(tmp_path), GIT_CONFIG_GLOBAL=str(gitconfig))
     assert "cloned into" in r.stdout and "token_used=0" in r.stdout, r.stdout + r.stderr
     assert (tmp_path / "opt/README.md").is_file()
+
+
+def test_the_public_clone_is_partial_and_still_updates(tmp_path):
+    """fetch_code clones with --filter=blob:none; what maxxing update does next (fetch, merge --ff-only, show,
+    format-patch, cherry-pick of a customization) works, the missing files coming on demand."""
+    origin = tmp_path / "origin"
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": str(tmp_path / "gitconfig")}
+
+    def git(*args, cwd=origin):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args], cwd=cwd,
+                              capture_output=True, text=True, env=env, check=True).stdout
+
+    origin.mkdir()
+    git("init", "-q", "-b", "main")
+    git("config", "uploadpack.allowFilter", "true")
+    for i in range(3):
+        (origin / "big.txt").write_text(f"version {i}\n" * 1000)
+        (origin / "README.md").write_text(f"r{i}\n")
+        git("add", ".")
+        git("commit", "-qm", f"v{i}")
+    (tmp_path / "gitconfig").write_text(f'[url "file://{origin}"]\n\tinsteadOf = https://github.com/o/n.git\n')
+    opt = tmp_path / "opt"
+    r = sh('fetch_code', INSTALL_DIR=str(opt), STATE_DIR=str(tmp_path / "st"), REPO="o/n", BRANCH="main", **env)
+    assert "cloned into" in r.stdout, r.stdout + r.stderr
+    assert git("config", "remote.origin.partialclonefilter", cwd=opt).strip() == "blob:none"
+    old = git("rev-parse", "HEAD~2:big.txt").strip()
+    missing = subprocess.run(["git", "rev-list", "--objects", "--missing=print", "HEAD"], cwd=opt, capture_output=True,
+                             text=True, env=env).stdout
+    assert f"?{old}" in missing                                     # older files not downloaded
+    (opt / "README.md").write_text("my change\n")                    # a customization
+    git("commit", "-qam", "custom: mine", cwd=opt)
+    (origin / "big.txt").write_text("version 3\n")
+    git("commit", "-qam", "v3")
+    git("fetch", "-q", "origin", "main", cwd=opt)
+    assert git("show", "origin/main:big.txt", cwd=opt) == "version 3\n"
+    assert "my change" in git("format-patch", "-1", "--stdout", "HEAD", cwd=opt)
+    assert git("rev-list", "--right-only", "--cherry-pick", "--no-merges", "origin/main...HEAD", cwd=opt).strip()
+    git("checkout", "-q", "-B", "next", "origin/main", cwd=opt)
+    git("cherry-pick", "main", cwd=opt)
+    assert (opt / "big.txt").read_text() == "version 3\n" and (opt / "README.md").read_text() == "my change\n"
+    assert git("show", "HEAD~4:big.txt", cwd=opt).startswith("version 0")   # an old version, fetched on demand

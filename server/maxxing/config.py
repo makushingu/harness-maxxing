@@ -231,7 +231,10 @@ def write_json(path: Path, data: Any, mode: int | None = None) -> None:
     if Path(path) in (config_path(), secrets_path()):
         with _lock:
             _keep_damaged(Path(path))
-            _atomic_write(Path(path), data, mode)
+            try:
+                _atomic_write(Path(path), data, mode)
+            finally:
+                _forget_secrets()
         return
     _atomic_write(Path(path), data, mode)    # unique temp file + rename: no lock (never the machine-wide one)
 
@@ -301,13 +304,25 @@ def config_path() -> Path:
 
 
 _cfg_lock = threading.Lock()
-_cfg_cache: dict[str, Any] = {"key": None, "blob": b""}
+_cfg_cache: dict[str, Any] = {"key": None, "blob": b"", "shared": None}
 
 
 def load_config() -> dict:
     """config.json merged over DEFAULT_CONFIG - a fresh copy the caller may change. The merged result
     is kept (pickled) while config.json's (inode, mtime, size, ctime) and the defaults are unchanged:
     saves are atomic renames (new inode), so a write by any process is seen at once."""
+    blob, cfg = _config_cached()
+    return pickle.loads(blob) if blob is not None else cfg
+
+
+def _setting(name: str) -> Any:
+    """One top-level setting without copying the whole config (paths asked for thousands of times per tree):
+    read from the cached merged config - only for values never mutated (strings, numbers)."""
+    return _config_cached()[1].get(name)
+
+
+def _config_cached() -> tuple[bytes | None, dict]:
+    """(pickled merged config or None when it cannot be pickled, the merged config - shared: never mutate it)."""
     p = config_path()
     try:
         st = os.stat(p)
@@ -317,15 +332,15 @@ def load_config() -> dict:
     key = (str(p), fkey, tuple((k, id(v)) for k, v in DEFAULT_CONFIG.items()))
     with _cfg_lock:
         if _cfg_cache["key"] == key:
-            return pickle.loads(_cfg_cache["blob"])
+            return _cfg_cache["blob"], _cfg_cache["shared"]
     cfg = _merge(DEFAULT_CONFIG, _document(p))
     try:
         blob = pickle.dumps(cfg)
     except Exception:  # noqa: BLE001 - never cache what cannot be copied back
-        return cfg
+        return None, cfg
     with _cfg_lock:
-        _cfg_cache.update(key=key, blob=blob)
-    return cfg
+        _cfg_cache.update(key=key, blob=blob, shared=cfg)
+    return blob, cfg
 
 
 def save_config(cfg: dict) -> None:
@@ -348,8 +363,38 @@ def secrets_path() -> Path:
     return STATE / "secrets.json"
 
 
+_sec_lock = threading.Lock()
+_sec_cache: dict[str, Any] = {"key": None, "blob": b""}
+
+
+def _forget_secrets() -> None:
+    with _sec_lock:
+        _sec_cache.update(key=None, blob=b"")
+
+
 def load_secrets() -> dict:
-    return _document(secrets_path())
+    """secrets.json - a fresh copy the caller may change. Read on every request (sign-in cookie check): the parsed
+    file is kept (pickled) while its (inode, mtime, size, ctime) is unchanged, like load_config; every save here
+    drops it, and a save by another process is an atomic rename (new inode)."""
+    p = secrets_path()
+    try:
+        st = os.stat(p)
+        key: tuple | None = (str(p), st.st_ino, st.st_mtime_ns, st.st_size, st.st_ctime_ns)
+    except OSError:
+        key = None
+    with _sec_lock:
+        if key is not None and _sec_cache["key"] == key:
+            return pickle.loads(_sec_cache["blob"])
+    data = _document(p)
+    if key is None:
+        return data
+    try:
+        blob = pickle.dumps(data)
+    except Exception:  # noqa: BLE001 - never cache what cannot be copied back
+        return data
+    with _sec_lock:
+        _sec_cache.update(key=key, blob=blob)
+    return data
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -370,21 +415,24 @@ def set_secrets(values: dict[str, Any]) -> None:
             else:
                 s[name] = value
         _keep_damaged(secrets_path())
-        _atomic_write(secrets_path(), s, 0o600)
+        try:
+            _atomic_write(secrets_path(), s, 0o600)
+        finally:
+            _forget_secrets()
 
 
 # ---- derived paths -------------------------------------------------------------------------
 def workspace() -> Path:
-    return Path(load_config()["workspace"] or DEFAULT_CONFIG["workspace"])
+    return Path(_setting("workspace") or DEFAULT_CONFIG["workspace"])
 
 
 def files_root() -> Path:
-    return Path(load_config()["files_root"] or DEFAULT_CONFIG["files_root"])
+    return Path(_setting("files_root") or DEFAULT_CONFIG["files_root"])
 
 
 def claude_dir() -> Path:
     """Claude Code's folder: config.claude_dir, else CLAUDE_CONFIG_DIR, else ~/.claude."""
-    d = load_config().get("claude_dir") or os.environ.get("CLAUDE_CONFIG_DIR")
+    d = _setting("claude_dir") or os.environ.get("CLAUDE_CONFIG_DIR")
     if d:
         return Path(d)
     return Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir) / ".claude"

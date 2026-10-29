@@ -44,7 +44,7 @@ Schedule and whitelist: Settings -> Backup. History: Settings -> Backup -> histo
 ## Move to a new server
 On the new server run the installer with the restore variables:
 ```bash
-curl -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/name RESTORE_TOKEN=<token> bash   # no key needed (LICENSE=HM-… for signed releases)
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/name RESTORE_TOKEN=<token> bash   # no key needed (LICENSE=HM-… for signed releases)
 ```
 (or answer "yes" to the restore question). It installs, initialises an empty workspace, then
 restores the backup over it. Then: sign in with the new setup link, re-enter secrets that were not

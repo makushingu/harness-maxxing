@@ -26,10 +26,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import config, security, videos, workspace
+from .. import config, downloads, security, videos, workspace
 from ..security import require_auth
 from .sessions import save_upload
 
@@ -213,9 +213,10 @@ def _file_headers(mime: str, cache: str) -> dict[str, str]:
 
 def _serve(p: Path, v: str, download: bool = False) -> FileResponse:
     mime = _mime(p)
-    return FileResponse(p, media_type=mime, filename=p.name if download else None,
-                        content_disposition_type="attachment" if download else "inline",
-                        headers=_file_headers(mime, _cache(v)))
+    headers = _file_headers(mime, _cache(v))
+    if download:
+        headers["Content-Disposition"] = downloads.content_disposition(p.name)
+    return FileResponse(p, media_type=mime, headers=headers)
 
 
 @router.get("/raw")
@@ -224,6 +225,29 @@ async def raw(path: str, download: int = 0, v: str = ""):
     if not await _t(p.is_file):
         raise _err(404, "not_found", "File not found")
     return _serve(p, v, bool(download))
+
+
+@router.get("/zip")
+async def zip_folder(path: str, check: int = 0):
+    """A folder as a zip, streamed while it is made (downloads.zip_plan for what goes in). `check=1`: only what it
+    would hold, or its 413 (the UI asks first: a refused link download shows no reason)."""
+    p = resolve(path)
+    if not await _t(p.is_dir):
+        raise _err(404, "not_found", "Not a folder")
+    try:
+        plan = await _t(downloads.zip_plan, p, _root())
+    except downloads.ZipTooLarge as e:
+        what = (f"more than {downloads.ZIP_MAX_FILES:,} files" if e.what == "count"
+                else f"more than {downloads.ZIP_MAX_BYTES >> 30} GB")
+        raise _err(413, "too_large", f"This folder holds {what}: too much for one zip") from None
+    except PermissionError:
+        raise _err(403, "forbidden", "Permission denied") from None
+    if check:
+        files = [st for _, _, st in plan if st is not None]
+        return {"count": len(files), "size": sum(st.st_size for st in files)}
+    return StreamingResponse(downloads.zip_stream(plan), media_type="application/zip", headers={
+        "Content-Disposition": downloads.content_disposition((p.name or "files") + ".zip"),
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 PREVIEW_MIN_BYTES = 300 * 1024            # smaller images are shown as they are
@@ -296,8 +320,12 @@ async def video_stream(path: str, q: int, v: str = ""):
     f = await _t(videos.variant_path, p, q)
     if not await _t(f.is_file):
         raise _err(404, "not_ready", "This quality is not ready yet")
-    await _t(os.utime, f)                     # the cache drops the least recently played copies first
-    return FileResponse(f, media_type="video/mp4", headers=_file_headers("video/mp4", _cache(v)))
+    # the cache drops the least recently played copies first: the access time only. A new mtime would change the
+    # ETag / Last-Modified of each response, and the browser's next Range request (If-Range) would get the whole
+    # file again (200) instead of its range (206): the playback restarts or stalls.
+    st = await _t(f.stat)
+    await _t(lambda: os.utime(f, ns=(time.time_ns(), st.st_mtime_ns)))
+    return FileResponse(f, media_type="video/mp4", stat_result=st, headers=_file_headers("video/mp4", _cache(v)))
 
 
 # ---- thumbnails ----------------------------------------------------------------------------
@@ -406,9 +434,15 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
     return p, _mime(p)                        # fallback: the original image
 
 
+GIF_ANIM_MAX = 8 * 1024**2                # anim=1: a GIF up to this size is served as it is (it moves), else a still
+
+
 @router.get("/thumb")
-async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = ""):
-    f, mime = await asyncio.get_running_loop().run_in_executor(_thumb_pool, _thumb, resolve(path), w)
+async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = "", anim: int = 0):
+    p = resolve(path)
+    if anim and p.suffix.lower() == ".gif" and await _t(p.is_file) and (await _t(p.stat)).st_size <= GIF_ANIM_MAX:
+        return _serve(p, v)
+    f, mime = await asyncio.get_running_loop().run_in_executor(_thumb_pool, _thumb, p, w)
     return FileResponse(f, media_type=mime, headers=_file_headers(mime, _cache(v)))
 
 

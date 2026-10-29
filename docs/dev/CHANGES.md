@@ -6,6 +6,124 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## Unreleased
+
+Server speed fundamentals (measured on a box with 184 sessions: the server used ~5 % of a core with 3 sessions
+running, mostly polling).
+- `config.load_secrets()` is cached like `load_config()` (key: path, inode, mtime_ns, size, ctime_ns; pickled, a
+  fresh copy per call); `set_secrets` and `write_json` of secrets.json drop it. `cookie_valid` no longer parses
+  secrets.json on every request (66 -> ~25 µs). `config.workspace()` / `files_root()` / `claude_dir()` read one
+  setting from the cached merged config (`_setting`) instead of unpickling the whole config.
+- `workspace.py`: CLAUDE.md descriptions, `.maxxing.json` and `projects/.order.json` are cached per file on their stat
+  (`_cached`; a file changed less than `RACY_S` = 2 s ago is read again; the writes here call `_forget`);
+  `_folder_meta` returns a copy. `tree()` / `list_topics()` read the workspace root once (`_one_root`).
+- `store.list_ids()` keeps the ids in memory and lists the folder again only when its mtime changed (or changed less
+  than 1 s ago): 1.1-1.5 ms -> ~10 µs with 652 files. `store.prune_locks()` removes the `.lock` / `.run` of sessions
+  that are gone or idle for an hour, under their lock; `_flock` and `hold_run_lock` check after locking that the
+  file is still the one at the path (fstat vs stat) and start again on a new one. `runner_alive` no longer creates
+  a missing `.run` (no file = nobody holds it).
+- New `sessions/wake.py`: one `watchfiles` RustNotify thread on the sessions folder (not recursive; debounce 100 ms,
+  step 50 ms) wakes the per-session SSE streams (`<id>.log` / `<id>.json`) and the turn-end watcher (`<id>.json`)
+  through asyncio events taken before looking (`mark` then `wait`: nothing missed in between). With it the streams
+  look at least every 2 s while running (`WAKE_RUNNING_S`) / 1 s idle, the watcher every 2 s while running /
+  `interval` idle; without it (no inotify, `MAXXING_INOTIFY=0`, another loop) the old polling (0.1 / 0.25 / 1 s).
+  `watchfiles` is now a declared dependency (it came with `uvicorn[standard]`).
+- `session-watcher.json`: written after the first pass, at once after a report, and at most every 5 s after passes
+  that saw a change (never when nothing changed; was every 5 s with indent + fsync); compact JSON, no fsync.
+- Feed watcher: `feed.watch_id()` reads nothing while feed.db and its WAL are unchanged and keeps one connection
+  (`check_same_thread=False`, under a lock; reopened when feed.db is replaced) instead of a new one every 3 s.
+- Logs: `clip.clip_event` drops `thinking.signature` and `redacted_thinking.data` (~16 % of the logs measured);
+  `clip.worth_clipping` also lets short lines carrying them through `clip_line` / `compact_log`. New
+  `sessions/maintenance.py`: every night at 04:30 (server time) compacts the logs written since the previous pass
+  (`<state>/sessions-maintenance.json {at, retry}`; running ones retried the next night), then `prune_locks()`.
+  Disabled in tests with `MAXXING_SESSION_MAINTENANCE=0`. The first pass after the update compacts every log once.
+- `search.reclaim()`: after a files walk, at most once a day, VACUUM when more than 25 % of search.db is free pages
+  (and it is at least 4 MB).
+
+Video player (branch `opt/video`). Public text for the next CHANGELOG.md entry: videos play sharp (the original
+whenever the browser can decode it), keep playing through a server restart or a network drop, remember volume, speed
+and where you stopped, no longer jump while loading; GIFs move in conversations and inline audio keeps playing when
+you scroll away.
+
+- `GET /api/files/video/stream` sets the atime only (`os.utime(ns=(now, st_mtime_ns))`, `stat_result` passed to
+  `FileResponse`): touching the mtime changed the ETag / Last-Modified on every request, so a Range request with
+  `If-Range` got a 200 (whole file) and playback restarted. `videos._trim_cache` sorts on atime and skips copies
+  played in the last 30 min (`COPY_KEEP_S`; the cache may stay over `VIDEO_CACHE_MAX` meanwhile).
+- `videos.auto_quality`: 1080 above 1080p (was 720), 720 for a heavy original ≤ 1080p. Encoder `-preset faster -crf
+  20`, maxrate 8M / 4M / 1500k, bufsize 2x (`encode_args`). Copy file names gain `-r2` (`COPY_REV`): the blurry
+  crf 23 copies are never served again and age out of the cache.
+- `videos.probe` reads every stream (no `-select_streams v:0`): new `has_audio`, `rotation` (side data or `rotate`
+  tag). The in-memory probe cache is per process, so no stale entry without the new keys survives a restart.
+- `GET /api/files/thumb` gains `anim=1`: a `.gif` ≤ 8 MB (`GIF_ANIM_MAX`) is served as it is.
+- Web, `features/files/`: `videoQuality.ts` (`canDecode` = `canPlayType` with a `codecs=` string per ffprobe codec;
+  Auto targets `info.auto` only when `needCopy`: original undecodable / format error, or rough), `MediaPlayer.tsx`
+  (frozen source + "File changed · Reload", lost-connection retries 1 / 3 / 6 s then a 5 s probe, error triage through
+  a `Range: bytes=0-0` fetch, box sized with `cqw`/`cqh` from the info then `videoWidth`, throttled seek on drag, touch
+  first tap, iPhone `webkit*fullscreen` events, GIF-like clips), `mediaMemory.ts` (`mx-media-prefs`, `mx-media-pos`:
+  LRU 100, 1 s debounced writes, flushed on `pagehide`), `sharedAudio.ts` (inline chat audio owns an `Audio()` outside
+  React, one per path, dropped when paused or ended with no player mounted). `MediaView` is a size container
+  (`container-type: size`, `min-h-40`); `MediaSkeleton` replaces `CodeSkeleton` for media in the viewer. `Thumb`
+  takes `anim`; chat thumbnails sit in a fixed `aspect-[4/3]` box.
+
+Downloads:
+- `downloads.content_disposition(name)` names every download (`/api/files/raw?download=1`, `/api/team-peer/files/{fid}`,
+  `/api/pc/download/{target}`): `attachment; filename="<ASCII>"; filename*=UTF-8''<name>`. Starlette's `filename=`
+  raised `UnicodeEncodeError` (500) on a name that is not UTF-8 on disk (lone surrogates) and sent no plain
+  `filename=`. Such a name is now read as Latin-1 (`caf\xe9` -> `café`); slashes, control and bidi characters are
+  replaced or dropped (a peer's file name is untrusted), names are cut at 200 characters keeping the extension.
+- `GET /api/files/zip?path=`: a folder as a zip, streamed (`downloads.zip_plan` walks it first in a worker thread and
+  refuses with `413 too_large` past `ZIP_MAX_BYTES` 2 GB uncompressed / `ZIP_MAX_FILES` 100,000, before any byte;
+  `downloads.zip_stream` is a sync iterator over a `zipfile.ZipFile` writing into an unseekable sink, so entries use
+  data descriptors and ZIP64 when needed). Symlinked folders are never followed; a symlinked file only when it resolves
+  to a regular file inside the files root; FIFOs, sockets and devices are skipped. A file that grows meanwhile is cut
+  at its planned size; one that became unreadable is left out.
+- `GET /api/files/zip?check=1` answers `{count, size}` or the same `413` without zipping: the UI asks it first, since
+  a link download the server refuses fails without a reason.
+- UI (`features/files/download.ts`): every download is the browser's own download of `?download=1` (streamed to disk,
+  progress, any size); images and PDFs are no longer read into a Blob. Only shortcut left: an image with a version
+  (`v`, given or `knownFileStamp`) of at most 20 MB (size given, else Content-Length / bytes read) is fetched from
+  the versioned URL the viewer shows and saved from a Blob. `downloadProps` lets a plain click follow the link unless
+  that shortcut or the iOS path applies, and then prevents only the native event (a Radix menu item checks the React
+  event's `defaultPrevented` before closing). Callers pass `{version, size}` (listing entry, viewer stamp / parent
+  listing, read size).
+- iOS home-screen app (`inIosApp()` = `isIOS() && isStandalone()`): Download -> `navigator.share({files})` up to
+  50 MB when `canShare` accepts it; else (or when the share is refused) `location.assign` of the inline raw URL in the
+  app. "Open raw" links (`openRawProps`) drop `target=_blank` there: Safari has no session cookie (401).
+- File viewer: Download no longer hidden on phones; below `sm` Download (or Download as zip), Open in Files and Parent
+  folder sit in a "More actions" menu. Folders: Download as zip in the viewer header and in the listing row menu
+  (`useDownloadZip`).
+- PC agent download: `pcbridge.agent_binary` -> `agent_file` (a path; the cache is hashed in chunks) and `personalised`
+  returns `(name, agent path, trailer)`; `/api/pc/download/{target}` streams the file then the trailer instead of
+  holding a personalised copy of the binary in memory per request.
+
+Installer speed and re-runs (`install.sh`):
+- Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
+  `<state>/logs/install-failed-*` with the other logs); `bg_wait NAME` returns its exit code and prints the log tail
+  on failure. PIDs in `BG_PID` (assoc array). `on_exit` waits for a running `apt` job (never cuts dpkg; `$WORK` is
+  its TMPDIR) and kills the others with their children (`kill_tree`, pgrep -P).
+- Packages: `BASE_PKGS` still in the foreground (git, curl, python3... needed next); `TOOL_PKGS SEC_PKGS
+  BROWSER_PKGS` (+ ufw) in ONE background apt job (`apt_tools`: `apt-get update` there when the foreground did none,
+  `pkg_known` filter, `apt_install` = no-recommends then with). `apt_wait` (in `setup_caddy`, `secure_server`,
+  `install_tools_now`) waits, dies on failure like before, reports skipped names / count / missing ffmpeg. Only one
+  apt/dpkg at a time (the DPkg lock timeout would serialize a missed call anyway). `ensure_swap` moved first.
+- Downloads: `prefetch` starts the Claude Code and (when not the pinned one) uv downloads after the clone;
+  `python_sync` (the `uv sync`) starts in the background right after uv and runs while Claude Code installs; the
+  steps are now ... uv, Claude Code, Python environment, init. Overlap: the apt job (~1-2 min on a fresh VPS) with
+  clone + uv + Claude Code + uv sync + init; uv sync (~20-60 s) with the Claude Code install.
+- Download cache: `fetch_verified` keeps verified files in `CACHE_DIR` (`/var/cache/harness-maxxing`, 700, refused
+  if a link or not ours) named by sha256, re-checked on each use, hard-linked (or copied) to DEST; a `.part` left by
+  a cut transfer is resumed (`curl -C -`, from scratch if the server refuses). `cache_clear` (end of a successful
+  install) deletes only `<sha256>` / `<sha256>.part` files, then the folder if empty. `CACHE_DIR` is validated like
+  the other paths (`safe_path`, `not_system_dir`). uv's own cache (`~/.cache/uv`) and the managed Python already
+  survived a failed run; Node.js / Chromium are `maxxing deps update`'s (not covered).
+- Clone: the keyless public clone is partial (`--filter=blob:none`, 42 -> 11 MB today). Every git command of
+  `maxxing update` / customs works on it (blobs fetched on demand, batched by checkout; tested: fetch, merge
+  --ff-only, show, format-patch, rev-list --cherry-pick, cherry-pick). Lazy fetches go to the public origin without
+  a token, so a `GH_TOKEN` clone (private fork) stays full. Offline, showing a file of a version never checked out
+  fails (needs the network, like the fetch before it).
+- The documented one-liner is `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash`
+  (README, docs/user, skill maxxing-backup, install.sh help). The site (harness-maxxing-cloud) still shows the old one.
+
 ## 2.0.0-alpha.104 - 2026-10-28
 
 Session list (`feat/session-list`, web only):
