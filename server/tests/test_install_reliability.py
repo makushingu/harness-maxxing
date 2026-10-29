@@ -78,6 +78,39 @@ def test_installer_fetch_verified_checks_before_use(http_dir, tmp_path):
     assert "refused" in r.stdout and not dest.exists()
 
 
+def test_downloads_are_kept_for_a_re_run(http_dir, tmp_path):
+    """A failed install run again does not download again: verified files stay in CACHE_DIR (named by their
+    sha256, checked on every use) until cache_clear, after a successful install."""
+    d, base = http_dir
+    (d / "tool").write_bytes(b"good build")
+    good = hashlib.sha256(b"good build").hexdigest()
+    cache, work = tmp_path / "cache", tmp_path / "work"
+    work.mkdir()
+    r = sh(f'fetch_verified {base}/tool {good} {work}/a && echo fetched', CACHE_DIR=str(cache))
+    assert "fetched" in r.stdout and (cache / good).read_bytes() == b"good build", r.stdout + r.stderr
+    (d / "tool").unlink()                                           # the network is gone: the cache serves it
+    r = sh(f'fetch_verified {base}/tool {good} {work}/b && echo fetched', CACHE_DIR=str(cache))
+    assert "fetched" in r.stdout and (work / "b").read_bytes() == b"good build"
+    (cache / good).write_bytes(b"tampered")                         # never used without its sha256
+    r = sh(f'fetch_verified {base}/tool {good} {work}/c || echo refused', CACHE_DIR=str(cache))
+    assert "refused" in r.stdout and not (cache / good).exists() and not (work / "c").exists()
+    (d / "tool").write_bytes(b"good build")                         # a cut transfer left a .part: still a good file
+    (cache / f"{good}.part").write_bytes(b"garbage")
+    r = sh(f'fetch_verified {base}/tool {good} {work}/d && echo fetched', CACHE_DIR=str(cache))
+    assert "fetched" in r.stdout and (work / "d").read_bytes() == b"good build"
+    assert not (cache / f"{good}.part").exists()
+    (cache / "mine.txt").write_text("not ours")
+    sh('cache_clear', CACHE_DIR=str(cache))
+    assert [p.name for p in cache.iterdir()] == ["mine.txt"]
+    (cache / "mine.txt").unlink()
+    sh('cache_clear', CACHE_DIR=str(cache))
+    assert not cache.exists()
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path / "elsewhere")
+    r = sh(f'fetch_verified {base}/tool {good} {work}/e && echo fetched', CACHE_DIR=str(link))
+    assert "fetched" in r.stdout and not (tmp_path / "elsewhere").exists()   # a link is never used as the cache
+
+
 # ---- install.sh pieces -----------------------------------------------------------------------------------------
 def _meminfo(tmp_path, mb: int, swap_kb: int = 0) -> Path:
     f = tmp_path / "meminfo"
@@ -223,6 +256,15 @@ def test_branch_names_are_validated(value, ok):
     r = sh('check_inputs && echo fine', BRANCH=value, INSTALL_DIR="/opt/x", WORKSPACE="/root/w", STATE_DIR="/var/lib/x",
            PORT="8787", REPO="o/n", LICENSE_API="https://api.example.com", RESTORE_TRUST="0", ALLOW_UNPROTECTED="0",
            FIREWALL="auto", SSH_HARDEN="auto", TOOLS="background", SWAP="auto")
+    assert ("fine" in r.stdout) is ok, r.stderr
+
+
+@pytest.mark.parametrize("value, ok", [("/var/cache/harness-maxxing", True), ("/var/cache", False), ("/etc", False),
+                                       ("relative", False), ("/var/cache/a b", False)])
+def test_cache_dir_is_validated(value, ok):
+    r = sh('check_inputs && echo fine', CACHE_DIR=value, BRANCH="main", INSTALL_DIR="/opt/x", WORKSPACE="/root/w",
+           STATE_DIR="/var/lib/x", PORT="8787", REPO="o/n", LICENSE_API="https://api.example.com", RESTORE_TRUST="0",
+           ALLOW_UNPROTECTED="0", FIREWALL="auto", SSH_HARDEN="auto", TOOLS="background", SWAP="auto")
     assert ("fine" in r.stdout) is ok, r.stderr
 
 

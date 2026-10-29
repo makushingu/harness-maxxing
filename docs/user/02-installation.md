@@ -65,7 +65,9 @@ local engine (on servers with at least 3 GB of RAM) and the time zone is chosen 
     model - see [Videos, PDFs and images](tools). `maxxing deps list` shows where they are.
 
 About a minute until the setup link on a small server, a minute or two more for the tools. A re-run only redoes what
-changed (about 10 seconds). Re-run one part alone on an existing server: `bash /opt/claude-maxxing/install.sh --tools`
+changed (about 10 seconds). If an install stops halfway (network cut, full disk), run the same command again: what
+was already downloaded is kept in `/var/cache/harness-maxxing` (checked again before use, emptied once the install
+succeeds) and is not downloaded again. Re-run one part alone on an existing server: `bash /opt/claude-maxxing/install.sh --tools`
 (= `maxxing deps update`) or `--secure`. Technical names keep the original spelling: the service is
 `claude-maxxing`, the code `/opt/claude-maxxing`, the state `/var/lib/claude-maxxing`.
 
@@ -171,6 +173,7 @@ curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com
 | `TOOLS` | `background` | `background` = Node.js, Chromium, Remotion, Scrapling and the speech model are installed once the service runs, `foreground` = wait for them, `0` = skip (`maxxing deps update` later) |
 | `SWAP` | `auto` | `auto` = a 2 GB `/swapfile` under 4 GB of RAM when there is no swap, on a fresh server only (not in containers, not on a server already in use or a re-run), `1` = the same on any server, `0` = never |
 | `SOURCE_DIR` | – | install this local copy of the code (see "Install from a local copy") |
+| `CACHE_DIR` | `/var/cache/harness-maxxing` | where downloads are kept until the install succeeds, so a re-run after a failure does not download them again |
 | `ASSUME_YES` | `0` | `1` = never ask, use defaults |
 
 ## Restore on a new server

@@ -110,6 +110,12 @@ Installer speed and re-runs (`install.sh`):
   `python_sync` (the `uv sync`) starts in the background right after uv and runs while Claude Code installs; the
   steps are now ... uv, Claude Code, Python environment, init. Overlap: the apt job (~1-2 min on a fresh VPS) with
   clone + uv + Claude Code + uv sync + init; uv sync (~20-60 s) with the Claude Code install.
+- Download cache: `fetch_verified` keeps verified files in `CACHE_DIR` (`/var/cache/harness-maxxing`, 700, refused
+  if a link or not ours) named by sha256, re-checked on each use, hard-linked (or copied) to DEST; a `.part` left by
+  a cut transfer is resumed (`curl -C -`, from scratch if the server refuses). `cache_clear` (end of a successful
+  install) deletes only `<sha256>` / `<sha256>.part` files, then the folder if empty. `CACHE_DIR` is validated like
+  the other paths (`safe_path`, `not_system_dir`). uv's own cache (`~/.cache/uv`) and the managed Python already
+  survived a failed run; Node.js / Chromium are `maxxing deps update`'s (not covered).
 
 ## 2.0.0-alpha.102 - 2026-10-26
 
