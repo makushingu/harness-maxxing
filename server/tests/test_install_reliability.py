@@ -305,3 +305,43 @@ def test_a_keyless_clone_uses_no_token(tmp_path):
     assert "cloned into" in r.stdout and "token_used=0" in r.stdout, r.stdout + r.stderr
     assert (tmp_path / "opt/README.md").is_file()
 
+
+def test_the_public_clone_is_partial_and_still_updates(tmp_path):
+    """fetch_code clones with --filter=blob:none; what maxxing update does next (fetch, merge --ff-only, show,
+    format-patch, cherry-pick of a customization) works, the missing files coming on demand."""
+    origin = tmp_path / "origin"
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": str(tmp_path / "gitconfig")}
+
+    def git(*args, cwd=origin):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args], cwd=cwd,
+                              capture_output=True, text=True, env=env, check=True).stdout
+
+    origin.mkdir()
+    git("init", "-q", "-b", "main")
+    git("config", "uploadpack.allowFilter", "true")
+    for i in range(3):
+        (origin / "big.txt").write_text(f"version {i}\n" * 1000)
+        (origin / "README.md").write_text(f"r{i}\n")
+        git("add", ".")
+        git("commit", "-qm", f"v{i}")
+    (tmp_path / "gitconfig").write_text(f'[url "file://{origin}"]\n\tinsteadOf = https://github.com/o/n.git\n')
+    opt = tmp_path / "opt"
+    r = sh('fetch_code', INSTALL_DIR=str(opt), STATE_DIR=str(tmp_path / "st"), REPO="o/n", BRANCH="main", **env)
+    assert "cloned into" in r.stdout, r.stdout + r.stderr
+    assert git("config", "remote.origin.partialclonefilter", cwd=opt).strip() == "blob:none"
+    old = git("rev-parse", "HEAD~2:big.txt").strip()
+    missing = subprocess.run(["git", "rev-list", "--objects", "--missing=print", "HEAD"], cwd=opt, capture_output=True,
+                             text=True, env=env).stdout
+    assert f"?{old}" in missing                                     # older files not downloaded
+    (opt / "README.md").write_text("my change\n")                    # a customization
+    git("commit", "-qam", "custom: mine", cwd=opt)
+    (origin / "big.txt").write_text("version 3\n")
+    git("commit", "-qam", "v3")
+    git("fetch", "-q", "origin", "main", cwd=opt)
+    assert git("show", "origin/main:big.txt", cwd=opt) == "version 3\n"
+    assert "my change" in git("format-patch", "-1", "--stdout", "HEAD", cwd=opt)
+    assert git("rev-list", "--right-only", "--cherry-pick", "--no-merges", "origin/main...HEAD", cwd=opt).strip()
+    git("checkout", "-q", "-B", "next", "origin/main", cwd=opt)
+    git("cherry-pick", "main", cwd=opt)
+    assert (opt / "big.txt").read_text() == "version 3\n" and (opt / "README.md").read_text() == "my change\n"
+    assert git("show", "HEAD~4:big.txt", cwd=opt).startswith("version 0")   # an old version, fetched on demand

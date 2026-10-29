@@ -116,6 +116,11 @@ Installer speed and re-runs (`install.sh`):
   install) deletes only `<sha256>` / `<sha256>.part` files, then the folder if empty. `CACHE_DIR` is validated like
   the other paths (`safe_path`, `not_system_dir`). uv's own cache (`~/.cache/uv`) and the managed Python already
   survived a failed run; Node.js / Chromium are `maxxing deps update`'s (not covered).
+- Clone: the keyless public clone is partial (`--filter=blob:none`, 42 -> 11 MB today). Every git command of
+  `maxxing update` / customs works on it (blobs fetched on demand, batched by checkout; tested: fetch, merge
+  --ff-only, show, format-patch, rev-list --cherry-pick, cherry-pick). Lazy fetches go to the public origin without
+  a token, so a `GH_TOKEN` clone (private fork) stays full. Offline, showing a file of a version never checked out
+  fails (needs the network, like the fetch before it).
 
 ## 2.0.0-alpha.102 - 2026-10-26
 
