@@ -21,7 +21,8 @@ import { basename, dirname, iconFor, isRendered, isTextual, kindOf } from './kin
 import { PreviewBody } from './FilePreview'
 import { TextZoomControl, zoomsText } from './textZoom'
 import { FolderView } from './rich'
-import { CodeSkeleton, DiagramView } from './viewers'
+import { CodeSkeleton, DiagramView, MediaSkeleton } from './viewers'
+import { videoInfoQuery } from './videoQuality'
 import { CodeBlock, CopyButton } from '@/components/ui/code-block'
 import { DIAGRAM_PREFIX, diagramCode } from '@/components/ui/diagram'
 import { useFileViewer } from './viewerStore'
@@ -231,7 +232,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
         ) : isDir ? (
           <FolderView path={path} onOpen={openEntry} />
         ) : !stamp.ready ? (
-          <CodeSkeleton />
+          kind === 'video' || kind === 'audio' ? <MediaSkeleton kind={kind} /> : <CodeSkeleton />
         ) : (
           <PreviewBody path={path} kind={kind} view={view} content={content} version={stamp.version} />
         )}
@@ -338,7 +339,10 @@ function usePrefetchNeighbours(list: string[], index: number) {
         if (isDiagram(p)) continue
         const k = kindOf(basename(p))
         if (k === 'image') void fileStamp(p).then((v) => prefetchImage(filePreviewUrl(p, PREVIEW_W, v)))
-        else if (k === 'video') void fileStamp(p).then((v) => prefetchImage(fileThumbUrl(p, 1280, v)))
+        else if (k === 'video') {
+          void fileStamp(p).then((v) => prefetchImage(fileThumbUrl(p, 1280, v)))
+          void qc.prefetchQuery(videoInfoQuery(p)) // the player's box gets the video's shape at once
+        }
         else if (k === 'pdf') prefetchImage(fileThumbUrl(p, 240, null))
         else if (k === 'markdown' || k === 'csv' || k === 'code' || k === 'text')
           void qc.prefetchQuery({ queryKey: qk.files.read(p), queryFn: () => api.get<FileContent>('/api/files/read', { path: p }), staleTime: 30_000 })

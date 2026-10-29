@@ -532,16 +532,34 @@ export function DiagramView({ code, className }: { code: string; className?: str
 }
 
 /* ------------------------------------------------------------------ video / audio / pdf */
+/** The player in the space it is given. A size container (`cqw` / `cqh`): the video box fits it with the video's shape
+ *  before anything loads. Only a file this browser cannot play at all (no copy possible) ends in the info card - a
+ *  lost connection keeps the player (it resumes by itself). */
 export function MediaView({ path, kind, version, className }: { path: string; kind: 'video' | 'audio'; version?: number | null; className?: string }) {
   const t = useT()
   const [failed, setFailed] = React.useState(false)
+  const fail = React.useCallback(() => setFailed(true), [])
   React.useEffect(() => setFailed(false), [path])
   if (failed) return <FileInfoCard path={path} reason={t('files.mediaError')} className={className} />
   return (
-    <div className={cn('flex min-h-0 flex-1 items-center justify-center p-4 md:p-6', className)}>
+    <div className={cn('flex min-h-40 flex-1 items-center justify-center p-4 [container-type:size] md:p-6', className)}>
       <Sensitive placeholder={<div className="aspect-video w-full max-w-3xl rounded-lg bg-muted/60" aria-label="Hidden (presentation mode)" />}>
-        <MediaPlayer key={path} path={path} kind={kind} version={version} onError={() => setFailed(true)} className={kind === 'video' ? 'max-h-full' : undefined} />
+        <MediaPlayer key={path} path={path} kind={kind} version={version} onError={fail} />
       </Sensitive>
+    </div>
+  )
+}
+
+/** While the file's version is asked (a moment): the black box of a video, the card of an audio file - not lines of
+ *  text that turn into a picture. */
+export function MediaSkeleton({ kind }: { kind: 'video' | 'audio' }) {
+  return (
+    <div className="flex min-h-40 flex-1 items-center justify-center p-4 [container-type:size] md:p-6" aria-hidden data-testid="media-skeleton">
+      {kind === 'video' ? (
+        <div className="rounded-xl bg-black shadow-pop" style={{ width: 'min(48rem, 100cqw, calc(100cqh * 16 / 9))', aspectRatio: '16 / 9' }} />
+      ) : (
+        <Skeleton className="h-28 w-full max-w-lg rounded-xl" />
+      )}
     </div>
   )
 }
