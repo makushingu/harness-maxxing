@@ -871,6 +871,27 @@ def test_update_signature_required_stops_unsigned(env, repos, monkeypatch, capsy
     assert not any(c[:2] == ["/fake/uv", "sync"] for c in seen)
 
 
+def test_update_signature_checked_before_switching_branch(env, repos, monkeypatch, capsys):
+    """--branch X with an unsigned origin/X: the checkout ran before the check and stayed, code unverified on disk."""
+    config.update_config(update_verify_signature=True)
+    work = repos["work"]
+    _git("checkout", "-q", "-b", "beta", cwd=work)
+    (work / "evil.txt").write_text("unsigned")
+    _git("add", "-A", cwd=work)
+    _git("commit", "-q", "-m", "unsigned", cwd=work)
+    _git("push", "-q", "origin", "beta", cwd=work)
+    _git("checkout", "-q", "main", cwd=work)
+    clone, _ = _signed_update_env(env, repos, monkeypatch, verify_commit=1)
+    head = ["git", "-C", str(clone), "rev-parse", "HEAD"]
+    before = subprocess.run(head, capture_output=True, text=True).stdout
+    assert run_cli("update", "--branch", "beta") == 1
+    assert "no valid signature" in capsys.readouterr().out
+    assert subprocess.run(head, capture_output=True, text=True).stdout == before
+    assert subprocess.run(["git", "-C", str(clone), "branch", "--show-current"],
+                          capture_output=True, text=True).stdout.strip() == "main"
+    assert not (clone / "evil.txt").exists()
+
+
 def test_update_signature_good_commit_or_tag(env, repos, monkeypatch, capsys):
     config.update_config(update_verify_signature=True)
     clone, _ = _signed_update_env(env, repos, monkeypatch, verify_commit=0)
