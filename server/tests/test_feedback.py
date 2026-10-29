@@ -141,3 +141,15 @@ def test_an_answer_that_is_not_an_object_is_a_clean_error(client, mx, monkeypatc
     assert e.value.code == "bad_answer" and not config.get_secret(license.KEY)
     register.save(count=True)
     assert register.state()["error"] == "bad_answer" and not config.get_secret(register.TOKEN)
+
+
+def test_an_email_with_a_lone_surrogate_is_refused_before_anything_is_sent(client, cloud):
+    """The feedback went out, then writing feedback_email to config.json raised: 500. The register too."""
+    body = b'{"email": "a\\ud800@b.io", "message": "hello there"}'
+    r = client.post("/api/settings/feedback", content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_email"
+    assert cloud.got == []
+    r = client.put("/api/settings/register", content=b'{"email": "a\\ud800@b.io"}',
+                   headers={"Content-Type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_email"
+    assert not (config.load_config().get("register") or {}).get("email")
