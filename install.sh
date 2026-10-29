@@ -1108,11 +1108,13 @@ ssh_key_only() { # called by secure_server: adds to its "done" list
   done+=("SSH by key only")
 }
 
-# ufw_has_port "RULES" PORT - a ufw rule already names this port (22, 22/tcp, OpenSSH for 22, or a range holding it)
+# ufw_has_port "RULES" PORT - a ufw rule already names this TCP port (22, 22/tcp, OpenSSH for 22, or a range
+# holding it; 22/udp does not count)
 ufw_has_port() {
   local r lo hi
   for r in $1; do
-    r=${r%/tcp}; r=${r%/udp}
+    case "$r" in */udp) continue ;; esac
+    r=${r%/tcp}
     case "$r" in
       "$2") return 0 ;;
       OpenSSH) [ "$2" = 22 ] && return 0 ;;
@@ -1122,6 +1124,17 @@ ufw_has_port() {
     esac
   done
   return 1
+}
+
+# ufw status | ufw_open_rules - the "To" of the rules that let anyone in: ALLOW (IN), from Anywhere, on no
+# interface (not DENY, REJECT, LIMIT, OUT, "on tailscale0" or a single source address)
+ufw_open_rules() {
+  awk 'NR > 4 && NF {
+    i = 2; if ($i == "(v6)") i++
+    if ($i == "on" || $(i + 1) == "OUT" || $(i + 1) == "FWD" || $i != "ALLOW") next
+    i++; if ($i == "IN") i++
+    if ($i == "Anywhere") print $1
+  }'
 }
 
 # ufw_tailscale - on the Tailscale interface: the web UI and SSH only (not every port of the server)
@@ -1193,8 +1206,9 @@ secure_server() {
     info "container: the firewall is left to the host"; FW_ON=host
   elif [ "$FIREWALL" = add ]; then
     if [ "$FW_ACTIVE" = ufw ]; then
-      local added="" p cur rules
-      rules=$(ufw status 2>/dev/null | awk 'NR > 4 && $1 != "" {print $1}')
+      local added="" p cur rules web_open
+      rules=$(ufw status 2>/dev/null | awk 'NR > 4 && $1 != "" {print $1}')   # SSH: any rule naming the port
+      web_open=$(ufw status 2>/dev/null | ufw_open_rules)                       # web: open to everyone only
       # SSH: their rules stay as they are; only the port of this very connection, if no rule mentions it at all
       cur=$(ssh_connection 2>/dev/null | awk 'NF==4{print $4}')
       if [ -n "$cur" ] && ! ufw_has_port "$rules" "$cur"; then
@@ -1202,7 +1216,7 @@ secure_server() {
       fi
       if [ "$ACCESS" = domain ] && [ -z "$WEB_BUSY" ]; then
         for p in 80 443; do
-          ufw_has_port "$rules" "$p" || { ufw allow "$p/tcp" comment 'Caddy' >/dev/null; added="$added + $p"; }
+          ufw_has_port "$web_open" "$p" || { ufw allow "$p/tcp" comment 'Caddy' >/dev/null; added="$added + $p"; }
         done
       fi
       [ "$ACCESS" = tailscale ] && { ufw_tailscale; added="$added + tailscale0 ($PORT, SSH)"; }
