@@ -620,9 +620,11 @@ function Workspace() {
           {tabs && <TabsArrows onPick={pickTab} />}
           <div
             ref={strip}
-            className={cn('relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
+            className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
             style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: rows(rowSplit) } : undefined}
             data-columns
+            // several sessions side by side: messages show their grip (drag one into another session, contentDrag.ts)
+            data-multi={(!tabs && shownCols.length > 1) || undefined}
           >
             {shownCols.length === 0 ? (
               <div className="flex flex-1 items-center justify-center">
