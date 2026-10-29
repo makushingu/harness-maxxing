@@ -147,7 +147,9 @@ also send the quotes alone. Quotes are kept with the draft and shown as quote bl
 - **Git graphs**: when Claude talks about a repository, it shows the real graph of its branches and commits (read
   live); click a commit for its files. See [Git & GitHub](26-git.md).
 - **Pictures and videos** named in an answer show as thumbnails under it (click to open), and **audio files** as a
-  small player you can play right there (its name opens the file viewer); audio you send plays the same way.
+  small player you can play right there (its name opens the file viewer); audio you send plays the same way. It
+  keeps playing when you scroll away, switch session or open another page; come back to the message to pause it.
+  **GIFs** move in the thread (up to 8 MB; a bigger one shows a still, marked GIF).
   Thumbnails follow the files: when Claude rewrites a picture under the same name, the new version shows as soon as
   the tool has run (also in the viewer and the HUD).
 - **Right click** a picture, a video, an attachment or a file path (long press on Android): **Open**, **Download**,

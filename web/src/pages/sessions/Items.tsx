@@ -381,7 +381,7 @@ export function AttachmentStrip({ paths }: { paths: string[] }) {
       {paths.map((p) =>
         isAudio(p) ? (
           <div key={p} data-mx-file={p} className="w-72 max-w-full">
-            <MediaPlayer path={p} kind="audio" onOpen={() => open(p)} className="gap-2 p-3" />
+            <MediaPlayer path={p} kind="audio" keepAlive onOpen={() => open(p)} className="gap-2 p-3" />
           </div>
         ) : isImage(p) || isVideo(p) ? (
           <button
@@ -394,7 +394,8 @@ export function AttachmentStrip({ paths }: { paths: string[] }) {
             className="relative size-20 shrink-0 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             aria-label={masked ? 'Attachment' : baseName(p)}
           >
-            {masked ? null : <Thumb path={p} w={160} loading="lazy" className="size-full object-cover" />}
+            {masked ? null : <Thumb path={p} w={160} anim loading="lazy" className="size-full object-cover" />}
+            {isGif(p) && <GifBadge />}
             {isVideo(p) && (
               <span className="absolute inset-0 flex items-center justify-center bg-black/25">
                 <Play className="size-5 fill-white text-white" />
@@ -454,8 +455,10 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
         {media.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {media.map((p) => (
-              <button key={p} type="button" data-mx-file={p} onClick={() => open(p)} onPointerEnter={() => prefetchMedia(p)} onFocus={() => prefetchMedia(p)} className="relative h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                <Thumb path={p} w={320} alt={baseName(p)} loading="lazy" className="h-full w-auto object-cover" />
+              // a box of fixed shape: nothing in the thread moves when the picture arrives
+              <button key={p} type="button" data-mx-file={p} onClick={() => open(p)} onPointerEnter={() => prefetchMedia(p)} onFocus={() => prefetchMedia(p)} className="relative aspect-[4/3] h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                <Thumb path={p} w={320} anim alt={baseName(p)} loading="lazy" className="size-full object-cover" />
+                {isGif(p) && <GifBadge />}
                 {isVideo(p) && (
                   <span className="absolute inset-0 flex items-center justify-center bg-black/25">
                     <Play className="size-6 fill-white text-white" />
@@ -469,7 +472,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
           <div className="mt-2 grid gap-2">
             {audio.map((p) => (
               <div key={p} data-mx-file={p} className="max-w-md">
-                <MediaPlayer path={p} kind="audio" onOpen={() => open(p)} className="gap-2 p-3" />
+                <MediaPlayer path={p} kind="audio" keepAlive onOpen={() => open(p)} className="gap-2 p-3" />
               </div>
             ))}
           </div>
@@ -478,6 +481,14 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
     </div>
   )
 })
+
+/** On a GIF in the thread: it moves (up to 8 MB), or it is the still of a bigger one. */
+function GifBadge() {
+  const t = useT()
+  return <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] leading-4 font-semibold text-white">{t('media.gif')}</span>
+}
+
+const isGif = (p: string) => /\.gif$/i.test(p)
 
 function MaskedLines() {
   return (

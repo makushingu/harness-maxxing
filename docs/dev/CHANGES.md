@@ -40,6 +40,31 @@ running, mostly polling).
 - `search.reclaim()`: after a files walk, at most once a day, VACUUM when more than 25 % of search.db is free pages
   (and it is at least 4 MB).
 
+Video player (branch `opt/video`). Public text for the next CHANGELOG.md entry: videos play sharp (the original
+whenever the browser can decode it), keep playing through a server restart or a network drop, remember volume, speed
+and where you stopped, no longer jump while loading; GIFs move in conversations and inline audio keeps playing when
+you scroll away.
+
+- `GET /api/files/video/stream` sets the atime only (`os.utime(ns=(now, st_mtime_ns))`, `stat_result` passed to
+  `FileResponse`): touching the mtime changed the ETag / Last-Modified on every request, so a Range request with
+  `If-Range` got a 200 (whole file) and playback restarted. `videos._trim_cache` sorts on atime and skips copies
+  played in the last 30 min (`COPY_KEEP_S`; the cache may stay over `VIDEO_CACHE_MAX` meanwhile).
+- `videos.auto_quality`: 1080 above 1080p (was 720), 720 for a heavy original ≤ 1080p. Encoder `-preset faster -crf
+  20`, maxrate 8M / 4M / 1500k, bufsize 2x (`encode_args`). Copy file names gain `-r2` (`COPY_REV`): the blurry
+  crf 23 copies are never served again and age out of the cache.
+- `videos.probe` reads every stream (no `-select_streams v:0`): new `has_audio`, `rotation` (side data or `rotate`
+  tag). The in-memory probe cache is per process, so no stale entry without the new keys survives a restart.
+- `GET /api/files/thumb` gains `anim=1`: a `.gif` ≤ 8 MB (`GIF_ANIM_MAX`) is served as it is.
+- Web, `features/files/`: `videoQuality.ts` (`canDecode` = `canPlayType` with a `codecs=` string per ffprobe codec;
+  Auto targets `info.auto` only when `needCopy`: original undecodable / format error, or rough), `MediaPlayer.tsx`
+  (frozen source + "File changed · Reload", lost-connection retries 1 / 3 / 6 s then a 5 s probe, error triage through
+  a `Range: bytes=0-0` fetch, box sized with `cqw`/`cqh` from the info then `videoWidth`, throttled seek on drag, touch
+  first tap, iPhone `webkit*fullscreen` events, GIF-like clips), `mediaMemory.ts` (`mx-media-prefs`, `mx-media-pos`:
+  LRU 100, 1 s debounced writes, flushed on `pagehide`), `sharedAudio.ts` (inline chat audio owns an `Audio()` outside
+  React, one per path, dropped when paused or ended with no player mounted). `MediaView` is a size container
+  (`container-type: size`, `min-h-40`); `MediaSkeleton` replaces `CodeSkeleton` for media in the viewer. `Thumb`
+  takes `anim`; chat thumbnails sit in a fixed `aspect-[4/3]` box.
+
 ## 2.0.0-alpha.102 - 2026-10-26
 
 Integration of #23, the port of the pre-squash `fix/telegram-all` (a76-a79 there, never merged). `web/dist`
