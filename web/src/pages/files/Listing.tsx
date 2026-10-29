@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Copy,
   Download,
+  FolderDown,
   FolderOpen,
   FolderUp,
   LayoutGrid,
@@ -48,7 +49,7 @@ import {
 } from '@/components/ui'
 import { hasThumb, iconFor, iconTone } from '@/features/files/kinds'
 import { sortEntries, useFilePrefs, type SortKey, type UploadItem } from './state'
-import { downloadProps } from '@/features/files/download'
+import { downloadProps, useDownloadZip } from '@/features/files/download'
 
 export type EntryActions = {
   open: (e: FileEntry) => void
@@ -401,6 +402,7 @@ function ListingSkeleton({ grid }: { grid: boolean }) {
 
 function EntryMenu({ entry, actions, className }: { entry: FileEntry; actions: EntryActions; className?: string }) {
   const t = useT()
+  const downloadZip = useDownloadZip()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -421,12 +423,17 @@ function EntryMenu({ entry, actions, className }: { entry: FileEntry; actions: E
           <FolderOpen />
           {t('files.open')}
         </DropdownMenuItem>
-        {entry.type === 'file' && (
+        {entry.type === 'file' ? (
           <DropdownMenuItem asChild>
-            <a {...downloadProps(entry.path, entry.mtime)}>
+            <a {...downloadProps(entry.path, { version: entry.mtime, size: entry.size })}>
               <Download />
               {t('files.download')}
             </a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => downloadZip(entry.path)} data-testid="entry-zip">
+            <FolderDown />
+            {t('files.downloadZip')}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => actions.copyPath(entry)}>

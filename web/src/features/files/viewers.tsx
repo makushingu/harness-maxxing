@@ -14,7 +14,7 @@ import { useDiagramSvg } from '@/components/ui/diagram'
 import { basename, CONVERTED_IMAGE, dirname, extOf, resolvePath } from './kinds'
 import type { CodeEditorProps } from './CodeEditor'
 import { MediaPlayer } from './MediaPlayer'
-import { downloadProps } from './download'
+import { downloadProps, inIosApp, openRawProps } from './download'
 
 const CodeEditorChunk = React.lazy(() => import('./CodeEditor'))
 const MarkdownChunk = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
@@ -575,9 +575,9 @@ export function PdfView({ path, className }: { path: string; className?: string 
       <div className="flex shrink-0 items-center justify-end gap-1 border-t px-3 py-1.5">
         <span className="mr-auto text-xs text-muted-foreground max-sm:hidden">{t('files.pdfHint')}</span>
         <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
-          <a href={fileRawUrl(path)} target="_blank" rel="noopener noreferrer">
+          <a {...openRawProps(path)}>
             <ExternalLink />
-            {t('files.openRaw')}
+            {t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}
           </a>
         </Button>
         <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
@@ -628,15 +628,15 @@ export function FileInfoCard({
         </div>
         <div className="flex flex-wrap justify-center gap-2">
           <Button asChild variant="secondary" size="sm">
-            <a {...downloadProps(path)}>
+            <a {...downloadProps(path, { size })}>
               <Download />
               {t('files.download')}
             </a>
           </Button>
           <Button asChild variant="ghost" size="sm">
-            <a href={fileRawUrl(path)} target="_blank" rel="noopener noreferrer">
+            <a {...openRawProps(path)}>
               <ExternalLink />
-              {t('files.openRaw')}
+              {t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}
             </a>
           </Button>
           {children}

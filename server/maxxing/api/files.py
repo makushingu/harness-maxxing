@@ -228,8 +228,9 @@ async def raw(path: str, download: int = 0, v: str = ""):
 
 
 @router.get("/zip")
-async def zip_folder(path: str):
-    """A folder as a zip, streamed while it is made (downloads.zip_plan for what goes in)."""
+async def zip_folder(path: str, check: int = 0):
+    """A folder as a zip, streamed while it is made (downloads.zip_plan for what goes in). `check=1`: only what it
+    would hold, or its 413 (the UI asks first: a refused link download shows no reason)."""
     p = resolve(path)
     if not await _t(p.is_dir):
         raise _err(404, "not_found", "Not a folder")
@@ -241,6 +242,9 @@ async def zip_folder(path: str):
         raise _err(413, "too_large", f"This folder holds {what}: too much for one zip") from None
     except PermissionError:
         raise _err(403, "forbidden", "Permission denied") from None
+    if check:
+        files = [st for _, _, st in plan if st is not None]
+        return {"count": len(files), "size": sum(st.st_size for st in files)}
     return StreamingResponse(downloads.zip_stream(plan), media_type="application/zip", headers={
         "Content-Disposition": downloads.content_disposition((p.name or "files") + ".zip"),
         "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
