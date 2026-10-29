@@ -63,7 +63,7 @@ export function FilePreview({ path, className, header = true, openInFiles = true
           )}
           <Tooltip content={t('files.download')}>
             <Button asChild variant="ghost" size="icon-sm">
-              <a {...downloadProps(path)} aria-label={t('files.download')}>
+              <a {...downloadProps(path, { size: content.data?.size })} aria-label={t('files.download')}>
                 <Download />
               </a>
             </Button>

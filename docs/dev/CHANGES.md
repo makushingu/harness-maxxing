@@ -77,6 +77,21 @@ Downloads:
   data descriptors and ZIP64 when needed). Symlinked folders are never followed; a symlinked file only when it resolves
   to a regular file inside the files root; FIFOs, sockets and devices are skipped. A file that grows meanwhile is cut
   at its planned size; one that became unreadable is left out.
+- `GET /api/files/zip?check=1` answers `{count, size}` or the same `413` without zipping: the UI asks it first, since
+  a link download the server refuses fails without a reason.
+- UI (`features/files/download.ts`): every download is the browser's own download of `?download=1` (streamed to disk,
+  progress, any size); images and PDFs are no longer read into a Blob. Only shortcut left: an image with a version
+  (`v`, given or `knownFileStamp`) of at most 20 MB (size given, else Content-Length / bytes read) is fetched from
+  the versioned URL the viewer shows and saved from a Blob. `downloadProps` lets a plain click follow the link unless
+  that shortcut or the iOS path applies, and then prevents only the native event (a Radix menu item checks the React
+  event's `defaultPrevented` before closing). Callers pass `{version, size}` (listing entry, viewer stamp / parent
+  listing, read size).
+- iOS home-screen app (`inIosApp()` = `isIOS() && isStandalone()`): Download -> `navigator.share({files})` up to
+  50 MB when `canShare` accepts it; else (or when the share is refused) `location.assign` of the inline raw URL in the
+  app. "Open raw" links (`openRawProps`) drop `target=_blank` there: Safari has no session cookie (401).
+- File viewer: Download no longer hidden on phones; below `sm` Download (or Download as zip), Open in Files and Parent
+  folder sit in a "More actions" menu. Folders: Download as zip in the viewer header and in the listing row menu
+  (`useDownloadZip`).
 - PC agent download: `pcbridge.agent_binary` -> `agent_file` (a path; the cache is hashed in chunks) and `personalised`
   returns `(name, agent path, trailer)`; `/api/pc/download/{target}` streams the file then the trailer instead of
   holding a personalised copy of the binary in memory per request.
