@@ -75,7 +75,7 @@ export const qk = {
   },
 }
 
-/** Global bus topic → query key prefixes to invalidate. */
+/** Global bus topic → query key prefixes to invalidate (minus what `busSkips` leaves to the streams). */
 export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   // The tree's counters (running, unread, sessions) only change with events that also carry `workspace`.
   sessions: [qk.sessions.all],
@@ -106,3 +106,15 @@ export const isLiveKey = (key: readonly unknown[]) => LIVE_KEYS.some((p) => p.ev
  *  or ends a turn (state/unread change), appears or goes away. A turn may reveal an expired Claude sign-in and
  *  moves the token stats; plain `sessions` events (metadata while a turn streams, queue edits) do not. */
 export const BUS_TURN_KEYS: readonly (readonly unknown[])[] = [qk.claude, qk.stats.tokens]
+
+/** What the open streams keep fresh by themselves: `bus` = /api/stream is connected (useGlobalBus), `sessions` =
+ *  ids whose own stream is connected (useSessionStream: its `state` frames carry the Session at every change). */
+export const liveStreams = { bus: false, sessions: new Map<string, number>() }
+
+/** Keys a bus batch leaves alone: the Session of a column whose stream is open (the stream already pushed it), and
+ *  the session searches outside turn batches (a snapshot: only a finished turn adds text to find). */
+export function busSkips(key: readonly unknown[], turn: boolean): boolean {
+  if (key[0] !== 'sessions') return false
+  if (key[1] === 'one') return liveStreams.sessions.has(key[2] as string)
+  return key[1] === 'search' && !turn
+}
