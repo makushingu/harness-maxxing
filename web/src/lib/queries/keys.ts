@@ -118,3 +118,7 @@ export function busSkips(key: readonly unknown[], turn: boolean): boolean {
   if (key[1] === 'one') return liveStreams.sessions.has(key[2] as string)
   return key[1] === 'search' && !turn
 }
+
+/** For a write the server announces on the bus itself: nothing to invalidate while the bus is connected (it
+ *  refetches the same keys a moment later; invalidating here too fetched everything twice), `keys` otherwise. */
+export const unlessBus = (keys: readonly (readonly unknown[])[]) => () => (liveStreams.bus ? [] : keys)
