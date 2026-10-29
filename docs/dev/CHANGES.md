@@ -113,6 +113,15 @@ Drag content between sessions (`web/src/pages/sessions/contentDrag.ts`):
   inserted as `fileQuote(path)`. A thread picture also carries `Files`: `isFileDrag` ignores drags with the content type.
 - i18n: new lazy group `drag` (`drag.*`), loaded on the first dragstart.
 
+Several files at once (Files page and the folder grid of the file viewer):
+- `POST /api/files/zip {paths}` (1-1000): every path through `resolve()` (the files guard), must exist; duplicates
+  and entries inside another selected folder dropped; `downloads.zip_plan_many(items, root)` plans them side by side
+  at the top of the zip (`zip_plan` is now its one-folder case), names made unique (` (2)`, casefolded), the
+  2 GB / 100,000 caps on the whole set. Answers `{count, size, name, token, expires_in}`; `GET /api/files/zip?token=`
+  streams it (a link download cannot POST). Tokens: in memory (`_zip_tokens`, at most 200, 120 s), bound to a
+  sha256 of the session cookie, the paths resolved and planned again at download time. CSRF as every POST
+  (`X-Maxxing`).
+
 Installer speed and re-runs (`install.sh`):
 - Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
   `<state>/logs/install-failed-*` with the other logs); `bg_wait NAME` returns its exit code and prints the log tail
