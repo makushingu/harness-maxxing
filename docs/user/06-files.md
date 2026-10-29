@@ -43,16 +43,16 @@ smaller and the passage you are reading stays in place; click the percentage to 
 where you were: switching **Preview**, **Edit** and **Split**, or opening the file again (even after a reload),
 brings you back to the same passage.
 
-**Video quality**: a big video (over 1080p, a high bitrate, or a format some browsers cannot play, like AV1 on
-Safari) can be slow to start, mostly on a phone. The player's quality button (next to the speed) lists
-**Auto**, **Original** and lighter copies. The server makes a copy once (H.264, built to start playing
-at once), one video at a time and at low priority. Meanwhile the original keeps playing. A quality you pick switches
-at the same moment when its copy is ready. **Auto** (the default) uses a 720p copy only for heavy videos, and only
-once you press play: opening a video to look at it starts no encoding. With **Auto**, a copy that gets ready while
-the original already plays well is kept for the next time you open the video (switching would make the picture jump);
-it takes over at once only if the original keeps stalling or dropping frames.
-Your choice is remembered on this device. Copies are kept up to 4 GB in total (the least recently played go first)
-and need `ffmpeg`.
+**Video quality**: the player plays the **original** whenever your browser can decode it, at full sharpness (text
+in a screen recording stays readable). A lighter copy is used only when the original cannot be played here (HEVC,
+ProRes or AV1 on some browsers: "Preparing a copy this browser can play…" shows while it is made) or keeps stalling or
+dropping frames. The copy is 1080p for a video above 1080p, 720p for a heavy one at most 1080p. The player's quality
+button (next to the speed) lists **Auto** (the default, as above), **Original** and the lighter copies; a quality you
+pick switches at the same moment when its copy is ready. The server makes a copy once (H.264, built to start playing
+at once), one video at a time and at low priority, and only once you press play: opening a video to look at it
+starts no encoding. With **Auto**, a change of source while the video plays waits until you pause, unless the
+original cannot keep up. Your choice is remembered on this device. Copies are kept up to 4 GB in total (the least
+recently played go first, never one played in the last 30 minutes) and need `ffmpeg`.
 
 **HTML pages run isolated**: they get their own sandbox, separate from Harness Maxxing. Their scripts run,
 but they cannot use your session, read the API or your cookies. Links that open a new tab or window keep
@@ -73,7 +73,18 @@ pictures. The **fullscreen** button opens the file viewer (see below) on the fil
   the device's own list (the system picker on a phone, never cut off, also in full screen), speeds 0.5× to 4×;
   picture in picture and full screen from the buttons. The poster image appears at once. On a phone or a tablet,
   tap the speaker to show the volume slider, tap it again to mute (on an iPhone or iPad the slider also works,
-  on top of the device's volume buttons).
+  on top of the device's volume buttons). On a touch screen, a first tap on a playing video shows the controls, a
+  second one pauses. The player's box has the video's shape from the start: nothing jumps when it loads.
+  - **Kept in this browser**: the volume, mute and speed, and where you stopped in each audio or video file longer
+    than 15 s. Opening it again resumes there ("Resumes at 12:34 · From start" until you press play), except in its
+    first 3 or last 5 seconds.
+  - **The file changes while it plays** (Claude rewrote it): the player keeps playing what it had and shows
+    **File changed · Reload**.
+  - **Connection lost** (the server restarting after an update, a network drop): the player stays, shows
+    "Connection lost, resuming…" and continues at the same moment as soon as the server answers again (three quick
+    tries, then a **Retry** button and a quiet check every few seconds). Only a file this browser cannot play at all
+    shows a card with **Download**.
+  - **Short clips without sound** (15 s or less) play like a GIF: muted, looping, controls on hover or tap.
 
 ## The file viewer
 
