@@ -96,6 +96,23 @@ Downloads:
   returns `(name, agent path, trailer)`; `/api/pc/download/{target}` streams the file then the trailer instead of
   holding a personalised copy of the binary in memory per request.
 
+Drag content between sessions (`web/src/pages/sessions/contentDrag.ts`):
+- One delegated `dragstart` / `dragend` on each thread scroller (`Thread.tsx`): the target is a message grip
+  (`[data-mx-drag]`, its text registered in a WeakMap by `gripRef`, no listener per row), a file (`[data-mx-file]` /
+  `#mx-file=` link, same lookup as `FileMenu`) or the selection (dragstart on a text node). File elements of the
+  thread carry `draggable`; grips show only on a fine pointer when the strip shows several sessions
+  (`data-multi` + `group/strip` on the strip, `index.tsx`).
+- Data: `application/x-mx-content` = `{v: 1, kind: 'text' | 'file', text | path, from: <session id>, nonce}` and a
+  `text/plain` fallback (a selection keeps the browser's `text/html`). The drag state (`useContentDrag`: `drag.from`,
+  `over`) is a tiny zustand store set one frame after dragstart (like the column grip); only `ContentDropOverlay`
+  (Column.tsx) subscribes to it.
+- Drop (`SessionColumn` / `NewSessionColumn` body, before the OS-file handling): taken only while a drag started in
+  this tab is on and its `nonce` equals the per-tab random one (module memory); otherwise not handled, the browser
+  default stays (plain text into a field). Same session: `dropEffect = 'none'`. Text: control / bidi characters out,
+  20 000 characters at most; path: a string, absolute, `.` / `..` / `//` resolved, 4096 at most, never fetched, only
+  inserted as `fileQuote(path)`. A thread picture also carries `Files`: `isFileDrag` ignores drags with the content type.
+- i18n: new lazy group `drag` (`drag.*`), loaded on the first dragstart.
+
 Installer speed and re-runs (`install.sh`):
 - Background jobs: `bg_start NAME CMD...` runs CMD in a `set -e` subshell, output in `$WORK/bg-NAME.log` (copied to
   `<state>/logs/install-failed-*` with the other logs); `bg_wait NAME` returns its exit code and prints the log tail

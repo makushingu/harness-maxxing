@@ -27,6 +27,7 @@ import {
   Columns2,
   LayoutGrid,
   PenLine,
+  Quote,
   Rows2,
 } from 'lucide-react'
 import { cn, copyText } from '@/lib/utils'
@@ -95,6 +96,7 @@ import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
 import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
 import { absTopicDir, fileQuote, fmtCost, topicLabel } from './util'
+import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
 
 export type ColumnVariant = 'column' | 'solo' | 'mobile'
 export { MIN_W }
@@ -246,6 +248,37 @@ function StackedComposer({ colKey, stacked, children }: { colKey: string; stacke
           {t('sessions.grid.write')}
         </button>
       )}
+    </div>
+  )
+}
+
+/** Content of another session dropped here (contentDrag.ts): into this column's composer as a quote, never sent. */
+function quoteDropped(colKey: string, composer: ComposerHandle | null, d: Dropped) {
+  if (!composer) return
+  composer.quote(d.kind === 'file' ? fileQuote(d.path) : d.text)
+  window.getSelection()?.removeAllRanges()
+  // a folded composer (two sessions in a column) unfolds with the focus
+  useSessionsUI.getState().focus(colKey)
+  requestAnimationFrame(() => composer.focus())
+}
+
+/** While content of another session is dragged: this column is a drop zone (stronger under the pointer). Only these
+ *  overlays follow the drag, not the threads. */
+function ContentDropOverlay({ colKey, sid }: { colKey: string; sid: string | null }) {
+  const t = useT()
+  const state = useContentDrag((s) => (!s.drag || s.drag.from === sid ? null : s.over === colKey ? 'over' : 'on'))
+  if (!state) return null
+  return (
+    <div
+      className={cn(
+        'pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-sm font-medium transition-colors',
+        state === 'over' ? 'border-primary bg-background/95' : 'border-primary/40 bg-background/60 text-muted-foreground',
+      )}
+      data-testid="content-drop"
+      data-over={state === 'over' || undefined}
+    >
+      <Quote className="size-6 text-primary" />
+      {t('drag.dropToQuote')}
     </div>
   )
 }
@@ -491,7 +524,8 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
     },
   }
 
-  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+  // (a picture dragged from a thread carries a file too: that is a content drag)
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
   return (
     <ColumnShell col={col} index={index} count={count} variant={variant} place={place}>
       <div
@@ -499,12 +533,16 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
         className="relative flex min-h-0 flex-1 flex-col"
         onDragEnter={(e) => isFileDrag(e) && setDragFiles(true)}
         onDragOver={(e) => {
+          if (contentDragOver(e, col.key, sid)) return
           if (isFileDrag(e)) e.preventDefault()
         }}
         onDragLeave={(e) => {
+          contentDragLeave(e, col.key)
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragFiles(false)
         }}
         onDrop={(e) => {
+          const d = contentDrop(e, sid)
+          if (d !== undefined) return d && quoteDropped(col.key, composer.current, d)
           if (!isFileDrag(e)) return
           e.preventDefault()
           setDragFiles(false)
@@ -723,6 +761,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
             {t('sessions.dropToAttach')}
           </div>
         )}
+        <ContentDropOverlay colKey={col.key} sid={sid} />
       </div>
     </ColumnShell>
   )
@@ -1054,15 +1093,21 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
     }
   }
 
-  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+  // (a picture dragged from a thread carries a file too: that is a content drag)
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
   return (
     <ColumnShell col={col} index={index} count={count} variant={variant} place={place}>
       <div
         className="relative flex min-h-0 flex-1 flex-col"
         onDragEnter={(e) => isFileDrag(e) && setDragFiles(true)}
-        onDragOver={(e) => isFileDrag(e) && e.preventDefault()}
-        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragFiles(false)}
+        onDragOver={(e) => !contentDragOver(e, col.key, null) && isFileDrag(e) && e.preventDefault()}
+        onDragLeave={(e) => {
+          contentDragLeave(e, col.key)
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragFiles(false)
+        }}
         onDrop={(e) => {
+          const d = contentDrop(e, null)
+          if (d !== undefined) return d && quoteDropped(col.key, composer.current, d)
           if (!isFileDrag(e)) return
           e.preventDefault()
           setDragFiles(false)
@@ -1133,6 +1178,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
             {t('sessions.dropToAttach')}
           </div>
         )}
+        <ContentDropOverlay colKey={col.key} sid={null} />
       </div>
     </ColumnShell>
   )
