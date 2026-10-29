@@ -549,3 +549,10 @@ def test_lone_surrogate_in_args_does_not_break_the_call(mx, monkeypatch):
     assert r["isError"]                                                       # the PC is offline: said, not raised
     assert pcbridge.actions()[0]["args"] == {"uid": "a?b", "url": "https://example.com/a"}
     json.dumps(pcbridge.actions()).encode()
+
+
+def test_deep_json_body_is_a_json_rpc_error(pc, monkeypatch):
+    monkeypatch.setattr(pc_api, "_loopback", lambda conn: True)
+    h = {"Authorization": f"Bearer {pcbridge.load()['mcp_secret']}", "Content-Type": "application/json"}
+    r = pc.post("/api/pc/mcp", content="[" * 100000 + "]" * 100000, headers=h)
+    assert r.status_code == 200 and r.json()["error"]["code"] == -32700
