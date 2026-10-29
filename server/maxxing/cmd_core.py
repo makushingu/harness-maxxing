@@ -2295,6 +2295,19 @@ def _is_state_dir(p: Path) -> bool:
     return p not in (*_SYSTEM_DIRS, home().resolve()) and (p / "config.json").is_file()
 
 
+def _purge_dir(p: Path, what: str) -> None:
+    """--purge of the code / state directory: says "removed" only when it is gone. A link is kept (rmtree refuses
+    it, and what it points to may be shared), as for the workspace."""
+    if p.is_symlink():
+        line(WARN, f"{p} is a link (to {p.resolve()}) - kept: delete it by hand")
+        return
+    shutil.rmtree(p, ignore_errors=True)
+    if p.exists():
+        line(WARN, f"{what} not fully removed ({p}) - delete it by hand")
+    else:
+        line(OK, f"{what} removed ({p})")
+
+
 def _is_workspace_dir(p: Path) -> bool:
     """--purge-workspace deletes the workspace only if it is one: never a link (its target would go), a system
     directory, the home directory nor a folder without CLAUDE.md or projects/ (a workspace set to /usr by mistake)."""
@@ -2399,13 +2412,11 @@ def cmd_uninstall(a) -> int:
     _uninstall_components(changed, a.purge)
     if a.purge:
         if _is_install_dir(config.CODE):
-            shutil.rmtree(config.CODE, ignore_errors=True)
-            line(OK, f"code removed ({config.CODE})")
+            _purge_dir(config.CODE, "code")
         else:
             line(WARN, f"{config.CODE} does not look like an install directory - kept")
         if _is_state_dir(config.STATE):
-            shutil.rmtree(config.STATE, ignore_errors=True)
-            line(OK, f"state removed ({config.STATE})")
+            _purge_dir(config.STATE, "state")
         elif config.STATE.is_dir():
             line(WARN, f"{config.STATE} does not look like a Harness Maxxing state directory (no config.json) - kept")
     if a.purge_workspace:
