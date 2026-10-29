@@ -4,6 +4,7 @@
 //   node mock/server.mjs                       # port 8809, scenario "ready"
 //   MOCK_PORT=8899 MOCK_SCENARIO=setup node mock/server.mjs
 //   curl -X POST localhost:8809/__mock/scenario -d '{"name":"login"}'   # reset state at runtime
+//   curl -X POST localhost:8809/__mock/bus -d '{"topics":["sessions","workspace"]}'   # emit a bus event
 //
 // Implements every endpoint of docs/dev/API.md with in-memory state and fake, product-neutral data.
 // Serves the built SPA from ../dist (web/dist). Scenarios: setup | login | onboarding | ready | maxxing.
@@ -616,6 +617,13 @@ const sseSend = (res, event, data) => { try { res.write(`event: ${event}\ndata: 
 function bus(...topics) {
   const data = { topics: [...new Set(topics)] }
   for (const c of busClients) sseSend(c, 'invalidate', data)
+  // Like the server's session streams: a `state` frame whenever the Session changed (any write announces `sessions`).
+  if (topics.includes('sessions')) for (const [id, subs] of sessionSubs) {
+    const s = S.sessions.find((x) => x.id === id)
+    if (!s) { for (const r of subs) sseSend(r, 'state', null); sessionSubs.delete(id); continue }
+    const sig = JSON.stringify(s)
+    for (const r of subs) if (r.mxState !== sig) { r.mxState = sig; sseSend(r, 'state', s) }
+  }
 }
 function pushEvents(id, newEvents) {
   const subs = sessionSubs.get(id)
@@ -1994,6 +2002,13 @@ const server = http.createServer(async (req, res) => {
       if (!SCENARIOS.includes(name)) return sendJson(res, 422, { error: 'invalid', message: `name must be one of ${SCENARIOS.join(', ')}` })
       resetScenario(name)
       return sendJson(res, 200, { ok: true, name })
+    }
+    if (url.pathname === '/__mock/bus' && req.method === 'POST') { // emit a bus event, e.g. {"topics":["sessions","workspace"]}
+      let topics
+      try { topics = JSON.parse((await readBody(req)).toString() || '{}').topics } catch { topics = null }
+      if (!Array.isArray(topics) || !topics.length) return sendJson(res, 422, { error: 'invalid', message: 'topics must be a non-empty list' })
+      bus(...topics)
+      return sendJson(res, 200, { ok: true })
     }
     if (url.pathname.startsWith('/api/') || url.pathname === '/api') return await handleApi(req, res, url)
     if (url.pathname.startsWith('/ext/')) return serveExt(req, res, url)

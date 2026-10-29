@@ -8,7 +8,7 @@
 // The cache survives column moves / remounts (no reload, no flash).
 import * as React from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { fetchBefore, fetchTail, qk, takeEarlyTail, TAIL_EVENTS, useSetSessionCache } from '@/lib/queries'
+import { fetchBefore, fetchTail, liveStreams, qk, takeEarlyTail, TAIL_EVENTS, useSetSessionCache } from '@/lib/queries'
 import { refreshFileStamps } from '@/lib/queries/files'
 import { errorMessage } from '@/lib/api'
 import { useEventSource } from '@/lib/sse'
@@ -355,7 +355,7 @@ export function useSessionStream(id: string | null) {
   const setSession = useSetSessionCache()
   const qc = useQueryClient()
   const ready = useLogSelect(id, (st) => st.status === 'ready' && !st.deleted)
-  useEventSource(
+  const status = useEventSource(
     id && ready ? () => `/api/sessions/${encodeURIComponent(id!)}/stream?from=${get(id!).next}` : null,
     {
       events: (data: SessionStreamEvents) => {
@@ -384,6 +384,17 @@ export function useSessionStream(id: string | null) {
       },
     },
   )
+  // While the stream is open, its `state` frames keep the Session fresh: the global bus does not refetch it.
+  React.useEffect(() => {
+    if (!id || status !== 'open') return
+    const open = liveStreams.sessions
+    open.set(id, (open.get(id) || 0) + 1)
+    return () => {
+      const n = (open.get(id) || 1) - 1
+      if (n) open.set(id, n)
+      else open.delete(id)
+    }
+  }, [id, status])
 }
 
 /** A brand-new session has an empty log: mark it ready so its column renders without a skeleton. */
