@@ -33,6 +33,7 @@ def _wait(client, p, q, timeout=60):
 def test_info_prepare_and_stream(client, clip, mx):
     info = client.get("/api/files/video", params={"path": str(clip)}).json()
     assert (info["width"], info["height"], info["codec"]) == (960, 540, "mpeg4")
+    assert info["has_audio"] is True and info["rotation"] == 0
     assert [q["q"] for q in info["qualities"]] == [480] and info["qualities"][0]["state"] == "none"
     assert info["auto"] == 480                      # not H.264: Auto plays a copy
     assert client.get("/api/files/video/stream", params={"path": str(clip), "q": 480}).status_code == 404
@@ -49,6 +50,33 @@ def test_info_prepare_and_stream(client, clip, mx):
     assert (mx["state"] / "videos").stat().st_mode & 0o077 == 0
 
 
+def test_stream_keeps_its_etag_so_range_requests_stay_ranges(client, clip, mx):
+    """Playing a copy touches its access time only: the ETag / Last-Modified of the next request are the same, so the
+    browser's If-Range request gets its range (206), not the whole file again (200 = the playback restarts)."""
+    client.post("/api/files/video/prepare", json={"path": str(clip), "q": 480})
+    assert _wait(client, clip, 480)["state"] == "ready"
+    f = videos.variant_path(clip, 480)
+    import os
+    os.utime(f, (time.time() - 7200, f.stat().st_mtime))
+    params = {"path": str(clip), "q": 480}
+    a = client.get("/api/files/video/stream", params=params, headers={"Range": "bytes=0-99"})
+    time.sleep(0.02)
+    b = client.get("/api/files/video/stream", params=params, headers={"Range": "bytes=100-199"})
+    assert a.status_code == b.status_code == 206
+    assert a.headers["etag"] == b.headers["etag"] and a.headers["last-modified"] == b.headers["last-modified"]
+    c = client.get("/api/files/video/stream", params=params, headers={"Range": "bytes=200-299", "If-Range": a.headers["etag"]})
+    assert c.status_code == 206 and len(c.content) == 100
+    assert time.time() - f.stat().st_atime < 60              # still marked as recently played
+
+
+def test_probe_tells_silent_clips(mx):
+    p = mx["files"] / "silent.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=320x240:r=10:d=1", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", str(p)], check=True)
+    info = videos.probe(p)
+    assert info["has_audio"] is False and info["codec"] == "h264" and 0.5 < info["duration"] < 2
+
+
 def test_rejects_bad_requests(client, clip, mx):
     assert client.post("/api/files/video/prepare", json={"path": str(clip), "q": 1080}).status_code == 422
     txt = mx["files"] / "a.txt"
@@ -58,22 +86,53 @@ def test_rejects_bad_requests(client, clip, mx):
     assert client.get("/api/files/video", params={"path": "/etc/passwd.mp4"}).status_code in (403, 404)
 
 
-def test_auto_keeps_light_originals():
+def test_auto_fallback_copy():
     light = {"codec": "h264", "height": 1080, "bitrate": 4_000_000}
     assert videos.auto_quality(light) is None
-    assert videos.auto_quality({**light, "height": 1440, "bitrate": 11_000_000}) == 720
+    assert videos.auto_quality({**light, "height": 1440, "bitrate": 11_000_000}) == 1080    # sharp: 1080p, not 720p
+    assert videos.auto_quality({**light, "height": 2160, "codec": "hevc"}) == 1080
     assert videos.auto_quality({**light, "codec": "av1"}) == 720
+    assert videos.auto_quality({**light, "bitrate": 9_000_000}) == 720
     assert videos.auto_quality({"codec": "hevc", "height": 360, "bitrate": 1}) is None   # nothing lighter
+    assert videos.auto_quality({"codec": "hevc", "height": 600, "bitrate": 1}) == 480
+
+
+def test_encoder_settings(tmp_path):
+    cmd = videos.encode_args(tmp_path / "in.mov", 1080, tmp_path / "out.part.mp4")
+    arg = lambda k: cmd[cmd.index(k) + 1]                                                   # noqa: E731
+    assert (arg("-preset"), arg("-crf"), arg("-maxrate"), arg("-bufsize")) == ("faster", "20", "8M", "16M")
+    cmd = videos.encode_args(tmp_path / "in.mov", 720, tmp_path / "out.part.mp4")
+    assert (cmd[cmd.index("-maxrate") + 1], cmd[cmd.index("-bufsize") + 1]) == ("4M", "8M")
+    cmd = videos.encode_args(tmp_path / "in.mov", 480, tmp_path / "out.part.mp4")
+    assert (cmd[cmd.index("-maxrate") + 1], cmd[cmd.index("-bufsize") + 1]) == ("1500k", "3M")
+    assert "-protocol_whitelist" in cmd and cmd[-1].endswith("out.part.mp4")
 
 
 def test_cache_is_trimmed(mx, monkeypatch):
+    import os
     d = videos.cache_dir()
+    now = time.time()
     for i in range(3):
-        (d / f"k{i}-480.mp4").write_bytes(b"x" * 100)
-        time.sleep(0.01)
+        f = d / f"k{i}-480.mp4"
+        f.write_bytes(b"x" * 100)
+        os.utime(f, (now - 7200 + i, now - 7200))           # played 2 h ago, oldest first
     monkeypatch.setattr(videos, "VIDEO_CACHE_MAX", 250)
     videos._trim_cache()
     assert sorted(f.name for f in d.glob("*.mp4")) == ["k1-480.mp4", "k2-480.mp4"]
+
+
+def test_cache_keeps_copies_played_recently(mx, monkeypatch):
+    import os
+    d = videos.cache_dir()
+    now = time.time()
+    old, playing = d / "old-480.mp4", d / "playing-480.mp4"
+    for f in (old, playing):
+        f.write_bytes(b"x" * 100)
+    os.utime(old, (now - 7200, now - 7200))
+    os.utime(playing, (now - 60, now - 7200))               # played a minute ago (maybe still playing)
+    monkeypatch.setattr(videos, "VIDEO_CACHE_MAX", 50)
+    videos._trim_cache()
+    assert not old.exists() and playing.exists()             # over the cap for a while rather than cut a playback
 
 
 def test_stale_part_files_are_cleaned(mx, monkeypatch):
