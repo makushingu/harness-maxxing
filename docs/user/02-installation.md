@@ -23,13 +23,15 @@ We recommend a server dedicated to Harness Maxxing: by default Claude runs with 
 As root on the server (`sudo -i` first if you are logged in as another user):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
 ```
+
+(`--proto '=https' --tlsv1.2`: curl only speaks HTTPS with TLS 1.2 or newer, even if a redirect points elsewhere.)
 
 It asks three questions (access mode, domain, restore a backup), then clones the public git repository
 (`github.com/makushingu/harness-maxxing`, branch `stable` = the published versions) - no key, no account. Updates then come from that branch
 (`maxxing update`). Unattended install:
-`curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
+`curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
 Harness Maxxing is free under a fair source license: see [License](license).
 
 No license key is asked. A company that needs an Enterprise key gives it after the install, in Settings → License
@@ -39,16 +41,18 @@ After the questions the installer runs unattended with a live progress display. 
 local engine (on servers with at least 3 GB of RAM) and the time zone is chosen in the web onboarding:
 
 1. checks the server (root, apt, systemd, architecture) and whether it is already in use (see below);
-2. installs every system package it needs **in one pass** (git, curl, python3, gnupg, openssh-client, cron, ffmpeg,
-   jq, ripgrep, ImageMagick, the browser libraries, unattended-upgrades, fail2ban...), turning Ubuntu's `universe`
-   component on if the image shipped without it; on a small server without swap it adds a 2 GB swap file;
-3. clones the code into `/opt/claude-maxxing`; your customizations sit on top of it, see
-   [Customizing](customizing);
+2. installs the system packages it needs: the base ones right away (git, curl, python3, gnupg, openssh-client,
+   cron...), the others (ffmpeg, jq, ripgrep, ImageMagick, the browser libraries, unattended-upgrades, fail2ban...)
+   **in one pass in the background** while the next steps run, turning Ubuntu's `universe` component on if the
+   image shipped without it; on a small server without swap it adds a 2 GB swap file first;
+3. clones the code into `/opt/claude-maxxing` (a partial clone: the files of older versions are fetched only if git
+   ever needs them); your customizations sit on top of it, see [Customizing](customizing);
 4. installs **uv** (Python toolchain) in `/usr/local/bin`, the Python of the server in
    `/var/lib/claude-maxxing/tools/python`, and the **Claude Code CLI**: each one a pinned version whose checksum is
    in the release's list of components, `deps.toml` - nothing downloaded is run before it is checked (see
    [Security](security), "Downloads");
-5. creates the Python environment and the `maxxing` command, then runs `maxxing init`: configuration, workspace,
+5. creates the Python environment (in the background, while Claude Code installs) and the `maxxing` command, then
+   runs `maxxing init`: configuration, workspace,
    skills, default jobs;
 6. optionally restores your memory from a backup;
 7. sets up access (Caddy for a domain, Tailscale, or local only);
@@ -63,7 +67,9 @@ local engine (on servers with at least 3 GB of RAM) and the time zone is chosen 
     model - see [Videos, PDFs and images](tools). `maxxing deps list` shows where they are.
 
 About a minute until the setup link on a small server, a minute or two more for the tools. A re-run only redoes what
-changed (about 10 seconds). Re-run one part alone on an existing server: `bash /opt/claude-maxxing/install.sh --tools`
+changed (about 10 seconds). If an install stops halfway (network cut, full disk), run the same command again: what
+was already downloaded is kept in `/var/cache/harness-maxxing` (checked again before use, emptied once the install
+succeeds) and is not downloaded again. Re-run one part alone on an existing server: `bash /opt/claude-maxxing/install.sh --tools`
 (= `maxxing deps update`) or `--secure`. Technical names keep the original spelling: the service is
 `claude-maxxing`, the code `/opt/claude-maxxing`, the state `/var/lib/claude-maxxing`.
 
@@ -106,7 +112,7 @@ scheduled jobs, an older Node.js, an existing Claude Code setup, other Telegram 
 that report (nothing is changed):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | bash -s -- --check
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash -s -- --check
 ```
 
 When the server is already in use, the installer asks for confirmation and then:
@@ -143,7 +149,7 @@ The server never listens on `0.0.0.0` or a public address.
 Answer every question with variables and add `ASSUME_YES=1`:
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash
 ```
 
 | Variable | Default | Meaning |
@@ -169,6 +175,7 @@ curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com
 | `TOOLS` | `background` | `background` = Node.js, Chromium, Remotion, Scrapling and the speech model are installed once the service runs, `foreground` = wait for them, `0` = skip (`maxxing deps update` later) |
 | `SWAP` | `auto` | `auto` = a 2 GB `/swapfile` under 4 GB of RAM when there is no swap, on a fresh server only (not in containers, not on a server already in use or a re-run), `1` = the same on any server, `0` = never |
 | `SOURCE_DIR` | – | install this local copy of the code (see "Install from a local copy") |
+| `CACHE_DIR` | `/var/cache/harness-maxxing` | where downloads are kept until the install succeeds, so a re-run after a failure does not download them again |
 | `ASSUME_YES` | `0` | `1` = never ask, use defaults |
 
 ## Restore on a new server
@@ -177,7 +184,7 @@ Moving to a new server? Install with your backup repository (with an Enterprise 
 server: Settings → License → Remove the key, see [License](license)):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash
 ```
 
 The installer runs `maxxing backup restore --from owner/memory-backup` after creating the

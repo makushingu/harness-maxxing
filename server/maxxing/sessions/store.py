@@ -132,11 +132,30 @@ def _write(sid: str, data: dict) -> None:
         tmp.unlink(missing_ok=True)                    # a failed write (disk full) leaves no stray file
 
 
+def _same_file(fd: int, path: Path) -> bool:
+    """The locked fd is still the file at `path`: `prune_locks` may have removed it (under the lock) between our
+    open() and our flock(), and a lock on a removed file excludes nobody."""
+    try:
+        a, b = os.fstat(fd), os.stat(path)
+    except OSError:
+        return False
+    return (a.st_ino, a.st_dev) == (b.st_ino, b.st_dev)
+
+
 @contextmanager
 def _flock(sid: str) -> Iterator[None]:
-    fd = os.open(_path(sid, ".lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    path = _path(sid, ".lock")
+    while True:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        except BaseException:
+            os.close(fd)
+            raise
+        if _same_file(fd, path):
+            break
+        os.close(fd)                                    # removed under us: lock the new file
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
         yield
     finally:
         os.close(fd)
@@ -164,6 +183,7 @@ def create(meta: dict) -> dict:
     with _flock(sid):
         _write(sid, meta)
     log_path(sid).touch(mode=0o600, exist_ok=True)
+    _ids["ids"] = _ids["ids"] | {sid}
     return meta
 
 
@@ -262,8 +282,34 @@ def new_meta(path: str, title: str, *, model: str = "", source: str = "web", not
             "permission_mode": permission_mode or ""}
 
 
+# Session ids, kept in memory: the folder is listed again only when its mtime changed (a file added, removed or
+# renamed - every meta save is a rename) or changed less than IDS_RACY_S ago (a file created in the same timestamp
+# tick as the last listing would not change it).
+IDS_RACY_S = 1.0
+_ids: dict[str, Any] = {"key": None, "ids": set()}
+
+
 def list_ids() -> list[str]:
-    return [p.stem for p in sessions_dir().glob("*.json") if is_valid_id(p.stem)]
+    d = sessions_dir()
+    try:
+        st = os.stat(d)
+        key: tuple | None = (str(d), st.st_ino, st.st_mtime_ns)
+        settled = time.time() - st.st_mtime > IDS_RACY_S
+    except OSError:
+        key, settled = None, False
+    if key is not None and settled and _ids["key"] == key:
+        return list(_ids["ids"])
+    ids: set[str] = set()
+    try:
+        with os.scandir(d) as it:
+            for e in it:
+                n = e.name
+                if n.endswith(".json") and is_valid_id(n[:-5]):
+                    ids.add(n[:-5])
+    except OSError:
+        pass
+    _ids.update(key=key, ids=ids)
+    return list(ids)
 
 
 def remove(sid: str) -> None:
@@ -272,6 +318,69 @@ def remove(sid: str) -> None:
             _path(sid, ext).unlink()
         except (FileNotFoundError, KeyError):
             pass
+    _ids["ids"] = _ids["ids"] - {sid}
+
+
+PRUNE_IDLE_S = 3600.0          # a lock file is removed only once its session has been idle this long
+
+
+def prune_locks(idle_s: float = PRUNE_IDLE_S) -> int:
+    """Remove the `.lock` / `.run` files nothing needs: of sessions that are gone, and of sessions idle for
+    `idle_s` (not running, empty queue, no runner spawned, finished and updated that long ago). Each file is
+    removed while we hold its lock (never one a runner or an edit holds); `_flock` / `hold_run_lock` check after
+    locking that the file is still there, so a waiter on a removed file starts again on a new one.
+    -> number of files removed."""
+    d = sessions_dir()
+    now, n = time.time(), 0
+    try:
+        names = [e.name for e in os.scandir(d)]
+    except OSError:
+        return 0
+    for name in names:
+        sid, dot, ext = name.partition(".")
+        if ext not in ("lock", "run") or not is_valid_id(sid):
+            continue
+        path = d / name
+        try:
+            if now - os.stat(path).st_mtime < idle_s:
+                continue
+        except OSError:
+            continue
+        m = read(sid)
+        if m is not None and not _idle_since(m, now, idle_s):
+            continue
+        try:
+            fd = os.open(path, os.O_RDWR)
+        except OSError:
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(fd)                                # held: in use
+            continue
+        try:
+            m = read(sid)                               # again, now that nobody else holds it
+            if (m is None or _idle_since(m, now, idle_s)) and _same_file(fd, path):
+                path.unlink()
+                n += 1
+        except OSError:
+            pass
+        finally:
+            os.close(fd)
+    return n
+
+
+def _idle_since(m: dict, now: float, idle_s: float) -> bool:
+    def num(v: Any) -> float:
+        try:
+            return float(v or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    if m.get("state") == "running" or m.get("queue") or m.get("pid"):
+        return False
+    if now - num(m.get("spawned_at")) < idle_s or now - num(m.get("updated")) < idle_s:
+        return False
+    return now - num(m.get("finished_at")) >= idle_s
 
 
 # ---- raw log -------------------------------------------------------------------------------
@@ -292,17 +401,22 @@ def log_size(sid: str) -> int:
 def hold_run_lock(sid: str, wait_s: float = 0.0) -> int | None:
     """Runner side: take the exclusive run lock (kept for the runner's life), retrying for
     `wait_s` seconds. None if still taken."""
-    fd = os.open(_path(sid, ".run"), os.O_RDWR | os.O_CREAT, 0o600)
+    path = _path(sid, ".run")
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.time() + wait_s
     while True:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return fd
         except OSError:
             if time.time() >= deadline:
                 os.close(fd)
                 return None
             time.sleep(LOCK_RETRY_S)
+            continue
+        if _same_file(fd, path):
+            return fd
+        os.close(fd)                                    # removed by prune_locks meanwhile: lock the new file
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
 
 
 def runner_alive(sid: str, meta: dict | None = None) -> bool:
@@ -311,7 +425,7 @@ def runner_alive(sid: str, meta: dict | None = None) -> bool:
     if meta and meta.get("spawned_at") and time.time() - float(meta["spawned_at"]) < SPAWN_GRACE_S:
         return True
     try:
-        fd = os.open(_path(sid, ".run"), os.O_RDWR | os.O_CREAT, 0o600)
+        fd = os.open(_path(sid, ".run"), os.O_RDWR)    # no file: nobody holds it (not created just to look)
     except (OSError, KeyError):
         return False
     try:

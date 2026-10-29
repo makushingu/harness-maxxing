@@ -1,21 +1,40 @@
 // Light video / audio player in the app's style (theme accent), no dependency.
-// - video: poster (server thumbnail) shown at once, big play button, controls that fade out while playing;
-// - progress bar with buffered range and hover time, drag to seek (mouse, touch, keyboard);
+// - video: a black box of the video's shape from the start (size from /api/files/video, then from the file: no
+//   300x150 frame, no jump), the poster (server thumbnail) at once, big play button, controls that fade out while
+//   playing; on a touch screen a first tap on the picture shows the controls, a tap while they show plays / pauses;
+// - progress bar with buffered range and hover time, drag to seek (mouse, touch, keyboard; one seek per 150 ms
+//   while dragging, the position shown at once);
 // - volume / mute, speed (0.5x-4x), picture-in-picture, fullscreen; on a touch screen the volume button opens the
 //   slider (a second tap mutes); where the browser ignores `volume` (iPhone, iPad) the slider drives a Web Audio gain;
-// - keys when focused: Space/K play, ←/→ ±5 s, J/L ±10 s, ↑/↓ volume, M mute, F fullscreen, 0-9 jump, </> speed.
+// - volume, mute and speed are kept in this browser, and where each file was left (mediaMemory.ts): opening it again
+//   resumes there, with a "From start" chip until Play;
+// - keys when focused: Space/K play, ←/→ ±5 s, J/L ±10 s, ↑/↓ volume, M mute, F fullscreen, 0-9 jump, </> speed
+//   (on the volume slider the arrows move the volume);
 // `preload="metadata"`: nothing but the header is downloaded before Play (Range requests on /raw).
 // - video quality (videoQuality.ts): Auto / Original / lighter copies made by the server; switching keeps the time.
+// - the source is frozen once playback started: a newer version of the file shows "File changed - Reload" instead of
+//   switching under the viewer, and Auto changes source only when paused (or at once when the original fails or
+//   struggles, or a quality is picked);
+// - a lost connection (server restart, network) keeps the player: "Connection lost, resuming…", the same source is
+//   loaded again at the same time (3 tries, then a Retry button and a quiet check every 5 s; again at once when the
+//   tab shows or the network is back).
+//   Only a file this browser cannot decode, with no copy possible, ends in the info card (`onError`);
+// - a short clip without sound plays like a GIF: muted, looped, controls on hover / tap, no resume;
+// - `keepAlive` (audio in a conversation): the element lives outside React (sharedAudio.ts), so playback goes on
+//   when the message leaves the screen.
 // Speed and quality are native <select>s under small buttons: the phone's own picker, never clipped by a small
 // player, shown in full screen, and Escape closes them without closing the viewer around the player.
 import * as React from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Gauge, Maximize, Minimize, Pause, PictureInPicture2, Play, RotateCcw, Volume1, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Sensitive, Spinner, Tooltip } from '@/components/ui'
 import { fileRawUrl, fileThumbUrl } from '@/lib/queries/files'
 import { basename } from './kinds'
-import { useVideoQuality, type VideoInfo } from './videoQuality'
+import { canDecode, gifLike, shownSize, useVideoQuality, videoInfoQuery, type VideoInfo } from './videoQuality'
+import { clearMediaPos, mediaPosKey, readPrefs, resumePos, savePrefs, setMediaPos } from './mediaMemory'
+import { releaseAudio, takeAudio } from './sharedAudio'
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]
 
@@ -63,12 +82,54 @@ function fmt(t: number) {
   return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}`
 }
 
-/** `onOpen` (audio): the name opens the file viewer - the player shown inline in a conversation. */
-export function MediaPlayer({ path, kind, version, onError, onOpen, className }: { path: string; kind: 'video' | 'audio'; version?: number | null; onError?: () => void; onOpen?: () => void; className?: string }) {
+/** After a media error: is the server answering for this URL? 'down' = no answer, 401 or 5xx (a restart, the
+ *  network); 'missing' = 403 / 404 (a copy removed from the cache, a file deleted); 'ok' = it serves the bytes, so
+ *  the browser cannot decode them. */
+async function reach(url: string): Promise<'ok' | 'down' | 'missing'> {
+  try {
+    const r = await fetch(url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store', credentials: 'same-origin' })
+    void r.body?.cancel().catch(() => {})
+    if (r.ok) return 'ok'
+    return r.status === 403 || r.status === 404 || r.status === 410 || r.status === 415 ? 'missing' : 'down'
+  } catch {
+    return 'down'
+  }
+}
+
+const RETRY_MS = [1000, 3000, 6000]
+const SEEK_EVERY_MS = 150
+const MEDIA_EVENTS = [
+  'play', 'pause', 'ended', 'waiting', 'playing', 'canplay', 'timeupdate', 'loadedmetadata', 'durationchange', 'progress',
+  'volumechange', 'ratechange', 'error', 'webkitbeginfullscreen', 'webkitendfullscreen',
+] as const
+type MediaHandlers = Partial<Record<(typeof MEDIA_EVENTS)[number], (m: HTMLMediaElement) => void>>
+
+/** Listeners on the element (also one React does not render: the shared audio), always calling the latest handlers;
+ *  attached in a layout effect, before the element's first event can fire. */
+function useMediaEvents(el: HTMLMediaElement | null, handlers: MediaHandlers) {
+  const ref = React.useRef(handlers)
+  React.useLayoutEffect(() => {
+    ref.current = handlers
+  })
+  React.useLayoutEffect(() => {
+    if (!el) return
+    const fns = MEDIA_EVENTS.map((n) => [n, () => ref.current[n]?.(el)] as const)
+    for (const [n, f] of fns) el.addEventListener(n, f)
+    return () => {
+      for (const [n, f] of fns) el.removeEventListener(n, f)
+    }
+  }, [el])
+}
+
+/** `onOpen` (audio): the name opens the file viewer - the player shown inline in a conversation. `keepAlive`
+ *  (audio): playback goes on when the player unmounts (see sharedAudio.ts). */
+export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, className }: { path: string; kind: 'video' | 'audio'; version?: number | null; onError?: () => void; onOpen?: () => void; keepAlive?: boolean; className?: string }) {
   const t = useT()
-  const media = React.useRef<HTMLVideoElement & HTMLAudioElement>(null)
+  const media = React.useRef<HTMLMediaElement | null>(null)
+  const [el, setEl] = React.useState<HTMLMediaElement | null>(null)
   const root = React.useRef<HTMLDivElement>(null)
   const bar = React.useRef<HTMLDivElement>(null)
+  const prefs = React.useMemo(readPrefs, [])
   const [playing, setPlaying] = React.useState(false)
   const [started, setStarted] = React.useState(false)
   const [waiting, setWaiting] = React.useState(false)
@@ -76,39 +137,61 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
   const [time, setTime] = React.useState(0)
   const [duration, setDuration] = React.useState(0)
   const [buffered, setBuffered] = React.useState(0)
-  const [volume, setVolume] = React.useState(1)
-  const [muted, setMuted] = React.useState(false)
+  const [volume, setVolume] = React.useState(prefs.volume)
+  const [muted, setMuted] = React.useState(prefs.muted)
   // touch screens: the volume button opens the slider (no hover there), closed again after a few seconds
   const [volOpen, setVolOpen] = React.useState(false)
   const volTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const gainVol = React.useRef<number | null>(null)
-  const [speed, setSpeed] = React.useState(1)
+  const [speed, setSpeed] = React.useState(prefs.speed)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [hover, setHover] = React.useState<{ x: number; t: number } | null>(null)
   const [idle, setIdle] = React.useState(false)
-  const dragging = React.useRef(false)
+  const [dragT, setDragT] = React.useState<number | null>(null) // the bar is being dragged: the time shown
   const idleTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const controlsAtDown = React.useRef({ shown: true, touch: false }) // a tap on the picture: were the controls shown?
   const video = kind === 'video'
+  const shared = !video && !!keepAlive
 
-  // Auto makes its copy once the video is played, not for a video only opened to have a look.
-  const vq = useVideoQuality(path, video, version, started)
+  // ---- source: original or a lighter copy (videoQuality.ts)
+  const [rough, setRough] = React.useState(false) // the original struggles (long buffering, many dropped frames)
+  const [origFailed, setOrigFailed] = React.useState(false) // the browser could not decode the original
   const [copyFailed, setCopyFailed] = React.useState(false)
+  const copyRetries = React.useRef(0)
+  const info = useQuery({ ...videoInfoQuery(path), enabled: video }).data // the query useVideoQuality runs too
+  const decodable = video ? canDecode(info, path) : true
+  const origBad = decodable === false || origFailed
+  // Auto makes its copy once the video is played, not for a video only opened to have a look.
+  const vq = useVideoQuality(path, video, version, started, origBad || rough, origBad)
+  const gif = video && gifLike(info)
+  React.useEffect(() => {
+    if (gif) setIdle(true) // a GIF-like clip: controls only on hover / tap
+  }, [gif])
   const copy = video && vq.src && !copyFailed ? vq.src : null
   const wanted = copy ?? fileRawUrl(path, false, version)
-  // Auto: a copy that gets ready while the original already plays waits for the next opening - switching source
-  // empties the picture and reloads it mid-way (the jerk seen when coming back to the page and resuming). It takes
-  // over at once only when the original struggles (long buffering, many dropped frames). A quality the user picks,
-  // an error, or a copy ready before anything played switch straight away.
-  const [src, setSrc] = React.useState(wanted)
+  // The source is frozen once playback started (see the header). `ver` = the file version it plays.
+  const [cur, setCur] = React.useState({ src: wanted, ver: version ?? null })
+  const src = cur.src
+  const [changed, setChanged] = React.useState(false)
+  const picked = React.useRef(false) // the user picked a quality: switch at once
   const played = React.useRef(false)
-  const [rough, setRough] = React.useState(false)
   React.useEffect(() => {
-    if (wanted === src) return
-    if (vq.choice === 'auto' && copy && wanted === copy && played.current && !rough) return
-    setSrc(wanted)
-  }, [wanted, src, copy, vq.choice, rough])
+    if (wanted === cur.src) return setChanged(false)
+    const m = media.current
+    if (!started) return setCur({ src: wanted, ver: version ?? null })
+    if (version && cur.ver && version !== cur.ver) return setChanged(true) // rewritten on disk: the user decides
+    // at once: a quality the user picks (now or before: its copy is back), the original struggling, nothing playing
+    if (picked.current || typeof vq.choice === 'number' || rough || !m || m.paused || m.ended || m.error) {
+      picked.current = false
+      setCur({ src: wanted, ver: version ?? cur.ver })
+    }
+  }, [wanted, cur, started, version, rough, playing, vq.choice])
+  const reloadChanged = () => {
+    setChanged(false)
+    setCur({ src: wanted, ver: version ?? null })
+  }
   const onCopy = !!copy && src === copy
-  // Switching source (another quality): resume at the same time, playing if it was.
+  // Switching source (another quality, a reload): resume at the same time, playing if it was.
   const resume = React.useRef<{ t: number; play: boolean } | null>(null)
   const last = React.useRef({ t: 0, play: false, src })
   if (last.current.src !== src) {
@@ -116,6 +199,72 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     last.current.src = src
   }
   const poster = video ? fileThumbUrl(path, 1280, version) : undefined
+  // The copy came back (made again after it was removed from the cache): try it again.
+  const copyState = vq.targetState?.state
+  const prevCopyState = React.useRef(copyState)
+  React.useEffect(() => {
+    if (copyState === 'ready' && prevCopyState.current !== 'ready') setCopyFailed(false)
+    prevCopyState.current = copyState
+  }, [copyState])
+  // Nothing this browser can play: an original it cannot decode and no copy to make (none lighter, or it failed).
+  const noCopy = !!info && (info.auto == null || (copyState === 'error' && vq.target === info.auto) || copyRetries.current > 2)
+  React.useEffect(() => {
+    if (video && origBad && started && noCopy) onError?.()
+  }, [video, origBad, started, noCopy, onError])
+  const preparing = video && origBad && started && !onCopy && !noCopy
+
+  // ---- position in this file (mediaMemory.ts): longer than 15 s, not a GIF-like clip
+  const posKey = mediaPosKey(path, cur.ver)
+  const remember = !gif && duration > 15
+  const [resumeChip, setResumeChip] = React.useState<number | null>(null)
+  const posChecked = React.useRef(false)
+  const lastSave = React.useRef(0)
+  const saveNow = React.useRef(() => {})
+  saveNow.current = () => {
+    if (remember && played.current && last.current.t > 0) setMediaPos(posKey, last.current.t)
+  }
+  React.useEffect(() => () => saveNow.current(), [])
+
+  // ---- lost connection: reload the same source at the same time
+  const [lost, setLost] = React.useState<null | 'retrying' | 'failed'>(null)
+  const tries = React.useRef(0)
+  const retryTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const playIntent = React.useRef(false) // playing when the connection was lost
+  const reload = React.useCallback(() => {
+    const m = media.current
+    clearTimeout(retryTimer.current)
+    if (!m) return
+    resume.current = { t: last.current.t, play: playIntent.current }
+    setLost((l) => (l ? 'retrying' : l))
+    m.load()
+  }, [])
+  const connectionLost = React.useCallback(() => {
+    if (tries.current >= RETRY_MS.length) return setLost('failed')
+    setLost('retrying')
+    retryTimer.current = setTimeout(reload, RETRY_MS[tries.current++])
+  }, [reload])
+  React.useEffect(() => {
+    if (!lost) return
+    const again = () => {
+      if (document.visibilityState !== 'visible') return
+      tries.current = 0
+      reload()
+    }
+    document.addEventListener('visibilitychange', again)
+    window.addEventListener('online', again)
+    // after the 3 tries: ask the server every 5 s, quietly, and resume as soon as it answers
+    const poll = lost === 'failed' ? setInterval(() => void reach(last.current.src).then((r) => r === 'ok' && again()), 5000) : undefined
+    return () => {
+      document.removeEventListener('visibilitychange', again)
+      window.removeEventListener('online', again)
+      clearInterval(poll)
+    }
+  }, [lost, reload])
+  const back = () => {
+    if (!lost) return
+    tries.current = 0
+    setLost(null)
+  }
 
   // Controls fade out after 2.5 s without moving while a video plays.
   const poke = React.useCallback(() => {
@@ -127,15 +276,18 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     clearTimeout(idleTimer.current)
     clearTimeout(volTimer.current)
     clearTimeout(waitTimer.current)
+    clearTimeout(retryTimer.current)
+    clearTimeout(seekTimer.current)
   }, [])
-  // The original struggles while a lighter copy is ready or coming: buffering > 1.5 s, or > 20 % frames dropped.
+  // The original struggles while a lighter copy is possible: buffering > 1.5 s, or > 20 % frames dropped.
   const waitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const watchRough = video && vq.choice === 'auto' && vq.target != null && !rough
+  const watchRough = video && vq.choice === 'auto' && info?.auto != null && !rough && !onCopy
   React.useEffect(() => {
     if (!watchRough || !playing) return
-    let prev = media.current?.getVideoPlaybackQuality?.()
+    const v = media.current as HTMLVideoElement | null
+    let prev = v?.getVideoPlaybackQuality?.()
     const id = setInterval(() => {
-      const q = media.current?.getVideoPlaybackQuality?.()
+      const q = v?.getVideoPlaybackQuality?.()
       if (!q || !prev) return
       const total = q.totalVideoFrames - prev.totalVideoFrames
       if (total >= 20 && (q.droppedVideoFrames - prev.droppedVideoFrames) / total > 0.2) setRough(true)
@@ -149,23 +301,79 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
 
-  const el = () => media.current
+  // ---- the element: rendered below, or (keepAlive audio) taken from sharedAudio
+  const setMediaEl = React.useCallback((m: HTMLMediaElement | null) => {
+    media.current = m
+    setEl(m)
+  }, [])
+  React.useLayoutEffect(() => {
+    if (!shared) return
+    const a = takeAudio(path)
+    if (a.getAttribute('src')) {
+      // still playing (or paused) from an earlier mount: show where it is
+      played.current = a.currentTime > 0 || !a.paused
+      posChecked.current = true
+      last.current = { t: a.currentTime, play: !a.paused, src: a.getAttribute('src')! }
+      setCur((c) => ({ ...c, src: a.getAttribute('src')! }))
+      setStarted(played.current)
+      setPlaying(!a.paused)
+      setTime(a.currentTime)
+      setDuration(Number.isFinite(a.duration) ? a.duration : 0)
+      setVolume(a.volume)
+      setMuted(a.muted)
+      setSpeed(a.playbackRate)
+    }
+    setMediaEl(a)
+    return () => {
+      setMediaEl(null)
+      releaseAudio(path)
+    }
+  }, [shared, path, setMediaEl])
+  React.useEffect(() => {
+    if (shared && el && el.getAttribute('src') !== src && (el.paused || el.ended)) el.src = src
+  }, [shared, el, src])
+  // Saved volume, mute and speed on a new element (a GIF-like clip: muted, looped, normal speed).
+  React.useEffect(() => {
+    if (!el || (shared && played.current)) return
+    if (gif) {
+      el.muted = true
+      el.loop = true
+      el.defaultPlaybackRate = el.playbackRate = 1
+      if (el.paused && !el.ended) void el.play().catch(() => {})
+      return
+    }
+    el.loop = false
+    if (canSetVolume()) el.volume = prefs.volume
+    el.muted = prefs.muted
+    el.defaultPlaybackRate = el.playbackRate = prefs.speed
+  }, [el, gif, prefs, shared])
+
   const toggle = () => {
-    const m = el()
+    const m = media.current
     if (!m) return
     if (m.paused || m.ended) {
       setStarted(true) // asked to play: the Auto copy may start (even when this browser cannot read the original)
+      playIntent.current = true
+      // where `volume` is read-only (iPhone): the saved level goes through the gain, set up now (a user gesture)
+      if (!canSetVolume() && !gif && gainVol.current == null && prefs.volume < 1) setVol(prefs.volume)
+      if (video && origBad && !onCopy) {
+        last.current.play = true // the copy starts playing when ready
+        return
+      }
       void m.play().catch(() => {})
-    } else m.pause()
+    } else {
+      playIntent.current = false
+      m.pause()
+    }
   }
   const seek = (to: number) => {
-    const m = el()
+    const m = media.current
     if (!m || !Number.isFinite(m.duration)) return
     m.currentTime = Math.max(0, Math.min(m.duration, to))
     setTime(m.currentTime)
   }
   const setVol = (v: number) => {
-    const m = el()
+    const m = media.current
     if (!m) return
     v = Math.max(0, Math.min(1, v))
     if (!canSetVolume()) {
@@ -174,6 +382,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
         g.gain.value = v
         gainVol.current = v
         setVolume(v)
+        if (!gif) savePrefs({ volume: v })
       }
       m.muted = v === 0
       return
@@ -187,7 +396,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     volTimer.current = setTimeout(() => setVolOpen(false), 3500)
   }
   const onVolButton = () => {
-    const m = el()
+    const m = media.current
     if (!m) return
     if (coarse() && !volOpen) {
       setVolOpen(true)
@@ -199,15 +408,15 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     if (volOpen) keepVolOpen()
   }
   const setRate = (r: number) => {
-    const m = el()
-    if (m) m.playbackRate = r
+    const m = media.current
+    if (m) m.defaultPlaybackRate = m.playbackRate = r
   }
   /** One step up / down the speed list (keys > and <). */
   const stepSpeed = (dir: 1 | -1) => {
-    const m = el()
+    const m = media.current
     if (!m) return
     const next = dir > 0 ? SPEEDS.find((x) => x > m.playbackRate + 1e-3) : [...SPEEDS].reverse().find((x) => x < m.playbackRate - 1e-3)
-    if (next) m.playbackRate = next
+    if (next) setRate(next)
   }
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
@@ -221,31 +430,59 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     else void v.requestPictureInPicture?.().catch(() => {})
   }
 
+  // ---- progress bar: the drag position shows at once, the media seeks at most every 150 ms (each seek of a video
+  // not buffered there is a new Range request), and once more where the pointer is released
   const timeAt = (clientX: number) => {
     const r = bar.current?.getBoundingClientRect()
     if (!r || !duration) return 0
     return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * duration
   }
+  const seekTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const lastSeek = React.useRef(0)
+  const pendingSeek = React.useRef<number | null>(null)
+  const flushSeek = () => {
+    clearTimeout(seekTimer.current)
+    seekTimer.current = undefined
+    if (pendingSeek.current == null) return
+    lastSeek.current = performance.now()
+    seek(pendingSeek.current)
+    pendingSeek.current = null
+  }
+  const dragTo = (to: number) => {
+    setDragT(to)
+    pendingSeek.current = to
+    const wait = SEEK_EVERY_MS - (performance.now() - lastSeek.current)
+    if (wait <= 0) flushSeek()
+    else seekTimer.current ??= setTimeout(flushSeek, wait)
+  }
   const onBarDown = (e: React.PointerEvent) => {
     e.preventDefault()
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragging.current = true
-    seek(timeAt(e.clientX))
+    dragTo(timeAt(e.clientX))
   }
   const onBarMove = (e: React.PointerEvent) => {
     const r = bar.current?.getBoundingClientRect()
     if (r) setHover({ x: Math.max(0, Math.min(r.width, e.clientX - r.left)), t: timeAt(e.clientX) })
-    if (dragging.current) seek(timeAt(e.clientX))
+    if (dragT != null) dragTo(timeAt(e.clientX))
   }
-  const onBarUp = () => {
-    dragging.current = false
+  const onBarUp = (e: React.PointerEvent) => {
+    if (dragT == null) return
+    pendingSeek.current = e.type === 'pointercancel' ? dragT : timeAt(e.clientX)
+    flushSeek()
+    setDragT(null)
   }
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return
-    if ((e.target as HTMLElement).tagName === 'SELECT') return      // the speed / quality picker has its own keys
+    const target = e.target as HTMLElement
+    if (target.tagName === 'SELECT') return // the speed / quality picker has its own keys
+    // the volume slider: its arrows (and Home / End / Page keys) move the volume, not the time
+    if (target instanceof HTMLInputElement && target.type === 'range' && /^(Arrow|Home|End|Page)/.test(e.key)) {
+      e.stopPropagation()
+      return
+    }
     const k = e.key.toLowerCase()
-    const m = el()
+    const m = media.current
     if (!m) return
     let handled = true
     if (e.key === '>') stepSpeed(1)
@@ -268,12 +505,15 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     }
   }
 
-  const pct = duration ? (time / duration) * 100 : 0
-  const showControls = !video || !playing || !idle || dragging.current || volOpen
+  const shownT = dragT ?? time
+  const pct = duration ? (shownT / duration) * 100 : 0
+  const showControls = !video || !playing || !idle || dragT != null || volOpen
   const VolIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
+  const touchVolHidden = !volOpen && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
 
   const controls = (
-    <div className={cn('flex flex-col gap-1.5', video ? 'px-3 pt-8 pb-2.5 text-white [background:linear-gradient(to_top,rgb(0_0_0/0.72),transparent)]' : 'text-foreground')}>
+    // video: the shaded band lets taps through to the picture (only the bar and the buttons take them)
+    <div className={cn('flex flex-col gap-1.5', video ? 'pointer-events-none px-3 pt-8 pb-2.5 text-white [background:linear-gradient(to_top,rgb(0_0_0/0.72),transparent)]' : 'text-foreground', video && showControls && '[&>*]:pointer-events-auto')}>
       {/* progress */}
       <div
         ref={bar}
@@ -282,13 +522,14 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
         aria-label={t('media.seek')}
         aria-valuemin={0}
         aria-valuemax={Math.round(duration)}
-        aria-valuenow={Math.round(time)}
-        aria-valuetext={`${fmt(time)} / ${fmt(duration)}`}
+        aria-valuenow={Math.round(shownT)}
+        aria-valuetext={`${fmt(shownT)} / ${fmt(duration)}`}
         onPointerDown={onBarDown}
         onPointerMove={onBarMove}
         onPointerUp={onBarUp}
         onPointerCancel={onBarUp}
         onPointerLeave={() => setHover(null)}
+        data-testid="media-bar"
         className="group/bar relative flex h-4 cursor-pointer max-md:h-10 pointer-coarse:h-10 touch-none items-center"
       >
         <div className={cn('relative h-1 w-full overflow-hidden rounded-full transition-[height] group-hover/bar:h-1.5', video ? 'bg-white/25' : 'bg-muted')}>
@@ -317,12 +558,14 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             max={1}
             step={0.05}
             value={muted ? 0 : volume}
+            tabIndex={touchVolHidden ? -1 : undefined}
             onChange={(e) => {
               setVol(Number(e.target.value))
               if (volOpen) keepVolOpen()
               poke()
             }}
             aria-label={t('media.volume')}
+            data-testid="media-volume"
             className={cn(
               'h-1 w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all pointer-coarse:h-8',
               volOpen ? 'ml-1 w-24 opacity-100' : 'group-focus-within/vol:w-20 group-focus-within/vol:opacity-100 group-hover/vol:w-20 group-hover/vol:opacity-100 pointer-coarse:hidden',
@@ -330,7 +573,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
           />
         </div>
         <span className={cn('ml-1 text-xs whitespace-nowrap tabular-nums', video ? 'text-white/90' : 'text-muted-foreground', volOpen && 'max-sm:hidden')}>
-          {fmt(time)} <span className="opacity-60">/ {fmt(duration)}</span>
+          {fmt(shownT)} <span className="opacity-60">/ {fmt(duration)}</span>
         </span>
         <span className="flex-1" />
         {video && !!vq.info?.qualities.length && (
@@ -340,6 +583,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             value={String(vq.choice)}
             options={qualityOptions(vq.info, t)}
             onPick={(v) => {
+              picked.current = true
               vq.setChoice(v === 'auto' || v === 'original' ? v : Number(v))
               setCopyFailed(false)
             }}
@@ -375,70 +619,188 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
     </div>
   )
 
-  const events = {
-    onPlay: () => {
+  const [natural, setNatural] = React.useState<{ w: number; h: number } | null>(null)
+  useMediaEvents(el, {
+    play: () => {
       last.current.play = true
+      playIntent.current = true
+      played.current = true
       setPlaying(true)
       setStarted(true)
       setEnded(false)
-      poke()
+      setResumeChip(null)
+      if (!gif) poke()
     },
-    onPause: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      // A source switch pauses on its own: that pause must not stop the playback that resumes after it.
-      if (!e.currentTarget.ended && e.currentTarget.currentTime === 0 && resume.current) return
+    pause: (m) => {
+      // A source switch (or a reload after a lost connection) pauses on its own: that pause must not stop the
+      // playback that resumes after it.
+      if (!m.ended && m.currentTime === 0 && resume.current) return
+      if (m.error || lost) return
       last.current.play = false
       setPlaying(false)
+      saveNow.current()
     },
-    onEnded: () => {
+    ended: () => {
       setPlaying(false)
       setEnded(true)
+      playIntent.current = false
+      clearMediaPos(posKey)
     },
-    onWaiting: () => {
+    waiting: () => {
       setWaiting(true)
       clearTimeout(waitTimer.current)
-      if (watchRough && played.current) waitTimer.current = setTimeout(() => setRough(true), 1500)
+      // the original struggles: > 1.5 s of buffering; nothing comes for 15 s: the connection may be gone
+      waitTimer.current = setTimeout(
+        () => {
+          if (watchRough && played.current) setRough(true)
+          else if (src) void reach(src).then((r) => r === 'down' && connectionLost())
+        },
+        watchRough && played.current ? 1500 : 15000,
+      )
     },
-    onPlaying: () => {
+    playing: () => {
       played.current = true
       setWaiting(false)
       clearTimeout(waitTimer.current)
+      back()
     },
-    onCanPlay: () => {
+    canplay: () => {
       setWaiting(false)
       clearTimeout(waitTimer.current)
+      back()
     },
-    onTimeUpdate: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      last.current.t = e.currentTarget.currentTime
-      if (!dragging.current) setTime(e.currentTarget.currentTime)
+    timeupdate: (m) => {
+      if (resume.current) return // a reload or a source switch on its way: the time to resume is kept
+      last.current.t = m.currentTime
+      if (dragT == null) setTime(m.currentTime)
+      if (Date.now() - lastSave.current > 2000) {
+        lastSave.current = Date.now()
+        saveNow.current()
+      }
     },
-    onLoadedMetadata: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      const m = e.currentTarget
+    loadedmetadata: (m) => {
       setDuration(m.duration)
+      const v = m as HTMLVideoElement
+      if (video && v.videoWidth && v.videoHeight) setNatural({ w: v.videoWidth, h: v.videoHeight })
+      // where `volume` is read-only, the gain stays on the element: set its level again after a source change
+      if (gainVol.current != null) {
+        const g = gainFor(m)
+        if (g) g.gain.value = gainVol.current
+      }
       const r = resume.current
       resume.current = null
+      // opened again: back where it was left (not for a short or GIF-like clip)
+      const at = !posChecked.current && !gif && m.duration > 15 ? resumePos(posKey, m.duration) : null
+      posChecked.current = true
+      if (r && r.t > 0) m.currentTime = Math.min(r.t, m.duration || r.t)
+      else if (at != null && m.currentTime < 1) {
+        m.currentTime = at
+        last.current.t = at
+        setTime(at)
+        if (!r?.play) setResumeChip(at)
+      }
       if (r) {
-        m.currentTime = Math.min(r.t, m.duration || r.t)
         m.playbackRate = speed
         if (r.play) void m.play().catch(() => {})
       }
     },
-    onDurationChange: (e: React.SyntheticEvent<HTMLMediaElement>) => setDuration(e.currentTarget.duration),
-    onProgress: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      const b = e.currentTarget.buffered
-      const now = e.currentTarget.currentTime
+    durationchange: (m) => setDuration(m.duration),
+    progress: (m) => {
+      const b = m.buffered
+      const now = m.currentTime
       for (let i = 0; i < b.length; i++) if (b.start(i) <= now + 0.5) setBuffered(b.end(i))
     },
-    onVolumeChange: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      setVolume(gainVol.current ?? e.currentTarget.volume) // the gain's level where `volume` is read-only
-      setMuted(e.currentTarget.muted)
+    volumechange: (m) => {
+      const v = gainVol.current ?? m.volume // the gain's level where `volume` is read-only
+      setVolume(v)
+      setMuted(m.muted)
+      if (!gif) savePrefs(canSetVolume() ? { volume: v, muted: m.muted } : { muted: m.muted })
     },
-    onRateChange: (e: React.SyntheticEvent<HTMLMediaElement>) => setSpeed(e.currentTarget.playbackRate),
-    onError: () => {
-      if (onCopy) return setCopyFailed(true)
-      setStarted(true) // an original this browser cannot read (HEVC, ProRes): the Auto copy is the way to play it
-      onError?.()
+    ratechange: (m) => {
+      setSpeed(m.playbackRate)
+      if (!gif) savePrefs({ speed: m.playbackRate })
     },
-  }
+    error: (m) => {
+      const err = m.error
+      if (!err || err.code === 1) return // MEDIA_ERR_ABORTED: a new source replaced this one
+      const at = m.currentTime || last.current.t
+      if (at > 0) last.current.t = at
+      // A network error, or a decode / format error - which is also what the browser says when the server did not
+      // answer at all (restarting): ask the server what it serves for this URL now.
+      const failed = src
+      void reach(failed).then((r) => {
+        if (media.current !== m || last.current.src !== failed) return
+        if (r === 'down' || (r === 'ok' && err.code === 2)) return connectionLost() // 2: MEDIA_ERR_NETWORK
+        if (onCopy) {
+          // the copy is gone (cache) or broken: the original meanwhile, the copy made again
+          copyRetries.current++
+          setCopyFailed(true)
+          if (vq.target != null) vq.retry(vq.target)
+          return
+        }
+        if (video && r === 'ok') {
+          // an original this browser cannot read (HEVC, ProRes): the Auto copy is the way to play it - made once
+          // Play is pressed (an error while only opening it starts no encoding)
+          setOrigFailed(true)
+          last.current.play = last.current.play || playIntent.current
+          return
+        }
+        onError?.()
+      })
+    },
+    webkitbeginfullscreen: () => setFullscreen(true), // iPhone: the video alone in the system player
+    webkitendfullscreen: () => setFullscreen(false),
+  })
+
+  const chips = (
+    <>
+      {lost && (
+        <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs text-white shadow-pop" role="status" data-testid="media-lost">
+          {lost === 'retrying' ? (
+            <>
+              <Spinner className="size-3.5" />
+              {t('media.lost')}
+            </>
+          ) : (
+            <>
+              {t('media.lostFailed')}
+              <span className="opacity-60">·</span>
+              <button type="button" className="font-medium underline-offset-2 hover:underline" onClick={() => ((tries.current = 0), reload())}>
+                {t('common.retry')}
+              </button>
+            </>
+          )}
+        </span>
+      )}
+      {changed && !lost && (
+        <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs text-white shadow-pop" data-testid="media-changed">
+          {t('media.changed')}
+          <span className="opacity-60">·</span>
+          <button type="button" className="font-medium underline-offset-2 hover:underline" onClick={reloadChanged}>
+            {t('media.reload')}
+          </button>
+        </span>
+      )}
+      {resumeChip != null && !playing && !lost && (
+        <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs text-white shadow-pop" data-testid="media-resume">
+          {t('media.resumeAt', { time: fmt(resumeChip) })}
+          <span className="opacity-60">·</span>
+          <button
+            type="button"
+            className="font-medium underline-offset-2 hover:underline"
+            onClick={() => {
+              seek(0)
+              last.current.t = 0
+              clearMediaPos(posKey)
+              setResumeChip(null)
+            }}
+          >
+            {t('media.fromStart')}
+          </button>
+        </span>
+      )}
+    </>
+  )
 
   if (!video)
     return (
@@ -450,7 +812,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             aria-label={playing ? t('media.pause') : t('media.play')}
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            {waiting && playing ? <Spinner className="size-5" /> : playing ? <Pause className="size-5 fill-current" /> : <Play className="ml-0.5 size-5 fill-current" />}
+            {(waiting && playing) || lost === 'retrying' ? <Spinner className="size-5" /> : playing ? <Pause className="size-5 fill-current" /> : <Play className="ml-0.5 size-5 fill-current" />}
           </button>
           {onOpen ? (
             <button type="button" onClick={onOpen} title={t('media.open')} className="min-w-0 flex-1 truncate rounded-sm text-left text-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
@@ -462,49 +824,71 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, className }:
             </p>
           )}
         </div>
+        {(lost || changed || resumeChip != null) && <div className="flex flex-wrap gap-1.5">{chips}</div>}
         {controls}
-        <audio ref={media} key={path} src={src} preload="metadata" className="hidden" {...events} />
+        {!shared && <audio ref={setMediaEl} key={path} src={src} preload="metadata" className="hidden" />}
       </div>
     )
 
+  // The box has the video's shape before anything loads: its size from the server, then from the file itself.
+  // It fits the space around it (a container: MediaView) like the picture would - no 300x150 frame, no jump.
+  const dims = natural ?? (info ? shownSize(info) : null)
+  const ratio = dims && dims.w > 0 && dims.h > 0 ? `${dims.w} / ${dims.h}` : '16 / 9'
+  const boxW = dims && dims.w > 0 && dims.h > 0 ? `min(${dims.w}px, 100cqw, calc(100cqh * ${dims.w} / ${dims.h}))` : 'min(48rem, 100cqw, calc(100cqh * 16 / 9))'
   return (
     <div
       ref={root}
       tabIndex={0}
       onKeyDown={onKey}
       data-media-player
+      data-gif={gif || undefined}
       onPointerMove={poke}
+      onPointerLeave={() => gif && playing && setIdle(true)}
+      style={{ width: boxW, aspectRatio: ratio }}
       className={cn(
-        'group/player relative flex max-h-full max-w-full overflow-hidden rounded-xl bg-black shadow-pop outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group/player relative flex max-w-full overflow-hidden rounded-xl bg-black shadow-pop outline-none focus-visible:ring-2 focus-visible:ring-ring',
         fullscreen && 'rounded-none',
         playing && idle && 'cursor-none',
         className,
       )}
     >
       <video
-        ref={media}
+        ref={setMediaEl as React.Ref<HTMLVideoElement>}
         key={path}
         src={src}
         poster={poster}
-        preload="metadata"
+        preload={gif ? 'auto' : 'metadata'}
         playsInline
-        onClick={toggle}
+        onPointerDown={(e) => (controlsAtDown.current = { shown: showControls, touch: e.pointerType !== 'mouse' })}
+        onClick={() => {
+          // touch: a first tap shows the controls, a tap while they show plays / pauses
+          if (controlsAtDown.current.touch && !controlsAtDown.current.shown) return poke()
+          toggle()
+          if (gif) poke()
+        }}
         onDoubleClick={toggleFullscreen}
-        className="max-h-[inherit] w-full max-w-full object-contain"
-        {...events}
+        className="size-full object-contain"
       />
-      {/* centre: big play / spinner */}
-      {(!playing || (waiting && started)) && (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={ended ? t('media.replay') : t('media.play')}
-          className="absolute inset-0 m-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-pop transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-        >
-          {waiting && started ? <Spinner className="size-7" /> : ended ? <RotateCcw className="size-7" /> : <Play className="ml-1 size-7 fill-current" />}
-        </button>
+      {/* centre: big play / spinner / a copy being made */}
+      {preparing ? (
+        <div className="absolute inset-0 m-auto flex h-fit w-fit max-w-[80%] items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-sm text-white" role="status" data-testid="media-preparing">
+          <Spinner className="size-4" />
+          {t('media.preparing', { pct: vq.targetState?.state === 'running' ? `${Math.round(vq.targetState.progress * 100)} %` : '' })}
+        </div>
+      ) : (
+        (!playing || (waiting && started)) && (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={ended ? t('media.replay') : t('media.play')}
+            className="absolute inset-0 z-10 m-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-pop transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+          >
+            {(waiting && started) || lost === 'retrying' ? <Spinner className="size-7" /> : ended ? <RotateCcw className="size-7" /> : <Play className="ml-1 size-7 fill-current" />}
+          </button>
+        )
       )}
-      <div className={cn('absolute inset-x-0 bottom-0 transition-opacity duration-300', showControls ? 'opacity-100' : 'pointer-events-none opacity-0')}>{controls}</div>
+      <div className="pointer-events-none absolute top-2.5 left-2.5 flex flex-col items-start gap-1.5">{chips}</div>
+      <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 transition-opacity duration-300', showControls ? 'opacity-100' : 'opacity-0')}>{controls}</div>
     </div>
   )
 }

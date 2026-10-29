@@ -41,7 +41,7 @@ import {
   useClaudeStatus,
   useClearQueue,
   useCompactSession,
-  useCreateSessionSeeded,
+  useCreateSession,
   useDeleteSession,
   useHandoffSession,
   useMarkSeen,
@@ -1059,7 +1059,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const close = useSessionsUI((s) => s.close)
   const becomeSession = useSessionsUI((s) => s.becomeSession)
   const setNewPath = useSessionsUI((s) => s.setNewPath)
-  const create = useCreateSessionSeeded()
+  const create = useCreateSession()
   const [title, setTitle] = React.useState('')
   const [model, setModel] = React.useState('')
   const [planMode, setPlanMode] = React.useState(false)

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import bus, config, voice, workspace
-from . import clip, normalize, spawn, store, titles, voicejobs
+from . import clip, normalize, spawn, store, titles, voicejobs, wake
 from .runner import SUMMARY_PROMPT  # noqa: F401  (also used by the runner's automatic compaction)
 
 log = logging.getLogger("maxxing.sessions")
@@ -831,7 +831,7 @@ def compact_log(sid: str, dry_run: bool = False) -> dict:
                     line = raw[:-1] if end else raw
                     if clip.drop_line(line):
                         continue
-                    if len(line) > clip.RESULT_MAX:
+                    if clip.worth_clipping(line):
                         new = clip.clip_line(line.decode("utf-8", "replace"))
                         if len(new) < len(line):
                             line = new.encode("utf-8")
@@ -1052,10 +1052,12 @@ def on_turn_end(cb: Callable[[dict, dict | None], Any]) -> None:
     _turn_cbs.append(cb)
 
 
-# While a session runs, the watcher passes every WATCH_RUNNING_S (its turn end - Telegram reply, notification, cron
-# result - is seen within 0.25 s instead of 1 s); an unchanged running session is still re-read (dead runner check)
-# only every RUNNING_RECHECK_S.
+# A meta change wakes the watcher at once (wake.py: inotify); it also passes every WATCH_WAKE_RUNNING_S while a session
+# runs (dead runner check: an unchanged running session is re-read at most every RUNNING_RECHECK_S) and every
+# `interval` otherwise. Without inotify it polls: every WATCH_RUNNING_S while a session runs (its turn end - Telegram
+# reply, notification, cron result - is seen within 0.25 s instead of 1 s), every `interval` otherwise.
 WATCH_RUNNING_S = 0.25
+WATCH_WAKE_RUNNING_S = 2.0
 RUNNING_RECHECK_S = 1.0
 _checked: dict[str, float] = {}
 
@@ -1167,7 +1169,11 @@ async def _fire(session: dict, result: dict | None) -> None:
             log.exception("on_turn_end callback failed")
 
 
-PASS_STAMP_S = 5.0                     # how often the watcher records its last pass (STATE/session-watcher.json)
+# The watcher records its last pass (STATE/session-watcher.json): after the first pass, at once after a report (a
+# restart does not repeat it), and at most every PASS_STAMP_S after passes that saw a session change - a pass that
+# saw nothing has nothing to record (a turn that ends while the server is down is newer than the stamp anyway).
+# Read only by the first pass after a start.
+PASS_STAMP_S = 5.0
 
 
 def _stamp_path() -> Path:
@@ -1183,22 +1189,31 @@ def _last_pass() -> float:
 
 
 def _stamp(at: float) -> None:
+    """Tiny and rewritten often: a plain atomic rename, no fsync (losing the last stamp in a power cut only means a
+    turn end reported twice)."""
+    p = _stamp_path()
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
     try:
-        config.write_json(_stamp_path(), {"at": at})
+        with open(tmp, "w", opener=lambda f, fl: os.open(f, fl, 0o600)) as f:
+            json.dump({"at": at}, f, separators=(",", ":"))
+        os.replace(tmp, p)
     except OSError:
-        log.warning("session watcher: cannot write %s", _stamp_path(), exc_info=True)
+        tmp.unlink(missing_ok=True)
+        log.warning("session watcher: cannot write %s", p, exc_info=True)
 
 
 async def _watch(interval: float) -> None:
-    primed, stamped = False, 0.0
+    primed, stamped, dirty = False, 0.0, True
     while True:
+        ev = wake.mark(wake.ANY)                         # before the pass: a change made during it wakes the next one
         try:
             t0 = time.time()
             ends, changed, ws = await asyncio.to_thread(_scan, primed)
             primed = True
-            if ends or t0 - stamped >= PASS_STAMP_S:     # at once after a report: a restart does not repeat it
+            dirty = dirty or changed
+            if ends or dirty and t0 - stamped >= PASS_STAMP_S:
                 await asyncio.to_thread(_stamp, t0)
-                stamped = t0
+                stamped, dirty = t0, False
             if changed:
                 bus.invalidate(*(("sessions", "workspace") if ws else ("sessions",)))
             for s, r in ends:
@@ -1210,11 +1225,15 @@ async def _watch(interval: float) -> None:
         except Exception:
             log.exception("session watcher pass failed")
         running = any(v[2] == "running" for v in _known.values())
-        await asyncio.sleep(min(interval, WATCH_RUNNING_S) if running else interval)
+        if ev is not None:
+            await wake.wait(ev, WATCH_WAKE_RUNNING_S if running else interval)
+        else:
+            await asyncio.sleep(min(interval, WATCH_RUNNING_S) if running else interval)
 
 
 def start_watcher(interval: float = 1.0) -> None:
     global _watch_task
+    wake.start()
     if _watch_task is None or _watch_task.done():
         _known.clear()
         _watch_task = asyncio.get_running_loop().create_task(_watch(interval))
@@ -1229,6 +1248,7 @@ async def stop_watcher() -> None:
         except (asyncio.CancelledError, Exception):
             pass
         _watch_task = None
+    wake.stop()
 
 
 def wait_turn(sid: str, timeout_s: float) -> dict:

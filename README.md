@@ -9,7 +9,7 @@
 project and topic, plus files, tasks, scheduled jobs, a Telegram bridge and a memory backup -
 installed on your own server with one command and configured from a guided web onboarding.
 
-Free and [fair source](#fair-source) (source-available). Install: `curl -fsSL https://get.harness-maxxing.com | bash` as root - no key,
+Free and [fair source](#fair-source) (source-available). Install: `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash` as root - no key,
 no account. Details in [Install](#install) below. News: [@HarnessMaxxing](https://x.com/HarnessMaxxing) on X.
 
 ## Screenshots
@@ -82,7 +82,7 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
 As root on the server (`sudo -i` first if you are logged in as another user):
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
 ```
 
 It asks three questions (access mode, domain, restore a backup), clones this public repository (no key, no token),
@@ -93,13 +93,13 @@ version checked against its checksum (`server/maxxing/deps.toml`, managed with `
 **one-time setup link**: open it, choose your password and follow the onboarding (language, Claude
 connection, import from another agent, first project, Telegram, backup).
 
-Unattended: `curl -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
+Unattended: `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
 Updates come from this repository (`maxxing update`, or the Update button in Settings).
 
 Other ways to install:
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | REPO=you/your-fork BRANCH=main bash   # from your fork (updates from it)
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | REPO=you/your-fork BRANCH=main bash   # from your fork (updates from it)
 bash /path/to/harness-maxxing/install.sh       # from a local copy (a clone with web/dist): no download, updates = a newer copy
 ```
 

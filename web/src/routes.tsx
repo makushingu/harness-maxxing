@@ -43,7 +43,7 @@ export const routes: RouteObject[] = [
           { index: true, lazy: page(() => import('./pages/dashboard')) },
           // Feature pages — implemented in src/pages/<name>/index.tsx
           { path: 'sessions/*', lazy: page(() => import('./pages/sessions'), ['files']) },
-          { path: 'files/*', lazy: page(() => import('./pages/files'), ['files']) },
+          { path: 'files/*', lazy: page(() => import('./pages/files'), ['files', 'media']) },
           { path: 'tasks/*', lazy: page(() => import('./pages/tasks'), ['tasks']) },
           { path: 'crons/*', lazy: page(() => import('./pages/crons'), ['tasks']) },
           { path: 'feed', lazy: page(() => import('./pages/feed')) },

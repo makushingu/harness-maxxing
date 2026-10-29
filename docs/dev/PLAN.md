@@ -77,7 +77,7 @@ Browser (React SPA)  ──HTTPS──>  Caddy (optional)  ──>  maxxing serv
 ### 3.1 Choices and why
 - **Python 3.11+ / FastAPI / uvicorn**, installed in a venv by **uv** (single static binary, can fetch
   Python itself) → reliable install on any recent Ubuntu/Debian. Few dependencies: fastapi, uvicorn,
-  httpx, python-multipart.
+  httpx, python-multipart, watchfiles (inotify).
 - **Turn runner in a transient systemd unit** (kept from v1, proven): a turn survives browser close
   and server restarts. The runner is stdlib-only and writes an NDJSON log; the server only reads it.
 - **Real-time = SSE** (server tails the log file) instead of polling → no flicker, instant output.

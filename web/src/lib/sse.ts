@@ -5,7 +5,7 @@
 // - useGlobalBus(): connects /api/stream once and invalidates React Query keys by topic.
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { BUS_KEYS, BUS_TURN_KEYS, LIVE_KEYS } from './queries/keys'
+import { BUS_KEYS, BUS_TURN_KEYS, LIVE_KEYS, busSkips, liveStreams } from './queries/keys'
 import type { BusTopic, InvalidatePayload } from './types'
 import { checkForUpdate } from '@/pwa'
 
@@ -134,16 +134,16 @@ export function useGlobalBus(enabled: boolean): SSEStatus {
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [enabled, qc])
-  const invalidate = (keys: readonly (readonly unknown[])[]) => {
+  const invalidate = (keys: readonly (readonly unknown[])[], skip?: (key: readonly unknown[]) => boolean) => {
     const seen = new Set<string>()
     for (const k of keys) {
       const id = JSON.stringify(k)
       if (seen.has(id)) continue
       seen.add(id)
-      qc.invalidateQueries({ queryKey: k })
+      qc.invalidateQueries({ queryKey: k, predicate: skip && ((q) => !skip(q.queryKey)) })
     }
   }
-  return useEventSource(
+  const status = useEventSource(
     '/api/stream',
     {
       invalidate: (data: InvalidatePayload) => {
@@ -155,8 +155,9 @@ export function useGlobalBus(enabled: boolean): SSEStatus {
           const batch = [...pending.current] as BusTopic[]
           pending.current.clear()
           const keys = batch.flatMap((t) => BUS_KEYS[t] || [])
-          if (batch.includes('sessions') && batch.includes('workspace')) keys.push(...BUS_TURN_KEYS)
-          invalidate(keys)
+          const turn = batch.includes('sessions') && batch.includes('workspace')
+          if (turn) keys.push(...BUS_TURN_KEYS)
+          invalidate(keys, (k) => busSkips(k, turn))
         }, 250)
       },
     },
@@ -170,4 +171,12 @@ export function useGlobalBus(enabled: boolean): SSEStatus {
       },
     },
   )
+  // Session writes skip their own invalidation while the bus is there to announce them (unlessBus).
+  useEffect(() => {
+    liveStreams.bus = status === 'open'
+    return () => {
+      liveStreams.bus = false
+    }
+  }, [status])
+  return status
 }

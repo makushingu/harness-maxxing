@@ -60,6 +60,11 @@ MAX_MESSAGE_CHARS = 20_000
 READ_CHUNK = 4 * 1024 * 1024         # session log bytes read per pass and session
 WAL_LIMIT = 4 * 1024 * 1024          # journal_size_limit: bytes the WAL keeps after a checkpoint
 CHECKPOINT_BUSY_MS = 200             # a TRUNCATE checkpoint waits at most this long for readers
+# Rows replaced as logs and files change leave free pages behind: after a files walk, search.db is VACUUMed when more
+# than VACUUM_FREE of it is free (and it is at least VACUUM_MIN_BYTES), at most every VACUUM_EVERY_S.
+VACUUM_FREE = 0.25
+VACUUM_MIN_BYTES = 4 * 1024 * 1024
+VACUUM_EVERY_S = 86400
 
 _lock = threading.RLock()          # writer: refreshes (one connection)
 _rlock = threading.Lock()          # reader: queries use their own connection (WAL), never wait on a refresh
@@ -392,7 +397,7 @@ def refresh(full: bool = True, deep: bool | None = True) -> None:
     when `deep` - None = only if the last walk is older than FILES_EVERY_S, what the background loop asks)."""
     with _lock:
         con = _db()
-        vacuum = False
+        vacuum = walk = False
         try:
             before = con.total_changes
             _index_sessions(con)
@@ -425,8 +430,36 @@ def refresh(full: bool = True, deep: bool | None = True) -> None:
                 log.info("search index cleaned up and compacted (%s)", _state.get("files"))
             except sqlite3.Error as e:
                 log.warning("search index VACUUM skipped: %s", e)
+        elif walk:
+            reclaim(con)
         if con.total_changes != before:
             checkpoint(con)
+
+
+def reclaim(con: sqlite3.Connection | None = None, force: bool = False) -> bool:
+    """VACUUM search.db when too much of it is free pages (see VACUUM_FREE). -> True when it ran."""
+    with _lock:
+        con = con or _db()
+        if not force and time.time() - _state.get("vacuum_at", 0.0) < VACUUM_EVERY_S:
+            return False
+        try:
+            pages = con.execute("PRAGMA page_count").fetchone()[0]
+            free = con.execute("PRAGMA freelist_count").fetchone()[0]
+            size = con.execute("PRAGMA page_size").fetchone()[0]
+        except sqlite3.Error:
+            return False
+        if not pages or pages * size < VACUUM_MIN_BYTES or free / pages <= VACUUM_FREE:
+            return False
+        _state["vacuum_at"] = time.time()
+        try:
+            checkpoint(con)
+            con.execute("VACUUM")
+            checkpoint(con)
+        except sqlite3.Error as e:
+            log.warning("search index VACUUM skipped: %s", e)
+            return False
+        log.info("search index compacted: %d of %d pages were free", free, pages)
+        return True
 
 
 def checkpoint(con: sqlite3.Connection | None = None) -> tuple[int, int, int] | None:

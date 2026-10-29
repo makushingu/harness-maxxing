@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronLeft, ChevronRight, Code2, Columns2, Copy, Download, ExternalLink, Eye, Lock, Maximize2, MoreHorizontal, Pencil, Save, Sparkles, Trash2 } from 'lucide-react'
 import type { FileContent, FileEntry, FileWriteResult } from '@/lib/types'
 import { api, errorMessage, isApiError } from '@/lib/api'
-import { fileRawUrl, useFileContent } from '@/lib/queries/files'
+import { useFileContent } from '@/lib/queries/files'
 import { qk } from '@/lib/queries/keys'
 import { fmtBytes, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -42,7 +42,7 @@ import { ReadError } from '@/features/files/FilePreview'
 import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from '@/features/files/textZoom'
 import { useTextZoom } from '@/features/files/readPos'
 import { ConflictDialog, type ConflictChoice } from './dialogs'
-import { downloadProps } from '@/features/files/download'
+import { downloadProps, inIosApp, openRawProps } from '@/features/files/download'
 
 type MdMode = 'preview' | 'edit' | 'split'
 
@@ -370,15 +370,15 @@ export function FileView({ path, siblings, actions, entry }: { path: string; sib
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuItem asChild>
-              <a {...downloadProps(path, entry?.mtime)}>
+              <a {...downloadProps(path, { version: entry?.mtime, size: entry?.size })}>
                 <Download />
                 {t('files.download')}
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <a href={fileRawUrl(path)} target="_blank" rel="noopener noreferrer">
+              <a {...openRawProps(path, entry?.mtime)}>
                 <ExternalLink />
-                {t('files.openRaw')}
+                {t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => actions.copyPath(path)}>

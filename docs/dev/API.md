@@ -75,7 +75,7 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 
 ```
 Project = {name, path, description, topics:[Topic], session_count}
-Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, running:int, unread:int, telegram_thread:int|null}
+Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null}
 ```
 Names: `^[a-z0-9][a-z0-9-]{0,47}$` (slug); the UI slugifies the label. Description goes into the CLAUDE.md header.
 
@@ -121,7 +121,7 @@ Session = {
 | GET | `/api/sessions/{id}/events?tail=N` | – | last events, read backwards from the end (whole log lines, at least N events when available, max 5000): `{events, start, next, more_before:bool, state}` — `start` = offset of the first line returned, `next` = end offset (start the stream there). What the UI uses to open a thread |
 | GET | `/api/sessions/{id}/events?before=<offset>&limit=N` | – | events strictly before `offset` (backward paging, "Show earlier messages"): `{events, start, next:offset, more_before, state}` · `{events:[], reset:true, state}` when `offset` is not a line boundary of the current log |
 | GET | `/api/sessions/{id}/events?from=0` | – | forward reading `{events:[Event], next:int, state, more:bool}` (≤ 4 MB of log per call; `more` = call again from `next`) · `reset:true` when `from` is beyond the end / not a line boundary |
-| GET | `/api/sessions/{id}/stream?from=0` | – | **SSE**. `event: events` `data: {events, next}` · `event: state` `data: Session` · `event: reset` `data: {}` then end of stream when the log was rewritten or shrank (or `from` is stale): reload with `?tail=` · heartbeat comment every 15 s |
+| GET | `/api/sessions/{id}/stream?from=0` | – | **SSE**. `event: events` `data: {events, next}` · `event: state` `data: Session` · `event: reset` `data: {}` then end of stream when the log was rewritten or shrank (or `from` is stale): reload with `?tail=` · heartbeat comment every 15 s. New lines and state changes are pushed ~0.05-0.15 s after they are written (inotify on the sessions folder; without it the stream polls every 0.1 s while the session runs) |
 | GET | `/api/sessions/search?q=` | – | `[{id, title, path, snippet, at}]` (served by the full-text index, see Search; max 50) |
 | POST | `/api/uploads?path=<topic path>` | multipart `file` (multi) | `{files:[{path, name, size, mime}]}` saved in `<topic>/attachments/YYYY-MM/` · each file `413 too_large` over `upload_max_mb`, `507 disk_full` when it would leave less than `upload_min_free_mb` free on the destination disk (files saved before it in the same request are kept); the whole request is capped too (see Conventions) |
 
@@ -132,9 +132,11 @@ most 32 MB further back). The runner clips tool outputs before
 writing them (2 000 characters per tool result, images → `[image]`, Write/Edit inputs beyond 20 kB; the block
 gets `mx_clipped`), keeps only `cwd, session_id, model, permissionMode, apiKeySource, claude_code_version,
 output_style, fast_mode_state, mcp_servers, uuid` of `system/init` lines (the tool / skill / slash-command
-lists, ~20 kB per turn, are dropped) and does not write `system/thinking_tokens` lines; `maxxing sessions
+lists, ~20 kB per turn, are dropped), drops the `signature` of `thinking` blocks and the `data` of
+`redacted_thinking` blocks (read by the API only) and does not write `system/thinking_tokens` lines; `maxxing sessions
 compact-logs [--dry-run]` applies the same to existing logs (atomic
-rewrite, running sessions skipped) — open streams then receive `reset`. **Event** (normalised):
+rewrite, running sessions skipped), and the server does it every night at 04:30 for the logs written since the
+previous night — open streams then receive `reset`. **Event** (normalised):
 ```
 {type:"user", text, attachments:[path], at, source, voice?:[path]}   // voice: a voice message sent directly (its audio)
 {type:"voice_text", text, error:str|null, stopped?:true, at}   // transcript of the voice message just above (error: not transcribed, nothing sent to Claude)
@@ -160,14 +162,13 @@ rewrite, running sessions skipped) — open streams then receive `reset`. **Even
 Every `path` is absolute and inside `files_root` (else `400 bad_path` / `403 forbidden`); a path with a NUL byte or a symlink loop is `400 bad_path`.
 | GET | `/api/files/list?path=` | – | `{path, parent, root, entries:[{name, path, type:"file"\|"dir", size, mtime, mime}]}` dirs first |
 | GET | `/api/files/read?path=` | – | `{path, content, mtime, size, mime, editable}` (text ≤ 2 MB; else `413`; binary / non-UTF-8 → `415 binary`) |
-| GET | `/api/files/raw?path=&download=0&v=` | – | bytes, Range supported (video). Every type but images (not SVG), audio, video and PDF gets `Content-Security-Policy: sandbox; default-src 'none'; …` (+ `nosniff` always). `v` (the file's mtime, set by the UI when it knows it) = cached by the browser for good, else `no-cache` + ETag. |
-| GET | `/api/files/thumb?path=&w=320&v=` | – | webp thumbnail for images, videos and PDFs (ffmpeg, video: frame at 1 s; PDF: first page through `pdftoppm`), cached server side; without ffmpeg images fall back to the original · other types `415`. `w` ≤ 4096. Cache: `no-cache` (revalidated), or for good with `v`. Same CSP rule as `/raw` (an SVG fallback is sandboxed) |
+| GET | `/api/files/raw?path=&download=0&v=` | – | bytes, Range supported (video). Every type but images (not SVG), audio, video and PDF gets `Content-Security-Policy: sandbox; default-src 'none'; …` (+ `nosniff` always). `v` (the file's mtime, set by the UI when it knows it) = cached by the browser for good, else `no-cache` + ETag. `download=1`: `Content-Disposition: attachment; filename="<ASCII fallback>"; filename*=UTF-8''<name>` (`downloads.content_disposition`: a name that is not UTF-8 on disk is read as Latin-1; slashes, control and bidi characters replaced or dropped; cut at 200 characters keeping the extension) |
+| GET | `/api/files/zip?path=&check=0` | – | the folder as a zip (`application/zip`, `<folder>.zip`, `no-store`), made while it is sent: ZIP64, deflate level 6, stored for already-compressed types (images, video, audio, archives, office, PDF, fonts). Everything the listing shows; symlinked folders are not followed, a symlinked file only when its target is a regular file inside the files root; sockets / FIFOs / devices left out; names not UTF-8 read as Latin-1 · not a folder `404` · over 2 GB uncompressed or 100,000 entries `413 too_large` (checked before the first byte) · `check=1`: `{count, size}` (files, uncompressed bytes) or that `413`, nothing zipped: the UI asks first, a refused link download shows no reason |
+| GET | `/api/files/thumb?path=&w=320&v=&anim=0` | – | webp thumbnail for images, videos and PDFs (ffmpeg, video: frame at 1 s; PDF: first page through `pdftoppm`), cached server side; without ffmpeg images fall back to the original · other types `415`. `w` ≤ 4096. `anim=1` (chat): a `.gif` of at most 8 MB (`GIF_ANIM_MAX`) is served as it is (`image/gif`, it moves), a bigger one gets the still. Cache: `no-cache` (revalidated), or for good with `v`. Same CSP rule as `/raw` (an SVG fallback is sandboxed) |
 | POST | `/api/files/stat` | `{paths: [str]}` (≤ 500) | `{mtimes: {path: float \| null}}` - current mtime of each file (null = missing, outside the files root, not absolute). The UI puts it in preview URLs (`v`) so a file rewritten under the same name shows its new version |
-| GET | `/api/files/video?path=` | – | `{width, height, codec, bitrate, duration, fps, qualities: [{q, state: none\|queued\|running\|ready\|error, progress 0-1, error?}], auto}`: the lighter copies offered (1080 / 720 / 480 below the original's height) and the copy "Auto" plays (`null` = the original: H.264 / VP8 / VP9, ≤ 1080p, ≤ 6 Mbit/s) · not a video `415` · no ffprobe / no video stream `422 video_unavailable` |
-| POST | `/api/files/video/prepare` | `{path, q}` | queues the copy at height `q` (H.264 crf 23 veryfast + AAC 128k, maxrate 5M / 2.5M / 1.2M, `+faststart`, `nice 10`, 2 threads, one encode at a time) in `<state>/videos/<sha1(path, mtime, size)>-<q>.mp4`; no-op when ready or queued; returns the same as GET · `q` not offered or no ffmpeg `422`. Poll GET for progress |
-| GET | `/api/files/video/stream?path=&q=&v=` | – | the ready copy (`video/mp4`, Range requests) · not made yet `404 not_ready`. Touches the file: past 4 GB (`VIDEO_CACHE_MAX`) the least recently played copies are removed after each encode |
-| GET | `/api/files/preview?path=&w=2048&v=` | – | the image the viewer shows: a WebP at most `w` px wide (cached server side) when the original is over 300 KB, else the original (GIF / SVG always original; TIFF / HEIC always converted, `415` when the server cannot) · not an image `415` |
-| GET | `/api/files/archive?path=` | – | `{path, format:"zip"\|"tar"\|"gzip", entries:[{name, size, dir, mtime}], count, total_size, truncated, size}` (first 5000 entries, nothing extracted; a tar is read through 256 MB decompressed and 3 s at most, a zip directory 3 s, then `truncated` with the counts so far; cached per file version) · other formats / unreadable `415 unsupported` |
+| GET | `/api/files/video?path=` | – | `{width, height, codec, bitrate, duration, fps, has_audio, rotation, qualities: [{q, state: none\|queued\|running\|ready\|error, progress 0-1, error?}], auto}`: `width`/`height` as coded (`rotation` 90 / 270 = shown sideways), `has_audio` false = no audio stream (the UI plays a clip of ≤ 15 s without sound like a GIF); the lighter copies offered (1080 / 720 / 480 below the original's height) and `auto`, the copy the UI falls back on when the browser cannot decode the original (it checks `canPlayType` with `codec`) or it struggles: 1080 above 1080p, 720 for a heavy original ≤ 1080p (not H.264 / VP8 / VP9, or > 6 Mbit/s), `null` = none (light original, or nothing lighter) · not a video `415` · no ffprobe / no video stream `422 video_unavailable` |
+| POST | `/api/files/video/prepare` | `{path, q}` | queues the copy at height `q` (H.264 crf 20 `faster` + AAC 128k, maxrate 8M / 4M / 1.5M with a buffer twice that, `+faststart`, `nice 10`, 2 threads, one encode at a time) in `<state>/videos/<sha1(path, mtime, size)>-<q>-r2.mp4` (`r2`: copies made with older settings are never served); no-op when ready or queued; returns the same as GET · `q` not offered or no ffmpeg `422`. Poll GET for progress |
+| GET | `/api/files/video/stream?path=&q=&v=` | – | the ready copy (`video/mp4`, Range requests) · not made yet `404 not_ready`. Sets the copy's access time only (its mtime, so the ETag / Last-Modified, never change: the browser's `If-Range` requests keep getting 206). Past 4 GB (`VIDEO_CACHE_MAX`) the least recently played copies are removed after each encode, never one played in the last 30 min (`COPY_KEEP_S`) |
 | GET | `/api/files/site-url?path=` | – | `{url, expires_in}`: `/api/files/site/<token>/<name>` renders an HTML file (`.html`/`.htm` only, 415 otherwise) with its relative assets for 2 h. Folder token: only static web assets of the page's folder tree (`html htm css js mjs wasm`, fonts `woff woff2 ttf otf eot`, pictures, audio, video; never `.md .json .txt .csv .pdf .xml`, code or settings); from a topic's `attachments/`, pictures and media only. When the page's folder is the files root, the home directory, `/`, under a dot folder, the workspace root, `projects/`, a project, its `topics/` or a topic's `attachments/`, the token covers that file only (never under a dot folder). The token carries its issue time and session id: refused after that session signs out, when it is older than `sessions_not_before`, or after a password change |
 | GET | `/api/files/site/<token>/<rel path>` | – (**no cookie**: the token, scoped to the page's folder, is the permission) | the file, with `Content-Security-Policy: sandbox allow-scripts allow-popups allow-forms allow-modals allow-downloads` (no `allow-same-origin`: opaque origin, no session; no `allow-popups-to-escape-sandbox`: popups and `target=_blank` links inherit the sandbox; the UI iframe uses the same flags) + `frame-ancestors 'self'`; outside the folder, any dotfile / dot folder in the path, another file of a single-file token, or a file type outside the list above `403`; expired, revoked / forged token `403 expired` |
 | PUT | `/api/files/write` | `{path, content, expected_mtime?}` | `{ok, mtime}` · `409 conflict` when mtime differs · `400 bad_content` (a lone surrogate) |
@@ -305,7 +306,7 @@ target = windows-amd64|windows-arm64|darwin-arm64|darwin-amd64|linux-amd64|linux
 | POST | `/api/pc/mcp/register` | – | `{ok}` · `409 not_paired` |
 | DELETE | `/api/pc` | – | `{ok}` - unpairs (the agent removes its autostart and exits), MCP removed |
 | POST | `/api/pc/pair` | `{code, name, os, arch, version, browsers}` | `{device_id, token}` - the PC is a `candidate` until `/confirm` · public, `403 bad_code\|expired` |
-| GET | `/api/pc/download/{target}?code=` | – | the agent binary + config trailer · public, `403`, `404` |
+| GET | `/api/pc/download/{target}?code=` | – | the agent binary + config trailer, streamed from the cached agent (`Content-Length` set) · public, `403`, `404` |
 | GET | `/api/pc/install.ps1\|sh?code=&target=` | – | install script (downloads, starts) · public |
 | WS | `/api/pc/ws` | `Authorization: Bearer <device token>` | agent control + DevTools frames (PROTOCOL.md) · close `4401` |
 | WS | `/api/pc/cdp` | `X-PC-Secret` | loopback only: DevTools relay for chrome-devtools-mcp · close `4403` |
@@ -436,7 +437,7 @@ Between servers (public, no cookie, `404` while `team_page` is off; protocol in 
 |---|---|---|---|
 | POST | `/api/team-peer/hello` | `{from, to, nonce_b, proof, profile}` | `{nonce_a, proof_a, profile}` · `403` no matching invitation · `429` after 5 bad hellos/h/IP |
 | POST | `/api/team-peer/inbox` | signed event `{type: accept\|refuse\|bye\|profile\|presence\|chat\|message\|vote\|react\|typing\|read\|edit\|delete\|leave, …}` | `{ok}` · `401` unsigned / stale / replayed · `403` bad signature · `429` `too_many_groups` (a new group past 50 open groups from that sender) |
-| GET | `/api/team-peer/files/{fid}` | signed | the file, when the sender is a member of a chat where it was shared |
+| GET | `/api/team-peer/files/{fid}` | signed | the file, when the sender is a member of a chat where it was shared (`Content-Disposition` built by `downloads.content_disposition`) |
 
 ## Dashboard & extensions
 ```
@@ -538,7 +539,8 @@ the last indexed offset, files on mtime/size change; refreshed every 30 s (sessi
 full walk of the other files every 10 min, and, for sessions, before each query. `GET /api/search/stats` adds
 `files_walked_at` and `files` (last walk: files, buckets, per_bucket, cut, dropped). A refresh (or the hourly `optimize`) that changed rows ends
 with `PRAGMA wal_checkpoint(TRUNCATE)` (200 ms busy timeout; retried next pass when a query holds a snapshot) and
-`journal_size_limit` is 4 MB, so `search.db-wal` does not keep its high-water mark.
+`journal_size_limit` is 4 MB, so `search.db-wal` does not keep its high-water mark. After a files walk, at most once
+a day, `search.db` is VACUUMed when more than 25 % of its pages are free (and it is at least 4 MB).
 
 | Method | Path | Body | Response |
 |---|---|---|---|

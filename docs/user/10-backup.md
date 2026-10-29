@@ -72,7 +72,7 @@ Settings -> Backup.
 ## Moving to a new server
 
 ```bash
-curl -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/name RESTORE_TOKEN=<token> bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/name RESTORE_TOKEN=<token> bash
 ```
 
 The installer restores your memory, settings and jobs. Then sign in, re-enter what is never backed

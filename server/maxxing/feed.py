@@ -240,6 +240,42 @@ def last_id() -> int:
     return (r[0] or 0) * 100000 + (r[1] or 0)              # changes on new events and on reads
 
 
+_watch_lock = threading.Lock()
+_watch: dict = {"ident": None, "conn": None, "stamp": None, "last": 0}
+
+
+def watch_id() -> int:
+    """last_id() for the watcher that tells the UI about events written by other processes (a pass every few
+    seconds): nothing is read while feed.db and its WAL are unchanged, and the read goes through one connection
+    kept open (opened again when feed.db is replaced) instead of a new one per pass."""
+    path = db_path()
+    with _watch_lock:
+        stamp = (str(path), _db_stamp(path))
+        if stamp == _watch["stamp"]:
+            return _watch["last"]
+        try:
+            ident: tuple | None = (str(path), os.stat(path).st_ino)
+        except OSError:
+            ident = None
+        c = _watch["conn"]
+        if ident is None or ident != _watch["ident"] or c is None:
+            if c is not None:
+                c.close()
+            _watch.update(conn=None, ident=None, stamp=None)
+            _conn().close()                             # creates / repairs the database and its table
+            c = sqlite3.connect(path, timeout=10, check_same_thread=False)    # used under _watch_lock only
+            _watch.update(conn=c, ident=ident)
+        try:
+            r = c.execute("SELECT MAX(id), SUM(read) FROM events").fetchone()
+        except sqlite3.Error:
+            c.close()
+            _watch.update(conn=None, ident=None, stamp=None)
+            raise
+        last = (r[0] or 0) * 100000 + (r[1] or 0)
+        _watch.update(stamp=stamp, last=last)
+        return last
+
+
 def mark_read(ids: list[int] | None = None, source: str | None = None, everything: bool = False) -> int:
     with _conn() as c:
         if everything:
