@@ -263,3 +263,13 @@ def test_zip_skips_a_file_whose_folder_was_swapped_for_a_link_after_the_plan(tre
     z = zipfile.ZipFile(io.BytesIO(data))
     assert "proj/sub/deep/x.md" not in z.namelist() and "proj/a.txt" in z.namelist()
 
+
+def test_zip_token_download_of_an_unreadable_entry_is_a_403(client, tree, monkeypatch):
+    """Planned again at the GET: a folder that became unreadable since the POST answers 403, not a 500."""
+    token = client.post("/api/files/zip", json={"paths": [str(tree / "proj")]}).json()["token"]
+
+    def denied(*a):
+        raise PermissionError(13, "Permission denied")
+    monkeypatch.setattr(downloads, "zip_plan_many", denied)
+    r = client.get("/api/files/zip", params={"token": token})
+    assert r.status_code == 403 and r.json()["error"] == "forbidden"

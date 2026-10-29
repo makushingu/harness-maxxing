@@ -9,6 +9,7 @@ import asyncio
 import bz2
 import gzip
 import hashlib
+import hmac
 import lzma
 import mimetypes
 import os
@@ -246,13 +247,15 @@ async def zip_folder(request: Request, path: str = "", check: int = 0, token: st
     of a POST /zip (several files and folders), planned again from their paths."""
     if token:
         held = _zip_tokens.get(token)
-        if not held or held[0] < time.monotonic() or held[1] != _cookie_tag(request):
+        if not held or held[0] < time.monotonic() or not hmac.compare_digest(held[1], _cookie_tag(request)):
             raise _err(404, "not_found", "This download link expired")
-        items, name = await _t(_zip_items, held[2])
         try:
+            items, name = await _t(_zip_items, held[2])
             plan = await _t(downloads.zip_plan_many, items, _root())
         except downloads.ZipTooLarge as e:
             raise _zip_413(e, "These files hold") from None
+        except PermissionError:
+            raise _err(403, "forbidden", "Permission denied") from None
         return _zip_response(plan, name)
     p = resolve(path)
     if not await _t(p.is_dir):
