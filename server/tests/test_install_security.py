@@ -122,7 +122,9 @@ def test_paths_are_validated(value, ok):
 
 
 @pytest.mark.parametrize("value, ok", [("ui.example.com", True), ("a.b", False), ("ui.example.com;rm", False),
-                                       ("-x.example.com", False), ("UI.example.com", False)])
+                                       ("-x.example.com", False), ("UI.example.com", False),
+                                       ("ui.example.--", False), ("a.b-c.--", False), ("ui.example.-co", False),
+                                       ("ui.example.co-", False), ("ui.example.xn--p1ai", True)])
 def test_domains_are_validated(value, ok):
     assert (sh('valid_domain "$V" && echo fine', V=value).stdout.strip() == "fine") is ok
 

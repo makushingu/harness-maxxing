@@ -430,7 +430,7 @@ check_inputs() {
   [ -z "$TIMEZONE" ] || valid_tz_name "$TIMEZONE" || die "TIMEZONE is not a time zone name (got '$TIMEZONE')"
 }
 valid_tz_name() { one_line "$1" || return 1; case "$1" in ""|/*|*..*) return 1 ;; esac; printf '%s' "$1" | grep -Eq '^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$'; }
-valid_domain() { one_line "$1" && [ ${#1} -le 253 ] && printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$'; }
+valid_domain() { one_line "$1" && [ ${#1} -le 253 ] && printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$'; }
 valid_tz() {
   case "$1" in UTC|Etc/UTC) return 0 ;; esac
   valid_tz_name "$1" && [ -f "/usr/share/zoneinfo/$1" ]
