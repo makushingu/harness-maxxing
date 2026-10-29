@@ -13,7 +13,8 @@ const item = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) =>
   )
 
 /**
- * Extension pages in the sidebar: one "Extensions" entry (the /x hub, with the count of unpinned pages),
+ * Extension pages in the sidebar: one "Extensions" entry (the /x hub, without a counter: the count of unpinned pages
+ * read like a notification, and the stock "Your pages" made it 1 on every install),
  * then each pinned page right below it. Nothing is shown when no page extension is installed.
  */
 export function SidebarExtensions({ collapsed }: { collapsed: boolean }) {
@@ -22,7 +23,6 @@ export function SidebarExtensions({ collapsed }: { collapsed: boolean }) {
   const pages = (data || []).filter((e) => e.type === 'page' && e.enabled && !e.error)
   if (!pages.length) return null
   const pinned = pages.filter((e) => e.pinned)
-  const others = pages.length - pinned.length
   return (
     <div className={cn('grid gap-0.5 border-t border-sidebar-border px-3 pt-2 pb-2', collapsed && 'px-2.5')}>
       <Tooltip content={collapsed ? t('ext.hubTitle') : null} side="right">
@@ -31,12 +31,7 @@ export function SidebarExtensions({ collapsed }: { collapsed: boolean }) {
             <>
               {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
               <Blocks className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
-              {!collapsed && (
-                <>
-                  <span className="flex-1 truncate">{t('ext.hubTitle')}</span>
-                  {others > 0 && <span className="rounded bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground tabular-nums">{others}</span>}
-                </>
-              )}
+              {!collapsed && <span className="flex-1 truncate">{t('ext.hubTitle')}</span>}
             </>
           )}
         </NavLink>

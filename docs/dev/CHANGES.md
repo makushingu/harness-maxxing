@@ -135,6 +135,9 @@ Several files at once (Files page and the folder grid of the file viewer):
   (viewer): same model, rename (NameDialog of the Files page) and delete there too, `onOpenInFiles`; tiles get
   `.mx-cv-tile` (content-visibility) past 300 entries. Texts: `files.sel.*` (group `files`).
 
+Sidebar: the **Extensions** entry no longer shows the count of enabled page extensions that are not pinned. It read
+like a notification, and the stock "Your pages" (workspace template) made it 1 on every install.
+
 Session tree: folding works while a filter is on. A search or the running / unread filter passes `forceOpen` to every
 project and topic, which ignored their fold button (the chevron showed, the click did nothing). Now `forceOpen` only
 unfolds by default: a click folds the row in `useSessionsUI.narrowFolded` (not persisted, emptied when the search or
