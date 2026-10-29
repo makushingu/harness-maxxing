@@ -1414,7 +1414,11 @@ fetch_code() {
     die "$INSTALL_DIR exists and is not a git clone - move it away or set INSTALL_DIR"
   fi
   mkdir -p "$(dirname "$INSTALL_DIR")"
-  if [ -z "$GH_TOKEN" ] && (umask 022; git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 clone -q -b "$BRANCH" -- "$url" "$INSTALL_DIR") 2>/dev/null; then
+  # the public repository: a partial clone (--filter=blob:none, a third of the download): the files of older versions
+  # come on demand when git needs them (an update, a look at an old version). Not with a token: maxxing's own git commands do
+  # not pass it, so a private fork keeps a full clone.
+  if [ -z "$GH_TOKEN" ] && (umask 022; git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 clone -q --filter=blob:none \
+       -b "$BRANCH" -- "$url" "$INSTALL_DIR") 2>/dev/null; then
     ok "cloned into $INSTALL_DIR"
     return
   fi
