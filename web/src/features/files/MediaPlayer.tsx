@@ -32,7 +32,7 @@ import { useT } from '@/i18n'
 import { Sensitive, Spinner, Tooltip } from '@/components/ui'
 import { fileRawUrl, fileThumbUrl } from '@/lib/queries/files'
 import { basename } from './kinds'
-import { canDecode, gifLike, shownSize, useVideoQuality, videoInfoQuery, type VideoInfo } from './videoQuality'
+import { canDecode, gifLike, shortSide, shownSize, useVideoQuality, videoInfoQuery, type VideoInfo } from './videoQuality'
 import { clearMediaPos, mediaPosKey, readPrefs, resumePos, savePrefs, setMediaPos } from './mediaMemory'
 import { releaseAudio, takeAudio } from './sharedAudio'
 
@@ -590,7 +590,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
             video={video}
           >
             <span className="relative text-xs font-semibold tabular-nums">
-              {onCopy ? `${vq.playing}p` : vq.choice === 'auto' ? 'Auto' : `${vq.info.height}p`}
+              {onCopy ? `${vq.playing}p` : vq.choice === 'auto' ? 'Auto' : `${shortSide(vq.info)}p`}
               {(vq.targetState?.state === 'queued' || vq.targetState?.state === 'running') && <span className="absolute -top-0.5 -right-1.5 size-1.5 animate-pulse rounded-full bg-primary" />}
             </span>
           </PickButton>
@@ -950,7 +950,7 @@ function qualityOptions(info: VideoInfo, t: ReturnType<typeof useT>): { value: s
     q.state === 'running' ? ` · ${Math.round(q.progress * 100)} %` : q.state === 'queued' ? ` · ${t('media.qualityQueued')}` : q.state === 'error' ? ` · ${t('media.qualityFailed')}` : ''
   return [
     { value: 'auto', label: `${t('media.qualityAuto')} (${info.auto ? `${info.auto}p` : t('media.qualityOriginal')})` },
-    { value: 'original', label: `${t('media.qualityOriginal')} · ${info.height}p${mbps}` },
+    { value: 'original', label: `${t('media.qualityOriginal')} · ${shortSide(info)}p${mbps}` },
     ...info.qualities.map((q) => ({ value: String(q.q), label: `${q.q}p${state(q)}` })),
   ]
 }
