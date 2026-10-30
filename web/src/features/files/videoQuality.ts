@@ -1,10 +1,11 @@
 // Video quality (see docs/dev/API.md, /api/files/video): the server makes lighter H.264 copies (1080p / 720p /
 // 480p, fast start) one at a time. The choice (Auto / Original / a height) is remembered on this device.
-// Auto plays the ORIGINAL whenever this browser can decode it (canDecode: canPlayType with the codec the server
-// read), sharp as it is. It needs the copy the server suggests (`auto`: 1080p above 1080p, else 720p for a heavy
-// original) only when the original cannot be decoded (HEVC, ProRes, AV1 here, or a format error while playing) or
-// struggles (`needCopy`, decided by the player); that copy is made once the video is played (`active`), never for a
-// video only opened. A chosen height not ready yet is prepared at once; the player switches to it when done.
+// Auto plays the sharpest version this connection carries (autoPick): the ORIGINAL when the browser decodes it
+// (canDecode: canPlayType with the codec the server read) and the measured speed (netSpeed.ts) is enough or unknown,
+// else the first copy light enough. Each stall lowers a ceiling (`cap`, set by the player) below the source playing,
+// so Auto steps down one version at a time, to 480p. A copy is made once the video is played (`active`), never for a
+// video only opened; until it is ready the nearest ready copy plays (else the original). A chosen quality not ready
+// yet is prepared at once; the player switches to it when done.
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, withQuery } from '@/lib/api'
@@ -15,6 +16,10 @@ export interface VideoQuality {
   state: VideoQualityState
   progress: number
   error?: string
+  /** Revision of the copy's name: in its URL, so a copy made again is never read from the browser's cache. */
+  rev?: string
+  /** Ready copies: their real bitrate (bits per second). */
+  bitrate?: number
 }
 export interface VideoInfo {
   width: number
@@ -94,7 +99,30 @@ function saveChoice(c: QualityChoice) {
   }
 }
 
-export const videoStreamUrl = (path: string, q: number, v?: string) => withQuery('/api/files/video/stream', { path, q, v })
+export const videoStreamUrl = (path: string, q: number, v?: string, r?: string) => withQuery('/api/files/video/stream', { path, q, v, r })
+
+// what a copy usually weighs before it is made (crf 20, capped at 8 / 4 / 1.5 Mbit/s): its real bitrate once ready
+const TYPICAL_BPS: Record<number, number> = { 1080: 5e6, 720: 2.5e6, 480: 1e6 }
+
+/** Bits per second of the original (q null) or of a copy. */
+export function rateOf(info: VideoInfo, q: number | null): number {
+  const orig = info.bitrate || 1e7
+  if (q == null) return orig
+  const c = info.qualities.find((x) => x.q === q)
+  return c?.bitrate || Math.min(TYPICAL_BPS[q] ?? orig, orig)
+}
+
+/** Auto's pick: the sharpest version within the budget (80 % of the speed, under the stall ceiling `cap`); null = the
+ *  original. Nothing known (no speed, no stall): the original when decodable, else the server's suggestion (or the
+ *  sharpest copy: an H.264 .avi needs one too). */
+export function autoPick(info: VideoInfo, decodable: boolean, speed: number | null, cap: number): number | null {
+  const copies = info.qualities.map((q) => q.q)
+  const options: (number | null)[] = decodable ? [null, ...copies] : copies
+  if (!options.length) return null
+  const budget = Math.min(speed ? speed * 0.8 : Infinity, cap)
+  if (budget === Infinity) return decodable ? null : (info.auto ?? copies[0] ?? null)
+  return options.find((o) => rateOf(info, o) <= budget) ?? options[options.length - 1]!
+}
 
 const busy = (q?: VideoQuality) => q?.state === 'queued' || q?.state === 'running'
 
@@ -108,9 +136,9 @@ export function targetQuality(info: VideoInfo | undefined, choice: QualityChoice
   return offered.reduce((best, q) => (Math.abs(q - choice) < Math.abs(best - choice) ? q : best), offered[0]!)
 }
 
-/** `needCopy`: Auto must leave the original (it cannot be decoded or it struggles); `mustLeave`: it cannot be decoded,
- *  so even "Original" falls back on Auto's copy. */
-export function useVideoQuality(path: string, enabled: boolean, version?: number | null, active = true, needCopy = false, mustLeave = false) {
+/** `decodable`: this browser plays the original (else even "Original" falls back on Auto's pick); `speed`: bits per
+ *  second (netSpeed); `cap`: the ceiling the player lowers on each stall. */
+export function useVideoQuality(path: string, enabled: boolean, version?: number | null, active = true, decodable = true, speed: number | null = null, cap = Infinity) {
   const qc = useQueryClient()
   const [choice, setChoiceState] = React.useState<QualityChoice>(readChoice)
   const key = React.useMemo(() => ['files', 'video', path] as const, [path])
@@ -119,9 +147,12 @@ export function useVideoQuality(path: string, enabled: boolean, version?: number
     enabled,
     refetchInterval: (q) => (q.state.data?.qualities.some(busy) ? 1500 : false),
   })
-  const target = choice === 'auto' ? (needCopy ? (info.data?.auto ?? null) : null) : (targetQuality(info.data, choice) ?? (mustLeave ? (info.data?.auto ?? null) : null))
-  const targetState = info.data?.qualities.find((q) => q.q === target)
+  const d = info.data
+  const auto = d ? autoPick(d, decodable, speed, cap) : null
+  const target = choice === 'auto' ? auto : (targetQuality(d, choice) ?? (decodable ? null : auto))
+  const targetState = d?.qualities.find((q) => q.q === target)
   const asked = React.useRef(new Set<number>())
+  const again = React.useRef(new Set<number>()) // picked again by hand after an error: ask once more
 
   const prepare = React.useCallback(
     async (q: number) => {
@@ -129,17 +160,34 @@ export function useVideoQuality(path: string, enabled: boolean, version?: number
       try {
         qc.setQueryData(key, await api.post<VideoInfo>('/api/files/video/prepare', { path, q }))
       } catch {
-        /* reported by the next GET (state "error") or no ffmpeg: the original keeps playing */
+        // refused (queue full, no ffmpeg): asked again a bit later, not in a loop
+        setTimeout(() => {
+          asked.current.delete(q)
+          void qc.invalidateQueries({ queryKey: key })
+        }, 15_000)
       }
     },
     [qc, key, path],
   )
-  // The wanted copy is missing: make it (once per player; an error is not retried in a loop).
+  // A copy that was queued, running or ready and is "none" again (the server restarted, the cache dropped it): it
+  // may be asked again.
+  const seen = React.useRef(new Map<number, VideoQualityState>())
   React.useEffect(() => {
-    if (target != null && targetState?.state === 'none' && !asked.current.has(target) && (active || choice !== 'auto')) void prepare(target)
+    for (const q of d?.qualities ?? []) {
+      if (q.state === 'none' && seen.current.get(q.q) && seen.current.get(q.q) !== 'none') asked.current.delete(q.q)
+      seen.current.set(q.q, q.state)
+    }
+  }, [d])
+  // The wanted copy is missing: make it (once per player; an error is not retried in a loop, only when picked again).
+  React.useEffect(() => {
+    if (target == null || !(active || choice !== 'auto')) return
+    const st = targetState?.state
+    if (st === 'error' && again.current.delete(target)) void prepare(target)
+    else if (st === 'none' && !asked.current.has(target)) void prepare(target)
   }, [target, targetState?.state, prepare, active, choice])
 
   const setChoice = (c: QualityChoice) => {
+    if (typeof c === 'number') again.current.add(c)
     setChoiceState(c)
     saveChoice(c)
   }
@@ -151,17 +199,28 @@ export function useVideoQuality(path: string, enabled: boolean, version?: number
     },
     [qc, key],
   )
-  // What plays now: the target copy when ready, else the original.
-  const playing = target != null && targetState?.state === 'ready' ? target : null
+  // What plays now: the target copy when ready. Else, for Auto, the nearest ready copy (a lighter one first: the
+  // connection asked for less), and the original when none is ready; a quality picked by hand waits on the original.
+  const ready = (d?.qualities ?? []).filter((q) => q.state === 'ready').map((q) => q.q)
+  let playing: number | null = null
+  if (target != null && ready.includes(target)) playing = target
+  else if (target != null && (choice === 'auto' || !decodable)) {
+    const lighter = ready.filter((q) => q < target)
+    const heavier = ready.filter((q) => q > target)
+    playing = lighter.length ? Math.max(...lighter) : heavier.length ? Math.min(...heavier) : null
+  }
+  const playingRev = d?.qualities.find((q) => q.q === playing)?.rev
   const v = version ? String(Math.round(version * 1000)) : undefined
   return {
     info: info.data,
+    /** Auto's pick now (null = the original). */
+    auto,
     retry,
     choice,
     setChoice,
     target,
     targetState,
     playing,
-    src: playing != null ? videoStreamUrl(path, playing, v) : null,
+    src: playing != null ? videoStreamUrl(path, playing, v, playingRev) : null,
   }
 }

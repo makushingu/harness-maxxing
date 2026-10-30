@@ -64,6 +64,11 @@ def test_a_vertical_video_is_measured_by_its_short_side(client, mx):
     copy = videos.probe(videos.variant_path(tall, 480))
     assert (copy["width"], copy["height"]) == (480, 854)
     assert videos.variant_path(tall, 480).name.endswith("-480-r2-v.mp4")    # never an old height-scaled copy
+    ready = client.get("/api/files/video", params={"path": str(tall)}).json()["qualities"][0]
+    assert ready["rev"] == "r2-v" and ready["bitrate"] > 0                    # in the copy's URL / for the player
+    # a phone video coded sideways (1920x1080, rotated 90 degrees) is vertical too
+    assert videos.copy_rev({"width": 1920, "height": 1080, "rotation": 90}) == "r2-v"
+    assert videos.copy_rev({"width": 1920, "height": 1080, "rotation": 0}) == "r2"
     assert videos.auto_quality({"codec": "h264", "width": 1080, "height": 1920, "bitrate": 11_000_000}) == 720
 
 
