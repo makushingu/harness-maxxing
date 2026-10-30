@@ -52,6 +52,21 @@ def test_info_prepare_and_stream(client, clip, mx):
     assert (mx["state"] / "videos").stat().st_mode & 0o077 == 0
 
 
+def test_a_vertical_video_is_measured_by_its_short_side(client, mx):
+    # a 9:16 video (540x960) is "540p": its copies keep the short side, not the height (a 480p copy is 480x854)
+    tall = mx["files"] / "tall.mkv"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=540x960:r=25:d=1", "-c:v", "mpeg4",
+                    str(tall)], check=True)
+    info = client.get("/api/files/video", params={"path": str(tall)}).json()
+    assert [q["q"] for q in info["qualities"]] == [480] and info["auto"] == 480
+    assert client.post("/api/files/video/prepare", json={"path": str(tall), "q": 480}).status_code == 200
+    assert _wait(client, tall, 480)["state"] == "ready"
+    copy = videos.probe(videos.variant_path(tall, 480))
+    assert (copy["width"], copy["height"]) == (480, 854)
+    assert videos.variant_path(tall, 480).name.endswith("-480-r2-v.mp4")    # never an old height-scaled copy
+    assert videos.auto_quality({"codec": "h264", "width": 1080, "height": 1920, "bitrate": 11_000_000}) == 720
+
+
 def test_stream_keeps_its_etag_so_range_requests_stay_ranges(client, clip, mx):
     """Playing a copy touches its access time only: the ETag / Last-Modified of the next request are the same, so the
     browser's If-Range request gets its range (206), not the whole file again (200 = the playback restarts)."""

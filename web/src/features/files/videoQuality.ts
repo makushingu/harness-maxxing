@@ -33,6 +33,8 @@ export interface VideoInfo {
 
 /** Width / height as shown (rotation applied). */
 export const shownSize = (i: VideoInfo) => (i.rotation === 90 || i.rotation === 270 ? { w: i.height, h: i.width } : { w: i.width, h: i.height })
+/** What "1080p" means: the short side (a vertical 1080x1920 video is 1080p, not 1920p). */
+export const shortSide = (i: VideoInfo) => (i.width ? Math.min(i.width, i.height) : i.height)
 
 /** A short clip without sound: played like a GIF (muted, looped, no resume). */
 export const gifLike = (i: VideoInfo | undefined) => !!i && i.has_audio === false && i.duration > 0 && i.duration <= 15
@@ -102,7 +104,7 @@ export function targetQuality(info: VideoInfo | undefined, choice: QualityChoice
   if (!info || choice === 'original') return null
   if (choice === 'auto') return info.auto
   const offered = info.qualities.map((q) => q.q)
-  if (!offered.length || choice >= info.height) return null
+  if (!offered.length || choice >= shortSide(info)) return null
   return offered.reduce((best, q) => (Math.abs(q - choice) < Math.abs(best - choice) ? q : best), offered[0]!)
 }
 
