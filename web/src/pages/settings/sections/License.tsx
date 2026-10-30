@@ -39,10 +39,10 @@ export function LicenseSection() {
       <SettingsCard title={t('license.yours')}>
         {lic.has_key ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm">
+            <p className="min-w-0 text-sm">
               <KeyRound className="mr-1.5 inline size-4 align-[-3px] text-muted-foreground" />
               {t('license.active', { key: lic.key_hint, kind })}
-              {lic.email ? <span className="text-muted-foreground"> · {lic.email}</span> : null}
+              {lic.email ? <span className="text-muted-foreground [overflow-wrap:anywhere]"> · {lic.email}</span> : null}
               {lic.expires_at ? <span className="text-muted-foreground"> · {t('license.until', { date: new Date(lic.expires_at * 1000).toLocaleDateString(lang) })}</span> : null}
             </p>
             <Button variant="outline" size="sm" loading={remove.isPending} onClick={() => remove.mutate()} title={t('license.removeDesc')}>
