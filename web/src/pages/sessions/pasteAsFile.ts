@@ -8,6 +8,7 @@ const MIN_STRUCTURED = 400 // valid JSON / XML / CSV from this size
 const MIN_DATA = 2000 // other non-prose text from this size
 const HUGE = 20000 // anything from this size
 const LONG_TOKEN = /\S{200,}/ // a cookie, a key, base64...
+const URL = /\bhttps?:\/\/\S+/g // a link (signed, with _ # / & =) is no sign of data in prose
 const MAX_CELL = 60 // average characters per cell of a table
 
 // A line of prose: a sentence of 6 words or more ending with . ! or ?
@@ -75,7 +76,8 @@ export function pastedFile(text: string): PastedFile | null {
   if (table) return table
   if (s.length >= MIN_DATA && isLog(lines)) return { ext: 'log', type: 'text/plain' }
   if (s.length >= HUGE) return TEXT_FILE
-  if (s.length >= MIN_DATA && (LONG_TOKEN.test(s) || symbolShare(s) > 0.03)) return TEXT_FILE
+  const bare = s.replace(URL, ' ')
+  if (s.length >= MIN_DATA && (LONG_TOKEN.test(bare) || symbolShare(bare) > 0.03)) return TEXT_FILE
   return null
 }
 
