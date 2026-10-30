@@ -142,7 +142,7 @@ In a folder (the Files page list or grid, and the folder grid of the file viewer
 - Download any file from its menu: the browser saves it with its progress, whatever its size, under its real name
   (accents included).
 - **Download as zip** in a folder's menu (and in the viewer of a folder) downloads the whole folder, sub-folders
-  included, as one zip made while it downloads. Up to 2 GB (before compression) and 100,000 files; a bigger folder
+  included, as one zip made while it downloads. Up to 2 GB (before compression) and 100,000 files and folders; a bigger folder
   says so, download its sub-folders instead. Links that point outside the files root are left out.
 - **iPhone / iPad, app added to the home screen**: **Download** opens the share sheet (*Save to Files*, AirDrop,
   Messages...) for files up to 50 MB; a bigger file opens inside the app, where the system offers to save or share
