@@ -67,12 +67,19 @@ def cache_dir() -> Path:
     return d
 
 
-def _copy_key(ident: str, q: int) -> str:
-    return f"{ident}-{q}-{COPY_REV}"
+def short_side(info: dict) -> int:
+    """What "1080p" means: the short side, so a vertical 1080x1920 video is 1080p (its height is 1920)."""
+    return min(info["width"], info["height"]) if info.get("width") else info["height"]
+
+
+def _copy_key(ident: str, q: int, info: dict) -> str:
+    # vertical copies were scaled by height until r2 (a "1080p" copy of a 9:16 video was 608 px wide): new names
+    tall = 0 < info.get("width", 0) < info["height"]
+    return f"{ident}-{q}-{COPY_REV}{'-v' if tall else ''}"
 
 
 def variant_path(p: Path, q: int) -> Path:
-    return cache_dir() / f"{_copy_key(_ident(p), q)}.mp4"
+    return cache_dir() / f"{_copy_key(_ident(p), q, probe(p))}.mp4"
 
 
 # Demuxers ffmpeg/ffprobe may pick for a video (-format_whitelist): never concat, hls or tty, which open other files
@@ -134,8 +141,8 @@ def probe(p: Path) -> dict:
 
 
 def offered(info: dict) -> list[int]:
-    """Lighter heights worth offering: below the original's height."""
-    return [q for q in QUALITIES if q < info["height"]]
+    """Lighter qualities worth offering: below the original's short side."""
+    return [q for q in QUALITIES if q < short_side(info)]
 
 
 def auto_quality(info: dict) -> int | None:
@@ -143,7 +150,7 @@ def auto_quality(info: dict) -> int | None:
     720p for a heavy original at most 1080p, None when the original is light enough for any browser (or nothing
     lighter exists)."""
     qs = offered(info)
-    if info["height"] > LIGHT_HEIGHT:
+    if short_side(info) > LIGHT_HEIGHT:
         return AUTO_TOP if AUTO_TOP in qs else (qs[0] if qs else None)
     if info["codec"] in LIGHT_CODECS and info["bitrate"] <= LIGHT_BITRATE:
         return None
@@ -155,7 +162,7 @@ def status(p: Path) -> dict:
     ident = _ident(p)
     qualities = []
     for q in offered(info):
-        key = _copy_key(ident, q)
+        key = _copy_key(ident, q, info)
         if (cache_dir() / f"{key}.mp4").exists():
             qualities.append({"q": q, "state": "ready", "progress": 1.0})
             continue
@@ -170,10 +177,10 @@ def prepare(p: Path, q: int) -> dict:
     """Queue the copy at height `q` (no-op when it exists or is already queued)."""
     info = probe(p)
     if q not in offered(info):
-        raise VideoError(f"no {q}p copy for a {info['height']}p video")
+        raise VideoError(f"no {q}p copy for a {short_side(info)}p video")
     if not shutil.which("ffmpeg"):
         raise VideoError("ffmpeg is not installed")
-    key = _copy_key(_ident(p), q)
+    key = _copy_key(_ident(p), q, info)
     dest = cache_dir() / f"{key}.mp4"
     with _lock:
         if not dest.exists() and _jobs.get(key, {}).get("state") not in ("queued", "running"):
@@ -185,11 +192,12 @@ def prepare(p: Path, q: int) -> dict:
 
 
 def encode_args(src: Path, q: int, part: Path) -> list[str]:
-    """The ffmpeg command making the copy at height `q` into `part`."""
+    """The ffmpeg command making the copy whose short side is `q` into `part` (ffmpeg rotates the frames first, so
+    `iw` / `ih` are as shown)."""
     nice = shutil.which("nice")
     return [*([nice, "-n", "10"] if nice else []), shutil.which("ffmpeg") or "ffmpeg", "-v", "error", "-y",
             "-protocol_whitelist", "file", "-format_whitelist", VIDEO_FORMATS, "-i", str(src),
-            "-map", "0:v:0", "-map", "0:a:0?", "-vf", f"scale=-2:{q}", "-c:v", "libx264", "-preset", ENCODE_PRESET,
+            "-map", "0:v:0", "-map", "0:a:0?", "-vf", f"scale='if(gt(iw,ih),-2,{q})':'if(gt(iw,ih),{q},-2)'", "-c:v", "libx264", "-preset", ENCODE_PRESET,
             "-crf", ENCODE_CRF, "-maxrate", MAXRATE[q], "-bufsize", BUFSIZE[q], "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-movflags", "+faststart", "-threads", "2",
             "-progress", "pipe:1", "-nostats", str(part)]

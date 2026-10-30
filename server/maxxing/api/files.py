@@ -403,7 +403,7 @@ async def video_prepare(body: VideoPrepareIn):
 async def video_stream(path: str, q: int, v: str = ""):
     """The ready copy at height `q` (H.264 + AAC, fast start; Range requests supported)."""
     p = await _t(_video, path)
-    f = await _t(videos.variant_path, p, q)
+    f = await _video_call(videos.variant_path, p, q)
     if not await _t(f.is_file):
         raise _err(404, "not_ready", "This quality is not ready yet")
     # the cache drops the least recently played copies first: the access time only. A new mtime would change the
