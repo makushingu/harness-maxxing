@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -221,6 +222,13 @@ def test_write_file_with_a_long_name(client, mx):
     p.write_text("old")
     assert client.put("/api/files/write", json={"path": str(p), "content": "new"}).status_code == 200
     assert p.read_text() == "new" and [x.name for x in mx["files"].iterdir()] == [p.name]
+
+
+def test_a_lone_surrogate_in_a_path_is_a_400_not_a_500(client, tree):
+    bad = str(tree / "\ud800")                                     # JSON may carry one; it encodes to no bytes
+    for url, body in (("/api/files/zip", {"paths": [bad]}), ("/api/files/mkdir", {"path": bad})):
+        r = client.post(url, content=json.dumps(body), headers={"content-type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "bad_path"
 
 
 def test_names_over_255_bytes_are_refused_not_500(client, tree):
