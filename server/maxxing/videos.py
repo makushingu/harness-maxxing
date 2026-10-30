@@ -12,7 +12,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
@@ -193,6 +195,18 @@ def encode_args(src: Path, q: int, part: Path) -> list[str]:
             "-progress", "pipe:1", "-nostats", str(part)]
 
 
+def _kill(proc: subprocess.Popen) -> None:
+    """Kill ffmpeg's whole group (nice + ffmpeg, started in a session of their own) and reap it."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def _encode(src: Path, q: int, dest: Path, key: str, duration: float) -> None:
     with _lock:
         _jobs[key] = {"state": "running", "progress": 0.0}
@@ -202,9 +216,15 @@ def _encode(src: Path, q: int, dest: Path, key: str, duration: float) -> None:
     # stderr to a file, not a pipe: a broken source can print more than a pipe holds while we read stdout, and
     # ffmpeg would then wait for us forever (the one encode slot taken for hours)
     errf = tempfile.TemporaryFile(mode="w+")
+    proc: subprocess.Popen | None = None
+    timer: threading.Timer | None = None
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errf, text=True,
                                 start_new_session=True)
+        # the deadline runs from the start: a hung ffmpeg that keeps stdout open would block the loop below
+        timer = threading.Timer(ENCODE_TIMEOUT_S, _kill, (proc,))
+        timer.daemon = True
+        timer.start()
         assert proc.stdout is not None
         for line in proc.stdout:                       # out_time_us=12345678 every ~0.5 s
             if line.startswith("out_time_us=") and duration > 0:
@@ -217,6 +237,8 @@ def _encode(src: Path, q: int, dest: Path, key: str, duration: float) -> None:
         proc.wait(timeout=ENCODE_TIMEOUT_S)
         errf.seek(0)
         err = errf.read()[-300:]
+        if proc.returncode == -signal.SIGKILL:
+            err = f"ffmpeg took longer than {ENCODE_TIMEOUT_S} s"
         if proc.returncode == 0 and part.exists() and part.stat().st_size > 0:
             part.replace(dest)
             dest.chmod(0o600)
@@ -227,6 +249,10 @@ def _encode(src: Path, q: int, dest: Path, key: str, duration: float) -> None:
     except Exception as e:                               # noqa: BLE001 - reported on the job
         err = str(e)
     finally:
+        if timer is not None:
+            timer.cancel()
+        if proc is not None and proc.poll() is None:     # never leave it holding the encode slot's CPU
+            _kill(proc)
         errf.close()
     part.unlink(missing_ok=True)
     log.warning("video copy %sp of %s failed: %s", q, src, err.strip())
