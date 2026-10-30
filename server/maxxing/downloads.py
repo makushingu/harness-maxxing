@@ -37,7 +37,9 @@ def display_name(name: str) -> str:
             out.append("_")
         elif not cat.startswith("C"):
             out.append(ch)
-    text = "".join(out).strip().strip(".").strip()
+    text = "".join(out).strip().rstrip(".").rstrip()
+    if text.startswith(".."):                    # one leading dot stays (`.env`), a run of them goes (`../x`)
+        text = text.lstrip(".").lstrip()
     if len(text) > NAME_MAX:
         stem, dot, ext = text.rpartition(".")
         ext = ext if dot and stem and 0 < len(ext) <= 16 else ""
@@ -127,16 +129,18 @@ def _unique(name: str, taken: set[str]) -> str:
 def _plan_folder(plan: list[tuple[Path, str, os.stat_result | None]], folder: Path, base: str, root: Path,
                  total: int) -> int:
     plan.append((folder, base + "/", None))
+    prefixes = {folder: base + "/"}              # each folder's name in the zip, made unique in its parent
     for top, dirs, files in os.walk(folder, followlinks=False):
         dirs.sort()
         here = Path(top)
-        rel = "/".join(display_name(p) for p in here.relative_to(folder).parts)
-        prefix = f"{base}/{rel}/" if rel else f"{base}/"
+        prefix = prefixes.pop(here)
+        taken: set[str] = set()                  # two names shown alike (`a\nb` / `a_b`) must not share an entry
         for d in list(dirs):
             if (here / d).is_symlink():
                 dirs.remove(d)
             else:
-                plan.append((here / d, prefix + display_name(d) + "/", None))
+                prefixes[here / d] = prefix + _unique(display_name(d), taken) + "/"
+                plan.append((here / d, prefixes[here / d], None))
                 if len(plan) > ZIP_MAX_FILES:         # folders count too: a tree of empty ones is walked otherwise
                     raise ZipTooLarge("count")
         for f in sorted(files):
@@ -154,7 +158,7 @@ def _plan_folder(plan: list[tuple[Path, str, os.stat_result | None]], folder: Pa
             total += st.st_size
             if total > ZIP_MAX_BYTES:
                 raise ZipTooLarge("size")
-            plan.append((src, prefix + display_name(f), st))
+            plan.append((src, prefix + _unique(display_name(f), taken), st))
             if len(plan) > ZIP_MAX_FILES:
                 raise ZipTooLarge("count")
     return total
