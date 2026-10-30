@@ -262,12 +262,12 @@ function Paired({ s, onReinstall }: { s: PcStatus; onReinstall: () => void }) {
           <p className="text-sm font-medium">{t('pc.recent')}</p>
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-1 text-[13px]">
             {s.actions.slice(0, 6).map((a, i) => (
-              <li key={`${a.at}-${i}`} className="flex min-w-0 items-center gap-2">
+              <li key={`${a.at}-${i}`} className="flex min-w-0 items-center gap-2 max-sm:flex-wrap max-sm:gap-y-0.5">
                 <Badge variant={a.ok ? 'secondary' : 'destructive'} className="max-w-[45%] min-w-0 font-mono">
                   <span className="truncate">{a.tool}</span>
                 </Badge>
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">{a.args.url || ''}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">{fmtRelative(a.at, lang)}</span>
+                <span title={a.args.url || undefined} className="min-w-0 flex-1 truncate text-muted-foreground max-sm:order-last max-sm:basis-full max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">{a.args.url || ''}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground max-sm:ml-auto">{fmtRelative(a.at, lang)}</span>
               </li>
             ))}
           </ul>
