@@ -4,7 +4,8 @@ One thread watches the sessions folder (not recursive) and, on the event loop, w
 (its log or meta changed: the SSE streams) and, for a meta change, the turn-end watcher (key ANY). A waiter takes
 its event with `mark(key)` BEFORE it looks at the files, then awaits it with `wait(ev, timeout)`: a change made in
 between has already set it, so nothing is missed. When the watch cannot run (no inotify, too many watches, another
-event loop, the folder changed) `mark` returns None and the callers keep their short polling intervals.
+event loop) `mark` returns None and the callers keep their short polling intervals. A sessions folder moved,
+replaced (a restore) or changed in the settings is watched again from the next `mark`.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ ENABLED = os.environ.get("MAXXING_INOTIFY", "1") != "0"
 class _Hub:
     def __init__(self, folder: Path, loop: asyncio.AbstractEventLoop) -> None:
         self.folder = folder
+        self.ident = _ident(folder)                 # the folder watched, not its path: a replaced one is another
         self.loop = loop
         self.stop = threading.Event()
         self.ok = False
@@ -69,6 +71,14 @@ _hub: _Hub | None = None
 _lock = threading.Lock()
 
 
+def _ident(folder: Path) -> tuple[int, int] | None:
+    try:
+        st = os.stat(folder)
+    except OSError:
+        return None
+    return st.st_dev, st.st_ino
+
+
 def start() -> bool:
     """Watch the current sessions folder from the running event loop (again when either changed). -> active."""
     global _hub
@@ -78,7 +88,8 @@ def start() -> bool:
     folder = store.sessions_dir()
     with _lock:
         h = _hub
-        if h is not None and h.folder == folder and h.loop is loop and h.thread.is_alive():
+        if (h is not None and h.folder == folder and h.ident == _ident(folder) and h.loop is loop
+                and h.thread.is_alive()):
             return True
         if h is not None:
             h.stop.set()
@@ -99,6 +110,8 @@ def active() -> bool:
     h = _hub
     if h is None or not h.ok or not h.thread.is_alive() or h.folder != store.sessions_dir():
         return False
+    if h.ident is None or h.ident != _ident(h.folder):
+        return False
     try:
         return asyncio.get_running_loop() is h.loop
     except RuntimeError:
@@ -108,6 +121,7 @@ def active() -> bool:
 def mark(key: str) -> asyncio.Event | None:
     """The event the next change of `key` (a session id, or ANY) sets; None when changes are not watched."""
     if not active():
+        _rewatch()
         return None
     h = _hub
     assert h is not None
@@ -115,6 +129,22 @@ def mark(key: str) -> asyncio.Event | None:
     if ev is None:
         ev = h.events[key] = asyncio.Event()
     return ev
+
+
+def _rewatch() -> None:
+    """Watch again when the sessions folder is another one than the hub's (its path or the folder itself)."""
+    h = _hub
+    if h is None:
+        return
+    folder = store.sessions_dir()
+    ident = _ident(folder)
+    if ident is None or (h.folder == folder and h.ident == ident):
+        return                                   # no folder yet, or the same one (the hub failed: poll)
+    try:
+        if asyncio.get_running_loop() is h.loop:
+            start()
+    except RuntimeError:
+        pass
 
 
 async def wait(ev: asyncio.Event | None, timeout: float) -> bool:
