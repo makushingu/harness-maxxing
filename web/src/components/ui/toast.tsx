@@ -16,8 +16,8 @@ export function Toaster() {
         classNames: {
           toast: '!bg-popover !text-popover-foreground !border-border !shadow-pop !rounded-lg !font-sans',
           description: '!text-muted-foreground',
-          actionButton: '!bg-primary !text-primary-foreground',
-          closeButton: '!bg-popover !border-border !text-muted-foreground',
+          actionButton: '!bg-primary !text-primary-foreground pointer-coarse:!h-10 pointer-coarse:!px-4',
+          closeButton: '!bg-popover !border-border !text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-3',
         },
       }}
     />

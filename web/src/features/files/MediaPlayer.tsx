@@ -567,7 +567,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
             aria-label={t('media.volume')}
             data-testid="media-volume"
             className={cn(
-              'h-1 w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all pointer-coarse:h-8',
+              'h-1 w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all pointer-coarse:h-10',
               volOpen ? 'ml-1 w-24 opacity-100' : 'group-focus-within/vol:w-20 group-focus-within/vol:opacity-100 group-hover/vol:w-20 group-hover/vol:opacity-100 pointer-coarse:hidden',
             )}
           />
