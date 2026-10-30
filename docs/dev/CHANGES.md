@@ -141,6 +141,18 @@ side (`scale='if(gt(iw,ih),-2,q)':'if(gt(iw,ih),q,-2)'`, after ffmpeg's autorota
 (`-r2-v`), so the old blurry ones are never served (they leave with the cache trim). `/video/stream` answers 422
 instead of 500 when the source can no longer be read.
 
+Video Auto quality follows the connection (`web/src/features/files/netSpeed.ts`). While a video plays, the player
+measures the download speed every 2 s (media seconds gained x the source's bitrate; a sample counts as the real speed
+when the buffer runs low or grows faster than playback, else it is only a floor) and keeps it 30 min per connection
+type in `mx-net-speed`. `autoPick` plays the sharpest version under 80 % of that speed (copy bitrates from
+`/video/info`, typical ones until a copy exists) and under the stall ceiling; with nothing known it plays the original.
+On a slow link the next video starts straight on the light copy; Data Saver caps at 1.5 Mbit/s; the poster is 640 px
+under 3 Mbit/s. Fixes: the copy name follows the displayed orientation (rotation 90/270 = `-v`), copy URLs carry the
+copy revision (`r=`, no stale browser cache), "Preparing" no longer spins forever (asks again when the copy went
+missing, retries a failed one after 15 s), a seek or a pause is no longer counted as a stall (4 s after a seek), Auto
+never switches source in the middle of smooth playback (only on a stall, a pause or the end), an .avi/.mkv the browser
+cannot decode falls back on a copy, a quality picked after an error is asked again.
+
 Sidebar: the **Extensions** entry no longer shows the count of enabled page extensions that are not pinned. It read
 like a notification, and the stock "Your pages" (workspace template) made it 1 on every install.
 

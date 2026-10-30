@@ -46,7 +46,9 @@ brings you back to the same passage.
 **Video quality**: the player plays the **original** whenever your browser can decode it, at full sharpness (text
 in a screen recording stays readable). A lighter copy is used only when the original cannot be played here (HEVC,
 ProRes or AV1 on some browsers: "Preparing a copy this browser can play…" shows while it is made) or keeps stalling or
-dropping frames. The copy is 1080p for a video above 1080p, 720p for a heavy one at most 1080p. The player's quality
+dropping frames. Auto also follows your connection: the player measures its speed while a video plays and remembers it
+for 30 minutes, so on a slow connection (or with the browser's data saver on) the next videos start directly on a copy
+the connection carries, and on a fast one they stay on the original. The copy is 1080p for a video above 1080p, 720p for a heavy one at most 1080p. The player's quality
 button (next to the speed) lists **Auto** (the default, as above), **Original** and the lighter copies; a quality you
 pick switches at the same moment when its copy is ready. The server makes a copy once (H.264, built to start playing
 at once), one video at a time and at low priority, and only once you press play: opening a video to look at it
