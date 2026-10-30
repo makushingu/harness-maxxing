@@ -300,3 +300,21 @@ def test_add_with_secrets_is_undone_when_the_config_cannot_be_completed(env, mon
                 None)
     assert e.value.code == "not_saved"
     assert "api" not in _cfg(env).get("mcpServers", {})
+
+
+def test_pc_mcp_registered_reads_no_project_file(env, monkeypatch):
+    """The PC card polls mcp_registered() every 3-15 s: it must not read every project's .mcp.json."""
+    from maxxing import mcp, pcbridge
+    mcp.add(pcbridge.MCP_NAME, {"type": "http", "url": "https://pc.example.com/mcp"}, None)
+    (env.ws / "projects" / "acme" / ".mcp.json").write_text(json.dumps({"mcpServers": {"x": {"command": "x"}}}))
+    import threading
+    reads = []
+    real = mcp._read_mcp_json
+    me = threading.get_ident()                   # add() may start a background check that lists every server
+    monkeypatch.setattr(mcp, "_read_mcp_json",
+                        lambda f: (threading.get_ident() == me and reads.append(f)) or real(f))
+    assert pcbridge.mcp_registered() is True
+    assert reads == []
+    mcp.remove(mcp._id("user", None, pcbridge.MCP_NAME))
+    assert pcbridge.mcp_registered() is False
+    assert any(s["name"] == "x" for s in mcp.servers()) and reads
