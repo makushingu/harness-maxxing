@@ -1,1 +1,0 @@
-import"./rolldown-runtime-hePW80VL.js";import{i as e,t}from"./vendor-react-K_Ak52ge.js";import{n}from"./utils-Df2GuFRM.js";e();var r=t();function i({className:e,...t}){return(0,r.jsx)(`div`,{className:n(`flex flex-col rounded-xl border bg-card text-card-foreground shadow-xs`,e),...t})}export{i as t};

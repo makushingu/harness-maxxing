@@ -135,6 +135,12 @@ Several files at once (Files page and the folder grid of the file viewer):
   (viewer): same model, rename (NameDialog of the Files page) and delete there too, `onOpenInFiles`; tiles get
   `.mx-cv-tile` (content-visibility) past 300 entries. Texts: `files.sel.*` (group `files`).
 
+Video qualities of vertical videos: "1080p" is the short side (`videos.short_side`, `shortSide` in videoQuality.ts).
+A 1080x1920 video showed "1920p" and its "1080p" copy was 608x1080 (scaled by height). Copies now scale the short
+side (`scale='if(gt(iw,ih),-2,q)':'if(gt(iw,ih),q,-2)'`, after ffmpeg's autorotation); vertical copies get new names
+(`-r2-v`), so the old blurry ones are never served (they leave with the cache trim). `/video/stream` answers 422
+instead of 500 when the source can no longer be read.
+
 Sidebar: the **Extensions** entry no longer shows the count of enabled page extensions that are not pinned. It read
 like a notification, and the stock "Your pages" (workspace template) made it 1 on every install.
 
