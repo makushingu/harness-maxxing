@@ -8,6 +8,11 @@ const MIN_STRUCTURED = 400 // valid JSON / XML / CSV from this size
 const MIN_DATA = 2000 // other non-prose text from this size
 const HUGE = 20000 // anything from this size
 const LONG_TOKEN = /\S{200,}/ // a cookie, a key, base64...
+const URL = /\bhttps?:\/\/\S+/g // a link (signed, with _ # / & =) is no sign of data in prose
+const MAX_CELL = 60 // average characters per cell of a table
+
+// A line of prose: a sentence of 6 words or more ending with . ! or ?
+const sentence = (l: string) => /[.!?]$/.test(l.trim()) && l.trim().split(/\s+/).length >= 6
 
 const JSON_FILE = { ext: 'json', type: 'application/json' }
 const TEXT_FILE = { ext: 'txt', type: 'text/plain' }
@@ -28,10 +33,11 @@ function isJsonLines(lines: string[]): boolean {
   return rows.length >= 3 && rows.every((l) => isJson(l.trim()))
 }
 
-// Same number (2 or more) of the same separator on almost every line.
+// Same number (2 or more) of the same separator as the first line on almost every line, short cells, and not
+// sentences (a prompt of a few lines with two commas each is no CSV).
 function delimited(lines: string[]): PastedFile | null {
   const rows = lines.filter((l) => l.trim())
-  if (rows.length < 4) return null
+  if (rows.length < 4 || rows.filter(sentence).length >= rows.length / 2) return null
   for (const [sep, file] of [
     ['\t', { ext: 'tsv', type: 'text/tab-separated-values' }],
     [',', { ext: 'csv', type: 'text/csv' }],
@@ -39,7 +45,8 @@ function delimited(lines: string[]): PastedFile | null {
   ] as const) {
     const counts = rows.map((l) => l.split(sep).length - 1)
     const n = counts[0]
-    if (n >= 2 && counts.filter((c) => c === n).length >= rows.length * 0.9) return file
+    const cells = rows.reduce((sum, l) => sum + l.length, 0) / (rows.length * (n + 1))
+    if (n >= 2 && cells < MAX_CELL && counts.filter((c) => c === n).length >= rows.length * 0.9) return file
   }
   return null
 }
@@ -69,7 +76,8 @@ export function pastedFile(text: string): PastedFile | null {
   if (table) return table
   if (s.length >= MIN_DATA && isLog(lines)) return { ext: 'log', type: 'text/plain' }
   if (s.length >= HUGE) return TEXT_FILE
-  if (s.length >= MIN_DATA && (LONG_TOKEN.test(s) || symbolShare(s) > 0.03)) return TEXT_FILE
+  const bare = s.replace(URL, ' ')
+  if (s.length >= MIN_DATA && (LONG_TOKEN.test(bare) || symbolShare(bare) > 0.03)) return TEXT_FILE
   return null
 }
 
