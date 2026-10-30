@@ -38,6 +38,8 @@ def _names(header: str) -> tuple[str, str]:
     ("\ud800x.txt", "?x.txt", "?x.txt"),                         # a surrogate that is no byte (JSON from a peer)
     ("", "download", "download"),
     ("...", "download", "download"),
+    (".env", ".env", ".env"),                                    # a hidden file keeps its dot
+    ("notes.", "notes", "notes"),
 ])
 def test_content_disposition(name, plain, real):
     assert _names(downloads.content_disposition(name)) == (plain, real)
@@ -121,6 +123,26 @@ def test_zip_names_that_are_not_utf8(client, tree):
     os.close(os.open(os.fsencode(d) + b"/caf\xe9.txt", os.O_CREAT | os.O_WRONLY))
     r, z = _get_zip(client, d)
     assert "proj/café.txt" in z.namelist()
+
+
+
+def test_zip_names_shown_alike_get_distinct_entries(client, tree):
+    """`.env` keeps its dot, and two names shown alike in one folder (`café` on disk as UTF-8 and as Latin-1,
+    `a\\nb` / `a_b`) never share an entry: the extractor would overwrite one with the other."""
+    d = tree / "proj" / "names"
+    d.mkdir()
+    for name in (".env", "env", "café", "a\nb", "a_b"):
+        (d / name).write_text(name)
+    os.close(os.open(os.fsencode(d) + b"/caf\xe9", os.O_CREAT | os.O_WRONLY))
+    (d / "x_").mkdir()
+    (d / "x\n").mkdir()
+    (d / "x_" / "f").write_text("1")
+    (d / "x\n" / "f").write_text("2")
+    r, z = _get_zip(client, d)
+    names = z.namelist()
+    assert len(names) == len(set(names)) == 11
+    assert "names/.env" in names and "names/env" in names
+    assert sorted(z.read(n) for n in names if n.endswith("/f")) == [b"1", b"2"]
 
 
 def test_raw_download_names(client, mx):
