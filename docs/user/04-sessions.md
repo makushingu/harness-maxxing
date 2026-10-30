@@ -110,7 +110,7 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
   strip of two rows that scrolls (the newest in view), so the conversation keeps its room.
 - **Pasting data**: a paste that is data rather than a message - JSON, XML / HTML, CSV, a log, cookies or keys,
   any very long text that is not prose - becomes an attachment (`pasted-2026-10-29-143205.json`) instead of filling
-  the composer. A prompt stays text, even a long one. The notice that shows has **Paste as text** to undo it, and
+  the composer. A prompt stays text, even a long one with commas or links. The notice that shows has **Paste as text** to undo it, and
   Ctrl+Shift+V (⌘⇧V) always pastes as text.
 - **Queue**: you can send while Claude is still working. Messages wait in a card above the
   composer, with their full text, and are sent one after the other; its **×** clears them. The card shows every

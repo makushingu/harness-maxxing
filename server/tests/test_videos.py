@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import threading
 import time
 
 import pytest
@@ -147,3 +149,21 @@ def test_stale_part_files_are_cleaned(mx, monkeypatch):
     monkeypatch.setitem(videos._jobs, "busy-720", {"state": "running", "progress": 0.5})
     videos._trim_cache()
     assert not stale.exists() and live.exists() and fresh.exists()   # a restart left it; still encoding; just started
+
+
+@pytest.mark.parametrize("body", ["sleep 60", "exec 1>&-; sleep 60"])   # stdout open, then closed
+def test_a_hung_ffmpeg_is_killed_at_the_deadline(tmp_path, monkeypatch, body):
+    pidf = tmp_path / "pid"
+    monkeypatch.setattr(videos, "ENCODE_TIMEOUT_S", 1)
+    monkeypatch.setattr(videos, "encode_args", lambda *a: ["sh", "-c", f"echo $$ > {pidf}; {body}"])
+    src, dest = tmp_path / "in.mp4", tmp_path / "out.mp4"
+    t = threading.Thread(target=videos._encode, args=(src, 480, dest, "k-hung", 10.0), daemon=True)
+    start = time.monotonic()
+    t.start()
+    t.join(8)
+    assert not t.is_alive() and time.monotonic() - start < 8
+    assert videos._jobs.pop("k-hung")["state"] == "error"
+    pid = int(pidf.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    assert not dest.with_suffix(".part.mp4").exists()
