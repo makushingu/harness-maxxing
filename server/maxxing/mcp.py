@@ -308,6 +308,11 @@ def _read_mcp_json(f: Path) -> str:
         os.close(fd)
 
 
+def has_user_server(name: str) -> bool:
+    """Whether `name` is a user-scope server: only .claude.json (cached), no project .mcp.json is read."""
+    return isinstance(_dict(_read_cfg().get("mcpServers")).get(name), dict)
+
+
 def servers() -> list[dict]:
     """Every MCP server Claude Code would load in this workspace, with its last known state."""
     d = _read_cfg()

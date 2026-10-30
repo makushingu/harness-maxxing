@@ -273,3 +273,17 @@ def test_zip_token_download_of_an_unreadable_entry_is_a_403(client, tree, monkey
     monkeypatch.setattr(downloads, "zip_plan_many", denied)
     r = client.get("/api/files/zip", params={"token": token})
     assert r.status_code == 403 and r.json()["error"] == "forbidden"
+
+
+def test_zip_cap_counts_empty_folders(client, tree, monkeypatch):
+    """A tree of empty folders is not walked past ZIP_MAX_FILES: folders count in the cap."""
+    deep = tree / "proj" / "empties"
+    for i in range(30):
+        (deep / f"d{i}").mkdir(parents=True)
+    walked = []
+    real = downloads.os.walk
+    monkeypatch.setattr(downloads.os, "walk", lambda *a, **k: (walked.append(1) or x for x in real(*a, **k)))
+    monkeypatch.setattr(downloads, "ZIP_MAX_FILES", 10)
+    r = client.get("/api/files/zip", params={"path": str(deep), "check": 1})
+    assert r.status_code == 413 and r.json()["error"] == "too_large"
+    assert len(walked) < 30

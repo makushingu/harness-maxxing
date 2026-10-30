@@ -82,7 +82,7 @@ class ZipTooLarge(Exception):
 def zip_plan(folder: Path, root: Path) -> list[tuple[Path, str, os.stat_result | None]]:
     """What the zip of `folder` holds: (source, name in the zip, stat; None for a folder), in walk order.
     Symlinked folders are not followed; a symlinked file counts only when its target is a regular file inside `root`.
-    Sockets, FIFOs and devices are left out. Raises ZipTooLarge past ZIP_MAX_BYTES / ZIP_MAX_FILES."""
+    Sockets, FIFOs and devices are left out. Raises ZipTooLarge past ZIP_MAX_BYTES / ZIP_MAX_FILES (files and folders)."""
     return zip_plan_many([(folder, folder.name or "files")], root)
 
 
@@ -137,6 +137,8 @@ def _plan_folder(plan: list[tuple[Path, str, os.stat_result | None]], folder: Pa
                 dirs.remove(d)
             else:
                 plan.append((here / d, prefix + display_name(d) + "/", None))
+                if len(plan) > ZIP_MAX_FILES:         # folders count too: a tree of empty ones is walked otherwise
+                    raise ZipTooLarge("count")
         for f in sorted(files):
             src = here / f
             try:
