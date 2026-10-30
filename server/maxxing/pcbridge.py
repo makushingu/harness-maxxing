@@ -443,7 +443,7 @@ def ensure_mcp_soon() -> None:
 def mcp_registered() -> bool:
     try:
         from . import mcp
-        return any(s["name"] == MCP_NAME and s["scope"] == "user" for s in mcp.servers())
+        return mcp.has_user_server(MCP_NAME)     # polled every few seconds: never walk every project's .mcp.json
     except Exception:  # noqa: BLE001
         return False
 
