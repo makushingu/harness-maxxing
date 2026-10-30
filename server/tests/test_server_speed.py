@@ -7,6 +7,7 @@ import asyncio
 import fcntl
 import json
 import os
+import shutil
 import sqlite3
 import threading
 import time
@@ -231,6 +232,34 @@ def test_stream_is_woken_by_inotify(mx, monkeypatch):
         return took
     took = asyncio.run(run())
     assert took is not None and took < 0.3 + 0.5, took
+
+
+def test_a_replaced_sessions_folder_is_watched_again(mx):
+    """A restore moves the sessions folder away and puts another in its place: the old watch sees nothing more."""
+    sid, _ = _stream_session()
+    folder = store.sessions_dir()
+
+    async def ready():
+        for _ in range(100):
+            if wake.active():
+                return True
+            wake.mark(sid)
+            await asyncio.sleep(0.02)
+        return False
+
+    async def run():
+        assert wake.start() and await ready()
+        shutil.move(folder, folder.with_name("sessions.old"))
+        folder.mkdir()
+        store.log_path(sid).write_text("")
+        assert wake.mark(sid) is None                                  # not the old inode's watch any more
+        assert await ready()
+        ev = wake.mark(sid)
+        asyncio.get_running_loop().call_later(0.2, _append, sid, "hello")
+        woken = await wake.wait(ev, 3.0)
+        wake.stop()
+        return woken
+    assert asyncio.run(run())
 
 
 def test_stream_polls_when_inotify_is_off(mx, monkeypatch):
