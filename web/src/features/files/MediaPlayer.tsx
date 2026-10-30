@@ -32,7 +32,8 @@ import { useT } from '@/i18n'
 import { Sensitive, Spinner, Tooltip } from '@/components/ui'
 import { fileRawUrl, fileThumbUrl } from '@/lib/queries/files'
 import { basename } from './kinds'
-import { canDecode, gifLike, shortSide, shownSize, useVideoQuality, videoInfoQuery, type VideoInfo } from './videoQuality'
+import { canDecode, gifLike, rateOf, shortSide, shownSize, useVideoQuality, videoInfoQuery, type VideoInfo } from './videoQuality'
+import { addNetSample, netSpeed } from './netSpeed'
 import { clearMediaPos, mediaPosKey, readPrefs, resumePos, savePrefs, setMediaPos } from './mediaMemory'
 import { releaseAudio, takeAudio } from './sharedAudio'
 
@@ -100,7 +101,7 @@ const RETRY_MS = [1000, 3000, 6000]
 const SEEK_EVERY_MS = 150
 const MEDIA_EVENTS = [
   'play', 'pause', 'ended', 'waiting', 'playing', 'canplay', 'timeupdate', 'loadedmetadata', 'durationchange', 'progress',
-  'volumechange', 'ratechange', 'error', 'webkitbeginfullscreen', 'webkitendfullscreen',
+  'volumechange', 'ratechange', 'error', 'webkitbeginfullscreen', 'webkitendfullscreen', 'seeking',
 ] as const
 type MediaHandlers = Partial<Record<(typeof MEDIA_EVENTS)[number], (m: HTMLMediaElement) => void>>
 
@@ -154,7 +155,9 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
   const shared = !video && !!keepAlive
 
   // ---- source: original or a lighter copy (videoQuality.ts)
-  const [rough, setRough] = React.useState(false) // the original struggles (long buffering, many dropped frames)
+  // Auto's ceiling (bits/s): each stall (long buffering, many dropped frames) puts it under the source playing
+  const [cap, setCap] = React.useState(Infinity)
+  const [net, setNet] = React.useState(netSpeed) // read again on each pause: Auto may go back up then
   const [origFailed, setOrigFailed] = React.useState(false) // the browser could not decode the original
   const [copyFailed, setCopyFailed] = React.useState(false)
   const copyRetries = React.useRef(0)
@@ -162,7 +165,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
   const decodable = video ? canDecode(info, path) : true
   const origBad = decodable === false || origFailed
   // Auto makes its copy once the video is played, not for a video only opened to have a look.
-  const vq = useVideoQuality(path, video, version, started, origBad || rough, origBad)
+  const vq = useVideoQuality(path, video, version, started, !origBad, net, cap)
   const gif = video && gifLike(info)
   React.useEffect(() => {
     if (gif) setIdle(true) // a GIF-like clip: controls only on hover / tap
@@ -180,12 +183,13 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
     const m = media.current
     if (!started) return setCur({ src: wanted, ver: version ?? null })
     if (version && cur.ver && version !== cur.ver) return setChanged(true) // rewritten on disk: the user decides
-    // at once: a quality the user picks (now or before: its copy is back), the original struggling, nothing playing
-    if (picked.current || typeof vq.choice === 'number' || rough || !m || m.paused || m.ended || m.error) {
+    // at once: a quality the user picks (now or before: its copy is back), a stall, nothing playing. Never in the
+    // middle of a smooth playback: a copy ready minutes after a stall waits for the next pause or stall.
+    if (picked.current || typeof vq.choice === 'number' || waiting || !m || m.paused || m.ended || m.error) {
       picked.current = false
       setCur({ src: wanted, ver: version ?? cur.ver })
     }
-  }, [wanted, cur, started, version, rough, playing, vq.choice])
+  }, [wanted, cur, started, version, waiting, playing, vq.choice])
   const reloadChanged = () => {
     setChanged(false)
     setCur({ src: wanted, ver: version ?? null })
@@ -198,7 +202,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
     resume.current = last.current.t > 0 || last.current.play ? { t: last.current.t, play: last.current.play } : null
     last.current.src = src
   }
-  const poster = video ? fileThumbUrl(path, 1280, version) : undefined
+  const poster = video ? fileThumbUrl(path, net != null && net < 3e6 ? 640 : 1280, version) : undefined
   // The copy came back (made again after it was removed from the cache): try it again.
   const copyState = vq.targetState?.state
   const prevCopyState = React.useRef(copyState)
@@ -207,7 +211,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
     prevCopyState.current = copyState
   }, [copyState])
   // Nothing this browser can play: an original it cannot decode and no copy to make (none lighter, or it failed).
-  const noCopy = !!info && (info.auto == null || (copyState === 'error' && vq.target === info.auto) || copyRetries.current > 2)
+  const noCopy = !!info && (!info.qualities.length || (copyState === 'error' && vq.target != null) || copyRetries.current > 2)
   React.useEffect(() => {
     if (video && origBad && started && noCopy) onError?.()
   }, [video, origBad, started, noCopy, onError])
@@ -279,9 +283,18 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
     clearTimeout(retryTimer.current)
     clearTimeout(seekTimer.current)
   }, [])
-  // The original struggles while a lighter copy is possible: buffering > 1.5 s, or > 20 % frames dropped.
+  // A stall while a lighter version exists (Auto): buffering > 1.5 s (4 s just after a seek), or > 20 % frames
+  // dropped. The ceiling goes under the source playing: Auto steps down one version.
   const waitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const watchRough = video && vq.choice === 'auto' && info?.auto != null && !rough && !onCopy
+  const seekAt = React.useRef(0)
+  const lightest = info?.qualities.length ? Math.min(...info.qualities.map((q) => q.q)) : null
+  const curQ = onCopy ? vq.playing : null
+  const watchRough = video && vq.choice === 'auto' && !!info && lightest != null && curQ !== lightest
+  const stall = React.useCallback(() => {
+    if (!info) return
+    setCap((c) => Math.min(c, rateOf(info, curQ) * 0.9))
+    setNet(netSpeed()) // measured meanwhile: straight to the version this connection carries
+  }, [info, curQ])
   React.useEffect(() => {
     if (!watchRough || !playing) return
     const v = media.current as HTMLVideoElement | null
@@ -290,11 +303,36 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
       const q = v?.getVideoPlaybackQuality?.()
       if (!q || !prev) return
       const total = q.totalVideoFrames - prev.totalVideoFrames
-      if (total >= 20 && (q.droppedVideoFrames - prev.droppedVideoFrames) / total > 0.2) setRough(true)
+      if (total >= 20 && (q.droppedVideoFrames - prev.droppedVideoFrames) / total > 0.2) stall()
       prev = q
     }, 2000)
     return () => clearInterval(id)
-  }, [watchRough, playing])
+  }, [watchRough, playing, stall])
+  // The connection's speed: seconds of media gained x the bitrate of the source, every 2 s. Kept for the next videos
+  // (netSpeed.ts).
+  const srcRate = info ? rateOf(info, curQ) : 0 // a number: the info polled while a copy is made restarts nothing
+  React.useEffect(() => {
+    if (!video || !srcRate || !playing) return
+    const m = media.current
+    const rate = srcRate
+    let prev: { end: number; at: number } | null = null
+    const id = setInterval(() => {
+      if (!m || m.paused || m.seeking) return (prev = null)
+      const b = m.buffered
+      let end = -1
+      for (let i = 0; i < b.length; i++) if (b.start(i) <= m.currentTime + 0.5 && b.end(i) >= m.currentTime) end = b.end(i)
+      const now = performance.now()
+      if (end < 0 || end >= m.duration - 0.5) return (prev = null) // nothing loading, or all of it is there
+      const gained = prev ? end - prev.end : -1
+      // the browser downloads flat out while the buffer runs low (< 5 s ahead, or stalled) or grows clearly faster than
+      // it plays: the sample is the real speed; else it only fetches what it plays: a floor
+      const dt = prev ? (now - prev.at) / 1000 : 0
+      const real = end - m.currentTime < 5 || m.readyState < 3 || gained > dt * 1.3
+      if (prev && gained >= 0 && (gained > 0 || real)) addNetSample((gained * rate) / dt, real)
+      prev = { end, at: now }
+    }, 2000)
+    return () => clearInterval(id)
+  }, [video, srcRate, playing])
   React.useEffect(() => {
     const onFs = () => setFullscreen(document.fullscreenElement === root.current)
     document.addEventListener('fullscreenchange', onFs)
@@ -581,7 +619,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
             label={t('media.quality')}
             testid="quality"
             value={String(vq.choice)}
-            options={qualityOptions(vq.info, t)}
+            options={qualityOptions(vq.info, vq.auto, t)}
             onPick={(v) => {
               picked.current = true
               vq.setChoice(v === 'auto' || v === 'original' ? v : Number(v))
@@ -631,7 +669,12 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
       setResumeChip(null)
       if (!gif) poke()
     },
+    seeking: () => {
+      seekAt.current = Date.now()
+    },
     pause: (m) => {
+      clearTimeout(waitTimer.current)
+      setNet(netSpeed())
       // A source switch (or a reload after a lost connection) pauses on its own: that pause must not stop the
       // playback that resumes after it.
       if (!m.ended && m.currentTime === 0 && resume.current) return
@@ -649,13 +692,15 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
     waiting: () => {
       setWaiting(true)
       clearTimeout(waitTimer.current)
-      // the original struggles: > 1.5 s of buffering; nothing comes for 15 s: the connection may be gone
+      // a stall: > 1.5 s of buffering (4 s just after a seek: a heavy original fills a new spot); nothing comes for
+      // 15 s: the connection may be gone
+      const afterSeek = Date.now() - seekAt.current < 1000
       waitTimer.current = setTimeout(
         () => {
-          if (watchRough && played.current) setRough(true)
+          if (watchRough && played.current) stall()
           else if (src) void reach(src).then((r) => r === 'down' && connectionLost())
         },
-        watchRough && played.current ? 1500 : 15000,
+        watchRough && played.current ? (afterSeek ? 4000 : 1500) : 15000,
       )
     },
     playing: () => {
@@ -944,12 +989,12 @@ function PickButton({ label, testid, value, options, onPick, video, children }: 
   )
 }
 
-function qualityOptions(info: VideoInfo, t: ReturnType<typeof useT>): { value: string; label: string }[] {
+function qualityOptions(info: VideoInfo, auto: number | null, t: ReturnType<typeof useT>): { value: string; label: string }[] {
   const mbps = info.bitrate ? ` · ${(info.bitrate / 1e6).toFixed(info.bitrate < 1e7 ? 1 : 0)} Mb/s` : ''
   const state = (q: VideoInfo['qualities'][number]) =>
     q.state === 'running' ? ` · ${Math.round(q.progress * 100)} %` : q.state === 'queued' ? ` · ${t('media.qualityQueued')}` : q.state === 'error' ? ` · ${t('media.qualityFailed')}` : ''
   return [
-    { value: 'auto', label: `${t('media.qualityAuto')} (${info.auto ? `${info.auto}p` : t('media.qualityOriginal')})` },
+    { value: 'auto', label: `${t('media.qualityAuto')} (${auto ? `${auto}p` : t('media.qualityOriginal')})` },
     { value: 'original', label: `${t('media.qualityOriginal')} · ${shortSide(info)}p${mbps}` },
     ...info.qualities.map((q) => ({ value: String(q.q), label: `${q.q}p${state(q)}` })),
   ]
