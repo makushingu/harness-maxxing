@@ -72,10 +72,18 @@ def short_side(info: dict) -> int:
     return min(info["width"], info["height"]) if info.get("width") else info["height"]
 
 
+def copy_rev(info: dict) -> str:
+    """The revision in a copy's name (and its URL). Vertical copies were scaled by height until r2 (a "1080p" copy of
+    a 9:16 video was 608 px wide): they get their own names. Vertical as shown: a phone video coded 1920x1080 and
+    rotated 90 degrees is vertical too."""
+    w, h = info.get("width", 0), info["height"]
+    if info.get("rotation") in (90, 270):
+        w, h = h, w
+    return f"{COPY_REV}-v" if 0 < w < h else COPY_REV
+
+
 def _copy_key(ident: str, q: int, info: dict) -> str:
-    # vertical copies were scaled by height until r2 (a "1080p" copy of a 9:16 video was 608 px wide): new names
-    tall = 0 < info.get("width", 0) < info["height"]
-    return f"{ident}-{q}-{COPY_REV}{'-v' if tall else ''}"
+    return f"{ident}-{q}-{copy_rev(info)}"
 
 
 def variant_path(p: Path, q: int) -> Path:
@@ -160,16 +168,23 @@ def auto_quality(info: dict) -> int | None:
 def status(p: Path) -> dict:
     info = probe(p)
     ident = _ident(p)
+    rev = copy_rev(info)
     qualities = []
     for q in offered(info):
         key = _copy_key(ident, q, info)
-        if (cache_dir() / f"{key}.mp4").exists():
-            qualities.append({"q": q, "state": "ready", "progress": 1.0})
+        try:
+            size = (cache_dir() / f"{key}.mp4").stat().st_size
+        except OSError:
+            size = None
+        if size is not None:
+            # its real bitrate: the player compares it with the connection's speed
+            rate = int(size * 8 / info["duration"]) if info["duration"] else 0
+            qualities.append({"q": q, "state": "ready", "progress": 1.0, "rev": rev, "bitrate": rate})
             continue
         with _lock:
             job = dict(_jobs.get(key) or {})
         qualities.append({"q": q, "state": job.get("state", "none"), "progress": round(job.get("progress", 0.0), 3),
-                          **({"error": job["error"]} if job.get("error") else {})})
+                          "rev": rev, **({"error": job["error"]} if job.get("error") else {})})
     return {**info, "qualities": qualities, "auto": auto_quality(info)}
 
 
