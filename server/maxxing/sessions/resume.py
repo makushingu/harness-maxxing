@@ -55,14 +55,17 @@ def candidate(m: dict, item: dict, cfg: dict, now: float) -> tuple[float, int] |
         return None
     if m.get("fresh", True) or m.get("cron") or m.get("plan_ready"):
         return None
-    ctx = int(m.get("context_tokens") or 0)
-    last = max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+    try:
+        ctx = int(m.get("context_tokens") or 0)
+        last = max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+        base = int(m.get("base_tokens") or 0)          # what a fresh thread costs anyway (CLAUDE.md, memory...)
+        after = float(cfg.get("idle_compact_after_s") or 3600)
+    except (TypeError, ValueError, OverflowError):     # a hand-edited value: no summary, never a crashed turn
+        return None
     if not last or ctx < limit or now - last < MIN_PAUSE_S:
         return None
-    base = int(m.get("base_tokens") or 0)              # what a fresh thread costs anyway (CLAUDE.md, memory...)
     if base and ctx - base < limit // 2:
         return None                                    # mostly fixed context: a summary would save nothing
-    after = float(cfg.get("idle_compact_after_s") or 3600)
     if now - last < after and ctx < limit * WARM_FACTOR:
         return None                                    # cache still warm and a medium context: just go on
     return now - last, ctx
