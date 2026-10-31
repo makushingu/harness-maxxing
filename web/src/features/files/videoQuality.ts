@@ -119,7 +119,7 @@ export function autoPick(info: VideoInfo, decodable: boolean, speed: number | nu
   const copies = info.qualities.map((q) => q.q)
   const options: (number | null)[] = decodable ? [null, ...copies] : copies
   if (!options.length) return null
-  const budget = Math.min(speed ? speed * 0.8 : Infinity, cap)
+  const budget = Math.min(speed != null ? speed * 0.8 : Infinity, cap) // 0 = measured during a stall, not unknown
   if (budget === Infinity) return decodable ? null : (info.auto ?? copies[0] ?? null)
   return options.find((o) => rateOf(info, o) <= budget) ?? options[options.length - 1]!
 }
