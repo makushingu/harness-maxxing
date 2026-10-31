@@ -1923,6 +1923,15 @@ def cmd_update(a) -> int:
             code, out = _git("reset", "-q", "--hard", f"origin/{branch}")
             if code == 0:
                 line(OK, "the history of the repository was rewritten upstream: this server now follows it")
+        elif code != 0:
+            # Local commits whose changes are all upstream already (a customization merged upstream as another
+            # commit): a rebase drops them and the code follows upstream; a conflict leaves everything as it was.
+            customs.ensure_identity()
+            code, out = customs.git("rebase", "-q", f"origin/{branch}", timeout=300)
+            if code != 0:
+                customs.git("rebase", "--abort")
+            else:
+                line(OK, "local commits already included upstream were dropped: this server follows it")
         if code != 0:
             line(FAIL, "cannot fast-forward", out.strip()[-300:] + f" | inspect: git -C {config.CODE} status")
             return 1
