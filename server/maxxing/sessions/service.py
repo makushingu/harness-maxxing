@@ -6,6 +6,7 @@ Blocking functions (file I/O, waiting for a runner) are plain functions: call th
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import inspect
 import json
 import logging
@@ -805,10 +806,13 @@ def _add_task_starts(f, before: int, events: list[dict]) -> None:
                             tgt[k] = ev[k]
 
 
+COMPACT_FREE_MARGIN = 256 * 1024 * 1024               # free space kept beyond the copy of a log
+
+
 def compact_log(sid: str, dry_run: bool = False) -> dict:
     """Rewrite a raw log with clipped tool outputs and slimmed system lines (clip.py), atomically,
     streaming line by line.
-    -> {id, status:"compacted"|"unchanged"|"running"|"missing", before, after} (bytes).
+    -> {id, status:"compacted"|"unchanged"|"running"|"no_space"|"missing", before, after} (bytes).
     Skips a session whose runner is alive; holds the run lock meanwhile so none starts."""
     meta = store.read(sid)
     path = store.log_path(sid)
@@ -821,38 +825,53 @@ def compact_log(sid: str, dry_run: bool = False) -> dict:
     if fd is None:
         return {"id": sid, "status": "running", "before": before, "after": before}
     tmp = path.with_name(f"{path.name}.compact.tmp")
+    marker = store.compacting_path(sid)
     try:
+        if not dry_run and shutil.disk_usage(path.parent).free < before + COMPACT_FREE_MARGIN:
+            return {"id": sid, "status": "no_space", "before": before, "after": before}
+        if not dry_run:
+            marker.touch()
         after = 0
+        consumed = 0                                   # bytes of the log read so far
         out = None if dry_run else open(tmp, "wb")
         try:
             with open(path, "rb") as src:
                 for raw in src:
+                    consumed += len(raw)
                     end = b"\n" if raw.endswith(b"\n") else b""
                     line = raw[:-1] if end else raw
-                    if clip.drop_line(line):
-                        continue
-                    if clip.worth_clipping(line):
-                        new = clip.clip_line(line.decode("utf-8", "replace"))
-                        if len(new) < len(line):
-                            line = new.encode("utf-8")
-                    after += len(line) + len(end)
-                    if out is not None:
-                        out.write(line + end)
-            if out is not None:
-                out.flush()
-                os.fsync(out.fileno())
+                    if not clip.drop_line(line):
+                        if clip.worth_clipping(line):
+                            new = clip.clip_line(line.decode("utf-8", "replace"))
+                            if len(new) < len(line):
+                                line = new.encode("utf-8")
+                        after += len(line) + len(end)
+                        if out is not None:
+                            out.write(line + end)
+                    if consumed >= before:
+                        break                          # what the server appends meanwhile is copied below
         finally:
             if out is not None:
                 out.close()
         if after >= before:
-            tmp.unlink(missing_ok=True)
             return {"id": sid, "status": "unchanged", "before": before, "after": before}
         if not dry_run:
-            os.chmod(tmp, 0o600)
-            os.replace(tmp, path)
+            # Appends (store.append_log) take this lock: the tail written since the read is copied as is, then the
+            # new file replaces the old one before any other line can go to the old one.
+            with open(path, "rb") as src, open(tmp, "ab") as dst:
+                fcntl.flock(src, fcntl.LOCK_EX)
+                src.seek(consumed)
+                tail = src.read()
+                dst.write(tail)
+                after += len(tail)
+                dst.flush()
+                os.fsync(dst.fileno())
+                os.chmod(tmp, 0o600)
+                os.replace(tmp, path)
         return {"id": sid, "status": "compacted", "before": before, "after": after}
     finally:
         tmp.unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
         os.close(fd)
 
 
