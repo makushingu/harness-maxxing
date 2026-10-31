@@ -308,7 +308,8 @@ def list_ids() -> list[str]:
                     ids.add(n[:-5])
     except OSError:
         pass
-    _ids.update(key=key, ids=ids)
+    # A scan of a folder changed less than IDS_RACY_S ago may miss a file created in the same tick: not kept.
+    _ids.update(key=key if settled else None, ids=ids)
     return list(ids)
 
 
