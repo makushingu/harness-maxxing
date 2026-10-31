@@ -6,7 +6,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
-## Unreleased
+## 2.0.0-alpha.105 - 2026-10-31
 
 Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, default 100 000, 0 = off; Settings -> Claude, GET
 status / PUT settings). A user message to a session whose cache expired (`idle_compact_after_s`) with at least that
