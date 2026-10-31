@@ -8,6 +8,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+Claude plans renamed by Anthropic on 2026-10-31 (Max 5x -> **Max**, Max 20x -> **Ultra**; verified Ultra accounts no
+longer have the 5-hour limit). `claude_auth.plan_name()` reads the plan from the `claude login` credentials
+(subscriptionType + rateLimitTier `..._20x` = Ultra); `/api/usage` gives it as `plan` (None with a setup-token or an API
+key). Sidebar bars, Settings -> Stats and the dashboard widget show the plan, and with Ultra and no 5-hour window
+they say "no 5-hour limit" instead of a missing bar (accounts not verified yet keep their 5-hour bar: it comes from
+Claude Code). Texts "Pro or Max" -> "Pro, Max or Ultra" (README, docs, sign-in).
+
 Server speed fundamentals (measured on a box with 184 sessions: the server used ~5 % of a core with 3 sessions
 running, mostly polling).
 - `config.load_secrets()` is cached like `load_config()` (key: path, inode, mtime_ns, size, ctime_ns; pickled, a

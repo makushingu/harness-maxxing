@@ -71,7 +71,7 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
 
 - A VPS with **Ubuntu 24.04** (tested: Ubuntu 22.04, 24.04, 26.04 and Debian 12: apt + systemd), x86_64 or arm64,
   root access. **2 vCPU, 4 GB RAM, 40 GB disk** recommended.
-- A Claude subscription (Pro or Max, connected with `claude setup-token`) or an Anthropic API key.
+- A Claude subscription (Pro, Max or Ultra, connected with `claude setup-token`) or an Anthropic API key.
 - For HTTPS: a subdomain pointing to the server, DNS only (or use Tailscale / an SSH tunnel).
 - Optional: a Telegram bot (BotFather, Threaded Mode on), a Groq key for faster voice.
 - A server dedicated to Claude is recommended: sessions run Claude Code with full permissions by

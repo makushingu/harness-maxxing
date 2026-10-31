@@ -21,7 +21,7 @@ def test_credentials_file_detected(client, monkeypatch, tmp_path):
     (home / ".claude" / ".credentials.json").write_text('{"claudeAiOauth": {"subscriptionType": "max"}}')
     monkeypatch.setenv("HOME", str(home))
     auth = client.get("/api/claude/status").json()["auth"]
-    assert auth["ok"] and auth["method"] == "credentials" and "max" in auth["detail"]
+    assert auth["ok"] and auth["method"] == "credentials" and "(Max plan)" in auth["detail"]
 
 
 def test_auth_store_test_delete(client, mx, monkeypatch, tmp_path):

@@ -60,7 +60,12 @@ function QuotaCard() {
             <Skeleton className="h-12" />
           ) : usage.data?.available ? (
             <>
-              <QuotaRow label={t('stats.fiveHour')} w={usage.data.five_hour} />
+              {usage.data.plan && <p className="text-sm text-muted-foreground">{t('stats.plan', { plan: usage.data.plan })}</p>}
+              {!usage.data.five_hour && usage.data.plan === 'Ultra' ? (
+                <p className="text-sm">{t('stats.noFiveHour')}</p>
+              ) : (
+                <QuotaRow label={t('stats.fiveHour')} w={usage.data.five_hour} />
+              )}
               <QuotaRow label={t('stats.sevenDay')} w={usage.data.seven_day} />
               {usage.data.stale && (
                 <p className="text-xs text-muted-foreground">

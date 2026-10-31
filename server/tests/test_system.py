@@ -265,7 +265,7 @@ def test_usage(client, org, monkeypatch):
     assert seen["url"] == health.USAGE_URL and seen["headers"]["anthropic-beta"] == "oauth-2025-04-20"
     assert seen["headers"]["Authorization"] == "Bearer tok"
     assert u == {"available": True, "five_hour": {"pct": 42.0, "resets_at": 1791633600.0},
-                 "seven_day": {"pct": 7.0, "resets_at": None}}
+                 "seven_day": {"pct": 7.0, "resets_at": None}, "plan": None}
 
     def boom(*a, **k):
         raise httpx.ConnectError("offline")
@@ -345,6 +345,33 @@ def test_usage_from_the_turns(client, org, monkeypatch):
     assert u["five_hour"] == {"pct": 19.0, "resets_at": now + 3600} and u["seven_day"] == {"pct": 0.0, "resets_at": None}
     config.update_config(usage_widget=True)
     assert client.get("/api/usage?force=1").json()["source"] == "turn"            # fresh: still no call
+
+
+def test_plan_names_and_an_ultra_plan_without_a_five_hour_window(client, org, monkeypatch):
+    """Anthropic renamed its plans on 2026-10-31 (Max 5x -> Max, Max 20x -> Ultra) and dropped the 5-hour window of
+    verified Ultra accounts: /api/usage says which plan, the dashboard widget says why the 5-hour bar is gone."""
+    import json as _json
+    import httpx
+    from maxxing import claude_auth, widgets
+    health._usage.update(at=0.0, data=None, blocked_until=0.0)
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no call")))
+    for sub, tier, name in (("max", "default_claude_max_20x", "Ultra"), ("max", "default_claude_max_5x", "Max"),
+                            ("ultra", None, "Ultra"), ("pro", None, "Pro"), (None, None, None)):
+        assert claude_auth.plan_name({"claudeAiOauth": {"subscriptionType": sub, "rateLimitTier": tier}}) == name
+    assert claude_auth.plan_name([]) is None
+    f = claude_auth.credentials_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps({"claudeAiOauth": {"subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"}}))
+    claude_auth.record_limits({"status": "allowed", "unifiedWindows": {
+        "seven_day": {"utilization": 0.4, "resetsAt": time.time() + 86400}}})
+    u = client.get("/api/usage").json()
+    assert u["plan"] == "Ultra" and u["five_hour"] is None and u["seven_day"]["pct"] == 40.0
+    w = widgets.usage()
+    assert w["blocks"][0]["type"] == "markdown" and "Ultra" in w["blocks"][0]["text"]
+    assert [b["value"] for b in w["blocks"] if b["type"] == "progress"] == [40.0]
+    assert claude_auth.auth_method()[1].endswith("(Ultra plan)")
+    f.unlink()
+    assert client.get("/api/usage").json()["plan"] is None
 
 
 def test_usage_from_an_old_turn_survives_a_rate_limited_endpoint(client, org, monkeypatch):
