@@ -123,6 +123,8 @@ type State = {
   setRowSplit: (v: number) => void
   /** Put column `key` under column `under` (which must be alone in its column). */
   stack: (key: string, under: string) => void
+  /** Put column `key` above column `over` (which must be alone in its column): `key` takes its place, `over` goes under. */
+  stackAbove: (key: string, over: string) => void
   /** Give a stacked session its own column again. */
   unstack: (key: string) => void
   /** 2x2: every second column goes under the one before it. */
@@ -271,6 +273,21 @@ export const useSessionsUI = create<State>()(
           const cols = detach(s.cols, key)
           cols.splice(cols.findIndex((c) => c.key === under) + 1, 0, { ...m, below: true } as Col)
           return { cols: normalizeCols(cols), focused: key }
+        }),
+      stackAbove: (key, over) =>
+        set((s) => {
+          const target = s.cols.findIndex((c) => c.key === over)
+          const t = s.cols[target]
+          if (!t || key === over || t.below || s.cols[target + 1]?.below) return s
+          const moving = s.cols.find((c) => c.key === key)
+          if (!moving) return s
+          const { wide: _w, below: _b, ...m } = moving
+          const { wide, ...under } = t
+          const cols = detach(s.cols, key)
+          // `key` takes the strip column of `over` (its `wide` and saved width, kept under the top key) and `over` goes under it
+          cols.splice(cols.findIndex((c) => c.key === over), 1, { ...m, ...(wide && { wide: true }) } as Col, { ...under, below: true } as Col)
+          const { [key]: _old, [over]: w, ...widths } = s.widths
+          return { cols: normalizeCols(cols), widths: w == null ? widths : { ...widths, [key]: w }, focused: key }
         }),
       unstack: (key) => set((s) => ({ cols: normalizeCols(s.cols.map((c) => (c.key === key ? (({ below: _b, ...r }) => r as Col)(c) : c))) })),
       toGrid: () => set((s) => ({ cols: normalizeCols(s.cols.map((c, i) => (i % 2 ? { ...c, below: true } : (({ below: _b, ...r }) => r as Col)(c)))) })),
