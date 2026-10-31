@@ -1092,11 +1092,22 @@ def _turn_ok(res: dict) -> bool:
 _live_locks: dict[str, tuple] = {}                   # cron id -> (open lock file, start) while it runs here
 
 
+def _proc_start(pid: int) -> str | None:
+    """Boot id + start time (clock ticks) of a process: who it is, not just its number (numbers are reused)."""
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        stat = Path(f"/proc/{pid}/stat").read_text()
+        return f"{boot}:{stat.rsplit(')', 1)[1].split()[19]}"
+    except (OSError, IndexError):
+        return None
+
+
 def _mark(lockf, start: float, pgid: int | None = None) -> None:
     """Write the running run into its lock file: a run killed before its end (SIGKILL, out of memory) leaves it."""
     lockf.seek(0)
     lockf.truncate()
-    lockf.write(json.dumps({"pid": os.getpid(), "at": start, "pgid": pgid}))
+    lockf.write(json.dumps({"pid": os.getpid(), "at": start, "pgid": pgid,
+                            "pgid_start": _proc_start(pgid) if pgid else None}))
     lockf.flush()
 
 
@@ -1120,7 +1131,11 @@ def _interrupted(cid: str, job: dict, lockf) -> dict | None:
     if not isinstance(mark, dict) or not isinstance(mark.get("at"), (int, float)):
         return None
     pgid = mark.get("pgid")
-    if isinstance(pgid, int) and pgid > 1 and _group_alive(pgid):
+    # Only the same job shell (same boot, same start time): after a reboot or a pid wrap the number may belong to
+    # anything else (a session, a database) and the server runs as root.
+    same = isinstance(mark.get("pgid_start"), str) and _proc_start(pgid) == mark["pgid_start"] \
+        if isinstance(pgid, int) and pgid > 1 else False
+    if same and _group_alive(pgid):
         try:
             os.killpg(pgid, signal.SIGKILL)
         except OSError:
