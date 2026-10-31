@@ -182,7 +182,8 @@ class AuthIn(BaseModel):
 @router.post("/auth")
 async def set_auth(body: AuthIn):
     value = body.value.strip()
-    if len(value) < 10 or any(c.isspace() for c in value):
+    # printable ASCII only: a NUL byte made every turn fail to start, a lone surrogate could not be stored
+    if len(value) < 10 or any(c.isspace() for c in value) or not (value.isascii() and value.isprintable()):
         raise HTTPException(400, detail={"error": "invalid", "message": "This does not look like a token"})
     for kind, name in SECRET_FOR.items():               # one stored credential at a time
         config.set_secret(name, value if kind == body.kind else None)
