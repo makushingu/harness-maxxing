@@ -72,6 +72,12 @@ def test_health(client, org, services, monkeypatch):
     assert "backup_old" in codes and 71 < h["backup_age_h"] < 73
     assert h["ok"] is False and set(h) >= {"cpu_pct", "load", "mem", "disk", "uptime_s"}
 
+    for bad in ('{"at": NaN, "ok": true}', '{"at": 1e999, "ok": true}'):        # a damaged history entry
+        hist.write_text(bad + "\n")
+        r = client.get("/api/system/health?force=1")
+        assert r.status_code == 200 and "backup_never" in {i["code"] for i in r.json()["issues"]}
+    hist.write_text(json.dumps({"at": time.time() - 72 * 3600, "ok": True}) + "\n")
+
     # cached 30 s, force refresh
     config.set_secret("anthropic_api_key", "sk-test")
     assert client.get("/api/system/health").json()["claude_auth"] is False
