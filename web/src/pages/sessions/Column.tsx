@@ -127,7 +127,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
   const focus = useSessionsUI((s) => s.focus)
   const strip = React.useContext(StripContext)
   const ref = React.useRef<HTMLElement>(null)
-  const [dropSide, setDropSide] = React.useState<'left' | 'right' | 'below' | null>(null)
+  const [dropSide, setDropSide] = React.useState<'left' | 'right' | 'above' | 'below' | null>(null)
   const isCol = variant === 'column'
   const row = place?.row ?? 'full'
 
@@ -143,8 +143,9 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         if (!isCol || !isColDrag(e)) return
         e.preventDefault()
         const r = ref.current!.getBoundingClientRect()
-        // lower third of a session alone in its column: stack under it (2 per column at most)
+        // lower / upper third of a session alone in its column: stack under / above it (2 per column at most)
         if (row === 'full' && e.clientY > r.top + r.height * 0.66) setDropSide('below')
+        else if (row === 'full' && e.clientY < r.top + r.height * 0.34) setDropSide('above')
         else setDropSide(e.clientX < r.left + r.width / 2 ? 'left' : 'right')
       }}
       onDragLeave={(e) => {
@@ -158,6 +159,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         setDropSide(null)
         if (!key || key === col.key) return
         if (side === 'below') return useSessionsUI.getState().stack(key, col.key)
+        if (side === 'above') return useSessionsUI.getState().stackAbove(key, col.key)
         // beside the whole strip column (a pair stays a pair)
         useSessionsUI.getState().moveBeside(key, col.key, side ?? 'right')
       }}
@@ -173,8 +175,8 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
       )}
     >
       {children}
-      {dropSide === 'below' ? (
-        <span aria-hidden className="pointer-events-none absolute inset-x-2 bottom-2 z-20 h-1/3 rounded-lg border-2 border-dashed border-primary bg-primary/10 animate-in" />
+      {dropSide === 'below' || dropSide === 'above' ? (
+        <span aria-hidden className={cn('pointer-events-none absolute inset-x-2 z-20 h-1/3 rounded-lg border-2 border-dashed border-primary bg-primary/10 animate-in', dropSide === 'below' ? 'bottom-2' : 'top-2')} />
       ) : (
         dropSide && <span aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary', dropSide === 'left' ? 'left-0' : 'right-0')} />
       )}

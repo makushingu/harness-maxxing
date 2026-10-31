@@ -8,6 +8,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+Sessions page: dropping a column on the upper third of a session alone in its column stacks it above (new store
+action `stackAbove(key, over)`: the dragged session takes the target's strip column, its `wide` and its saved width,
+the target goes `below`); same dashed zone as the lower third, drawn at the top.
+
 Claude plans renamed by Anthropic on 2026-10-31 (Max 5x -> **Max**, Max 20x -> **Ultra**; verified Ultra accounts no
 longer have the 5-hour limit). `claude_auth.plan_name()` reads the plan from the `claude login` credentials
 (subscriptionType + rateLimitTier `..._20x` = Ultra); `/api/usage` gives it as `plan` (None with a setup-token or an API
