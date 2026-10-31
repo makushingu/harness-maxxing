@@ -390,9 +390,25 @@ def _idle_since(m: dict, now: float, idle_s: float) -> bool:
 
 # ---- raw log -------------------------------------------------------------------------------
 def append_log(sid: str, obj: dict) -> None:
+    """One line at the end of the log. Under an flock of the file: a log compaction (service.compact_log) swaps the
+    file under the same lock, an append that waited for it reopens the new file instead of writing to the old one."""
     line = json.dumps(obj, ensure_ascii=False) + "\n"
-    with open(log_path(sid), "a", opener=_private) as f:
-        f.write(line)
+    path = log_path(sid)
+    for attempt in range(5):
+        with open(path, "a", opener=_private) as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                current = os.fstat(f.fileno()).st_ino == os.stat(path).st_ino
+            except FileNotFoundError:
+                current = False
+            if current or attempt == 4:
+                f.write(line)
+                return
+
+
+def compacting_path(sid: str) -> Path:
+    """Present while a log compaction holds the run lock (a runner then waits longer for it)."""
+    return _path(sid, ".compacting")
 
 
 def log_size(sid: str) -> int:

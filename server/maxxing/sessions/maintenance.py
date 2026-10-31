@@ -47,7 +47,7 @@ def run() -> dict:
         except Exception:                               # one bad log never stops the others
             log.exception("compacting the log of %s failed", sid)
             continue
-        if r["status"] == "running":
+        if r["status"] in ("running", "no_space"):
             out["running"] += 1
             skipped.append(sid)
         elif r["status"] == "compacted":
