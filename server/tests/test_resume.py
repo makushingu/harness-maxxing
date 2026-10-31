@@ -140,3 +140,8 @@ def test_summary_prompt():
     long = resume.summary_prompt("a" * 5000 + "b" * 5000)
     assert " … " in long and long.endswith("b" * 100) and len(long) < len(resume.SUMMARY_PROMPT) + resume.MESSAGE_CHARS
     assert resume.summary_prompt("  ").endswith("(no text, only attachments)")
+
+
+@pytest.mark.parametrize("bad", ["abc", float("nan"), float("inf"), 1e999, [1], {"a": 1}])
+def test_a_malformed_threshold_means_off(bad):
+    assert resume.threshold({"smart_resume_tokens": bad}) == 0
