@@ -286,16 +286,13 @@ never trigger it, nor does a session whose context is mostly what every new thre
 memory): summarizing it would save nothing. Pick Off to keep the full thread whatever the pause. Stop during the
 summary cancels only the summary, your message stays: it runs right after, in the full thread.
 
-**Smart resume** (Settings -> Claude, 60k tokens by default): not every return deserves a summary. When you come back
-after 5 minutes or more to a session holding at least that much context (and its cache expired, or it holds 100k or
-more), a small model compares your message with the last exchanges - a quick check of a second or two:
-- **a new subject** (another task, a question that stands on its own): Harness summarizes the session first, as
-  above, with the note "New subject after 2 h: ...";
-- **a follow-up of the work in progress** ("go on", "fix that", the file or error you were just looking at, the answer
-  to a question Claude asked): your message simply continues in the full thread - no detail is lost, even past the
-  "Compact when you come back" threshold. Automatic compaction at the end of the turn still applies.
-
-If the check fails, the "Compact when you come back" rule applies as before. Off = that rule alone.
+**Smart resume** (Settings -> Claude, 100k tokens by default): when you come back to a session whose cache expired
+with at least that much context - or after 5 minutes or more with twice as much - Harness first has Claude summarize
+the session **for the message you just sent**. The summary keeps exact what your message needs (the files, commands,
+values, errors, the plan in progress or the question Claude asked), then your message runs in a fresh, much smaller
+thread, with the note "Back after 2 h: Harness summarized the session ... for your message". Measured on real
+returns: 38 to 67 % fewer tokens from 100k, and details kept better than with the plain summary. Below the threshold
+the full thread goes on. Off = the "Compact when you come back" rule alone.
 
 ## Edit or delete a message that got no answer
 
