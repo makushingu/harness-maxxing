@@ -55,9 +55,9 @@ def _conn() -> sqlite3.Connection:
     key = str(path)
     try:
         return _open(path, key)
-    except sqlite3.DatabaseError:
-        if key in _ready:
-            raise
+    except sqlite3.DatabaseError as e:
+        if key in _ready or not _damaged(e):
+            raise                                      # busy, disk full, too many files...: never set a good base aside
     # Unreadable feed.db (not a database, corrupted): set it aside and start a fresh one, or the feed and every
     # system notification (crons, updates, sign-ins) would fail from now on.
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -68,6 +68,12 @@ def _conn() -> sqlite3.Connection:
             pass
     log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
     return _open(path, key)
+
+
+def _damaged(e: sqlite3.DatabaseError) -> bool:
+    """The file itself is broken (not a passing error such as a lock, a full disk or too many open files)."""
+    text = str(e).lower()
+    return "not a database" in text or "malformed" in text or "corrupt" in text
 
 
 def _open(path: Path, key: str) -> sqlite3.Connection:
