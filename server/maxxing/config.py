@@ -65,6 +65,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "auto_update": False,                 # Harness updates itself while nobody is on the interface (auto_update.py)
     "claude_quiet_start": True,           # CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: faster start, smaller prompt
     "background_agents": False,           # False: each turn asks Claude for foreground subagents (spawn.agents_args)
+    "mcp_auto": False,                    # True: each turn loads only the MCP servers its session needs (mcp_auto.py)
     "onboarding_completed": False,
     "profile": {"name": "", "color": "", "emoji": ""},   # the user's pseudo: messages, notifications
     "usage_widget": False,

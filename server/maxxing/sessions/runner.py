@@ -43,7 +43,7 @@ from typing import Callable, Iterator
 if __package__ in (None, ""):                       # path invocation
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from maxxing import claude_auth, config             # noqa: E402  (stdlib-only modules)
+from maxxing import claude_auth, config, mcp_auto   # noqa: E402  (stdlib-only modules)
 from maxxing.sessions import clip, spawn, store      # noqa: E402
 
 RESUME_LOST = re.compile(r"no conversation found|session .{0,80}not found|no such session|"
@@ -89,6 +89,8 @@ class Attempt:
     start_s: float | None = None                       # -> its first event (Claude Code ready)
     first_s: float | None = None                       # -> its first answer (start + the API's first response)
     oom: bool = False                                  # SIGKILLed while the unit's oom_kill counter went up
+    mcp_used: set[str] = field(default_factory=set)    # MCP servers (tool form) whose tools were called
+    connectors: list[str] | None = None                # claude.ai connectors listed by the init event
 
 
 class Runner:
@@ -250,12 +252,14 @@ class Runner:
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
         model = (meta.get("model") or cfg.get("default_model") or "").strip()
+        mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg)
+        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg, mcp_plan.hint)
         base += ["--model", model] if model else []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
-        base += pcbridge.mcp_config_args()
+        base += pcbridge.mcp_config_args() + mcp_plan.args
         env = spawn.claude_env(meta.get("env") or {}, mode)
+        env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
         prompt, json_in = stdin_payload(text, item, Path(cfg.get("workspace") or "/").resolve())
         if json_in:
@@ -291,9 +295,38 @@ class Runner:
         if plan and err is None and not a.stopped:
             store.update(self.sid, plan_ready=True)
         self._post(item, a, err)
+        self._mcp_after(item, a, err, cfg, meta, mcp_plan, plan)
         if not plan:
             self._auto_compact(item, a, err, cfg)
         return err
+
+    def _mcp_after(self, item: dict, a: Attempt, err: str | None, cfg: dict, meta: dict,
+                   mcp_plan: mcp_auto.Plan, plan: bool) -> None:
+        """Remembers the MCP servers the topic used and the claude.ai connectors seen; when the turn asked for a
+        server it was not given (`maxxing mcp load`), queues a continuation first - at most CONTINUE_MAX in a row."""
+        try:
+            if a.mcp_used:
+                mcp_auto.record_used(str(meta.get("path") or ""), a.mcp_used)
+            if not mcp_plan.args and a.connectors is not None:     # a full list only when nothing was restricted
+                mcp_auto.record_connectors(a.connectors)
+            if not mcp_plan.args or err is not None or a.stopped or plan:
+                return
+            before = set(meta.get("mcp_loaded") or [])
+            given = {mcp_auto.norm(n) for n in mcp_plan.loaded}
+            now = (store.read(self.sid) or {}).get("mcp_loaded") or []
+            new = [n for n in now if isinstance(n, str) and n not in before and mcp_auto.norm(n) not in given]
+            if not new:
+                return
+            streak = int(item.get("mcp_continue") or 0) + 1
+            if streak > mcp_auto.CONTINUE_MAX:
+                self.note(f"MCP server {', '.join(new)} loaded for the next message (Harness did not continue by "
+                          "itself again).")
+                return
+            with store.edit(self.sid) as m:
+                m["queue"] = [mcp_auto.continue_item(new, streak)] + (m.get("queue") or [])
+            self.note(f"MCP server {', '.join(new)} loaded: Harness continues the turn.")
+        except Exception as e:                         # noqa: BLE001 - never fails a turn
+            self.note(f"MCP auto-loading: {e}"[:300], "warn")
 
     def _voice(self, item: dict, voices: list[dict]) -> tuple[dict | None, str | None]:
         """A voice message sent directly: wait for its transcription (done by the server, voicejobs.py), show it
@@ -457,8 +490,15 @@ class Runner:
         t = ev.get("type")
         if a.start_s is None and a.t0:
             a.start_s = round(time.time() - a.t0, 3)
+        if t == "assistant":                           # subagents' calls count too
+            for b in (ev.get("message") or {}).get("content") or []:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    srv = mcp_auto.tool_server(b.get("name"))
+                    if srv:
+                        a.mcp_used.add(srv)
         if t == "system" and ev.get("subtype") == "init":
             a.saw_init = True
+            a.connectors = mcp_auto.connectors_of_init(ev)
         elif t == "assistant" and not ev.get("parent_tool_use_id"):
             if a.first_s is None and a.t0:
                 a.first_s = round(time.time() - a.t0, 3)

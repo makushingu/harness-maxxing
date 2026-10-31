@@ -388,6 +388,14 @@ _check: dict[str, Any] = {"running": False, "at": None}
 LIST_LINE = re.compile(r"^(?P<name>[A-Za-z0-9_.-]{1,64}): (?P<what>.*) - (?P<mark>\S)️?\s+(?P<detail>.*)$")
 
 
+CONNECTOR_LINE = re.compile(r"^(claude\.ai [^:]{1,100}): .* - \S")
+
+
+def connectors_of_list(out: str) -> list[str]:
+    """The claude.ai connectors in `claude mcp list` output (their names have spaces: not in `parse_list`)."""
+    return [m.group(1) for ln in out.splitlines() if (m := CONNECTOR_LINE.match(ln.strip()))]
+
+
 def parse_list(out: str) -> dict[str, dict]:
     res = {}
     for ln in out.splitlines():
@@ -423,7 +431,11 @@ def check(wait: bool = False) -> dict:
                         _status[s["id"]] = {"state": "failed", "detail": "folder no longer exists", "at": time.time()}
                     continue
                 try:
-                    found = parse_list(_cli(["list"], folder, timeout=120))
+                    out = _cli(["list"], folder, timeout=120)
+                    found = parse_list(out)
+                    if folder is None:               # what `mcp_auto` lists to the turns it restricts
+                        from . import mcp_auto
+                        mcp_auto.record_connectors(connectors_of_list(out))
                 except McpError as e:
                     found = {}
                     for s in items:
@@ -447,7 +459,7 @@ def check(wait: bool = False) -> dict:
 def overview() -> dict:
     _gc()                                            # abandoned OAuth logins go when the page is (re)loaded
     return {"servers": servers(), "checking": _check["running"], "checked_at": _check["at"],
-            "config_file": str(_cfg_path())}
+            "config_file": str(_cfg_path()), "auto": bool(config.load_config().get("mcp_auto"))}
 
 
 # ---- add / remove ------------------------------------------------------------------------------
