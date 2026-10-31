@@ -27,6 +27,7 @@ import re
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterator
 from urllib.parse import urlsplit
@@ -160,6 +161,22 @@ def _cfg_file() -> Path:
     return mcp._cfg_path()                      # noqa: SLF001
 
 
+# (path, mtime_ns, size, inode) -> parsed .claude.json: read before every turn, and it can weigh megabytes
+_cfg_cache: dict[str, Any] = {"key": None, "data": None}
+
+
+def _read_cfg() -> Any:
+    """Parsed Claude Code config, re-read only when the file changed. Raises OSError / ValueError /
+    RecursionError like a plain read (unlike mcp._read_cfg, which hides them): the caller needs to know."""
+    p = _cfg_file()
+    st = p.stat()
+    key = (str(p), st.st_mtime_ns, st.st_size, st.st_ino)
+    if _cfg_cache["key"] != key:
+        _cfg_cache.update(key=None, data=json.loads(p.read_text(encoding="utf-8")))
+        _cfg_cache["key"] = key
+    return _cfg_cache["data"]
+
+
 def _d(x: Any) -> dict:
     return x if isinstance(x, dict) else {}
 
@@ -220,13 +237,25 @@ def mentioned(names: list[str], text: str) -> set[str]:
             count[w] = count.get(w, 0) + 1
     out = set()
     for n in names:
-        parts = [re.escape(w) for w in re.split(r"[^0-9A-Za-z]+", _base(n).lower()) if w]
-        if parts and re.search(r"(?<![0-9a-z])" + r"[\s_.-]*".join(parts) + r"(?![0-9a-z])", t):
+        whole = _name_re(n)
+        if whole and whole.search(t):
             out.add(n)
             continue
-        if any(count.get(w) == 1 and re.search(rf"(?<![0-9a-z]){re.escape(w)}(?![0-9a-z])", t) for w in _words(n)):
+        if any(count.get(w) == 1 and _word_re(w).search(t) for w in _words(n)):
             out.add(n)
     return out
+
+
+# compiled once per name / word: re's own cache (512) overflows with a few hundred servers, every turn
+@lru_cache(maxsize=4096)
+def _name_re(name: str) -> re.Pattern | None:
+    parts = [re.escape(w) for w in re.split(r"[^0-9A-Za-z]+", _base(name).lower()) if w]
+    return re.compile(r"(?<![0-9a-z])" + r"[\s_.-]*".join(parts) + r"(?![0-9a-z])") if parts else None
+
+
+@lru_cache(maxsize=4096)
+def _word_re(word: str) -> re.Pattern:
+    return re.compile(rf"(?<![0-9a-z]){re.escape(word)}(?![0-9a-z])")
 
 
 @dataclass
@@ -252,7 +281,7 @@ def plan(sid: str, cfg: dict, meta: dict, cwd: str, text: str) -> Plan:
 
 def _plan(sid: str, meta: dict, cwd: str, text: str) -> Plan:
     try:
-        claude_json = json.loads(_cfg_file().read_text(encoding="utf-8"))
+        claude_json = _read_cfg()
     except (OSError, ValueError, RecursionError):
         return NO_PLAN                          # unreadable (being rewritten?): restricting would drop servers
     if not isinstance(claude_json, dict):
@@ -307,7 +336,7 @@ def forget_session(sid: str) -> None:
 def known_names(cwd: str | None = None) -> list[str]:
     """Every server a session could load: user scope, the folder's own, the claude.ai connectors."""
     try:
-        claude_json = json.loads(_cfg_file().read_text(encoding="utf-8"))
+        claude_json = _read_cfg()
     except (OSError, ValueError, RecursionError):
         claude_json = {}
     users, folder = candidates(cwd or "/nonexistent", _d(claude_json))
