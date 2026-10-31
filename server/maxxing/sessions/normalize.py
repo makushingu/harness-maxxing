@@ -9,6 +9,7 @@ summaries), and empty (redacted) thinking blocks.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from datetime import datetime
@@ -32,15 +33,15 @@ def normalize_lines(lines: Iterable[str]) -> list[dict]:
             continue
         try:
             ev = json.loads(line)
-        except ValueError:
+            if _LONE_SURROGATE.search(line):
+                ev = _no_surrogates(ev)
+        except (ValueError, RecursionError):                # not JSON, or nested too deep to read
             continue
-        if _LONE_SURROGATE.search(line):
-            ev = _no_surrogates(ev)
         if isinstance(ev, dict):
             try:
                 out.extend(normalize(ev))
-            except (AttributeError, TypeError, ValueError):     # a field of an unexpected type: skip that line
-                continue
+            except (AttributeError, TypeError, ValueError, ArithmeticError, RecursionError):
+                continue                                    # a field of an unexpected type or size: skip that line
     return out
 
 
@@ -195,8 +196,9 @@ def _result(ev: dict, at: float | None) -> dict:
     u = ev.get("usage") if isinstance(ev.get("usage"), dict) else {}
     mu = ev.get("modelUsage") if isinstance(ev.get("modelUsage"), dict) else {}
     model = max(mu, key=lambda k: (mu[k] or {}).get("costUSD") or 0) if mu else ""
+    cost = float(ev["mx_turn_cost"] if ev.get("mx_turn_cost") is not None else ev.get("total_cost_usd") or 0)
     return {"type": "result", "ok": not ev.get("is_error") and ev.get("subtype", "success") == "success",
-            "cost_usd": float(ev["mx_turn_cost"] if ev.get("mx_turn_cost") is not None else ev.get("total_cost_usd") or 0), "duration_ms": int(ev.get("duration_ms") or 0),
+            "cost_usd": cost if math.isfinite(cost) else 0.0, "duration_ms": int(ev.get("duration_ms") or 0),
             "model": model,
             "usage": {"input": int(u.get("input_tokens") or 0), "output": int(u.get("output_tokens") or 0),
                       "cache_read": int(u.get("cache_read_input_tokens") or 0),
@@ -225,7 +227,7 @@ def _at(ev: dict) -> float | None:
     for k in ("at", "mx_at"):
         v = ev.get(k)
         if isinstance(v, (int, float)):
-            return float(v)
+            return float(v) if math.isfinite(v) else None     # NaN / Infinity cannot be sent as JSON
     ts = ev.get("timestamp")
     if isinstance(ts, str):
         try:

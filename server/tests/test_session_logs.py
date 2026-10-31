@@ -211,6 +211,30 @@ def test_log_lines_with_fields_of_the_wrong_type_are_skipped():
     assert out[-1]["type"] == "user" and out[-1]["text"] == "still here"
 
 
+def test_log_lines_with_huge_numbers_or_deep_nesting_are_skipped():
+    """1e999 is valid JSON (it reads as inf) and a deeply nested array cannot be read without a RecursionError:
+    such a line is skipped like any other odd line, the session stays readable."""
+    from maxxing.sessions.normalize import normalize_lines
+    odd = ['{"type":"result","duration_ms":1e999}',
+           '{"type":"result","usage":{"input_tokens":1e999}}',
+           '{"type":"system","subtype":"task_progress","task_id":"t","usage":{"total_tokens":1e999}}',
+           "[" * 100_000 + "]" * 100_000,
+           '{"type":"mx_user","text":"x","attachments":' + "[" * 100_000 + "]" * 100_000 + '}']
+    out = normalize_lines(odd + [json.dumps({"type": "mx_user", "text": "still here"})])
+    assert [e["text"] for e in out] == ["still here"]
+
+
+def test_non_finite_times_and_costs_render_as_json():
+    """NaN / Infinity in at or cost (valid for Python's json.loads) used to break the events response (500)."""
+    from maxxing.sessions.normalize import normalize_lines
+    lines = ['{"type":"mx_user","text":"x","at":NaN}', '{"type":"mx_user","text":"y","mx_at":1e999}',
+             '{"type":"result","total_cost_usd":NaN,"at":5}', '{"type":"result","mx_turn_cost":-Infinity}']
+    out = normalize_lines(lines)
+    json.dumps(out, allow_nan=False)
+    assert [e["at"] for e in out] == [None, None, 5.0, None]
+    assert [e["cost_usd"] for e in out[2:]] == [0.0, 0.0]
+
+
 def _task_lines() -> str:
     """A background sub-agent as Claude Code logs it: Agent call, "launched" result, progress, notification."""
     t = "toolu_agent0001"

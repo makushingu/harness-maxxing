@@ -582,6 +582,24 @@ def test_side_question_answers_without_touching_the_session(client, topic, mx):
     assert client.post(f"/api/sessions/{sid}/ask", json={"question": " "}).status_code == 400
 
 
+@pytest.mark.parametrize("out,status", [("[1]", 502), ("123", 502),
+                                        (json.dumps({"result": "hi", "total_cost_usd": "n/a", "duration_ms": "x"}), 200)])
+def test_side_question_with_an_odd_answer_line(client, tmp_path, monkeypatch, out, status):
+    """A last line that is not an object is a failed question (502), a cost that is not a number counts as 0."""
+    from maxxing import config
+    from maxxing.sessions import aside, spawn
+    fake = tmp_path / "claude"
+    fake.write_text(f"#!/bin/sh\ncat >/dev/null\necho '{out}'\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(spawn, "claude_bin", lambda: str(fake))
+    try:
+        r = aside._run({"id": "s", "model": ""}, "c", str(tmp_path), config.load_config(), "q")
+    except service.SessionError as e:
+        assert (e.status, e.code) == (status, "ask_failed")
+    else:
+        assert status == 200 and r["answer"] == "hi" and r["cost_usd"] == 0 and r["duration_ms"] >= 0
+
+
 def test_move_session_to_another_topic(client, topic, mx):
     from pathlib import Path
     from maxxing import workspace

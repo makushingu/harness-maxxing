@@ -267,13 +267,27 @@ export function notifySent(id: string) {
   const m = useMaxxing.getState()
   if (!m.on || m.current !== id) return
   stats.onSent(id)
-  requestAnimationFrame(() => {
-    if (useMaxxing.getState().current === id) useMaxxing.getState().drop(id)
-  })
+  cancelAnimationFrame(pendingDrops.get(id) ?? 0)
+  pendingDrops.set(
+    id,
+    requestAnimationFrame(() => {
+      pendingDrops.delete(id)
+      if (useMaxxing.getState().current === id) useMaxxing.getState().drop(id)
+    }),
+  )
 }
+
+/** Drops planned by notifySent, not run yet (a send refused in the same frame cancels its own). */
+const pendingDrops = new Map<string, number>()
 
 /** The send was refused (the text is back in its draft): the session goes back to the head of the queue. */
 export function notifySendFailed(id: string) {
+  const drop = pendingDrops.get(id)
+  if (drop !== undefined) {
+    // refused before the next frame: the session never left the front, it simply stays there
+    cancelAnimationFrame(drop)
+    pendingDrops.delete(id)
+  }
   const m = useMaxxing.getState()
   if (!m.on || m.current === id || m.queue.includes(id)) return
   useMaxxing.setState({ queue: [id, ...m.queue] })

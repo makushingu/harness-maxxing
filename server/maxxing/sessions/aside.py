@@ -9,6 +9,7 @@ process next to the running turn: memory on a small server).
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import threading
 import time
@@ -80,11 +81,19 @@ def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str) -> dict:
         res = json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {}
     except ValueError:
         res = {}
+    if not isinstance(res, dict):                       # an unexpected last line: no answer, not a crash
+        res = {}
     answer = str(res.get("result") or "").strip()
     if p.returncode != 0 or res.get("is_error") or not answer:
         detail = answer or (p.stderr or "").strip()[-300:] or f"exit code {p.returncode}"
         raise SessionError(502, "ask_failed", f"The side question failed: {detail}")
     # the fork starts from the thread's running total: only the increase is this question's cost
-    cost = store.turn_cost(float(res.get("total_cost_usd") or 0), store.thread_prev_cost(m, csid))
-    return {"answer": answer, "cost_usd": round(cost, 4),
-            "duration_ms": int(res.get("duration_ms") or (time.time() - t0) * 1000)}
+    try:
+        total = float(res.get("total_cost_usd") or 0)
+    except (TypeError, ValueError):
+        total = 0.0
+    cost = store.turn_cost(total if math.isfinite(total) else 0.0, store.thread_prev_cost(m, csid))
+    ms = res.get("duration_ms")
+    if not (isinstance(ms, (int, float)) and math.isfinite(ms) and ms):
+        ms = (time.time() - t0) * 1000
+    return {"answer": answer, "cost_usd": round(cost, 4), "duration_ms": int(ms)}
