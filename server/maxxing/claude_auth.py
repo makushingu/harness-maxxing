@@ -32,6 +32,24 @@ def credentials_file() -> Path:
     return config.claude_dir() / ".credentials.json"
 
 
+def plan_name(creds: object = None) -> str | None:
+    """The Claude plan as Anthropic names it since 2026-10-31 (Max 5x -> "Max", Max 20x -> "Ultra"), read in the
+    `claude login` credentials file (subscriptionType + rateLimitTier); None when unknown (setup-token, API key)."""
+    if creds is None:
+        try:
+            creds = json.loads(credentials_file().read_text())
+        except (OSError, ValueError):
+            return None
+    o = creds.get("claudeAiOauth") if isinstance(creds, dict) else None
+    if not isinstance(o, dict):
+        return None
+    sub = str(o.get("subscriptionType") or "").lower()
+    tier = str(o.get("rateLimitTier") or "").lower()
+    if sub == "ultra" or "20x" in tier or "ultra" in tier:
+        return "Ultra"
+    return {"pro": "Pro", "max": "Max", "team": "Team", "enterprise": "Enterprise", "free": "Free"}.get(sub)
+
+
 def auth_method() -> tuple[str | None, str]:
     """(method, detail) without any network call."""
     if config.get_secret("claude_oauth_token"):
@@ -40,10 +58,7 @@ def auth_method() -> tuple[str | None, str]:
         return "api_key", "API key stored in Harness Maxxing"
     f = credentials_file()
     if f.is_file():
-        try:
-            sub = (json.loads(f.read_text()).get("claudeAiOauth") or {}).get("subscriptionType")
-        except (OSError, ValueError, AttributeError):
-            sub = None
+        sub = plan_name()
         return "credentials", "Signed in with `claude` on this server" + (f" ({sub} plan)" if sub else "")
     return None, "Not connected"
 

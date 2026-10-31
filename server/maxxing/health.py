@@ -420,6 +420,15 @@ def map_usage(u: dict) -> dict:
 
 
 def usage(force: bool = False) -> dict:
+    """Plan usage, with `plan` (claude_auth.plan_name: "Pro", "Max", "Ultra"... or None): a verified Ultra account
+    has no 5-hour window any more (2026-10-31), `five_hour` is then None and the UI says so.
+    """
+    from . import claude_auth
+    u = _usage_any(force)
+    return {**u, "plan": claude_auth.plan_name()}
+
+
+def _usage_any(force: bool) -> dict:
     """Plan usage. Never raises. First source: the limits Claude Code printed in the last turn (no call, always on,
     `source: "turn"`, `seen_at`); with config usage_widget, the experimental endpoint when those are older than
     TURN_FRESH_S or missing.
