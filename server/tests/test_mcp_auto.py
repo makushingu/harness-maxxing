@@ -283,3 +283,39 @@ def test_api_switch_and_removed_session_drops_its_file(client, topic, mx, server
     assert f.exists()
     client.delete(f"/api/sessions/{sid}")
     wait_for(lambda: not f.exists())
+
+
+def test_a_too_deep_mcp_json_is_skipped_not_fatal(mx, servers, topic):
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    (Path(servers) / ".mcp.json").write_text("[" * 100_000 + "]" * 100_000)
+    p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, "hi")
+    assert p.loaded == ["blog-db"]
+    assert "blog-db" in mcp_auto.known_names(servers)
+    (mx["tmp"] / "claude" / ".claude.json").write_text("[" * 100_000 + "]" * 100_000)
+    assert mcp_auto.known_names(servers) == ["claude.ai Google Drive"]
+
+
+def test_a_server_name_with_a_lone_surrogate_still_writes_the_plan(mx, servers, topic):
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    f = mx["tmp"] / "claude" / ".claude.json"
+    d = json.loads(f.read_text())
+    d["projects"][servers]["mcpServers"]["db\ud800"] = {"command": "x"}
+    f.write_text(json.dumps(d))
+    p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, "hi")
+    assert sorted(p.loaded) == ["blog-db", "db\ud800"]
+    folder = Path(p.args[-1]).parent
+    assert [x.name for x in folder.iterdir() if x.name.endswith(".tmp")] == []
+
+
+def test_the_hint_of_left_out_servers_is_capped(mx, servers, topic):
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    f = mx["tmp"] / "claude" / ".claude.json"
+    d = json.loads(f.read_text())
+    d["mcpServers"].update({f"srv{i:04d}-" + "x" * 300: {"command": "x"} for i in range(4000)})
+    f.write_text(json.dumps(d))
+    p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, "hi")
+    assert p is not mcp_auto.NO_PLAN and len(p.hint) < 20_000
+    assert "more" in p.hint
