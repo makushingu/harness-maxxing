@@ -561,6 +561,9 @@ export type UsagePayload = {
   available: boolean
   five_hour: UsageWindow | null
   seven_day: UsageWindow | null
+  /** "Pro", "Max", "Ultra"... (Max 20x is "Ultra" since 2026-10-31); null when the sign-in does not tell. A verified
+   *  Ultra account has no 5-hour window: five_hour is then null. */
+  plan?: string | null
   /** disabled | no_oauth_credentials | api_key | rate_limited | http_<status> | <exception name> */
   reason?: string
   /** "turn": read in the last turn's rate_limit_event (no call), at `seen_at` (Unix seconds). */
