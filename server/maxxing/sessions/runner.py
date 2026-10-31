@@ -43,8 +43,8 @@ from typing import Callable, Iterator
 if __package__ in (None, ""):                       # path invocation
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from maxxing import claude_auth, config             # noqa: E402  (stdlib-only modules)
-from maxxing.sessions import clip, spawn, store      # noqa: E402
+from maxxing import claude_auth, config, mcp_auto   # noqa: E402  (stdlib-only modules)
+from maxxing.sessions import clip, resume, spawn, store      # noqa: E402
 
 RESUME_LOST = re.compile(r"no conversation found|session .{0,80}not found|no such session|"
                          r"invalid session|could not resume|failed to resume", re.I)
@@ -89,6 +89,8 @@ class Attempt:
     start_s: float | None = None                       # -> its first event (Claude Code ready)
     first_s: float | None = None                       # -> its first answer (start + the API's first response)
     oom: bool = False                                  # SIGKILLed while the unit's oom_kill counter went up
+    mcp_used: set[str] = field(default_factory=set)    # MCP servers (tool form) whose tools were called
+    connectors: list[str] | None = None                # claude.ai connectors listed by the init event
 
 
 class Runner:
@@ -171,42 +173,86 @@ class Runner:
     def _pop(self, failed: str | None) -> dict | None:
         """Next queue item, or None after setting the final state - atomically, so a message
         queued by the server is either popped here or finds the session idle and respawns it. A user message
-        that comes back to a big session after its prompt cache expired is preceded by a summary turn (idle
-        compaction): the message stays at the head of the queue and runs in the fresh thread."""
-        idle = None
-        with store.edit(self.sid) as m:
-            m["spawned_at"] = None
-            q = m.get("queue") or []
-            m["updated"] = time.time()
-            if not q:
-                m["pid"], m["state"] = None, ("error" if failed else "idle")
-                m.pop("runner_caps", None)
-                m.pop("turn_id", None)
-                m.pop("turn_refs", None)
-                return None
-            item = q.pop(0)
-            item.pop("held", None)
-            idle = _idle_compact(m, item, config.load_config(), time.time())
-            if idle:                                   # the summary runs first, the message waits at the head
-                q.insert(0, {**item, "held": True})    # a Stop cancels the summary, never the user's message
-                item = {"text": SUMMARY_PROMPT, "attachments": [], "source": "system", "kind": "compact",
-                        "auto": True, "idle": True, "at": time.time()}
-            m["queue"], m["state"], m["pid"] = q, "running", os.getpid()
-            m["runner_caps"] = ["steer"]               # the server may send SIGUSR1 (steer) to this runner
-            # Before releasing the lock: a steer can only target this turn once its id is known.
-            self.turn_id = m["turn_id"] = uuid.uuid4().hex[:12]
-            # Still under the lock: a Stop / steer for THIS turn can only be sent once the item is popped, so it is
-            # never wiped here (one that targeted the previous turn arrived before and is dropped).
-            self.stop_flag.clear()
-            self.interrupted = False
-            m["turn_kind"] = item.get("kind") or "user"
-            m["turn_refs"] = list(item.get("refs") or [])     # the caller's ids of this message (Telegram)
-            self.current = item
+        that comes back to a big session after a pause may be preceded by a summary turn (smart resume / idle
+        compaction): the message stays at the head of the queue and runs in the fresh thread.
+
+        Smart resume asks a small classifier first. That call never runs under the session lock: the head is
+        inspected under the lock (the state stays "running", so the server queues behind us and never respawns),
+        the lock is released for the call, then re-taken to pop. A Stop, a steer or an edit meanwhile changes the
+        head: the call is cut short and the new head is looked at again (verdicts are only used for the item they
+        were asked about)."""
+        asked: tuple[dict, str | None] | None = None   # (queue head as classified, verdict or None = failed)
+        for attempt in range(3):
+            ask = None
+            with store.edit(self.sid) as m:
+                m["spawned_at"] = None
+                q = m.get("queue") or []
+                m["updated"] = time.time()
+                if not q:
+                    m["pid"], m["state"] = None, ("error" if failed else "idle")
+                    m.pop("runner_caps", None)
+                    m.pop("turn_id", None)
+                    m.pop("turn_refs", None)
+                    return None
+                cfg, now = config.load_config(), time.time()
+                same = asked is not None and q[0] == asked[0]
+                if not same and attempt < 2:
+                    ask = resume.candidate(m, q[0], cfg, now)
+                if not ask:
+                    return self._take(m, q, cfg, now, asked[1] if same and asked else None)
+                # Like a turn that is starting (no pid): the head shows as being sent, not as waiting, and is never
+                # merged by a steer; a Stop just clears the queue (seen below, no signal needed).
+                m["pid"] = None
+                head, title = json.loads(json.dumps(q[0])), str(m.get("title") or "")
+                self.stop_flag.clear()
+            verdict = resume.classify(title, resume.conversation(resume.exchanges(self.sid)), head.get("text") or "",
+                                      should_stop=lambda h=head: self._head_changed(h))
+            asked = (head, verdict)
+        return None                                    # not reached: the third pass never asks
+
+    def _head_changed(self, head: dict) -> bool:
+        if self.stop_flag.is_set():
+            return True
+        q = (store.read(self.sid) or {}).get("queue") or []
+        return not q or q[0] != head
+
+    def _take(self, m: dict, q: list, cfg: dict, now: float, verdict: str | None) -> dict:
+        """Pop the queue head (under the session lock), with the summary turn first when the return is worth it."""
+        item = q.pop(0)
+        item.pop("held", None)
+        if verdict == "CONTINUE":                      # builds on the recent details: resume as is
+            idle = None
+        elif verdict == "NEW":
+            away = now - max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+            idle = (resume.away_text(away), int(m.get("context_tokens") or 0) // 1000)
+        else:                                          # not asked, or the call failed: the idle rule as before
+            idle = _idle_compact(m, item, cfg, now)
+        if idle:                                       # the summary runs first, the message waits at the head
+            q.insert(0, {**item, "held": True})        # a Stop cancels the summary, never the user's message
+            item = {"text": SUMMARY_PROMPT, "attachments": [], "source": "system", "kind": "compact",
+                    "auto": True, "idle": True, "at": time.time()}
+        m["queue"], m["state"], m["pid"] = q, "running", os.getpid()
+        m["runner_caps"] = ["steer"]                   # the server may send SIGUSR1 (steer) to this runner
+        # Before releasing the lock: a steer can only target this turn once its id is known.
+        self.turn_id = m["turn_id"] = uuid.uuid4().hex[:12]
+        # Still under the lock: a Stop / steer for THIS turn can only be sent once the item is popped, so it is
+        # never wiped here (one that targeted the previous turn arrived before and is dropped).
+        self.stop_flag.clear()
+        self.interrupted = False
+        m["turn_kind"] = item.get("kind") or "user"
+        m["turn_refs"] = list(item.get("refs") or [])  # the caller's ids of this message (Telegram)
+        self.current = item
         if idle:
             hours, tokens = idle
-            self.note(f"Back after {hours}: the cache had expired, Harness summarized the session ({tokens}k tokens) "
-                      "before your message - cheaper from now on (idle compaction, Settings -> Claude). The history "
-                      "stays displayed here.")
+            if verdict == "NEW":
+                text = (f"New subject after {hours}: Harness summarized the session ({tokens}k tokens) before your "
+                        "message - cheaper from now on (smart resume, Settings -> Claude). The history stays "
+                        "displayed here.")
+            else:
+                text = (f"Back after {hours}: the cache had expired, Harness summarized the session ({tokens}k tokens) "
+                        "before your message - cheaper from now on (idle compaction, Settings -> Claude). The history "
+                        "stays displayed here.")
+            self.note(text)                            # under the lock: written before the summary turn starts
         return item
 
     def _crash(self, e: Exception) -> None:
@@ -250,12 +296,14 @@ class Runner:
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
         model = (meta.get("model") or cfg.get("default_model") or "").strip()
+        mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg)
+        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg, mcp_plan.hint)
         base += ["--model", model] if model else []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
-        base += pcbridge.mcp_config_args()
+        base += pcbridge.mcp_config_args() + mcp_plan.args
         env = spawn.claude_env(meta.get("env") or {}, mode)
+        env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
         prompt, json_in = stdin_payload(text, item, Path(cfg.get("workspace") or "/").resolve())
         if json_in:
@@ -291,9 +339,38 @@ class Runner:
         if plan and err is None and not a.stopped:
             store.update(self.sid, plan_ready=True)
         self._post(item, a, err)
+        self._mcp_after(item, a, err, cfg, meta, mcp_plan, plan)
         if not plan:
             self._auto_compact(item, a, err, cfg)
         return err
+
+    def _mcp_after(self, item: dict, a: Attempt, err: str | None, cfg: dict, meta: dict,
+                   mcp_plan: mcp_auto.Plan, plan: bool) -> None:
+        """Remembers the MCP servers the topic used and the claude.ai connectors seen; when the turn asked for a
+        server it was not given (`maxxing mcp load`), queues a continuation first - at most CONTINUE_MAX in a row."""
+        try:
+            if a.mcp_used:
+                mcp_auto.record_used(str(meta.get("path") or ""), a.mcp_used)
+            if not mcp_plan.args and a.connectors is not None:     # a full list only when nothing was restricted
+                mcp_auto.record_connectors(a.connectors)
+            if not mcp_plan.args or err is not None or a.stopped or plan:
+                return
+            before = set(meta.get("mcp_loaded") or [])
+            given = {mcp_auto.norm(n) for n in mcp_plan.loaded}
+            now = (store.read(self.sid) or {}).get("mcp_loaded") or []
+            new = [n for n in now if isinstance(n, str) and n not in before and mcp_auto.norm(n) not in given]
+            if not new:
+                return
+            streak = int(item.get("mcp_continue") or 0) + 1
+            if streak > mcp_auto.CONTINUE_MAX:
+                self.note(f"MCP server {', '.join(new)} loaded for the next message (Harness did not continue by "
+                          "itself again).")
+                return
+            with store.edit(self.sid) as m:
+                m["queue"] = [mcp_auto.continue_item(new, streak)] + (m.get("queue") or [])
+            self.note(f"MCP server {', '.join(new)} loaded: Harness continues the turn.")
+        except Exception as e:                         # noqa: BLE001 - never fails a turn
+            self.note(f"MCP auto-loading: {e}"[:300], "warn")
 
     def _voice(self, item: dict, voices: list[dict]) -> tuple[dict | None, str | None]:
         """A voice message sent directly: wait for its transcription (done by the server, voicejobs.py), show it
@@ -457,8 +534,15 @@ class Runner:
         t = ev.get("type")
         if a.start_s is None and a.t0:
             a.start_s = round(time.time() - a.t0, 3)
+        if t == "assistant":                           # subagents' calls count too
+            for b in (ev.get("message") or {}).get("content") or []:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    srv = mcp_auto.tool_server(b.get("name"))
+                    if srv:
+                        a.mcp_used.add(srv)
         if t == "system" and ev.get("subtype") == "init":
             a.saw_init = True
+            a.connectors = mcp_auto.connectors_of_init(ev)
         elif t == "assistant" and not ev.get("parent_tool_use_id"):
             if a.first_s is None and a.t0:
                 a.first_s = round(time.time() - a.t0, 3)

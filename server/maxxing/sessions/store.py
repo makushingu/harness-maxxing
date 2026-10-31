@@ -318,6 +318,11 @@ def remove(sid: str) -> None:
             _path(sid, ext).unlink()
         except (FileNotFoundError, KeyError):
             pass
+    if is_valid_id(sid):                       # its MCP config of the turns (mcp_auto.py), holds server secrets
+        try:
+            (config.STATE / "mcp-auto" / "sessions" / f"{sid}.json").unlink()
+        except OSError:
+            pass
     _ids["ids"] = _ids["ids"] - {sid}
 
 

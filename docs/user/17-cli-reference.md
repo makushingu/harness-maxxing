@@ -187,6 +187,7 @@ Scripts read keys from the environment (`os.environ["NAME"]`, `$NAME`); a script
 | `maxxing mcp add NAME URL [--where projects/P/topics/T] [--header 'Name: value'] [--sse]` | add a server by address, for every session or one topic; secrets as `${KEY}` from the vault |
 | `maxxing mcp add NAME --command 'npx -y pkg' [--env KEY=VALUE] [--where …]` | add a local program |
 | `maxxing mcp remove NAME [--where …]` | remove it |
+| `maxxing mcp load NAME [--session ID]` | in a session (setting *Load MCP servers only when a session needs them*): load that server from the next turn on; Harness continues the turn by itself |
 
 OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. See [MCP servers](28-mcp.md).
 
