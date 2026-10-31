@@ -29,7 +29,7 @@ _T = {
         "Not configured": "Non configuré", "Last backup": "Dernière sauvegarde", "Never": "Jamais",
         "Files": "Fichiers", "Telegram": "Telegram", "Bot": "Bot", "Status": "État", "Connected": "Connecté",
         "Stopped": "Arrêté", "Claude usage": "Utilisation Claude", "5-hour window": "Fenêtre 5 h",
-        "7-day window": "Fenêtre 7 jours", "Usage data unavailable": "Données d'utilisation indisponibles",
+        "7-day window": "Fenêtre 7 jours", "5-hour window: no limit on the Ultra plan": "Fenêtre 5 h : pas de limite avec le forfait Ultra", "Usage data unavailable": "Données d'utilisation indisponibles",
         "resets": "réinit.", "ago": "il y a", "Set it up": "Configurer", "Load": "Charge",
         "Up": "Allumé depuis", "Runs": "Exécutions", "Today's schedule": "Planning du jour",
         "Runs today": "Exécutions du jour", "Failed today": "Échecs du jour", "Next": "Prochaine",
@@ -388,6 +388,8 @@ def usage(force: bool = False) -> dict:
         if w and w.get("pct") is not None:
             blocks.append({"type": "progress", "label": t(label), "value": w["pct"], "max": 100, "format": "percent",
                            "hint": f"{t('resets')} {_reset(w['resets_at'])}" if w.get("resets_at") else None})
+    if u.get("five_hour") is None and u.get("plan") == "Ultra":
+        blocks.insert(0, {"type": "markdown", "text": t("5-hour window: no limit on the Ultra plan")})
     if u.get("stale") and u.get("retry_at"):
         blocks.append({"type": "markdown", "text": f"{t('Last known values - next reading at')} {_clock(u['retry_at'])}"})
     worst = max((b.get("value", 0) for b in blocks if b["type"] == "progress"), default=0)

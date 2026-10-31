@@ -10,7 +10,7 @@ section: Getting started
   recommended (the tools for videos and scraping take ~1.5 GB). Under 4 GB of RAM without swap the installer adds a
   2 GB swap file; under 3 GB local voice transcription stays off unless you ask for it.
 - Root access (`sudo -i`).
-- A **Claude** subscription (Pro/Max) or an **Anthropic API key**.
+- A **Claude** subscription (Pro, Max or Ultra) or an **Anthropic API key**.
 - For HTTPS access: a domain name whose DNS A/AAAA record points to the server, and ports 80/443
   open. Alternatively Tailscale, or an SSH tunnel.
 
