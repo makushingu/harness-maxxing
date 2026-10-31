@@ -44,6 +44,8 @@ TEXT_MAX = 20000                                # characters of a message search
 LOADED_MAX = 50
 CONTINUE_MAX = 2                                # automatic continuations in a row (a server asked turn after turn)
 CONTINUE_TEXT = ("[Harness: the MCP server{s} {names} {verb} now loaded. Continue where you stopped.]")
+HINT_MAX = 40                                   # servers named in the hint, then "and N more"
+HINT_NAME_MAX = 120                             # characters per server in the hint
 HINT = ("MCP servers NOT loaded in this turn (Harness loads only the ones this topic uses, to save tokens): {items}. "
         "If you need one, run `maxxing mcp load \"<name>\"` (it is loaded from your next turn on) and end your turn "
         "saying so; Harness continues automatically.")
@@ -181,7 +183,7 @@ def candidates(cwd: str, claude_json: dict) -> tuple[list[Server], list[Server]]
             if not f.is_file() or f.stat().st_size > (1 << 20):
                 continue
             items = _d(_d(json.loads(f.read_text(encoding="utf-8"))).get("mcpServers"))
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             continue
         own = _d(projects.get(str(d)))
         refused = set(_l(here.get("disabledMcpjsonServers")))
@@ -251,7 +253,7 @@ def plan(sid: str, cfg: dict, meta: dict, cwd: str, text: str) -> Plan:
 def _plan(sid: str, meta: dict, cwd: str, text: str) -> Plan:
     try:
         claude_json = json.loads(_cfg_file().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return NO_PLAN                          # unreadable (being rewritten?): restricting would drop servers
     if not isinstance(claude_json, dict):
         return NO_PLAN
@@ -266,7 +268,7 @@ def _plan(sid: str, meta: dict, cwd: str, text: str) -> Plan:
     chosen = folder + [s for s in users if norm(s.name) in want]
     left = [s for s in pool if s not in chosen]
     f = _dir() / "sessions" / f"{sid}.json"
-    body = json.dumps({"mcpServers": {s.name: s.cfg for s in chosen}}, ensure_ascii=False, sort_keys=True)
+    body = json.dumps({"mcpServers": {s.name: s.cfg for s in chosen}}, sort_keys=True)
     try:
         same = f.read_text(encoding="utf-8") == body
     except OSError:
@@ -275,12 +277,23 @@ def _plan(sid: str, meta: dict, cwd: str, text: str) -> Plan:
         f.parent.mkdir(parents=True, exist_ok=True)
         os.chmod(f.parent, 0o700)
         tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(body)
-        os.replace(tmp, f)
-    hint = HINT.format(items="; ".join(s.hint() for s in left)) if left else ""
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(body)
+            os.replace(tmp, f)
+        finally:
+            tmp.unlink(missing_ok=True)
+    hint = HINT.format(items=_hint_items(left)) if left else ""
     return Plan(["--strict-mcp-config", "--mcp-config", str(f)], hint, [s.name for s in chosen])
+
+
+def _hint_items(left: list[Server]) -> str:
+    """The servers left out, capped: the list goes into --append-system-prompt (argv has a size limit)."""
+    items = [s.hint()[:HINT_NAME_MAX] for s in left[:HINT_MAX]]
+    if len(left) > HINT_MAX:
+        items.append(f"and {len(left) - HINT_MAX} more")
+    return "; ".join(items)
 
 
 def forget_session(sid: str) -> None:
@@ -295,7 +308,7 @@ def known_names(cwd: str | None = None) -> list[str]:
     """Every server a session could load: user scope, the folder's own, the claude.ai connectors."""
     try:
         claude_json = json.loads(_cfg_file().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         claude_json = {}
     users, folder = candidates(cwd or "/nonexistent", _d(claude_json))
     return [s.name for s in users + folder] + connectors()
