@@ -8,6 +8,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, default 60 000, 0 = off; Settings -> Claude, GET
+status / PUT settings). A user message after a pause of 5 min+ to a session of at least that context (cache expired
+or 100k+) is sorted by one haiku call (title + last 3 exchanges <= 4000 chars + the message): NEW -> the idle
+compaction summary first (note "New subject after ..."), even below `idle_compact_tokens`; CONTINUE -> no summary, no
+note, even above it; failure / timeout (20 s) -> `_idle_compact` unchanged. `runner._pop` releases the session lock
+during the call (head copied, `pid` None meanwhile, verdict used only if the head is unchanged; Stop / steer cut the
+call); `_take` holds the former pop code. fake_claude: `FAKE_CLAUDE_RESUME` (default FAIL = the old behaviour).
+
 MCP servers loaded per turn (config `mcp_auto`, default **false**; Settings -> MCP switch, `PUT /api/mcp/auto`).
 New `maxxing/mcp_auto.py` (stdlib only). When on, `mcp_auto.plan()` (runner `turn()`) gives the turn
 `--strict-mcp-config --mcp-config <state>/mcp-auto/sessions/<sid>.json` (0600, folder 0700, rewritten only when its

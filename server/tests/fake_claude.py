@@ -20,7 +20,8 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   MCPLOAD       runs `maxxing mcp load $FAKE_CLAUDE_MCPLOAD` (python -m maxxing) like a turn asking for a server
   MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
 A `--system-prompt` that names chat sessions (short titles) gets $FAKE_CLAUDE_TITLE (default "Fake short
-title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail.
+title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail. The smart resume
+classifier ("triage a returning user") answers $FAKE_CLAUDE_RESUME (NEW or CONTINUE; default FAIL = fails, SLOW hangs 30 s).
 Threads are remembered in $FAKE_CLAUDE_DIR (default /tmp/fake-claude-<uid>): --resume of an
 unknown id fails ("No conversation found…"), --session-id of a known id fails ("already in use").
 Every call is appended to $FAKE_CLAUDE_DIR/calls.jsonl (argv, prompt, cwd, a few env vars).
@@ -269,9 +270,18 @@ def main() -> int:
             print(json.dumps(result(sid, model, err, ok=False)) if o["format"] == "json" else err)
         return 1
     if o["format"] == "json":
-        if "FAIL" in prompt:
+        if "FAIL" in prompt and "triage a returning user" not in (o.get("system_prompt") or ""):
             print(json.dumps(result(sid, model, "Simulated failure", ok=False)))
             return 1
+        if "triage a returning user" in (o.get("system_prompt") or ""):     # smart resume classifier
+            verdict = os.environ.get("FAKE_CLAUDE_RESUME", "FAIL")   # default: the idle rule, as before
+            if verdict == "SLOW":
+                time.sleep(30)
+            if verdict in ("FAIL", "SLOW"):
+                print(json.dumps(result(sid, model, "Simulated failure", ok=False)))
+                return 1
+            print(json.dumps(result(sid, model, verdict, t0=t0, keep=False)))
+            return 0
         if "name chat sessions" in (o.get("system_prompt") or ""):
             print(json.dumps(result(sid, model, os.environ.get("FAKE_CLAUDE_TITLE", "Fake short title"), t0=t0,
                                     keep=False)))

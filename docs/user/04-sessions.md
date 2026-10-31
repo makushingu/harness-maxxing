@@ -286,6 +286,17 @@ never trigger it, nor does a session whose context is mostly what every new thre
 memory): summarizing it would save nothing. Pick Off to keep the full thread whatever the pause. Stop during the
 summary cancels only the summary, your message stays: it runs right after, in the full thread.
 
+**Smart resume** (Settings -> Claude, 60k tokens by default): not every return deserves a summary. When you come back
+after 5 minutes or more to a session holding at least that much context (and its cache expired, or it holds 100k or
+more), a small model compares your message with the last exchanges - a quick check of a second or two:
+- **a new subject** (another task, a question that stands on its own): Harness summarizes the session first, as
+  above, with the note "New subject after 2 h: ...";
+- **a follow-up of the work in progress** ("go on", "fix that", the file or error you were just looking at, the answer
+  to a question Claude asked): your message simply continues in the full thread - no detail is lost, even past the
+  "Compact when you come back" threshold. Automatic compaction at the end of the turn still applies.
+
+If the check fails, the "Compact when you come back" rule applies as before. Off = that rule alone.
+
 ## Edit or delete a message that got no answer
 
 A message you stopped before Claude answered (it shows **Stopped.** under it) can be fixed or removed. Right-click
