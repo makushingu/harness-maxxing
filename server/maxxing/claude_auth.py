@@ -38,7 +38,7 @@ def plan_name(creds: object = None) -> str | None:
     if creds is None:
         try:
             creds = json.loads(credentials_file().read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):              # a damaged file must not break /api/usage
             return None
     o = creds.get("claudeAiOauth") if isinstance(creds, dict) else None
     if not isinstance(o, dict):

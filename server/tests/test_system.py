@@ -380,6 +380,23 @@ def test_plan_names_and_an_ultra_plan_without_a_five_hour_window(client, org, mo
     assert client.get("/api/usage").json()["plan"] is None
 
 
+def test_a_deeply_nested_credentials_file_is_an_unknown_plan(client, org, monkeypatch):
+    """A damaged ~/.claude/.credentials.json nested too deep for the JSON parser (RecursionError) reads as an unknown
+    plan: /api/usage, the usage widget and the Claude status keep working."""
+    import httpx
+    from maxxing import claude_auth, widgets
+    health._usage.update(at=0.0, data=None, blocked_until=0.0)
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no call")))
+    f = claude_auth.credentials_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("[" * 200_000 + "]" * 200_000)
+    assert claude_auth.plan_name() is None
+    assert claude_auth.auth_method() == ("credentials", "Signed in with `claude` on this server")
+    assert client.get("/api/usage").status_code == 200
+    widgets.usage()
+    f.unlink()
+
+
 def test_usage_from_an_old_turn_survives_a_rate_limited_endpoint(client, org, monkeypatch):
     """Limits seen in a turn an hour ago, endpoint answering 429: every reading (the first, the cached ones while
     blocked) gives the turn's values, never `available: false` - the sidebar bars no longer vanish."""
