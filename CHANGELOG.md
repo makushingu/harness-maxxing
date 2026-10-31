@@ -3,6 +3,52 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.105 - 2026-10-31
+
+New:
+- **Smart resume.** When you come back to a big session after its cache expired (100k tokens of context by default,
+  or 200k after a 5-minute pause), Claude first summarizes it for the message you just sent, keeping exactly what that
+  message needs (files, commands, values, the plan in progress), then your message runs in a fresh, much smaller
+  thread. Settings -> Claude.
+- **MCP servers loaded per session** (Settings -> MCP, off by default). Each turn only loads the MCP servers its topic
+  actually uses; Claude can load another one when it needs it and carries on by itself.
+- **Drag content between sessions.** Drag a message, a selection or a file into another session's composer: it is
+  quoted there, never sent. Drop a column on the upper part of another to stack it above.
+- **Select several files.** Long press, Shift / Ctrl+click or Ctrl+A in the Files page and in the viewer's folder grid,
+  with a right-click menu (download as zip, rename, delete). A folder, or several entries, download as one zip.
+- **Pasted data becomes an attachment.** JSON, XML, CSV, logs or very long non-prose text pasted in the composer is
+  attached as a file; "Paste as text" undoes it, Ctrl/Cmd+Shift+V always pastes text.
+- **Video Auto quality follows your connection,** and vertical videos are named by their short side (1080p, not 1920p).
+  The player remembers volume, speed and position, survives a lost connection and GIFs move in the chat.
+- **Claude plans: Pro, Max and Ultra.** Ultra shows "no 5-hour limit".
+
+Faster:
+- The server keeps secrets, workspace files and session ids in memory, wakes streams with inotify instead of polling,
+  and compacts session logs and the search index every night: about 5x less CPU with sessions open.
+- Smaller first load of the UI; archived sessions load when their fold opens.
+- The installer downloads and sets up in the background, keeps verified downloads for a re-run and clones only what it
+  needs.
+
+Fixes:
+- `maxxing update` follows a history rewritten upstream, checks the signature before switching branch, and is no
+  longer blocked by a customization that was merged upstream.
+- The nightly log compaction never loses a line written meanwhile and skips a log when the disk is nearly full; a
+  message sent during it waits instead of failing.
+- An unreadable feed is set aside only when the file is really broken, not on a passing lock or a full disk.
+- A cron job interrupted by a restart only cleans up its own processes.
+- Downloads work on every device (safe file names, iOS share sheet).
+- The session tree folds again while a search or a filter is on; no more counter on Extensions; the Tabs button is an
+  icon.
+- Many touch targets are now 40 px (media player, tasks, crons, infra, sign-in, settings, toasts).
+- Crons, tasks, files, feed, backup, voice, MCP, Telegram, Git page, license and stats: dozens of inputs that caused a
+  500, a broken page or a lost record are now handled cleanly.
+
+Security:
+- Team: group keys stay in their group, invitations never replace a contact, connections go to the checked public IP
+  (no DNS rebinding) and a request signed before a restart is refused.
+- Installer: system directories refused for every path, safer purge, firewall detection and downloads.
+- Sign-in: setup link, cookie and device keys created under the config lock; two-step enable checks the session first.
+- Zip downloads never follow a link or a FIFO swapped in during the download.
 ## 2.0.0-alpha.104 - 2026-10-28
 
 Changed (Sessions):

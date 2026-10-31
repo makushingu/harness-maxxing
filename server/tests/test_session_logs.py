@@ -126,6 +126,37 @@ def test_compact_logs_slims_existing_system_lines(client, topic):
     assert service.compact_log(sid)["status"] == "unchanged"
 
 
+def test_compact_log_keeps_what_the_server_appends_meanwhile(client, topic, monkeypatch):
+    """A line the server appends while the log is being rewritten (a hidden message, a note) is not lost."""
+    from maxxing.sessions import clip
+    think = {"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": "c1"}
+    sid = _session_with_log(topic, _line(think) * 30 + _turn_lines(0))
+    real, done = clip.drop_line, []
+
+    def drop_and_append(line):
+        if not done:
+            done.append(1)
+            store.append_log(sid, {"type": "mx_hide", "ref": 1.0, "hidden": True, "at": 2.0})
+        return real(line)
+    monkeypatch.setattr(clip, "drop_line", drop_and_append)
+    assert service.compact_log(sid)["status"] == "compacted"
+    raw = [json.loads(x) for x in store.log_path(sid).read_text().splitlines()]
+    assert raw[-1]["type"] == "mx_hide" and sum(ev["type"] == "mx_hide" for ev in raw) == 1
+    assert not any(ev.get("subtype") == "thinking_tokens" for ev in raw)
+    assert not store.compacting_path(sid).exists()
+
+
+def test_compact_log_needs_free_space(client, topic, monkeypatch):
+    import shutil
+    from collections import namedtuple
+    think = {"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": "c1"}
+    sid = _session_with_log(topic, _line(think) * 30 + _turn_lines(0))
+    before = store.log_path(sid).read_bytes()
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: namedtuple("u", "total used free")(10, 10, 0))
+    assert service.compact_log(sid)["status"] == "no_space"
+    assert store.log_path(sid).read_bytes() == before
+
+
 def test_tail_ignores_partial_last_line(client, topic):
     sid = _session_with_log(topic, _turn_lines(0) + '{"type": "assistant", "mess')
     r = client.get(f"/api/sessions/{sid}/events", params={"tail": 50}).json()

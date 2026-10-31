@@ -151,6 +151,8 @@ class Runner:
     # ---- main loop -------------------------------------------------------------------------
     def run(self) -> int:
         fd = store.hold_run_lock(self.sid, wait_s=20.0)   # a previous runner may still be exiting
+        if fd is None and store.compacting_path(self.sid).exists():
+            fd = store.hold_run_lock(self.sid, wait_s=600.0)   # the nightly log compaction: the message waits
         if fd is None:
             return 0                                   # another runner owns this session
         signal.signal(signal.SIGTERM, self.on_sigterm)
