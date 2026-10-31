@@ -570,12 +570,19 @@ def test_killed_run_is_recorded_as_interrupted_on_the_next_run(org, monkeypatch)
     assert len(crons.read_runs()) == 1 and lock.read_text() == ""   # a normal end clears the mark
     orphan = subprocess.Popen(["sleep", "600"], start_new_session=True)
     try:
-        lock.write_text(json.dumps({"pid": 999999, "at": _time.time() - 5, "pgid": orphan.pid}))
+        other = subprocess.Popen(["sleep", "600"], start_new_session=True)   # a reused number: not ours
+        lock.write_text(json.dumps({"pid": 999999, "at": _time.time() - 5, "pgid": other.pid,
+                                    "pgid_start": "another-boot:1"}))
+        crons.run_job(j["id"])
+        assert other.poll() is None
+        other.kill()
+        lock.write_text(json.dumps({"pid": 999999, "at": _time.time() - 5, "pgid": orphan.pid,
+                                    "pgid_start": crons._proc_start(orphan.pid)}))
         r = crons.run_job(j["id"])
         assert r["ok"]
         runs = crons.read_runs()
-        assert len(runs) == 3 and not runs[1]["ok"] and "interrupted" in runs[1]["output_tail"]
-        assert [x["ok"] for x in sent] == [True, False, True]
+        assert len(runs) == 5 and not runs[1]["ok"] and "interrupted" in runs[1]["output_tail"]
+        assert [x["ok"] for x in sent] == [True, False, True, False, True]
         assert orphan.wait(timeout=5) == -9                          # the orphan job shell is killed
     finally:
         if orphan.poll() is None:
