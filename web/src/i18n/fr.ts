@@ -783,6 +783,8 @@ export const fr: Record<keyof typeof en, string> = {
   'claude.autoCompactRecommended': 'recommandé',
   'claude.idleCompact': 'Compacter au retour',
   'claude.idleCompactHint': 'Le cache de prompt de Claude dure quelques minutes (une heure au plus). Quand vous écrivez dans une session inactive depuis plus longtemps, avec au moins ce contexte, Harness la résume d\'abord et votre message part dans un nouveau fil qui reprend ce résumé : l\'historique serait de toute façon renvoyé au prix fort, les tours suivants coûtent donc beaucoup moins. Coût : un tour de résumé (une courte attente) avant la réponse.',
+  'claude.smartResume': 'Reprise intelligente',
+  'claude.smartResumeHint': 'Quand vous revenez sur une session après 5 minutes ou plus, avec au moins ce contexte (et son cache expiré, ou 100k ou plus), un petit modèle compare rapidement votre message aux derniers échanges. Nouveau sujet : Harness résume d\'abord la session, comme ci-dessus. Suite du travail en cours (« continue », « corrige ça », le fichier ou l\'erreur dont on parlait) : votre message continue simplement dans le fil complet, aucun détail n\'est perdu. Si la vérification échoue, la règle ci-dessus s\'applique. Désactivé : seulement la règle ci-dessus.',
   'claude.protectSecrets': 'Protéger les secrets',
   'claude.protectSecretsHint': 'Les outils de Claude refusent de lire ou modifier les secrets du serveur (secrets.json) et les clés SSH (~/.ssh), quel que soit le mode de permissions. Cela empêche une instruction cachée dans une page web ou un e-mail de simplement les lire ; un script écrit pour ouvrir le fichier n’est pas bloqué - pour du contenu venu de l’extérieur, préférez un mode plus strict sur ce topic.',
   'claude.shortTitles': 'Titres de session courts',
