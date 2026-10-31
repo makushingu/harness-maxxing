@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import { KeyRound, LogIn, MoreHorizontal, Plug, Plus, RefreshCw, Trash2, X } from 'lucide-react'
-import { useMcp, useMcpAdd, useMcpCheck, useMcpRemove, useSecrets, useTopics } from '@/lib/queries'
+import { useMcp, useMcpAdd, useMcpAuto, useMcpCheck, useMcpRemove, useSecrets, useTopics } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
 import { fmtRelative } from '@/lib/format'
 import type { McpServer, McpState } from '@/lib/types'
@@ -26,12 +26,13 @@ import {
   Input,
   Segmented,
   Skeleton,
+  Switch,
   Tooltip,
   confirm,
   toast,
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
-import { Callout } from '@/features/common'
+import { Callout, SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
 import { PcBrowserCard } from '@/features/pc/PcBrowserCard'
 import { ConnectDialog } from '@/features/mcp/ConnectDialog'
@@ -279,6 +280,7 @@ export function McpSection() {
   const lang = useLang()
   const { data, isLoading } = useMcp()
   const check = useMcpCheck()
+  const auto = useMcpAuto()
   const [adding, setAdding] = React.useState(false)
   const [connecting, setConnecting] = React.useState<McpServer | null>(null)
   const servers = data?.servers || []
@@ -326,6 +328,11 @@ export function McpSection() {
             </ul>
           </>
         )}
+      </SettingsCard>
+      <SettingsCard title={t('mcp.autoTitle')}>
+        <SettingRow label={t('mcp.auto')} description={t('mcp.autoHint')} htmlFor="mx-mcp-auto">
+          <Switch id="mx-mcp-auto" checked={data?.auto ?? false} disabled={!data || auto.isPending} onCheckedChange={(on) => auto.mutate(on)} />
+        </SettingRow>
       </SettingsCard>
       <PcBrowserCard />
       <AddDialog open={adding} onOpenChange={setAdding} />

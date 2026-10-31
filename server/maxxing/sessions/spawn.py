@@ -157,9 +157,11 @@ FOREGROUND_AGENTS = ("Subagents (Agent tool): run them in the foreground, always
                      "Agent calls in the same message: they run in parallel and their results come back in this turn.")
 
 
-def agents_args(cfg: dict) -> list[str]:
-    """`--append-system-prompt` asking for foreground subagents, unless config `background_agents` is on."""
-    return [] if cfg.get("background_agents") else ["--append-system-prompt", FOREGROUND_AGENTS]
+def agents_args(cfg: dict, extra: str = "") -> list[str]:
+    """`--append-system-prompt` asking for foreground subagents, unless config `background_agents` is on, followed by
+    `extra` (the MCP servers not loaded, mcp_auto.py). One flag only: Claude Code keeps the last of several."""
+    parts = ([] if cfg.get("background_agents") else [FOREGROUND_AGENTS]) + ([extra] if extra else [])
+    return ["--append-system-prompt", "\n\n".join(parts)] if parts else []
 
 
 def settings_args(cfg: dict) -> list[str]:

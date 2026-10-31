@@ -16,6 +16,9 @@ export function useMcp() {
 export function useMcpCheck() {
   return useMut(() => api.post('/api/mcp/check', {}), { invalidate: [mcpKeys.all] })
 }
+export function useMcpAuto() {
+  return useMut((enabled: boolean) => api.put<Ok>('/api/mcp/auto', { enabled }), { invalidate: [mcpKeys.all] })
+}
 export function useMcpAdd() {
   return useMut((b: McpAddBody) => api.post<{ id: string; exposed: string[] }>('/api/mcp', b), { invalidate: [mcpKeys.all], errorToast: false })
 }

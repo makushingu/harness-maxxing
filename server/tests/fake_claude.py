@@ -16,6 +16,9 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   HUGE          a 3 MB tool result, an image result and a 100 kB Write input (log clipping tests)
   AUTH_EXPIRED  (or env FAKE_CLAUDE_AUTH_EXPIRED=1) fails like an expired OAuth sign-in
   BIGCTX        the last answer reports a 150k-token context (automatic compaction tests)
+  MCPUSE:<srv>  calls the tool mcp__<srv>__ping (MCP auto-loading tests)
+  MCPLOAD       runs `maxxing mcp load $FAKE_CLAUDE_MCPLOAD` (python -m maxxing) like a turn asking for a server
+  MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
 A `--system-prompt` that names chat sessions (short titles) gets $FAKE_CLAUDE_TITLE (default "Fake short
 title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail.
 Threads are remembered in $FAKE_CLAUDE_DIR (default /tmp/fake-claude-<uid>): --resume of an
@@ -47,7 +50,8 @@ def parse(argv: list[str]) -> dict:
     with_value = {"--output-format": "format", "--model": "model", "--session-id": "session_id",
                   "--resume": "resume", "--permission-mode": "permission_mode", "-r": "resume",
                   "--input-format": "input", "--settings": "settings", "--tools": "tools",
-                  "--system-prompt": "system_prompt", "--append-system-prompt": "append_system_prompt"}
+                  "--system-prompt": "system_prompt", "--append-system-prompt": "append_system_prompt",
+                  "--mcp-config": "mcp_config"}
     for a in it:
         if a in ("-p", "--print"):
             o["print"] = True
@@ -143,7 +147,8 @@ def record(o: dict, prompt: str, images: int = 0) -> None:
                             "env": {k: os.environ.get(k) for k in ("IS_SANDBOX", "CLAUDE_CODE_OAUTH_TOKEN",
                                                                    "ANTHROPIC_API_KEY", "MX_TEST_VAR",
                                                                    "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
-                                                                   "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")},
+                                                                   "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+                                                                   "MAXXING_SESSION")},
                             "at": time.time()}) + "\n")
 
 
@@ -280,7 +285,10 @@ def main() -> int:
         return 0
 
     emit({"type": "system", "subtype": "init", "cwd": os.getcwd(), "session_id": sid,
-          "tools": ["Task", "Bash", "Read", "Edit", "Write", "Grep", "Glob"], "mcp_servers": [],
+          "tools": ["Task", "Bash", "Read", "Edit", "Write", "Grep", "Glob"],
+          "mcp_servers": [{"name": "Facebook-ads", "status": "connected", "source": "user"},
+                          {"name": "claude.ai Google Drive", "status": "connected", "source": "claudeai"}]
+          if "MCPINIT" in prompt else [],
           "model": model, "permissionMode": "bypassPermissions" if o["skip"] else (o["permission_mode"] or "default"),
           "apiKeySource": "none", "claude_code_version": VERSION.split()[0], "uuid": str(uuid.uuid4())})
     emit({"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": sid})
@@ -326,6 +334,19 @@ def main() -> int:
             {"tool_use_id": iid, "type": "tool_result", "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "A" * 500_000}}]}]},
             "parent_tool_use_id": None, "session_id": sid, "uuid": str(uuid.uuid4())})
+    import re as _re
+    for srv in _re.findall(r"MCPUSE:([A-Za-z0-9_-]+)", prompt):
+        uid = "toolu_" + uuid.uuid4().hex[:20]
+        emit(msg(sid, model, [{"type": "tool_use", "id": uid, "name": f"mcp__{srv}__ping", "input": {}}]))
+        emit({"type": "user", "message": {"role": "user", "content": [
+            {"tool_use_id": uid, "type": "tool_result", "content": "pong"}]}, "parent_tool_use_id": None,
+            "session_id": sid, "uuid": str(uuid.uuid4())})
+    for srv in ([os.environ.get("FAKE_CLAUDE_MCPLOAD", "")] if "MCPLOAD" in prompt else []):
+        import subprocess as _sp
+        r = _sp.run([sys.executable, "-m", "maxxing", "mcp", "load", srv], capture_output=True, text=True,
+                    timeout=60)
+        with open(STORE / "mcp-load.txt", "a") as f:
+            f.write(f"{r.returncode} {r.stdout.strip()} {r.stderr.strip()}\n")
     if "NOTOOL" not in prompt:
         tid = "toolu_" + uuid.uuid4().hex[:20]
         emit(msg(sid, model, [{"type": "text", "text": "Let me look at the folder."}]))

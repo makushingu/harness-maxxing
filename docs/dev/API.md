@@ -275,7 +275,8 @@ McpServer = {id:"<scope>|<folder>|<name>", name, scope:"user"|"local"|"project",
 ```
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/mcp` | – | `{servers:[McpServer], checking, checked_at, config_file}` (first call starts a check) |
+| GET | `/api/mcp` | – | `{servers:[McpServer], checking, checked_at, config_file, auto}` (first call starts a check; `auto` = config `mcp_auto`) |
+| PUT | `/api/mcp/auto` | `{enabled}` | `{ok, enabled}` - config `mcp_auto` (turning it on starts a check: it lists the claude.ai connectors) |
 | POST | `/api/mcp/check` | – | `{checking:true}` - `claude mcp list` per folder in the background, then bus `mcp` |
 | POST | `/api/mcp` | `{name, where:"" \| "projects/…", type:"http"\|"sse"\|"stdio", url?, command?, args?, headers?, env?}` | `{id, exposed:[vault keys now exposed]}` · `400 bad_name\|bad_url\|bad_command\|bad_type\|bad_where\|too_long` (a value over 8192 characters, or 32768 in all), `404 folder_missing`, `409 exists` |
 | DELETE | `/api/mcp?id=` | – | `{ok}` |

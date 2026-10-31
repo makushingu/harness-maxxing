@@ -207,7 +207,7 @@ export type McpServer = {
   detail: string | null
   approved?: boolean
 }
-export type McpView = { servers: McpServer[]; checking: boolean; checked_at: number | null; config_file: string }
+export type McpView = { servers: McpServer[]; checking: boolean; checked_at: number | null; config_file: string; /** config `mcp_auto`: each turn loads only the servers its session needs */ auto?: boolean }
 export type McpAddBody = { name: string; where: string; type: 'http' | 'sse' | 'stdio'; url?: string; command?: string; headers?: Record<string, string>; env?: Record<string, string> }
 
 /* ---------------------------------------------------------------- Notifications feed */

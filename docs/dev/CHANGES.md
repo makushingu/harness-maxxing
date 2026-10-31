@@ -8,6 +8,29 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+MCP servers loaded per turn (config `mcp_auto`, default **false**; Settings -> MCP switch, `PUT /api/mcp/auto`).
+New `maxxing/mcp_auto.py` (stdlib only). When on, `mcp_auto.plan()` (runner `turn()`) gives the turn
+`--strict-mcp-config --mcp-config <state>/mcp-auto/sessions/<sid>.json` (0600, folder 0700, rewritten only when its
+content changes, deleted by `store.remove`) with the full configs of: user-scope servers used by the topic
+(`<state>/mcp-auto/topics/<sha1(path)[:20]>.json` `{path, used:{server in tool form: ts}}`, 60 days, written at turn
+end from every `mcp__<server>__*` tool_use, subagents included), named in the message (whole name, or a 4+ letter word
+of it no other server has), or in meta `mcp_loaded`; plus every local-scope server of the cwd and the approved
+`.mcp.json` servers of the cwd and its parents (Claude Code reads parents too; verified). `disabledMcpServers` /
+`disabledMcpjsonServers` of the cwd are respected; harness-pc is left to pcbridge's own `--mcp-config` (two
+`--mcp-config` flags work together, verified). Strict also drops claude.ai connectors: if one is needed, no flag at
+all (everything loads). Connector names: `<state>/mcp-auto/connectors.json`, from the init event of unrestricted
+turns (`source: "claudeai"`) and from `mcp.check()` (`connectors_of_list`, lines with spaces that `parse_list`
+skips). Unreadable .claude.json = no restriction. Servers left out go into the system prompt (hint with kind + URL
+host / program, never secrets) with `maxxing mcp load "<name>"`: `spawn.agents_args(cfg, extra)` now joins the
+foreground-agents text and that hint in ONE `--append-system-prompt` (Claude Code keeps only the last of several:
+verified). Turns get `MAXXING_SESSION=<sid>`; `maxxing mcp load NAME [--session ID]` resolves the name (any case,
+with/without "claude.ai ", tool form) and appends it to meta `mcp_loaded` (50 max). `runner._mcp_after()`: if
+`mcp_loaded` got a server the turn did not have (strict turns only, not after an error / stop / plan turn), queues
+first `{source:"system", kind:"user", mcp_continue:n, text:"[Harness: the MCP server X is now loaded...]"}`, at most
+`CONTINUE_MAX` = 2 in a row. Measured (haiku, /tmp, this box's servers): 24.2k -> 18.5k tokens per call with
+nothing loaded; Facebook-ads alone ~3.4k. Note: a change of the loaded set changes the tool list, so the next call
+after it re-creates the prompt cache once. Tests: `tests/test_mcp_auto.py` (fake claude: MCPUSE:, MCPLOAD, MCPINIT).
+
 Sessions page: dropping a column on the upper third of a session alone in its column stacks it above (new store
 action `stackAbove(key, over)`: the dragged session takes the target's strip column, its `wide` and its saved width,
 the target goes `below`); same dashed zone as the lower third, drawn at the top.
