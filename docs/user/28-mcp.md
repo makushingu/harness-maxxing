@@ -66,6 +66,22 @@ The connection is kept for every session (Claude Code renews it on its own). Don
 
 **...** -> **Remove**. The keys of the vault stay.
 
+## Load servers only when needed
+
+Every server Claude Code loads costs tokens on **each** message (its tool names and instructions: a big service
+such as an ads account adds a few thousand) and time at the start of each turn (the connection). **Settings -> MCP
+-> Load MCP servers only when a session needs them** (off by default) gives each message only:
+
+- the servers its topic already used (in the last 60 days);
+- the servers named in your message ("look at my **Facebook ads**", "the file in my **Drive**");
+- the servers added to its topic (or project), always;
+- the servers Claude asked for in this session.
+
+When Claude needs a server it was not given, it runs `maxxing mcp load <name>` (it knows which ones exist) and stops;
+Harness continues by itself with the server loaded (at most twice in a row), and the topic keeps it from then on.
+When a message needs a **claude.ai connector** (Google Drive, Gmail...), that message loads every server, as before
+(Claude Code loads connectors only all together). The **Browser of my PC** is always loaded.
+
 ## Browser of my PC
 
 **Settings -> MCP -> Browser of my PC** lets Claude use a browser on **your own computer** (Windows, Mac or Linux):

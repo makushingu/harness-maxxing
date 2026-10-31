@@ -48,6 +48,9 @@ export type ClaudeStatus = {
    *  is preceded by a summary turn (the prompt cache expired anyway); 0 = off. */
   idle_compact_tokens: number
   idle_compact_after_s: number
+  /** A user message after a pause of 5 min+ to a session with at least this context (cache expired, or 100k+) is
+   *  sorted by a small model call: new subject -> summary first, follow-up -> the thread goes on; 0 = off. */
+  smart_resume_tokens: number
   protect_secrets?: boolean
   /** New sessions get a short title (2-5 words) naming their subject. */
   short_titles?: boolean
@@ -65,7 +68,7 @@ export type ClaudeAutoUpdate = {
 export type ClaudeAuthBody = { kind: 'oauth_token' | 'api_key'; value: string }
 export type ClaudeAuthResult = { ok: boolean; error?: string }
 export type ClaudeTestResult = { ok: boolean; model: string; ms: number; error?: string }
-export type ClaudeSettingsBody = { default_model?: string; permission_mode?: PermissionMode; auto_compact_tokens?: number; idle_compact_tokens?: number; idle_compact_after_s?: number; protect_secrets?: boolean; short_titles?: boolean; short_titles_model?: boolean; claude_auto_update?: boolean }
+export type ClaudeSettingsBody = { default_model?: string; permission_mode?: PermissionMode; auto_compact_tokens?: number; idle_compact_tokens?: number; idle_compact_after_s?: number; smart_resume_tokens?: number; protect_secrets?: boolean; short_titles?: boolean; short_titles_model?: boolean; claude_auto_update?: boolean }
 
 /* ---------------------------------------------------------------- Workspace */
 export type Topic = {
@@ -207,7 +210,7 @@ export type McpServer = {
   detail: string | null
   approved?: boolean
 }
-export type McpView = { servers: McpServer[]; checking: boolean; checked_at: number | null; config_file: string }
+export type McpView = { servers: McpServer[]; checking: boolean; checked_at: number | null; config_file: string; /** config `mcp_auto`: each turn loads only the servers its session needs */ auto?: boolean }
 export type McpAddBody = { name: string; where: string; type: 'http' | 'sse' | 'stdio'; url?: string; command?: string; headers?: Record<string, string>; env?: Record<string, string> }
 
 /* ---------------------------------------------------------------- Notifications feed */

@@ -167,6 +167,7 @@ async def status():
             "auto_compact_tokens": int(cfg.get("auto_compact_tokens") or 0),
             "idle_compact_tokens": int(cfg.get("idle_compact_tokens") or 0),
             "idle_compact_after_s": int(cfg.get("idle_compact_after_s") or 0),
+            "smart_resume_tokens": int(cfg.get("smart_resume_tokens") or 0),
             "protect_secrets": bool(cfg.get("protect_secrets", True)),
             "short_titles": bool(cfg.get("short_titles", True)),
             "short_titles_model": bool(cfg.get("short_titles_model", False)),
@@ -210,6 +211,7 @@ class SettingsIn(BaseModel):
     auto_compact_tokens: int | None = Field(None, ge=0, le=2_000_000)
     idle_compact_tokens: int | None = Field(None, ge=0, le=2_000_000)
     idle_compact_after_s: int | None = Field(None, ge=300, le=7 * 86400)
+    smart_resume_tokens: int | None = Field(None, ge=0, le=2_000_000)
     protect_secrets: bool | None = None
     short_titles: bool | None = None
     short_titles_model: bool | None = None
@@ -232,6 +234,8 @@ async def settings(body: SettingsIn):
         changes["idle_compact_tokens"] = body.idle_compact_tokens
     if body.idle_compact_after_s is not None:
         changes["idle_compact_after_s"] = body.idle_compact_after_s
+    if body.smart_resume_tokens is not None:
+        changes["smart_resume_tokens"] = body.smart_resume_tokens
     if body.protect_secrets is not None:
         changes["protect_secrets"] = body.protect_secrets
     if body.short_titles is not None:

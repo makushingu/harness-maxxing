@@ -13,7 +13,7 @@ stopped.
 - **Main area**: one or more **columns**, one session each. Open several sessions side by side,
   resize and reorder the columns, or detach one into its own window.
 - **Grid**: with two sessions or more, the grid button at the top right stacks them two per column (four sessions
-  = 2x2). You can also drop a column on the lower part of another, or pick **Put under the column on the left** in
+  = 2x2). You can also drop a column on the lower part of another (it goes under it) or on its upper part (it goes above it), or pick **Put under the column on the left** in
   its **…** menu. Only the session you clicked shows its full message box; the others show a slim **Write…** bar -
   click it to write there. Drag the line between two stacked sessions to share the height (double-click: half and
   half). The same button, or **Give it its own column**, puts them back side by side.
@@ -290,6 +290,17 @@ You wait for one summary turn before the reply; every turn after it is much smal
 never trigger it, nor does a session whose context is mostly what every new thread loads anyway (CLAUDE.md,
 memory): summarizing it would save nothing. Pick Off to keep the full thread whatever the pause. Stop during the
 summary cancels only the summary, your message stays: it runs right after, in the full thread.
+
+**Smart resume** (Settings -> Claude, 60k tokens by default): not every return deserves a summary. When you come back
+after 5 minutes or more to a session holding at least that much context (and its cache expired, or it holds 100k or
+more), a small model compares your message with the last exchanges - a quick check of a second or two:
+- **a new subject** (another task, a question that stands on its own): Harness summarizes the session first, as
+  above, with the note "New subject after 2 h: ...";
+- **a follow-up of the work in progress** ("go on", "fix that", the file or error you were just looking at, the answer
+  to a question Claude asked): your message simply continues in the full thread - no detail is lost, even past the
+  "Compact when you come back" threshold. Automatic compaction at the end of the turn still applies.
+
+If the check fails, the "Compact when you come back" rule applies as before. Off = that rule alone.
 
 ## Edit or delete a message that got no answer
 

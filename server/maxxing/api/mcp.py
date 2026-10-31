@@ -37,6 +37,21 @@ async def check():
     return {"checking": True, "checked_at": st.get("at")}
 
 
+class AutoIn(BaseModel):
+    enabled: bool
+
+
+@router.put("/api/mcp/auto")
+async def set_auto(body: AutoIn):
+    """Each turn loads only the MCP servers its session needs (mcp_auto.py)."""
+    from .. import config
+    config.update_config(mcp_auto=body.enabled)
+    if body.enabled:
+        await _call(mcp.check)                   # the claude.ai connectors get known (listed to the turns)
+    bus.invalidate("mcp")
+    return {"ok": True, "enabled": body.enabled}
+
+
 class AddIn(BaseModel):
     name: str
     where: Optional[str] = None          # workspace-relative folder (a topic); empty = every session
