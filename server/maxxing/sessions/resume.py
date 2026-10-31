@@ -33,7 +33,10 @@ SUMMARY_PROMPT = (
 
 def threshold(cfg: dict) -> int:
     """The context (tokens) from which a return after the cache expired is summarized; 0 = smart resume off."""
-    n = int(cfg.get("smart_resume_tokens") or 0)
+    try:
+        n = int(cfg.get("smart_resume_tokens") or 0)
+    except (TypeError, ValueError, OverflowError):   # hand-edited config: off, never a crashed turn
+        return 0
     return max(n, MIN_TOKENS) if n > 0 else 0
 
 
