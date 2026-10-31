@@ -720,7 +720,8 @@ def _idle_session(client, topic, text="long work BIGCTX NOTOOL", **kw) -> str:
 def test_idle_compaction_runs_before_the_message_of_a_big_session(client, topic, mx):
     st = client.get("/api/claude/status").json()
     assert st["idle_compact_tokens"] == 200000 and st["idle_compact_after_s"] == 3600
-    assert client.put("/api/claude/settings", json={"idle_compact_tokens": 100000}).json() == {"ok": True}
+    assert client.put("/api/claude/settings", json={"idle_compact_tokens": 100000, "smart_resume_tokens": 0}).json() \
+        == {"ok": True}                                      # smart resume (test_resume.py) would take it first
     sid = _idle_session(client, topic)                       # 150k tokens of context
     csid = store.read(sid)["csid"]
     client.post(f"/api/sessions/{sid}/messages", json={"text": "back again NOTOOL"})
@@ -742,7 +743,7 @@ def test_idle_compaction_runs_before_the_message_of_a_big_session(client, topic,
 @pytest.mark.parametrize("case", ["recent", "small", "off", "cron", "aside"])
 def test_idle_compaction_skipped(client, topic, mx, case):
     from maxxing import config
-    config.update_config(idle_compact_tokens=100000)          # below the 150k of BIGCTX: only `case` skips it
+    config.update_config(idle_compact_tokens=100000, smart_resume_tokens=0)   # < BIGCTX: only `case` skips it
     sid = _idle_session(client, topic, "short NOTOOL" if case == "small" else "long work BIGCTX NOTOOL")
     if case == "recent":
         store.update(sid, finished_at=time.time() - 600)
@@ -763,7 +764,7 @@ def test_idle_compaction_skipped(client, topic, mx, case):
 def test_stop_during_the_idle_summary_keeps_the_waiting_message(client, topic, mx, monkeypatch):
     """Stop while the idle-compaction summary runs cancels the summary only: the message behind it still runs."""
     from maxxing import config
-    config.update_config(idle_compact_tokens=100000)          # below the 150k of BIGCTX
+    config.update_config(idle_compact_tokens=100000, smart_resume_tokens=0)   # below the 150k of BIGCTX
     sid = _idle_session(client, topic)
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.5")
     client.post(f"/api/sessions/{sid}/messages", json={"text": "my important message NOTOOL"})
