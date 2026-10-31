@@ -145,3 +145,12 @@ def test_summary_prompt():
 @pytest.mark.parametrize("bad", ["abc", float("nan"), float("inf"), 1e999, [1], {"a": 1}])
 def test_a_malformed_threshold_means_off(bad):
     assert resume.threshold({"smart_resume_tokens": bad}) == 0
+
+
+def test_candidate_survives_malformed_numbers():
+    from maxxing.sessions import resume
+    m = {"fresh": False, "context_tokens": "abc", "finished_at": 1.0}
+    assert resume.candidate(m, {"text": "hi"}, {"smart_resume_tokens": 100_000}, 10_000.0) is None
+    m = {"fresh": False, "context_tokens": 300_000, "finished_at": 1.0}
+    assert resume.candidate(m, {"text": "hi"}, {"smart_resume_tokens": 100_000, "idle_compact_after_s": [1]},
+                            10_000.0) is None
