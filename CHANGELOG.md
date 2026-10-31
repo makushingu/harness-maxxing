@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.106 - 2026-10-31
+
+Fixes:
+- A malformed smart resume setting turns smart resume off instead of making every turn fail.
+- MCP servers per session: a broken or very deep Claude Code config, or an odd character in a server name, no longer
+  stops the turn; the list of servers left out is capped so it never bloats the prompt.
+
+Faster:
+- MCP servers per session read Claude Code's config once until it changes.
+
 ## 2.0.0-alpha.105 - 2026-10-31
 
 New:
