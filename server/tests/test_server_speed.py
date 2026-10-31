@@ -413,3 +413,15 @@ def test_search_db_free_pages_are_reclaimed(mx, monkeypatch):
     assert search.reclaim(con)
     assert con.execute("PRAGMA freelist_count").fetchone()[0] < free / 4
     assert not search.reclaim(con)                                     # at most once a day
+
+
+def test_a_scan_of_a_folder_still_changing_is_not_kept(mx, monkeypatch):
+    """A scan made while the sessions folder changed less than IDS_RACY_S ago may miss a file of the same tick:
+    the next call scans again instead of answering from it."""
+    store.sessions_dir().mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(store, "IDS_RACY_S", 3600.0)
+    store.list_ids()
+    assert store._ids["key"] is None
+    monkeypatch.setattr(store, "IDS_RACY_S", 0.0)
+    store.list_ids()
+    assert store._ids["key"] is not None
