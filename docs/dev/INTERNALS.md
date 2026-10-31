@@ -69,18 +69,12 @@ Python modules call each other only through these functions. Keep signatures sta
   to the queue head marked `held: true` (removed when it pops) and a `compact` item (`auto`, `idle`) runs first; `_post`
   then puts the seed into the message as `preface` (prepended by `build_prompt`, not displayed) instead of a separate
   seed turn. `service.stop` keeps `held` items: a Stop cancels the summary only, the message then runs.
-- Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, 0 = off): in `_pop`, `resume.candidate(meta, head,
-  cfg, now)` (same exclusions as idle compaction, plus `held`; pause >= `MIN_PAUSE_S` 300 s; context >=
-  max(threshold, 20k); cache expired or context >= 100k; not mostly `base_tokens`) says whether to ask. Then the head
-  is copied, `pid` set to None (the head shows as "being sent", steer leaves it alone, `_enqueue` still sees a live
-  runner through the run lock), the lock RELEASED, and `resume.classify()` runs (haiku, `--tools ""`, no session
-  persistence, strict MCP, no slash commands, own system prompt, cwd `<state>/claude-resume`, 20 s; killed as soon as
-  `stop_flag` is set or the queue head differs from the copy - a Stop / steer / edit). The lock is re-taken: the
-  verdict is used only if the head is still equal to the copy (else the new head is looked at again, at most twice
-  more, then the idle rule). `_take` pops: CONTINUE = no summary; NEW = the idle-compaction mechanics (`held` +
-  `compact` item, note "New subject after ..."); None (not asked / failed) = `_idle_compact` as before. Input:
-  title + the last 3 (user `mx_user` kind user, turn `result` text) pairs of the log tail, `conversation()` <= 4000
-  chars, the new message <= 1500. Tests: fake claude answers `$FAKE_CLAUDE_RESUME` (default FAIL).
+- Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, 0 = off): in `_take` (under the session lock),
+  `resume.candidate(meta, head, cfg, now)` (same exclusions as idle compaction, plus `held`; pause >= `MIN_PAUSE_S`
+  300 s; context >= max(threshold, 20k); cache expired, or context >= `WARM_FACTOR` (2) x threshold; not mostly
+  `base_tokens`) says whether a summary goes first. If so the idle-compaction mechanics run (`held` + `compact` item)
+  with `resume.summary_prompt(message)` instead of `SUMMARY_PROMPT`: the summary is written for the waiting message.
+  Otherwise `_idle_compact` (plain summary) as before.
 - A successful turn of a `cron=True` session archives it; a message from the web/Telegram clears the flag.
 
 

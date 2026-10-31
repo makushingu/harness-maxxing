@@ -8,13 +8,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
-Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, default 60 000, 0 = off; Settings -> Claude, GET
-status / PUT settings). A user message after a pause of 5 min+ to a session of at least that context (cache expired
-or 100k+) is sorted by one haiku call (title + last 3 exchanges <= 4000 chars + the message): NEW -> the idle
-compaction summary first (note "New subject after ..."), even below `idle_compact_tokens`; CONTINUE -> no summary, no
-note, even above it; failure / timeout (20 s) -> `_idle_compact` unchanged. `runner._pop` releases the session lock
-during the call (head copied, `pid` None meanwhile, verdict used only if the head is unchanged; Stop / steer cut the
-call); `_take` holds the former pop code. fake_claude: `FAKE_CLAUDE_RESUME` (default FAIL = the old behaviour).
+Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, default 100 000, 0 = off; Settings -> Claude, GET
+status / PUT settings). A user message to a session whose cache expired (`idle_compact_after_s`) with at least that
+context, or after a pause of 5 min+ with twice that, gets a summary turn first whose prompt (`resume.summary_prompt`)
+carries the message (<= 6000 chars): the plain 15-line summary plus "For the next message", the details it relies
+on kept exact. Note "Back after ...: Harness summarized the session (...) for your message". Otherwise
+`_idle_compact` (plain summary) as before. Measured on 30 real returns (blind judge vs the turn done with the full
+history): nothing missing 9 vs 2 for the plain summary, important detail missing 1 vs 2; tokens of the resumed turn
+-38 to -45 % at 100-200k, -67 % from 200k, -11 % at 60-100k. No classifier call any more (the first version's haiku
+call never worked outside the tests: `communicate(input, timeout=0.2)` retried with input raised ValueError).
 
 MCP servers loaded per turn (config `mcp_auto`, default **false**; Settings -> MCP switch, `PUT /api/mcp/auto`).
 New `maxxing/mcp_auto.py` (stdlib only). When on, `mcp_auto.plan()` (runner `turn()`) gives the turn

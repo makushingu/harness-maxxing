@@ -55,11 +55,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # the history would be re-sent uncached anyway. 0 = off; a lower non-zero value is raised to 20000.
     "idle_compact_tokens": 200000,
     "idle_compact_after_s": 3600,
-    # Smart resume: a user message that comes back after 5 min or more to a session of at least smart_resume_tokens
-    # (and whose cache expired, or of 100k tokens or more) is sorted by a small model call: a new subject gets the
-    # summary turn first, a follow-up of the recent work just goes on (no summary, even past the idle threshold).
-    # If the call fails, the idle compaction rule applies. 0 = off (idle compaction alone); a lower value -> 20000.
-    "smart_resume_tokens": 60000,
+    # Smart resume: a user message that comes back to a session whose cache expired (idle_compact_after_s) with at
+    # least smart_resume_tokens of context, or after 5 min+ with twice that, is preceded by a summary written for
+    # that message (it keeps exact what the message needs). 0 = off (idle compaction alone); a lower value -> 20000.
+    "smart_resume_tokens": 100000,
     # Claude's tools refuse to read or edit secrets.json and ~/.ssh (deny rules, every permission mode) + extra rules.
     "protect_secrets": True,
     # A new session without a title gets a short one (2-5 words) from a small model call, else from its first message.
