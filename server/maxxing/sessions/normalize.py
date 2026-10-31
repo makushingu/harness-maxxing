@@ -32,15 +32,15 @@ def normalize_lines(lines: Iterable[str]) -> list[dict]:
             continue
         try:
             ev = json.loads(line)
-        except ValueError:
+            if _LONE_SURROGATE.search(line):
+                ev = _no_surrogates(ev)
+        except (ValueError, RecursionError):                # not JSON, or nested too deep to read
             continue
-        if _LONE_SURROGATE.search(line):
-            ev = _no_surrogates(ev)
         if isinstance(ev, dict):
             try:
                 out.extend(normalize(ev))
-            except (AttributeError, TypeError, ValueError):     # a field of an unexpected type: skip that line
-                continue
+            except (AttributeError, TypeError, ValueError, ArithmeticError, RecursionError):
+                continue                                    # a field of an unexpected type or size: skip that line
     return out
 
 
