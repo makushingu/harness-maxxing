@@ -225,8 +225,8 @@ def last_backup() -> dict | None:
             e = json.loads(line)
         except ValueError:
             continue
-        if isinstance(e, dict) and isinstance(e.get("at"), (int, float)):
-            return e
+        if isinstance(e, dict) and isinstance(e.get("at"), (int, float)) and math.isfinite(e["at"]):
+            return e                                    # NaN / 1e999 would break the health response
     return None
 
 

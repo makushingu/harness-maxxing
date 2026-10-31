@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from maxxing import config
 
 
@@ -39,6 +41,15 @@ def test_auth_store_test_delete(client, mx, monkeypatch, tmp_path):
     assert client.post("/api/claude/auth", json={"kind": "nope", "value": "x" * 20}).status_code == 422
     assert client.delete("/api/claude/auth").json() == {"ok": True}
     assert client.get("/api/claude/status").json()["auth"]["method"] is None
+
+
+def test_auth_with_control_or_non_ascii_characters_is_refused(client, mx, monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    for bad in ("sk-ant-api-0123\x00456789", "sk-ant-api-0123\ud800456789", "sk-ant-api-0123é456789"):
+        r = client.post("/api/claude/auth", content=json.dumps({"kind": "api_key", "value": bad}),
+                        headers={"content-type": "application/json"})
+        assert r.status_code == 400
+    assert config.get_secret("anthropic_api_key") in (None, "")
 
 
 def test_failing_test_reported(client, mx, monkeypatch, tmp_path):
