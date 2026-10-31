@@ -203,7 +203,10 @@ export function prefetchTail(id: string) {
   const e = earlyTails.get(id)
   if (e && Date.now() - e.at < 10_000) return
   const p = fetchTail(id, TAIL_EVENTS)
-  p.catch(() => undefined)
+  // a failed early load is forgotten: the thread then fetches its tail itself instead of showing that error
+  p.catch(() => {
+    if (earlyTails.get(id)?.p === p) earlyTails.delete(id)
+  })
   earlyTails.set(id, { p, at: Date.now() })
 }
 /** The tail started by `prefetchTail` (consumed once, and only while recent: later loads always fetch; the live
