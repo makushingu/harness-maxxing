@@ -319,3 +319,27 @@ def test_the_hint_of_left_out_servers_is_capped(mx, servers, topic):
     p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, "hi")
     assert p is not mcp_auto.NO_PLAN and len(p.hint) < 20_000
     assert "more" in p.hint
+
+
+def test_a_second_identical_plan_compiles_and_reads_nothing(mx, servers, topic, monkeypatch):
+    import re
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    f = mx["tmp"] / "claude" / ".claude.json"
+    d = json.loads(f.read_text())
+    d["mcpServers"].update({f"tool{i}-svc": {"command": "x"} for i in range(600)})
+    f.write_text(json.dumps(d))
+    text = "please use tool42 svc and the blog db"
+    mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, text)
+    compiled, reads = [], []
+    real_compile, real_read = re._compile, type(f).read_text
+    monkeypatch.setattr(re, "_compile", lambda *a: compiled.append(a[0]) or real_compile(*a))
+    monkeypatch.setattr(type(f), "read_text",
+                        lambda self, *a, **k: (reads.append(self.name), real_read(self, *a, **k))[1])
+    p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, text)
+    assert "tool42-svc" in p.loaded
+    assert reads.count(".claude.json") == 0
+    assert not [c for c in compiled if isinstance(c, str) and "(?<![0-9a-z])" in c]
+    d["mcpServers"]["fresh-one"] = {"command": "x"}
+    f.write_text(json.dumps(d))                 # a changed file is read again
+    assert "fresh-one" in mcp_auto.known_names(servers)
