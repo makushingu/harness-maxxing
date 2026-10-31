@@ -211,6 +211,19 @@ def test_log_lines_with_fields_of_the_wrong_type_are_skipped():
     assert out[-1]["type"] == "user" and out[-1]["text"] == "still here"
 
 
+def test_log_lines_with_huge_numbers_or_deep_nesting_are_skipped():
+    """1e999 is valid JSON (it reads as inf) and a deeply nested array cannot be read without a RecursionError:
+    such a line is skipped like any other odd line, the session stays readable."""
+    from maxxing.sessions.normalize import normalize_lines
+    odd = ['{"type":"result","duration_ms":1e999}',
+           '{"type":"result","usage":{"input_tokens":1e999}}',
+           '{"type":"system","subtype":"task_progress","task_id":"t","usage":{"total_tokens":1e999}}',
+           "[" * 100_000 + "]" * 100_000,
+           '{"type":"mx_user","text":"x","attachments":' + "[" * 100_000 + "]" * 100_000 + '}']
+    out = normalize_lines(odd + [json.dumps({"type": "mx_user", "text": "still here"})])
+    assert [e["text"] for e in out] == ["still here"]
+
+
 def _task_lines() -> str:
     """A background sub-agent as Claude Code logs it: Agent call, "launched" result, progress, notification."""
     t = "toolu_agent0001"
