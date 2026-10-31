@@ -44,7 +44,7 @@ if __package__ in (None, ""):                       # path invocation
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from maxxing import claude_auth, config, mcp_auto   # noqa: E402  (stdlib-only modules)
-from maxxing.sessions import clip, spawn, store      # noqa: E402
+from maxxing.sessions import clip, resume, spawn, store      # noqa: E402
 
 RESUME_LOST = re.compile(r"no conversation found|session .{0,80}not found|no such session|"
                          r"invalid session|could not resume|failed to resume", re.I)
@@ -173,42 +173,86 @@ class Runner:
     def _pop(self, failed: str | None) -> dict | None:
         """Next queue item, or None after setting the final state - atomically, so a message
         queued by the server is either popped here or finds the session idle and respawns it. A user message
-        that comes back to a big session after its prompt cache expired is preceded by a summary turn (idle
-        compaction): the message stays at the head of the queue and runs in the fresh thread."""
-        idle = None
-        with store.edit(self.sid) as m:
-            m["spawned_at"] = None
-            q = m.get("queue") or []
-            m["updated"] = time.time()
-            if not q:
-                m["pid"], m["state"] = None, ("error" if failed else "idle")
-                m.pop("runner_caps", None)
-                m.pop("turn_id", None)
-                m.pop("turn_refs", None)
-                return None
-            item = q.pop(0)
-            item.pop("held", None)
-            idle = _idle_compact(m, item, config.load_config(), time.time())
-            if idle:                                   # the summary runs first, the message waits at the head
-                q.insert(0, {**item, "held": True})    # a Stop cancels the summary, never the user's message
-                item = {"text": SUMMARY_PROMPT, "attachments": [], "source": "system", "kind": "compact",
-                        "auto": True, "idle": True, "at": time.time()}
-            m["queue"], m["state"], m["pid"] = q, "running", os.getpid()
-            m["runner_caps"] = ["steer"]               # the server may send SIGUSR1 (steer) to this runner
-            # Before releasing the lock: a steer can only target this turn once its id is known.
-            self.turn_id = m["turn_id"] = uuid.uuid4().hex[:12]
-            # Still under the lock: a Stop / steer for THIS turn can only be sent once the item is popped, so it is
-            # never wiped here (one that targeted the previous turn arrived before and is dropped).
-            self.stop_flag.clear()
-            self.interrupted = False
-            m["turn_kind"] = item.get("kind") or "user"
-            m["turn_refs"] = list(item.get("refs") or [])     # the caller's ids of this message (Telegram)
-            self.current = item
+        that comes back to a big session after a pause may be preceded by a summary turn (smart resume / idle
+        compaction): the message stays at the head of the queue and runs in the fresh thread.
+
+        Smart resume asks a small classifier first. That call never runs under the session lock: the head is
+        inspected under the lock (the state stays "running", so the server queues behind us and never respawns),
+        the lock is released for the call, then re-taken to pop. A Stop, a steer or an edit meanwhile changes the
+        head: the call is cut short and the new head is looked at again (verdicts are only used for the item they
+        were asked about)."""
+        asked: tuple[dict, str | None] | None = None   # (queue head as classified, verdict or None = failed)
+        for attempt in range(3):
+            ask = None
+            with store.edit(self.sid) as m:
+                m["spawned_at"] = None
+                q = m.get("queue") or []
+                m["updated"] = time.time()
+                if not q:
+                    m["pid"], m["state"] = None, ("error" if failed else "idle")
+                    m.pop("runner_caps", None)
+                    m.pop("turn_id", None)
+                    m.pop("turn_refs", None)
+                    return None
+                cfg, now = config.load_config(), time.time()
+                same = asked is not None and q[0] == asked[0]
+                if not same and attempt < 2:
+                    ask = resume.candidate(m, q[0], cfg, now)
+                if not ask:
+                    return self._take(m, q, cfg, now, asked[1] if same and asked else None)
+                # Like a turn that is starting (no pid): the head shows as being sent, not as waiting, and is never
+                # merged by a steer; a Stop just clears the queue (seen below, no signal needed).
+                m["pid"] = None
+                head, title = json.loads(json.dumps(q[0])), str(m.get("title") or "")
+                self.stop_flag.clear()
+            verdict = resume.classify(title, resume.conversation(resume.exchanges(self.sid)), head.get("text") or "",
+                                      should_stop=lambda h=head: self._head_changed(h))
+            asked = (head, verdict)
+        return None                                    # not reached: the third pass never asks
+
+    def _head_changed(self, head: dict) -> bool:
+        if self.stop_flag.is_set():
+            return True
+        q = (store.read(self.sid) or {}).get("queue") or []
+        return not q or q[0] != head
+
+    def _take(self, m: dict, q: list, cfg: dict, now: float, verdict: str | None) -> dict:
+        """Pop the queue head (under the session lock), with the summary turn first when the return is worth it."""
+        item = q.pop(0)
+        item.pop("held", None)
+        if verdict == "CONTINUE":                      # builds on the recent details: resume as is
+            idle = None
+        elif verdict == "NEW":
+            away = now - max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+            idle = (resume.away_text(away), int(m.get("context_tokens") or 0) // 1000)
+        else:                                          # not asked, or the call failed: the idle rule as before
+            idle = _idle_compact(m, item, cfg, now)
+        if idle:                                       # the summary runs first, the message waits at the head
+            q.insert(0, {**item, "held": True})        # a Stop cancels the summary, never the user's message
+            item = {"text": SUMMARY_PROMPT, "attachments": [], "source": "system", "kind": "compact",
+                    "auto": True, "idle": True, "at": time.time()}
+        m["queue"], m["state"], m["pid"] = q, "running", os.getpid()
+        m["runner_caps"] = ["steer"]                   # the server may send SIGUSR1 (steer) to this runner
+        # Before releasing the lock: a steer can only target this turn once its id is known.
+        self.turn_id = m["turn_id"] = uuid.uuid4().hex[:12]
+        # Still under the lock: a Stop / steer for THIS turn can only be sent once the item is popped, so it is
+        # never wiped here (one that targeted the previous turn arrived before and is dropped).
+        self.stop_flag.clear()
+        self.interrupted = False
+        m["turn_kind"] = item.get("kind") or "user"
+        m["turn_refs"] = list(item.get("refs") or [])  # the caller's ids of this message (Telegram)
+        self.current = item
         if idle:
             hours, tokens = idle
-            self.note(f"Back after {hours}: the cache had expired, Harness summarized the session ({tokens}k tokens) "
-                      "before your message - cheaper from now on (idle compaction, Settings -> Claude). The history "
-                      "stays displayed here.")
+            if verdict == "NEW":
+                text = (f"New subject after {hours}: Harness summarized the session ({tokens}k tokens) before your "
+                        "message - cheaper from now on (smart resume, Settings -> Claude). The history stays "
+                        "displayed here.")
+            else:
+                text = (f"Back after {hours}: the cache had expired, Harness summarized the session ({tokens}k tokens) "
+                        "before your message - cheaper from now on (idle compaction, Settings -> Claude). The history "
+                        "stays displayed here.")
+            self.note(text)                            # under the lock: written before the summary turn starts
         return item
 
     def _crash(self, e: Exception) -> None:

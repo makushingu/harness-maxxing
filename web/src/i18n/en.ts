@@ -794,6 +794,8 @@ export const en = {
   'claude.autoCompactRecommended': 'recommended',
   'claude.idleCompact': 'Compact when you come back',
   'claude.idleCompactHint': 'Claude\'s prompt cache lasts a few minutes (up to an hour). When you write to a session idle for longer, with at least this much context, Harness first summarizes it and your message runs in a fresh thread seeded with the summary: the history would be re-sent at full price anyway, so later turns get much cheaper. Costs one summary turn (a short wait) before the reply.',
+  'claude.smartResume': 'Smart resume',
+  'claude.smartResumeHint': 'When you come back to a session after 5 minutes or more, with at least this much context (and its cache expired, or 100k or more), a quick check by a small model reads your message against the last exchanges. A new subject: Harness summarizes the session first, as above. A follow-up of the work in progress ("go on", "fix that", the file or error just discussed): your message simply continues in the full thread, no detail is lost. If the check fails, the rule above applies. Off: only the rule above.',
   'claude.protectSecrets': 'Protect the secrets',
   'claude.protectSecretsHint': 'Claude’s tools refuse to read or edit the server’s secrets (secrets.json) and the SSH keys (~/.ssh), whatever the permission mode. It stops instructions hidden in a web page or an e-mail from simply reading them; a script written to open the file is not stopped - for content from outside, prefer a stricter permission mode on that topic.',
   'claude.shortTitles': 'Short session titles',

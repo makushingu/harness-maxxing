@@ -11,6 +11,8 @@ const CLI_DEFAULT = '__cli_default__'
 const COMPACT_AT = [0, 200_000, 300_000, 400_000, 600_000, 800_000]
 /** Idle compaction thresholds offered (context of a session you come back to after its cache expired); 0 = off. */
 const IDLE_AT = [0, 40_000, 60_000, 100_000, 200_000]
+/** Smart resume thresholds offered (context from which a return after a pause is sorted: new subject or follow-up); 0 = off. */
+const SMART_AT = [0, 40_000, 60_000, 100_000, 200_000]
 
 /** Default model + permission mode (saved immediately). */
 export function ClaudeDefaults() {
@@ -75,6 +77,21 @@ export function ClaudeDefaults() {
           />
         </FormField>
       </div>
+      <FormField label={t('claude.smartResume')} hint={t('claude.smartResumeHint')}>
+        <Select
+          value={String(s.smart_resume_tokens ?? 0)}
+          onValueChange={(v) => save.mutate({ smart_resume_tokens: Number(v) })}
+          options={[
+            ...SMART_AT.map((n) => ({
+              value: String(n),
+              label: n === 0 ? t('claude.autoCompactOff') : `${n / 1000}k${n === 60_000 ? ` · ${t('claude.autoCompactRecommended')}` : ''}`,
+            })),
+            ...(SMART_AT.includes(s.smart_resume_tokens) ? [] : [{ value: String(s.smart_resume_tokens), label: `${Math.round(s.smart_resume_tokens / 1000)}k` }]),
+          ]}
+          className="sm:max-w-sm"
+          data-testid="smart-resume"
+        />
+      </FormField>
       <SettingRow label={t('claude.protectSecrets')} description={t('claude.protectSecretsHint')} htmlFor="mx-protect-secrets">
         <Switch id="mx-protect-secrets" checked={s.protect_secrets ?? true} onCheckedChange={(v) => save.mutate({ protect_secrets: v })} />
       </SettingRow>
