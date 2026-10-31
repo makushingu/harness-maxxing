@@ -36,23 +36,23 @@ export function ClaudeDefaults() {
   ]
   return (
     <div className="grid gap-6">
-      <FormField label={t('claude.defaultModel')} hint={t('claude.defaultModelHint')}>
+      <FormField label={t('cdef.defaultModel')} hint={t('cdef.defaultModelHint')}>
         <Select
           value={s.default_model || CLI_DEFAULT}
           onValueChange={(v) => save.mutate({ default_model: v === CLI_DEFAULT ? '' : v })}
-          options={[{ value: CLI_DEFAULT, label: t('claude.cliDefault') }, ...models.map((m) => ({ value: m.id, label: m.label || m.id }))]}
+          options={[{ value: CLI_DEFAULT, label: t('cdef.cliDefault') }, ...models.map((m) => ({ value: m.id, label: m.label || m.id }))]}
           disabled={save.isPending}
           className="sm:max-w-sm"
         />
       </FormField>
-      <FormField label={t('claude.autoCompact')} hint={t('claude.autoCompactHint')}>
+      <FormField label={t('cdef.autoCompact')} hint={t('cdef.autoCompactHint')}>
         <Select
           value={String(s.auto_compact_tokens ?? 0)}
           onValueChange={(v) => save.mutate({ auto_compact_tokens: Number(v) })}
           options={[
             ...COMPACT_AT.map((n) => ({
               value: String(n),
-              label: n === 0 ? t('claude.autoCompactOff') : `${n / 1000}k${n === 400_000 ? ` · ${t('claude.autoCompactRecommended')}` : ''}`,
+              label: n === 0 ? t('cdef.autoCompactOff') : `${n / 1000}k${n === 400_000 ? ` · ${t('cdef.autoCompactRecommended')}` : ''}`,
             })),
             ...(COMPACT_AT.includes(s.auto_compact_tokens) ? [] : [{ value: String(s.auto_compact_tokens), label: `${Math.round(s.auto_compact_tokens / 1000)}k` }]),
           ]}
@@ -61,14 +61,14 @@ export function ClaudeDefaults() {
         />
       </FormField>
       <div data-tour="idle-compact">
-        <FormField label={t('claude.idleCompact')} hint={t('claude.idleCompactHint')}>
+        <FormField label={t('cdef.idleCompact')} hint={t('cdef.idleCompactHint')}>
           <Select
             value={String(s.idle_compact_tokens ?? 0)}
             onValueChange={(v) => save.mutate({ idle_compact_tokens: Number(v) })}
             options={[
               ...IDLE_AT.map((n) => ({
                 value: String(n),
-                label: n === 0 ? t('claude.autoCompactOff') : `${n / 1000}k${n === 60_000 ? ` · ${t('claude.autoCompactRecommended')}` : ''}`,
+                label: n === 0 ? t('cdef.autoCompactOff') : `${n / 1000}k${n === 60_000 ? ` · ${t('cdef.autoCompactRecommended')}` : ''}`,
               })),
               ...(IDLE_AT.includes(s.idle_compact_tokens) ? [] : [{ value: String(s.idle_compact_tokens), label: `${Math.round(s.idle_compact_tokens / 1000)}k` }]),
             ]}
@@ -77,14 +77,14 @@ export function ClaudeDefaults() {
           />
         </FormField>
       </div>
-      <FormField label={t('claude.smartResume')} hint={t('claude.smartResumeHint')}>
+      <FormField label={t('cdef.smartResume')} hint={t('cdef.smartResumeHint')}>
         <Select
           value={String(s.smart_resume_tokens ?? 0)}
           onValueChange={(v) => save.mutate({ smart_resume_tokens: Number(v) })}
           options={[
             ...SMART_AT.map((n) => ({
               value: String(n),
-              label: n === 0 ? t('claude.autoCompactOff') : `${n / 1000}k${n === 60_000 ? ` · ${t('claude.autoCompactRecommended')}` : ''}`,
+              label: n === 0 ? t('cdef.autoCompactOff') : `${n / 1000}k${n === 60_000 ? ` · ${t('cdef.autoCompactRecommended')}` : ''}`,
             })),
             ...(SMART_AT.includes(s.smart_resume_tokens) ? [] : [{ value: String(s.smart_resume_tokens), label: `${Math.round(s.smart_resume_tokens / 1000)}k` }]),
           ]}
@@ -92,26 +92,26 @@ export function ClaudeDefaults() {
           data-testid="smart-resume"
         />
       </FormField>
-      <SettingRow label={t('claude.protectSecrets')} description={t('claude.protectSecretsHint')} htmlFor="mx-protect-secrets">
+      <SettingRow label={t('cdef.protectSecrets')} description={t('cdef.protectSecretsHint')} htmlFor="mx-protect-secrets">
         <Switch id="mx-protect-secrets" checked={s.protect_secrets ?? true} onCheckedChange={(v) => save.mutate({ protect_secrets: v })} />
       </SettingRow>
-      <SettingRow label={t('claude.shortTitles')} description={t('claude.shortTitlesHint')} htmlFor="mx-short-titles">
+      <SettingRow label={t('cdef.shortTitles')} description={t('cdef.shortTitlesHint')} htmlFor="mx-short-titles">
         <Switch id="mx-short-titles" checked={s.short_titles ?? true} onCheckedChange={(v) => save.mutate({ short_titles: v })} />
       </SettingRow>
       {(s.short_titles ?? true) && (
-        <SettingRow label={t('claude.shortTitlesModel')} description={t('claude.shortTitlesModelHint')} htmlFor="mx-short-titles-model">
+        <SettingRow label={t('cdef.shortTitlesModel')} description={t('cdef.shortTitlesModelHint')} htmlFor="mx-short-titles-model">
           <Switch id="mx-short-titles-model" checked={!!s.short_titles_model} onCheckedChange={(v) => save.mutate({ short_titles_model: v })} />
         </SettingRow>
       )}
       <div data-tour="claude-auto-update" className="rounded-md">
         <SettingRow
-          label={t('claude.autoUpdate')}
+          label={t('cdef.autoUpdate')}
           description={
             <>
-              {t('claude.autoUpdateHint')}
+              {t('cdef.autoUpdateHint')}
               {s.auto_update?.last && (
                 <span className={`mt-1 block ${s.auto_update.last.ok ? '' : 'text-destructive'}`} data-testid="claude-last-update">
-                  {t(s.auto_update.last.ok ? 'claude.autoUpdateLast' : 'claude.autoUpdateFailed', {
+                  {t(s.auto_update.last.ok ? 'cdef.autoUpdateLast' : 'cdef.autoUpdateFailed', {
                     from: s.auto_update.last.from,
                     to: s.auto_update.last.to,
                     date: fmtDate(s.auto_update.last.at, lang),
