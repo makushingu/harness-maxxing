@@ -6,6 +6,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.106 - 2026-10-31
+
+Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,
+`cache_at`, `idle_compact_after_s` defensively (TypeError / ValueError / OverflowError -> off). `mcp_auto`: RecursionError caught where the
+configs are parsed, the session file is written ASCII-only and its `.tmp` removed on failure, the left-out list of the
+hint is capped (40 servers, 120 chars each, "and N more"). Name patterns are `lru_cache`d and `.claude.json` is
+parsed again only when `(path, mtime_ns, size, inode)` changes (`mcp_auto._read_cfg`, which raises like a plain read
+so an unreadable config still means "load everything").
+
 ## 2.0.0-alpha.105 - 2026-10-31
 
 Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, default 100 000, 0 = off; Settings -> Claude, GET
