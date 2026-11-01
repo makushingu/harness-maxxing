@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import queue
 import re
@@ -819,13 +820,18 @@ def _idle_compact(m: dict, item: dict, cfg: dict, now: float) -> tuple[str, int]
     """Idle compaction: (time away, context in k tokens) when a user message comes back to a big session whose
     prompt cache has expired (last call more than `idle_compact_after_s` ago). The history would be re-sent
     uncached anyway: summarizing it now costs that once, and every later turn starts from a small seed."""
-    limit = int(cfg.get("idle_compact_tokens") or 0)
-    after = float(cfg.get("idle_compact_after_s") or 0)
-    ctx = int(m.get("context_tokens") or 0)
-    last = max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+    try:
+        limit = int(cfg.get("idle_compact_tokens") or 0)
+        after = float(cfg.get("idle_compact_after_s") or 0)
+        ctx = int(m.get("context_tokens") or 0)
+        last = max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+        base = int(m.get("base_tokens") or 0)          # what a fresh thread costs anyway (CLAUDE.md, memory...)
+    except (TypeError, ValueError, OverflowError):     # a hand-edited value: no summary, never a crashed turn
+        return None
+    if not math.isfinite(after) or not math.isfinite(last):
+        return None
     if limit <= 0 or after <= 0 or not last or ctx < max(limit, IDLE_COMPACT_MIN) or now - last < after:
         return None
-    base = int(m.get("base_tokens") or 0)              # what a fresh thread costs anyway (CLAUDE.md, memory...)
     if base and ctx - base < max(limit, IDLE_COMPACT_MIN) // 2:
         return None                                    # mostly fixed context: a summary would save nothing
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
