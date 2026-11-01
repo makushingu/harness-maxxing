@@ -16,6 +16,8 @@ Measured on 30 real returns, each summary judged blind against the turn done wit
 """
 from __future__ import annotations
 
+import math
+
 MIN_PAUSE_S = 300                       # below this, a message is just the next one of the conversation
 WARM_FACTOR = 2                         # cache still warm: re-reading is cheap, only summarize a much bigger thread
 MIN_TOKENS = 20_000                     # a lower non-zero setting is raised to this (like idle compaction)
@@ -61,6 +63,8 @@ def candidate(m: dict, item: dict, cfg: dict, now: float) -> tuple[float, int] |
         base = int(m.get("base_tokens") or 0)          # what a fresh thread costs anyway (CLAUDE.md, memory...)
         after = float(cfg.get("idle_compact_after_s") or 3600)
     except (TypeError, ValueError, OverflowError):     # a hand-edited value: no summary, never a crashed turn
+        return None
+    if not math.isfinite(last) or not math.isfinite(after):
         return None
     if not last or ctx < limit or now - last < MIN_PAUSE_S:
         return None
