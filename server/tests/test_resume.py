@@ -154,3 +154,28 @@ def test_candidate_survives_malformed_numbers():
     m = {"fresh": False, "context_tokens": 300_000, "finished_at": 1.0}
     assert resume.candidate(m, {"text": "hi"}, {"smart_resume_tokens": 100_000, "idle_compact_after_s": [1]},
                             10_000.0) is None
+
+
+@pytest.mark.parametrize("cfg,meta", [
+    ({"idle_compact_after_s": "x"}, {}),
+    ({"idle_compact_tokens": 1e999}, {}),
+    ({"idle_compact_after_s": float("nan")}, {}),
+    ({}, {"context_tokens": "abc"}),
+    ({}, {"finished_at": float("nan")}),
+    ({}, {"base_tokens": [1]}),
+])
+def test_idle_compaction_survives_malformed_numbers(cfg, meta):
+    from maxxing.sessions import runner
+    m = {"fresh": False, "context_tokens": 300_000, "finished_at": 1.0, **meta}
+    assert runner._idle_compact(m, {"text": "hi"}, {"idle_compact_tokens": 100_000, "idle_compact_after_s": 60,
+                                                   **cfg}, 10_000.0) is None
+    if "idle_compact_tokens" not in cfg:               # smart resume has its own threshold
+        assert resume.candidate(m, {"text": "hi"}, {"smart_resume_tokens": 100_000, "idle_compact_after_s": 60,
+                                                    **cfg}, 10_000.0) is None
+
+
+def test_idle_compaction_still_runs_with_sane_numbers():
+    from maxxing.sessions import runner
+    m = {"fresh": False, "context_tokens": 300_000, "finished_at": 1.0}
+    assert runner._idle_compact(m, {"text": "hi"}, {"idle_compact_tokens": 100_000, "idle_compact_after_s": 60},
+                                10_000.0) == ("3 h", 300)
