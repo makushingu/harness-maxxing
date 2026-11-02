@@ -61,6 +61,9 @@ def _handler(a) -> int:
             return 3
         return 0 if run["ok"] else 1
     if a.cron_cmd == "sync":
+        if crons._read_raw() is None:
+            print(f"{crons.jobs_path()} cannot be read: crontab left as it is", file=sys.stderr)
+            return 1
         text = crons.sync_crontab()
         print(f"crontab synced ({len(crons.managed_lines(crons._load_raw()))} managed lines, "
               f"{len(text.splitlines())} lines total)")
