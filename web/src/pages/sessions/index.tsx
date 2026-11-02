@@ -334,17 +334,7 @@ function Workspace() {
     // (it is already in place). Like `snap-proximity`, only when a column edge is near.
     let stopGlide = () => {}
     const glideToColumn = (el: HTMLDivElement) => {
-      const max = el.scrollWidth - el.clientWidth
-      let target: number | null = null
-      // a half column held at the left edge covers that much of the strip: columns settle just past it
-      const stuck = el.querySelector<HTMLElement>(':scope > [data-col][style*="sticky"]')
-      const pad = stuck && stuck.style.left === '0px' ? stuck.offsetWidth : 0
-      const pinned = !!stuck
-      for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
-        if (c.style.position === 'sticky') continue
-        const left = Math.min(max, Math.max(0, c.offsetLeft - pad))
-        if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
-      }
+      const { target, pinned } = columnStop(el)
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       // beside a pinned half the strip always settles on a column (snap-mandatory): one left between two stays half
       // hidden under the half
@@ -373,6 +363,45 @@ function Workspace() {
       stopGlide()
     }
   }, [mobile])
+  // Beside a pinned half, a column must never rest half hidden under it, whatever scrolled the strip (scrollbar,
+  // keyboard, a focus or scrollIntoView, a browser that ignores snap-mandatory): once the scrolling stops, the strip
+  // glides to the nearest column.
+  const pinnedSide = React.useRef<string | undefined>(undefined)
+  React.useEffect(() => {
+    // on the document (capture: scroll does not bubble), so it keeps working when the strip is re-mounted
+    let timer = 0
+    let held = false
+    const settle = () => {
+      const el = strip.current
+      if (!el || !pinnedSide.current || held) return
+      const { target } = columnStop(el)
+      if (target != null && Math.abs(target - el.scrollLeft) >= 2) el.scrollTo({ left: target, behavior: reducedMotion() ? 'auto' : 'smooth' })
+    }
+    const onScroll = (e: Event) => {
+      if (e.target !== strip.current) return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(settle, 200)
+    }
+    // dragging the scrollbar: wait for the button to come up
+    const down = (e: PointerEvent) => {
+      if (e.target === strip.current) held = true
+    }
+    const up = () => {
+      if (!held) return
+      held = false
+      window.clearTimeout(timer)
+      timer = window.setTimeout(settle, 200)
+    }
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    document.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointerup', up)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('scroll', onScroll, { capture: true })
+      document.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointerup', up)
+    }
+  }, [])
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
   // A place equal to the previous one is the same object: the columns are memoized (ColumnFor), and a focus change
   // or a new row split would otherwise re-render all of them.
@@ -452,6 +481,7 @@ function Workspace() {
   const templateNow = React.useRef(template)
   templateNow.current = template
   const stickSide = [...places.places.values()].find((p) => p.stick)?.stick
+  pinnedSide.current = stickSide
   const stacked = cols.some((c) => c.below)
 
   React.useLayoutEffect(() => {
@@ -897,3 +927,18 @@ function SubtitleWithBadges({ text }: { text: string }) {
 
 const samePlace = (a: Place, b: Place) =>
   a.col === b.col && a.row === b.row && a.i === b.i && a.n === b.n && a.gridRow === b.gridRow && a.top === b.top && a.hidden === b.hidden && a.stick === b.stick
+
+/** Where the strip should rest: the scroll position closest to the current one that shows a column whole, past a
+ *  half column held at the left edge (it covers that much of the strip). */
+function columnStop(el: HTMLElement): { target: number | null; pinned: boolean } {
+  const max = el.scrollWidth - el.clientWidth
+  let target: number | null = null
+  const stuck = el.querySelector<HTMLElement>(':scope > [data-col][style*="sticky"]')
+  const pad = stuck && stuck.style.left === '0px' ? stuck.offsetWidth : 0
+  for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
+    if (c.style.position === 'sticky') continue
+    const left = Math.min(max, Math.max(0, c.offsetLeft - pad))
+    if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
+  }
+  return { target, pinned: !!stuck }
+}
