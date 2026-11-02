@@ -35,6 +35,12 @@ thread, composer, tasks, aside and error box use `max-w-(--mx-read,860px)`. Shor
 picture-in-picture, the topic / cost line, and plan / Telegram unless on are hidden; plan and Telegram are checkbox
 items in the … menu.
 
+Pinned half: the strip used `snap-proximity` and the wheel glide gave up past 30 % of the width, so a column could
+rest half hidden under the sticky half; with a stuck column the strip is `snap-mandatory` and the glide always
+settles. A hand width on the half collapsed it to `MIN_W` (`minmax(MIN_W, w)` against neighbours of `max(MIN_W, 50%)`)
+and a hand width on a neighbour broke the exact share: while a half is pinned, `template` ignores `widths`, resize
+handles are hidden and `startColResize` returns.
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,
