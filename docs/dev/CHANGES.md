@@ -20,6 +20,14 @@ scroll. `unstack` = `moveBeside` the stack top (the middle of a trio left the th
 `dropBeside` (store, not persisted) draws the line along every session of the strip column, not only the hovered
 one.
 
+Sessions strip speed (10 sessions open, CPU x4, mock): a Place equal to the previous one keeps its identity, so the
+memoized columns (ColumnFor) no longer all re-render on every focus change (`places` depended on `focused` even out
+of the tabs view); StripContext's value only changes with the number of columns (template / places read through
+refs); column and row resize apply once per animation frame; an empty Textarea sets its height without measuring
+(`height: auto` + `scrollHeight` forced a page layout per open composer when a layout change moved `maxRows`).
+Drag over the strip: long tasks -50 %; layout switch: -15 %, p95 frame 50 -> 33 ms; row resize worst frame
+250 -> 140 ms (what is left there is paint: every open session really changes size).
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,
