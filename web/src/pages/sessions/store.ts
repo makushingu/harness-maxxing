@@ -16,33 +16,56 @@ export type FlatSort = 'used' | 'recent' | 'name' | 'created'
 export const FLAT_SORTS: FlatSort[] = ['used', 'recent', 'name', 'created']
 export const RECENT_COUNTS = [3, 5, 10, 20]
 
-/** `below`: the column sits under the one before it (two sessions share a column of the strip: 2x2 grid).
- *  `wide`: without a set width, its column of the strip takes two shares of the room instead of one. */
-export type Col = ({ key: string; kind: 'session'; id: string } | { key: string; kind: 'new'; path: string }) & { below?: boolean; wide?: boolean }
+/** `below`: the column sits under the one before it (sessions share a column of the strip: 2 or 3 stacked).
+ *  `wide`: without a set width, its column of the strip takes two shares of the room instead of one.
+ *  `half`: its column of the strip takes half the strip's visible width and stays in place while the rest scrolls. */
+export type Col = ({ key: string; kind: 'session'; id: string } | { key: string; kind: 'new'; path: string }) & { below?: boolean; wide?: boolean; half?: boolean }
 
-/** At most two sessions per column of the strip: the first column is never `below`, and a `below` column always
- *  follows one that is not. */
+/** Sessions one column of the strip holds at most. */
+export const MAX_STACK = 3
+
+/** At most MAX_STACK sessions per column of the strip: the first column is never `below`; only the top session of
+ *  a column can be `wide`; `half` only on a session alone in its column, one at most. */
 export function normalizeCols(cols: Col[]): Col[] {
   let changed = false
+  let run = 0
   const out = cols.map((c, i) => {
-    const prev = cols[i - 1]
-    if (c.below && c.wide) {
-      changed = true
-      const { wide: _w, ...rest } = c
-      return rest as Col
+    let d = c
+    if (d.below && (i === 0 || run >= MAX_STACK)) {
+      const { below: _b, ...rest } = d
+      d = rest as Col
     }
-    const ok = !c.below || (i > 0 && !prev.below)
-    if (ok) return c
+    if (d.below && (d.wide || d.half)) {
+      const { wide: _w, half: _h, ...rest } = d
+      d = rest as Col
+    }
+    run = d.below ? run + 1 : 1
+    if (d !== c) changed = true
+    return d
+  })
+  let halves = 0
+  const res = out.map((c, i) => {
+    if (!c.half) return c
+    // stacked (a session under it), or a second one: back to a plain column
+    if (!out[i + 1]?.below && !halves++) return c
     changed = true
-    const { below: _b, ...rest } = c
+    const { half: _h, ...rest } = c
     return rest as Col
   })
-  // a fix can make the next one valid again: run until stable
-  return changed ? normalizeCols(out) : cols
+  return changed ? res : cols
 }
 
-/** `cols` without `key`; when `key` was the top of a pair, the session under it gets its own column (else it would
- *  slide under whatever column comes before). */
+/** Index range [start, end] of the strip column (one session or a stack) that holds `cols[i]`. */
+export function groupAt(cols: Col[], i: number): [number, number] {
+  let start = i
+  while (start > 0 && cols[start]?.below) start--
+  let end = start
+  while (cols[end + 1]?.below) end++
+  return [start, end]
+}
+
+/** `cols` without `key`; when `key` was the top of a stack, the session under it becomes the top (else it would
+ *  slide under whatever column comes before). `wide` / `half` leave with `key`. */
 function detach(cols: Col[], key: string): Col[] {
   const i = cols.findIndex((c) => c.key === key)
   if (i < 0) return cols
@@ -50,12 +73,6 @@ function detach(cols: Col[], key: string): Col[] {
   const next = cols[i + 1]
   if (!cols[i].below && next?.below) out[i] = (({ below: _b, ...r }) => r as Col)(next)
   return out
-}
-
-/** Index range [start, end] of the strip column (one session or a pair) that holds `cols[i]`. */
-function groupAt(cols: Col[], i: number): [number, number] {
-  const start = cols[i]?.below ? i - 1 : i
-  return [start, cols[start + 1]?.below ? start + 1 : start]
 }
 
 /** Whether `key` can move one strip column to the left (-1) or right (+1): a session of a pair always can (it leaves
@@ -75,7 +92,7 @@ type State = {
   focused: string | null
   /** Column width in px by column key (absent = flexible). */
   widths: Record<string, number>
-  /** Share of the height given to the top session where two share a column (0.2-0.8). */
+  /** Share of the height given to the top session where two share a column (0.2-0.8); three share it evenly. */
   rowSplit: number
   /** Tree node expanded flags: `p:<project>`, `t:<topic path>`, `a:<topic path>` (archived fold). */
   expanded: Record<string, boolean>
@@ -107,6 +124,9 @@ type State = {
   /** Column being dragged by its grip (the layouts bar shows at the top); not persisted. */
   dragging: string | null
   setDragging: (key: string | null) => void
+  /** Drop beside a strip column: the line shows along every session of it (top key and side); not persisted. */
+  dropBeside: { top: string; side: 'left' | 'right' } | null
+  setDropBeside: (v: { top: string; side: 'left' | 'right' } | null) => void
   openSession: (id: string, opts?: { focus?: boolean; after?: string | null }) => string
   openNew: (path: string) => string
   close: (key: string) => void
@@ -121,9 +141,10 @@ type State = {
   shift: (key: string, dir: -1 | 1) => void
   setWidth: (key: string, w: number | null) => void
   setRowSplit: (v: number) => void
-  /** Put column `key` under column `under` (which must be alone in its column). */
+  /** Put column `key` right under column `under` (whose strip column holds fewer than MAX_STACK). */
   stack: (key: string, under: string) => void
-  /** Put column `key` above column `over` (which must be alone in its column): `key` takes its place, `over` goes under. */
+  /** Put column `key` above column `over` (the top of a strip column holding fewer than MAX_STACK): `key` takes its
+   *  place, `over` goes under. */
   stackAbove: (key: string, over: string) => void
   /** Give a stacked session its own column again. */
   unstack: (key: string) => void
@@ -219,7 +240,7 @@ export const useSessionsUI = create<State>()(
         set((s) => {
           // If that session is somehow already open elsewhere, drop the duplicate.
           const dup = s.cols.find((c) => c.kind === 'session' && c.id === id && c.key !== key)
-          const cols = normalizeCols(s.cols.filter((c) => c !== dup).map((c) => (c.key === key ? ({ key, kind: 'session', id, ...(c.below && { below: true }), ...(c.wide && { wide: true }) } as Col) : c)))
+          const cols = normalizeCols(s.cols.filter((c) => c !== dup).map((c) => (c.key === key ? ({ key, kind: 'session', id, ...(c.below && { below: true }), ...(c.wide && { wide: true }), ...(c.half && { half: true }) } as Col) : c)))
           return { cols }
         }),
       setNewPath: (key, path) => set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) })),
@@ -233,7 +254,10 @@ export const useSessionsUI = create<State>()(
           const { below: _b, ...moved } = s.cols[from]   // a moved session gets its own column
           const cols = detach(s.cols, key)
           let to = Math.max(0, Math.min(cols.length, toIndex))
-          if (cols[to]?.below) to += to >= from ? 1 : -1    // never between a pair
+          if (cols[to]?.below) {                            // never inside a stack
+            const [start, end] = groupAt(cols, to)
+            to = to >= from ? end + 1 : start
+          }
           cols.splice(Math.max(0, to), 0, moved as Col)
           return { cols: normalizeCols(cols) }
         }),
@@ -266,10 +290,13 @@ export const useSessionsUI = create<State>()(
         set((s) => {
           const target = s.cols.findIndex((c) => c.key === under)
           const t = s.cols[target]
-          if (!t || key === under || t.below || s.cols[target + 1]?.below) return s
+          if (!t || key === under) return s
           const moving = s.cols.find((c) => c.key === key)
           if (!moving) return s
-          const { wide: _w, ...m } = moving
+          const [start, end] = groupAt(s.cols, target)
+          const already = s.cols.slice(start, end + 1).some((c) => c.key === key)
+          if (!already && end - start + 1 >= MAX_STACK) return s
+          const { wide: _w, half: _h, ...m } = moving
           const cols = detach(s.cols, key)
           cols.splice(cols.findIndex((c) => c.key === under) + 1, 0, { ...m, below: true } as Col)
           return { cols: normalizeCols(cols), focused: key }
@@ -278,18 +305,26 @@ export const useSessionsUI = create<State>()(
         set((s) => {
           const target = s.cols.findIndex((c) => c.key === over)
           const t = s.cols[target]
-          if (!t || key === over || t.below || s.cols[target + 1]?.below) return s
+          if (!t || key === over || t.below) return s
           const moving = s.cols.find((c) => c.key === key)
           if (!moving) return s
-          const { wide: _w, below: _b, ...m } = moving
-          const { wide, ...under } = t
+          const [start, end] = groupAt(s.cols, target)
+          const already = s.cols.slice(start, end + 1).some((c) => c.key === key)
+          if (!already && end - start + 1 >= MAX_STACK) return s
+          const { wide: _w, half: _h, below: _b, ...m } = moving
+          const { wide, half, ...under } = t
           const cols = detach(s.cols, key)
-          // `key` takes the strip column of `over` (its `wide` and saved width, kept under the top key) and `over` goes under it
-          cols.splice(cols.findIndex((c) => c.key === over), 1, { ...m, ...(wide && { wide: true }) } as Col, { ...under, below: true } as Col)
+          // `key` takes the strip column of `over` (its `wide` / `half` and saved width, kept under the top key) and `over` goes under it
+          cols.splice(cols.findIndex((c) => c.key === over), 1, { ...m, ...(wide && { wide: true }), ...(half && { half: true }) } as Col, { ...under, below: true } as Col)
           const { [key]: _old, [over]: w, ...widths } = s.widths
           return { cols: normalizeCols(cols), widths: w == null ? widths : { ...widths, [key]: w }, focused: key }
         }),
-      unstack: (key) => set((s) => ({ cols: normalizeCols(s.cols.map((c) => (c.key === key ? (({ below: _b, ...r }) => r as Col)(c) : c))) })),
+      unstack: (key) => {
+        // its own strip column, right after the stack it leaves (the others of the stack stay together)
+        const cols = get().cols
+        const i = cols.findIndex((c) => c.key === key)
+        if (i > 0 && cols[i].below) get().moveBeside(key, cols[groupAt(cols, i)[0]].key, 'right')
+      },
       toGrid: () => set((s) => ({ cols: normalizeCols(s.cols.map((c, i) => (i % 2 ? { ...c, below: true } : (({ below: _b, ...r }) => r as Col)(c)))) })),
       toColumns: () => set((s) => ({ cols: s.cols.map((c) => (({ below: _b, ...r }) => r as Col)(c)) })),
       applyLayout: (slots, move) =>
@@ -307,7 +342,7 @@ export const useSessionsUI = create<State>()(
         set((s) => {
           const ids = new Set(saved.cols.flatMap((c) => (c.kind === 'session' ? [c.id] : [])))
           const keys = new Set(saved.cols.map((c) => c.key))
-          const extra = s.cols.filter((c) => !keys.has(c.key) && !(c.kind === 'session' && ids.has(c.id))).map(({ below: _b, wide: _w, ...r }) => r as Col)
+          const extra = s.cols.filter((c) => !keys.has(c.key) && !(c.kind === 'session' && ids.has(c.id))).map(({ below: _b, wide: _w, half: _h, ...r }) => r as Col)
           const cols = normalizeCols([...saved.cols, ...extra])
           const cur = s.cols.find((c) => c.key === s.focused)
           const focused = cols.find((c) => c.key === s.focused || (cur?.kind === 'session' && c.kind === 'session' && c.id === cur.id))?.key ?? cols[0]?.key ?? null
@@ -330,7 +365,12 @@ export const useSessionsUI = create<State>()(
       layoutPicker: null,
       setLayoutPicker: (layoutPicker) => set({ layoutPicker }),
       dragging: null,
-      setDragging: (dragging) => set({ dragging }),
+      setDragging: (dragging) => set(dragging ? { dragging } : { dragging, dropBeside: null }),
+      dropBeside: null,
+      setDropBeside: (dropBeside) => {
+        const cur = get().dropBeside
+        if (cur?.top !== dropBeside?.top || cur?.side !== dropBeside?.side) set({ dropBeside })
+      },
     }),
     {
       name: 'mx-sessions',
