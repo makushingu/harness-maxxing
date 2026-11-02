@@ -339,13 +339,17 @@ function Workspace() {
       // a half column held at the left edge covers that much of the strip: columns settle just past it
       const stuck = el.querySelector<HTMLElement>(':scope > [data-col][style*="sticky"]')
       const pad = stuck && stuck.style.left === '0px' ? stuck.offsetWidth : 0
+      const pinned = !!stuck
       for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
         if (c.style.position === 'sticky') continue
         const left = Math.min(max, Math.max(0, c.offsetLeft - pad))
         if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
       }
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      if (target == null || reduce || Math.abs(target - el.scrollLeft) < 1 || Math.abs(target - el.scrollLeft) > el.clientWidth * 0.3) {
+      // beside a pinned half the strip always settles on a column (snap-mandatory): one left between two stays half
+      // hidden under the half
+      const far = target != null && !pinned && Math.abs(target - el.scrollLeft) > el.clientWidth * 0.3
+      if (target == null || reduce || Math.abs(target - el.scrollLeft) < 1 || far) {
         el.style.scrollSnapType = ''
         return
       }
@@ -432,7 +436,9 @@ function Workspace() {
     (override?: { key: string; w: number }) =>
       places.tops
         .map((k) => {
-          const w = override?.key === k ? override.w : places.tops.length > 1 ? widths[k] : undefined
+          // beside a pinned half no width set by hand counts: the half stays half and the others share the other half
+          // exactly (a hand width collapsed the half to MIN_W, or left a column partly under it)
+          const w = hasHalf ? undefined : override?.key === k ? override.w : places.tops.length > 1 ? widths[k] : undefined
           // a resized column keeps its width while there is room, then shrinks to MIN_W before the strip scrolls
           if (w) return `minmax(${MIN_W}px, ${Math.round(w)}px)`
           // half the visible strip, whatever the number of columns beside it (they scroll past it)
@@ -506,7 +512,7 @@ function Workspace() {
       startColResize: (key: string, e: React.PointerEvent) => {
         const el = colEl(key)
         const st = strip.current
-        if (!el || !st) return
+        if (!el || !st || [...placesNow.current.places.values()].some((p) => p.stick)) return
         // (the bottom session's handle resizes the same grid column: its width is saved under the top key)
         e.preventDefault()
         const startX = e.clientX
@@ -688,7 +694,7 @@ function Workspace() {
           {tabs && <TabsArrows onPick={pickTab} />}
           <div
             ref={strip}
-            className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
+            className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x overflow-x-auto overflow-y-hidden', stickSide ? 'snap-mandatory' : 'snap-proximity', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
             style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: places.rows.template, ...(stickSide && { [stickSide === 'left' ? 'scrollPaddingLeft' : 'scrollPaddingRight']: '50%' }) } : undefined}
             data-columns
             // several sessions side by side: messages show their grip (drag one into another session, contentDrag.ts)
