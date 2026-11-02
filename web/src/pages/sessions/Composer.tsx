@@ -438,7 +438,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
 
   return (
     <div className="shrink-0 px-3 pt-1 pb-3 max-md:pb-[calc(0.5rem+var(--safe-bottom-ui))]">
-      <div className="mx-auto w-full max-w-[860px]">
+      <div className="mx-auto w-full max-w-(--mx-read,860px)">
         <div className={cn('grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none', stackCount > 0 && !stack.leaving ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="min-h-0 overflow-hidden" inert={stackCount === 0 || stack.leaving ? true : undefined}>
         {stackCount > 0 && (

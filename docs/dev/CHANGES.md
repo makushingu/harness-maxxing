@@ -28,6 +28,13 @@ refs); column and row resize apply once per animation frame; an empty Textarea s
 Drag over the strip: long tasks -50 %; layout switch: -15 %, p95 frame 50 -> 33 ms; row resize worst frame
 250 -> 140 ms (what is left there is paint: every open session really changes size).
 
+Column width: `MAX_W` 1400 -> 2000, and a column resize stops at what the strip can show (others at `MIN_W`), so
+the handle never moves for nothing. A column widened by hand past 900 px sets `--mx-read: none` on its section: the
+thread, composer, tasks, aside and error box use `max-w-(--mx-read,860px)`. Short stacked sessions
+(`useSlimHeader`: stacked and under `SLIM_BELOW` = 560 px, ResizeObserver on the section) get a one-line header:
+picture-in-picture, the topic / cost line, and plan / Telegram unless on are hidden; plan and Telegram are checkbox
+items in the … menu.
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,
