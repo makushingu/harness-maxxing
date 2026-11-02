@@ -44,6 +44,20 @@ are hidden and `startColResize` returns.
 Stacked composers: only a stack of three folds the unfocused composers into the "Write…" bar (`StackedComposer`
 `stacked = place.n >= 3`); two stacked sessions both keep their composer (still `maxRows` 4).
 
+Sessions strip: no scroll snapping any more (`snap-x snap-proximity` on the strip, `snap-start` on the columns, the
+wheel handler's snap toggling, `glideToColumn` and `columnStop` removed): the strip stays where it is scrolled to.
+
+Composer drafts survive a reload: the text is also written on `pagehide` / tab hidden when the 250 ms debounce has
+not run yet (only if this composer has unsaved text, so an idle tab does not overwrite another tab's draft); uploaded
+attachments are stored with the draft (`mx-draft:<k>:atts`, `loadAtts` / `saveAtts`). Outbox
+(`mx-draft:<k>:out`, `outboxAdd` / `outboxDone` / `outboxMove` / `leftOutbox` in store.ts): each send is written
+before the request and removed once it is answered, except while the page is going away (its fetch is aborted, that
+is not a refusal). On mount the composer takes what a previous load left; the session column's `checkSent` loads
+the log and drops what the server got (a user event with the same text since the send, or a queue item it starts
+with), the rest comes back in the box with a toast (`sessions.composer.sendInterrupted`). `null` = could not tell:
+the entries stay for the next load. `lib/busy.ts`: sends and uploads in progress hold the automatic switch to a new
+build (pwa `announceUpdate` waits for `onIdle`).
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,
