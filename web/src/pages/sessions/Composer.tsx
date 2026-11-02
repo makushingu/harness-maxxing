@@ -218,9 +218,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
     let off = false
     void (checkSent ? checkSent(left) : Promise.resolve(left)).then((lost) => {
       if (off || !lost) return // null: could not tell, they stay stored
-      for (const e of [...lost].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
+      // already back in the draft (refused, then the page went away before its entry was removed)
+      const back = lost.filter((e) => !(e.body && live.current.text.includes(e.body)))
+      for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
       left.forEach((e) => outboxDone(draftKey, e.id))
-      if (lost.length) toast.info(t('sessions.composer.sendInterrupted', { count: lost.length }))
+      if (back.length) toast.info(t('sessions.composer.sendInterrupted', { count: back.length }))
     })
     return () => {
       off = true
@@ -315,8 +317,14 @@ export const Composer = React.forwardRef<ComposerHandle, {
     chain.current = chain.current.then(async () => {
       const ok = await onSend(sent, paths).catch(() => false)
       if (--inflight.current === 0 && mounted.current) setSending(false)
-      outboxDone(k0, outId)
-      if (live.current.draftKey !== k0) outboxDone(live.current.draftKey, outId)
+      // Refused: it comes back in the box below. A failure can also be the page going away (its request is cut):
+      // the entry is removed only if the page is still here a moment later, else the next load brings it back.
+      const done = () => {
+        outboxDone(k0, outId)
+        if (live.current.draftKey !== k0) outboxDone(live.current.draftKey, outId)
+      }
+      if (ok) done()
+      else window.setTimeout(done, 1500)
       busyEnd()
       if (!ok) {
         // Preserve the refused message AND anything typed/attached while it was in flight.
