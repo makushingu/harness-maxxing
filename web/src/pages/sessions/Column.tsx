@@ -141,7 +141,9 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
   // beside the whole strip column: the line runs along every session of it, not only the one under the pointer
   const beside = useSessionsUI((s) => (s.dropBeside?.top === groupKey ? s.dropBeside.side : null))
   // widened by hand to read: the conversation and the composer use the whole width (otherwise 860 px at most)
-  const widened = useSessionsUI((s) => isCol && !!strip && strip.columns > 1 && (s.widths[groupKey] ?? 0) > 900)
+  // a pinned half fixes every width of the strip (index.tsx template): no resize handle, no hand width
+  const halfPinned = useSessionsUI((s) => s.cols.some((c) => c.half))
+  const widened = useSessionsUI((s) => isCol && !!strip && strip.columns > 1 && !halfPinned && (s.widths[groupKey] ?? 0) > 900)
 
   const isColDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('application/x-mx-col')
   return (
@@ -205,7 +207,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
       ) : (
         beside && <span aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary', beside === 'left' ? 'left-0' : 'right-0')} />
       )}
-      {isCol && strip && strip.columns > 1 && (
+      {isCol && strip && strip.columns > 1 && !halfPinned && (
         <div
           role="separator"
           aria-orientation="vertical"
