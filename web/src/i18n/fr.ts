@@ -236,6 +236,8 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.model.differs': 'Dernière réponse : {real} — prochain tour : {next}',
   'sessions.model.lastUsed': 'utilisé',
   'sessions.composer.placeholder': 'Écrire à Harness…',
+  'sessions.composer.sendInterrupted': 'La page s’est rechargée pendant l’envoi : {count} messages sont revenus dans la zone de saisie',
+  'sessions.composer.sendInterrupted#one': 'La page s’est rechargée pendant l’envoi : le message est revenu dans la zone de saisie',
   'sessions.composer.label': 'Message',
   'sessions.composer.attach': 'Joindre des fichiers',
   'sessions.composer.send': 'Envoyer (Entrée)',

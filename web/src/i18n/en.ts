@@ -238,6 +238,8 @@ export const en = {
   'sessions.model.differs': 'Last answer by {real} — next turn uses {next}',
   'sessions.model.lastUsed': 'last used',
   'sessions.composer.placeholder': 'Message Harness…',
+  'sessions.composer.sendInterrupted': 'The page reloaded while sending: {count} messages are back in the box',
+  'sessions.composer.sendInterrupted#one': 'The page reloaded while sending: the message is back in the box',
   'sessions.composer.label': 'Message',
   'sessions.composer.attach': 'Attach files',
   'sessions.composer.send': 'Send (Enter)',
