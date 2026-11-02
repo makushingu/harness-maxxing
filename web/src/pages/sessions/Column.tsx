@@ -109,9 +109,8 @@ export const MAX_W = 2000
 /** `top`: key of the session at the top of this grid column (its width is saved under that key). */
 /** `hidden`: kept mounted but not shown (tabs view: only the focused session is on screen). */
 /** Where a session sits in the strip grid: its column, its rank `i` in a stack of `n` (row: 'full' alone, 'top'
- *  first of a stack, 'bottom' any other), its grid lines, the top key of its stack, and `stick` for a `half` column
- *  held at that edge while the others scroll past it. */
-export type Place = { col: number; row: 'full' | 'top' | 'bottom'; i: number; n: number; gridRow: string; top?: string; hidden?: boolean; stick?: 'left' | 'right' }
+ *  first of a stack, 'bottom' any other), its grid lines, the top key of its stack. */
+export type Place = { col: number; row: 'full' | 'top' | 'bottom'; i: number; n: number; gridRow: string; top?: string; hidden?: boolean }
 /** The strip owns the grid template: handles ask it to resize a column or the row split. */
 export const StripContext = React.createContext<{
   startColResize: (key: string, e: React.PointerEvent) => void
@@ -141,9 +140,9 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
   // beside the whole strip column: the line runs along every session of it, not only the one under the pointer
   const beside = useSessionsUI((s) => (s.dropBeside?.top === groupKey ? s.dropBeside.side : null))
   // widened by hand to read: the conversation and the composer use the whole width (otherwise 860 px at most)
-  // a pinned half fixes every width of the strip (index.tsx template): no resize handle, no hand width
-  const halfPinned = useSessionsUI((s) => s.cols.some((c) => c.half))
-  const widened = useSessionsUI((s) => isCol && !!strip && strip.columns > 1 && !halfPinned && (s.widths[groupKey] ?? 0) > 900)
+  // a half column fixes every width of the strip (index.tsx template): no resize handle, no hand width
+  const halfShown = useSessionsUI((s) => s.cols.some((c) => c.half))
+  const widened = useSessionsUI((s) => isCol && !!strip && strip.columns > 1 && !halfShown && (s.widths[groupKey] ?? 0) > 900)
 
   const isColDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('application/x-mx-col')
   return (
@@ -185,18 +184,15 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         // beside the whole strip column (a stack stays a stack)
         ui.moveBeside(key, col.key, side ?? 'right')
       }}
-      // In the strip, the grid places the session (its width comes from the grid template, see index.tsx). A pinned half
-      // sits above everything of the columns that scroll under it (their composer is z-10, drop overlays up to z-30).
+      // In the strip, the grid places the session (its width comes from the grid template, see index.tsx).
       style={{
-        ...(isCol && place && { gridColumn: place.col, gridRow: place.gridRow, ...(place.stick && { position: 'sticky', [place.stick]: 0, zIndex: 40 }) }),
+        ...(isCol && place && { gridColumn: place.col, gridRow: place.gridRow }),
         ...(widened && ({ '--mx-read': 'none' } as React.CSSProperties)),
       }}
       className={cn(
         'relative flex min-h-0 min-w-0 flex-col bg-background',
         isCol && 'snap-start border-r',
         isCol && rank < size - 1 && 'border-b',
-        place?.stick === 'left' && 'shadow-[6px_0_12px_-10px_rgb(0_0_0/0.45)]',
-        place?.stick === 'right' && 'border-l shadow-[-6px_0_12px_-10px_rgb(0_0_0/0.45)]',
         isCol && count > 1 && focused && 'shadow-[inset_0_2px_0_0_var(--primary)]',
         !isCol && 'h-full w-full',
         place?.hidden && 'hidden',
@@ -208,7 +204,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
       ) : (
         beside && <span aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary', beside === 'left' ? 'left-0' : 'right-0')} />
       )}
-      {isCol && strip && strip.columns > 1 && !halfPinned && (
+      {isCol && strip && strip.columns > 1 && !halfShown && (
         <div
           role="separator"
           aria-orientation="vertical"

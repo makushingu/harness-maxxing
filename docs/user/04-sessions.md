@@ -30,9 +30,8 @@ stopped.
   layouts bar slides down at the top of the sessions, drop it on a zone. Rest the pointer on the grid button to
   arrange every open session at once. With the keyboard: **…** menu > **Layouts…**. From four sessions, the
   **Half left / Half right** layouts give one session half the screen and put the others beside it, two or three
-  per column: when they do not all fit, they scroll past it while it stays in place (handy with ten sessions open)
-  and always stop on a whole column, never half hidden under it. While a half is pinned the widths are fixed (no
-  resize handle).
+  per column: when they do not all fit, the strip scrolls as usual (the half moves with it, nothing slides under
+  it). While a half is shown the widths are fixed (no resize handle).
   **Grid of 3** stacks three per column.
 - **Tabs view**: the **Tabs** button (window icon) at the top right of the Sessions page (Alt+T) shows one session at a time,
   full width, with every open session as a chip above it. A chip shows whether its session is working, finished
