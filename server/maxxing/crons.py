@@ -835,14 +835,15 @@ def managed_lines(jobs: list[dict]) -> list[str]:
 
 def sync_crontab(jobs: list[dict] | None = None) -> str:
     """Rewrite the managed block from the job list; everything else is preserved byte for byte
-    (except a trailing blank line). Returns the new crontab text."""
+    (except a trailing blank line). Returns the new crontab text. Without `jobs` and with an unreadable
+    jobs.json, the crontab is left as it is: a damaged file is not an empty list of jobs."""
     with _lock:
         if jobs is None:
             jobs = _read_raw()
             if jobs is None:
-                jobs = []
-            else:
-                _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
+                log.warning("jobs.json cannot be read: crontab left as it is")
+                return read_crontab()
+            _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
         outside, _ = split_crontab(read_crontab())
         while outside and not outside[-1].strip():
             outside.pop()
