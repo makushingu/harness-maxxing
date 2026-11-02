@@ -370,7 +370,21 @@ function Workspace() {
     }
   }, [mobile])
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
+  // A place equal to the previous one is the same object: the columns are memoized (ColumnFor), and a focus change
+  // or a new row split would otherwise re-render all of them.
+  const lastPlaces = React.useRef(new Map<string, Place>())
   const places = React.useMemo(() => {
+    const r = computePlaces()
+    const prev = lastPlaces.current
+    for (const [k, pl] of r.places) {
+      const old = prev.get(k)
+      if (old && samePlace(old, pl)) r.places.set(k, old)
+    }
+    lastPlaces.current = r.places
+    return r
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownCols, tabs, tabs && focused, rowSplit])
+  function computePlaces() {
     const out = new Map<string, Place>()
     if (tabs) {
       // tabs view: every session in the one cell, only the focused one shown (the others stay mounted: no reload)
@@ -395,7 +409,7 @@ function Workspace() {
       )
     })
     return { places: out, tops: stacks.map((g) => g[0]), stacks, rows }
-  }, [shownCols, tabs, focused, rowSplit])
+  }
   const wide = React.useMemo(() => new Set(cols.filter((c) => c.wide).map((c) => c.key)), [cols])
   const half = React.useMemo(() => new Set(cols.filter((c) => c.half).map((c) => c.key)), [cols])
   // (a row drag reads the stacks of the moment: a session can open or close meanwhile)
@@ -429,6 +443,8 @@ function Workspace() {
         .join(' '),
     [places, widths, wide, half, hasHalf, beside],
   )
+  const templateNow = React.useRef(template)
+  templateNow.current = template
   const stickSide = [...places.places.values()].find((p) => p.stick)?.stick
   const stacked = cols.some((c) => c.below)
 
@@ -498,11 +514,17 @@ function Workspace() {
         const target = e.currentTarget as HTMLElement
         target.setPointerCapture(e.pointerId)
         let w = startW
+        // one grid change per frame (pointer events can come faster, each relays out every open session)
+        let frame = 0
         const onMove = (ev: PointerEvent) => {
           w = Math.max(MIN_W, Math.min(MAX_W, startW + ev.clientX - startX))
-          st.style.gridTemplateColumns = template({ key, w })
+          frame ||= requestAnimationFrame(() => {
+            frame = 0
+            st.style.gridTemplateColumns = templateNow.current({ key, w })
+          })
         }
         const onUp = () => {
+          cancelAnimationFrame(frame)
           target.removeEventListener('pointermove', onMove)
           target.removeEventListener('pointerup', onUp)
           target.removeEventListener('pointercancel', onUp)
@@ -523,8 +545,14 @@ function Workspace() {
         const target = e.currentTarget as HTMLElement
         target.setPointerCapture(e.pointerId)
         let r = useSessionsUI.getState().rowSplit
+        let frame = 0
         const onMove = (ev: PointerEvent) => {
           r = Math.max(ROW_SPLIT_MIN, Math.min(ROW_SPLIT_MAX, (ev.clientY - box.top) / box.height))
+          frame ||= requestAnimationFrame(apply)
+        }
+        // one grid change per frame (pointer events can come faster, each relays out every open session)
+        const apply = () => {
+          frame = 0
           // pairs and trios share the grid rows: when the split crosses a third, every stack's lines change
           const { stacks } = placesNow.current
           const live = stripRows(stacks.map((g) => g.length), r)
@@ -539,6 +567,8 @@ function Workspace() {
           target.removeEventListener('pointermove', onMove)
           target.removeEventListener('pointerup', onUp)
           target.removeEventListener('pointercancel', onUp)
+          cancelAnimationFrame(frame)
+          apply()
           document.body.style.cursor = ''
           useSessionsUI.getState().setRowSplit(r)
         }
@@ -550,7 +580,8 @@ function Workspace() {
       resetRowSplit: () => useSessionsUI.getState().setRowSplit(0.5),
       columns: places.tops.length,
     }),
-    [template, places], // eslint-disable-line react-hooks/exhaustive-deps
+    // stable while the number of columns stays: every column reads this context (a new value re-renders them all)
+    [places.tops.length], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const openIds = React.useMemo(() => new Set(cols.flatMap((c) => (c.kind === 'session' ? [c.id] : []))), [cols])
@@ -834,3 +865,6 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     </Dialog>
   )
 }
+
+const samePlace = (a: Place, b: Place) =>
+  a.col === b.col && a.row === b.row && a.i === b.i && a.n === b.n && a.gridRow === b.gridRow && a.top === b.top && a.hidden === b.hidden && a.stick === b.stick
