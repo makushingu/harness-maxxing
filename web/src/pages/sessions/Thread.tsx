@@ -290,7 +290,7 @@ export const Thread = React.forwardRef<ThreadHandle, {
     <div className="relative min-h-0 flex-1">
       {/* one delegated handler for the drags into another session (message grips, files, selected text) */}
       <div ref={scroller} onScroll={onScroll} onDragStart={(e) => onThreadDragStart(e, sid)} onDragEnd={onThreadDragEnd} className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain [contain:layout_paint] [overflow-anchor:none]" data-thread>
-        <div ref={content} className="mx-auto flex min-h-full w-full max-w-[860px] flex-col gap-3 px-4 pt-4 pb-6 max-md:px-3">
+        <div ref={content} className="mx-auto flex min-h-full w-full max-w-(--mx-read,860px) flex-col gap-3 px-4 pt-4 pb-6 max-md:px-3">
           {log.status === 'loading' && <ThreadSkeleton />}
           {log.status === 'error' && (
             <EmptyState
