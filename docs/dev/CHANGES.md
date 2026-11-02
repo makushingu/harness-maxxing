@@ -41,6 +41,9 @@ It keeps half the visible width and its neighbours share the other half exactly.
 ignores `widths` (a hand width collapsed it to `MIN_W` against neighbours of `max(MIN_W, 50% / k)`), resize handles
 are hidden and `startColResize` returns.
 
+Stacked composers: only a stack of three folds the unfocused composers into the "Write…" bar (`StackedComposer`
+`stacked = place.n >= 3`); two stacked sessions both keep their composer (still `maxRows` 4).
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,
