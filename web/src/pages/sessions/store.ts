@@ -524,6 +524,76 @@ export function saveQuotes(k: string, quotes: string[]) {
   }
 }
 
+/** Uploaded files attached to a draft (files still uploading cannot be kept: the browser drops them on reload). */
+export type DraftAtt = { path: string; name: string; size: number }
+export function loadAtts(k: string): DraftAtt[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(`${draftKey(k)}:atts`) || '[]')
+    return Array.isArray(v) ? v.filter((a) => a && typeof a.path === 'string' && a.path) : []
+  } catch {
+    return []
+  }
+}
+export function saveAtts(k: string, atts: DraftAtt[]) {
+  try {
+    if (atts.length) localStorage.setItem(`${draftKey(k)}:atts`, JSON.stringify(atts))
+    else localStorage.removeItem(`${draftKey(k)}:atts`)
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/* ---------------------------------------------------------------- Outbox (messages being sent)
+ * Written before a send, removed once the server answered: what is left when the page loads was being sent when
+ * the page went away (reload, update, closed tab). The column checks whether the server got it, else it comes
+ * back into the composer. */
+export type OutboxEntry = { id: string; at: number; text: string; body: string; quotes: string[]; attachments: string[] }
+const outboxKey = (k: string) => `${draftKey(k)}:out`
+function readOutbox(k: string): OutboxEntry[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(outboxKey(k)) || '[]')
+    return Array.isArray(v) ? v.filter((e) => e && typeof e.id === 'string' && typeof e.text === 'string') : []
+  } catch {
+    return []
+  }
+}
+function writeOutbox(k: string, list: OutboxEntry[]) {
+  try {
+    if (list.length) localStorage.setItem(outboxKey(k), JSON.stringify(list))
+    else localStorage.removeItem(outboxKey(k))
+  } catch {
+    /* quota / private mode */
+  }
+}
+const mine = new Set<string>() // sent by this page load: still in flight, not left over
+export function outboxAdd(k: string, e: Omit<OutboxEntry, 'id' | 'at'>): string {
+  const id = uid()
+  mine.add(id)
+  writeOutbox(k, [...readOutbox(k), { ...e, id, at: Date.now() }])
+  return id
+}
+// While the page goes away its sends are cut short (they fail): they stay stored for the next load to check.
+let leaving = false
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => (leaving = true))
+  window.addEventListener('pageshow', () => (leaving = false))
+}
+export function outboxDone(k: string, id: string) {
+  if (leaving) return
+  writeOutbox(k, readOutbox(k).filter((e) => e.id !== id))
+}
+/** Moves the entries of draft `from` to draft `to` (a new column became a session). */
+export function outboxMove(from: string, to: string) {
+  const a = readOutbox(from)
+  if (!a.length) return
+  writeOutbox(from, [])
+  writeOutbox(to, [...readOutbox(to), ...a])
+}
+/** What a previous page load left (sent when the page went away); stays stored until `outboxDone`. */
+export function leftOutbox(k: string): OutboxEntry[] {
+  return readOutbox(k).filter((e) => !mine.has(e.id))
+}
+
 /* ---------------------------------------------------------------- Seeds (a message brought back into a composer) */
 /** What a message puts back in a composer: Edit on a stopped message, "New session from this message". */
 export type Seed = { text: string; quotes: string[]; attachments: string[] }
