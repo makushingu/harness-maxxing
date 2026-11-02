@@ -82,7 +82,7 @@ import {
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { TaskBar } from './Tasks'
-import { forgetLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
+import { forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
@@ -91,7 +91,7 @@ import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
 import { EASE_OUT, reducedMotion } from '@/lib/presence'
-import { canShift, focusComposer, groupAt, MAX_STACK, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type Seed } from './store'
+import { canShift, focusComposer, groupAt, MAX_STACK, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
 import { Thread, type ThreadHandle } from './Thread'
 import { Composer, type ComposerHandle } from './Composer'
 import { QuotePill } from './Quote'
@@ -191,7 +191,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
       }}
       className={cn(
         'relative flex min-h-0 min-w-0 flex-col bg-background',
-        isCol && 'snap-start border-r',
+        isCol && 'border-r',
         isCol && rank < size - 1 && 'border-b',
         isCol && count > 1 && focused && 'shadow-[inset_0_2px_0_0_var(--primary)]',
         !isCol && 'h-full w-full',
@@ -483,6 +483,26 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
       return false
     }
   }
+
+  // Sent by a previous page load that went away before the answer: did the server get it? (a user event
+  // since it was sent, or still waiting in the queue).
+  const sessionNow = React.useRef(session)
+  sessionNow.current = session
+  const checkSent = React.useCallback(
+    async (left: OutboxEntry[]) => {
+      await loadLog(sid)
+      for (let i = 0; i < 40 && !sessionNow.current; i++) await new Promise((r) => setTimeout(r, 250))
+      const st = getLog(sid)
+      if (st.status !== 'ready' || !sessionNow.current) return null // unknown: kept for the next load
+      const queue = (sessionNow.current.queue_items || []).map((q) => q.text)
+      return left.filter((e) => {
+        const text = e.text.trim()
+        if (st.items.some((it) => it.kind === 'user' && (it.ev.at ?? Infinity) >= e.at / 1000 - 60 && it.ev.text.trim() === text)) return false
+        return !queue.some((q) => q && text.startsWith(q.trim()))
+      })
+    },
+    [sid],
+  )
 
   // Voice message sent directly: an optimistic voice bubble while the recording uploads, then sent with `voice`.
   const onSendVoice = async (file: File) => {
@@ -793,6 +813,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
             asking={takeQueue.isPending || aside.pending}
             clearingQueue={clearQueue.isPending}
             onSend={onSend}
+            checkSent={checkSent}
             onSendVoice={onSendVoice}
             onStop={onStop}
             stopping={stop.isPending}

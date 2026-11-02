@@ -82,6 +82,9 @@ const cache = new Map<string, LogState>()
 const listeners = new Map<string, Set<() => void>>()
 const loading = new Map<string, Promise<void>>()
 
+export function getLog(id: string): LogState {
+  return get(id)
+}
 function get(id: string): LogState {
   return cache.get(id) || INITIAL
 }
