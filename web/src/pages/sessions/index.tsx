@@ -334,12 +334,9 @@ function Workspace() {
     // (it is already in place). Like `snap-proximity`, only when a column edge is near.
     let stopGlide = () => {}
     const glideToColumn = (el: HTMLDivElement) => {
-      const { target, pinned } = columnStop(el)
+      const target = columnStop(el)
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      // beside a pinned half the strip always settles on a column (snap-mandatory): one left between two stays half
-      // hidden under the half
-      const far = target != null && !pinned && Math.abs(target - el.scrollLeft) > el.clientWidth * 0.3
-      if (target == null || reduce || Math.abs(target - el.scrollLeft) < 1 || far) {
+      if (target == null || reduce || Math.abs(target - el.scrollLeft) < 1 || Math.abs(target - el.scrollLeft) > el.clientWidth * 0.3) {
         el.style.scrollSnapType = ''
         return
       }
@@ -363,45 +360,6 @@ function Workspace() {
       stopGlide()
     }
   }, [mobile])
-  // Beside a pinned half, a column must never rest half hidden under it, whatever scrolled the strip (scrollbar,
-  // keyboard, a focus or scrollIntoView, a browser that ignores snap-mandatory): once the scrolling stops, the strip
-  // glides to the nearest column.
-  const pinnedSide = React.useRef<string | undefined>(undefined)
-  React.useEffect(() => {
-    // on the document (capture: scroll does not bubble), so it keeps working when the strip is re-mounted
-    let timer = 0
-    let held = false
-    const settle = () => {
-      const el = strip.current
-      if (!el || !pinnedSide.current || held) return
-      const { target } = columnStop(el)
-      if (target != null && Math.abs(target - el.scrollLeft) >= 2) el.scrollTo({ left: target, behavior: reducedMotion() ? 'auto' : 'smooth' })
-    }
-    const onScroll = (e: Event) => {
-      if (e.target !== strip.current) return
-      window.clearTimeout(timer)
-      timer = window.setTimeout(settle, 200)
-    }
-    // dragging the scrollbar: wait for the button to come up
-    const down = (e: PointerEvent) => {
-      if (e.target === strip.current) held = true
-    }
-    const up = () => {
-      if (!held) return
-      held = false
-      window.clearTimeout(timer)
-      timer = window.setTimeout(settle, 200)
-    }
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    document.addEventListener('pointerdown', down, true)
-    window.addEventListener('pointerup', up)
-    return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('scroll', onScroll, { capture: true })
-      document.removeEventListener('pointerdown', down, true)
-      window.removeEventListener('pointerup', up)
-    }
-  }, [])
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
   // A place equal to the previous one is the same object: the columns are memoized (ColumnFor), and a focus change
   // or a new row split would otherwise re-render all of them.
@@ -436,9 +394,8 @@ function Workspace() {
     const halfOf = (g: string[]) => g.length === 1 && !!shownCols.find((p) => p.key === g[0])?.item.half
     stacks.forEach((g, c) => {
       // a half column at an edge of the strip stays there while the others scroll past it
-      const stick = stacks.length > 1 && halfOf(g) ? (c === 0 ? 'left' : c === stacks.length - 1 ? 'right' : undefined) : undefined
       g.forEach((k, i) =>
-        out.set(k, { col: c + 1, row: g.length === 1 ? 'full' : i ? 'bottom' : 'top', i, n: g.length, gridRow: rows.lines(g.length, i), ...(i > 0 && { top: g[0] }), ...(stick && { stick }) }),
+        out.set(k, { col: c + 1, row: g.length === 1 ? 'full' : i ? 'bottom' : 'top', i, n: g.length, gridRow: rows.lines(g.length, i), ...(i > 0 && { top: g[0] }) }),
       )
     })
     return { places: out, tops: stacks.map((g) => g[0]), stacks, rows }
@@ -465,7 +422,7 @@ function Workspace() {
     (override?: { key: string; w: number }) =>
       places.tops
         .map((k) => {
-          // beside a pinned half no width set by hand counts: the half stays half and the others share the other half
+          // with a half column no width set by hand counts: the half stays half and the others share the other half
           // exactly (a hand width collapsed the half to MIN_W, or left a column partly under it)
           const w = hasHalf ? undefined : override?.key === k ? override.w : places.tops.length > 1 ? widths[k] : undefined
           // a resized column keeps its width while there is room, then shrinks to MIN_W before the strip scrolls
@@ -478,10 +435,10 @@ function Workspace() {
         .join(' '),
     [places, widths, wide, half, hasHalf, beside],
   )
+  const halfNow = React.useRef(hasHalf)
+  halfNow.current = hasHalf
   const templateNow = React.useRef(template)
   templateNow.current = template
-  const stickSide = [...places.places.values()].find((p) => p.stick)?.stick
-  pinnedSide.current = stickSide
   const stacked = cols.some((c) => c.below)
 
   React.useLayoutEffect(() => {
@@ -542,7 +499,7 @@ function Workspace() {
       startColResize: (key: string, e: React.PointerEvent) => {
         const el = colEl(key)
         const st = strip.current
-        if (!el || !st || [...placesNow.current.places.values()].some((p) => p.stick)) return
+        if (!el || !st || halfNow.current) return
         // (the bottom session's handle resizes the same grid column: its width is saved under the top key)
         e.preventDefault()
         const startX = e.clientX
@@ -724,8 +681,8 @@ function Workspace() {
           {tabs && <TabsArrows onPick={pickTab} />}
           <div
             ref={strip}
-            className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x overflow-x-auto overflow-y-hidden', stickSide ? 'snap-mandatory' : 'snap-proximity', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
-            style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: places.rows.template, ...(stickSide && { [stickSide === 'left' ? 'scrollPaddingLeft' : 'scrollPaddingRight']: '50%' }) } : undefined}
+            className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
+            style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: places.rows.template } : undefined}
             data-columns
             // several sessions side by side: messages show their grip (drag one into another session, contentDrag.ts)
             data-multi={(!tabs && shownCols.length > 1) || undefined}
@@ -926,19 +883,15 @@ function SubtitleWithBadges({ text }: { text: string }) {
 }
 
 const samePlace = (a: Place, b: Place) =>
-  a.col === b.col && a.row === b.row && a.i === b.i && a.n === b.n && a.gridRow === b.gridRow && a.top === b.top && a.hidden === b.hidden && a.stick === b.stick
+  a.col === b.col && a.row === b.row && a.i === b.i && a.n === b.n && a.gridRow === b.gridRow && a.top === b.top && a.hidden === b.hidden
 
-/** Where the strip should rest: the scroll position closest to the current one that shows a column whole, past a
- *  half column held at the left edge (it covers that much of the strip). */
-function columnStop(el: HTMLElement): { target: number | null; pinned: boolean } {
+/** Where the strip should rest: the scroll position closest to the current one that starts on a column. */
+function columnStop(el: HTMLElement): number | null {
   const max = el.scrollWidth - el.clientWidth
   let target: number | null = null
-  const stuck = el.querySelector<HTMLElement>(':scope > [data-col][style*="sticky"]')
-  const pad = stuck && stuck.style.left === '0px' ? stuck.offsetWidth : 0
   for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
-    if (c.style.position === 'sticky') continue
-    const left = Math.min(max, Math.max(0, c.offsetLeft - pad))
+    const left = Math.min(max, Math.max(0, c.offsetLeft))
     if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
   }
-  return { target, pinned: !!stuck }
+  return target
 }

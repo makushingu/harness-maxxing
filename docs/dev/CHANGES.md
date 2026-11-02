@@ -35,14 +35,11 @@ thread, composer, tasks, aside and error box use `max-w-(--mx-read,860px)`. Shor
 picture-in-picture, the topic / cost line, and plan / Telegram unless on are hidden; plan and Telegram are checkbox
 items in the … menu.
 
-Pinned half: the strip used `snap-proximity` and the wheel glide gave up past 30 % of the width, so a column could
-rest half hidden under the sticky half; with a stuck column the strip is `snap-mandatory` and the glide always
-settles. A hand width on the half collapsed it to `MIN_W` (`minmax(MIN_W, w)` against neighbours of `max(MIN_W, 50%)`)
-and a hand width on a neighbour broke the exact share: while a half is pinned, `template` ignores `widths`, resize
-handles are hidden and `startColResize` returns.
-Some browsers still left the strip between two columns beside the half: the settling no longer relies on CSS
-snapping, a scroll listener (document, capture) glides to `columnStop()` 200 ms after any scroll stops (scrollbar:
-after the button comes up). The half is `z-index: 40` so a scrolled column's composer (z-10) no longer shows over it.
+Half column: no longer pinned (`Place.stick`, sticky position, scroll padding, snap-mandatory and the settle
+listener are gone): FEU wants the other sessions never to pass under it, so it scrolls with the strip like any column.
+It keeps half the visible width and its neighbours share the other half exactly. While a half is shown, `template`
+ignores `widths` (a hand width collapsed it to `MIN_W` against neighbours of `max(MIN_W, 50% / k)`), resize handles
+are hidden and `startColResize` returns.
 
 ## 2.0.0-alpha.106 - 2026-10-31
 
