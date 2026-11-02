@@ -10,7 +10,7 @@ import { LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { fitting, layoutId, layoutName, layoutsFor, MIN_W, slotsOf, type Slot } from './layouts'
+import { fitting, layoutId, layoutName, layoutsFor, MIN_W, slotSize, slotsOf, type Slot } from './layouts'
 import { useSessionsUI } from './store'
 
 const HOVER_MS = 200
@@ -214,7 +214,7 @@ export function LayoutDropBar() {
         <div className={cn('grid transition-[grid-template-rows,opacity] duration-150 ease-out', over ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
           <div className="min-h-0 overflow-hidden">
             {over && (
-              <div className="flex gap-2 pt-2 pb-1">
+              <div className="flex max-w-[min(90vw,64rem)] flex-wrap justify-center gap-2 pt-2 pb-1">
                 {fitting(layoutsFor(cols.length), stripRoom(), MIN_W).map((slots, i) => {
                   const id = layoutId(slots)
                   return (
@@ -267,11 +267,14 @@ function Thumb({
   const t = useT()
   let n = 0
   const zones: { col: number; row: string; zone: number }[] = []
+  // 6 rows: a pair takes 3 each, a trio 2 each
   slots.forEach((s, c) => {
-    if (s === 'pair') {
-      zones.push({ col: c + 1, row: '1', zone: n++ }, { col: c + 1, row: '2', zone: n++ })
-    } else zones.push({ col: c + 1, row: '1 / span 2', zone: n++ })
+    const k = slotSize(s)
+    for (let r = 0; r < k; r++) zones.push({ col: c + 1, row: `${1 + (r * 6) / k} / span ${6 / k}`, zone: n++ })
   })
+  // a half column is as wide as all the others together
+  const others = slots.reduce((w, s) => w + (s === 'half' ? 0 : s === 'big' ? 2 : 1), 0)
+  const width = (s: Slot) => (s === 'half' ? `${Math.max(1, others)}fr` : s === 'big' ? '2fr' : '1fr')
   return (
     <div className="group mx-unfold grid w-[7.25rem] shrink-0 gap-1" style={{ '--i': i } as React.CSSProperties}>
     <div
@@ -280,7 +283,7 @@ function Thumb({
         current ? 'border-primary/70' : 'group-hover:border-foreground/30',
         lit != null && 'border-foreground/30 shadow-sm',
       )}
-      style={{ gridTemplateColumns: slots.map((s) => (s === 'big' ? '2fr' : '1fr')).join(' '), gridTemplateRows: '1fr 1fr' }}
+      style={{ gridTemplateColumns: slots.map(width).join(' '), gridTemplateRows: 'repeat(6, 1fr)' }}
     >
       {zones.map((z) => (
         <button
