@@ -7,7 +7,8 @@ import { loadGroups, useT } from '@/i18n'
 import { Button, Sensitive, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
 import { uploadAttachment } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
-import { DRAFT_EVENT, loadDraft, loadQuotes, onSeed, registerComposer, saveDraft, saveQuotes, takeSeed, type Pending, type Seed } from './store'
+import { DRAFT_EVENT, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
+import { busyEnd, busyStart } from '@/lib/busy'
 import { fmtBytes } from '@/lib/format'
 import type { QueueItem } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
@@ -18,6 +19,8 @@ import { VoiceButton } from '@/features/voice/VoiceButton'
 const NO_ITEMS: QueueItem[] = []
 
 type Att = { lid: string; name: string; size: number; path: string | null; progress: number; error: string | null; preview: string | null }
+const fromDraftAtt = (a: DraftAtt): Att => ({ lid: Math.random().toString(36).slice(2), name: a.name, size: a.size, path: a.path, progress: 1, error: null, preview: isImage(a.path) ? thumbUrl(a.path, 160) : null })
+const toDraftAtts = (atts: Att[]): DraftAtt[] => atts.filter((a) => a.path && !a.error).map((a) => ({ path: a.path!, name: a.name, size: a.size }))
 
 export type ComposerHandle = { addFiles: (files: File[]) => void; focus: () => void; quote: (text: string) => void; bringBack: (s: Seed) => void }
 
@@ -45,6 +48,8 @@ export const Composer = React.forwardRef<ComposerHandle, {
   asking?: boolean
   clearingQueue?: boolean
   onSend: (text: string, attachments: string[]) => Promise<boolean>
+  /** Messages a previous page load was sending when it went away: resolves to those the server never got. */
+  checkSent?: (left: OutboxEntry[]) => Promise<OutboxEntry[] | null>
   /** Voice message sent directly (setting on by default): the recording is sent as it is, the server transcribes it. */
   onSendVoice?: (file: File) => Promise<boolean>
   onStop?: () => void
@@ -61,14 +66,14 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const t = useT()
   const [text, setText] = React.useState(() => loadDraft(draftKey))
   const [quotes, setQuotes] = React.useState<string[]>(() => loadQuotes(draftKey))
-  const [atts, setAtts] = React.useState<Att[]>([])
+  const [atts, setAtts] = React.useState<Att[]>(() => loadAtts(draftKey).map(fromDraftAtt))
   const [sending, setSending] = React.useState(false)
   const ta = React.useRef<HTMLTextAreaElement | null>(null)
   const fileInput = React.useRef<HTMLInputElement>(null)
   const ctrls = React.useRef(new Map<string, AbortController>())
   const previews = React.useRef(new Set<string>())
-  const live = React.useRef({ text, quotes, draftKey })
-  live.current = { text, quotes, draftKey }
+  const live = React.useRef({ text, quotes, atts, draftKey })
+  live.current = { text, quotes, atts, draftKey }
   const mounted = React.useRef(true)
 
   const releasePreview = (preview: string | null) => {
@@ -92,14 +97,38 @@ export const Composer = React.forwardRef<ComposerHandle, {
     if (prevKey.current !== draftKey) {
       saveDraft(prevKey.current, '')
       saveQuotes(prevKey.current, [])
+      saveAtts(prevKey.current, [])
+      outboxMove(prevKey.current, draftKey)
       prevKey.current = draftKey
     }
   }, [draftKey])
+  const unsaved = React.useRef(false)
   React.useEffect(() => {
-    const id = setTimeout(() => saveDraft(draftKey, text), 250)
+    unsaved.current = true
+    const id = setTimeout(() => {
+      saveDraft(draftKey, text)
+      unsaved.current = false
+    }, 250)
     return () => clearTimeout(id)
   }, [text, draftKey])
   React.useEffect(() => saveQuotes(draftKey, quotes), [quotes, draftKey])
+  React.useEffect(() => saveAtts(draftKey, toDraftAtts(atts)), [atts, draftKey])
+  // The page goes away (reload, update, closed tab): the text typed in the last 250 ms is kept too (quotes and
+  // files are stored at once).
+  React.useEffect(() => {
+    const flush = () => {
+      if (!unsaved.current) return // already stored (and another tab may have written it since)
+      saveDraft(live.current.draftKey, live.current.text)
+      unsaved.current = false
+    }
+    const onHidden = () => document.visibilityState === 'hidden' && flush()
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onHidden)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onHidden)
+    }
+  }, [])
 
   React.useEffect(() => {
     mounted.current = true
@@ -107,6 +136,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
       mounted.current = false
       saveDraft(live.current.draftKey, live.current.text)
       saveQuotes(live.current.draftKey, live.current.quotes)
+      saveAtts(live.current.draftKey, toDraftAtts(live.current.atts))
       ctrls.current.forEach((c) => c.abort())
       previews.current.forEach((p) => URL.revokeObjectURL(p))
       previews.current.clear()
@@ -124,6 +154,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
         setAtts((a) => [...a, { lid, name: f.name || 'file', size: f.size, path: null, progress: 0, error: null, preview }])
         const ctrl = new AbortController()
         ctrls.current.set(lid, ctrl)
+        busyStart()
         uploadAttachment(topicPath, f, (l, tot) => setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, progress: tot ? l / tot : 0 } : x))), ctrl.signal)
           .then((saved) => setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, path: saved.path, name: saved.name, progress: 1 } : x))))
           .catch((e) => {
@@ -131,7 +162,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
             setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, error: errorMessage(e) } : x)))
             toast.error(t('sessions.uploadFailed', { name: f.name }))
           })
-          .finally(() => ctrls.current.delete(lid))
+          .finally(() => {
+            ctrls.current.delete(lid)
+            busyEnd()
+          })
       }
       return lids
     },
@@ -159,9 +193,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     if (s.attachments.length)
       setAtts((a) => [
         ...a,
-        ...s.attachments
-          .filter((p) => !a.some((x) => x.path === p))
-          .map((p) => ({ lid: Math.random().toString(36).slice(2), name: p.split('/').pop() || p, size: 0, path: p, progress: 1, error: null, preview: isImage(p) ? thumbUrl(p, 160) : null })),
+        ...s.attachments.filter((p) => !a.some((x) => x.path === p)).map((p) => fromDraftAtt({ path: p, name: p.split('/').pop() || p, size: 0 })),
       ])
     requestAnimationFrame(() => {
       const el = ta.current
@@ -178,6 +210,22 @@ export const Composer = React.forwardRef<ComposerHandle, {
     if (s) bringBack(s)
     return onSeed(draftKey, bringBack)
   }, [draftKey, bringBack])
+  // Messages that were being sent when the page went away: back in the box unless the server got them.
+  const checkSent = props.checkSent
+  React.useEffect(() => {
+    const left = leftOutbox(draftKey)
+    if (!left.length) return
+    let off = false
+    void (checkSent ? checkSent(left) : Promise.resolve(left)).then((lost) => {
+      if (off || !lost) return // null: could not tell, they stay stored
+      for (const e of [...lost].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
+      left.forEach((e) => outboxDone(draftKey, e.id))
+      if (lost.length) toast.info(t('sessions.composer.sendInterrupted', { count: lost.length }))
+    })
+    return () => {
+      off = true
+    }
+  }, [draftKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Edit: the queued messages come back here. When every queued message is known to this tab (typed here), they
   // come back at once and the stack sinks; the server's answer only corrects what changed meanwhile (a message
@@ -260,9 +308,16 @@ export const Composer = React.forwardRef<ComposerHandle, {
     setQuotes([])
     inflight.current++
     setSending(true)
+    // Kept until the server answers: a reload in between brings it back (Composer mount, checkSent).
+    const k0 = draftKey
+    const outId = outboxAdd(k0, { text: sent, body, quotes: kept, attachments: paths })
+    busyStart()
     chain.current = chain.current.then(async () => {
       const ok = await onSend(sent, paths).catch(() => false)
       if (--inflight.current === 0 && mounted.current) setSending(false)
+      outboxDone(k0, outId)
+      if (live.current.draftKey !== k0) outboxDone(live.current.draftKey, outId)
+      busyEnd()
       if (!ok) {
         // Preserve the refused message AND anything typed/attached while it was in flight.
         // If the column was closed meanwhile, keep the text in its persisted draft.

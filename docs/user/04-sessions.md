@@ -24,8 +24,8 @@ stopped.
 - **Widening a session to read**: drag the right edge of a column, up to 2000 px (never wider than the screen leaves
   room for, the other columns keep their minimum width). A widened column's conversation and message box use its
   whole width; otherwise the text stays at a comfortable 860 px. Double-click the edge to undo.
-- **Scrolling sideways** (trackpad swipe, the mouse wheel between sessions or over a session's title bar, or Shift + wheel anywhere) moves the columns; when you let go
-  near the edge of a session, the strip glides to it.
+- **Scrolling sideways** (trackpad swipe, the mouse wheel between sessions or over a session's title bar, or Shift + wheel anywhere) moves the columns; the strip
+  stays exactly where you leave it (it never locks onto a session).
 - **Ready-made layouts**: hold the mouse button down on a session's grip (the dots left of its title): small
   layouts appear, click the zone where it should go (the others fill the rest). Or drag the session by its grip: a
   layouts bar slides down at the top of the sessions, drop it on a zone. Rest the pointer on the grid button to
@@ -148,6 +148,12 @@ click **Quote** above the selection (below it on a phone). The text goes into a 
 composer; quote several passages if you like, and remove one with its **×** (or all with the card's **×**).
 When you send, the quotes go first, as Markdown blockquotes (`> …`), followed by what you typed - you can
 also send the quotes alone. Quotes are kept with the draft and shown as quote blocks in your message.
+
+**Nothing typed is lost on a reload.** What you type in a session's message box, its quotes and its attached
+files stay saved in the browser: they are still there after a page reload, an update of Harness Maxxing or a
+server restart. A message being sent at the moment the page reloads comes back in the box (a notice says so)
+unless the server had received it. Messages waiting in the queue are kept by the server. After an update the
+page switches to the new version only once nothing is being sent or uploaded.
 
 **Drag from one session into another.** With several sessions side by side (mouse), drag content of one session
 onto another session's column: it lands in that session's **Quote** card, the message box gets the focus, and
