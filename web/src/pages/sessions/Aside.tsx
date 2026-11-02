@@ -39,7 +39,7 @@ export function AsidePanel({ aside, onClose }: { aside: Aside; onClose: () => vo
   const t = useT()
   const pending = !aside.answer && !aside.error
   return (
-    <div className="mx-auto w-full max-w-[860px] px-3 pb-2">
+    <div className="mx-auto w-full max-w-(--mx-read,860px) px-3 pb-2">
       <section
         aria-label={t('aside.title')}
         aria-live="polite"

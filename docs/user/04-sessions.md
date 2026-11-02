@@ -17,7 +17,12 @@ stopped.
   its **…** menu; a column holds up to three sessions (three stacked share the height evenly). Only the session you
   clicked shows its full message box; the others show a slim **Write…** bar - click it to write there. Drag the line
   between two stacked sessions to share the height (double-click: half and half). The same button, or **Give it its
-  own column**, puts them back side by side.
+  own column**, puts them back side by side. A stacked session shorter than about 560 px keeps a one-line header
+  (title, context, **…**, close): plan mode and Telegram notifications move into its **…** menu (their icon stays
+  while they are on), the project / topic line and the cost are hidden.
+- **Widening a session to read**: drag the right edge of a column, up to 2000 px (never wider than the screen leaves
+  room for, the other columns keep their minimum width). A widened column's conversation and message box use its
+  whole width; otherwise the text stays at a comfortable 860 px. Double-click the edge to undo.
 - **Scrolling sideways** (trackpad swipe, the mouse wheel between sessions or over a session's title bar, or Shift + wheel anywhere) moves the columns; when you let go
   near the edge of a session, the strip glides to it.
 - **Ready-made layouts**: hold the mouse button down on a session's grip (the dots left of its title): small
