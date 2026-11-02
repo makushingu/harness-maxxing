@@ -185,9 +185,10 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         // beside the whole strip column (a stack stays a stack)
         ui.moveBeside(key, col.key, side ?? 'right')
       }}
-      // In the strip, the grid places the session (its width comes from the grid template, see index.tsx).
+      // In the strip, the grid places the session (its width comes from the grid template, see index.tsx). A pinned half
+      // sits above everything of the columns that scroll under it (their composer is z-10, drop overlays up to z-30).
       style={{
-        ...(isCol && place && { gridColumn: place.col, gridRow: place.gridRow, ...(place.stick && { position: 'sticky', [place.stick]: 0, zIndex: 5 }) }),
+        ...(isCol && place && { gridColumn: place.col, gridRow: place.gridRow, ...(place.stick && { position: 'sticky', [place.stick]: 0, zIndex: 40 }) }),
         ...(widened && ({ '--mx-read': 'none' } as React.CSSProperties)),
       }}
       className={cn(
