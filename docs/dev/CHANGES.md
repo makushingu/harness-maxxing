@@ -8,6 +8,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+Session list (a104 rewrite of `Tree.tsx`): back the two speed fixes of `f64f334d` that the rewrite dropped. A
+filtered topic shows `SESSIONS_SHOWN_FILTERED` (30) rows then "Show more", and `SessionRows` reads `useCompact()`
+once and passes `touchLayout` to each `SessionRow` (one media-query subscriber per list, not per row). Mock, 1500
+sessions in 30 topics, filter matching all: 1500 -> 900 rows mounted; first keystroke CPU x4 (phone)
+4.1 -> 2.7 s, next ones ~200 -> ~165 ms; clearing the filter 2.7 -> 1.6 s. Dead `halfOf` removed from
+`pages/sessions/index.tsx` (`tsc -b` failed on it).
+
 Sessions strip: up to `MAX_STACK` (3) sessions per strip column (`Col.below` chains; `store.groupAt` exported,
 `normalizeCols` drops a `below` past 3 and a `wide` / `half` under a top). New `Col.half` / slot `half`: track
 `max(MIN_W, 50%)`, `position: sticky` at the strip edge when it is the first / last column (`Place.stick`), the strip
