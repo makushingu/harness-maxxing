@@ -14,8 +14,9 @@ stopped.
   resize and reorder the columns, or detach one into its own window.
 - **Grid**: with two sessions or more, the grid button at the top right stacks them two per column (four sessions
   = 2x2). You can also drop a column on the lower part of another (it goes under it) or on its upper part (it goes above it), or pick **Put under the column on the left** in
-  its **…** menu; a column holds up to three sessions (three stacked share the height evenly). Only the session you
-  clicked shows its full message box; the others show a slim **Write…** bar - click it to write there. Drag the line
+  its **…** menu; a column holds up to three sessions (three stacked share the height evenly). Two stacked sessions
+  both keep their message box; in a stack of three, only the session you clicked shows its full message box and the
+  others show a slim **Write…** bar - click it to write there. Drag the line
   between two stacked sessions to share the height (double-click: half and half). The same button, or **Give it its
   own column**, puts them back side by side. A stacked session shorter than about 560 px keeps a one-line header
   (title, context, **…**, close): plan mode and Telegram notifications move into its **…** menu (their icon stays

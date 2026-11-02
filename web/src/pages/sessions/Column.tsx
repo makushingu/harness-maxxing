@@ -237,8 +237,9 @@ function canStackUnderPrevious(key: string) {
   return end - start + 1 < MAX_STACK
 }
 
-/** Where two sessions share a column, only the focused one shows its composer (the other folds it into a thin
- *  "Write…" bar, smoothly); a click anywhere in the session focuses it and unfolds its composer. */
+/** Where three sessions share a column, only the focused one shows its composer (the others fold it into a thin
+ *  "Write…" bar, smoothly); a click anywhere in the session focuses it and unfolds its composer. Two stacked
+ *  sessions both keep theirs (FEU: having to click first was in the way). */
 function StackedComposer({ colKey, stacked, children }: { colKey: string; stacked: boolean; children: React.ReactNode }) {
   const t = useT()
   const focused = useSessionsUI((s) => s.focused === colKey)
@@ -752,7 +753,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
         {!notFound && aside.aside && <AsidePanel aside={aside.aside} onClose={aside.close} />}
         {!notFound && <TaskBar sid={sid} running={running} />}
         {!notFound && (
-          <StackedComposer colKey={col.key} stacked={!!place && place.row !== 'full'}>
+          <StackedComposer colKey={col.key} stacked={!!place && place.n >= 3}>
           <Composer
             ref={composer}
             colKey={col.key}
