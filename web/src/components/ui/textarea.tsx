@@ -22,6 +22,13 @@ export function Textarea({ className, autosize = true, minRows = 3, maxRows = 16
     const cs = getComputedStyle(el)
     const line = parseFloat(cs.lineHeight) || 20
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)
+    // Empty: its height is known without measuring. Measuring (height auto, then scrollHeight) forces a layout of
+    // the whole page, and a layout change of the sessions strip runs this for every open composer at once.
+    if (!el.value) {
+      el.style.height = `${minRows * line + pad}px`
+      el.style.overflowY = 'hidden'
+      return
+    }
     el.style.height = 'auto'
     const h = Math.min(Math.max(el.scrollHeight, minRows * line + pad), maxRows * line + pad)
     el.style.height = `${h}px`
