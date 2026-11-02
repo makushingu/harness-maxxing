@@ -135,7 +135,7 @@ export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
   if (!live.length) return null
   const agentsOnly = live.every((tk) => tk.kind === 'agent')
   return (
-    <div className="mx-auto w-full max-w-[860px] px-3 pt-1">
+    <div className="mx-auto w-full max-w-(--mx-read,860px) px-3 pt-1">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button

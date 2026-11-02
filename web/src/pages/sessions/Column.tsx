@@ -100,7 +100,7 @@ import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useConten
 
 export type ColumnVariant = 'column' | 'solo' | 'mobile'
 export { MIN_W }
-export const MAX_W = 1400
+export const MAX_W = 2000
 
 /** Cell of a session in the strip grid: its grid column, and the whole height or the top / bottom half. */
 /** `top`: key of the session at the top of this grid column (its width is saved under that key). */
@@ -137,6 +137,8 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
   const groupKey = place?.top ?? col.key
   // beside the whole strip column: the line runs along every session of it, not only the one under the pointer
   const beside = useSessionsUI((s) => (s.dropBeside?.top === groupKey ? s.dropBeside.side : null))
+  // widened by hand to read: the conversation and the composer use the whole width (otherwise 860 px at most)
+  const widened = useSessionsUI((s) => isCol && !!strip && strip.columns > 1 && (s.widths[groupKey] ?? 0) > 900)
 
   const isColDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('application/x-mx-col')
   return (
@@ -179,7 +181,10 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         ui.moveBeside(key, col.key, side ?? 'right')
       }}
       // In the strip, the grid places the session (its width comes from the grid template, see index.tsx).
-      style={isCol && place ? { gridColumn: place.col, gridRow: place.gridRow, ...(place.stick && { position: 'sticky', [place.stick]: 0, zIndex: 5 }) } : undefined}
+      style={{
+        ...(isCol && place && { gridColumn: place.col, gridRow: place.gridRow, ...(place.stick && { position: 'sticky', [place.stick]: 0, zIndex: 5 }) }),
+        ...(widened && ({ '--mx-read': 'none' } as React.CSSProperties)),
+      }}
       className={cn(
         'relative flex min-h-0 min-w-0 flex-col bg-background',
         isCol && 'snap-start border-r',
@@ -346,6 +351,24 @@ const LiveThread = React.memo(
   }),
 )
 
+/** A stacked session shorter than this keeps a one-line header (see ColumnHeader `slim`). */
+const SLIM_BELOW = 560
+
+/** True while the session holding `head` is stacked with others and short: its header drops what is rarely used. */
+function useSlimHeader(head: React.RefObject<HTMLElement | null>, stacked: boolean) {
+  const [slim, setSlim] = React.useState(false)
+  React.useLayoutEffect(() => {
+    const box = head.current?.parentElement
+    if (!stacked || !box) return setSlim(false)
+    const fit = () => setSlim(box.clientHeight < SLIM_BELOW)
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [head, stacked])
+  return slim
+}
+
 export function SessionColumn({ col, sid, variant, index, count, place }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place }) {
   const t = useT()
   const navigate = useNavigate()
@@ -506,6 +529,8 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
     else toast.error(t('sessions.popupBlocked'))
   }
 
+  const head = React.useRef<HTMLElement>(null)
+  const slim = useSlimHeader(head, variant === 'column' && !!place && place.row !== 'full')
   const actions = {
     rename: (title: string) => patch.mutate({ id: sid, title }),
     model: (model: string) => patch.mutate({ id: sid, model }),
@@ -575,6 +600,8 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
           rootLabel={t('sessions.root')}
           onClose={() => close(col.key)}
           tgLinked={tgLinked}
+          headRef={head}
+          slim={slim}
           menu={
             <DropdownMenu>
               <Tooltip content={t('common.more')}>
@@ -590,9 +617,15 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
                 // "Layouts…": the focus goes to the picker, not back to this button (that would close the picker)
                 onCloseAutoFocus={(e) => useSessionsUI.getState().layoutPicker === col.key && e.preventDefault()}
               >
-                {variant === 'mobile' && (
+                {(variant === 'mobile' || slim) && (
                   <>
-                    {/* Touch layout: the header keeps room for the title - Telegram lives here (plan mode is next to the title). */}
+                    {/* Touch layout and short stacked session: the header keeps room for the title - Telegram lives
+                        here (on a phone plan mode is next to the title). */}
+                    {slim && (
+                      <DropdownMenuCheckboxItem checked={!!session?.plan_mode} disabled={!session} onSelect={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}>
+                        {t('plan.toggle')}
+                      </DropdownMenuCheckboxItem>
+                    )}
                     <DropdownMenuCheckboxItem checked={!!session?.notify} disabled={!session || !tgLinked} onSelect={actions.notify}>
                       {t('sessions.notify.label')}
                     </DropdownMenuCheckboxItem>
@@ -692,7 +725,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
           )}
         </ItemContext.Provider>
         {session?.state === 'error' && session.error && !running && (
-          <div className="mx-auto w-full max-w-[860px] px-3">
+          <div className="mx-auto w-full max-w-(--mx-read,860px) px-3">
             <div role="alert" className="rounded-md bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
               <Sensitive>{session.error}</Sensitive>
             </div>
@@ -799,6 +832,8 @@ function ColumnHeader({
   onHud,
   onPlan,
   tgLinked,
+  headRef,
+  slim,
 }: {
   col: Col
   variant: ColumnVariant
@@ -811,6 +846,10 @@ function ColumnHeader({
   onHud?: () => void
   onPlan?: () => void
   tgLinked: boolean
+  headRef?: React.Ref<HTMLElement>
+  /** Short stacked session: one line (title, state, context, menu, close); plan mode and Telegram show only
+   *  while on and are in the menu, the picture-in-picture is in the menu, topic and cost go. */
+  slim?: boolean
 }) {
   const t = useT()
   const billed = useCostIsBilled()
@@ -873,20 +912,25 @@ function ColumnHeader({
       </header>
     )
   return (
-    <header data-col-head className={cn('shrink-0 border-b bg-background/95 px-3 py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
+    <header ref={headRef} data-col-head className={cn('shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
       <div className="flex h-9 min-w-0 items-center gap-1 pointer-coarse:h-10">
         {variant === 'column' && <DragGrip colKey={col.key} />}
         {session ? <InlineTitle value={session.title} onSave={onRename} /> : <Skeleton className="h-4 w-40" />}
         {session && <StateBadge session={session} />}
         <div className="ml-auto flex shrink-0 items-center">
-          {onHud && (
+          {slim && session && (
+            <span className="mr-1 flex">
+              <ContextGauge ring tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
+            </span>
+          )}
+          {onHud && !slim && (
             <Tooltip content={t('hud.open')}>
               <Button variant="ghost" size="icon-sm" aria-label={t('hud.open')} onClick={onHud}>
                 <PictureInPicture2 />
               </Button>
             </Tooltip>
           )}
-          {onPlan && (
+          {onPlan && (!slim || session?.plan_mode) && (
             <Tooltip content={session?.plan_mode ? t('plan.toggleOff') : t('plan.toggleOn')}>
               <Button
                 variant="ghost"
@@ -901,6 +945,7 @@ function ColumnHeader({
               </Button>
             </Tooltip>
           )}
+          {(!slim || session?.notify) && (
           <Tooltip content={notifyTip}>
             <span>
               <Button
@@ -916,6 +961,7 @@ function ColumnHeader({
               </Button>
             </span>
           </Tooltip>
+          )}
           {menu}
           {variant === 'column' && (
             <Tooltip content={t('sessions.closeColumn')}>
@@ -926,7 +972,7 @@ function ColumnHeader({
           )}
         </div>
       </div>
-      <div className="flex h-5 min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
+      <div className={cn('flex h-5 min-w-0 items-center gap-2 text-[11px] text-muted-foreground', slim && 'hidden')}>
         {session ? (
           <>
             <MoveSessionPicker session={session} rootLabel={rootLabel} />
