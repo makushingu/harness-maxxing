@@ -40,6 +40,9 @@ rest half hidden under the sticky half; with a stuck column the strip is `snap-m
 settles. A hand width on the half collapsed it to `MIN_W` (`minmax(MIN_W, w)` against neighbours of `max(MIN_W, 50%)`)
 and a hand width on a neighbour broke the exact share: while a half is pinned, `template` ignores `widths`, resize
 handles are hidden and `startColResize` returns.
+Some browsers still left the strip between two columns beside the half: the settling no longer relies on CSS
+snapping, a scroll listener (document, capture) glides to `columnStop()` 200 ms after any scroll stops (scrollbar:
+after the button comes up). The half is `z-index: 40` so a scrolled column's composer (z-10) no longer shows over it.
 
 ## 2.0.0-alpha.106 - 2026-10-31
 
