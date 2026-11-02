@@ -51,8 +51,8 @@ Composer drafts survive a reload: the text is also written on `pagehide` / tab h
 not run yet (only if this composer has unsaved text, so an idle tab does not overwrite another tab's draft); uploaded
 attachments are stored with the draft (`mx-draft:<k>:atts`, `loadAtts` / `saveAtts`). Outbox
 (`mx-draft:<k>:out`, `outboxAdd` / `outboxDone` / `outboxMove` / `leftOutbox` in store.ts): each send is written
-before the request and removed once it is answered, except while the page is going away (its fetch is aborted, that
-is not a refusal). On mount the composer takes what a previous load left; the session column's `checkSent` loads
+before the request and removed once it is answered (a failure: 1.5 s later, only if the page is still here, since a
+reload cuts the request and that is not a refusal; a leftover already back in the draft is not added twice). On mount the composer takes what a previous load left; the session column's `checkSent` loads
 the log and drops what the server got (a user event with the same text since the send, or a queue item it starts
 with), the rest comes back in the box with a toast (`sessions.composer.sendInterrupted`). `null` = could not tell:
 the entries stay for the next load. `lib/busy.ts`: sends and uploads in progress hold the automatic switch to a new
