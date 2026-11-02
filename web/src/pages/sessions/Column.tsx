@@ -91,7 +91,7 @@ import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
 import { EASE_OUT, reducedMotion } from '@/lib/presence'
-import { canShift, focusComposer, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type Seed } from './store'
+import { canShift, focusComposer, groupAt, MAX_STACK, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type Seed } from './store'
 import { Thread, type ThreadHandle } from './Thread'
 import { Composer, type ComposerHandle } from './Composer'
 import { QuotePill } from './Quote'
@@ -108,7 +108,10 @@ export const MAX_W = 1400
 /** Cell of a session in the strip grid: its grid column, and the whole height or the top / bottom half. */
 /** `top`: key of the session at the top of this grid column (its width is saved under that key). */
 /** `hidden`: kept mounted but not shown (tabs view: only the focused session is on screen). */
-export type Place = { col: number; row: 'full' | 'top' | 'bottom'; top?: string; hidden?: boolean }
+/** Where a session sits in the strip grid: its column, its rank `i` in a stack of `n` (row: 'full' alone, 'top'
+ *  first of a stack, 'bottom' any other), its grid lines, the top key of its stack, and `stick` for a `half` column
+ *  held at that edge while the others scroll past it. */
+export type Place = { col: number; row: 'full' | 'top' | 'bottom'; i: number; n: number; gridRow: string; top?: string; hidden?: boolean; stick?: 'left' | 'right' }
 /** The strip owns the grid template: handles ask it to resize a column or the row split. */
 export const StripContext = React.createContext<{
   startColResize: (key: string, e: React.PointerEvent) => void
@@ -130,9 +133,13 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
   const focus = useSessionsUI((s) => s.focus)
   const strip = React.useContext(StripContext)
   const ref = React.useRef<HTMLElement>(null)
-  const [dropSide, setDropSide] = React.useState<'left' | 'right' | 'above' | 'below' | null>(null)
+  const [dropSide, setDropSide] = React.useState<'above' | 'below' | null>(null)
   const isCol = variant === 'column'
-  const row = place?.row ?? 'full'
+  const rank = place?.i ?? 0
+  const size = place?.n ?? 1
+  const groupKey = place?.top ?? col.key
+  // beside the whole strip column: the line runs along every session of it, not only the one under the pointer
+  const beside = useSessionsUI((s) => (s.dropBeside?.top === groupKey ? s.dropBeside.side : null))
 
   const isColDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('application/x-mx-col')
   return (
@@ -146,32 +153,42 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         if (!isCol || !isColDrag(e)) return
         e.preventDefault()
         const r = ref.current!.getBoundingClientRect()
-        // lower / upper third of a session alone in its column: stack under / above it (2 per column at most)
-        if (row === 'full' && e.clientY > r.top + r.height * 0.66) setDropSide('below')
-        else if (row === 'full' && e.clientY < r.top + r.height * 0.34) setDropSide('above')
-        else setDropSide(e.clientX < r.left + r.width / 2 ? 'left' : 'right')
+        const ui = useSessionsUI.getState()
+        // upper third of a stack's top session / lower third of its last one: stack above / under it, while the
+        // column holds fewer than MAX_STACK
+        const room = size < MAX_STACK
+        const v = room && rank === size - 1 && e.clientY > r.top + r.height * 0.66 ? 'below' : room && rank === 0 && e.clientY < r.top + r.height * 0.34 ? 'above' : null
+        setDropSide(v)
+        ui.setDropBeside(v ? null : { top: groupKey, side: e.clientX < r.left + r.width / 2 ? 'left' : 'right' })
       }}
       onDragLeave={(e) => {
-        if (!ref.current?.contains(e.relatedTarget as Node)) setDropSide(null)
+        if (ref.current?.contains(e.relatedTarget as Node)) return
+        setDropSide(null)
+        const ui = useSessionsUI.getState()
+        if (ui.dropBeside?.top === groupKey) ui.setDropBeside(null)
       }}
       onDrop={(e) => {
         if (!isColDrag(e)) return
         e.preventDefault()
         const key = e.dataTransfer.getData('application/x-mx-col')
-        const side = dropSide
+        const ui = useSessionsUI.getState()
+        const side = dropSide ?? (ui.dropBeside?.top === groupKey ? ui.dropBeside.side : null)
         setDropSide(null)
+        ui.setDropBeside(null)
         if (!key || key === col.key) return
-        if (side === 'below') return useSessionsUI.getState().stack(key, col.key)
-        if (side === 'above') return useSessionsUI.getState().stackAbove(key, col.key)
-        // beside the whole strip column (a pair stays a pair)
-        useSessionsUI.getState().moveBeside(key, col.key, side ?? 'right')
+        if (side === 'below') return ui.stack(key, col.key)
+        if (side === 'above') return ui.stackAbove(key, col.key)
+        // beside the whole strip column (a stack stays a stack)
+        ui.moveBeside(key, col.key, side ?? 'right')
       }}
       // In the strip, the grid places the session (its width comes from the grid template, see index.tsx).
-      style={isCol && place ? { gridColumn: place.col, gridRow: row === 'full' ? '1 / span 2' : row === 'top' ? '1' : '2' } : undefined}
+      style={isCol && place ? { gridColumn: place.col, gridRow: place.gridRow, ...(place.stick && { position: 'sticky', [place.stick]: 0, zIndex: 5 }) } : undefined}
       className={cn(
         'relative flex min-h-0 min-w-0 flex-col bg-background',
         isCol && 'snap-start border-r',
-        isCol && row === 'top' && 'border-b',
+        isCol && rank < size - 1 && 'border-b',
+        place?.stick === 'left' && 'shadow-[6px_0_12px_-10px_rgb(0_0_0/0.45)]',
+        place?.stick === 'right' && 'border-l shadow-[-6px_0_12px_-10px_rgb(0_0_0/0.45)]',
         isCol && count > 1 && focused && 'shadow-[inset_0_2px_0_0_var(--primary)]',
         !isCol && 'h-full w-full',
         place?.hidden && 'hidden',
@@ -181,7 +198,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
       {dropSide === 'below' || dropSide === 'above' ? (
         <span aria-hidden className={cn('pointer-events-none absolute inset-x-2 z-20 h-1/3 rounded-lg border-2 border-dashed border-primary bg-primary/10 animate-in', dropSide === 'below' ? 'bottom-2' : 'top-2')} />
       ) : (
-        dropSide && <span aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary', dropSide === 'left' ? 'left-0' : 'right-0')} />
+        beside && <span aria-hidden className={cn('pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary', beside === 'left' ? 'left-0' : 'right-0')} />
       )}
       {isCol && strip && strip.columns > 1 && (
         <div
@@ -195,7 +212,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
           className="absolute inset-y-0 left-full z-10 -ml-px w-2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-0 after:w-[3px] after:transition-colors hover:after:bg-primary/40 active:after:bg-primary/60"
         />
       )}
-      {isCol && strip && row === 'bottom' && (
+      {isCol && strip && size === 2 && rank === 1 && (
         <div
           role="separator"
           aria-orientation="horizontal"
@@ -214,9 +231,9 @@ function canStackUnderPrevious(key: string) {
   const cols = useSessionsUI.getState().cols
   const i = cols.findIndex((c) => c.key === key)
   if (i < 1) return false
-  const prev = cols[i - 1]
-  // the column on the left: `prev` alone, or `prev` already under another one (then it is full)
-  return !prev.below
+  // the column on the left holds fewer than MAX_STACK
+  const [start, end] = groupAt(cols, i - 1)
+  return end - start + 1 < MAX_STACK
 }
 
 /** Where two sessions share a column, only the focused one shows its composer (the other folds it into a thin
@@ -622,8 +639,8 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
                           onSelect={() => {
                             const cols = useSessionsUI.getState().cols
                             const i = cols.findIndex((c) => c.key === col.key)
-                            const top = cols[i - 1]?.below ? cols[i - 2] : cols[i - 1]
-                            if (top) useSessionsUI.getState().stack(col.key, top.key)
+                            // under the last session of the strip column on the left
+                            if (i > 0) useSessionsUI.getState().stack(col.key, cols[i - 1].key)
                           }}
                         >
                           <Rows2 /> {t('sessions.grid.stack')}
