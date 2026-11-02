@@ -6,6 +6,20 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## Unreleased
+
+Sessions strip: up to `MAX_STACK` (3) sessions per strip column (`Col.below` chains; `store.groupAt` exported,
+`normalizeCols` drops a `below` past 3 and a `wide` / `half` under a top). New `Col.half` / slot `half`: track
+`max(MIN_W, 50%)`, `position: sticky` at the strip edge when it is the first / last column (`Place.stick`), the strip
+gets `scroll-padding-left|right: 50%`, the other columns `minmax(max(MIN_W, 50% / k), 1fr)` with k = how many fit in
+the other half (ResizeObserver), so none shows cut. Slot `trio`. Rows: `layouts.stripRows(sizes, split)` builds the
+shared row template from the cuts used (pair at `rowSplit`, trio in thirds); `Place` gains `i`, `n`, `gridRow`; the
+row handle (pairs only) re-applies every stack's lines live. `layoutsFor(n >= 4)` adds half + pairs / trios and
+mirrors, `n >= 5` the trio grid; `fitting` keeps a half layout from 2 columns of room and the grids even when they
+scroll. `unstack` = `moveBeside` the stack top (the middle of a trio left the third under it). Drop beside a stack:
+`dropBeside` (store, not persisted) draws the line along every session of the strip column, not only the hovered
+one.
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Audit fixes. `resume.threshold()` and `candidate()` read `smart_resume_tokens`, `context_tokens`, `base_tokens`, `finished_at`,

@@ -17,7 +17,8 @@ import { useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/
 import type { Session } from '@/lib/types'
 import { PageHeader } from '@/components/shell/Page'
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, Kbd, MOD, Tooltip } from '@/components/ui'
-import { focusComposer, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
+import { focusComposer, MAX_STACK, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
+import { stripRows } from './layouts'
 import { SessionTree } from './Tree'
 import { LayoutDropBar, LayoutPicker } from './LayoutPicker'
 import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, StripContext, type ColumnVariant, type Place } from './Column'
@@ -335,8 +336,12 @@ function Workspace() {
     const glideToColumn = (el: HTMLDivElement) => {
       const max = el.scrollWidth - el.clientWidth
       let target: number | null = null
+      // a half column held at the left edge covers that much of the strip: columns settle just past it
+      const stuck = el.querySelector<HTMLElement>(':scope > [data-col][style*="sticky"]')
+      const pad = stuck && stuck.style.left === '0px' ? stuck.offsetWidth : 0
       for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
-        const left = Math.min(max, Math.max(0, c.offsetLeft))
+        if (c.style.position === 'sticky') continue
+        const left = Math.min(max, Math.max(0, c.offsetLeft - pad))
         if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
       }
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -370,26 +375,45 @@ function Workspace() {
     if (tabs) {
       // tabs view: every session in the one cell, only the focused one shown (the others stay mounted: no reload)
       const shown = shownCols.some((p) => p.key === focused && !p.leaving) ? focused : shownCols.find((p) => !p.leaving)?.key
-      for (const p of shownCols) out.set(p.key, { col: 1, row: 'full', hidden: p.key !== shown })
-      return { places: out, tops: shownCols.length ? [shownCols[0].key] : [] }
+      for (const p of shownCols) out.set(p.key, { col: 1, row: 'full', i: 0, n: 1, gridRow: '1 / -1', hidden: p.key !== shown })
+      return { places: out, tops: shownCols.length ? [shownCols[0].key] : [], stacks: [] as string[][], rows: stripRows([1], rowSplit) }
     }
-    const tops: string[] = []
-    let prev: { key: string; place: Place } | null = null
+    // stacks: a `below` session joins the strip column before it, up to MAX_STACK
+    const stacks: string[][] = []
     for (const p of shownCols) {
-      if (p.item.below && prev && prev.place.row === 'full') {
-        prev.place.row = 'top'
-        out.set(p.key, { col: prev.place.col, row: 'bottom', top: prev.key })
-        prev = null
-        continue
-      }
-      const place: Place = { col: tops.length + 1, row: 'full' }
-      tops.push(p.key)
-      out.set(p.key, place)
-      prev = { key: p.key, place }
+      const last = stacks[stacks.length - 1]
+      if (p.item.below && last && last.length < MAX_STACK) last.push(p.key)
+      else stacks.push([p.key])
     }
-    return { places: out, tops }
-  }, [shownCols, tabs, focused])
+    const rows = stripRows(stacks.map((g) => g.length), rowSplit)
+    const halfOf = (g: string[]) => g.length === 1 && !!shownCols.find((p) => p.key === g[0])?.item.half
+    stacks.forEach((g, c) => {
+      // a half column at an edge of the strip stays there while the others scroll past it
+      const stick = stacks.length > 1 && halfOf(g) ? (c === 0 ? 'left' : c === stacks.length - 1 ? 'right' : undefined) : undefined
+      g.forEach((k, i) =>
+        out.set(k, { col: c + 1, row: g.length === 1 ? 'full' : i ? 'bottom' : 'top', i, n: g.length, gridRow: rows.lines(g.length, i), ...(i > 0 && { top: g[0] }), ...(stick && { stick }) }),
+      )
+    })
+    return { places: out, tops: stacks.map((g) => g[0]), stacks, rows }
+  }, [shownCols, tabs, focused, rowSplit])
   const wide = React.useMemo(() => new Set(cols.filter((c) => c.wide).map((c) => c.key)), [cols])
+  const half = React.useMemo(() => new Set(cols.filter((c) => c.half).map((c) => c.key)), [cols])
+  // (a row drag reads the stacks of the moment: a session can open or close meanwhile)
+  const placesNow = React.useRef(places)
+  placesNow.current = places
+  // beside a half column, the others fill the other half exactly (as many as fit at MIN_W): none shows cut in two,
+  // and scrolling steps one column at a time
+  const hasHalf = places.tops.length > 1 && places.tops.some((k) => half.has(k))
+  const [beside, setBeside] = React.useState(1)
+  React.useLayoutEffect(() => {
+    const el = strip.current
+    if (!hasHalf || !el) return
+    const fit = () => setBeside(Math.max(1, Math.floor(el.clientWidth / 2 / MIN_W)))
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [hasHalf])
   const template = React.useCallback(
     (override?: { key: string; w: number }) =>
       places.tops
@@ -397,12 +421,15 @@ function Workspace() {
           const w = override?.key === k ? override.w : places.tops.length > 1 ? widths[k] : undefined
           // a resized column keeps its width while there is room, then shrinks to MIN_W before the strip scrolls
           if (w) return `minmax(${MIN_W}px, ${Math.round(w)}px)`
-          return `minmax(${MIN_W}px, ${places.tops.length > 1 && wide.has(k) ? 2 : 1}fr)`
+          // half the visible strip, whatever the number of columns beside it (they scroll past it)
+          if (places.tops.length > 1 && half.has(k)) return `max(${MIN_W}px, 50%)`
+          const min = hasHalf ? `max(${MIN_W}px, ${+(50 / beside).toFixed(3)}%)` : `${MIN_W}px`
+          return `minmax(${min}, ${places.tops.length > 1 && wide.has(k) ? 2 : 1}fr)`
         })
         .join(' '),
-    [places, widths, wide],
+    [places, widths, wide, half, hasHalf, beside],
   )
-  const rows = (r: number) => `minmax(120px, ${r}fr) minmax(120px, ${1 - r}fr)`
+  const stickSide = [...places.places.values()].find((p) => p.stick)?.stick
   const stacked = cols.some((c) => c.below)
 
   React.useLayoutEffect(() => {
@@ -454,7 +481,7 @@ function Workspace() {
         }
       }
     lastRects.current = now
-  }, [tabs, cols.map((c) => c.key + (c.below ? 'v' : '') + (c.wide ? 'w' : '') + (widths[c.key] ?? '')).join(' ')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, cols.map((c) => c.key + (c.below ? 'v' : '') + (c.wide ? 'w' : '') + (c.half ? 'h' : '') + (widths[c.key] ?? '')).join(' ')]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resizing: the column handle (width of a grid column) and the row handle (height split of stacked sessions) set
   // the grid template live, then save it.
@@ -498,7 +525,15 @@ function Workspace() {
         let r = useSessionsUI.getState().rowSplit
         const onMove = (ev: PointerEvent) => {
           r = Math.max(ROW_SPLIT_MIN, Math.min(ROW_SPLIT_MAX, (ev.clientY - box.top) / box.height))
-          st.style.gridTemplateRows = rows(r)
+          // pairs and trios share the grid rows: when the split crosses a third, every stack's lines change
+          const { stacks } = placesNow.current
+          const live = stripRows(stacks.map((g) => g.length), r)
+          st.style.gridTemplateRows = live.template
+          for (const g of stacks)
+            g.forEach((k, i) => {
+              const el = colEl(k)
+              if (el) el.style.gridRow = live.lines(g.length, i)
+            })
         }
         const onUp = () => {
           target.removeEventListener('pointermove', onMove)
@@ -515,7 +550,7 @@ function Workspace() {
       resetRowSplit: () => useSessionsUI.getState().setRowSplit(0.5),
       columns: places.tops.length,
     }),
-    [template, places.tops.length], // eslint-disable-line react-hooks/exhaustive-deps
+    [template, places], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const openIds = React.useMemo(() => new Set(cols.flatMap((c) => (c.kind === 'session' ? [c.id] : []))), [cols])
@@ -621,7 +656,7 @@ function Workspace() {
           <div
             ref={strip}
             className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
-            style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: rows(rowSplit) } : undefined}
+            style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: places.rows.template, ...(stickSide && { [stickSide === 'left' ? 'scrollPaddingLeft' : 'scrollPaddingRight']: '50%' }) } : undefined}
             data-columns
             // several sessions side by side: messages show their grip (drag one into another session, contentDrag.ts)
             data-multi={(!tabs && shownCols.length > 1) || undefined}
