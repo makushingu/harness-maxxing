@@ -351,6 +351,15 @@ def _load_raw() -> list[dict]:
     return _read_raw() or []
 
 
+def _load_for_write() -> list[dict]:
+    """The jobs to change and save back. An unreadable jobs.json is refused (CronError `damaged_jobs`):
+    saving over it would lose every job it held, and take their lines out of the crontab."""
+    jobs = _read_raw()
+    if jobs is None:
+        raise CronError(f"{jobs_path()} cannot be read: repair or remove it first", "damaged_jobs")
+    return jobs
+
+
 def _save_raw(jobs: list[dict], reason: str = "removed") -> None:
     old = _read_raw()
     if old is not None:
@@ -412,7 +421,7 @@ SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 def restore_job(cid: str) -> dict:
     """Put back the most recent archived copy of job `cid`, with its id (CronError if absent or still there)."""
     with _lock:
-        jobs = _load_raw()
+        jobs = _load_for_write()
         if any(j["id"] == cid for j in jobs):
             raise CronError(f"job {cid} exists", "exists")
         if not SAFE_ID.fullmatch(str(cid)):              # the id goes into a crontab line: never shell syntax
@@ -526,7 +535,7 @@ def create_job(fields: dict) -> dict:
     j = _clean({k: v for k, v in fields.items() if k in DEFAULTS})
     now = time.time()
     with _lock:
-        jobs = _load_raw()
+        jobs = _load_for_write()
         j.update(id=new_id(), created=now, updated=now)
         while any(x["id"] == j["id"] for x in jobs):
             j["id"] = new_id()
@@ -538,7 +547,7 @@ def create_job(fields: dict) -> dict:
 
 def update_job(cid: str, fields: dict) -> dict | None:
     with _lock:
-        jobs = _load_raw()
+        jobs = _load_for_write()
         for i, cur in enumerate(jobs):
             if cur["id"] == cid:
                 merged = {**DEFAULTS, **cur, **{k: v for k, v in fields.items() if k in DEFAULTS}}
@@ -555,7 +564,7 @@ def update_job(cid: str, fields: dict) -> dict | None:
 
 def delete_job(cid: str) -> bool:
     with _lock:
-        jobs = _load_raw()
+        jobs = _load_for_write()
         rest = [j for j in jobs if j["id"] != cid]
         if len(rest) == len(jobs):
             return False

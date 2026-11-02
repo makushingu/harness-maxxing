@@ -530,6 +530,25 @@ def test_an_unreadable_jobs_json_leaves_the_crontab_as_it_is(org, capsys):
     assert crons.read_crontab() == before
 
 
+def test_an_unreadable_jobs_json_is_never_saved_over(org):
+    """Create, update, delete and restore refuse to write over a damaged jobs.json (its jobs would be lost)."""
+    a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
+    crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
+    crons.delete_job(a["id"])
+    tab = crons.read_crontab()
+    bad = '{"version": 1, "jobs": [{"id": "c_'
+    crons.jobs_path().write_text(bad)
+    for call in (lambda: crons.create_job({"name": "C", "schedule": "0 7 * * *", "command": "echo c"}),
+                 lambda: crons.update_job(a["id"], {"name": "A2"}),
+                 lambda: crons.delete_job(a["id"]),
+                 lambda: crons.restore_job(a["id"])):
+        with pytest.raises(crons.CronError) as e:
+            call()
+        assert e.value.code == "damaged_jobs"
+    assert crons.jobs_path().read_text() == bad
+    assert crons.read_crontab() == tab
+
+
 def test_deleted_lists_even_with_a_bad_date(org, capsys):
     """deleted.jsonl is only a file: a date that is not a number (or out of range) does not break the list."""
     from maxxing import cmd_cron
