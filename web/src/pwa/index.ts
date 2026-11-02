@@ -2,6 +2,7 @@
 // `initPWA()` runs once from main.tsx (before React) so the early `beforeinstallprompt` event is never missed.
 // The worker itself is web/sw/sw.js (emitted as /sw.js by the `maxxing-sw` Vite plugin, production builds only).
 import { create } from 'zustand'
+import { isBusy, onIdle } from '@/lib/busy'
 
 /** Chrome's install prompt event (not in lib.dom). */
 type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
@@ -90,17 +91,21 @@ function typing() {
  *  sidebar shows "New version - reload". */
 function announceUpdate(w: ServiceWorker) {
   usePWA.setState({ waiting: w })
-  if (!typing()) return applyUpdate()
+  if (!typing() && !isBusy()) return applyUpdate()
+  let stopIdle = () => {}
   const later = () => {
-    if (document.visibilityState === 'visible' && typing()) return
+    if (isBusy() || (document.visibilityState === 'visible' && typing())) return
     document.removeEventListener('focusout', soon)
     document.removeEventListener('visibilitychange', later)
+    stopIdle()
     applyUpdate()
   }
   // focusout fires before the next element takes focus: look once it has
   const soon = () => setTimeout(later, 0)
   document.addEventListener('focusout', soon)
   document.addEventListener('visibilitychange', later)
+  // A message being sent or a file being uploaded: wait for it to end (a reload would lose it).
+  stopIdle = onIdle(soon)
 }
 
 let registration: ServiceWorkerRegistration | null = null

@@ -301,12 +301,10 @@ function Workspace() {
   // sideways, and so does Shift + wheel anywhere on the strip (columns side by side leave no gap to aim at).
   // Trackpad: a sideways swipe anywhere over the columns scrolls the strip. The threads inside contain their
   // overscroll (vertical lists), which swallowed horizontal wheel deltas unless the pointer sat below them.
-  // The strip snaps to columns: a programmatic scroll of a few pixels is snapped straight back, so snapping is
-  // off while the fingers move and comes back right after (the strip then settles on the nearest column).
+  // No snapping on a computer: the strip stays where it is scrolled to, it never locks onto a column.
   // Listening on the document (not the strip) keeps working whenever the strip is mounted or re-mounted.
   React.useEffect(() => {
     if (mobile) return
-    let settle = 0
     const onWheel = (e: WheelEvent) => {
       const el = strip.current
       if (!el || !(e.target instanceof Node) || !el.contains(e.target)) return
@@ -324,41 +322,10 @@ function Workspace() {
         }
       }
       e.preventDefault()
-      stopGlide()
-      el.style.scrollSnapType = 'none'
       el.scrollLeft += e.deltaMode === 1 ? delta * 16 : delta
-      window.clearTimeout(settle)
-      settle = window.setTimeout(() => glideToColumn(el), 180)
-    }
-    // Turning snapping back on made the browser jump to the column: glide there first, then turn it back on
-    // (it is already in place). Like `snap-proximity`, only when a column edge is near.
-    let stopGlide = () => {}
-    const glideToColumn = (el: HTMLDivElement) => {
-      const target = columnStop(el)
-      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      if (target == null || reduce || Math.abs(target - el.scrollLeft) < 1 || Math.abs(target - el.scrollLeft) > el.clientWidth * 0.3) {
-        el.style.scrollSnapType = ''
-        return
-      }
-      const done = () => {
-        stopGlide()
-        el.style.scrollSnapType = ''
-      }
-      const fallback = window.setTimeout(done, 700)
-      el.addEventListener('scrollend', done, { once: true })
-      stopGlide = () => {
-        window.clearTimeout(fallback)
-        el.removeEventListener('scrollend', done)
-        stopGlide = () => {}
-      }
-      el.scrollTo({ left: target, behavior: 'smooth' })
     }
     document.addEventListener('wheel', onWheel, { passive: false })
-    return () => {
-      document.removeEventListener('wheel', onWheel)
-      window.clearTimeout(settle)
-      stopGlide()
-    }
+    return () => document.removeEventListener('wheel', onWheel)
   }, [mobile])
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
   // A place equal to the previous one is the same object: the columns are memoized (ColumnFor), and a focus change
@@ -681,7 +648,7 @@ function Workspace() {
           {tabs && <TabsArrows onPick={pickTab} />}
           <div
             ref={strip}
-            className={cn('group/strip relative min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
+            className={cn('group/strip relative min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden', !tabs && 'pr-2', shownCols.length ? 'grid' : 'flex')}
             style={shownCols.length ? { gridTemplateColumns: template(), gridTemplateRows: places.rows.template } : undefined}
             data-columns
             // several sessions side by side: messages show their grip (drag one into another session, contentDrag.ts)
@@ -864,13 +831,3 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
 const samePlace = (a: Place, b: Place) =>
   a.col === b.col && a.row === b.row && a.i === b.i && a.n === b.n && a.gridRow === b.gridRow && a.top === b.top && a.hidden === b.hidden
 
-/** Where the strip should rest: the scroll position closest to the current one that starts on a column. */
-function columnStop(el: HTMLElement): number | null {
-  const max = el.scrollWidth - el.clientWidth
-  let target: number | null = null
-  for (const c of el.querySelectorAll<HTMLElement>(':scope > [data-col]')) {
-    const left = Math.min(max, Math.max(0, c.offsetLeft))
-    if (target == null || Math.abs(left - el.scrollLeft) < Math.abs(target - el.scrollLeft)) target = left
-  }
-  return target
-}
