@@ -35,7 +35,7 @@ class CronIn(BaseModel):
 
 
 def _bad(e: crons.CronError) -> HTTPException:
-    status = 409 if e.code == "already_running" else 502 if e.code in ("crontab_error", "spawn_failed") else 400
+    status = 409 if e.code in ("already_running", "damaged_jobs") else 502 if e.code in ("crontab_error", "spawn_failed") else 400
     return HTTPException(status, detail={"error": e.code, "message": str(e)})
 
 

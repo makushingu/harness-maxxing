@@ -223,8 +223,8 @@ Cron = {id, name, schedule,            // 5-field cron expression
 Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|null}   (output_tail: a Claude job keeps the first 2048 characters of its answer, a command the last 2048 of its output)
 ```
 | GET | `/api/crons` | – | `{jobs:[Cron], external:[{schedule, command, human}]}` (external = crontab lines outside the managed block, read-only) |
-| POST | `/api/crons` | Cron fields | `Cron` (validates expression; syncs crontab) |
-| PATCH / DELETE | `/api/crons/{id}` | | |
+| POST | `/api/crons` | Cron fields | `Cron` (validates expression; syncs crontab) · `409 damaged_jobs` (jobs.json cannot be read: nothing is written) |
+| PATCH / DELETE | `/api/crons/{id}` | | `409 damaged_jobs` as for POST |
 | POST | `/api/crons/{id}/run` | – | `{ok}` (runs now in a transient unit) · `409 already_running` |
 | GET | `/api/crons/runs?cron_id=&limit=50` | – | `[Run]` |
 | GET | `/api/crons/{id}` | – | `Cron` |
