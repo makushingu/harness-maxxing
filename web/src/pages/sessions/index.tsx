@@ -514,10 +514,12 @@ function Workspace() {
         const target = e.currentTarget as HTMLElement
         target.setPointerCapture(e.pointerId)
         let w = startW
+        // never wider than the strip can show (the others keep MIN_W): past it the handle would move for nothing
+        const room = Math.max(startW, st.clientWidth - 8 - (placesNow.current.tops.length - 1) * MIN_W)
         // one grid change per frame (pointer events can come faster, each relays out every open session)
         let frame = 0
         const onMove = (ev: PointerEvent) => {
-          w = Math.max(MIN_W, Math.min(MAX_W, startW + ev.clientX - startX))
+          w = Math.max(MIN_W, Math.min(MAX_W, room, startW + ev.clientX - startX))
           frame ||= requestAnimationFrame(() => {
             frame = 0
             st.style.gridTemplateColumns = templateNow.current({ key, w })
