@@ -14,15 +14,19 @@ stopped.
   resize and reorder the columns, or detach one into its own window.
 - **Grid**: with two sessions or more, the grid button at the top right stacks them two per column (four sessions
   = 2x2). You can also drop a column on the lower part of another (it goes under it) or on its upper part (it goes above it), or pick **Put under the column on the left** in
-  its **…** menu. Only the session you clicked shows its full message box; the others show a slim **Write…** bar -
-  click it to write there. Drag the line between two stacked sessions to share the height (double-click: half and
-  half). The same button, or **Give it its own column**, puts them back side by side.
+  its **…** menu; a column holds up to three sessions (three stacked share the height evenly). Only the session you
+  clicked shows its full message box; the others show a slim **Write…** bar - click it to write there. Drag the line
+  between two stacked sessions to share the height (double-click: half and half). The same button, or **Give it its
+  own column**, puts them back side by side.
 - **Scrolling sideways** (trackpad swipe, the mouse wheel between sessions or over a session's title bar, or Shift + wheel anywhere) moves the columns; when you let go
   near the edge of a session, the strip glides to it.
 - **Ready-made layouts**: hold the mouse button down on a session's grip (the dots left of its title): small
   layouts appear, click the zone where it should go (the others fill the rest). Or drag the session by its grip: a
   layouts bar slides down at the top of the sessions, drop it on a zone. Rest the pointer on the grid button to
-  arrange every open session at once. With the keyboard: **…** menu > **Layouts…**.
+  arrange every open session at once. With the keyboard: **…** menu > **Layouts…**. From four sessions, the
+  **Half left / Half right** layouts give one session half the screen and put the others beside it, two or three
+  per column: when they do not all fit, they scroll past it while it stays in place (handy with ten sessions open).
+  **Grid of 3** stacks three per column.
 - **Tabs view**: the **Tabs** button (window icon) at the top right of the Sessions page (Alt+T) shows one session at a time,
   full width, with every open session as a chip above it. A chip shows whether its session is working, finished
   with an unread answer or stopped on an error; click it to show that session, or use the arrows on the left and
