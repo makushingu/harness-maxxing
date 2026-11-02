@@ -358,7 +358,6 @@ function Workspace() {
       else stacks.push([p.key])
     }
     const rows = stripRows(stacks.map((g) => g.length), rowSplit)
-    const halfOf = (g: string[]) => g.length === 1 && !!shownCols.find((p) => p.key === g[0])?.item.half
     stacks.forEach((g, c) => {
       // a half column at an edge of the strip stays there while the others scroll past it
       g.forEach((k, i) =>
