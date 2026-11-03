@@ -35,6 +35,34 @@ def test_names(client):
     assert client.put("/api/secrets/A1", json={"value": "v"}).status_code == 200
 
 
+def test_a_name_with_a_trailing_newline_is_refused(client):
+    for bad in ("FOO\n", "PATH\n"):
+        try:
+            vault.check_name(bad)
+        except vault.VaultError:
+            continue
+        raise AssertionError(repr(bad))
+    assert client.put("/api/secrets/NLKEY%0A", json={"value": "v"}).status_code == 400
+    config.set_secret("vault", {"FOO\n": {"value": "v", "expose": True}})
+    assert vault.exposed_env() == {}
+
+
+def test_a_value_with_a_null_byte_is_refused_and_never_exposed(client, org):
+    """A null byte in an exposed value made every session and every job fail to start (ValueError of Popen)."""
+    r = client.put("/api/secrets/NULV", json={"value": "a\u0000b", "expose": True})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_value"
+    config.set_secret("vault", {"NULV": {"value": "a\0b", "expose": True}, "OK_ONE": {"value": "v", "expose": True}})
+    assert vault.exposed_env() == {"OK_ONE": "v"}
+
+
+def test_a_value_or_note_with_a_lone_surrogate_is_a_400(client, org):
+    r = client.put("/api/secrets/SURR", content='{"value": "a\\ud800b"}', headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_value"
+    r = client.put("/api/secrets/SURR", content='{"value": "v", "note": "a\\udce9"}', headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_note"
+    assert client.get("/api/secrets").json() == []
+
+
 def test_vault_tolerates_garbage(org):
     config.set_secret("vault", {"OK_ONE": {"value": "v", "expose": True}, "BAD": "string", "ALSO": {"no": 1}})
     assert [x["name"] for x in vault.list_secrets()] == ["OK_ONE"]
