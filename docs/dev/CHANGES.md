@@ -6,7 +6,16 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
-## Unreleased
+## 2.0.0-alpha.107 - 2026-11-03
+
+Audit fixes (Radar, one commit each with its test): idle compaction settings read defensively; crons never save over
+or drop the crontab for an unreadable `jobs.json`; tasks.json: NaN / infinite numbers -> null, too deep = corrupt,
+lone surrogates replaced on read and refused (422) on write, list / object / duplicate ids get a new id; Keys: names
+with a trailing newline, values with a null byte, lone surrogates refused; Import: 50 MB secret-scan budget per zip,
+apply reuses the upload's scan, two applies at once serialized, encrypted / damaged zip = 400 `bad_zip`; Infra:
+server name picked under the registry lock, odd ports in infra.json skipped; Dashboard: a card with a lone surrogate
+fails alone. Touch targets (Tasks rows and labels, Import choices), Infra title on phones, long key names wrap.
+
 
 Sessions strip: up to `MAX_STACK` (3) sessions per strip column (`Col.below` chains; `store.groupAt` exported,
 `normalizeCols` drops a `below` past 3 and a `wide` / `half` under a top). New `Col.half` / slot `half`: track
