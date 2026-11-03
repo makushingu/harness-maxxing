@@ -471,7 +471,7 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
 /* ---------------------------------------------------------------- The profile panel */
 function PanelSection({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="grid gap-2">
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
       <div className="flex items-center gap-2">
         <h3 className="min-w-0 flex-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
         {action}
@@ -489,7 +489,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
   const spent = a.cost_today || 0
   const mode = a.approvals ? 'approvals' : a.permission_mode || 'topic'
   return (
-    <div className="grid gap-6 p-4">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4">
       <div className="flex items-center gap-3">
         <AgentAvatarIcon avatar={a.avatar} size={56} />
         <div className="grid min-w-0 flex-1">
@@ -587,7 +587,7 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
         <button
           type="button"
           onClick={() => setV(a.description)}
-          className="group rounded-lg bg-muted/50 px-3 py-2 text-left text-sm whitespace-pre-line hover:bg-muted"
+          className="group rounded-lg bg-muted/50 px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
           data-testid="agent-role"
         >
           {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}
