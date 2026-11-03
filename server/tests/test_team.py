@@ -438,3 +438,20 @@ def test_a_contact_cannot_flood_us_with_groups(client, sent):
     team.apply_remote(LEA, True, {"type": "chat", "chat": "g_%016x" % 0, "name": "renamed", "members": roster(0),
                                   "keys": {"http://127.0.0.1:20000": teampeer._b64(b"x" * 32)}})    # a known group still changes
     assert any(c["name"] == "renamed" for c in client.get("/api/team").json()["chats"])
+
+
+def test_a_member_cannot_hide_a_message_by_claiming_its_id_first(client, sent):
+    lea, tom = teampeer.pid(LEA), teampeer.pid(TOM)
+    g = "g_" + "ef" * 8
+    roster = [{"address": LEA}, {"address": ME}, {"address": TOM}]
+    team.apply_remote(LEA, True, {"type": "chat", "chat": g, "kind": "group", "name": "g", "members": roster, "keys": {}})
+    msg = {"id": "m_aaaaaaaa", "at": 1, "kind": "text"}
+    team.apply_remote(LEA, True, {"type": "message", "chat": g, "message": msg | {"text": "fake from lea"}})
+    team.apply_remote(TOM, True, {"type": "message", "chat": g, "message": msg | {"text": "real from tom"}})
+    team.apply_remote(TOM, True, {"type": "message", "chat": g, "message": msg | {"text": "real from tom"}})   # a retry
+    msgs = client.get(f"/api/team/chats/{g}").json()["messages"]
+    assert sorted((m["author"], m["text"]) for m in msgs) == sorted([(lea, "fake from lea"), (tom, "real from tom")])
+    assert len({m["id"] for m in msgs}) == 2
+    team.apply_remote(TOM, True, {"type": "edit", "chat": g, "msg": "m_aaaaaaaa", "text": "edited"})   # Tom's own id
+    texts = {m["author"]: m["text"] for m in client.get(f"/api/team/chats/{g}").json()["messages"]}
+    assert texts == {lea: "fake from lea", tom: "edited"}

@@ -809,7 +809,7 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
             return
         if kind in ("edit", "delete"):
             mid = str(event.get("msg"))[:40]
-            msg = next((m for m in chat["messages"] if m["id"] == mid and m["author"] == who), None)
+            msg = next((m for m in chat["messages"] if m.get("rid", m["id"]) == mid and m["author"] == who), None)
             if msg is None:                      # not theirs, or never arrived: nothing to change
                 return
             if kind == "edit":
@@ -824,8 +824,11 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
             return
         if kind == "message":
             msg = _remote_message(who, event.get("message"))
-            if any(m["id"] == msg["id"] for m in chat["messages"]):   # already here (or the id is taken): no-op
-                return
+            if any(m.get("rid", m["id"]) == msg["id"] and m["author"] == who for m in chat["messages"]):
+                return                           # already here: no-op
+            if any(m["id"] == msg["id"] for m in chat["messages"]):   # id taken by another member: kept under a
+                msg["rid"] = msg["id"]           # local id, so nobody can hide a message by claiming its id first
+                msg["id"] = "m_" + hashlib.sha256(f"{who}\0{msg['id']}".encode()).hexdigest()[:24]
             chat["messages"].append(msg)
             chat["messages"].sort(key=lambda m: m["at"])
             _typing.get(cid, {}).pop(who, None)     # the message is there: no more "is writing"
