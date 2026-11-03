@@ -399,8 +399,10 @@ def clean_card(card: Any) -> dict:
     out["blocks"] = [b for b in blocks if isinstance(b, dict) and b.get("type") in BLOCK_TYPES]
     if out.get("status") not in (None, "ok", "warn", "error"):
         out.pop("status")
-    json.dumps(out, allow_nan=False)                   # JSON serialisable as the answer is (NaN/inf: this card fails,
-                                                       # not the whole dashboard)
+    try:                                               # JSON serialisable as the answer is (NaN/inf, a lone surrogate:
+        json.dumps(out, allow_nan=False, ensure_ascii=False).encode("utf-8")   # this card fails, not the whole dashboard)
+    except UnicodeEncodeError:
+        raise ValueError("card text is not valid UTF-8 (lone surrogate)") from None
     return out
 
 
