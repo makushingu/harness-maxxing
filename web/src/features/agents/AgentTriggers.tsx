@@ -52,7 +52,7 @@ export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
   const hooks = new Map((a.webhooks || []).map((h) => [h.id, h]))
 
   return (
-    <div className="grid gap-2" data-testid="agent-triggers">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2" data-testid="agent-triggers">
       {a.crons.map((j) => (
         <CronRow key={j.id} job={j} onEdit={() => setCronSeed({ mode: 'edit', job: j })} onChanged={refresh} />
       ))}
@@ -65,7 +65,11 @@ export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
               {x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
               <span className="min-w-0 flex-1 text-sm">
                 <Sensitive length={10}>
-                  {x.hook_id ? t('agents.when.webhook', { service: t(`agents.hook.${h?.kind || 'generic'}` as 'agents.hook.generic') }) : t('agents.when.feed', { source: triggerSummary(t, x) })}
+                  {x.hook_id
+                    ? !h || h.kind === 'generic'
+                      ? t('agents.when.webhookAny')
+                      : t('agents.when.webhook', { service: t(`agents.hook.${h.kind}` as 'agents.hook.generic') })
+                    : t('agents.when.feed', { source: triggerSummary(t, x) })}
                 </Sensitive>
               </span>
               <Switch

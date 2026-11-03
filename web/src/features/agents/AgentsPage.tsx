@@ -184,7 +184,7 @@ function AgentCard({ agent: a, crons }: { agent: Agent; crons: Cron[] }) {
         <TriggerChips agent={a} crons={crons} />
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
-            {!last ? (
+            {last?.kind === 'result' && last.ok !== false ? null : !last ? (
               t('agents.neverRun')
             ) : last.kind === 'skip' ? (
               <span className="text-warning">{t('agents.lastSkipped', { when: fmtRelative(last.at, lang), reason: reasonText(t, last.reason) || last.text })}</span>
