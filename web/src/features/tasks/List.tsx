@@ -220,7 +220,7 @@ function TaskRow({
       <button
         type="button"
         onClick={(e) => onOpen(e)}
-        className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded text-left outline-none pointer-coarse:-my-2.5 pointer-coarse:py-2.5 focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className={cn('min-w-0 flex-1 basis-56 text-sm leading-5 break-words', done && 'text-muted-foreground line-through decoration-muted-foreground/40')}>
           <Sensitive length={10}>{task.title}</Sensitive>

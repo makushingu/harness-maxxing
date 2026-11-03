@@ -234,7 +234,7 @@ function DayPanel({
               <span className="flex h-5 items-center">
                 <Checkbox checked={done} onCheckedChange={(v) => onToggleDone(x, v === true)} aria-label={done ? t('tasks.markOpen') : t('tasks.markDone')} />
               </span>
-              <button type="button" onClick={() => onOpen(x.id)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button type="button" onClick={() => onOpen(x.id)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded text-left outline-none pointer-coarse:-my-2.5 pointer-coarse:py-2.5 focus-visible:ring-2 focus-visible:ring-ring">
                 <span className={cn('min-w-0 flex-1 basis-48 text-sm leading-5 break-words', done && 'text-muted-foreground line-through decoration-muted-foreground/40')}>
                   <Sensitive length={10}>{x.title}</Sensitive>
                 </span>
