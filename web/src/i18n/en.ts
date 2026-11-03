@@ -3056,6 +3056,7 @@ export const en = {
   'agents.settings.trustOutsideWarn': 'It acts on outside events without asking: a crafted e-mail or webhook could make it run commands with its keys.',
   'agents.settings.keys': 'Keys it can use',
   'agents.settings.keysDesc': 'Only these Keys vault entries reach its runs (as environment variables). None by default, even the ones exposed to sessions.',
+  'agents.settings.keysFilter': 'Filter the {count} keys…',
   'agents.settings.keysNone': 'The Keys vault is empty (Settings -> Keys).',
   'agents.settings.approvals': 'Ask before risky actions',
   'agents.settings.approvalsDesc': 'The agent waits for your OK (here or on Telegram) before an action its permission mode does not allow on its own.',

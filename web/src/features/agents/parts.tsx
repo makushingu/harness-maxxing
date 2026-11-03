@@ -269,16 +269,23 @@ export function reasonText(t: TFn, reason?: string): string {
 export function KeyChecks({ value, onChange }: { value: string[]; onChange: (keys: string[]) => void }) {
   const t = useT()
   const { data: secrets } = useSecrets()
+  const [q, setQ] = React.useState('')
   const names = Array.from(new Set([...(secrets || []).map((x) => x.name), ...value])).sort()
   if (!names.length) return <p className="text-xs text-muted-foreground">{t('agents.settings.keysNone')}</p>
+  // A long vault: a filter; the checked keys always show, first.
+  const ql = q.trim().toLowerCase()
+  const shown = [...value.filter((n) => names.includes(n)).sort(), ...names.filter((n) => !value.includes(n) && (!ql || n.toLowerCase().includes(ql)))]
   return (
-    <div className="grid gap-1.5 sm:grid-cols-2">
-      {names.map((n) => (
+    <div className="grid gap-2">
+      {names.length > 8 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('agents.settings.keysFilter', { count: names.length })} className="h-8 text-[13px]" />}
+      <div className="grid max-h-56 gap-1.5 overflow-y-auto sm:grid-cols-2">
+      {shown.map((n) => (
         <label key={n} className="flex min-w-0 items-center gap-2 text-[13px]">
           <Checkbox checked={value.includes(n)} onCheckedChange={(v) => onChange(v === true ? [...value, n] : value.filter((k) => k !== n))} />
           <span className="truncate font-mono">{n}</span>
         </label>
       ))}
+      </div>
     </div>
   )
 }

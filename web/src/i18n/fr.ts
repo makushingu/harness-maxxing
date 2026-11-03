@@ -3038,6 +3038,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.settings.trustOutsideWarn': 'Il agit sur les événements extérieurs sans demander : un e-mail ou un webhook piégé pourrait lui faire lancer des commandes avec ses clés.',
   'agents.settings.keys': "Clés qu'il peut utiliser",
   'agents.settings.keysDesc': "Seules ces entrées du coffre de clés arrivent dans ses tours (en variables d'environnement). Aucune par défaut, même celles exposées aux sessions.",
+  'agents.settings.keysFilter': 'Filtrer les {count} clés…',
   'agents.settings.keysNone': 'Le coffre de clés est vide (Réglages -> Clés).',
   'agents.settings.approvals': 'Demander avant les actions risquées',
   'agents.settings.approvalsDesc': "L'agent attend votre accord (ici ou sur Telegram) avant une action que son mode de permission ne permet pas tout seul.",
