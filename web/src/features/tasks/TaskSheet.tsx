@@ -378,7 +378,7 @@ function TaskEditor({
                         type="button"
                         onClick={() => void save({ labels: task.labels.filter((x) => x !== l) })}
                         aria-label={`${t('common.remove')} ${mask(l)}`}
-                        className="relative flex size-4 items-center justify-center rounded-full before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent hover:text-foreground"
+                        className="relative flex size-4 items-center justify-center rounded-full before:absolute before:-inset-2.5 before:content-[''] pointer-coarse:before:-inset-3.5 hover:bg-accent hover:text-foreground"
                       >
                         <X className="size-3" />
                       </button>
