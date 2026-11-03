@@ -118,3 +118,31 @@ def test_an_encrypted_or_damaged_zip_is_a_400_and_is_not_kept(client, mx):
         assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
     from maxxing import importer
     assert not any(importer.uploads_dir().iterdir())
+
+
+def test_two_applies_of_the_same_upload_at_once_never_crash(client, mx):
+    """A double click on Apply: one thread created the topics, the other raised WorkspaceError (a 500)."""
+    import threading
+    from maxxing import importer
+    files = {f"projects/race/topics/t{i}/memory.md": f"- {i}\n" for i in range(150)}
+    up = _upload(client, _zip(files))
+    assert up.status_code == 200, up.text
+    path = importer.upload_path(up.json()["id"])
+    out: list = []
+    go = threading.Barrier(2)
+
+    def run():
+        go.wait()
+        try:
+            out.append(("ok", len(importer.apply(path)["topics"])))
+        except importer.ImportFailed as e:
+            out.append((e.status, e.code))
+        except Exception as e:  # noqa: BLE001
+            out.append((type(e).__name__, str(e)))
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(o[0] for o in out if o[0] != "ok") in ([409], [404]), out
+    assert ("ok", 150) in out
