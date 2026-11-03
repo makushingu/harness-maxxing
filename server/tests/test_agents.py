@@ -280,3 +280,30 @@ def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeyp
     assert cli.main(["feed", "post", "fine", "--source", "blog-report"]) == 0
     monkeypatch.delenv("MAXXING_AGENT")
     assert cli.main(["feed", "post", "from a script", "--source", "shop"]) == 0
+
+
+def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
+    from maxxing import agents
+    _on(client)
+    _create(client)
+    run = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()["session"]["id"]
+    archived = lambda sid: client.get(f"/api/sessions/{sid}").json()["archived"]
+    a = run("one")
+    wait_idle(client, a)
+    b = run("two")                       # a not read yet: still listed
+    wait_idle(client, b)
+    assert not archived(a) and not archived(b)
+    assert client.post(f"/api/sessions/{a}/seen").status_code == 200
+    assert not archived(a)               # opening it leaves it in place...
+    c = run("three")                     # ...the next run folds it away
+    wait_idle(client, c)
+    assert archived(a) and not archived(b) and not archived(c)
+    # past KEEP_UNREAD, the oldest unread ones fold away too (their result waits in the thread)
+    monkeypatch.setattr(agents, "KEEP_UNREAD", 1)
+    assert agents.tidy(A) == 1 and archived(b) and not archived(c)
+    # reading the thread folds every finished one; a new message in one brings it back
+    client.post("/api/agents/acme/blog/writer/seen")
+    assert archived(c)
+    client.post(f"/api/sessions/{c}/messages", json={"text": "NOTOOL more"})
+    assert not archived(c)
+    wait_idle(client, c)
