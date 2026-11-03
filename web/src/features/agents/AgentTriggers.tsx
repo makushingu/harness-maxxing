@@ -1,41 +1,44 @@
-// What starts an agent: its schedules (normal Claude cron jobs in its folder, also on the Crons page), its feed
-// triggers (a webhook made for it is a feed source + a trigger on it), and its Telegram thread.
+// What starts an agent ("When it works" in its profile panel): its schedules (normal Claude cron jobs in its folder,
+// also on the Crons page), its feed triggers (a webhook made for it is a feed source + a trigger on it: its address,
+// what came in, a test), and its Telegram thread.
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Clock, MoreHorizontal, Pencil, Play, Plus, Rss, Send, Trash2, Webhook } from 'lucide-react'
+import { Clock, MoreHorizontal, Pencil, Play, Rss, Send, Trash2, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { agentKeys, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron } from '@/lib/queries'
+import { agentKeys, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron, useTestAgentTrigger } from '@/lib/queries'
 import type { AgentDetail, AgentTrigger, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, Cron } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import {
-  Button, confirm, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, FormField, Input, Sensitive, Switch, Textarea,
+  Button, confirm, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, FormField, Input, Sensitive, Switch, Textarea, toast,
 } from '@/components/ui'
-import { Callout, SettingRow } from '@/features/common'
+import { Callout } from '@/features/common'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { FeedTriggerFields, WebhookKindSelect, WebhookMade, triggerSummary } from './parts'
 
-function Section({ icon: Icon, title, desc, action, children }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; action?: React.ReactNode; children?: React.ReactNode }) {
+/** A dashed "add" row of the panel. */
+function AddRow({ icon: Icon, label, onClick, testId }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void; testId?: string }) {
   return (
-    <section className="grid gap-2">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="grid min-w-0 flex-1 gap-0.5">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-            <Icon className="size-4 text-primary" /> {title}
-          </h3>
-          <p className="text-xs text-muted-foreground">{desc}</p>
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className="flex w-full items-center gap-2 rounded-xl border border-dashed px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:min-h-11"
+    >
+      <Icon className="size-4 shrink-0" /> {label}
+    </button>
   )
 }
 
+/** "When it works": the agent's triggers as sentences (schedules, webhooks with their address and what came in,
+ * feed filters, Telegram), each switchable, then the rows that add one. */
 export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
+  const lang = useLang()
   const patch = usePatchAgent()
+  const test = useTestAgentTrigger()
   const [cronSeed, setCronSeed] = React.useState<EditorSeed | null>(null)
   const [addCron, setAddCron] = React.useState(false)
   const [feedEdit, setFeedEdit] = React.useState<AgentTriggerInput | null>(null)
@@ -46,103 +49,105 @@ export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
   const saveTriggers = (list: AgentTriggerInput[], onSuccess?: () => void) =>
     patch.mutate({ path: a.path, triggers: list.map(({ ...x }) => ({ ...x, kind: 'feed' as const })) }, { onSuccess })
   const toInput = (x: AgentTrigger): AgentTriggerInput => ({ id: x.id, enabled: x.enabled, source: x.source, levels: x.levels, match: x.match, prompt: x.prompt, hook_id: x.hook_id })
+  const hooks = new Map((a.webhooks || []).map((h) => [h.id, h]))
 
   return (
-    <div className="grid max-w-3xl gap-8">
-      <Section
-        icon={Clock}
-        title={t('agents.trigger.cronTitle')}
-        desc={t('agents.trigger.cronDesc')}
-        action={
-          <Button size="sm" variant="outline" onClick={() => setAddCron(true)} data-testid="agent-add-cron">
-            <Plus /> {t('agents.trigger.addCron')}
-          </Button>
-        }
-      >
-        {a.crons.length > 0 ? (
-          <ul className="divide-y rounded-xl border bg-card">
-            {a.crons.map((j) => (
-              <CronRow key={j.id} job={j} onEdit={() => setCronSeed({ mode: 'edit', job: j })} onChanged={refresh} />
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">{t('agents.trigger.noCron')}</p>
-        )}
-      </Section>
-
-      <Section
-        icon={Rss}
-        title={t('agents.trigger.feedTitle')}
-        desc={t('agents.trigger.feedDesc')}
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => setHook(true)} data-testid="agent-add-hook">
-              <Webhook /> {t('agents.trigger.addWebhook')}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setFeedEdit({ enabled: true, source: '', levels: [], match: '', prompt: '' })} data-testid="agent-add-feed">
-              <Plus /> {t('agents.trigger.addFeed')}
-            </Button>
+    <div className="grid gap-2" data-testid="agent-triggers">
+      {a.crons.map((j) => (
+        <CronRow key={j.id} job={j} onEdit={() => setCronSeed({ mode: 'edit', job: j })} onChanged={refresh} />
+      ))}
+      {a.triggers.map((x) => {
+        const h = x.hook_id ? hooks.get(x.hook_id) : undefined
+        const st = a.trigger_stats?.[x.id]
+        return (
+          <div key={x.id} className="grid gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-trigger">
+            <div className="flex items-center gap-2">
+              {x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
+              <span className="min-w-0 flex-1 text-sm">
+                <Sensitive length={10}>
+                  {x.hook_id ? t('agents.when.webhook', { service: t(`agents.hook.${h?.kind || 'generic'}` as 'agents.hook.generic') }) : t('agents.when.feed', { source: triggerSummary(t, x) })}
+                </Sensitive>
+              </span>
+              <Switch
+                checked={x.enabled !== false}
+                onCheckedChange={(v) => saveTriggers(a.triggers.map((y) => (y.id === x.id ? { ...toInput(y), enabled: v } : toInput(y))))}
+                aria-label={t('agents.trigger.enabled')}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label={t('common.more')}>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setFeedEdit(toInput(x))}>
+                    <Pencil /> {t('common.edit')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    destructive
+                    onSelect={async () => {
+                      if (!(await confirm({ title: t('agents.trigger.removeTitle'), description: x.hook_id ? t('agents.trigger.removeHookDesc') : undefined, destructive: true, confirmText: t('common.remove') }))) return
+                      saveTriggers(a.triggers.filter((y) => y.id !== x.id).map(toInput))
+                    }}
+                  >
+                    <Trash2 /> {t('common.remove')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            {h && (
+              <div className="flex items-center gap-1 rounded-lg bg-muted/60 py-0.5 pr-0.5 pl-2">
+                <code className="min-w-0 flex-1 truncate font-mono text-[11px]" data-testid="agent-trigger-url">
+                  <Sensitive>{h.url}</Sensitive>
+                </code>
+                <CopyButton text={h.url} />
+              </div>
+            )}
+            {h && h.kind !== 'generic' && !h.has_secret && <p className="text-xs text-warning">{t('agents.when.noSecret')}</p>}
+            {x.prompt && (
+              <p className="truncate text-xs text-muted-foreground">
+                <Sensitive length={12}>{x.prompt}</Sensitive>
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className={cn('size-1.5 rounded-full', st?.events ? 'bg-success' : 'bg-muted-foreground/40')} aria-hidden />
+              <span className="min-w-0 flex-1">
+                {st?.events && st.last_event_at
+                  ? t('agents.when.received', { count: st.events, when: fmtRelative(st.last_event_at, lang) })
+                  : t('agents.when.noneReceived')}
+              </span>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                loading={test.isPending && test.variables?.tid === x.id}
+                disabled={!a.enabled || x.enabled === false}
+                onClick={() => test.mutate({ path: a.path, tid: x.id }, { onSuccess: () => toast.success(t('agents.when.testSent')) })}
+                data-testid="agent-trigger-test"
+              >
+                {t('agents.when.test')}
+              </Button>
+            </div>
+            {h?.kind === 'generic' && (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer hover:text-foreground">{t('agents.when.howTo')}</summary>
+                <p className="mt-1">{t('agents.when.howToGeneric')}</p>
+                <code className="mt-1 block rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px] break-all">{'{"title": "…", "body": "…", "level": "info", "id": "unique-id"}'}</code>
+              </details>
+            )}
           </div>
-        }
-      >
-        {a.triggers.length > 0 ? (
-          <ul className="divide-y rounded-xl border bg-card">
-            {a.triggers.map((x) => (
-              <li key={x.id} className="flex items-center gap-3 px-4 py-3">
-                {x.hook_id ? <Webhook className="size-4 shrink-0 text-muted-foreground" /> : <Rss className="size-4 shrink-0 text-muted-foreground" />}
-                <div className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate text-sm">
-                    <Sensitive length={10}>{triggerSummary(t, x)}</Sensitive>
-                  </span>
-                  {x.prompt && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      <Sensitive length={12}>{x.prompt}</Sensitive>
-                    </span>
-                  )}
-                </div>
-                <Switch
-                  checked={x.enabled !== false}
-                  onCheckedChange={(v) => saveTriggers(a.triggers.map((y) => (y.id === x.id ? { ...toInput(y), enabled: v } : toInput(y))))}
-                  aria-label={t('agents.trigger.enabled')}
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" aria-label={t('common.more')}>
-                      <MoreHorizontal />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setFeedEdit(toInput(x))}>
-                      <Pencil /> {t('common.edit')}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      destructive
-                      onSelect={async () => {
-                        if (!(await confirm({ title: t('agents.trigger.removeTitle'), description: x.hook_id ? t('agents.trigger.removeHookDesc') : undefined, destructive: true, confirmText: t('common.remove') }))) return
-                        saveTriggers(a.triggers.filter((y) => y.id !== x.id).map(toInput))
-                      }}
-                    >
-                      <Trash2 /> {t('common.remove')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">{t('agents.trigger.noFeed')}</p>
-        )}
-      </Section>
-
-      <Section icon={Send} title={t('agents.trigger.telegram')} desc={t('agents.trigger.telegramDesc')}>
-        <div className="rounded-xl border bg-card p-4">
-          <SettingRow label={t('agents.trigger.telegramSwitch')} description={t('agents.trigger.telegramSwitchDesc')} htmlFor="agent-tg">
-            <Switch id="agent-tg" checked={a.telegram} onCheckedChange={(v) => patch.mutate({ path: a.path, telegram: v })} />
-          </SettingRow>
-          {a.telegram && <p className="mt-2 text-xs text-muted-foreground">{t('agents.trigger.telegramNote')}</p>}
-        </div>
-      </Section>
+        )
+      })}
+      <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5">
+        <Send className="size-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 text-sm">{t('agents.when.telegram')}</span>
+        <Switch checked={a.telegram} onCheckedChange={(v) => patch.mutate({ path: a.path, telegram: v })} aria-label={t('agents.trigger.telegramSwitch')} data-testid="agent-telegram-switch" />
+      </div>
+      {a.telegram && <p className="px-1 text-xs text-muted-foreground">{t('agents.trigger.telegramNote')}</p>}
+      <AddRow icon={Clock} label={t('agents.when.addCron')} onClick={() => setAddCron(true)} testId="agent-add-cron" />
+      <AddRow icon={Webhook} label={t('agents.when.addHook')} onClick={() => setHook(true)} testId="agent-add-hook" />
+      <AddRow icon={Rss} label={t('agents.when.addFeed')} onClick={() => setFeedEdit({ enabled: true, source: '', levels: [], match: '', prompt: '' })} testId="agent-add-feed" />
 
       <CronEditor seed={cronSeed} onOpenChange={(o) => !o && setCronSeed(null)} onSaved={() => (setCronSeed(null), refresh())} />
       <AddCronDialog open={addCron} onOpenChange={setAddCron} agent={a} />
@@ -167,14 +172,12 @@ function CronRow({ job: j, onEdit, onChanged }: { job: Cron; onEdit: () => void;
   const run = useRunCron()
   const del = useDeleteCron()
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <Clock className="size-4 shrink-0 text-muted-foreground" />
+    <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-cron">
+      <Clock className="size-4 shrink-0 text-primary" />
       <div className="grid min-w-0 flex-1 gap-0.5">
-        <span className="truncate text-sm font-medium">
-          <Sensitive length={8}>{j.name}</Sensitive>
-        </span>
+        <span className="text-sm">{t('agents.when.cron', { when: j.human || j.schedule })}</span>
         <span className="truncate text-xs text-muted-foreground">
-          {j.human || j.schedule}
+          <Sensitive length={8}>{j.name}</Sensitive>
           {j.next_run && j.enabled ? ` · ${t('agents.trigger.next', { when: fmtRelative(j.next_run, lang) })}` : ''}
         </span>
       </div>
@@ -204,7 +207,7 @@ function CronRow({ job: j, onEdit, onChanged }: { job: Cron; onEdit: () => void;
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </li>
+    </div>
   )
 }
 

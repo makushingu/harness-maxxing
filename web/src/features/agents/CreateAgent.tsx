@@ -1,18 +1,20 @@
-// Create an agent, in a side sheet (bottom sheet on touch screens), 3 steps:
+// Create an agent, in a side sheet (bottom sheet on touch screens). First "in a sentence" (or a template): a new
+// session gets the request and Claude prepares the agent (skill maxxing-agents). "Set it up by hand" = 3 steps:
 // Where (project, then topic) -> Who (name, face, role, model, permission mode) -> When (first triggers, guards).
 // The agent is created at the end; its cron and webhook triggers are added right after (webhook: its URL shown).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, Clock, Rss, Send, ShieldCheck, Webhook } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Clock, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
 import { useT } from '@/i18n'
 import { isApiError } from '@/lib/api'
-import { agentRoute, useAddAgentCron, useAddAgentWebhook, useCreateAgent, useWorkspace } from '@/lib/queries'
+import { agentRoute, useAddAgentCron, useAddAgentWebhook, useCreateAgent, useCreateSession, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentAvatar, AgentLimits, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
 import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
-import { randomAvatar } from './Avatar'
+import { AgentAvatarIcon, randomAvatar } from './Avatar'
+import { sessionsUrl } from '@/pages/sessions/util'
 import { AvatarEditor } from './AvatarEditor'
 import { DEFAULT_LIMITS, FeedTriggerFields, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
 
@@ -73,6 +75,8 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
   const addCron = useAddAgentCron()
   const addHook = useAddAgentWebhook()
   const [step, setStep] = React.useState<Step>(0)
+  // First the one-sentence way (Claude prepares the agent in a session); "Set it up by hand" = the steps below.
+  const [manual, setManual] = React.useState(false)
   const [f, setF] = React.useState<Form>(() => fresh(topicPath))
   const [errors, setErrors] = React.useState<{ name?: string; form?: string; schedule?: string }>({})
   const [made, setMade] = React.useState<{ agent: Agent; hook?: AgentWebhookResult['hook']; warn?: string } | null>(null)
@@ -82,6 +86,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
     if (open) {
       setF(fresh(topicPath))
       setStep(0)
+      setManual(false)
       setErrors({})
       setMade(null)
     }
@@ -150,8 +155,8 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
       <SheetContent className="md:w-[560px]" data-testid="agent-create">
         <SheetHeader>
           <SheetTitle>{made ? t('agents.create.madeTitle', { name: made.agent.display_name }) : t('agents.create.title')}</SheetTitle>
-          <SheetDescription>{made ? t('agents.create.madeDesc') : t('agents.create.desc')}</SheetDescription>
-          {!made && (
+          <SheetDescription>{made ? t('agents.create.madeDesc') : manual ? t('agents.create.desc') : t('agents.quick.desc')}</SheetDescription>
+          {!made && manual && (
             <ol className="mt-2 flex items-center gap-1.5 text-xs" aria-label={t('agents.create.steps')}>
               {STEPS.map((label, i) => (
                 <li key={label} className="flex items-center gap-1.5">
@@ -172,7 +177,9 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
           )}
         </SheetHeader>
         <SheetBody className="grid content-start gap-5">
-          {made ? (
+          {!made && !manual ? (
+            <QuickCreate topicPath={topicPath} onManual={() => setManual(true)} onDone={() => onOpenChange(false)} />
+          ) : made ? (
             <div className="grid gap-4">
               {made.warn && <Callout tone="warning">{made.warn}</Callout>}
               {made.hook && <WebhookMade hook={made.hook} />}
@@ -284,7 +291,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
             </>
           )}
         </SheetBody>
-        {!made && (
+        {!made && manual && (
           <div className="flex shrink-0 items-center justify-between gap-2 border-t px-5 py-3">
             {step > 0 ? (
               <Button variant="ghost" onClick={() => setStep((step - 1) as Step)} disabled={busy}>
@@ -338,6 +345,95 @@ function TriggerToggle({
         <Switch id={id} checked={on} onCheckedChange={onChange} data-testid={testId} />
       </div>
       {on && children && <div className="grid gap-3 border-t px-3 pt-3 pb-3">{children}</div>}
+    </div>
+  )
+}
+
+const TEMPLATES = ['feedback', 'digest', 'support', 'watch'] as const
+const TEMPLATE_AVATAR: Record<(typeof TEMPLATES)[number], AgentAvatar> = {
+  feedback: { color: 'orange', eyes: 'wide', mouth: 'smile', hat: 'cap', bg: 'orange' },
+  digest: { color: 'violet', eyes: 'dots', mouth: 'smile', hat: 'antenna', bg: 'slate' },
+  support: { color: 'teal', eyes: 'dots', mouth: 'grin', hat: 'none', bg: 'teal' },
+  watch: { color: 'blue', eyes: 'wide', mouth: 'smile', hat: 'antenna', bg: 'blue' },
+}
+
+/** "What should it do, and when?" in a sentence (or from a template): a new session in the chosen topic gets the
+ * request, and Claude (skill maxxing-agents) infers the rest, asks what is missing and creates the agent. */
+function QuickCreate({ topicPath, onManual, onDone }: { topicPath?: string; onManual: () => void; onDone: () => void }) {
+  const t = useT()
+  const mask = useMask()
+  const navigate = useNavigate()
+  const { data: ws } = useWorkspace()
+  const start = useCreateSession()
+  const [text, setText] = React.useState('')
+  const topics = React.useMemo(
+    () => (ws?.projects || []).filter((p) => p.name !== 'system').flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` }))),
+    [ws],
+  )
+  const [where, setWhere] = React.useState(topicPath || '')
+  const go = () => {
+    const v = text.trim()
+    if (!v) return
+    const path = where || (topics.some((x) => x.value === 'projects/general/topics/inbox') ? 'projects/general/topics/inbox' : topics[0]?.value)
+    if (!path) return
+    const message = where ? t('agents.quick.promptHere', { text: v }) : t('agents.quick.prompt', { text: v })
+    start.mutate({ path, message }, { onSuccess: (s) => (onDone(), navigate(sessionsUrl({ id: s.id, path: s.path }))) })
+  }
+  return (
+    <div className="grid gap-4" data-testid="agent-quick">
+      <div className="grid gap-2 rounded-xl border bg-card p-3 focus-within:border-primary/50">
+        <Textarea
+          autoFocus
+          minRows={3}
+          maxRows={10}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              go()
+            }
+          }}
+          placeholder={t('agents.quick.placeholder')}
+          className="resize-none border-0 bg-transparent p-1 text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+          data-testid="agent-quick-text"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={where || '_auto'}
+            onValueChange={(v) => setWhere(v === '_auto' ? '' : v)}
+            className="w-56 max-sm:w-full"
+            aria-label={t('agents.quick.where')}
+            options={[{ value: '_auto', label: t('agents.quick.auto') }, ...topics.map((x) => ({ value: x.value, label: mask(x.label, 8) }))]}
+          />
+          <Button className="ml-auto" onClick={go} disabled={!text.trim()} loading={start.isPending} data-testid="agent-quick-go">
+            <Sparkles /> {t('agents.quick.go')}
+          </Button>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {TEMPLATES.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setText(t(`agents.tpl.${k}.text` as 'agents.tpl.feedback.text'))}
+            className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+            data-testid={`agent-tpl-${k}`}
+          >
+            <AgentAvatarIcon avatar={TEMPLATE_AVATAR[k]} size={32} />
+            <span className="grid min-w-0 gap-0.5">
+              <span className="text-sm font-medium">{t(`agents.tpl.${k}.title` as 'agents.tpl.feedback.title')}</span>
+              <span className="text-xs text-muted-foreground">{t(`agents.tpl.${k}.desc` as 'agents.tpl.feedback.desc')}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">{t('agents.quick.how')}</p>
+      <div>
+        <Button variant="link" className="h-auto p-0" onClick={onManual} data-testid="agent-manual">
+          {t('agents.quick.manual')}
+        </Button>
+      </div>
     </div>
   )
 }

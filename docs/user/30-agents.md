@@ -28,34 +28,53 @@ it: the writer knows the blog's tone without repeating it. The three files are i
 
 ## Create an agent
 
-**Agents -> New agent**, in three steps:
+**Agents -> New agent**: say in a sentence what it should do and when ("every Monday morning, sum up the players'
+feedback and suggest 3 improvements"), or start from a template (feedback analyst, Monday digest, customer support,
+watch). **Prepare with Claude** opens a session with your request: Claude guesses the topic, writes the role, picks
+the trigger, asks only what is missing (a few questions at most), shows you a summary, creates the agent, gives you
+its webhook address if it has one and offers a test run. You can ask the same thing in any session.
+
+**Set it up by hand instead** gives the three steps:
 
 1. **Where**: the project and the topic it works in.
 2. **Who**: its name, its character (color, eyes, mouth, hat, background), its role in a few lines, and optionally
    the model, the permission mode and the tools it may use.
 3. **When**: its triggers and its limits (below).
 
-You can also ask Claude in any session ("I want an agent that sorts my customers' e-mails every morning"). It guesses
-the topic, writes the role and picks the trigger from what you said, asks only what is missing (at most a few
-questions), shows you a summary, creates the agent, gives you its webhook URL if it has one and offers a test run.
-
 Writing a good role: say what the agent produces and where it puts it ("a draft in `drafts/`, never published"),
 which files or keys it uses, and what it must never do. Keep it short; it learns the rest in its memory.
 
 ## The agent page
 
-- **Activity**: one line per start (the trigger, the session, its cost) and one per result, with the answer. A start
-  that was refused says why (switched off, budget reached, too many runs).
-- **Role** and **Memory**: its `CLAUDE.md` and `memory.md`, editable.
-- **Triggers** and **Settings**: below.
-- **Run**: start it now, with an optional task ("Write about the spring sale"). **Open a session**: talk to it
-  like in a topic.
+The page is a **conversation** with the agent, like a contact in a chat app:
+
+- **What started each run**: your message (on the right), or an event, a schedule, another agent (dashed).
+- **Its results**: one card per run, long ones folded (**Read all**), with the cost and a link to the session. While it
+  works, a "working…" bubble links to the live session; when it waits for your OK, the bubble says so.
+- **Writing to it** (the box at the bottom) starts a **new session**; it gets its last results as context, so "and the
+  second point?" makes sense.
+- **Reply** on a result goes on with **that result's session**: same context, nothing to explain again. A reply in its
+  Telegram thread to one of its results does the same.
+- The **schedule, webhook and notification runs stay separate**: each one is a new session of its own.
+
+On the right (**Profile** on a phone):
+
+- **Its role**: click it to edit (its `CLAUDE.md`).
+- **When it works**: its triggers as sentences. A webhook shows its address (copy it), what came in ("3 received · the
+  last 10 min ago") and **Send a test**, which posts a test event so you see it start. Add a schedule, a webhook or a
+  notification filter from here; switch Telegram on or off.
+- **Guards**: today's cost against its budget, its runs this hour, what it may do without asking.
+- **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
+- **Advanced settings**: name, face, model, permissions, tools, limits, delete.
+
+Opening the page marks its results as read. The **Agents** list shows first the agents **to read** (a new result,
+waiting for your OK, or working now), each card with its last result.
 
 ## Triggers
 
 | Trigger | When it starts |
 |---|---|
-| **By hand** | the **Run** button, or `maxxing agents run <agent> "task"` |
+| **By hand** | a message in its page, or `maxxing agents run <agent> "task"` |
 | **Schedule** | at the times you choose (same editor as [Crons](crons); the job is also listed on the Crons page) |
 | **Webhook** | a service calls its address (Stripe, Shopify, GitHub or any JSON): the agent gets the event. It is a [feed](feed) webhook made for the agent, so the event also shows in your notifications |
 | **Notification** | a new event of the [feed](feed) from a source you pick, optionally only some levels (warning, error...) or only events containing a word |
@@ -66,7 +85,10 @@ Events that arrive close together (within the agent's grouping delay, 60 s by de
 
 **What comes from outside is data, not orders.** A webhook, a notification or a message from another agent is given
 to the agent clearly marked as outside data, with the rule never to follow instructions written inside it. What you
-type yourself (Run, Telegram) is the task.
+type yourself (its page, Telegram) is the task.
+
+An agent cannot start itself in a loop: from one of its own runs, `maxxing feed post` refuses a source its own
+notification triggers watch. Longer loops (A starts B which starts A) stop at its runs-per-hour limit.
 
 ## Limits
 
@@ -85,7 +107,8 @@ stop after 3 hops, so two agents can never ping-pong forever.
 
 Turn on **Telegram** in the agent's settings: it gets its **own thread** in your Telegram chat, named after it
 (`🤖 Writer · acme/blog`). Each result is posted there, and anything you write there - text, a photo, a file, a voice
-note - starts the agent with it as the task (the bot answers "⏳ Writer is on it.", or why it did not start). Commands
+note - starts the agent with it as the task (the bot answers "⏳ Writer is on it.", or why it did not start).
+**Reply** to one of its results to go on with that result's session. Commands
 (`/new`, `/stop`...) work in session threads, not here. Without threads (topics off for the bot), results come into
 the main chat with the agent's name in front. See [Telegram](telegram).
 
