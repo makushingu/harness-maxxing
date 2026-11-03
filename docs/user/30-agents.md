@@ -35,8 +35,9 @@ it: the writer knows the blog's tone without repeating it. The three files are i
    the model, the permission mode and the tools it may use.
 3. **When**: its triggers and its limits (below).
 
-You can also ask Claude in any session ("create an agent in acme/blog that writes a post every Monday"): the skill
-`maxxing-agents` knows how.
+You can also ask Claude in any session ("I want an agent that sorts my customers' e-mails every morning"). It guesses
+the topic, writes the role and picks the trigger from what you said, asks only what is missing (at most a few
+questions), shows you a summary, creates the agent, gives you its webhook URL if it has one and offers a test run.
 
 Writing a good role: say what the agent produces and where it puts it ("a draft in `drafts/`, never published"),
 which files or keys it uses, and what it must never do. Keep it short; it learns the rest in its memory.
@@ -109,6 +110,11 @@ maxxing agents list                                  # every agent, on/off, trig
 maxxing agents run acme/blog/writer "Spring sale post"
 maxxing agents off writer                            # or: on
 maxxing agents send acme/blog/editor "Draft ready: drafts/spring-sale.md"   # from an agent's session
+maxxing agents create acme/blog/writer --name Writer --role "Writes …"     # --role-file, --permission, --telegram…
+maxxing agents cron writer --schedule "0 8 * * 1" --prompt "Weekly post"   # add a schedule
+maxxing agents webhook writer [--kind stripe]                              # add a webhook, prints its URL
+maxxing agents watch writer --source shop --match refund                   # start it on feed events
+maxxing agents show writer                                                 # settings, triggers, URLs (JSON)
 ```
 
 `<agent>` is `project/topic/agent`, or just the agent's name when only one agent has it. `run --data "..."` gives the

@@ -1,6 +1,6 @@
 ---
 name: maxxing-agents
-description: Create, configure, run, switch off or debug a Harness Maxxing agent - a lasting role inside a topic (its own CLAUDE.md, memory and agent.json) started by a schedule, a webhook, a feed event, a Telegram message or another agent, within a daily budget. Use when the user wants "an agent that…", a bot that handles orders / e-mails / leads / posts by itself, wants to hand work from one agent to another, or asks why an agent did not run.
+description: Create (from a session, asking only what is missing), configure, run, switch off or debug a Harness Maxxing agent - a lasting role inside a topic (its own CLAUDE.md, memory and agent.json) started by a schedule, a webhook, a feed event, a Telegram message or another agent, within a daily budget. Use when the user wants "an agent that…", a bot that handles orders / e-mails / leads / posts by itself, wants to hand work from one agent to another, or asks why an agent did not run.
 ---
 
 # Agents
@@ -17,15 +17,50 @@ Each trigger starts a **new session** in that folder, so Claude Code also loads 
 workspace CLAUDE.md / memory.md above it. The page is **Agents** (Settings -> Features -> Agents must be on).
 Docs: `docs/user/30-agents.md` (Settings -> Docs -> Agents).
 
-## Create one
-Prefer the UI: Agents -> New agent (where, who, when). Without the UI, the API (signed-in session) or files:
+## Create one when the user asks ("I want an agent that…")
+Do it from the session with the CLI; never send the user to the UI. Ask as little as possible:
+infer what the request already says, use the defaults below for the rest, and ask **at most 3 questions in
+one message**, only those you cannot infer:
+
+| To decide | Infer / default | Ask only if |
+|---|---|---|
+| **Where** (topic) | the topic of this session if the agent's work belongs there; else the topic whose files it works on (`ls {{WORKSPACE}}/projects/*/topics/`) | several topics fit, or none (then offer to create the topic first) |
+| **What it does** (role) | write it yourself from the request: what it is for, what it reads, what it produces and where (a file, the thread, a task), what it must never do | the output is unclear ("a report" - where? for whom?) |
+| **When it runs** | "every morning / each Monday" -> schedule; "when an order / a payment / a PR / a form arrives" -> webhook of that service; "when the feed shows…" -> feed trigger on an existing source; "I'll write to it" -> Telegram or manual | nothing in the request says when |
+| **Results** | its Activity thread (always); Telegram if the user wants it on the phone | - |
+| **Safety** | `--permission acceptEdits` when outside text starts it (webhook, feed, Telegram); `--approvals` if it may send, pay, delete or publish; budget $2/day, 6 runs/hour | it acts on money, customers or public posts |
+| **Name** | short and human ("Game Dev", "Support"); folder = lowercase-dashes of it | - |
+
+Then, before creating, show a short summary (name, topic, role in 2-3 lines, trigger in plain words,
+safety, budget) and create it once the user agrees (or right away if the request was complete and clear):
 ```bash
-# the API: POST /api/agents {topic_path, name, display_name, description, ...agent.json fields}
-# by hand: the folder + the three files, then check with:
-maxxing agents list
+cat > /tmp/role.md <<'EOF'
+Reads the players' feedback on Language Game and turns it into an improvement plan: groups similar
+remarks, ranks them by impact, proposes concrete changes with the files to touch.
+Writes the plan in plans/feedback-<date>.md and a 5-line summary as its answer. Never changes the game's code.
+EOF
+maxxing agents create acme/game/game-dev --name "Game Dev" --role-file /tmp/role.md --permission acceptEdits
+maxxing agents cron    game-dev --schedule "0 8 * * 1" --prompt "Weekly digest of the new feedback."
+maxxing agents webhook game-dev [--kind generic|stripe|shopify|github] [--prompt …]   # prints its URL
+maxxing agents watch   game-dev --source shop --levels warning,error --match refund     # existing feed events
+maxxing agents show    game-dev                                                         # check it
 ```
-`name` (the folder) = 1-48 lowercase letters, digits or dashes. At most 20 agents per topic. The role is
-written like a topic CLAUDE.md: what the agent is for, what it produces and where, what it must never do.
+Other `create` options: `--model`, `--approvals`, `--telegram`, `--usd-per-day N`, `--runs-per-hour N`, `--off`.
+Rules: `name` (the folder) = 1-48 lowercase letters, digits or dashes; at most 20 agents per topic; the role
+is written like a topic CLAUDE.md, in the user's language. Never a secret in the role (keys -> Settings -> Keys).
+
+After creating, always:
+1. give its page `/agents/<project>/<topic>/<agent>` (if `create` says the Agents page is off, tell the user
+   Settings -> Features -> Agents shows it; its triggers run anyway);
+2. for a webhook: the URL to paste in the service and, for Stripe / Shopify / GitHub, that the signing secret
+   goes in the agent page -> Triggers (deliveries are refused until then); for a generic webhook, the JSON it
+   accepts: `{"title": "…", "body": "…", "level": "info", "id": "unique-id"}`;
+3. offer a test: `maxxing feed post "Test" --body "<a realistic sample>" --source <its source>` for a webhook
+   or feed trigger (it starts within ~10 s + `debounce_s`), `maxxing agents run <agent> "<task>"` otherwise;
+   then read its answer in `{{STATE_DIR}}/agents/<p>__<t>__<a>.jsonl` (last `result` line) and tell the user.
+
+To change an agent later: `maxxing agents show`, then edit its `CLAUDE.md` (role) or `agent.json` (keep every
+field), or add a trigger with the commands above.
 
 ## agent.json
 ```json
@@ -84,6 +119,7 @@ maxxing agents list [--json]                   # path, name, on/off, triggers, c
 maxxing agents run <agent> [task] [--data]     # start now; --data: the text is outside data (framed)
 maxxing agents send <agent> <text>             # hand work to another agent (framed as data)
 maxxing agents on <agent> | off <agent>
+maxxing agents create <p>/<t>/<a> --role … | cron | webhook | watch | show   # see "Create one"
 ```
 `<agent>` = `projects/<p>/topics/<t>/agents/<a>`, `<p>/<t>/<a>`, or just `<a>` when the name is unique.
 
