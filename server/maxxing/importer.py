@@ -21,6 +21,7 @@ import re
 import secrets as _secrets
 import shutil
 import stat
+import threading
 import time
 import unicodedata
 import zipfile
@@ -33,6 +34,7 @@ MAX_FILES = 20000
 MAX_TOTAL = 500 * 1024 * 1024          # uncompressed
 MAX_FILE = 100 * 1024 * 1024
 SCAN_MAX = 5 * 1024 * 1024             # files scanned for secrets (larger: binary data, kept)
+SCAN_TOTAL = 50 * 1024 * 1024          # bytes scanned per zip; files past it are not imported
 JUNK_PARTS = {"__MACOSX", ".git", "node_modules", ".venv", "venv", "__pycache__", ".DS_Store", "Thumbs.db"}
 # Harness's own folder settings (a topic's permission mode, the project order): set in the app, never by an export.
 FOLDER_SETTINGS = {".maxxing.json", ".order.json"}
@@ -171,10 +173,12 @@ def _entries(zf: zipfile.ZipFile) -> tuple[list[tuple[zipfile.ZipInfo, PurePosix
     return ok, skipped
 
 
-def _plan(zf: zipfile.ZipFile) -> dict[str, Any]:
-    """What the import would do, without writing anything."""
+def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, Any]:
+    """What the import would do, without writing anything. `scans` (zip name -> secret kinds,
+    None = over SCAN_TOTAL) is filled in and reused, so applying does not scan the zip again."""
     from . import backup, workspace
     entries, skipped = _entries(zf)
+    scanned = 0
     root = workspace.root()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     projects: dict[str, dict] = {}
@@ -218,7 +222,17 @@ def _plan(zf: zipfile.ZipFile) -> dict[str, Any]:
             dest = PurePosixPath("imports", stamp, *parts)       # tasks.md, crons.md, SECRETS.md, the rest
             data_kind = "aside"
         if info.file_size <= SCAN_MAX:
-            kinds = backup.scan_bytes(zf.read(info))
+            if info.filename not in scans:
+                if scanned + info.file_size > SCAN_TOTAL:
+                    scans[info.filename] = None
+                else:
+                    scanned += info.file_size
+                    scans[info.filename] = backup.scan_bytes(zf.read(info))
+            kinds = scans[info.filename]
+            if kinds is None:                                  # unchecked: it could hold a secret
+                skipped.append({"file": info.filename,
+                                "reason": f"not checked for secrets (over {SCAN_TOTAL // 1024 // 1024} MB to check)"})
+                continue
             if kinds:                                          # never imported (SECRETS.md must hold names only)
                 secrets_found.append({"file": str(p), "kinds": kinds})
                 continue
@@ -244,9 +258,28 @@ def _open(path: Path) -> zipfile.ZipFile:
         raise ImportFailed(400, "bad_zip", "This file is not a valid zip archive") from None
 
 
+_SCANS: dict[tuple, dict[str, list[str] | None]] = {}
+_SCANS_LOCK = threading.Lock()
+
+
+def _scans(path: Path) -> dict[str, list[str] | None]:
+    """Secret scan results of this upload, kept while the file is unchanged (inspect, then apply)."""
+    try:
+        st = path.stat()
+    except OSError:
+        return {}
+    key = (str(path), st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size)
+    with _SCANS_LOCK:
+        if key not in _SCANS:
+            while len(_SCANS) >= 8:
+                del _SCANS[next(iter(_SCANS))]
+            _SCANS[key] = {}
+        return _SCANS[key]
+
+
 def inspect(path: Path) -> dict[str, Any]:
     with _open(path) as zf:
-        plan = _plan(zf)
+        plan = _plan(zf, _scans(path))
     plan.pop("_items")
     if not plan["files"]:
         raise ImportFailed(400, "empty", "Nothing to import: the zip has no projects/, skills/ or memory.md")
@@ -297,7 +330,7 @@ def apply(path: Path) -> dict[str, Any]:
     renamed_files: list[dict] = []
     skill_dirs: dict[str, str] = {}
     with _open(path) as zf:
-        plan = _plan(zf)
+        plan = _plan(zf, _scans(path))
         if not plan["files"]:
             raise ImportFailed(400, "empty", "Nothing to import: the zip has no projects/, skills/ or memory.md")
         for pr in plan["projects"]:
