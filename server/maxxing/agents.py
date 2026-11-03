@@ -496,12 +496,50 @@ def telegram_reply_to(path: str, telegram_id: Any) -> str | None:
 
 
 def mark_seen(path: str) -> None:
-    """The user read the agent's thread: its results stop counting as unread."""
+    """The user read the agent's thread: its results stop counting as unread (and their sessions fold away)."""
     with _lock:
         st = _read_state(path)
         st["seen_at"] = time.time()
         _write_state(path, st)
     _invalidate_thread()
+    tidy(path)
+
+
+KEEP_UNREAD = 5     # finished sessions nobody read yet that stay listed (older ones: in the thread's To read)
+
+
+def tidy(path: str) -> int:
+    """Archive the agent's finished sessions that need nothing anymore -> how many.
+    Their result stays in the thread with a link; the sessions list keeps only the running ones, the failed ones
+    not read yet and the KEEP_UNREAD latest unread. Run when the thread is read and before each new run (not when
+    a session is opened: it would leave the list under the pointer). A new message in one brings it back."""
+    from . import bus
+    from .sessions import store
+    seen = float(_read_state(path).get("seen_at") or 0)
+    done, unread = [], []
+    for m in _metas(path):
+        if (m.get("archived") or m.get("source") != "agent" or m.get("state") == "running" or m.get("queue")
+                or not m.get("finished_at")):
+            continue
+        fin = float(m.get("finished_at") or 0)
+        if max(float(m.get("seen_at") or 0), seen) >= fin:
+            done.append(m["id"])
+        elif not m.get("error"):
+            unread.append((fin, m["id"]))
+    unread.sort(reverse=True)
+    done += [sid for _, sid in unread[KEEP_UNREAD:]]
+    n = 0
+    for sid in done:
+        try:
+            with store.edit(sid) as m:
+                if m.get("state") != "running" and not m.get("queue"):
+                    m["archived"] = True
+                    n += 1
+        except KeyError:
+            pass
+    if n:
+        bus.invalidate("sessions", "workspace")
+    return n
 
 
 def hooks(path: str) -> list[dict]:
@@ -621,6 +659,10 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
         return {"started": False, "reason": reason}
     from .sessions import service
     a = load(path)
+    try:
+        tidy(path)
+    except Exception:  # noqa: BLE001 - a tidy-up never stops a run
+        log.exception("agent %s: tidy", path)
     message = frame(prompt, text, source) if text else (prompt or "Run your routine.")
     sid = _reply_session(path, reply_to) if reply_to else None
     if sid:
