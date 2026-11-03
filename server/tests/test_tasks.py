@@ -285,3 +285,15 @@ def test_a_non_finite_number_in_the_file_does_not_break_the_list(client, org, va
     assert r.json()["tasks"][0]["extra"] is None and r.json()["projects"][0]["x"] is None
     assert client.post("/api/tasks", json={"title": "y"}).status_code == 200
     assert client.get("/api/tasks").status_code == 200
+
+
+def test_a_lone_surrogate_in_the_file_is_replaced(client, org):
+    f = org.ws / "tasks.json"
+    f.write_text('{"version": 1, "projects": [], "tasks": [{"id": "a", "title": "x\\ud800",'
+                 ' "notes": "\\ud83d\\ude00", "labels": ["\\udfff"]}]}')
+    r = client.get("/api/tasks")
+    assert r.status_code == 200
+    t = r.json()["tasks"][0]
+    assert t["title"] == "x\ufffd" and t["notes"] == "\U0001F600" and t["labels"] == ["\ufffd"]
+    assert client.post("/api/tasks", json={"title": "y"}).status_code == 200
+    assert "\\ud800" not in f.read_text()
