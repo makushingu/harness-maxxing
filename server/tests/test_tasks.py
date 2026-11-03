@@ -266,3 +266,10 @@ def test_identical_hand_written_tasks_get_distinct_ids(client, org):
     assert len(set(ids)) == 2
     assert client.delete(f"/api/tasks/{ids[0]}").status_code in (200, 204)
     assert [t["id"] for t in client.get("/api/tasks").json()["tasks"]] == [ids[1]]
+
+
+def test_a_too_deeply_nested_file_is_a_corrupt_file(client, org):
+    f = org.ws / "tasks.json"
+    f.write_text("[" * 100000 + "]" * 100000)
+    r = client.get("/api/tasks")
+    assert r.status_code == 409 and r.json()["error"] == "corrupt_file"

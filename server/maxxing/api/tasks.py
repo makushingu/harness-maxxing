@@ -141,6 +141,8 @@ def load(copy_: bool = True) -> dict:
         else:
             try:
                 data = json.loads(p.read_text() or "{}")
+            except RecursionError:                     # nested too deep to read: damaged, not a 500
+                raise CorruptFile("tasks.json is nested too deeply") from None
             except ValueError as e:
                 raise CorruptFile(f"tasks.json is not valid JSON ({e})") from None
             except OSError as e:
