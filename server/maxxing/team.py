@@ -400,11 +400,13 @@ def _broadcast(cid: str, msg: dict | None = None, event: dict | None = None) -> 
 
 def delivered(cid: str, mid: str, who: str) -> None:
     with _lock:
-        doc = _load()
-        try:
-            m = _message(_chat(doc, cid), mid)
+        try:                                      # nothing to change (a late or repeated receipt): never parsed again
+            if who not in (_message(_chat(_peek(), cid), mid).get("pending") or []):
+                return
         except TeamError:
             return
+        doc = _load()
+        m = _message(_chat(doc, cid), mid)
         if who in (m.get("pending") or []):
             m["pending"].remove(who)
             if not m["pending"]:
@@ -724,8 +726,7 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
     me = teampeer.own_address()
     fetch: list[tuple[str, dict]] = []
     with _lock:
-        doc = _load()
-        chat = next((c for c in doc["chats"] if c["id"] == cid), None)
+        chat = next((c for c in _peek()["chats"] if c["id"] == cid), None)   # read only: typing/read rarely write
         if kind == "typing":
             if chat and chat.get("remote") and not chat.get("left") and who in chat["members"]:
                 _remote_typing(cid, who)
@@ -733,11 +734,13 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
         if kind == "read":                       # "Seen": only moves forward, never in the future
             if chat and chat.get("remote") and who in chat["members"]:
                 at = min(_finite(event.get("at"), 0), time.time())
-                seen = chat.setdefault("seen", {})
-                if at > seen.get(who, 0) + 1:
-                    seen[who] = at
+                if at > (chat.get("seen") or {}).get(who, 0) + 1:
+                    doc = _load()
+                    _chat(doc, cid).setdefault("seen", {})[who] = at
                     _save(doc)
             return
+        doc = _load()
+        chat = next((c for c in doc["chats"] if c["id"] == cid), None)
         if kind == "chat":
             if not contact or not cid.startswith("g_") or (chat and chat.get("admin") != who):
                 raise TeamError(403, "forbidden", "Only a contact may add you to a group, only its creator may change it")
