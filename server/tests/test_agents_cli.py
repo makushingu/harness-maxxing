@@ -103,3 +103,37 @@ def test_create_and_add_triggers_from_a_session(client, topic, capsys, tmp_path)
         ("blog-curator", ["warning", "error"], ""), ("shop", [], "refund")]
     assert d["webhooks"][0]["url"] == hook["url"] and "secret" not in d["webhooks"][0]
     assert "Sort the readers' comments." in d["claude_md"]
+
+
+def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
+    from maxxing import agent_templates, crons, vault
+    for lang in ("en", "fr", "de"):
+        for t in agent_templates.listing(lang):
+            assert t["name"] and t["summary"] and t["role"] and t["needs"], t["id"]
+            d = agents.clean(agent_templates.fields(t), strict=True)        # every field valid as is
+            assert d["permission_mode"] == "default" and "Edit(./memory.md)" in d["allowed_tools"]
+            assert all(t["avatar"][k] in v for k, v in agents.AVATAR.items())
+            assert bool(t.get("cron")) != bool(t.get("webhook"))
+            if t.get("cron"):
+                crons.validate(t["cron"]["schedule"])
+    assert agent_templates.get("support", "fr")["name"] == "SAV" and agent_templates.get("support", "de")["name"] == "Customer support"
+    assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
+    vault.put("SHOPIFY_TOKEN", "x")
+    got = client.get("/api/agents/templates?lang=fr").json()["templates"]
+    assert [t["id"] for t in got][:2] == ["support", "sales"] and got[0]["keys_present"] == ["SHOPIFY_TOKEN"]
+    # create from a template: its settings, its first trigger, what to connect
+    assert cli.main(["agents", "create", "acme/blog/digest", "--template", "sales", "--lang", "fr"]) == 0
+    out = capsys.readouterr().out
+    assert "schedule: 0 20 * * *" in out and "to connect:" in out
+    a = agents.get("projects/acme/topics/blog/agents/digest")
+    assert a["display_name"] == "Ventes du jour" and a["permission_mode"] == "default" and "Bash(curl:*)" in a["allowed_tools"]
+    assert a["keys"] == ["SHOPIFY_TOKEN"] and "keys: SHOPIFY_TOKEN" in out
+    jobs = [j for j in crons.list_jobs() if j.get("topic_path") == "projects/acme/topics/blog/agents/digest"]
+    assert [j["schedule"] for j in jobs] == ["0 20 * * *"]
+    assert "résumes les ventes" in a["description"]
+    assert cli.main(["agents", "create", "acme/blog/help", "--template", "support", "--keys", "SHOPIFY_TOKEN", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert r["webhook"] and agents.load(r["agent"])["approvals"] is True and agents.load(r["agent"])["keys"] == ["SHOPIFY_TOKEN"]
+    assert cli.main(["agents", "create", "acme/blog/x", "--template", "nope"]) == 2
+    assert cli.main(["agents", "create", "acme/blog/x"]) == 2
+    assert cli.main(["agents", "templates"]) == 0 and "pr-review" in capsys.readouterr().out

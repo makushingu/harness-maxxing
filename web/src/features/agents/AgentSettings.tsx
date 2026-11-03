@@ -4,13 +4,13 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { Trash2 } from 'lucide-react'
 import { useT } from '@/i18n'
-import { useDeleteAgent, usePatchAgent, useSecrets } from '@/lib/queries'
+import { useDeleteAgent, usePatchAgent } from '@/lib/queries'
 import type { AgentAvatar, AgentDetail, AgentLimits, PermissionMode } from '@/lib/types'
-import { Button, Checkbox, confirm, FormField, Input, Switch, Textarea, toast } from '@/components/ui'
+import { Button, confirm, FormField, Input, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 import { AvatarEditor } from './AvatarEditor'
-import { LimitsFields, ModelSelect, PermissionSelect } from './parts'
+import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect } from './parts'
 
 const toolsText = (l: string[]) => l.join('\n')
 const toolsList = (s: string) =>
@@ -154,31 +154,17 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
   )
 }
 
-/** The Keys vault entries the agent's turns get as environment variables: none until checked here. */
+/** The Keys vault entries the agent's runs get as environment variables: none until checked here. */
 function AgentKeys({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const patch = usePatchAgent()
-  const { data: secrets } = useSecrets()
-  const names = Array.from(new Set([...(secrets || []).map((x) => x.name), ...a.keys])).sort()
-  const toggle = (n: string, on: boolean) => patch.mutate({ path: a.path, keys: on ? [...a.keys, n] : a.keys.filter((k) => k !== n) })
   return (
     <div className="grid gap-2 py-3" data-testid="agent-keys">
       <div className="grid gap-0.5">
         <span className="text-sm font-medium">{t('agents.settings.keys')}</span>
         <span className="text-xs text-muted-foreground">{t('agents.settings.keysDesc')}</span>
       </div>
-      {names.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t('agents.settings.keysNone')}</p>
-      ) : (
-        <div className="grid gap-1.5 sm:grid-cols-2">
-          {names.map((n) => (
-            <label key={n} className="flex min-w-0 items-center gap-2 text-[13px]">
-              <Checkbox checked={a.keys.includes(n)} onCheckedChange={(v) => toggle(n, v === true)} />
-              <span className="truncate font-mono">{n}</span>
-            </label>
-          ))}
-        </div>
-      )}
+      <KeyChecks value={a.keys} onChange={(keys) => patch.mutate({ path: a.path, keys })} />
     </div>
   )
 }

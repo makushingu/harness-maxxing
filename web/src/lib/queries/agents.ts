@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Agent, AgentDetail, AgentInput, AgentMessage, AgentRunResult, AgentsPayload, AgentWebhookKind, AgentWebhookResult, Cron, FeedLevel, Ok } from '../types'
+import type { Agent, AgentDetail, AgentInput, AgentMessage, AgentRunResult, AgentsPayload, AgentTemplate, AgentWebhookKind, AgentWebhookResult, Cron, FeedLevel, Ok } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -11,6 +11,7 @@ export const agentKeys = {
   list: ['agents', 'list'] as const,
   one: (path: string) => ['agents', 'one', path] as const,
   thread: (path: string) => ['agents', 'thread', path] as const,
+  templates: (lang: string) => ['agents', 'templates', lang] as const,
 }
 
 /** "projects/acme/topics/blog/agents/writer" -> "/api/agents/acme/blog/writer" */
@@ -24,6 +25,15 @@ export const agentRoute = (a: Pick<Agent, 'project' | 'topic' | 'name'>) => `/ag
 
 export function useAgents(enabled = true) {
   return useQuery({ queryKey: agentKeys.list, queryFn: () => api.get<AgentsPayload>('/api/agents'), enabled })
+}
+/** The gallery of ready-made agents (texts in `lang`; `keys_present` = its suggested keys found in the vault). */
+export function useAgentTemplates(lang: string, enabled = true) {
+  return useQuery({
+    queryKey: agentKeys.templates(lang),
+    queryFn: () => api.get<{ templates: AgentTemplate[] }>('/api/agents/templates', { lang }).then((r) => r.templates),
+    enabled,
+    staleTime: 60_000,
+  })
 }
 export function useAgent(path: string | null) {
   return useQuery({ queryKey: agentKeys.one(path || ''), queryFn: () => api.get<AgentDetail>(agentUrl(path!)), enabled: !!path })
