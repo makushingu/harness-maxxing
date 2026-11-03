@@ -129,6 +129,17 @@ def _id_of(v: Any) -> str:
     return _text(v) if v else ""
 
 
+def _free_id(prefix: str, item: dict, taken: set) -> str:
+    """A stable id for a hand-written item: the same file gives the same id; two identical items get two."""
+    base = json.dumps(item, sort_keys=True, default=str)
+    n = 0
+    while True:
+        new = prefix + hashlib.sha1((base + (f"#{n}" if n else "")).encode()).hexdigest()[:6]
+        if new not in taken:
+            return new
+        n += 1
+
+
 def _norm_task(t: dict) -> dict:
     """Fill defaults for a task written by hand (keeps unknown keys)."""
     now = time.time()
@@ -190,24 +201,28 @@ def load(copy_: bool = True) -> dict:
         for k in ("projects", "tasks"):
             if not isinstance(data.get(k) or [], list):
                 raise CorruptFile(f'tasks.json: "{k}" must be a list')
-        data["projects"] = [x for x in (data.get("projects") or []) if isinstance(x, dict) and x.get("id")]
+        projects, seen = [], set()
+        for x in data.get("projects") or []:
+            if isinstance(x, dict) and _id_of(x.get("id")):
+                pid = _id_of(x["id"])
+                if pid in seen:                        # same id twice: deleting one must not delete both
+                    pid = _free_id("p_", x, seen)
+                seen.add(pid)
+                projects.append({**x, "id": pid})
+        data["projects"] = projects
         for proj in data["projects"]:
             if "workspace" in proj and not isinstance(proj["workspace"], str):   # a list is not a dict key: _sync failed
                 proj.pop("workspace")
-        tasks = []
+        tasks, seen = [], set()
         taken = {_id_of(t.get("id")) for t in data.get("tasks") or [] if isinstance(t, dict)} - {""}
         for t in data.get("tasks") or []:
             if isinstance(t, dict):
-                if not _id_of(t.get("id")):            # hand-written task (or a list as id): stable id until saved
-                    base = json.dumps(t, sort_keys=True, default=str)
-                    n = 0                              # two identical tasks must not share an id
-                    while True:
-                        digest = hashlib.sha1((base + (f"#{n}" if n else "")).encode()).hexdigest()
-                        if f"t_{digest[:6]}" not in taken:
-                            break
-                        n += 1
-                    t = {**t, "id": f"t_{digest[:6]}"}
-                    taken.add(t["id"])
+                tid = _id_of(t.get("id"))
+                if not tid or tid in seen:             # hand-written task, a list as id, or an id used twice
+                    tid = _free_id("t_", t, taken)     # stable until saved
+                    taken.add(tid)
+                    t = {**t, "id": tid}
+                seen.add(tid)
                 tasks.append(_norm_task(t))
         data["tasks"] = tasks
         _cache["sig"], _cache["data"] = sig, (copy.deepcopy(data) if copy_ else data)

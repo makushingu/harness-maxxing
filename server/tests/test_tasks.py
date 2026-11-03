@@ -310,3 +310,17 @@ def test_a_list_or_object_as_task_id_gets_a_new_id(client, org, bad):
     assert client.post("/api/tasks", json={"title": "z"}).status_code == 200
     from maxxing.api import tasks as tasks_api
     assert tasks_api.summary()["open"] == 3
+
+
+def test_deleting_one_of_two_tasks_with_the_same_id_keeps_the_other(client, org):
+    f = org.ws / "tasks.json"
+    f.write_text(json.dumps({"version": 1,
+                             "projects": [{"id": "p", "name": "One"}, {"id": "p", "name": "Two"}],
+                             "tasks": [{"id": "d", "title": "first"}, {"id": "d", "title": "second"}]}))
+    data = client.get("/api/tasks").json()
+    assert [t["id"] for t in data["tasks"]][0] == "d" and len({t["id"] for t in data["tasks"]}) == 2
+    assert data["projects"][0]["id"] == "p" and len({p["id"] for p in data["projects"]}) == 2
+    assert client.delete("/api/tasks/d").status_code == 200
+    assert [t["title"] for t in client.get("/api/tasks").json()["tasks"]] == ["second"]
+    assert client.delete("/api/tasks/projects/p").status_code == 200
+    assert [p["name"] for p in client.get("/api/tasks").json()["projects"]] == ["Two"]
