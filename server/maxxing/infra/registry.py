@@ -74,11 +74,14 @@ def get_server(name: str) -> dict | None:
 
 
 def _server_ok(s: dict) -> bool:
+    port = s.get("port") or 22
+    if isinstance(port, bool) or isinstance(port, float) and not port.is_integer():   # 22.5, 1e999 (infinity)
+        return False
     try:
         check_server(str(s.get("name") or ""), str(s.get("host") or ""), str(s.get("user") or "root"),
-                     int(s.get("port") or 22), str(s.get("key") or ""), key_must_exist=False)
+                     int(port), str(s.get("key") or ""), key_must_exist=False)
         return True
-    except (RegistryError, ValueError, TypeError):
+    except (RegistryError, ValueError, TypeError, OverflowError):
         return False
 
 

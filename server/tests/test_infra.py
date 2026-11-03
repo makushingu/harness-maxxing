@@ -1090,3 +1090,12 @@ def test_pg_create_drops_the_role_when_the_database_fails(org, monkeypatch):
     with pytest.raises(actions.ActionError):
         actions.pg_create("shop")
     assert sql[-1] == 'drop role if exists "shop";'
+
+
+@pytest.mark.parametrize("port", ["1e999", "22.5", "true"])
+def test_a_bad_port_in_infra_json_skips_the_server(org, client, port):
+    f = config.workspace() / "infra.json"
+    f.write_text('{"servers": [{"name": "a", "host": "1.2.3.4", "port": %s},'
+                 ' {"name": "b", "host": "1.2.3.5", "port": 2222}]}' % port)
+    assert [s["name"] for s in registry.servers()] == ["b"]
+    assert client.get("/api/infra").status_code == 200
