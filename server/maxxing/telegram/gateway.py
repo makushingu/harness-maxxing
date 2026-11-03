@@ -1317,9 +1317,11 @@ class Gateway:
                 return
         text = _with_context(msg, text) if text else \
             f"(sent from Telegram: {', '.join(os.path.basename(a) for a in saved)})"
+        rep = (msg.get("reply_to_message") or {}).get("message_id")
+        reply_to = await asyncio.to_thread(agents.telegram_reply_to, path, rep) if rep else None
         try:
             res = await asyncio.to_thread(agents.fire, path, trigger="telegram", prompt=text, source="telegram",
-                                          attachments=saved or None)
+                                          attachments=saved or None, reply_to=reply_to)
         except Exception as e:  # noqa: BLE001
             log.exception("agent fire from Telegram failed")
             await self._reply(msg, f"⚠️ {e}")
@@ -3201,10 +3203,10 @@ def update_settings(**kw: Any) -> dict:
 
 # ---- notifications (thread-safe, any process) ------------------------------------------------
 def _send_sync(key: str, parts: list[str], silent: bool, markup: dict | None = None,
-               target: tuple[int | None, int | None] | None = None) -> bool:
+               target: tuple[int | None, int | None] | None = None, sent: list | None = None) -> bool:
     """Direct blocking send (no gateway in this process): every part in order, each retried on its own (flood
     limits waited out up to a minute). Returns False when a part could not be sent. Never raises.
-    target: (chat, thread) instead of the one of `key` (an agent's thread)."""
+    target: (chat, thread) instead of the one of `key` (an agent's thread). sent: gets the message ids."""
     tok = token()
     chat, thread = target if target is not None else _target(key)
     if not tok or not chat:
@@ -3218,7 +3220,9 @@ def _send_sync(key: str, parts: list[str], silent: bool, markup: dict | None = N
         waits = reopened = 0
         for _ in range(6):
             try:
-                call_sync(tok, "sendMessage", max_wait=60.0, **params)
+                r = call_sync(tok, "sendMessage", max_wait=60.0, **params)
+                if sent is not None and isinstance(r, dict) and r.get("message_id"):
+                    sent.append(r["message_id"])
                 break
             except TelegramError as e:
                 if _bad_html(e) and params.get("parse_mode"):
@@ -3395,7 +3399,7 @@ def _agent_thread_sync(tok: str, chat: int, path: str) -> int | None:
     return tid
 
 
-def _agent_send_sync(path: str, parts: list[str], silent: bool) -> bool:
+def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str | None = None) -> bool:
     tok, chat = token(), tg_config().get("chat_id")
     if not tok or not chat:
         return False
@@ -3406,10 +3410,18 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool) -> bool:
             parts = [f"{head}\n{parts[0]}"] + parts[1:]
         else:
             parts = [head] + parts
-    return _send_sync("", parts, silent, target=(chat, tid))
+    sent: list = []
+    ok = _send_sync("", parts, silent, target=(chat, tid), sent=sent)
+    if thread_msg and sent:                            # a reply to these messages goes on with that session
+        try:
+            from .. import agents
+            agents.remember_telegram(path, sent, thread_msg)
+        except Exception:  # noqa: BLE001
+            log.exception("agent Telegram mapping")
+    return ok
 
 
-def notify_agent(path: str, text: str, ok: bool = True) -> None:
+def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None = None) -> None:
     """The result of an agent's turn into the agent's own thread (created on first use). Any process, never blocks
     an event loop, never raises."""
     try:
@@ -3427,9 +3439,9 @@ def notify_agent(path: str, text: str, ok: bool = True) -> None:
         except RuntimeError:
             in_loop = False
         if in_loop:
-            threading.Thread(target=_agent_send_sync, args=(path, parts, False), daemon=True).start()
+            threading.Thread(target=_agent_send_sync, args=(path, parts, False, thread_msg), daemon=True).start()
         else:
-            _agent_send_sync(path, parts, False)
+            _agent_send_sync(path, parts, False, thread_msg)
     except Exception:
         log.exception("telegram notify_agent failed")
 

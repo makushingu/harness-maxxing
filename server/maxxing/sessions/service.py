@@ -1102,8 +1102,10 @@ _known: dict[str, tuple[int, int, str, bool]] = {}      # sid -> (mtime_ns, turn
 
 def on_turn_end(cb: Callable[[dict, dict | None], Any]) -> None:
     """Register `cb(session, result)` (sync or async), called on the event loop when a turn of
-    any session ends (the turn counter grows, or running -> error)."""
-    _turn_cbs.append(cb)
+    any session ends (the turn counter grows, or running -> error). Registering the same callback again
+    (a second app start in one process) does nothing."""
+    if cb not in _turn_cbs:
+        _turn_cbs.append(cb)
 
 
 # A meta change wakes the watcher at once (wake.py: inotify); it also passes every WATCH_WAKE_RUNNING_S while a session
