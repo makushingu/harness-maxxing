@@ -18,6 +18,7 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   BIGCTX        the last answer reports a 150k-token context (automatic compaction tests)
   MCPUSE:<srv>  calls the tool mcp__<srv>__ping (MCP auto-loading tests)
   MCPLOAD       runs `maxxing mcp load $FAKE_CLAUDE_MCPLOAD` (python -m maxxing) like a turn asking for a server
+  APPROVE       asks the --permission-prompt-tool MCP server about a Bash call (approval tests)
   MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
 A `--system-prompt` that names chat sessions (short titles) gets $FAKE_CLAUDE_TITLE (default "Fake short
 title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail.
@@ -51,7 +52,7 @@ def parse(argv: list[str]) -> dict:
                   "--resume": "resume", "--permission-mode": "permission_mode", "-r": "resume",
                   "--input-format": "input", "--settings": "settings", "--tools": "tools",
                   "--system-prompt": "system_prompt", "--append-system-prompt": "append_system_prompt",
-                  "--mcp-config": "mcp_config"}
+                  "--mcp-config": "mcp_config", "--permission-prompt-tool": "permission_prompt_tool"}
     for a in it:
         if a in ("-p", "--print"):
             o["print"] = True
@@ -161,6 +162,41 @@ def reply_for(prompt: str) -> str:
         n = sum(1 for ln in prompt.splitlines() if ln.startswith("- /"))
         out += f" ({n} attachment{'s' if n != 1 else ''} received)"
     return out
+
+
+def _approve(sid: str, model: str) -> None:
+    """APPROVE: asks the --permission-prompt-tool (a stdio MCP server of a --mcp-config file) before a Bash call,
+    like Claude Code in permission mode `default`; the decoded answer goes to $FAKE_CLAUDE_DIR/approve.json."""
+    import subprocess as _sp
+    argv = sys.argv[1:]
+    tool = argv[argv.index("--permission-prompt-tool") + 1] if "--permission-prompt-tool" in argv else ""
+    answer: dict = {"behavior": "none"}
+    parts = tool.split("__")
+    spec = None
+    for i, a in enumerate(argv[:-1]):
+        if a == "--mcp-config" and len(parts) == 3:
+            f = Path(argv[i + 1])
+            cfg = json.loads(f.read_text()) if f.is_file() else {}
+            spec = (cfg.get("mcpServers") or {}).get(parts[1]) or spec
+    if spec:
+        p = _sp.Popen([spec["command"], *spec.get("args", [])], stdin=_sp.PIPE, stdout=_sp.PIPE, text=True,
+                      env={**os.environ, **(spec.get("env") or {})})
+        for m in ({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+                  {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                  {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": parts[2], "arguments": {
+                      "tool_name": "Bash", "input": {"command": "git push", "description": "Push"},
+                      "tool_use_id": "toolu_fake"}}}):
+            p.stdin.write(json.dumps(m) + "\n")
+            p.stdin.flush()
+        for line in p.stdout:
+            r = json.loads(line)
+            if r.get("id") == 2:
+                answer = json.loads(r["result"]["content"][0]["text"])
+                break
+        p.stdin.close()
+        p.wait(timeout=10)
+    (STORE / "approve.json").write_text(json.dumps(answer))
+    emit(msg(sid, model, [{"type": "text", "text": f"approval: {answer.get('behavior')}"}]))
 
 
 def _mcp_cfg() -> Path:
@@ -334,6 +370,8 @@ def main() -> int:
             {"tool_use_id": iid, "type": "tool_result", "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "A" * 500_000}}]}]},
             "parent_tool_use_id": None, "session_id": sid, "uuid": str(uuid.uuid4())})
+    if "APPROVE" in prompt:
+        _approve(sid, model)
     import re as _re
     for srv in _re.findall(r"MCPUSE:([A-Za-z0-9_-]+)", prompt):
         uid = "toolu_" + uuid.uuid4().hex[:20]

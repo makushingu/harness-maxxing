@@ -1,0 +1,198 @@
+// Feature page "Agents" (/agents, Settings -> Features -> agents_page): lasting roles living in a topic folder
+// (projects/<p>/topics/<t>/agents/<name>/), started by hand, by a cron, a webhook, a feed event or Telegram.
+// One card per agent, grouped by project; the agent's own page is /agents/<project>/<topic>/<name>.
+import * as React from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
+import { Bot, Play, Plus } from 'lucide-react'
+import { useLang, useT } from '@/i18n'
+import { agentRoute, useAgents, useCrons, usePatchAgent, useWorkspace } from '@/lib/queries'
+import type { Agent, Cron } from '@/lib/types'
+import { errorMessage } from '@/lib/api'
+import { fmtRelative } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { Badge, Button, EmptyState, Select, Sensitive, Skeleton, StatusDot, Switch, Tooltip, useMask } from '@/components/ui'
+import { Page } from '@/components/shell/Page'
+import { AgentAvatarIcon } from './Avatar'
+import { CreateAgent } from './CreateAgent'
+import { AgentsOff, TriggerChips, costLine, firstLine, reasonText, useAgentsOn, useRunNow } from './parts'
+
+export default function AgentsPage() {
+  const t = useT()
+  const on = useAgentsOn()
+  const { data, isLoading, error, refetch } = useAgents(on !== false)
+  const { data: crons } = useCrons()
+  const { data: ws } = useWorkspace()
+  const [params, setParams] = useSearchParams()
+  const creating = params.get('new') === '1'
+  const setCreating = (v: boolean) =>
+    setParams(
+      (p) => {
+        if (v) p.set('new', '1')
+        else p.delete('new')
+        return p
+      },
+      { replace: true },
+    )
+  const [project, setProject] = React.useState('_all')
+  const mask = useMask()
+
+  const agents = React.useMemo(() => data?.agents || [], [data])
+  const cronsOf = React.useMemo(() => {
+    const m = new Map<string, Cron[]>()
+    for (const j of crons?.jobs || []) if (j.kind === 'claude' && /\/agents\/[^/]+$/.test(j.topic_path)) m.set(j.topic_path, [...(m.get(j.topic_path) || []), j])
+    return m
+  }, [crons])
+  const projects = React.useMemo(() => [...new Set(agents.map((a) => a.project))], [agents])
+  const groups = React.useMemo(() => {
+    const g = new Map<string, Agent[]>()
+    for (const a of agents) if (project === '_all' || a.project === project) g.set(a.project, [...(g.get(a.project) || []), a])
+    return [...g.entries()]
+  }, [agents, project])
+  const emoji = (p: string) => ws?.projects.find((x) => x.name === p)?.emoji || ''
+
+  if (on === false) return <AgentsOff />
+
+  return (
+    <Page
+      title={t('agents.title')}
+      description={t('agents.desc')}
+      actions={
+        <>
+          {projects.length > 1 && (
+            <Select
+              value={project}
+              onValueChange={setProject}
+              aria-label={t('agents.filterProject')}
+              className="w-40 max-sm:w-32"
+              options={[{ value: '_all', label: t('agents.allProjects') }, ...projects.map((p) => ({ value: p, label: mask(p, 6) }))]}
+            />
+          )}
+          <Button size="sm" onClick={() => setCreating(true)} data-testid="agent-new">
+            <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
+          </Button>
+        </>
+      }
+    >
+      {isLoading || on === undefined ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-44 rounded-xl" />
+          ))}
+        </div>
+      ) : error ? (
+        <EmptyState
+          tone="error"
+          title={t('agents.loadError')}
+          description={errorMessage(error)}
+          action={
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : agents.length === 0 ? (
+        <EmptyState
+          icon={Bot}
+          title={t('agents.emptyTitle')}
+          description={
+            <span className="mx-auto grid max-w-lg gap-2">
+              <span>{t('agents.emptyDesc')}</span>
+              <span>{t('agents.emptyDesc2')}</span>
+            </span>
+          }
+          action={
+            <Button onClick={() => setCreating(true)}>
+              <Plus /> {t('agents.create')}
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-8">
+          {groups.map(([p, list]) => (
+            <section key={p} className="grid gap-3" aria-label={p}>
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                {emoji(p) && <span aria-hidden>{emoji(p)}</span>}
+                <Sensitive length={8}>{p}</Sensitive>
+              </h2>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {list.map((a) => (
+                  <AgentCard key={a.path} agent={a} crons={cronsOf.get(a.path) || []} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+      <CreateAgent open={creating} onOpenChange={setCreating} />
+    </Page>
+  )
+}
+
+function AgentCard({ agent: a, crons }: { agent: Agent; crons: Cron[] }) {
+  const t = useT()
+  const lang = useLang()
+  const navigate = useNavigate()
+  const patch = usePatchAgent()
+  const run = useRunNow()
+  const open = () => navigate(agentRoute(a))
+  const last = a.last_run
+  const running = (a.running_now || a.running || 0) > 0
+  return (
+    <li>
+      <div
+        role="link"
+        tabIndex={0}
+        onClick={open}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && (e.preventDefault(), open())}
+        className={cn('flex h-full cursor-pointer flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', !a.enabled && 'opacity-75')}
+        data-testid="agent-card"
+      >
+        <div className="flex items-start gap-3">
+          <AgentAvatarIcon avatar={a.avatar} size={44} />
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-medium">
+                <Sensitive length={8}>{a.display_name}</Sensitive>
+              </span>
+              {running && <StatusDot tone="running" pulse label={t('agents.runningNow')} />}
+              {a.unread > 0 && <Badge variant="default" className="h-4 px-1.5 text-[10px]">{a.unread}</Badge>}
+            </div>
+            <span className="truncate text-xs text-muted-foreground">
+              <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
+            </span>
+          </div>
+          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="flex items-center">
+            <Switch checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} aria-label={a.enabled ? t('agents.switchOff') : t('agents.switchOn')} data-testid="agent-enabled" />
+          </div>
+        </div>
+        <p className="line-clamp-2 min-h-10 text-sm text-muted-foreground">
+          {a.description ? <Sensitive block>{firstLine(a.description)}</Sensitive> : <span className="italic">{t('agents.noRole')}</span>}
+        </p>
+        <TriggerChips agent={a} crons={crons} />
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate">
+            {!last ? (
+              t('agents.neverRun')
+            ) : last.kind === 'skip' ? (
+              <span className="text-warning">{t('agents.lastSkipped', { when: fmtRelative(last.at, lang), reason: reasonText(t, last.reason) || last.text })}</span>
+            ) : (
+              <span className={last.ok === false ? 'text-destructive' : undefined}>
+                {t(last.ok === false ? 'agents.lastFailed' : 'agents.lastRun', { when: fmtRelative(last.at, lang) })}
+              </span>
+            )}
+          </span>
+          <span className="tabular-nums">
+            <Sensitive length={6}>{costLine(t, a)}</Sensitive>
+          </span>
+          <Tooltip content={a.enabled ? t('agents.run.now') : t('agents.reason.disabled')}>
+            <span onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" variant="outline" className="h-7" disabled={!a.enabled} loading={run.pending && run.vars?.path === a.path} onClick={() => run.go(a)} data-testid="agent-run">
+                <Play /> {t('agents.run.button')}
+              </Button>
+            </span>
+          </Tooltip>
+        </div>
+      </div>
+    </li>
+  )
+}

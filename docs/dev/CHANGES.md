@@ -179,6 +179,38 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `repeating-linear-gradient` unrelated to the real times. `widgets.MAX_PLANNED` 48 -> 144 so every-15-min jobs
   (96 runs) send their events instead of `dense`.
 
+## Unreleased
+
+Agents (branch `feat/topic-agents`, `agents_page` off by default): a lasting role in a topic folder
+`projects/<p>/topics/<t>/agents/<a>/` (CLAUDE.md role + memory.md + agent.json), see INTERNALS.md#maxxingagents and
+API.md#agents. Server core: `maxxing/agents.py` (agent.json validation, `fire()` = the only way in with guards
+`enabled` / `usd_per_day` / `runs_per_hour` / hops, a NEW session per start with `source: "agent"`, `cron: true`; thread
+`<state>/agents/<p>__<t>__<a>.jsonl`; feed triggers polled from feed.db every 10 s + in-memory debounce; webhook
+trigger = a feed hook + a feed trigger on its source; cron trigger = a `kind: claude` job whose `topic_path` is the
+agent path, `crons._run_claude` goes through `fire`), `api/agents.py` (`/api/agents...`, 404 `feature_off`). Session
+paths gain an optional 3rd level (`workspace._PATH_RE`); rename / delete of a topic carry its agents (state files, cron
+jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills `memory` / `memory-compaction`),
+`agent.json` in `backup.ALWAYS`.
+- Telegram: `config.telegram.agent_threads = {path: {tid, name}}` (new default key); `gateway.notify_agent(path, text,
+  ok)` (any process: blocking `call_sync`, in a daemon thread from an event loop) creates / renames the thread
+  `🤖 <name> · <p>/<t>`, main chat with `🤖 <name>` in front when threads are off; `Gateway._agent_message` turns a
+  message there into `fire(trigger="telegram", prompt=text)` (files saved in the agent folder, voice transcribed,
+  commands answered with a hint) and answers "⏳ <name> is on it." / the refusal reason (new WORDS keys `agent_*`,
+  `AGENT_REASONS`). `_send_sync(..., target=(chat, tid))`; `_forget_thread` also drops agent threads; link to another
+  chat / new bot / forget reset them; `_sync_sessions` never deletes them. `topic_label` / `topic_name` know agent
+  paths.
+- CLI `maxxing agents list|run|send|on|off` (`cmd_agents.py`, registered in `commands.py`): `send` frames the text as
+  data, trigger `agent:<sender path>`, depth `MAXXING_AGENT_DEPTH + 1`; `run --data` frames, plain `run` = a task.
+- 3rd level elsewhere: `mcp.where_of` adds `agent`, `_project_files` reads `agents/*/.mcp.json`; search indexes agent
+  CLAUDE.md / memory.md as memory titled `memory.md · agent <a> (<p>/<t>)`, one file budget per agent (the topic bucket
+  skips `agents/`); the importer skips `projects/*/topics/*/agents/**` (an import never plants an agent); stats topic
+  rows carry `label` and `agent`; `workspace.describe` returns `topic` / `agent`.
+- Product skill `maxxing-agents`; workspace template CLAUDE.md (skill + CLI rows) and help index row: existing
+  workspaces need an upgrade note when this ships (templates are copied only when missing). User docs
+  `docs/user/30-agents.md`, CLI reference section, welcome bullet.
+- Not done yet: an agent's own feed posts are not tagged, so a feed trigger on a source the agent itself posts to would
+  start it again (only the hourly / daily guards stop it).
+
 ## 2.0.0-alpha.108 - 2026-11-03
 
 Release of `beta` to `main`: a103 (Team friends, edits, presence) and a104 (session list rewrite) were on `beta` only

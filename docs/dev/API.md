@@ -75,8 +75,10 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 
 ```
 Project = {name, path, description, topics:[Topic], session_count}
-Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null}
+Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null, agents:[Agent]}
 ```
+`Topic.agents` = the agents of the topic (`[]` when none, see [Agents](#agents)); a session `path` may be an agent path
+`projects/<p>/topics/<t>/agents/<a>` (3rd level: same rules as a topic path).
 Names: `^[a-z0-9][a-z0-9-]{0,47}$` (slug); the UI slugifies the label. Description goes into the CLAUDE.md header.
 
 ## Sessions
@@ -99,7 +101,8 @@ Session = {
   error: string|null,
   plan_mode: bool,                    // turns run read-only (`--permission-mode plan`) and end with a plan
   permission_mode: string,            // set by its cron ("" = the topic's, else the global mode)
-  plan_ready: bool                    // a plan-mode turn finished OK: its plan waits for POST /plan/approve
+  plan_ready: bool,                   // a plan-mode turn finished OK: its plan waits for POST /plan/approve
+  approvals: int                      // tool calls waiting for the user's Allow / Deny (agent with `approvals`)
 }
 ```
 | GET | `/api/sessions?path=&archived=0\|1` | – | `[Session]` sorted by `updated` desc (no path = all) |
@@ -242,6 +245,12 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | POST | `/api/telegram/test` | – | sends a test message and checks the receiving side → `{ok, sent, poller:{running, last_poll_ok, last_poll_age, error, error_code}, webhook:{url, pending_updates, last_error}\|null, problems:[string]}` (`ok` = sent and no problem: poller stopped or in error, no getUpdates for 5 min, webhook set) · `409 not_linked` · `502 telegram_error` (not sent; same fields) |
 | DELETE | `/api/telegram` | – | unlink + forget token, threads and the Telegram sessions map |
 
+Agent threads (agent.json `telegram: true`): `config.telegram.agent_threads = {agent path: {tid, name}}`, one permanent
+thread per agent named `🤖 <display name> · <project>/<topic>`, created on its first result, renamed when the name
+changes, never deleted by the session sync, deleted with the agent. A message there = `agents.fire(trigger:
+"telegram")` (the bot answers "⏳ <name> is on it." or why it did not start); threads off: results go to the main
+chat with `🤖 <name>` in front.
+
 ## Backup
 | GET | `/api/backup` | – | `{configured, repo, private:bool\|null, schedule, include:[glob], always:[glob], last:{at, ok, commit, files, error}\|null}` (`always` = CLAUDE.md/memory.md globs, always included) |
 | POST | `/api/backup/config` | `{repo:"owner/name", token, create?:bool}` | verifies access/private/push (creates the private repo if asked; token may be omitted to keep the stored one) → `{ok, private, created?, warning?, error?}`; on success creates/updates the "Memory backup" cron job; `ok:false` while a backup or restore runs |
@@ -267,7 +276,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 Claude Code's MCP servers (maxxing/mcp.py), shown in Settings -> MCP. Bus topic `mcp`.
 ```
 McpServer = {id:"<scope>|<folder>|<name>", name, scope:"user"|"local"|"project",
-  where:{rel:"projects/acme/topics/ads"|null, project, topic, exists, path:"/abs/folder"|null},
+  where:{rel:"projects/acme/topics/ads"|null, project, topic, agent (an agent folder: projects/*/topics/*/agents/*), exists, path:"/abs/folder"|null},
   type:"http"|"sse"|"stdio", url?, command?, args?, headers?, env?,   (secrets shown as "•••": every header / env
     value that is not only ${KEY} references (an auth scheme word aside; Content-Type, Accept... stay), the
     user:password and query values of url)
@@ -357,6 +366,65 @@ Zip layout and merge rules: `server/maxxing/importer.py` and docs/user/21-import
 | POST | `/api/import/upload` | multipart `file` (≤ 600 MB) | preview, writes nothing → `{id, name, projects:[{name, exists, topics:[{name, source, files, exists}]}], skills, aside, root_memory, files, size, skipped:[{file, reason}], secrets:[{file, kinds}], renamed:[{from, to}]}` · `400 bad_zip\|empty` · `413 too_big\|too_many_files` |
 | POST | `/api/import/{id}/apply` | – | imports (never overwrites: memory/CLAUDE.md get an "## Imported" section, other files `<name> (imported)`, skills `<name>-imported`; files with secrets refused; Claude Code settings and Harness folder settings `.maxxing.json` / `.order.json` refused; a file whose place is taken by a folder, sits behind a file, or would be written through a link leading out of the workspace is added to `skipped` and the import goes on) → `{ok, projects, topics, files, merged, renamed, skills, aside, secrets, skipped, folder, report, finish_prompt}` · `400 bad_zip` · `404 not_found` (expired, 24 h) · `409 busy` (another import is being applied) `\|conflict` |
 | DELETE | `/api/import/{id}` | – | forgets an upload → `{ok}` |
+
+## Agents
+
+Settings -> Features -> Agents (`agents_page`, off by default): every route below answers `404 feature_off` while it
+is off. An agent = a folder `projects/<p>/topics/<t>/agents/<a>/` (CLAUDE.md role + memory.md + agent.json, see
+INTERNALS.md#agents); its path is a session path. Every trigger goes through `agents.fire()` (guards: `enabled`,
+`limits.usd_per_day`, `limits.runs_per_hour`, hops) and starts a NEW session (`source: "agent"`, `cron: true`).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], eyes: [..], mouth: [..], hat: [..], bg: [..]}}` |
+| POST | `/api/agents` | `{topic_path, name, display_name?, description?, ...AgentFields}` | `Agent & Status` · `400 bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
+| GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob]}` (the cron jobs whose `topic_path` is the agent path) · `404` |
+| PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
+| DELETE | `/api/agents/{p}/{t}/{a}` | – | `{ok}`: folder + sessions to the Trash, its cron jobs deleted, its thread, state and Telegram thread dropped · `409 has_running_sessions` |
+| GET | `/api/agents/{p}/{t}/{a}/thread?limit=100&before=<at>` | – | `{messages: [AgentMessage]}` oldest first (the Activity tab) |
+| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?}` | `{started: true, session: Session}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed) |
+| POST | `/api/agents/{p}/{t}/{a}/webhook` | `{kind: "generic"\|"stripe"\|"shopify"\|"github", prompt?, levels?, match?}` | `{agent, hook: FeedHook}`: a feed hook named `<topic>-<agent>` + a feed trigger on its source |
+| POST | `/api/agents/{p}/{t}/{a}/crons` | `{name?, schedule?, prompt?, enabled?}` | `CronJob` (`kind: "claude"`, `topic_path` = the agent path, `notify: "never"`) |
+
+```
+AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?: ""|"bypass"|"acceptEdits"|"default",
+               allowed_tools?: [string], disallowed_tools?: [string], telegram?: bool, approvals?: bool,
+               limits?: Limits, triggers?: [Trigger]}
+Agent  = {path, project, topic, name (folder slug), display_name, description, avatar: Avatar, enabled, model,
+          permission_mode, allowed_tools, disallowed_tools, telegram, approvals, limits: Limits, triggers: [Trigger],
+          created, session_count, archived_count, running, unread}
+Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
+          (last result or skip), running_now: int}
+Avatar = {color, eyes, mouth, hat, bg}   each one of the names listed by GET /api/agents (unknown -> default)
+Limits = {usd_per_day: 2.0 (0 = none), runs_per_hour: 6 (0 = none), timeout_s: 1800, debounce_s: 60,
+          approval_timeout_s: 1800}
+Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [info|success|warning|error] ([] = all),
+           match (substring of title / body, "" = any), prompt, hook_id? (the feed hook made for it)}
+AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
+                trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
+                session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note)}
+```
+Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:
+`maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent>`.
+
+## Approvals
+
+A turn of an agent with `approvals: true` runs in permission mode `default` with
+`--permission-prompt-tool mcp__maxxing-approval__approve` (`maxxing/approval_mcp.py`, a stdio MCP server started by
+Claude Code): every tool call that is not pre-allowed (`allowed_tools`) waits for the user. Bus topics `approvals` +
+`sessions` on every new / decided request. A request nobody answers is denied after the agent's
+`limits.approval_timeout_s` (default 1800 s); a stopped turn marks its requests `expired`.
+
+```
+Approval { id: string (16 hex), session: string, agent_path: string, tool: string, input: object (clipped, secrets
+           redacted), summary: string ("Bash: git push"), at: number, expires: number,
+           status: "pending"|"allow"|"deny"|"timeout"|"expired", message: string, decided_at: number|null }
+```
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/approvals?session=<sid>` | – | `{approvals: [Approval]}` waiting ones, oldest first |
+| POST | `/api/approvals/{id}` | `{decision: "allow"\|"deny", message?}` | `Approval` (`404 not_found`, `409 not_pending` when answered, timed out or expired) |
 
 ## Docs
 | GET | `/api/docs` | – | `[{slug, title, section, order}]`; `?full=1` adds `markdown` to every page (full-text search, one request) |
@@ -499,7 +567,7 @@ Built-in card links are SPA routes: `/sessions/<id>`, `/sessions`, `/tasks?task=
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/stats/tokens?force=1` | – | `{totals, projects:[{name, …}], topics:[{path, …}], sessions:[{id, title, path, archived, updated, …}] (top 100), days:[{date, tokens, cost_usd}] (90 days), latency:{start_s, first_answer_s, turns}, at}` (latency: medians over the last 20 turns of every session: seconds from starting `claude` to its first event / first answer); each group has `input, output, cache_read, cache_write, total, cost_usd, turns, sessions` (sorted by `total`; project `""` = workspace root). Cached 20 s |
+| GET | `/api/stats/tokens?force=1` | – | `{totals, projects:[{name, …}], topics:[{path, label ("acme / blog", "acme / blog / Writer" for an agent folder), agent (display name or null), …}], sessions:[{id, title, path, archived, updated, …}] (top 100), days:[{date, tokens, cost_usd}] (90 days), latency:{start_s, first_answer_s, turns}, at}` (latency: medians over the last 20 turns of every session: seconds from starting `claude` to its first event / first answer); each group has `input, output, cache_read, cache_write, total, cost_usd, turns, sessions` (sorted by `total`; project `""` = workspace root). Cached 20 s |
 
 ## Feed (notifications)
 `FeedEvent = {id, at, source, level: "info"|"success"|"warning"|"error", title, body, url, count, read}` (`count` > 1 =

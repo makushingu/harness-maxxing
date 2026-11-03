@@ -59,6 +59,7 @@ LIMITS = {  # name: (default, min, max)
     "runs_per_hour": (6, 0, 120),              # 0 = no limit
     "timeout_s": (1800, 60, 86400),
     "debounce_s": (60, 0, 3600),               # feed / Telegram events closer than this go in one turn
+    "approval_timeout_s": (1800, 30, 86400),   # `approvals`: a tool call nobody answered is denied after this
 }
 TRIGGER_KINDS = ("feed",)                      # stored in agent.json; cron triggers are cron jobs (crons.py)
 MAX_TRIGGERS = 10
@@ -221,7 +222,7 @@ def names(project: str, topic: str) -> list[str]:
 
 # ---- run settings read by the session runner -----------------------------------------------------
 def run_settings(path: str) -> dict:
-    """{model, permission_mode, args} of a turn in an agent folder ({} elsewhere). args = extra claude flags."""
+    """{model, permission_mode, args, approvals, approval_timeout_s} of a turn in an agent folder ({} elsewhere). args = extra claude flags."""
     if not exists(path):
         return {}
     a = load(path)
@@ -230,7 +231,8 @@ def run_settings(path: str) -> dict:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
     if a["disallowed_tools"]:
         args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
-    return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args}
+    return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
+            "approvals": a["approvals"], "approval_timeout_s": a["limits"]["approval_timeout_s"]}
 
 
 # ---- public shape ----------------------------------------------------------------------------------
@@ -351,6 +353,12 @@ def delete(path: str) -> None:
         log.exception("could not delete the cron jobs of %s", path)
     for ext in ("json", "jsonl"):
         _state_file(path, ext).unlink(missing_ok=True)
+    try:                                                # its Telegram thread goes with it
+        from .telegram import gateway
+        if path in gateway.agent_threads():
+            gateway.drop_agent_thread(path, delete=True)
+    except Exception:
+        log.exception("could not drop the Telegram thread of %s", path)
     _invalidate()
 
 
