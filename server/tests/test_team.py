@@ -467,3 +467,17 @@ def test_lone_surrogates_from_a_peer_are_saved(client, sent):
     chat = next(c for c in team._load()["chats"] if c["id"] == "g_abc")
     assert chat["name"] == "a?b" and [m["text"] for m in chat["messages"]] == ["a?b", "ok"]
     assert teampeer._load()["peers"][LEA]["name"] == "a?b"
+
+
+
+def test_opening_a_chat_skips_jsonable_encoder(client, sent, monkeypatch):
+    import fastapi.routing
+
+    dm = client.post("/api/team/chats", json={"kind": "dm", "members": [teampeer.pid(LEA)]}).json()["id"]
+    client.post(f"/api/team/chats/{dm}/messages", json={"text": "hi"})
+    seen = []
+    real = fastapi.routing.jsonable_encoder
+    monkeypatch.setattr(fastapi.routing, "jsonable_encoder", lambda obj, *a, **k: seen.append(obj) or real(obj, *a, **k))
+    r = client.get(f"/api/team/chats/{dm}")
+    assert r.status_code == 200 and r.json()["messages"][0]["text"] == "hi"
+    assert not any(isinstance(o, dict) and "messages" in o for o in seen)
