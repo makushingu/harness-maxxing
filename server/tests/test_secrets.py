@@ -47,6 +47,14 @@ def test_a_name_with_a_trailing_newline_is_refused(client):
     assert vault.exposed_env() == {}
 
 
+def test_a_value_with_a_null_byte_is_refused_and_never_exposed(client, org):
+    """A null byte in an exposed value made every session and every job fail to start (ValueError of Popen)."""
+    r = client.put("/api/secrets/NULV", json={"value": "a\u0000b", "expose": True})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_value"
+    config.set_secret("vault", {"NULV": {"value": "a\0b", "expose": True}, "OK_ONE": {"value": "v", "expose": True}})
+    assert vault.exposed_env() == {"OK_ONE": "v"}
+
+
 def test_vault_tolerates_garbage(org):
     config.set_secret("vault", {"OK_ONE": {"value": "v", "expose": True}, "BAD": "string", "ALSO": {"no": 1}})
     assert [x["name"] for x in vault.list_secrets()] == ["OK_ONE"]
