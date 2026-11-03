@@ -149,9 +149,10 @@ function SecretRow({ s, onEdit }: { s: Secret; onEdit: () => void }) {
   return (
     <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto]">
       <div className="grid min-w-0 gap-0.5">
-        <span className="truncate font-mono text-[13px] font-medium">{s.name}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          {s.note ? <Sensitive>{s.note}</Sensitive> : t('keys.noNote')} · {fmtRelative(s.updated, lang)}
+        <span className="font-mono text-[13px] font-medium [overflow-wrap:anywhere]">{s.name}</span>
+        <span className="flex min-w-0 text-xs text-muted-foreground">
+          <span className="truncate">{s.note ? <Sensitive>{s.note}</Sensitive> : t('keys.noNote')}</span>
+          <span className="shrink-0 whitespace-pre"> · {fmtRelative(s.updated, lang)}</span>
         </span>
       </div>
       <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 md:col-span-1 md:row-start-auto">
