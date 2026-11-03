@@ -51,6 +51,9 @@ def _configure(p) -> None:
     s.add_argument("--model", default="", help="default: the model of the topic")
     s.add_argument("--approvals", action="store_true", help="ask before risky actions (answered in the UI)")
     s.add_argument("--telegram", action="store_true", help="its own Telegram thread (results + messages start it)")
+    s.add_argument("--keys", default="", help="Keys vault entries its turns see, comma-separated (default: none)")
+    s.add_argument("--trust-outside", action="store_true",
+                   help="runs started by outside events (webhooks, feed, other agents) do not ask first: risky")
     s.add_argument("--usd-per-day", type=float, help="daily budget in $ (default 2, 0 = none)")
     s.add_argument("--runs-per-hour", type=int, help="default 6, 0 = no limit")
     s.add_argument("--off", action="store_true", help="create it switched off")
@@ -170,6 +173,7 @@ def _create(a) -> int:
     limits = {k: v for k, v in (("usd_per_day", a.usd_per_day), ("runs_per_hour", a.runs_per_hour)) if v is not None}
     fields = {"name": a.name or name, "description": role, "model": a.model, "permission_mode": a.permission or "",
               "approvals": a.approvals, "telegram": a.telegram, "enabled": not a.off,
+              "keys": [k.strip() for k in a.keys.split(",") if k.strip()], "trust_outside": a.trust_outside,
               "avatar": {k: random.choice(list(v)) for k, v in agents.AVATAR.items()}, "limits": limits}
     try:
         r = agents.create(f"projects/{project}/topics/{topic}", name, fields)
@@ -208,7 +212,7 @@ def _handler(a) -> int:
         except OSError:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
-                                                    "approvals", "telegram", "limits", "triggers")},
+                                                    "approvals", "trust_outside", "keys", "telegram", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
                           "webhooks": agents.hooks(path)}, indent=2, ensure_ascii=False))
