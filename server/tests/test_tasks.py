@@ -297,3 +297,16 @@ def test_a_lone_surrogate_in_the_file_is_replaced(client, org):
     assert t["title"] == "x\ufffd" and t["notes"] == "\U0001F600" and t["labels"] == ["\ufffd"]
     assert client.post("/api/tasks", json={"title": "y"}).status_code == 200
     assert "\\ud800" not in f.read_text()
+
+
+@pytest.mark.parametrize("bad", [["a"], {"a": 1}])
+def test_a_list_or_object_as_task_id_gets_a_new_id(client, org, bad):
+    f = org.ws / "tasks.json"
+    f.write_text(json.dumps({"version": 1, "projects": [], "tasks": [{"id": bad, "title": "x"}, {"id": "b", "title": "y"}]}))
+    r = client.get("/api/tasks")
+    assert r.status_code == 200
+    ids = [t["id"] for t in r.json()["tasks"]]
+    assert all(isinstance(i, str) and i for i in ids) and ids[1] == "b" and ids[0] != "b"
+    assert client.post("/api/tasks", json={"title": "z"}).status_code == 200
+    from maxxing.api import tasks as tasks_api
+    assert tasks_api.summary()["open"] == 3
