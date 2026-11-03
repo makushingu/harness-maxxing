@@ -33,7 +33,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .. import bus, config
 from ..security import require_auth
@@ -410,7 +410,22 @@ def summary() -> dict:
 
 
 # ---- validation -----------------------------------------------------------------------------
-class TaskIn(BaseModel):
+class _Text(BaseModel):
+    """A lone surrogate ("\\ud800" is valid JSON) cannot be written as UTF-8 to tasks.json: a 422, not a 500."""
+
+    @field_validator("*")
+    @classmethod
+    def _utf8(cls, v: Any) -> Any:
+        for s in v if isinstance(v, list) else (v,):
+            if isinstance(s, str) and not s.isascii():
+                try:
+                    s.encode("utf-8")
+                except UnicodeEncodeError:
+                    raise ValueError("text cut inside a character (lone surrogate)") from None
+        return v
+
+
+class TaskIn(_Text):
     model_config = {"extra": "ignore"}
     title: Optional[str] = None
     notes: Optional[str] = None
@@ -423,7 +438,7 @@ class TaskIn(BaseModel):
     order: Optional[float] = Field(None, allow_inf_nan=False)   # inf/NaN broke every later listing
 
 
-class ProjectIn(BaseModel):
+class ProjectIn(_Text):
     name: Optional[str] = None
     color: Optional[str] = None
     hidden: Optional[bool] = None
@@ -603,7 +618,7 @@ def _apply_project(proj: dict, body: ProjectIn) -> None:
             proj.pop("hidden", None)
 
 
-class BulkIn(BaseModel):
+class BulkIn(_Text):
     model_config = {"extra": "ignore"}
     ids: list[str]
     patch: Optional[TaskIn] = None

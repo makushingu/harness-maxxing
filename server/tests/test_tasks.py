@@ -324,3 +324,18 @@ def test_deleting_one_of_two_tasks_with_the_same_id_keeps_the_other(client, org)
     assert [t["title"] for t in client.get("/api/tasks").json()["tasks"]] == ["second"]
     assert client.delete("/api/tasks/projects/p").status_code == 200
     assert [p["name"] for p in client.get("/api/tasks").json()["projects"]] == ["Two"]
+
+
+def test_a_lone_surrogate_sent_to_the_api_is_refused(client, org):
+    a = client.post("/api/tasks", json={"title": "a"}).json()
+    f = org.ws / "tasks.json"
+    before = f.read_text()
+    js = {"content-type": "application/json"}
+    for body in ('{"title": "x\\ud800"}', '{"notes": "\\udfff"}', '{"labels": ["ok", "\\ud800"]}',
+                 '{"topic_path": "projects/\\ud800"}'):
+        assert client.patch(f"/api/tasks/{a['id']}", content=body, headers=js).status_code == 422
+        assert client.post("/api/tasks", content=body, headers=js).status_code == 422
+    assert client.post("/api/tasks/projects", content='{"name": "x\\ud800"}', headers=js).status_code == 422
+    r = client.post("/api/tasks/bulk", content='{"ids": ["%s"], "labels_add": ["\\ud800"]}' % a["id"], headers=js)
+    assert r.status_code == 422
+    assert f.read_text() == before
