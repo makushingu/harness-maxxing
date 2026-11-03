@@ -743,15 +743,15 @@ function MessageRow({
           </div>
           {!!m.reactions && Object.keys(m.reactions).length > 0 && <Reactions team={team} chat={chat} m={m} />}
           {!!m.sent?.length && (
-            <div className={cn('mt-1 flex flex-wrap gap-1', right && 'justify-end')}>
+            <div className={cn('mt-1 flex min-w-0 max-w-full flex-wrap gap-1', right && 'justify-end')}>
               {m.sent.map((s, i) => (
                 <Link
                   key={i}
                   to={`/sessions/${s.session}`}
-                  className="relative inline-flex max-w-full items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] pointer-coarse:before:absolute pointer-coarse:before:-inset-y-2 pointer-coarse:before:inset-x-0 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  className="relative inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] pointer-coarse:before:absolute pointer-coarse:before:-inset-y-2 pointer-coarse:before:inset-x-0 text-muted-foreground hover:border-primary/50 hover:text-foreground"
                 >
                   <MessageSquareShare className="size-3 text-primary" />
-                  <span className="truncate">{t('team.sentTo', { title: s.title || s.session })}</span>
+                  <span className="min-w-0 truncate">{t('team.sentTo', { title: s.title || s.session })}</span>
                 </Link>
               ))}
             </div>
