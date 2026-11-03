@@ -68,8 +68,21 @@ export function useDeleteAgent() {
   return useMut((path: string) => api.del<Ok>(agentUrl(path)), { invalidate: inv })
 }
 export function useRunAgent() {
-  return useMut(({ path, text }: { path: string; text?: string }) => api.post<AgentRunResult>(agentUrl(path, '/run'), { text: text || undefined }), {
+  return useMut(
+    ({ path, text, reply_to }: { path: string; text?: string; reply_to?: string }) =>
+      api.post<AgentRunResult>(agentUrl(path, '/run'), { text: text || undefined, reply_to: reply_to || undefined }),
+    { invalidate: [agentKeys.all] },
+  )
+}
+export function useAgentSeen() {
+  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/seen'), {}), {
     invalidate: [agentKeys.all],
+    errorToast: false,
+  })
+}
+export function useTestAgentTrigger() {
+  return useMut(({ path, tid }: { path: string; tid: string }) => api.post<{ event: unknown }>(agentUrl(path, `/triggers/${tid}/test`), {}), {
+    invalidate: [agentKeys.all, qk.feed.all],
   })
 }
 export function useAddAgentWebhook() {

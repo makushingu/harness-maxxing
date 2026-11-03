@@ -55,7 +55,8 @@ After creating, always:
 2. for a webhook: the URL to paste in the service and, for Stripe / Shopify / GitHub, that the signing secret
    goes in the agent page -> Triggers (deliveries are refused until then); for a generic webhook, the JSON it
    accepts: `{"title": "…", "body": "…", "level": "info", "id": "unique-id"}`;
-3. offer a test: `maxxing feed post "Test" --body "<a realistic sample>" --source <its source>` for a webhook
+3. offer a test: `maxxing feed post "Test" --body "<a realistic sample>" --source <its source>` (or the agent page ->
+   When it works -> Send a test) for a webhook
    or feed trigger (it starts within ~10 s + `debounce_s`), `maxxing agents run <agent> "<task>"` otherwise;
    then read its answer in `{{STATE_DIR}}/agents/<p>__<t>__<a>.jsonl` (last `result` line) and tell the user.
 
@@ -90,7 +91,18 @@ field), or add a trigger with the commands above.
 | Another agent | `maxxing agents send <agent> "<text>"` from a turn (below) |
 
 Events closer than `debounce_s` go into one turn. An agent that posts to the feed (`maxxing feed post`) must use
-another `source` than the ones its own feed triggers watch, or it would start itself again.
+another `source` than the ones its own feed triggers watch: from its own turn, `maxxing feed post` refuses such a
+source (exit 2).
+
+## Sessions of an agent (how a conversation works)
+- Every start is a **new session** in the agent folder, except a **reply**: `POST /api/agents/<p>/<t>/<a>/run
+  {text, reply_to: <thread message id>}` (the Reply button, or a Telegram reply to one of its results) sends the
+  text to the session that produced that message, which goes on with its whole context.
+- A new message typed by the user (page, Telegram) or handed by another agent gets the agent's **last 3 results**
+  appended as framed context. Schedule and feed runs get nothing: they stay isolated.
+- A turn written directly in one of its sessions (Sessions page) also posts its result in the agent's thread.
+- Its thread: `{{STATE_DIR}}/agents/<p>__<t>__<a>.jsonl` (`run` with `reply_to` when it continued a session,
+  `result` with `session` and `cost`).
 
 ## Guards
 Before each start: the agent must be `enabled`, today's cost of its sessions under `usd_per_day` (0 = no
