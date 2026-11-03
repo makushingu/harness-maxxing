@@ -1099,3 +1099,28 @@ def test_a_bad_port_in_infra_json_skips_the_server(org, client, port):
                  ' {"name": "b", "host": "1.2.3.5", "port": 2222}]}' % port)
     assert [s["name"] for s in registry.servers()] == ["b"]
     assert client.get("/api/infra").status_code == 200
+
+
+def test_two_connections_with_the_same_label_keep_both_servers(org, monkeypatch, tmp_path):
+    import threading
+    from maxxing.infra import connect
+    (tmp_path / "k").write_text("PRIVATE")
+    monkeypatch.setattr(connect, "ensure_key", lambda: (tmp_path / "k", "ssh-ed25519 AAAA x"))
+    monkeypatch.setattr(connect, "can_login", lambda *a, **k: None)
+    both = threading.Barrier(2, timeout=10)
+    free = registry.free_name
+
+    def free_then_wait(base):
+        name = free(base)
+        both.wait()                                   # both connections picked a name before either saved it
+        return name
+    monkeypatch.setattr(registry, "free_name", free_then_wait)
+    out = []
+    threads = [threading.Thread(target=lambda h=h: out.append(connect.connect_host(h, label="web")))
+               for h in ("192.0.2.1", "192.0.2.2")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(s["name"] for s in out) == ["web", "web-2"]
+    assert sorted((s["name"], s["host"]) for s in registry.servers()) == sorted((s["name"], s["host"]) for s in out)
