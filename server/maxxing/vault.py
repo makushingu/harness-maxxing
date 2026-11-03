@@ -67,6 +67,8 @@ def put(name: str, value: str | None = None, note: str | None = None, expose: bo
         if value is not None:
             if not value or len(value) > 16384:
                 raise VaultError("value must be 1 to 16384 characters", "invalid_value")
+            if "\0" in value:                              # every session and job would fail to start
+                raise VaultError("value must not contain a null byte", "invalid_value")
             cur["value"] = value
         if not cur.get("value"):
             raise VaultError("a new secret needs a value", "value_required")
@@ -96,6 +98,6 @@ def exposed_env() -> dict[str, str]:
     """{NAME: value} of the secrets flagged `expose` (never raises)."""
     try:
         return {k: e["value"] for k, e in _vault().items()
-                if e.get("expose") and NAME_RE.match(k) and k not in RESERVED}
+                if e.get("expose") and NAME_RE.match(k) and k not in RESERVED and "\0" not in e["value"]}
     except Exception:
         return {}

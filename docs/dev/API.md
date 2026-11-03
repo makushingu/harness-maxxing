@@ -258,7 +258,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET / POST | `/api/settings/feedback` | POST `{email, type: bug\|idea\|other, message}` | GET `{email, version}` (prefill); POST `{ok}`. Feedback to the authors (`maxxing/feedback.py` -> cloud `/v1/feedback`). Errors: 400 `invalid_email` / `message_required` / `too_long` / cloud codes, 429 `rate`, 502 `unreachable`, 503 `offline`. |
 | GET / PUT / DELETE | `/api/settings/license` | PUT `{key}` (`HM-XXXX-XXXX-XXXX-XXXX`) | `{has_key, key_hint, kind, email, max_servers, expires_at, activated_at, enabled, moved_to_git}` (bus `license`, never the key). Optional Enterprise key: PUT = `license.activate` (cloud `/v1/activate`: checks it, counts this server; 400 `invalid_key` / `limit` / `revoked` / `expired` with the cloud message), DELETE = `remove_key` (frees the seat). Changes nothing else: code and updates stay on git. |
 | GET | `/api/secrets` | – | `[{name, note, expose, updated, preview}]` (preview = first 4 chars + …, only `…` for values < 8 chars) |
-| PUT | `/api/secrets/{name}` | `{value?, note?, expose?}` | `{ok}` · `400 invalid_name\|reserved_name\|value_required` (PATH, HOME…, MAXXING_* are reserved) — `expose` = exported as env var to Claude sessions |
+| PUT | `/api/secrets/{name}` | `{value?, note?, expose?}` | `{ok}` · `400 invalid_name\|reserved_name\|value_required\|invalid_value` (PATH, HOME…, MAXXING_* are reserved; a value has 1 to 16384 characters, no null byte) — `expose` = exported as env var to Claude sessions |
 | GET | `/api/secrets/{name}/reveal` | – | `{value}` |
 | DELETE | `/api/secrets/{name}` | – | `{ok}` |
 
