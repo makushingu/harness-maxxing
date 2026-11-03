@@ -3,7 +3,7 @@
 // One card per agent, grouped by project; the agent's own page is /agents/<project>/<topic>/<name>.
 import * as React from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Bot, Play, Plus } from 'lucide-react'
+import { Bot, Play, Plus, ShieldCheck } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentRoute, useAgents, useCrons, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent, Cron } from '@/lib/types'
@@ -43,11 +43,15 @@ export default function AgentsPage() {
     return m
   }, [crons])
   const projects = React.useMemo(() => [...new Set(agents.map((a) => a.project))], [agents])
+  // "To read" first (a new result, waiting for an OK, working now), then the others by project.
+  const hot = (a: Agent) => (a.thread_unread || 0) > 0 || (a.waiting || 0) > 0 || (a.running_now || 0) > 0
+  const shown = React.useMemo(() => agents.filter((a) => project === '_all' || a.project === project), [agents, project])
+  const toRead = React.useMemo(() => shown.filter(hot), [shown])
   const groups = React.useMemo(() => {
     const g = new Map<string, Agent[]>()
-    for (const a of agents) if (project === '_all' || a.project === project) g.set(a.project, [...(g.get(a.project) || []), a])
+    for (const a of shown) if (!hot(a)) g.set(a.project, [...(g.get(a.project) || []), a])
     return [...g.entries()]
-  }, [agents, project])
+  }, [shown])
   const emoji = (p: string) => ws?.projects.find((x) => x.name === p)?.emoji || ''
 
   if (on === false) return <AgentsOff />
@@ -108,6 +112,18 @@ export default function AgentsPage() {
         />
       ) : (
         <div className="grid gap-8">
+          {toRead.length > 0 && (
+            <section className="grid gap-3" aria-label={t('agents.list.toRead')} data-testid="agents-to-read">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                {t('agents.list.toRead')} <Badge variant="default" className="h-4 px-1.5 text-[10px]">{toRead.length}</Badge>
+              </h2>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {toRead.map((a) => (
+                  <AgentCard key={a.path} agent={a} crons={cronsOf.get(a.path) || []} />
+                ))}
+              </ul>
+            </section>
+          )}
           {groups.map(([p, list]) => (
             <section key={p} className="grid gap-3" aria-label={p}>
               <h2 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
@@ -154,8 +170,7 @@ function AgentCard({ agent: a, crons }: { agent: Agent; crons: Cron[] }) {
               <span className="truncate font-medium">
                 <Sensitive length={8}>{a.display_name}</Sensitive>
               </span>
-              {running && <StatusDot tone="running" pulse label={t('agents.runningNow')} />}
-              {a.unread > 0 && <Badge variant="default" className="h-4 px-1.5 text-[10px]">{a.unread}</Badge>}
+              {(a.thread_unread || 0) > 0 && <span className="size-2 shrink-0 rounded-full bg-primary" title={t('agents.list.unread', { count: a.thread_unread || 0 })} aria-label={t('agents.list.unread', { count: a.thread_unread || 0 })} />}
             </div>
             <span className="truncate text-xs text-muted-foreground">
               <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
@@ -165,9 +180,7 @@ function AgentCard({ agent: a, crons }: { agent: Agent; crons: Cron[] }) {
             <Switch checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} aria-label={a.enabled ? t('agents.switchOff') : t('agents.switchOn')} data-testid="agent-enabled" />
           </div>
         </div>
-        <p className="line-clamp-2 min-h-10 text-sm text-muted-foreground">
-          {a.description ? <Sensitive block>{firstLine(a.description)}</Sensitive> : <span className="italic">{t('agents.noRole')}</span>}
-        </p>
+        <LastLine agent={a} running={running} />
         <TriggerChips agent={a} crons={crons} />
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
@@ -194,5 +207,43 @@ function AgentCard({ agent: a, crons }: { agent: Agent; crons: Cron[] }) {
         </div>
       </div>
     </li>
+  )
+}
+
+/** What the card says first: working now, waiting for an OK, its last result, or (never run) its role. */
+function LastLine({ agent: a, running }: { agent: Agent; running: boolean }) {
+  const t = useT()
+  const lang = useLang()
+  const last = a.last_run
+  const box = 'grid min-h-14 content-start gap-0.5 rounded-lg bg-muted/50 px-3 py-2 text-sm'
+  if ((a.waiting || 0) > 0)
+    return (
+      <div className={cn(box, 'bg-warning/10')} data-testid="agent-card-waiting">
+        <span className="flex items-center gap-1.5 font-medium text-warning">
+          <ShieldCheck className="size-3.5" /> {t('agents.list.waiting')}
+        </span>
+      </div>
+    )
+  if (running)
+    return (
+      <div className={box}>
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <StatusDot tone="running" pulse className="size-2" /> {t('agents.list.working')}
+        </span>
+      </div>
+    )
+  if (last?.kind === 'result' && last.text)
+    return (
+      <div className={box}>
+        <span className="text-[11px] text-muted-foreground">{fmtRelative(last.at, lang)}</span>
+        <span className={cn('line-clamp-2', last.ok === false && 'text-destructive')}>
+          <Sensitive block>{firstLine(last.text.replace(/^#+\s*/, ''))}</Sensitive>
+        </span>
+      </div>
+    )
+  return (
+    <p className="line-clamp-2 min-h-10 text-sm text-muted-foreground">
+      {a.description ? <Sensitive block>{firstLine(a.description)}</Sensitive> : <span className="italic">{t('agents.noRole')}</span>}
+    </p>
   )
 }

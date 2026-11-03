@@ -1,30 +1,39 @@
-// One agent (/agents/<project>/<topic>/<name>): its face, Run (with an optional text) and "Open a session" in the
-// header; tabs Activity (its thread: a message per run, newest at the bottom, live on the bus topic "agents") /
-// Role (CLAUDE.md) / Memory (memory.md) / Triggers / Settings. The tab is in the URL (?tab=).
+// One agent (/agents/<project>/<topic>/<name>) as a conversation, like a contact in a chat app:
+// - the thread fills the page: what started each run (an event, a schedule, your message), the agent's results
+//   (long ones folded), a "working…" bubble per running session, a callout when it waits for your OK;
+// - the box at the bottom writes to it: a new message starts a new session (the server adds its last results as
+//   context), "Reply" on a result goes on with that result's session (same context, same session);
+// - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
+//   webhook address, what came in, test), guards, memory, advanced settings (a sheet).
+// Opening the page marks its results as read (POST /seen).
 import * as React from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, MessageSquarePlus, Pencil, Play, StickyNote, XCircle } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
+import {
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, Pencil, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
+} from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
-import { useAgent, useAgentThread, useCrons, useFileContent, usePatchAgent, useWorkspace, useWriteFile } from '@/lib/queries'
+import { useAgent, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Cron } from '@/lib/types'
 import { fmtDate, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useMediaQuery } from '@/stores/media'
 import {
-  Badge, Button, EmptyState, Popover, PopoverContent, PopoverTrigger, Sensitive, Skeleton, StatusDot, Switch, Tabs, TabsContent, TabsList, TabsTrigger,
-  Textarea, Tooltip, toast,
+  Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
-import { Page } from '@/components/shell/Page'
+import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown, sessionsUrl } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings } from './AgentSettings'
-import { AgentsOff, TriggerChips, costLine, reasonText, useAgentsOn, useRunNow } from './parts'
+import { AgentsOff, costLine, reasonText, useAgentsOn } from './parts'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
-type Tab = 'activity' | 'role' | 'memory' | 'triggers' | 'settings'
-const TABS: Tab[] = ['activity', 'role', 'memory', 'triggers', 'settings']
+/** A result longer than this is folded (the first lines and "Read all"). */
+const FOLD_CHARS = 700
+/** Who wrote a run: the user (a message) or something else (an event, a schedule, another agent). */
+const isMine = (m: AgentMessage) => m.trigger === 'manual' || m.trigger === 'telegram' || m.source === 'manual' || m.source === 'telegram'
 
 export default function AgentPage() {
   const t = useT()
@@ -32,17 +41,8 @@ export default function AgentPage() {
   const { project = '', topic = '', name = '' } = useParams()
   const path = `projects/${project}/topics/${topic}/agents/${name}`
   const { data: a, isLoading, error, refetch } = useAgent(on === false ? null : path)
-  const [params, setParams] = useSearchParams()
-  const tab = (TABS as string[]).includes(params.get('tab') || '') ? (params.get('tab') as Tab) : 'activity'
-  const setTab = (v: string) =>
-    setParams(
-      (p) => {
-        if (v === 'activity') p.delete('tab')
-        else p.set('tab', v)
-        return p
-      },
-      { replace: true },
-    )
+  const wide = useMediaQuery('(min-width: 1024px)')
+  const [profile, setProfile] = React.useState(false)
   const back = (
     <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
       <Link to="/agents">
@@ -55,7 +55,7 @@ export default function AgentPage() {
   if (isLoading || on === undefined)
     return (
       <Page title={name} leading={back} width="wide">
-        <Skeleton className="h-36 rounded-xl" />
+        <Skeleton className="h-16 rounded-xl" />
         <Skeleton className="mt-4 h-80 rounded-xl" />
       </Page>
     )
@@ -81,133 +81,88 @@ export default function AgentPage() {
       </Page>
     )
 
+  const running = (a.running_now || 0) > 0
   return (
-    <Page
-      title={<Sensitive length={8}>{a.display_name}</Sensitive>}
-      description={<Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>}
-      leading={back}
-      width="wide"
-      actions={<HeaderActions agent={a} />}
-    >
-      <Hero agent={a} />
-      <Tabs value={tab} onValueChange={setTab} className="mt-5">
-        <div className="-mx-1 overflow-x-auto px-1">
-          <TabsList>
-            {TABS.map((x) => (
-              <TabsTrigger key={x} value={x} data-testid={`agent-tab-${x}`}>
-                {t(`agents.tab.${x}` as 'agents.tab.activity')}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-        <TabsContent value="activity" className="mt-4">
-          <Activity agent={a} />
-        </TabsContent>
-        <TabsContent value="role" className="mt-4">
-          <RoleTab agent={a} />
-        </TabsContent>
-        <TabsContent value="memory" className="mt-4">
-          <MemoryTab agent={a} />
-        </TabsContent>
-        <TabsContent value="triggers" className="mt-4">
-          <AgentTriggers agent={a} />
-        </TabsContent>
-        <TabsContent value="settings" className="mt-4">
-          <AgentSettings agent={a} />
-        </TabsContent>
-      </Tabs>
-    </Page>
-  )
-}
-
-/** Run (optional text) and "Open a session" (the new-session composer in the agent's folder). */
-function HeaderActions({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
-  const navigate = useNavigate()
-  const run = useRunNow()
-  const [open, setOpen] = React.useState(false)
-  const [text, setText] = React.useState('')
-  const go = () => run.go(a, text.trim() || undefined, () => (setOpen(false), setText('')))
-  return (
-    <>
-      <Tooltip content={t('agents.openSessionTip')}>
-        <Button variant="outline" size="sm" onClick={() => navigate(`/sessions?path=${encodeURIComponent(a.path)}&new=1`)} data-testid="agent-open-session">
-          <MessageSquarePlus /> <span className="max-sm:sr-only">{t('agents.openSession')}</span>
-        </Button>
-      </Tooltip>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button size="sm" disabled={!a.enabled} data-testid="agent-run-open">
-            <Play /> <span className="max-sm:sr-only">{t('agents.run.button')}</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="grid w-80 gap-3">
-          <div className="grid gap-1">
-            <span className="text-sm font-medium">{t('agents.run.title', { name: a.display_name })}</span>
-            <span className="text-xs text-muted-foreground">{t('agents.run.textHint')}</span>
+    <div className="flex h-full min-h-0 flex-col">
+      <PageHeader
+        leading={
+          <div className="flex items-center gap-2">
+            {back}
+            <button type="button" onClick={() => !wide && setProfile(true)} className={cn('shrink-0', wide && 'cursor-default')} aria-label={t('agents.panel.open')}>
+              <AgentAvatarIcon avatar={a.avatar} size={32} />
+            </button>
           </div>
-          <Textarea
-            autoFocus
-            minRows={3}
-            maxRows={10}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={t('agents.run.placeholder')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault()
-                go()
-              }
-            }}
-            data-testid="agent-run-text"
-          />
-          <div className="flex justify-end">
-            <Button size="sm" loading={run.pending} onClick={go} data-testid="agent-run">
-              <Play /> {t('agents.run.now')}
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </>
-  )
-}
-
-function Hero({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
-  const patch = usePatchAgent()
-  const running = (a.running_now || a.running || 0) > 0
-  return (
-    <div className="flex flex-wrap items-start gap-4 rounded-xl border bg-card p-4 sm:flex-nowrap sm:p-5">
-      <AgentAvatarIcon avatar={a.avatar} size={96} className="max-sm:size-16" />
-      <div className="grid min-w-0 flex-1 gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-lg font-semibold">
+        }
+        title={
+          <span className="flex items-center gap-2">
             <Sensitive length={8}>{a.display_name}</Sensitive>
+            {running ? (
+              <Badge variant="default" className="gap-1">
+                <StatusDot tone="running" pulse className="size-1.5" /> {t('agents.runningNow')}
+              </Badge>
+            ) : (
+              !a.enabled && <Badge variant="muted">{t('agents.paused')}</Badge>
+            )}
           </span>
-          {running ? <Badge variant="default" className="gap-1"><StatusDot tone="running" pulse className="size-1.5" /> {t('agents.runningNow')}</Badge> : !a.enabled && <Badge variant="muted">{t('agents.paused')}</Badge>}
-          <Link to={`/sessions?path=${encodeURIComponent(`projects/${a.project}/topics/${a.topic}`)}`} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+        }
+        description={
+          <Link to={`/sessions?path=${encodeURIComponent(`projects/${a.project}/topics/${a.topic}`)}`} className="hover:text-foreground hover:underline">
             <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
           </Link>
-        </div>
-        <p className="line-clamp-3 text-sm whitespace-pre-line text-muted-foreground">{a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="italic">{t('agents.noRole')}</span>}</p>
-        <TriggerChips agent={a} crons={a.crons} />
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            <Sensitive length={6}>{costLine(t, a)}</Sensitive>
-          </span>
-          {a.limits.runs_per_hour > 0 && <span className="tabular-nums">{t('agents.runsHour', { count: a.runs_last_hour || 0, max: a.limits.runs_per_hour })}</span>}
-          <span className="tabular-nums">{t('agents.sessionsCount', { count: a.session_count + a.archived_count })}</span>
-        </div>
+        }
+        actions={
+          <>
+            <Tooltip content={a.enabled ? t('agents.switchOff') : t('agents.switchOn')}>
+              <span className="flex items-center">
+                <EnabledSwitch agent={a} />
+              </span>
+            </Tooltip>
+            {!wide && (
+              <Button variant="outline" size="sm" onClick={() => setProfile(true)} data-testid="agent-profile-open">
+                <Info /> <span className="max-sm:sr-only">{t('agents.panel.open')}</span>
+              </Button>
+            )}
+          </>
+        }
+      />
+      <div className="flex min-h-0 flex-1">
+        <Conversation agent={a} />
+        {wide && (
+          <aside className="w-[360px] shrink-0 overflow-y-auto border-l" data-testid="agent-profile">
+            <Profile agent={a} />
+          </aside>
+        )}
       </div>
-      <label className="flex items-center gap-2 text-sm max-sm:w-full">
-        <Switch checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} data-testid="agent-enabled" />
-        {a.enabled ? t('agents.on') : t('agents.offShort')}
-      </label>
+      {!wide && (
+        <Sheet open={profile} onOpenChange={setProfile}>
+          <SheetContent side="right" data-testid="agent-profile">
+            <SheetHeader>
+              <SheetTitle>{a.display_name}</SheetTitle>
+            </SheetHeader>
+            <SheetBody className="p-0">
+              <Profile agent={a} />
+            </SheetBody>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   )
 }
 
-/* ---------------------------------------------------------------- Activity (the thread) */
+function EnabledSwitch({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  const patch = usePatchAgent()
+  return (
+    <Switch
+      checked={a.enabled}
+      onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })}
+      aria-label={a.enabled ? t('agents.switchOff') : t('agents.switchOn')}
+      data-testid="agent-enabled"
+    />
+  )
+}
+
+/* ---------------------------------------------------------------- The conversation */
 export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>, crons: Cron[] = []): string {
   const tr = m.trigger || ''
   if (tr === 'manual' || m.source === 'manual') return t('agents.from.manual')
@@ -221,56 +176,111 @@ export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>
   return m.source || tr || t('agents.from.manual')
 }
 
-function Activity({ agent: a }: { agent: AgentDetail }) {
+function Conversation({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const { data, isLoading, error } = useAgentThread(a.path)
   const { data: crons } = useCrons()
   const { data: ws } = useWorkspace()
+  const seen = useAgentSeen()
   const box = React.useRef<HTMLDivElement>(null)
-  const msgs = data?.messages || []
+  const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
+  const msgs = React.useMemo(() => data?.messages || [], [data])
+  const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
   const last = msgs[msgs.length - 1]?.id
   // Newest at the bottom: follow it when a message arrives (unless the user scrolled up to read).
   const stick = React.useRef(true)
   React.useLayoutEffect(() => {
     const el = box.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [last])
-  if (isLoading)
-    return (
-      <div className="grid gap-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />
-        ))}
-      </div>
-    )
-  if (error) return <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
-  if (!msgs.length) return <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
+  }, [last, a.running_now])
+  // Reading the page = its results are read (again when a new one comes in while it is open).
+  const unread = a.thread_unread || 0
+  const seenMutate = seen.mutate
+  React.useEffect(() => {
+    if (unread > 0) seenMutate({ path: a.path })
+  }, [unread, a.path, seenMutate])
+
   return (
-    <div
-      ref={box}
-      onScroll={(e) => {
-        const el = e.currentTarget
-        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-      }}
-      className="grid max-h-[calc(100dvh-22rem)] min-h-64 content-start gap-3 overflow-y-auto rounded-xl border bg-muted/20 p-3 sm:p-4 max-md:max-h-none"
-      data-testid="agent-thread"
-      aria-live="polite"
-    >
-      {msgs.map((m) => (
-        <ThreadMessage key={m.id} m={m} agent={a} crons={crons?.jobs || []} root={ws?.root} />
-      ))}
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        ref={box}
+        onScroll={(e) => {
+          const el = e.currentTarget
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+        }}
+        className="min-h-0 flex-1 overflow-y-auto"
+        aria-live="polite"
+        data-testid="agent-thread"
+      >
+        <div className="mx-auto grid max-w-3xl content-start gap-3 px-4 py-5 md:px-8">
+          {isLoading ? (
+            [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
+          ) : error ? (
+            <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
+          ) : !msgs.length ? (
+            <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
+          ) : (
+            msgs.map((m) => (
+              <ThreadMessage key={m.id} m={m} agent={a} crons={crons?.jobs || []} root={ws?.root} answers={m.reply_to ? byId.get(m.reply_to) : undefined} onReply={setReplyTo} />
+            ))
+          )}
+          {(a.running_sessions || []).map((s) => (
+            <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
+          ))}
+        </div>
+      </div>
+      <Composer agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
 }
 
-function ThreadMessage({ m, agent: a, crons, root }: { m: AgentMessage; agent: AgentDetail; crons: Cron[]; root?: string }) {
+/** A running session of the agent: "working…", or "waiting for your OK" with the way to answer. */
+function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; waiting: boolean }) {
+  const t = useT()
+  return (
+    <div className="flex items-start gap-2" data-kind="working">
+      <AgentAvatarIcon avatar={a.avatar} size={28} className="mt-0.5" />
+      <div className={cn('grid gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
+        <span className="flex items-center gap-2 text-muted-foreground">
+          {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
+          {waiting ? t('agents.conv.waiting', { name: a.display_name }) : t('agents.conv.working', { name: a.display_name })}
+        </span>
+        <Link to={sessionsUrl({ id: sid, path: a.path })} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10">
+          <ExternalLink className="size-3" /> {waiting ? t('agents.conv.waitingOpen') : t('agents.conv.follow')}
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function ThreadMessage({
+  m, agent: a, crons, root, answers, onReply,
+}: {
+  m: AgentMessage
+  agent: AgentDetail
+  crons: Cron[]
+  root?: string
+  answers?: AgentMessage
+  onReply: (m: AgentMessage) => void
+}) {
   const t = useT()
   const lang = useLang()
-  const when = <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>{fmtRelative(m.at, lang)}</time>
+  const [open, setOpen] = React.useState(false)
+  const when = (
+    <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
+      {fmtRelative(m.at, lang)}
+    </time>
+  )
   const sessionLink = m.session && (
-    <Link to={sessionsUrl({ id: m.session, path: a.path })} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10">
+    <Link to={sessionsUrl({ id: m.session, path: a.path })} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10">
       <ExternalLink className="size-3" /> {t('agents.thread.openSession')}
     </Link>
+  )
+  const quote = answers && (
+    <p className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+      <Reply className="size-3 shrink-0" />
+      <span className="truncate">{t('agents.conv.inReply', { text: firstLine(answers.text) })}</span>
+    </p>
   )
   if (m.kind === 'note')
     return (
@@ -292,24 +302,38 @@ function ThreadMessage({ m, agent: a, crons, root }: { m: AgentMessage; agent: A
         </div>
       </div>
     )
-  if (m.kind === 'run')
+  if (m.kind === 'run') {
+    if (isMine(m))
+      return (
+        <div className="ml-auto grid w-fit max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
+          {quote}
+          <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
+            <p className="whitespace-pre-wrap break-words">
+              <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
+            </p>
+          </div>
+          <span className="flex justify-end gap-2 text-[11px] text-muted-foreground">
+            {m.trigger === 'telegram' && t('agents.from.telegram')} {when}
+          </span>
+        </div>
+      )
     return (
-      <div className="ml-auto grid w-fit max-w-[85%] gap-1 rounded-xl rounded-br-sm bg-primary/10 px-3 py-2 text-sm max-sm:max-w-full" data-kind="run">
+      <div className="grid gap-1 rounded-xl border border-dashed px-3 py-2 text-sm sm:ml-9" data-kind="run">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <Play className="size-3 text-primary" />
           <span className="font-medium text-foreground">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
           {when}
         </div>
         {m.text && (
-          <p className="line-clamp-6 whitespace-pre-wrap break-words">
+          <p className="line-clamp-4 whitespace-pre-wrap break-words text-muted-foreground">
             <Sensitive block>{m.text}</Sensitive>
           </p>
         )}
-        {sessionLink}
       </div>
     )
+  }
   // result / approval: the agent speaks
   const failed = m.kind === 'result' && m.ok === false
+  const long = (m.text || '').length > FOLD_CHARS
   return (
     <div className="flex items-start gap-2" data-kind={m.kind}>
       <AgentAvatarIcon avatar={a.avatar} size={28} className="mt-0.5" />
@@ -333,100 +357,307 @@ function ThreadMessage({ m, agent: a, crons, root }: { m: AgentMessage; agent: A
           {m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
         </div>
         {m.text ? (
-          <div className="min-w-0 text-sm">
+          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
             <Sensitive block>
               <React.Suspense fallback={<p className="whitespace-pre-wrap break-words">{m.text}</p>}>
                 <Markdown className="text-sm">{linkifyMarkdown(m.text, root)}</Markdown>
               </React.Suspense>
             </Sensitive>
+            {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
           </div>
         ) : (
           <span className="text-sm text-muted-foreground italic">{t('agents.thread.noText')}</span>
         )}
-        {sessionLink}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {long && (
+            <button type="button" className="text-xs text-primary hover:underline pointer-coarse:min-h-10" onClick={() => setOpen((o) => !o)}>
+              {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
+            </button>
+          )}
+          {m.kind === 'result' && m.session && (
+            <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary pointer-coarse:min-h-10" onClick={() => onReply(m)} data-testid="agent-reply">
+              <Reply className="size-3" /> {t('agents.conv.reply')}
+            </button>
+          )}
+          {sessionLink}
+        </div>
       </div>
     </div>
   )
 }
 
-/* ---------------------------------------------------------------- Role */
-function RoleTab({ agent: a }: { agent: AgentDetail }) {
+const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
+
+function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const run = useRunAgent()
+  const [text, setText] = React.useState('')
+  const input = React.useRef<HTMLTextAreaElement>(null)
+  React.useEffect(() => {
+    if (replyTo) input.current?.focus()
+  }, [replyTo])
+  const submit = () => {
+    const v = text.trim()
+    if (!v || !a.enabled || run.isPending) return
+    setText('')
+    run.mutate(
+      { path: a.path, text: v, reply_to: replyTo?.id },
+      {
+        onSuccess: (r) => {
+          if (!r.started) {
+            setText(v)
+            toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
+          }
+        },
+        onError: () => setText(v),
+      },
+    )
+    onCancelReply()
+  }
+  return (
+    <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
+      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50">
+        {replyTo && (
+          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
+            <Reply className="size-3.5 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-medium">{t('agents.conv.replyingTo')}</span>
+              <span className="text-muted-foreground"> · {firstLine(replyTo.text)}</span>
+            </span>
+            <button type="button" onClick={onCancelReply} className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:grid pointer-coarse:size-10 pointer-coarse:place-items-center" aria-label={t('common.cancel')}>
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
+        {!a.enabled ? (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('agents.conv.paused')}</p>
+        ) : (
+          <div className="flex items-end gap-1">
+            <Textarea
+              ref={input}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  submit()
+                } else if (e.key === 'Escape' && replyTo) {
+                  e.preventDefault()
+                  onCancelReply()
+                }
+              }}
+              minRows={1}
+              maxRows={8}
+              placeholder={replyTo ? t('agents.conv.replyPlaceholder', { name: a.display_name }) : t('agents.conv.placeholder', { name: a.display_name })}
+              className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+              data-testid="agent-run-text"
+            />
+            <Tooltip content={t('agents.openSessionTip')}>
+              <Button size="icon-sm" variant="ghost" className="text-muted-foreground" onClick={() => navigate(`/sessions?path=${encodeURIComponent(a.path)}&new=1`)} aria-label={t('agents.openSession')} data-testid="agent-open-session">
+                <ExternalLink />
+              </Button>
+            </Tooltip>
+            <Button size="icon-sm" onClick={submit} disabled={!text.trim()} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
+              <Send />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ---------------------------------------------------------------- The profile panel */
+function PanelSection({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="grid gap-2">
+      <div className="flex items-center gap-2">
+        <h3 className="min-w-0 flex-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function Profile({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  const [advanced, setAdvanced] = React.useState(false)
+  const [memory, setMemory] = React.useState(false)
+  const lim = a.limits
+  const spent = a.cost_today || 0
+  const mode = a.approvals ? 'approvals' : a.permission_mode || 'topic'
+  return (
+    <div className="grid gap-6 p-4">
+      <div className="flex items-center gap-3">
+        <AgentAvatarIcon avatar={a.avatar} size={56} />
+        <div className="grid min-w-0 flex-1">
+          <span className="truncate font-semibold">
+            <Sensitive length={8}>{a.display_name}</Sensitive>
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
+          </span>
+        </div>
+      </div>
+
+      <PanelSection title={t('agents.panel.role')}>
+        <RoleEditor agent={a} />
+      </PanelSection>
+
+      <PanelSection title={t('agents.panel.when')}>
+        <p className="text-xs text-muted-foreground">{t('agents.when.manual')}</p>
+        <AgentTriggers agent={a} />
+      </PanelSection>
+
+      <PanelSection title={t('agents.panel.guards')}>
+        <div className="grid gap-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="flex-1">{lim.usd_per_day > 0 ? t('agents.panel.budget') : t('agents.panel.noBudget')}</span>
+            <span className="text-muted-foreground tabular-nums">
+              <Sensitive length={6}>{costLine(t, a)}</Sensitive>
+            </span>
+          </div>
+          {lim.usd_per_day > 0 && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+              <div className={cn('h-full rounded-full', spent >= lim.usd_per_day ? 'bg-destructive' : 'bg-primary')} style={{ width: `${Math.min(100, (spent / lim.usd_per_day) * 100)}%` }} />
+            </div>
+          )}
+          {lim.runs_per_hour > 0 && <span className="text-muted-foreground tabular-nums">{t('agents.runsHour', { count: a.runs_last_hour || 0, max: lim.runs_per_hour })}</span>}
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <ShieldCheck className="size-3.5 shrink-0" /> {t(`agents.panel.mode.${mode}` as 'agents.panel.mode.topic')}
+          </span>
+        </div>
+      </PanelSection>
+
+      <PanelSection
+        title={t('agents.panel.memory')}
+        action={
+          <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setMemory(true)} data-testid="agent-memory-open">
+            {t('agents.panel.memoryOpen')}
+          </Button>
+        }
+      >
+        <MemoryPreview agent={a} />
+      </PanelSection>
+
+      <button type="button" onClick={() => setAdvanced(true)} className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent" data-testid="agent-advanced">
+        <Settings2 className="size-4 shrink-0 text-muted-foreground" />
+        <span className="grid min-w-0 flex-1">
+          <span className="text-sm">{t('agents.panel.advanced')}</span>
+          <span className="truncate text-xs text-muted-foreground">{t('agents.panel.advancedDesc')}</span>
+        </span>
+      </button>
+
+      <Sheet open={advanced} onOpenChange={setAdvanced}>
+        <SheetContent side="right">
+          <SheetHeader>
+            <SheetTitle>{t('agents.panel.advanced')}</SheetTitle>
+          </SheetHeader>
+          <SheetBody>
+            <AgentSettings agent={a} />
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={memory} onOpenChange={setMemory}>
+        <SheetContent side="right">
+          <SheetHeader>
+            <SheetTitle>{t('agents.panel.memory')}</SheetTitle>
+          </SheetHeader>
+          <SheetBody>
+            <MemoryEditor agent={a} />
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+/** The role (first paragraph of its CLAUDE.md): read like text, edited in place. */
+function RoleEditor({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const patch = usePatchAgent()
   const { data: ws } = useWorkspace()
-  const [v, setV] = React.useState(a.description)
-  const [dirty, setDirty] = React.useState(false)
-  React.useEffect(() => {
-    if (!dirty) setV(a.description)
-  }, [a.description, dirty])
+  const [v, setV] = React.useState<string | null>(null)
   const dir = absTopicDir(ws, a.path)
-  return (
-    <div className="grid max-w-3xl gap-3">
-      <p className="text-sm text-muted-foreground">{t('agents.role.desc')}</p>
-      <Textarea
-        minRows={8}
-        maxRows={30}
-        value={v}
-        onChange={(e) => {
-          setV(e.target.value)
-          setDirty(true)
-        }}
-        placeholder={t('agents.create.rolePlaceholder')}
-        data-testid="agent-role-edit"
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          disabled={!dirty}
-          loading={patch.isPending}
-          onClick={() => patch.mutate({ path: a.path, description: v }, { onSuccess: () => (setDirty(false), toast.success(t('agents.role.saved'))) })}
-          data-testid="agent-role-save"
+  if (v === null)
+    return (
+      <div className="grid gap-1">
+        <button
+          type="button"
+          onClick={() => setV(a.description)}
+          className="group rounded-lg bg-muted/50 px-3 py-2 text-left text-sm whitespace-pre-line hover:bg-muted"
+          data-testid="agent-role"
         >
+          {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}
+          <Pencil className="ml-1 inline size-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+        </button>
+        <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="flex-1">{t('agents.panel.roleHint')}</span>
+          {dir && (
+            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="hover:text-foreground hover:underline">
+              CLAUDE.md
+            </Link>
+          )}
+        </span>
+      </div>
+    )
+  return (
+    <div className="grid gap-2">
+      <Textarea autoFocus minRows={4} maxRows={20} value={v} onChange={(e) => setV(e.target.value)} placeholder={t('agents.create.rolePlaceholder')} data-testid="agent-role-edit" />
+      <div className="flex gap-2">
+        <Button size="sm" loading={patch.isPending} onClick={() => patch.mutate({ path: a.path, description: v }, { onSuccess: () => (setV(null), toast.success(t('agents.role.saved'))) })} data-testid="agent-role-save">
           {t('common.save')}
         </Button>
-        {dirty && (
-          <Button variant="ghost" onClick={() => (setV(a.description), setDirty(false))}>
-            {t('common.cancel')}
-          </Button>
-        )}
-        {dir && (
-          <Button asChild variant="link" className="ml-auto">
-            <Link to={filesUrl(`${dir}/CLAUDE.md`)}>
-              <ExternalLink /> {t('agents.role.openFile')}
-            </Link>
-          </Button>
-        )}
+        <Button size="sm" variant="ghost" onClick={() => setV(null)}>
+          {t('common.cancel')}
+        </Button>
       </div>
     </div>
   )
 }
 
-/* ---------------------------------------------------------------- Memory */
-function MemoryTab({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
+function useMemoryFile(a: AgentDetail) {
   const { data: ws } = useWorkspace()
   const dir = absTopicDir(ws, a.path)
   const file = dir ? `${dir}/memory.md` : null
-  const { data, isLoading, error, refetch } = useFileContent(file)
+  return { file, ...useFileContent(file) }
+}
+
+/** The first lines of what it learned (memory.md without its heading). */
+function MemoryPreview({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  const { data, isLoading } = useMemoryFile(a)
+  if (isLoading) return <Skeleton className="h-12 rounded-lg" />
+  const lines = (data?.content || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'))
+  if (!lines.length) return <p className="text-xs text-muted-foreground">{t('agents.panel.memoryEmpty')}</p>
+  return (
+    <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+      <Sensitive block>
+        {lines.slice(0, 4).map((l, i) => (
+          <p key={i} className="truncate">
+            {l}
+          </p>
+        ))}
+      </Sensitive>
+    </div>
+  )
+}
+
+function MemoryEditor({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  const { file, data, isLoading, error, refetch } = useMemoryFile(a)
   const write = useWriteFile()
   const [edit, setEdit] = React.useState<string | null>(null)
   if (isLoading || !file) return <Skeleton className="h-60 rounded-xl" />
-  if (error)
-    return (
-      <EmptyState
-        compact
-        icon={StickyNote}
-        title={t('agents.memory.none')}
-        description={t('agents.memory.noneDesc')}
-        action={
-          <Button size="sm" variant="outline" onClick={() => refetch()}>
-            {t('common.retry')}
-          </Button>
-        }
-      />
-    )
+  if (error) return <EmptyState compact icon={StickyNote} title={t('agents.memory.none')} description={t('agents.memory.noneDesc')} />
   const content = data?.content || ''
   return (
-    <div className="grid max-w-3xl gap-3">
+    <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t('agents.memory.desc')}</p>
         {edit === null && data?.editable !== false && (

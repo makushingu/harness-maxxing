@@ -97,7 +97,7 @@ export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_
 export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source: string; levels: FeedLevel[]; match: string; prompt: string; hook_id?: string }
 export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
 export type AgentThreadKind = 'note' | 'run' | 'result' | 'skip' | 'approval'
-export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string }
+export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string }
 /** An agent = a folder projects/<p>/topics/<t>/agents/<name>/ (CLAUDE.md = its role, memory.md, agent.json). */
 export type Agent = {
   /** projects/<p>/topics/<t>/agents/<name>: also a session path */
@@ -129,8 +129,14 @@ export type Agent = {
   runs_last_hour?: number
   last_run?: AgentMessage | null
   running_now?: number
+  running_sessions?: { id: string; title: string; started?: number }[]
+  /** results posted after the user last opened the agent */
+  thread_unread?: number
+  /** approval requests of its running sessions */
+  waiting?: number
 }
-export type AgentDetail = Agent & { crons: Cron[] }
+export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
+export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
 export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }
 export type AgentInput = {
   topic_path?: string
@@ -148,7 +154,7 @@ export type AgentInput = {
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
 }
-export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string }
+export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
 export type AgentWebhookResult = { agent: AgentDetail; hook: { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean } }
 export type NameBody = { name: string; description?: string }
