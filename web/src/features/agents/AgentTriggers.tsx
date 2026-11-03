@@ -60,7 +60,7 @@ export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
         const h = x.hook_id ? hooks.get(x.hook_id) : undefined
         const st = a.trigger_stats?.[x.id]
         return (
-          <div key={x.id} className="grid gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-trigger">
+          <div key={x.id} className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-trigger">
             <div className="flex items-center gap-2">
               {x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
               <span className="min-w-0 flex-1 text-sm">
