@@ -3,7 +3,7 @@ import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Bot, Clock, Rss, Send, Settings2, Webhook } from 'lucide-react'
 import { useT, type TFn, type TKey } from '@/i18n'
-import { useClaudeStatus, useFeedSettings, usePatchHook, useRunAgent, useSettings } from '@/lib/queries'
+import { useClaudeStatus, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
 import type { Agent, AgentLimits, AgentWebhookResult, AgentTrigger, AgentTriggerInput, AgentWebhookKind, Cron, FeedLevel, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Badge, Button, Checkbox, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, useMask } from '@/components/ui'
@@ -263,4 +263,22 @@ export function useRunNow() {
 export function reasonText(t: TFn, reason?: string): string {
   if (reason === 'disabled' || reason === 'budget' || reason === 'rate' || reason === 'missing' || reason === 'depth') return t(`agents.reason.${reason}` as 'agents.reason.budget')
   return reason || ''
+}
+
+/** Checkboxes of the Keys vault entries an agent's runs get (plus checked names the vault no longer holds). */
+export function KeyChecks({ value, onChange }: { value: string[]; onChange: (keys: string[]) => void }) {
+  const t = useT()
+  const { data: secrets } = useSecrets()
+  const names = Array.from(new Set([...(secrets || []).map((x) => x.name), ...value])).sort()
+  if (!names.length) return <p className="text-xs text-muted-foreground">{t('agents.settings.keysNone')}</p>
+  return (
+    <div className="grid gap-1.5 sm:grid-cols-2">
+      {names.map((n) => (
+        <label key={n} className="flex min-w-0 items-center gap-2 text-[13px]">
+          <Checkbox checked={value.includes(n)} onCheckedChange={(v) => onChange(v === true ? [...value, n] : value.filter((k) => k !== n))} />
+          <span className="truncate font-mono">{n}</span>
+        </label>
+      ))}
+    </div>
+  )
 }

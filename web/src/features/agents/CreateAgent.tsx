@@ -1,14 +1,15 @@
-// Create an agent, in a side sheet (bottom sheet on touch screens). First "in a sentence" (or a template): a new
-// session gets the request and Claude prepares the agent (skill maxxing-agents). "Set it up by hand" = 3 steps:
+// Create an agent, in a side sheet (bottom sheet on touch screens). First "in a sentence": a new session gets the
+// request and Claude prepares the agent (skill maxxing-agents); or a ready-made agent of the gallery
+// (GET /api/agents/templates) fills the steps below, to check and create. "Set it up by hand" = 3 steps:
 // Where (project, then topic) -> Who (name, face, role, model, permission mode) -> When (first triggers, guards).
 // The agent is created at the end; its cron and webhook triggers are added right after (webhook: its URL shown).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowLeft, ArrowRight, Check, Clock, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
-import { useT } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 import { isApiError } from '@/lib/api'
-import { agentRoute, useAddAgentCron, useAddAgentWebhook, useCreateAgent, useCreateSession, useWorkspace } from '@/lib/queries'
-import type { Agent, AgentAvatar, AgentLimits, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
+import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useCreateSession, useWorkspace } from '@/lib/queries'
+import type { Agent, AgentAvatar, AgentLimits, AgentTemplate, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
 import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
@@ -16,7 +17,7 @@ import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { AgentAvatarIcon, randomAvatar } from './Avatar'
 import { sessionsUrl } from '@/pages/sessions/util'
 import { AvatarEditor } from './AvatarEditor'
-import { DEFAULT_LIMITS, FeedTriggerFields, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
+import { DEFAULT_LIMITS, FeedTriggerFields, KeyChecks, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
 
 type Step = 0 | 1 | 2
 type Form = {
@@ -39,6 +40,9 @@ type Form = {
   feedTrigger: AgentTriggerInput
   telegram: boolean
   limits: AgentLimits
+  approvals: boolean
+  allowed: string[]
+  keys: string[]
 }
 
 const fresh = (topicPath?: string): Form => {
@@ -63,8 +67,30 @@ const fresh = (topicPath?: string): Form => {
     feedTrigger: { source: '', levels: [], match: '', prompt: '' },
     telegram: false,
     limits: { ...DEFAULT_LIMITS },
+    approvals: false,
+    allowed: [],
+    keys: [],
   }
 }
+
+/** The form filled from a ready-made agent: its name, face, role, safety settings and first trigger. */
+const fromTemplate = (tp: AgentTemplate, topicPath?: string): Form => ({
+  ...fresh(topicPath),
+  display: tp.name,
+  avatar: { ...tp.avatar },
+  role: tp.role,
+  permission: tp.permission_mode,
+  approvals: tp.approvals,
+  allowed: [...tp.allowed_tools],
+  keys: [...tp.keys_present],
+  limits: { ...DEFAULT_LIMITS, ...tp.limits },
+  cron: !!tp.cron,
+  schedule: tp.cron?.schedule || '0 8 * * *',
+  cronPrompt: tp.cron?.prompt || '',
+  hook: !!tp.webhook,
+  hookKind: tp.webhook?.kind || 'generic',
+  hookPrompt: tp.webhook?.prompt || '',
+})
 
 export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; onOpenChange: (o: boolean) => void; topicPath?: string }) {
   const t = useT()
@@ -77,6 +103,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
   const [step, setStep] = React.useState<Step>(0)
   // First the one-sentence way (Claude prepares the agent in a session); "Set it up by hand" = the steps below.
   const [manual, setManual] = React.useState(false)
+  const [tpl, setTpl] = React.useState<AgentTemplate | null>(null)
   const [f, setF] = React.useState<Form>(() => fresh(topicPath))
   const [errors, setErrors] = React.useState<{ name?: string; form?: string; schedule?: string }>({})
   const [made, setMade] = React.useState<{ agent: Agent; hook?: AgentWebhookResult['hook']; warn?: string } | null>(null)
@@ -87,6 +114,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
       setF(fresh(topicPath))
       setStep(0)
       setManual(false)
+      setTpl(null)
       setErrors({})
       setMade(null)
     }
@@ -114,6 +142,9 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
         permission_mode: f.permission,
         telegram: f.telegram,
         limits: f.limits,
+        approvals: f.approvals,
+        allowed_tools: f.allowed,
+        keys: f.keys,
         triggers: f.feed ? [{ kind: 'feed', enabled: true, ...f.feedTrigger }] : [],
       })
     } catch (e) {
@@ -178,7 +209,18 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
         </SheetHeader>
         <SheetBody className="grid content-start gap-5">
           {!made && !manual ? (
-            <QuickCreate topicPath={topicPath} onManual={() => setManual(true)} onDone={() => onOpenChange(false)} />
+            <QuickCreate
+              topicPath={topicPath}
+              onManual={() => setManual(true)}
+              onTemplate={(tp) => {
+                const next = fromTemplate(tp, topicPath)
+                setF(next)
+                setTpl(tp)
+                setManual(true)
+                setStep(next.project && next.topic ? 1 : 0)
+              }}
+              onDone={() => onOpenChange(false)}
+            />
           ) : made ? (
             <div className="grid gap-4">
               {made.warn && <Callout tone="warning">{made.warn}</Callout>}
@@ -217,6 +259,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
             </>
           ) : step === 1 ? (
             <>
+              {tpl && <Callout tone="info">{t('agents.gallery.from', { name: tpl.name, needs: tpl.needs })}</Callout>}
               <div className="grid gap-3 sm:grid-cols-2">
                 <FormField label={t('agents.create.name')} error={errors.name}>
                   <Input value={f.display} autoFocus maxLength={60} onChange={(e) => set('display', e.target.value)} placeholder={t('agents.create.namePlaceholder')} data-testid="agent-name" />
@@ -269,19 +312,26 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
                 <FeedTriggerFields value={f.feedTrigger} onChange={(v) => set('feedTrigger', v)} />
               </TriggerToggle>
               <TriggerToggle icon={Send} title={t('agents.trigger.telegram')} desc={t('agents.trigger.telegramDesc')} on={f.telegram} onChange={(v) => set('telegram', v)} testId="agent-telegram" />
-              {external && (f.permission === '' || f.permission === 'bypass') && (
-                <Callout
-                  tone="warning"
-                  icon={ShieldCheck}
-                  action={
-                    <Button size="sm" variant="outline" onClick={() => set('permission', 'acceptEdits')}>
-                      {t('agents.create.useSafer')}
-                    </Button>
-                  }
-                >
-                  {t('agents.create.externalWarn')}
-                </Callout>
-              )}
+              <div className="grid gap-3 rounded-lg border p-3" data-testid="agent-create-safety">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <label htmlFor="ag-create-approvals" className="grid min-w-0 flex-1 cursor-pointer gap-0.5">
+                    <span className="text-sm font-medium">{t('agents.settings.approvals')}</span>
+                    <span className="text-xs text-muted-foreground">{external ? t('agents.create.externalAsks') : t('agents.settings.approvalsDesc')}</span>
+                  </label>
+                  <Switch id="ag-create-approvals" checked={f.approvals} onCheckedChange={(v) => set('approvals', v)} />
+                </div>
+                <div className="grid gap-1.5 border-t pt-3">
+                  <span className="text-sm font-medium">{t('agents.settings.keys')}</span>
+                  <span className="text-xs text-muted-foreground">{t('agents.settings.keysDesc')}</span>
+                  <KeyChecks value={f.keys} onChange={(v) => set('keys', v)} />
+                </div>
+                {f.allowed.length > 0 && (
+                  <p className="border-t pt-3 text-xs text-muted-foreground">
+                    {t('agents.create.allowedOnly')} <span className="font-mono">{f.allowed.join(', ')}</span>
+                  </p>
+                )}
+              </div>
               <details className="group rounded-lg border p-3">
                 <summary className="cursor-pointer text-sm font-medium">{t('agents.limits.title')}</summary>
                 <p className="mt-1 mb-3 text-xs text-muted-foreground">{t('agents.limits.desc')}</p>
@@ -349,18 +399,13 @@ function TriggerToggle({
   )
 }
 
-const TEMPLATES = ['feedback', 'digest', 'support', 'watch'] as const
-const TEMPLATE_AVATAR: Record<(typeof TEMPLATES)[number], AgentAvatar> = {
-  feedback: { color: 'orange', eyes: 'wide', mouth: 'smile', hat: 'cap', bg: 'orange' },
-  digest: { color: 'violet', eyes: 'dots', mouth: 'smile', hat: 'antenna', bg: 'slate' },
-  support: { color: 'teal', eyes: 'dots', mouth: 'grin', hat: 'none', bg: 'teal' },
-  watch: { color: 'blue', eyes: 'wide', mouth: 'smile', hat: 'antenna', bg: 'blue' },
-}
-
-/** "What should it do, and when?" in a sentence (or from a template): a new session in the chosen topic gets the
- * request, and Claude (skill maxxing-agents) infers the rest, asks what is missing and creates the agent. */
-function QuickCreate({ topicPath, onManual, onDone }: { topicPath?: string; onManual: () => void; onDone: () => void }) {
+/** "What should it do, and when?" in a sentence: a new session in the chosen topic gets the request, and Claude
+ * (skill maxxing-agents) infers the rest, asks what is missing and creates the agent. Below, the gallery of
+ * ready-made agents: one fills the steps of the form. */
+function QuickCreate({ topicPath, onManual, onTemplate, onDone }: { topicPath?: string; onManual: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void }) {
   const t = useT()
+  const lang = useLang()
+  const { data: templates } = useAgentTemplates(lang)
   const mask = useMask()
   const navigate = useNavigate()
   const { data: ws } = useWorkspace()
@@ -411,24 +456,34 @@ function QuickCreate({ topicPath, onManual, onDone }: { topicPath?: string; onMa
           </Button>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {TEMPLATES.map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setText(t(`agents.tpl.${k}.text` as 'agents.tpl.feedback.text'))}
-            className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
-            data-testid={`agent-tpl-${k}`}
-          >
-            <AgentAvatarIcon avatar={TEMPLATE_AVATAR[k]} size={32} />
-            <span className="grid min-w-0 gap-0.5">
-              <span className="text-sm font-medium">{t(`agents.tpl.${k}.title` as 'agents.tpl.feedback.title')}</span>
-              <span className="text-xs text-muted-foreground">{t(`agents.tpl.${k}.desc` as 'agents.tpl.feedback.desc')}</span>
-            </span>
-          </button>
-        ))}
-      </div>
       <p className="text-xs text-muted-foreground">{t('agents.quick.how')}</p>
+      {!!templates?.length && (
+        <div className="grid gap-2" data-testid="agent-gallery">
+          <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('agents.gallery.title')}</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {templates.map((tp) => (
+              <button
+                key={tp.id}
+                type="button"
+                onClick={() => onTemplate(tp)}
+                className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+                data-testid={`agent-tpl-${tp.id}`}
+              >
+                <AgentAvatarIcon avatar={tp.avatar} size={32} />
+                <span className="grid min-w-0 gap-0.5">
+                  <span className="text-sm font-medium">{tp.name}</span>
+                  <span className="text-xs text-muted-foreground">{tp.summary}</span>
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    {tp.cron ? <Clock className="size-3" /> : <Webhook className="size-3" />}
+                    {tp.cron ? t('agents.gallery.cron') : t('agents.gallery.webhook')}
+                    {tp.approvals && <><span aria-hidden>·</span><ShieldCheck className="size-3" /> {t('agents.gallery.asks')}</>}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div>
         <Button variant="link" className="h-auto p-0" onClick={onManual} data-testid="agent-manual">
           {t('agents.quick.manual')}

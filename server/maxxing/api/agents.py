@@ -117,6 +117,18 @@ def list_agents():
     return {"agents": agents.list_agents(with_status=True), "avatar": {k: list(v) for k, v in agents.AVATAR.items()}}
 
 
+@router.get("/templates")
+def list_templates(lang: Optional[str] = Query(default=None, max_length=8)):
+    """The gallery of ready-made agents, texts in `lang` (default: the UI language)."""
+    from .. import agent_templates, config, vault
+    _on()
+    have = {x["name"] for x in vault.list_secrets()}
+    out = agent_templates.listing(lang or config.load_config().get("language") or "en")
+    for t in out:
+        t["keys_present"] = [k for k in t["keys"] if k in have]
+    return {"templates": out}
+
+
 @router.post("")
 def create_agent(body: AgentIn):
     _on()
