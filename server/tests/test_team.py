@@ -455,3 +455,15 @@ def test_a_member_cannot_hide_a_message_by_claiming_its_id_first(client, sent):
     team.apply_remote(TOM, True, {"type": "edit", "chat": g, "msg": "m_aaaaaaaa", "text": "edited"})   # Tom's own id
     texts = {m["author"]: m["text"] for m in client.get(f"/api/team/chats/{g}").json()["messages"]}
     assert texts == {lea: "fake from lea", tom: "edited"}
+
+
+def test_lone_surrogates_from_a_peer_are_saved(client, sent):
+    # json.loads accepts "\ud800"; saved as is, it made team.json / peers.json unwritable (500, event lost)
+    bad = "a\ud800b"
+    teampeer.receive(LEA, {"type": "profile", "profile": {"name": bad}})
+    teampeer.receive(LEA, {"type": "chat", "chat": "g_abc", "name": bad, "members": [{"address": LEA}, {"address": ME}], "keys": {}})
+    teampeer.receive(LEA, {"type": "message", "chat": "g_abc", "message": {"id": "m_00000001", "text": bad}})
+    teampeer.receive(LEA, {"type": "message", "chat": "g_abc", "message": {"id": "m_00000002", "text": "ok"}})
+    chat = next(c for c in team._load()["chats"] if c["id"] == "g_abc")
+    assert chat["name"] == "a?b" and [m["text"] for m in chat["messages"]] == ["a?b", "ok"]
+    assert teampeer._load()["peers"][LEA]["name"] == "a?b"
