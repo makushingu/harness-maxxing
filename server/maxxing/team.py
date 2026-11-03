@@ -25,6 +25,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from typing import Callable
 
 import hashlib
 
@@ -246,16 +247,25 @@ def mark_read(cid: str) -> None:
 
 
 # ---- writing ------------------------------------------------------------------------------------------------
-def _post(cid: str, author: str, text: str, kind: str = "text", **extra) -> dict:
+def _post_mine(cid: str, text: str, kind: str = "text", check: Callable[[dict], None] | None = None, **extra) -> dict:
+    """A message of the user: read and written once (with who must still receive it: the clock shows at once), then
+    sent to the chat's real people. `check(chat)` runs first, under the lock."""
     with _lock:
         doc = _load()
         chat = _writable(doc, cid)
-        msg = {"id": _id("m"), "author": author, "at": time.time(), "text": text, "kind": kind} | extra
+        if check:
+            check(chat)
+        msg = {"id": _id("m"), "author": ME, "at": time.time(), "text": text, "kind": kind} | extra
+        remote = bool(chat.get("remote"))
+        addrs = _addresses(chat) if remote else []
+        if remote:
+            msg["pending"] = [teampeer.pid(a) for a in addrs]
         chat["messages"].append(msg)
-        if author == ME:
-            chat["read_at"] = msg["at"]
+        chat["read_at"] = msg["at"]
         _save(doc)
-        return msg
+    if remote:
+        teampeer.send(addrs, {"type": "message", "message": _wire(msg), "chat": cid}, msg["id"])
+    return msg
 
 
 def _writable(doc: dict, cid: str) -> dict:
@@ -299,16 +309,13 @@ def send(cid: str, text: str, reply_to: str | None = None, files: list[dict] | N
     if not text and not clean:
         raise TeamError(400, "empty", "Empty message")
     extra = ({"reply_to": reply_to} if reply_to else {}) | ({"files": clean} if clean else {})
-    with _lock:
-        chat = _writable(_load(), cid)
+    def check(chat: dict) -> None:
         if reply_to:
             _message(chat, reply_to)              # 404 when it is not a message of this chat
         if chat.get("remote"):
             for f in clean:
                 f["fid"] = teampeer.share_file(f["path"], cid, f)
-    msg = _post(cid, ME, text, **extra)
-    _broadcast(cid, msg)
-    return msg
+    return _post_mine(cid, text, check=check, **extra)
 
 
 def dm_id(a: str, b: str) -> str:
@@ -381,21 +388,11 @@ def _wire(msg: dict) -> dict:
     return out
 
 
-def _broadcast(cid: str, msg: dict | None = None, event: dict | None = None) -> None:
-    """A new message of the user (or another event) to every member of a chat with real people."""
-    with _lock:
-        doc = _load()
-        chat = _chat(doc, cid)
-        if not chat.get("remote"):
-            return
-        addrs = _addresses(chat)
-        if msg is not None:
-            m = _message(chat, msg["id"])
-            m["pending"] = [teampeer.pid(a) for a in addrs]
-            msg["pending"] = list(m["pending"])      # the caller returns it: the clock shows at once
-            _save(doc)
-    ev = event or {"type": "message", "message": _wire(msg or {})}
-    teampeer.send(addrs, ev | {"chat": cid}, msg["id"] if msg else None)
+def _broadcast(cid: str, chat: dict, event: dict) -> None:
+    """An event of the user (a reaction, an edit...) to every member of a chat with real people. `chat`: as just
+    saved (never read again for this; a new message: _post_mine)."""
+    if chat.get("remote"):
+        teampeer.send(_addresses(chat), event | {"chat": cid}, None)
 
 
 def delivered(cid: str, mid: str, who: str) -> None:
@@ -427,14 +424,15 @@ def react(cid: str, mid: str, emoji: str) -> dict:
         raise TeamError(400, "invalid_emoji", "Unknown reaction")
     with _lock:
         doc = _load()
-        msg = _message(_writable(doc, cid), mid)
+        chat = _writable(doc, cid)
+        msg = _message(chat, mid)
         if msg.get("deleted"):
             raise TeamError(409, "deleted", "This message was deleted")
         who = msg.setdefault("reactions", {}).setdefault(emoji, [])
         who.remove(ME) if ME in who else who.append(ME)
         msg["reactions"] = {e: w for e, w in msg["reactions"].items() if w}
         _save(doc)
-    _broadcast(cid, event={"type": "react", "msg": mid, "emoji": emoji, "on": ME in who})
+    _broadcast(cid, chat, {"type": "react", "msg": mid, "emoji": emoji, "on": ME in who})
     return msg
 
 
@@ -445,16 +443,15 @@ def create_poll(cid: str, question: str, options: list[str], multi: bool = False
     if not question or len(opts) < 2:
         raise TeamError(400, "invalid_poll", "A question and at least two options")
     poll = {"question": question, "multi": bool(multi), "options": [{"id": _id("o"), "label": o, "votes": []} for o in opts]}
-    msg = _post(cid, ME, question, kind="poll", poll=poll)
-    _broadcast(cid, msg)
-    return msg
+    return _post_mine(cid, question, kind="poll", poll=poll)
 
 
 def vote(cid: str, mid: str, option: str) -> dict:
     """Toggle the user's vote on an option (one choice: the other votes of the user go)."""
     with _lock:
         doc = _load()
-        msg = _message(_writable(doc, cid), mid)
+        chat = _writable(doc, cid)
+        msg = _message(chat, mid)
         poll = msg.get("poll") or {}
         opt = next((o for o in poll.get("options", []) if o["id"] == option), None)
         if opt is None:
@@ -468,7 +465,7 @@ def vote(cid: str, mid: str, option: str) -> dict:
                         o["votes"].remove(ME)
             opt["votes"].append(ME)
         _save(doc)
-    _broadcast(cid, event={"type": "vote", "msg": mid, "options": [o["id"] for o in poll["options"] if ME in o["votes"]]})
+    _broadcast(cid, chat, {"type": "vote", "msg": mid, "options": [o["id"] for o in poll["options"] if ME in o["votes"]]})
     return msg
 
 
@@ -487,7 +484,8 @@ def edit_message(cid: str, mid: str, text: str) -> dict:
     text = (text or "").strip()[:TEXT_MAX]
     with _lock:
         doc = _load()
-        msg = _message(_writable(doc, cid), mid)
+        chat = _writable(doc, cid)
+        msg = _message(chat, mid)
         if msg["author"] != ME or msg.get("kind") != "text" or msg.get("deleted"):
             raise TeamError(403, "forbidden", "Only your own messages can be edited")
         if not text and not msg.get("files"):
@@ -496,7 +494,7 @@ def edit_message(cid: str, mid: str, text: str) -> dict:
             return msg
         msg["text"], msg["edited"] = text, time.time()
         _save(doc)
-    _broadcast(cid, event={"type": "edit", "msg": mid, "text": text})
+    _broadcast(cid, chat, {"type": "edit", "msg": mid, "text": text})
     return msg
 
 
@@ -514,7 +512,8 @@ def delete_message(cid: str, mid: str) -> dict:
     no longer shared."""
     with _lock:
         doc = _load()
-        msg = _message(_writable(doc, cid), mid)
+        chat = _writable(doc, cid)
+        msg = _message(chat, mid)
         if msg["author"] != ME:
             raise TeamError(403, "forbidden", "Only your own messages can be deleted")
         if msg.get("deleted"):
@@ -523,7 +522,7 @@ def delete_message(cid: str, mid: str) -> dict:
             if f.get("fid"):
                 teampeer.unshare_file(f["fid"])
         _save(doc)
-    _broadcast(cid, event={"type": "delete", "msg": mid})
+    _broadcast(cid, chat, {"type": "delete", "msg": mid})
     return msg
 
 
@@ -601,9 +600,7 @@ def set_muted(cid: str, muted: bool) -> dict:
 
 
 def _post_shared(cid: str, text: str, **extra) -> dict:
-    msg = _post(cid, ME, text, **extra)
-    _broadcast(cid, msg)
-    return msg
+    return _post_mine(cid, text, **extra)
 
 
 # ---- summary (one claude -p call, no tools) -----------------------------------------------------------------

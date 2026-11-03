@@ -325,7 +325,7 @@ Chats between people, `<state>/team/team.json` (format in the docstring), one lo
 topic `team`. `state()`, `messages(cid)`, `create_chat`, `send`, `react`, `create_poll`, `vote`, `mark_read`,
 `mark_sent` (a "to a session" click), `edit_message` / `delete_message`, `update_group` / `leave_group` / `set_muted`,
 `typing` and the read receipt (signals through `teampeer.signal_all`, never queued), `summarize(cid, ids, since)` (one `claude -p` without tools, Sonnet,
-prompt `SUMMARY_PROMPT`, titles in the chat's language). Every local change is `_broadcast` to the other members
+prompt `SUMMARY_PROMPT`, titles in the chat's language). Every local change goes to the other members (`_post_mine`: a new message, stored with its `pending` list in one save; `_broadcast`: the other events)
 through `teampeer.send` (message `pending` = ids not reached yet, cleared by `delivered()`); remote events come in
 through `apply_remote(frm, contact, event)` which checks membership and authorship; their messages keep `recv`
 (arrival time here, unread counts on it) and an `at` never in the future. People ids = `teampeer.pid(address)`;
