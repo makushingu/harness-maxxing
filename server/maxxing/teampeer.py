@@ -376,8 +376,23 @@ def _rate(table: dict[str, list[float]], ip: str, limit: int, window: float) -> 
     return len(hits) >= limit
 
 
+def _scrub(x: object, depth: int = 0) -> object:
+    """Strings from another server, made writable: a lone surrogate ("\\ud800") passes json.loads but makes every
+    later save of team.json / peers.json fail."""
+    if isinstance(x, str):
+        return x.encode("utf-8", "replace").decode("utf-8") if not x.isascii() else x
+    if depth > 50:       # no event nests that deep
+        return None
+    if isinstance(x, dict):
+        return {_scrub(k, depth + 1): _scrub(v, depth + 1) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_scrub(v, depth + 1) for v in x]
+    return x
+
+
 def hello(body: dict, ip: str) -> dict:
     """A's side: a server uses one of our invitations."""
+    body = _scrub(body)  # type: ignore[assignment]
     me = own_address()
     with _lock:
         if _rate(_fails, ip, HELLO_FAILS, 3600):
@@ -547,6 +562,7 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
     """An event from a verified sender: contact life here, chat events in team.apply_remote(). `scope`: the group a
     group key is limited to (see verify)."""
     from . import team
+    event = _scrub(event)  # type: ignore[assignment]
     kind = event.get("type")
     if scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave") or str(event.get("chat") or "") != scope):
         raise PeerError(403, "forbidden", "A group key only works in its own group")
