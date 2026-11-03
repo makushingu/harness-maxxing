@@ -203,7 +203,7 @@ export function ImportWizard({ onDone, compact, autoFinish }: { onDone?: (r: Imp
                   aria-checked={agent === a.value}
                   onClick={() => setAgent(a.value)}
                   className={cn(
-                    'rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                    'rounded-md border px-3 py-2 text-sm font-medium transition-colors pointer-coarse:min-h-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                     agent === a.value ? 'border-primary bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
