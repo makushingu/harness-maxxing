@@ -41,12 +41,18 @@ def _configure(p) -> None:
     for name, hlp in (("on", "switch an agent on"), ("off", "switch an agent off")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("agent")
+    s = sub.add_parser("templates", help="the ready-made agents (gallery of New agent)")
+    s.add_argument("--lang", default="", help="en, fr (default: the UI language)")
+    s.add_argument("--json", action="store_true")
     s = sub.add_parser("create", help="create an agent in a topic")
     s.add_argument("where", help="<project>/<topic>/<agent> (agent = 1-48 lowercase letters, digits, dashes)")
     s.add_argument("--name", default="", help="display name (default: the folder name)")
-    role = s.add_mutually_exclusive_group(required=True)
+    role = s.add_mutually_exclusive_group()
     role.add_argument("--role", help="its role: the first paragraph of its CLAUDE.md")
     role.add_argument("--role-file", help="a file holding the role (several paragraphs)")
+    s.add_argument("--template", default="", help="start from a ready-made agent (`maxxing agents templates`): its "
+                   "role, safety settings and first trigger; the other options override it")
+    s.add_argument("--lang", default="", help="language of the template texts (en, fr; default: the UI language)")
     s.add_argument("--permission", choices=("bypass", "acceptEdits", "default"), help="default: the topic's mode")
     s.add_argument("--model", default="", help="default: the model of the topic")
     s.add_argument("--approvals", action="store_true", help="ask before risky actions (answered in the UI)")
@@ -153,6 +159,23 @@ def _levels(v: str) -> list[str]:
     return [x.strip() for x in (v or "").split(",") if x.strip()]
 
 
+def _lang(a) -> str:
+    from . import config
+    return (a.lang or config.load_config().get("language") or "en").strip()
+
+
+def _templates(a) -> int:
+    from . import agent_templates
+    rows = agent_templates.listing(_lang(a))
+    if a.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+    for t in rows:
+        when = f"cron {t['cron']['schedule']}" if t.get("cron") else f"webhook {t['webhook']['kind']}" if t.get("webhook") else ""
+        print(f"{t['id']:<10} {t['name']:<24} {when:<20} {t['summary']}")
+    return 0
+
+
 def _create(a) -> int:
     import random
     from . import agents
@@ -170,20 +193,59 @@ def _create(a) -> int:
             return 2
     else:
         role = (a.role or "").strip()
+    tpl = None
+    if a.template:
+        from . import agent_templates, vault
+        tpl = agent_templates.get(a.template, _lang(a))
+        if tpl is None:
+            print(f"No template {a.template!r}: see `maxxing agents templates`", file=sys.stderr)
+            return 2
+    elif not role:
+        print("Give its role: --role TEXT, --role-file FILE or --template ID", file=sys.stderr)
+        return 2
     limits = {k: v for k, v in (("usd_per_day", a.usd_per_day), ("runs_per_hour", a.runs_per_hour)) if v is not None}
-    fields = {"name": a.name or name, "description": role, "model": a.model, "permission_mode": a.permission or "",
-              "approvals": a.approvals, "telegram": a.telegram, "enabled": not a.off,
-              "keys": [k.strip() for k in a.keys.split(",") if k.strip()], "trust_outside": a.trust_outside,
-              "avatar": {k: random.choice(list(v)) for k, v in agents.AVATAR.items()}, "limits": limits}
+    keys = [k.strip() for k in a.keys.split(",") if k.strip()]
+    fields = {"avatar": {k: random.choice(list(v)) for k, v in agents.AVATAR.items()}, "permission_mode": "",
+              **(agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]) if tpl else {})}
+    fields.update({"name": a.name or fields.get("name") or name, "model": a.model, "telegram": a.telegram,
+                   "enabled": not a.off, "trust_outside": a.trust_outside,
+                   "approvals": a.approvals or bool(fields.get("approvals")),
+                   "limits": {**(fields.get("limits") or {}), **limits}})
+    if role:
+        fields["description"] = role
+    if a.permission:
+        fields["permission_mode"] = a.permission
+    if keys:
+        fields["keys"] = keys
     try:
         r = agents.create(f"projects/{project}/topics/{topic}", name, fields)
     except agents.AgentError as e:
         print(e.message, file=sys.stderr)
         return 2
+    extra: dict = {}
+    if tpl and tpl.get("cron"):
+        try:
+            extra["cron"] = agents.add_cron(r["path"], tpl["cron"]["schedule"], tpl["cron"]["prompt"], "")["id"]
+        except Exception as e:  # noqa: BLE001 - the agent exists: say what is missing
+            print(f"schedule not added: {e}", file=sys.stderr)
+    if tpl and tpl.get("webhook"):
+        try:
+            hook = agents.add_webhook(r["path"], tpl["webhook"]["kind"], tpl["webhook"]["prompt"], [], "")["hook"]
+            extra["webhook"] = hook.get("url")
+        except Exception as e:  # noqa: BLE001
+            print(f"webhook not added: {e}", file=sys.stderr)
     if a.json:
-        print(json.dumps({"agent": r["path"]}))
+        print(json.dumps({"agent": r["path"], **extra}))
     else:
         print(f"created {r['path']}")
+        if r.get("keys"):
+            print(f"keys: {', '.join(r['keys'])}")
+        if extra.get("cron"):
+            print(f"schedule: {tpl['cron']['schedule']}")
+        if extra.get("webhook"):
+            print(f"webhook URL: {extra['webhook']}")
+        if tpl and tpl.get("needs"):
+            print(f"to connect: {tpl['needs']}")
         if not agents.feature_on():
             print("(The Agents page is off: Settings -> Features -> Agents shows it. Triggers run anyway.)",
                   file=sys.stderr)
@@ -196,6 +258,8 @@ def _handler(a) -> int:
         return _list(a)
     if a.agents_cmd == "create":
         return _create(a)
+    if a.agents_cmd == "templates":
+        return _templates(a)
     try:
         path = resolve(a.agent)
     except ValueError as e:

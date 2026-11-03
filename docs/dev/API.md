@@ -377,6 +377,7 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], eyes: [..], mouth: [..], hat: [..], bg: [..]}}` |
+| GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
 | POST | `/api/agents` | `{topic_path, name, display_name?, description?, ...AgentFields}` | `Agent & Status` · `400 bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
 | GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob]}` (the cron jobs whose `topic_path` is the agent path) · `404` |
 | PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
@@ -389,9 +390,14 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 ```
 AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?: ""|"bypass"|"acceptEdits"|"default",
                allowed_tools?: [string], disallowed_tools?: [string], telegram?: bool, approvals?: bool,
-               limits?: Limits, triggers?: [Trigger]}
+               trust_outside?: bool, keys?: [string] (vault names, max 50; 400 bad_key), limits?: Limits,
+               triggers?: [Trigger]}
+               approvals: every run asks before risky tools; a run started by outside text (feed / webhook event,
+               another agent, `run --data`: session env MAXXING_AGENT_OUTSIDE=1) asks unless trust_outside.
+               keys: the only vault entries its runs get as env vars (none by default, exposed or not).
 Agent  = {path, project, topic, name (folder slug), display_name, description, avatar: Avatar, enabled, model,
-          permission_mode, allowed_tools, disallowed_tools, telegram, approvals, limits: Limits, triggers: [Trigger],
+          permission_mode, allowed_tools, disallowed_tools, telegram, approvals, trust_outside, keys, limits: Limits,
+          triggers: [Trigger],
           created, session_count, archived_count, running, unread}
 Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
           (last result or skip), running_now: int}

@@ -139,6 +139,26 @@ export type Agent = {
   /** approval requests of its running sessions */
   waiting?: number
 }
+/** A ready-made agent of the gallery (GET /api/agents/templates): fills the creation form. */
+export type AgentTemplate = {
+  id: string
+  name: string
+  summary: string
+  /** its role (CLAUDE.md) */
+  role: string
+  /** what the user still has to connect */
+  needs: string
+  avatar: AgentAvatar
+  permission_mode: PermissionMode
+  approvals: boolean
+  allowed_tools: string[]
+  /** keys worth giving it; keys_present = the ones the vault holds */
+  keys: string[]
+  keys_present: string[]
+  limits: Partial<AgentLimits>
+  cron?: { schedule: string; prompt: string }
+  webhook?: { kind: AgentWebhookKind; prompt: string }
+}
 export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
 export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
 export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }

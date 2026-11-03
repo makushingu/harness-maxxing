@@ -29,17 +29,35 @@ it: the writer knows the blog's tone without repeating it. The three files are i
 ## Create an agent
 
 **Agents -> New agent**: say in a sentence what it should do and when ("every Monday morning, sum up the players'
-feedback and suggest 3 improvements"), or start from a template (feedback analyst, Monday digest, customer support,
-watch). **Prepare with Claude** opens a session with your request: Claude guesses the topic, writes the role, picks
+feedback and suggest 3 improvements"). **Prepare with Claude** opens a session with your request: Claude guesses the topic, writes the role, picks
 the trigger, asks only what is missing (a few questions at most), shows you a summary, creates the agent, gives you
 its webhook address if it has one and offers a test run. You can ask the same thing in any session.
+
+Or start from a **ready-made agent**, under the box:
+
+| Agent | When | What it does |
+|---|---|---|
+| **Customer support** | Shopify webhook | drafts the reply and the action for each request, never sends or refunds alone |
+| **Sales of the day** | every evening | the day's sales in five lines, from a read-only Stripe or Shopify key |
+| **Orders to handle** | every morning (Mon-Sat) | the orders still waiting, oldest first |
+| **Watch** | every morning | only what is new on the sites listed in its role |
+| **Pull request review** | GitHub webhook | reviews each new pull request, never merges |
+| **Blog writer** | every Monday | one draft article in `drafts/`, never published |
+| **Site monitor** | every hour | checks the sites listed in its role, speaks only when one is down |
+| **Feedback analyst** | webhook | groups user feedback and proposes improvements |
+
+It fills the steps below: check them, change what you want, create. Each one is set up safely: it may only read,
+learn in its memory and do the few things its role needs (for example `curl` for the sales one), its webhook runs ask
+before anything else, and the keys it suggests are checked only if your Keys vault holds them. The blue note at the
+top says what is left to connect (a webhook address in Shopify, a key, the list of sites). From the command line:
+`maxxing agents templates`, then `maxxing agents create acme/shop/sales --template sales`.
 
 **Set it up by hand instead** gives the three steps:
 
 1. **Where**: the project and the topic it works in.
 2. **Who**: its name, its character (color, eyes, mouth, hat, background), its role in a few lines, and optionally
    the model, the permission mode and the tools it may use.
-3. **When**: its triggers and its limits (below).
+3. **When**: its triggers, whether it asks before risky actions, the keys it can use, and its limits (below).
 
 Writing a good role: say what the agent produces and where it puts it ("a draft in `drafts/`, never published"),
 which files or keys it uses, and what it must never do. Keep it short; it learns the rest in its memory.

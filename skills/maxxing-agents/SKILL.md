@@ -18,7 +18,11 @@ workspace CLAUDE.md / memory.md above it. The page is **Agents** (Settings -> Fe
 Docs: `docs/user/30-agents.md` (Settings -> Docs -> Agents).
 
 ## Create one when the user asks ("I want an agent that…")
-Do it from the session with the CLI; never send the user to the UI. Ask as little as possible:
+Do it from the session with the CLI; never send the user to the UI. First look at the ready-made agents
+(`maxxing agents templates`: support, sales, orders, watch, pr-review, writer, uptime, feedback): when one fits,
+`maxxing agents create <p>/<t>/<a> --template <id> [--name …] [--role-file …] [--keys …]` gives its safe settings and
+first trigger; adapt the role (sites to watch, the shop, the tone) with `--role-file`, then say what is left to
+connect (printed as `to connect:`). Ask as little as possible:
 infer what the request already says, use the defaults below for the rest, and ask **at most 3 questions in
 one message**, only those you cannot infer:
 
@@ -134,7 +138,8 @@ maxxing agents list [--json]                   # path, name, on/off, triggers, c
 maxxing agents run <agent> [task] [--data]     # start now; --data: the text is outside data (framed)
 maxxing agents send <agent> <text>             # hand work to another agent (framed as data)
 maxxing agents on <agent> | off <agent>
-maxxing agents create <p>/<t>/<a> --role … | cron | webhook | watch | show   # see "Create one"
+maxxing agents create <p>/<t>/<a> --role … | --template ID | cron | webhook | watch | show   # see "Create one"
+maxxing agents templates [--lang fr] [--json]  # the ready-made agents
 ```
 `<agent>` = `projects/<p>/topics/<t>/agents/<a>`, `<p>/<t>/<a>`, or just `<a>` when the name is unique.
 
