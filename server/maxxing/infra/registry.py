@@ -74,11 +74,14 @@ def get_server(name: str) -> dict | None:
 
 
 def _server_ok(s: dict) -> bool:
+    port = s.get("port") or 22
+    if isinstance(port, bool) or isinstance(port, float) and not port.is_integer():   # 22.5, 1e999 (infinity)
+        return False
     try:
         check_server(str(s.get("name") or ""), str(s.get("host") or ""), str(s.get("user") or "root"),
-                     int(s.get("port") or 22), str(s.get("key") or ""), key_must_exist=False)
+                     int(port), str(s.get("key") or ""), key_must_exist=False)
         return True
-    except (RegistryError, ValueError, TypeError):
+    except (RegistryError, ValueError, TypeError, OverflowError):
         return False
 
 
@@ -98,13 +101,16 @@ def check_server(name: str, host: str, user: str = "root", port: int = 22, key: 
 
 
 def add_server(name: str, host: str, user: str = "root", port: int = 22, key: str = "", note: str = "",
-               label: str = "") -> dict:
+               label: str = "", unique: bool = False) -> dict:
+    """unique=True: `name` taken meanwhile (two connections at once) -> `name-2`..., chosen under the lock."""
     check_server(name, host, user, port, key)
     item = {"name": name, "label": clean_label(label), "host": host, "user": user, "port": int(port), "key": key,
             "note": note, "added": int(time.time())}
     with _lock:
         d = load()
-        d["servers"] = [s for s in d["servers"] if s["name"] != name] + [item]
+        if unique:
+            item["name"] = _free(name, {s["name"] for s in d["servers"]})
+        d["servers"] = [s for s in d["servers"] if s["name"] != item["name"]] + [item]
         _save(d)
     return item
 
@@ -129,7 +135,10 @@ def free_name(base: str) -> str:
     stem = re.sub(r"[^a-z0-9-]+", "-", (base or "").lower().split(".")[0]).strip("-")[:36] or "server"
     if stem == "local" or not stem[0].isalnum():
         stem = f"server-{stem}".strip("-")[:36]
-    taken = {s["name"] for s in servers()}
+    return _free(stem, {s["name"] for s in servers()})
+
+
+def _free(stem: str, taken: set[str]) -> str:
     name, n = stem, 2
     while name in taken:
         name, n = f"{stem}-{n}", n + 1

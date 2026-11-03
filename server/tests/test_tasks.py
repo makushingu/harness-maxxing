@@ -266,3 +266,76 @@ def test_identical_hand_written_tasks_get_distinct_ids(client, org):
     assert len(set(ids)) == 2
     assert client.delete(f"/api/tasks/{ids[0]}").status_code in (200, 204)
     assert [t["id"] for t in client.get("/api/tasks").json()["tasks"]] == [ids[1]]
+
+
+def test_a_too_deeply_nested_file_is_a_corrupt_file(client, org):
+    f = org.ws / "tasks.json"
+    f.write_text("[" * 100000 + "]" * 100000)
+    r = client.get("/api/tasks")
+    assert r.status_code == 409 and r.json()["error"] == "corrupt_file"
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "1e999"])
+def test_a_non_finite_number_in_the_file_does_not_break_the_list(client, org, value):
+    f = org.ws / "tasks.json"
+    f.write_text('{"version": 1, "projects": [{"id": "p", "name": "P", "x": %s}],'
+                 ' "tasks": [{"id": "a", "title": "x", "extra": %s}]}' % (value, value))
+    r = client.get("/api/tasks")
+    assert r.status_code == 200
+    assert r.json()["tasks"][0]["extra"] is None and r.json()["projects"][0]["x"] is None
+    assert client.post("/api/tasks", json={"title": "y"}).status_code == 200
+    assert client.get("/api/tasks").status_code == 200
+
+
+def test_a_lone_surrogate_in_the_file_is_replaced(client, org):
+    f = org.ws / "tasks.json"
+    f.write_text('{"version": 1, "projects": [], "tasks": [{"id": "a", "title": "x\\ud800",'
+                 ' "notes": "\\ud83d\\ude00", "labels": ["\\udfff"]}]}')
+    r = client.get("/api/tasks")
+    assert r.status_code == 200
+    t = r.json()["tasks"][0]
+    assert t["title"] == "x\ufffd" and t["notes"] == "\U0001F600" and t["labels"] == ["\ufffd"]
+    assert client.post("/api/tasks", json={"title": "y"}).status_code == 200
+    assert "\\ud800" not in f.read_text()
+
+
+@pytest.mark.parametrize("bad", [["a"], {"a": 1}])
+def test_a_list_or_object_as_task_id_gets_a_new_id(client, org, bad):
+    f = org.ws / "tasks.json"
+    f.write_text(json.dumps({"version": 1, "projects": [], "tasks": [{"id": bad, "title": "x"}, {"id": "b", "title": "y"}]}))
+    r = client.get("/api/tasks")
+    assert r.status_code == 200
+    ids = [t["id"] for t in r.json()["tasks"]]
+    assert all(isinstance(i, str) and i for i in ids) and ids[1] == "b" and ids[0] != "b"
+    assert client.post("/api/tasks", json={"title": "z"}).status_code == 200
+    from maxxing.api import tasks as tasks_api
+    assert tasks_api.summary()["open"] == 3
+
+
+def test_deleting_one_of_two_tasks_with_the_same_id_keeps_the_other(client, org):
+    f = org.ws / "tasks.json"
+    f.write_text(json.dumps({"version": 1,
+                             "projects": [{"id": "p", "name": "One"}, {"id": "p", "name": "Two"}],
+                             "tasks": [{"id": "d", "title": "first"}, {"id": "d", "title": "second"}]}))
+    data = client.get("/api/tasks").json()
+    assert [t["id"] for t in data["tasks"]][0] == "d" and len({t["id"] for t in data["tasks"]}) == 2
+    assert data["projects"][0]["id"] == "p" and len({p["id"] for p in data["projects"]}) == 2
+    assert client.delete("/api/tasks/d").status_code == 200
+    assert [t["title"] for t in client.get("/api/tasks").json()["tasks"]] == ["second"]
+    assert client.delete("/api/tasks/projects/p").status_code == 200
+    assert [p["name"] for p in client.get("/api/tasks").json()["projects"]] == ["Two"]
+
+
+def test_a_lone_surrogate_sent_to_the_api_is_refused(client, org):
+    a = client.post("/api/tasks", json={"title": "a"}).json()
+    f = org.ws / "tasks.json"
+    before = f.read_text()
+    js = {"content-type": "application/json"}
+    for body in ('{"title": "x\\ud800"}', '{"notes": "\\udfff"}', '{"labels": ["ok", "\\ud800"]}',
+                 '{"topic_path": "projects/\\ud800"}'):
+        assert client.patch(f"/api/tasks/{a['id']}", content=body, headers=js).status_code == 422
+        assert client.post("/api/tasks", content=body, headers=js).status_code == 422
+    assert client.post("/api/tasks/projects", content='{"name": "x\\ud800"}', headers=js).status_code == 422
+    r = client.post("/api/tasks/bulk", content='{"ids": ["%s"], "labels_add": ["\\ud800"]}' % a["id"], headers=js)
+    assert r.status_code == 422
+    assert f.read_text() == before
