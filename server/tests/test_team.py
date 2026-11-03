@@ -508,3 +508,22 @@ def test_signals_from_a_contact_parse_team_json_only_to_write(client, sent, monk
     assert len(writes) == 2 and len(reads) <= 4
     msg = client.get(f"/api/team/chats/{dm}").json()
     assert "pending" not in msg["messages"][0] and lea in msg["chat"]["seen"]
+
+
+
+def test_sending_a_message_reads_and_writes_team_json_once(client, sent, monkeypatch):
+    lea = teampeer.pid(LEA)
+    dm = client.post("/api/team/chats", json={"kind": "dm", "members": [lea]}).json()["id"]
+    first = client.post(f"/api/team/chats/{dm}/messages", json={"text": "hi"}).json()
+    reads, writes = _count_team_io(monkeypatch)
+    m = client.post(f"/api/team/chats/{dm}/messages", json={"text": "again", "reply_to": first["id"]}).json()
+    assert m["pending"] == [lea] and sent[-1][1]["message"]["reply_to"] == first["id"]
+    assert len(reads) == 1 and len(writes) == 1
+    reads.clear(), writes.clear()
+    client.post(f"/api/team/chats/{dm}/messages/{m['id']}/react", json={"emoji": "👍"})
+    assert len(reads) == 1 and len(writes) == 1 and sent[-1][1]["type"] == "react"
+    reads.clear(), writes.clear()
+    client.post(f"/api/team/chats/{dm}/polls", json={"question": "Lunch?", "options": ["Yes", "No"]})
+    assert len(reads) == 1 and len(writes) == 1 and sent[-1][1]["message"]["kind"] == "poll"
+    stored = client.get(f"/api/team/chats/{dm}").json()["messages"]
+    assert stored[1]["pending"] == [lea] and stored[1]["reply_to"] == first["id"]
