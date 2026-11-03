@@ -12,7 +12,7 @@ from typing import Any
 
 from . import config
 
-NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")
+NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}\Z")
 # Environment variables a secret must never shadow when exposed: system basics, and the ones that make
 # shells, interpreters, git or Claude load code or send credentials somewhere else.
 RESERVED = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD", "TERM", "LANG", "LC_ALL", "TZ",
@@ -57,6 +57,15 @@ def get(name: str) -> str | None:
     return e["value"] if e else None
 
 
+def _is_text(v: str) -> bool:
+    """Writable to secrets.json (UTF-8): False for a lone surrogate."""
+    try:
+        v.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def put(name: str, value: str | None = None, note: str | None = None, expose: bool | None = None) -> None:
     """Create or update. A new secret needs a value; omitted fields keep their current value."""
     check_name(name)
@@ -67,10 +76,14 @@ def put(name: str, value: str | None = None, note: str | None = None, expose: bo
         if value is not None:
             if not value or len(value) > 16384:
                 raise VaultError("value must be 1 to 16384 characters", "invalid_value")
+            if "\0" in value or not _is_text(value):        # a null byte: every session and job would fail to start
+                raise VaultError("value must be text without a null byte", "invalid_value")
             cur["value"] = value
         if not cur.get("value"):
             raise VaultError("a new secret needs a value", "value_required")
         if note is not None:
+            if not _is_text(note):
+                raise VaultError("note must be valid text", "invalid_note")
             cur["note"] = note.strip()[:200]
         if expose is not None:
             cur["expose"] = bool(expose)
@@ -96,6 +109,6 @@ def exposed_env() -> dict[str, str]:
     """{NAME: value} of the secrets flagged `expose` (never raises)."""
     try:
         return {k: e["value"] for k, e in _vault().items()
-                if e.get("expose") and NAME_RE.match(k) and k not in RESERVED}
+                if e.get("expose") and NAME_RE.match(k) and k not in RESERVED and "\0" not in e["value"]}
     except Exception:
         return {}
