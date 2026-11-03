@@ -122,6 +122,13 @@ def _scrub(v: Any) -> Any:
     return v
 
 
+def _id_of(v: Any) -> str:
+    """An id written by hand: text or a number; anything else (a list, an object) is no id."""
+    if isinstance(v, bool) or not isinstance(v, (str, int, float)):
+        return ""
+    return _text(v) if v else ""
+
+
 def _norm_task(t: dict) -> dict:
     """Fill defaults for a task written by hand (keeps unknown keys)."""
     now = time.time()
@@ -188,10 +195,10 @@ def load(copy_: bool = True) -> dict:
             if "workspace" in proj and not isinstance(proj["workspace"], str):   # a list is not a dict key: _sync failed
                 proj.pop("workspace")
         tasks = []
-        taken = {t.get("id") for t in data.get("tasks") or [] if isinstance(t, dict) and t.get("id")}
+        taken = {_id_of(t.get("id")) for t in data.get("tasks") or [] if isinstance(t, dict)} - {""}
         for t in data.get("tasks") or []:
             if isinstance(t, dict):
-                if not t.get("id"):                    # hand-written task: stable id until saved
+                if not _id_of(t.get("id")):            # hand-written task (or a list as id): stable id until saved
                     base = json.dumps(t, sort_keys=True, default=str)
                     n = 0                              # two identical tasks must not share an id
                     while True:
