@@ -56,6 +56,10 @@ The page is a **conversation** with the agent, like a contact in a chat app:
 - **Reply** on a result goes on with **that result's session**: same context, nothing to explain again. A reply in its
   Telegram thread to one of its results does the same.
 - The **schedule, webhook and notification runs stay separate**: each one is a new session of its own.
+- **The sessions list stays short**: once you have read a finished session (opened it, or read the agent's page), it
+  moves to the agent's **Archived** fold when you next open its page or when it runs again. Under the agent row stay
+  the running sessions, the failed ones you have not read and the last 5 unread results. Nothing is lost: every result
+  keeps its link on the agent page, and writing in an archived session brings it back.
 
 On the right (**Profile** on a phone):
 
@@ -116,7 +120,9 @@ the main chat with the agent's name in front. See [Telegram](telegram).
 
 With **Ask before risky actions** on, the agent **asks before risky actions**: when it wants to run a command, edit a
 file or use a tool you did not allow in advance, it waits and the request shows in its session with **Allow** and
-**Deny**. Nobody answers within 30 minutes: the action is denied. Good for an agent started by webhooks or
+**Deny**. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread when
+its Telegram option is on, otherwise in **Alerts**): one tap answers it from your phone, and the message then says how
+it ended, wherever you answered. Nobody answers within 30 minutes: the action is denied. Good for an agent started by webhooks or
 notifications, which should not act alone on outside events. Tools you trust (for example `Read`) can be allowed in
 advance in its settings.
 

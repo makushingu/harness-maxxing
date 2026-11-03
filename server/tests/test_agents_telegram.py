@@ -139,3 +139,46 @@ def test_topic_rename_remaps_the_agent_thread(mx_state):
     real_workspace._remap_telegram(TOPIC, "projects/acme/topics/news")
     assert gateway.agent_threads() == {"projects/acme/topics/news/agents/writer": {"tid": 42, "name": "x"}}
     assert config.load_config()["telegram"]["agent_threads"]
+
+
+async def test_approval_buttons_answer_the_request(api, tg, monkeypatch):
+    from maxxing import approval_mcp, approvals
+    await _link(api, tg)
+    monkeypatch.setattr(agents, "load", lambda path: {"name": "Writer", "telegram": True})
+
+    def request(rid: str) -> dict:
+        d = {"id": rid, "status": "pending", "session": "s1", "agent_path": A, "tool": "Bash",
+             "input": {"command": "git push"}, "at": __import__("time").time()}
+        approvals.folder().mkdir(parents=True, exist_ok=True)
+        approval_mcp.write_atomic(approvals._file(rid), d)
+        return d
+
+    # a request: in the agent's thread, with Allow / Deny
+    gateway.notify_approval(request("a" * 16))
+    await wait_for(lambda: "asks before" in tg.sent()[-1]["text"], what="approval message")
+    p = tg.sent()[-1]
+    tid = gateway.agent_threads()[A]["tid"]
+    assert p["message_thread_id"] == tid and "Bash: git push" in p["text"]
+    row = p["reply_markup"]["inline_keyboard"][0]
+    assert [b["callback_data"] for b in row] == [f"p:{'a' * 16}:allow", f"p:{'a' * 16}:deny"]
+    mid = gateway._approval_msgs["a" * 16][1]
+    # a tap allows it, the message loses its buttons and says so
+    tg.callback(f"p:{'a' * 16}:allow", thread=tid, message_id=mid)
+    await wait_for(lambda: approvals.get("a" * 16)["status"] == "allow", what="allowed")
+    assert approvals.get("a" * 16)["decided_by"] == "telegram"
+    await wait_for(lambda: any(e["message_id"] == mid and e["text"].endswith("✅ Allowed") and not e.get("reply_markup")
+                               for e in tg.sent("editMessageText")), what="edited")
+    # tapped again: already answered, the buttons go
+    tg.callback(f"p:{'a' * 16}:deny", thread=tid, message_id=mid)
+    await wait_for(lambda: tg.sent("editMessageReplyMarkup"), what="stale buttons cleared")
+    assert approvals.get("a" * 16)["status"] == "allow"
+    # answered from the web: the Telegram message follows
+    gateway.notify_approval(request("b" * 16))
+    await wait_for(lambda: "b" * 16 in gateway._approval_msgs, what="second message")
+    await asyncio.to_thread(approvals.decide, "b" * 16, "deny")
+    await wait_for(lambda: tg.sent("editMessageText")[-1]["text"].endswith("❌ Denied"), what="web answer shown")
+    # an agent without its own thread: Alerts
+    monkeypatch.setattr(agents, "load", lambda path: {"name": "Writer", "telegram": False})
+    gateway.notify_approval(request("c" * 16))
+    await wait_for(lambda: "c" * 16 in gateway._approval_msgs, what="third message")
+    assert tg.sent()[-1]["message_thread_id"] == gateway.tg_config()["threads"]["#alerts"]
