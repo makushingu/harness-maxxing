@@ -481,3 +481,30 @@ def test_opening_a_chat_skips_jsonable_encoder(client, sent, monkeypatch):
     r = client.get(f"/api/team/chats/{dm}")
     assert r.status_code == 200 and r.json()["messages"][0]["text"] == "hi"
     assert not any(isinstance(o, dict) and "messages" in o for o in seen)
+
+
+def _count_team_io(monkeypatch) -> tuple[list, list]:
+    reads, writes = [], []
+    real_read, real_write = config.read_json, config.write_json
+    monkeypatch.setattr(config, "read_json", lambda p, *a, **k: (p == team._path() and reads.append(p)) or real_read(p, *a, **k))
+    monkeypatch.setattr(config, "write_json", lambda p, *a, **k: (p == team._path() and writes.append(p)) or real_write(p, *a, **k))
+    return reads, writes
+
+
+def test_signals_from_a_contact_parse_team_json_only_to_write(client, sent, monkeypatch):
+    lea = teampeer.pid(LEA)
+    dm = client.post("/api/team/chats", json={"kind": "dm", "members": [lea]}).json()["id"]
+    m = client.post(f"/api/team/chats/{dm}/messages", json={"text": "hi"}).json()
+    team.messages(dm)                                       # the read-only copy is up to date
+    reads, writes = _count_team_io(monkeypatch)
+    for _ in range(5):
+        team.apply_remote(LEA, True, {"type": "typing", "chat": dm})
+        team.delivered(dm, "m_unknown", lea)
+    assert reads == [] and writes == []
+    team.apply_remote(LEA, True, {"type": "read", "chat": dm, "at": time.time() - 5})
+    team.apply_remote(LEA, True, {"type": "read", "chat": dm, "at": time.time() - 5})   # nothing new: no write
+    team.delivered(dm, m["id"], lea)
+    team.delivered(dm, m["id"], lea)                        # repeated receipt: nothing to change
+    assert len(writes) == 2 and len(reads) <= 4
+    msg = client.get(f"/api/team/chats/{dm}").json()
+    assert "pending" not in msg["messages"][0] and lea in msg["chat"]["seen"]
