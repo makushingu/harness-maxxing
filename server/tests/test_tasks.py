@@ -273,3 +273,15 @@ def test_a_too_deeply_nested_file_is_a_corrupt_file(client, org):
     f.write_text("[" * 100000 + "]" * 100000)
     r = client.get("/api/tasks")
     assert r.status_code == 409 and r.json()["error"] == "corrupt_file"
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "1e999"])
+def test_a_non_finite_number_in_the_file_does_not_break_the_list(client, org, value):
+    f = org.ws / "tasks.json"
+    f.write_text('{"version": 1, "projects": [{"id": "p", "name": "P", "x": %s}],'
+                 ' "tasks": [{"id": "a", "title": "x", "extra": %s}]}' % (value, value))
+    r = client.get("/api/tasks")
+    assert r.status_code == 200
+    assert r.json()["tasks"][0]["extra"] is None and r.json()["projects"][0]["x"] is None
+    assert client.post("/api/tasks", json={"title": "y"}).status_code == 200
+    assert client.get("/api/tasks").status_code == 200

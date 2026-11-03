@@ -97,6 +97,17 @@ def _num(v: Any, default: Any) -> Any:
     return default
 
 
+def _no_constant(_: str) -> None:
+    """NaN / Infinity written by hand in tasks.json: read as null (the JSON response refuses them)."""
+    return None
+
+
+def _finite(v: str) -> float | None:
+    """1e999 is read as infinity: null instead, like NaN."""
+    f = float(v)
+    return f if math.isfinite(f) else None
+
+
 def _norm_task(t: dict) -> dict:
     """Fill defaults for a task written by hand (keeps unknown keys)."""
     now = time.time()
@@ -140,7 +151,7 @@ def load(copy_: bool = True) -> dict:
             data: dict = {"version": 1, "projects": [], "tasks": []}
         else:
             try:
-                data = json.loads(p.read_text() or "{}")
+                data = json.loads(p.read_text() or "{}", parse_constant=_no_constant, parse_float=_finite)
             except RecursionError:                     # nested too deep to read: damaged, not a 500
                 raise CorruptFile("tasks.json is nested too deeply") from None
             except ValueError as e:
