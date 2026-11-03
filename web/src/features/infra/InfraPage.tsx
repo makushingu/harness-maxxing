@@ -482,7 +482,7 @@ export default function InfraPage() {
         <>
           <AddServer />
           <Button variant="outline" size="sm" loading={refresh.isPending || !!v?.refreshing} onClick={() => refresh.mutate()} data-testid="infra-refresh">
-            <RefreshCw /> {v?.refreshing ? t('infra.refreshing') : t('infra.refresh')}
+            <RefreshCw /> <span className="max-[429px]:sr-only">{v?.refreshing ? t('infra.refreshing') : t('infra.refresh')}</span>
           </Button>
         </>
       }
