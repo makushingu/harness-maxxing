@@ -6,6 +6,13 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## 2.0.0-alpha.108 - 2026-11-03
+
+Release of `beta` to `main`: a103 (Team friends, edits, presence) and a104 (session list rewrite) were on `beta` only
+while a105-a107 went straight to `main`. No code change in this commit: version bump and notes only. The public
+CHANGELOG entry summarises a103 + a104 because installs on `stable` jump from a107 and `maxxing update` only prints
+the headings above the installed version.
+
 ## 2.0.0-alpha.107 - 2026-11-03
 
 Audit fixes (Radar, one commit each with its test): idle compaction settings read defensively; crons never save over

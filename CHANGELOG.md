@@ -3,6 +3,31 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.108 - 2026-11-03
+
+This version brings to every install the Team and session list changes of 2.0.0-alpha.103 and 2.0.0-alpha.104
+(details below, under those versions).
+
+New (Team, Settings -> Features -> Team):
+- **Friends**, with who is online, pending requests and **Add a friend**; private chats and groups.
+- **Reply, edit, delete** your messages, "Seen" and "writing…", notifications and **Mute**.
+- **Send to a friend from a session**: right click (a long press on a phone) on a message, **Send to**.
+
+Changed (Sessions):
+- **One header for the session list**, the same on a computer and on a phone: filter, **All / Running / Unread**
+  chips, and every display choice in one **Display** menu (the bottom bar is gone).
+- Project and topic badges under the session title, and a resizable sidebar.
+
+Fixes:
+- Team: a long session title no longer pushes Sent off screen, larger buttons on touch screens, and a member can no
+  longer hide another's message.
+- Session list: filtering many sessions is faster again.
+
+Faster:
+- Team: opening a chat and sending a message do less work.
+
+The other people need this version too to see your edits, "Seen", "writing…" and your presence.
+
 ## 2.0.0-alpha.107 - 2026-11-03
 
 New:
