@@ -108,6 +108,20 @@ def _finite(v: str) -> float | None:
     return f if math.isfinite(f) else None
 
 
+_SURROGATE = re.compile(r"\\u[dD][89a-fA-F]")
+
+
+def _scrub(v: Any) -> Any:
+    """A lone surrogate ("\\ud800" is valid JSON) cannot be written as UTF-8: replaced by U+FFFD."""
+    if isinstance(v, str):
+        return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    if isinstance(v, list):
+        return [_scrub(x) for x in v]
+    if isinstance(v, dict):
+        return {_scrub(k): _scrub(x) for k, x in v.items()}
+    return v
+
+
 def _norm_task(t: dict) -> dict:
     """Fill defaults for a task written by hand (keeps unknown keys)."""
     now = time.time()
@@ -151,7 +165,10 @@ def load(copy_: bool = True) -> dict:
             data: dict = {"version": 1, "projects": [], "tasks": []}
         else:
             try:
-                data = json.loads(p.read_text() or "{}", parse_constant=_no_constant, parse_float=_finite)
+                raw = p.read_text() or "{}"
+                data = json.loads(raw, parse_constant=_no_constant, parse_float=_finite)
+                if _SURROGATE.search(raw):
+                    data = _scrub(data)
             except RecursionError:                     # nested too deep to read: damaged, not a 500
                 raise CorruptFile("tasks.json is nested too deeply") from None
             except ValueError as e:
