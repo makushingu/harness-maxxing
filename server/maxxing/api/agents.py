@@ -92,6 +92,7 @@ def _fields(body: AgentIn) -> dict:
 
 class RunIn(BaseModel):
     text: Optional[str] = None
+    reply_to: Optional[str] = None       # a thread message: its session goes on (no new session)
 
 
 class WebhookIn(BaseModel):
@@ -172,10 +173,29 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
         raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
     text = (body.text or "").strip()
     try:                       # typed by the user: an instruction, not outside data (no markers)
-        return agents.fire(path, trigger="manual", prompt=text, source="manual")
+        return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None)
     except Exception as e:     # SessionError (bad model...)
         raise HTTPException(getattr(e, "status", 500),
                             detail={"error": getattr(e, "code", "run_failed"), "message": str(e)}) from None
+
+
+@router.post("/{project}/{topic}/{name}/seen")
+def agent_seen(project: str, topic: str, name: str):
+    _on()
+    path = _path(project, topic, name)
+    if not agents.exists(path):
+        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
+    agents.mark_seen(path)
+    return {"ok": True}
+
+
+@router.post("/{project}/{topic}/{name}/triggers/{tid}/test")
+def test_trigger(project: str, topic: str, name: str, tid: str):
+    _on()
+    try:
+        return agents.test_trigger(_path(project, topic, name), tid)
+    except agents.AgentError as e:
+        raise _bad(e) from None
 
 
 @router.post("/{project}/{topic}/{name}/webhook")

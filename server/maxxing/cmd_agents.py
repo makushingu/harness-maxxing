@@ -150,14 +150,6 @@ def _levels(v: str) -> list[str]:
     return [x.strip() for x in (v or "").split(",") if x.strip()]
 
 
-def _hooks(path: str) -> list[dict]:
-    """The feed hooks behind this agent's webhook triggers, with their URL (never their secret)."""
-    from . import agents, feedhooks
-    ids = {t.get("hook_id") for t in agents.load(path)["triggers"] if t.get("hook_id")}
-    return [{k: h.get(k) for k in ("id", "name", "kind", "url", "has_secret")}
-            for h in feedhooks.list_hooks() if h.get("id") in ids]
-
-
 def _create(a) -> int:
     import random
     from . import agents
@@ -219,7 +211,7 @@ def _handler(a) -> int:
                                                     "approvals", "telegram", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
-                          "webhooks": _hooks(path)}, indent=2, ensure_ascii=False))
+                          "webhooks": agents.hooks(path)}, indent=2, ensure_ascii=False))
         return 0
     try:
         if a.agents_cmd == "cron":

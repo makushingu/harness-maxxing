@@ -192,3 +192,91 @@ def test_topic_rename_moves_agent_sessions_state_and_crons(client, topic):
     assert client.get(f"/api/sessions/{run['session']['id']}").json()["path"] == new
     assert crons.get_job(job["id"])["topic_path"] == new
     assert any(m["kind"] == "run" for m in agents.thread(new))
+
+
+def _results(client) -> list[dict]:
+    return [m for m in client.get("/api/agents/acme/blog/writer/thread").json()["messages"] if m["kind"] == "result"]
+
+
+def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client, topic):
+    _on(client)
+    _create(client)
+    first = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL plan the post"}).json()
+    sid = first["session"]["id"]
+    wait_idle(client, sid)
+    res = wait_for(lambda: _results(client))
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["thread_unread"] == 1 and a["running_sessions"] == [] and a["waiting"] == 0
+    # reply to the result: the same session goes on (no new session, the task is not framed)
+    r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL now point 2", "reply_to": res[-1]["id"]}).json()
+    assert r["started"] and r["continued"] and r["session"]["id"] == sid
+    wait_idle(client, sid)
+    assert _calls()[-1]["prompt"] == "NOTOOL now point 2"
+    runs = [m for m in client.get("/api/agents/acme/blog/writer/thread").json()["messages"] if m["kind"] == "run"]
+    assert runs[-1]["reply_to"] == res[-1]["id"] and runs[-1]["session"] == sid
+    wait_for(lambda: len(_results(client)) == 2)
+    # a new message (no reply): a new session, with the last results as framed context
+    n = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL something else"}).json()
+    assert n["session"]["id"] != sid and not n.get("continued")
+    wait_idle(client, n["session"]["id"])
+    p = _calls()[-1]["prompt"]
+    assert p.startswith("NOTOOL something else") and "your last results in your thread" in p and "THREAD-" in p
+    # an unknown reply_to: a new session as usual
+    assert client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL x", "reply_to": "nope"}).json()["started"]
+    # seen: nothing unread any more
+    assert client.post("/api/agents/acme/blog/writer/seen").status_code == 200
+    assert client.get("/api/agents/acme/blog/writer").json()["thread_unread"] == 0
+
+
+def test_cron_and_feed_turns_carry_no_thread_context(client, topic, monkeypatch):
+    from maxxing import agents
+    _on(client)
+    _create(client)
+    agents.post(A, "result", "An old result", ok=True)
+    seen = []
+    from maxxing.sessions import service
+    monkeypatch.setattr(service, "create_session", lambda path, message=None, **k: seen.append(message) or {"id": "x"})
+    agents.fire(A, trigger="feed:t_1", text="new order", source="feed (shop)")
+    agents.fire(A, trigger="cron:c_1", prompt="Weekly digest")
+    agents.fire(A, trigger="telegram", prompt="hi")
+    assert "An old result" not in seen[0] and seen[1] == "Weekly digest" and "An old result" in seen[2]
+
+
+def test_webhook_details_trigger_test_and_stats(client, topic):
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"enabled": False})     # the test event must not start a turn
+    hook = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"}).json()["hook"]
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["webhooks"] == [{"id": hook["id"], "name": "blog-writer", "kind": "generic", "url": hook["url"],
+                              "has_secret": False}]
+    tid = a["triggers"][0]["id"]
+    assert a["trigger_stats"][tid] == {"events": 0, "last_event_at": None}
+    r = client.post(f"/api/agents/acme/blog/writer/triggers/{tid}/test")
+    assert r.status_code == 200, r.text and r.json()["event"]["source"] == "blog-writer"
+    st = client.get("/api/agents/acme/blog/writer").json()["trigger_stats"][tid]
+    assert st["events"] == 1 and st["last_event_at"]
+    assert client.post("/api/agents/acme/blog/writer/triggers/t_nope/test").status_code == 404
+
+
+def test_telegram_reply_maps_to_the_result(client, topic):
+    from maxxing import agents
+    _on(client)
+    _create(client)
+    agents.remember_telegram(A, [101, 102], "msg_a")
+    agents.remember_telegram(A, [103], "msg_b")
+    assert agents.telegram_reply_to(A, 102) == "msg_a" and agents.telegram_reply_to(A, "103") == "msg_b"
+    assert agents.telegram_reply_to(A, 999) is None
+
+
+def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeypatch, capsys):
+    from maxxing import cli
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"triggers": [{"kind": "feed", "source": "shop"}]})
+    monkeypatch.setenv("MAXXING_AGENT", A)
+    assert cli.main(["feed", "post", "loop", "--source", "shop"]) == 2
+    assert "would start it again" in capsys.readouterr().err
+    assert cli.main(["feed", "post", "fine", "--source", "blog-report"]) == 0
+    monkeypatch.delenv("MAXXING_AGENT")
+    assert cli.main(["feed", "post", "from a script", "--source", "shop"]) == 0
