@@ -34,7 +34,8 @@ files kept aside for Claude, and files refused. Press **Import**.
   saved as `<name>-imported`.
 - Folder names are turned into valid names (`Coffee Shop` -> `coffee-shop`).
 - **Files containing a key or a token are refused** (reported by type, never by value). Add your
-  keys in Settings -> Keys.
+  keys in Settings -> Keys. Files up to 5 MB are checked, 50 MB of them per archive at most: past that, the
+  remaining ones are skipped and listed (they could not be checked).
 - Unsafe archives are refused: paths leaving the folder, links, more than 20,000 files or 500 MB
   once unzipped (a 600 MB upload at most).
 - Settings are never imported: Claude Code settings (`.claude/settings.json`, `.mcp.json`) and Harness folder

@@ -75,3 +75,24 @@ def test_an_import_never_writes_through_a_link_out_of_the_workspace(client, mx):
     assert r.status_code == 200, r.text
     assert list(outside.iterdir()) == []
     assert (mx["ws"] / "projects/p/topics/t/fine.md").read_text() == "ok\n"
+
+
+def test_the_secret_scan_has_a_budget_and_apply_does_not_scan_again(client, mx, monkeypatch):
+    """A 97 KB zip of 20 x 5 MB of zeros took 80 s to scan at upload, and apply scanned it all again.
+    Now at most SCAN_TOTAL bytes are scanned (the rest is skipped, unchecked) and apply reuses the scan."""
+    from maxxing import backup, importer
+    monkeypatch.setattr(importer, "SCAN_TOTAL", 3000)
+    seen: list[int] = []
+    real = backup.scan_bytes
+    monkeypatch.setattr(backup, "scan_bytes", lambda data: seen.append(len(data)) or real(data))
+    files = {f"projects/p/notes/{n}.md": b"\0" * 1000 for n in range(5)}
+    up = client.post("/api/import/upload", files={"file": ("x.zip", _zip(files), "application/zip")})
+    assert up.status_code == 200, up.text
+    assert sum(seen) <= 3000, seen
+    unchecked = [s for s in up.json()["skipped"] if "not checked" in s["reason"]]
+    assert len(unchecked) == 2, up.json()["skipped"]
+    seen.clear()
+    r = client.post(f"/api/import/{up.json()['id']}/apply")
+    assert r.status_code == 200, r.text
+    assert seen == []
+    assert len(list((mx["ws"] / "projects/p/notes").iterdir())) == 3
