@@ -14,7 +14,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from .. import agents, crons
+from .. import agents
 from ..security import require_auth
 
 log = logging.getLogger("maxxing.api.agents")
@@ -192,20 +192,11 @@ def add_webhook(project: str, topic: str, name: str, body: WebhookIn):
 def add_cron(project: str, topic: str, name: str, body: CronIn):
     """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too)."""
     _on()
-    path = _path(project, topic, name)
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
-    a = agents.load(path)
     try:
-        job = crons.create_job({"name": body.name or f"{a['name'] or name} - routine", "kind": "claude",
-                                "schedule": body.schedule or "0 8 * * *", "topic_path": path,
-                                "prompt": body.prompt or "Run your routine.", "notify": "never",
-                                "enabled": body.enabled is not False})
-    except crons.CronError as e:
-        raise HTTPException(400, detail={"error": e.code, "message": str(e)}) from None
-    from .. import bus
-    bus.invalidate("crons", "agents")
-    return job
+        return agents.add_cron(_path(project, topic, name), body.schedule or "", body.prompt or "", body.name or "",
+                               body.enabled is not False)
+    except agents.AgentError as e:
+        raise _bad(e) from None
 
 
 # ---- background work (server) ----------------------------------------------------------------------

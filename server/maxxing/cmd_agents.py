@@ -5,6 +5,11 @@
   maxxing agents send <agent> <text>         from a turn: hand work to another agent (the text is framed as data;
                                              sender and depth come from MAXXING_AGENT / MAXXING_AGENT_DEPTH)
   maxxing agents on <agent> | off <agent>    switch an agent on or off
+  maxxing agents create <p>/<t>/<a> --role … create an agent (what a session runs when the user asks for one)
+  maxxing agents show <agent>                its agent.json, role, triggers, cron jobs, webhook URLs (JSON)
+  maxxing agents cron <agent> --schedule …   add a schedule (a Claude cron job in the agent folder)
+  maxxing agents webhook <agent> [--kind …]  add a webhook (a feed hook + a feed trigger on it); prints its URL
+  maxxing agents watch <agent> --source …    add a feed trigger on existing events (a source, levels, words)
 
 <agent> = projects/<p>/topics/<t>/agents/<a>, <p>/<t>/<a>, or just <a> when only one agent has that name.
 Works without the server: fire() only writes files and starts the turn's unit; the server's session watcher
@@ -36,6 +41,42 @@ def _configure(p) -> None:
     for name, hlp in (("on", "switch an agent on"), ("off", "switch an agent off")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("agent")
+    s = sub.add_parser("create", help="create an agent in a topic")
+    s.add_argument("where", help="<project>/<topic>/<agent> (agent = 1-48 lowercase letters, digits, dashes)")
+    s.add_argument("--name", default="", help="display name (default: the folder name)")
+    role = s.add_mutually_exclusive_group(required=True)
+    role.add_argument("--role", help="its role: the first paragraph of its CLAUDE.md")
+    role.add_argument("--role-file", help="a file holding the role (several paragraphs)")
+    s.add_argument("--permission", choices=("bypass", "acceptEdits", "default"), help="default: the topic's mode")
+    s.add_argument("--model", default="", help="default: the model of the topic")
+    s.add_argument("--approvals", action="store_true", help="ask before risky actions (answered in the UI)")
+    s.add_argument("--telegram", action="store_true", help="its own Telegram thread (results + messages start it)")
+    s.add_argument("--usd-per-day", type=float, help="daily budget in $ (default 2, 0 = none)")
+    s.add_argument("--runs-per-hour", type=int, help="default 6, 0 = no limit")
+    s.add_argument("--off", action="store_true", help="create it switched off")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("show", help="an agent's settings, role, triggers, cron jobs and webhook URLs (JSON)")
+    s.add_argument("agent")
+    s = sub.add_parser("cron", help="add a schedule to an agent")
+    s.add_argument("agent")
+    s.add_argument("--schedule", required=True, help='5-field cron, server time zone, e.g. "0 8 * * 1"')
+    s.add_argument("--prompt", default="", help='what to do each time (default "Run your routine.")')
+    s.add_argument("--name", default="", help="name of the cron job")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("webhook", help="add a webhook to an agent and print its URL")
+    s.add_argument("agent")
+    s.add_argument("--kind", choices=("generic", "stripe", "shopify", "github"), default="generic")
+    s.add_argument("--prompt", default="", help="what to do with each event (default: handle it per the role)")
+    s.add_argument("--levels", default="", help="only these levels, comma-separated (info,success,warning,error)")
+    s.add_argument("--match", default="", help="only events containing these words")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("watch", help="start an agent on feed events of a source")
+    s.add_argument("agent")
+    s.add_argument("--source", required=True, help="the feed source to watch (see the feed page or `maxxing feed list`)")
+    s.add_argument("--levels", default="", help="only these levels, comma-separated")
+    s.add_argument("--match", default="", help="only events containing these words")
+    s.add_argument("--prompt", default="", help="what to do with the events")
+    s.add_argument("--json", action="store_true")
 
 
 def resolve(ref: str) -> str:
@@ -105,10 +146,60 @@ def _list(a) -> int:
     return 0
 
 
+def _levels(v: str) -> list[str]:
+    return [x.strip() for x in (v or "").split(",") if x.strip()]
+
+
+def _hooks(path: str) -> list[dict]:
+    """The feed hooks behind this agent's webhook triggers, with their URL (never their secret)."""
+    from . import agents, feedhooks
+    ids = {t.get("hook_id") for t in agents.load(path)["triggers"] if t.get("hook_id")}
+    return [{k: h.get(k) for k in ("id", "name", "kind", "url", "has_secret")}
+            for h in feedhooks.list_hooks() if h.get("id") in ids]
+
+
+def _create(a) -> int:
+    import random
+    from . import agents
+    where = a.where.strip("/")
+    parts = list(agents.parse(where) or ()) if where.startswith("projects/") else where.split("/")
+    if len(parts) != 3:
+        print("Give <project>/<topic>/<agent>, e.g. acme/blog/editor", file=sys.stderr)
+        return 2
+    project, topic, name = parts
+    if a.role_file:
+        try:
+            role = open(a.role_file, encoding="utf-8").read().strip()
+        except OSError as e:
+            print(f"Cannot read {a.role_file}: {e}", file=sys.stderr)
+            return 2
+    else:
+        role = (a.role or "").strip()
+    limits = {k: v for k, v in (("usd_per_day", a.usd_per_day), ("runs_per_hour", a.runs_per_hour)) if v is not None}
+    fields = {"name": a.name or name, "description": role, "model": a.model, "permission_mode": a.permission or "",
+              "approvals": a.approvals, "telegram": a.telegram, "enabled": not a.off,
+              "avatar": {k: random.choice(list(v)) for k, v in agents.AVATAR.items()}, "limits": limits}
+    try:
+        r = agents.create(f"projects/{project}/topics/{topic}", name, fields)
+    except agents.AgentError as e:
+        print(e.message, file=sys.stderr)
+        return 2
+    if a.json:
+        print(json.dumps({"agent": r["path"]}))
+    else:
+        print(f"created {r['path']}")
+        if not agents.feature_on():
+            print("(The Agents page is off: Settings -> Features -> Agents shows it. Triggers run anyway.)",
+                  file=sys.stderr)
+    return 0
+
+
 def _handler(a) -> int:
     from . import agents
     if a.agents_cmd == "list":
         return _list(a)
+    if a.agents_cmd == "create":
+        return _create(a)
     try:
         path = resolve(a.agent)
     except ValueError as e:
@@ -118,6 +209,43 @@ def _handler(a) -> int:
         agents.update(path, {"enabled": a.agents_cmd == "on"})
         print(f"{path}: {a.agents_cmd}")
         return 0
+    if a.agents_cmd == "show":
+        d = agents.get(path)
+        try:
+            role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8")
+        except OSError:
+            role = ""
+        print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
+                                                    "approvals", "telegram", "limits", "triggers")},
+                          "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
+                                                       for j in agents.cron_jobs(path)],
+                          "webhooks": _hooks(path)}, indent=2, ensure_ascii=False))
+        return 0
+    try:
+        if a.agents_cmd == "cron":
+            job = agents.add_cron(path, a.schedule, a.prompt, a.name)
+            print(json.dumps({"cron": job.get("id")}) if a.json else f"schedule added: {job.get('id')} ({a.schedule})")
+            return 0
+        if a.agents_cmd == "webhook":
+            hook = agents.add_webhook(path, a.kind, a.prompt, _levels(a.levels), a.match)["hook"]
+            if a.json:
+                print(json.dumps({k: hook.get(k) for k in ("id", "name", "kind", "url")}))
+            else:
+                print(f"webhook added: source {hook['name']}\nURL: {hook.get('url')}")
+                if a.kind != "generic":
+                    print(f"Set its signing secret in the agent page -> Triggers (a {a.kind} webhook refuses "
+                          "deliveries until then).", file=sys.stderr)
+            return 0
+        if a.agents_cmd == "watch":
+            d = agents.load(path)
+            d["triggers"].append({"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
+                                  "match": a.match, "prompt": a.prompt})
+            agents.update(path, {"triggers": d["triggers"]})
+            print(json.dumps({"agent": path}) if a.json else f"{path} now watches the feed source {a.source.strip()}")
+            return 0
+    except agents.AgentError as e:
+        print(e.message, file=sys.stderr)
+        return 2
     text = " ".join(a.text).strip()
     if a.agents_cmd == "run":
         r = agents.fire(path, trigger="manual", source="command line",
@@ -143,5 +271,5 @@ def _handler(a) -> int:
     return _print_fire(path, r, a.json)
 
 
-cli.register("agents", "agents: list, run, send work from one agent to another, switch on / off",
+cli.register("agents", "agents: create, add triggers, list, run, send work from one agent to another, switch on / off",
              _configure, _handler)
