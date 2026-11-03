@@ -307,7 +307,7 @@ export function NewChatDialog({
           </>
         )}
         <DialogFooter className="items-center sm:justify-between">
-          <button type="button" onClick={addFriend} className="flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline max-sm:order-last">
+          <button type="button" onClick={addFriend} className="flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline max-sm:order-last pointer-coarse:min-h-10 pointer-coarse:px-2">
             <UserPlus className="size-3.5" /> {t('team.friends.add')}
           </button>
           {all.length > 0 && (
