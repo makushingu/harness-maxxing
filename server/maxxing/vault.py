@@ -57,6 +57,15 @@ def get(name: str) -> str | None:
     return e["value"] if e else None
 
 
+def _is_text(v: str) -> bool:
+    """Writable to secrets.json (UTF-8): False for a lone surrogate."""
+    try:
+        v.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def put(name: str, value: str | None = None, note: str | None = None, expose: bool | None = None) -> None:
     """Create or update. A new secret needs a value; omitted fields keep their current value."""
     check_name(name)
@@ -67,12 +76,14 @@ def put(name: str, value: str | None = None, note: str | None = None, expose: bo
         if value is not None:
             if not value or len(value) > 16384:
                 raise VaultError("value must be 1 to 16384 characters", "invalid_value")
-            if "\0" in value:                              # every session and job would fail to start
-                raise VaultError("value must not contain a null byte", "invalid_value")
+            if "\0" in value or not _is_text(value):        # a null byte: every session and job would fail to start
+                raise VaultError("value must be text without a null byte", "invalid_value")
             cur["value"] = value
         if not cur.get("value"):
             raise VaultError("a new secret needs a value", "value_required")
         if note is not None:
+            if not _is_text(note):
+                raise VaultError("note must be valid text", "invalid_note")
             cur["note"] = note.strip()[:200]
         if expose is not None:
             cur["expose"] = bool(expose)
