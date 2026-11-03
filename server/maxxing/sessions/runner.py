@@ -271,10 +271,12 @@ class Runner:
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
         from maxxing import agents                      # an agent folder: its model and tool lists
-        agent = agents.run_settings(meta.get("path") or "")
+        agent = agents.run_settings(meta.get("path") or "", (meta.get("env") or {}).get("MAXXING_AGENT_OUTSIDE") == "1")
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         if agent.get("approvals") and not plan:
+            if agent.get("approvals_forced") and meta.get("fresh", True):
+                self.note("Started by an outside event: asks before risky actions (agent setting: trust outside events)")
             mode = "default"
             approval = approval_args(self.sid, str(meta.get("path") or ""), agent.get("approval_timeout_s"))
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
@@ -284,7 +286,7 @@ class Runner:
         base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
         base += pcbridge.mcp_config_args() + mcp_plan.args + approval
-        env = spawn.claude_env(meta.get("env") or {}, mode)
+        env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
         prompt, json_in = stdin_payload(text, item, Path(cfg.get("workspace") or "/").resolve())

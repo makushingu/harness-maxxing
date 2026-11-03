@@ -132,6 +132,24 @@ def _clean_avatar(a: Any) -> dict:
     return {k: (a.get(k) if a.get(k) in opts else DEFAULT_AVATAR[k]) for k, opts in AVATAR.items()}
 
 
+KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")   # = vault.NAME_RE
+MAX_KEYS = 50
+
+
+def _clean_keys(v: Any, strict: bool = False) -> list[str]:
+    """Names of the Keys vault entries the agent's turns get as environment variables (none by default)."""
+    out: list[str] = []
+    for k in v if isinstance(v, list) else []:
+        k = str(k).strip()
+        if not KEY_RE.match(k):
+            if strict:
+                raise AgentError(400, "bad_key", f"Not a key name: {k!r}")
+            continue
+        if k not in out:
+            out.append(k)
+    return out[:MAX_KEYS]
+
+
 def _clean_tools(v: Any) -> list[str]:
     out = []
     for t in v if isinstance(v, list) else []:
@@ -184,6 +202,7 @@ def clean(data: Any, strict: bool = False) -> dict:
             "enabled": d.get("enabled") is not False, "model": model, "permission_mode": mode,
             "allowed_tools": _clean_tools(d.get("allowed_tools")), "disallowed_tools": _clean_tools(d.get("disallowed_tools")),
             "telegram": bool(d.get("telegram")), "approvals": bool(d.get("approvals")),
+            "trust_outside": bool(d.get("trust_outside")), "keys": _clean_keys(d.get("keys"), strict),
             "limits": limits, "triggers": triggers,
             "created": d.get("created") if isinstance(d.get("created"), (int, float)) else time.time()}
 
@@ -221,8 +240,12 @@ def names(project: str, topic: str) -> list[str]:
 
 
 # ---- run settings read by the session runner -----------------------------------------------------
-def run_settings(path: str) -> dict:
-    """{model, permission_mode, args, approvals, approval_timeout_s} of a turn in an agent folder ({} elsewhere). args = extra claude flags."""
+def run_settings(path: str, outside: bool = False) -> dict:
+    """{model, permission_mode, args, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
+    args = extra claude flags. outside: the session was started by text from outside (a webhook, a feed event, another
+    agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
+    risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
+    its turns see."""
     if not exists(path):
         return {}
     a = load(path)
@@ -231,8 +254,10 @@ def run_settings(path: str) -> dict:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
     if a["disallowed_tools"]:
         args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
+    forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
-            "approvals": a["approvals"], "approval_timeout_s": a["limits"]["approval_timeout_s"]}
+            "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
+            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"]}
 
 
 # ---- public shape ----------------------------------------------------------------------------------
@@ -246,7 +271,7 @@ def public(path: str, stats: dict | None = None) -> dict:
     return {"path": path, "project": p[0], "topic": p[1], "name": p[2], "display_name": a["name"] or p[2],
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
-                "approvals", "limits", "triggers", "created")},
+                "approvals", "trust_outside", "keys", "limits", "triggers", "created")},
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": st.get("unread", 0)}
 
@@ -677,6 +702,7 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     when = time.strftime("%Y-%m-%d %H:%M")
     title = f"{a['name'] or parse(path)[2]} - {when}"
     env = {"MAXXING_AGENT": path, "MAXXING_AGENT_TRIGGER": trigger, "MAXXING_AGENT_DEPTH": str(depth),
+           **({"MAXXING_AGENT_OUTSIDE": "1"} if text else {}),
            **(cron_env or {})}
     s = service.create_session(path, message=message, title=title, model=a["model"] or None,
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,

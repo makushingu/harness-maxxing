@@ -9,7 +9,7 @@
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, Pencil, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Pencil, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -527,6 +527,20 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           {lim.runs_per_hour > 0 && <span className="text-muted-foreground tabular-nums">{t('agents.runsHour', { count: a.runs_last_hour || 0, max: lim.runs_per_hour })}</span>}
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <ShieldCheck className="size-3.5 shrink-0" /> {t(`agents.panel.mode.${mode}` as 'agents.panel.mode.topic')}
+          </span>
+          {a.triggers.some((x) => x.kind === 'feed') &&
+            (a.trust_outside && !a.approvals ? (
+              <span className="flex items-center gap-1.5 text-warning" data-testid="agent-outside-risk">
+                <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.panel.outsideTrusted')}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <ShieldCheck className="size-3.5 shrink-0" /> {t('agents.panel.outsideAsks')}
+              </span>
+            ))}
+          <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+            <KeyRound className="size-3.5 shrink-0" />
+            <span className="truncate">{a.keys.length ? t('agents.panel.keys', { keys: a.keys.join(', ') }) : t('agents.panel.noKeys')}</span>
           </span>
         </div>
       </PanelSection>

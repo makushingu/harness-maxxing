@@ -117,6 +117,10 @@ export type Agent = {
   disallowed_tools: string[]
   telegram: boolean
   approvals: boolean
+  /** runs started by outside text (webhooks, feed, other agents) act per its mode instead of always asking first */
+  trust_outside: boolean
+  /** the Keys vault entries its turns see (none by default) */
+  keys: string[]
   limits: AgentLimits
   triggers: AgentTrigger[]
   created: number
@@ -151,6 +155,8 @@ export type AgentInput = {
   disallowed_tools?: string[]
   telegram?: boolean
   approvals?: boolean
+  trust_outside?: boolean
+  keys?: string[]
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
 }
