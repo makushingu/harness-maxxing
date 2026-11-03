@@ -347,12 +347,20 @@ WORDS["en"].update({
     "agent_started": "⏳ {name} is on it.",
     "agent_skipped": "{name} did not start: {reason}.",
     "agent_command": "Commands work in session threads. Here every message is a task for {name}.",
+    "approval_ask": "🔐 <b>{name}</b> asks before doing this:\n<code>{what}</code>",
+    "approval_btn_allow": "✅ Allow", "approval_btn_deny": "❌ Deny",
+    "approval_allow": "✅ Allowed", "approval_deny": "❌ Denied",
+    "approval_timeout": "⏱ No answer in time, denied", "approval_expired": "⏹ Expired (the turn stopped)",
 })
 WORDS["fr"].update({
     "agent_intro": "🤖 <b>{name}</b> publie ses résultats ici. Écrivez ici pour lui confier une tâche.",
     "agent_started": "⏳ {name} s'en occupe.",
     "agent_skipped": "{name} n'a pas démarré : {reason}.",
     "agent_command": "Les commandes marchent dans les fils de session. Ici chaque message est une tâche pour {name}.",
+    "approval_ask": "🔐 <b>{name}</b> demande votre accord avant :\n<code>{what}</code>",
+    "approval_btn_allow": "✅ Autoriser", "approval_btn_deny": "❌ Refuser",
+    "approval_allow": "✅ Autorisé", "approval_deny": "❌ Refusé",
+    "approval_timeout": "⏱ Pas de réponse à temps, refusé", "approval_expired": "⏹ Expiré (le tour s'est arrêté)",
 })
 AGENT_REASONS = {
     "en": {"disabled": "it is switched off", "budget": "its daily budget is reached",
@@ -2433,6 +2441,9 @@ class Gateway:
             if kind == "f":
                 answer = await self._ask_about_event(msg, val)
                 return
+            if kind == "p":                                # an agent's tool call: Allow / Deny
+                answer = await self._on_approval(msg, val)
+                return
             if kind == "a":                                # two-step sign-in: Allow / Deny
                 from .. import twofactor
                 cid, _, yes = val.rpartition(":")
@@ -2542,6 +2553,20 @@ class Gateway:
             return _w("cb_topic_gone")
         self.spawn(self._start_new(key, target), "new-session")
         return "OK"
+
+    async def _on_approval(self, msg: dict, val: str) -> str:
+        from .. import approvals
+        rid, _, decision = val.rpartition(":")
+        try:
+            await asyncio.to_thread(approvals.decide, rid, decision, "", "telegram")
+            return _w(f"approval_{decision}")              # approval_done() edits the message
+        except approvals.ApprovalError as e:               # answered elsewhere, or before a restart: drop the buttons
+            try:
+                await self.client.call("editMessageReplyMarkup", chat_id=msg["chat"]["id"],
+                                       message_id=msg["message_id"], reply_markup={"inline_keyboard": []})
+            except Exception:  # noqa: BLE001
+                pass
+            return e.message[:190]
 
     async def _edit(self, msg: dict, html: str) -> None:
         try:
@@ -3419,6 +3444,63 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str 
         except Exception:  # noqa: BLE001
             log.exception("agent Telegram mapping")
     return ok
+
+
+# ---- approvals (agent.json `approvals`): Allow / Deny buttons ------------------------------------------------
+# A request waiting for the user goes to the agent's thread (option `telegram`), else to Alerts; a tap answers it
+# like the web UI does (approvals.decide, by "telegram"). Once answered anywhere (web, Telegram, timeout, turn
+# stopped) the message loses its buttons and says how it ended. Kept in memory: after a restart an old button is
+# answered "already ..." and cleared when tapped.
+_approval_msgs: dict[str, tuple[int, int, str]] = {}     # request id -> (chat, message id, html)
+
+
+def _approval_send_sync(d: dict) -> None:
+    from .. import agents, approvals
+    tok, chat = token(), tg_config().get("chat_id")
+    if not tok or not chat or not d.get("id"):
+        return
+    path = d.get("agent_path") or ""
+    target = None
+    try:
+        if path and agents.exists(path) and agents.load(path)["telegram"]:
+            target = (chat, _agent_thread_sync(tok, chat, path))
+    except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
+        log.exception("agent thread for an approval")
+    name = fmt.escape(_agent_display(path)) if path else "Claude"
+    html = _w("approval_ask", name=name, what=fmt.escape(approvals.short(str(d.get("tool") or ""), d.get("input"))))
+    markup = keyboard([[(_w("approval_btn_allow"), f"p:{d['id']}:allow"), (_w("approval_btn_deny"), f"p:{d['id']}:deny")]])
+    sent: list = []
+    _send_sync(ALERTS, [html], False, markup, target=target, sent=sent)
+    if sent:
+        _approval_msgs[d["id"]] = ((target or _target(ALERTS))[0] or chat, sent[-1], html)
+
+
+def _approval_done_sync(rid: str, status: str) -> None:
+    info = _approval_msgs.pop(rid, None)
+    tok = token()
+    if not info or not tok:
+        return
+    chat, mid, html = info
+    note = _w(f"approval_{status}") if status in ("allow", "deny", "timeout", "expired") else status
+    try:
+        call_sync(tok, "editMessageText", chat_id=chat, message_id=mid, text=f"{html}\n{note}", parse_mode="HTML")
+    except Exception as e:  # noqa: BLE001 - too old to edit, deleted: nothing to clean
+        log.info("approval message %s not edited: %s", rid, e)
+
+
+def notify_approval(d: dict) -> None:
+    """A new request of an agent's turn, with Allow / Deny buttons. Never blocks, never raises."""
+    try:
+        if token() and tg_config().get("chat_id"):
+            threading.Thread(target=_approval_send_sync, args=(dict(d),), daemon=True).start()
+    except Exception:
+        log.exception("telegram approval failed")
+
+
+def approval_done(rid: str, status: str) -> None:
+    """The request was answered (anywhere): its Telegram message drops the buttons. Never blocks, never raises."""
+    if rid in _approval_msgs:
+        threading.Thread(target=_approval_done_sync, args=(rid, status), daemon=True).start()
 
 
 def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None = None) -> None:

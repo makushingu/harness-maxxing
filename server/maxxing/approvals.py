@@ -155,12 +155,21 @@ def _post(d: dict, kind: str, text: str, **extra: Any) -> None:
         log.exception("agent thread message for an approval failed")
 
 
+def _telegram(fn: str, *args: Any) -> None:
+    try:
+        from .telegram import gateway
+        getattr(gateway, fn)(*args)
+    except Exception:  # noqa: BLE001 - Telegram is a nicety
+        log.exception("telegram %s failed", fn)
+
+
 def _note(d: dict) -> None:
     st = str(d.get("status") or "")
     text = f"{NOTES.get(st, st)}: {short(str(d.get('tool') or ''), d.get('input'))}"
     if st == "deny" and d.get("message"):
         text += f" ({d['message']})"
     _post(d, "note", text, status=st)
+    _telegram("approval_done", str(d.get("id") or ""), st)
 
 
 def _signature() -> Any:
@@ -203,6 +212,7 @@ def scan(force: bool = False) -> bool:
         changed = True
         if st == "pending":
             _post(d, "approval", short(str(d.get("tool") or ""), d.get("input")), status="pending")
+            _telegram("notify_approval", d)
         elif prev is not None:                  # decided elsewhere (timeout, expired): our own decide() noted it
             _note(d)
     live = {d["id"] for d in final}
