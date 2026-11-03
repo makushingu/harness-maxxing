@@ -174,8 +174,10 @@ def test_a_waiter_on_a_pruned_lock_file_locks_the_new_one(mx):
     time.sleep(0.2)
     old_ino = os.fstat(fd).st_ino
     path.unlink()
-    os.close(fd)
+    # unlock without closing: the open fd keeps the old inode alive, so ext4 cannot hand its number to the new file
+    fcntl.flock(fd, fcntl.LOCK_UN)
     t.join(5)
+    os.close(fd)
     assert got and store.read(sid)["title"] == "edited"
     assert path.exists()                                               # the edit used a fresh lock file
     assert got[0] == os.stat(path).st_ino != old_ino
