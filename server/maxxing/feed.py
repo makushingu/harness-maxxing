@@ -262,9 +262,9 @@ def _db_stamp(path: Path) -> tuple:
 
 
 def _aggregate(c: sqlite3.Connection, cutoff: float) -> list[dict]:
-    srcs = c.execute("SELECT source, COUNT(*) total, SUM(read=0) unread FROM events WHERE at>? "
+    srcs = c.execute("SELECT source, COUNT(*) total, SUM(read=0) unread, MAX(at) last FROM events WHERE at>? "
                      "GROUP BY source ORDER BY MAX(at) DESC", (cutoff,)).fetchall()
-    return [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0} for r in srcs]
+    return [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0, "last": r["last"]} for r in srcs]
 
 
 def source_counts() -> list[dict]:

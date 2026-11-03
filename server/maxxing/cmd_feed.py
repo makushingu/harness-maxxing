@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 
@@ -29,11 +30,32 @@ def _configure(p) -> None:
     sub.add_parser("read-all", help="mark every event as read")
 
 
+def _self_trigger(source: str) -> str:
+    """From an agent's turn: refuse a source its own feed triggers watch (it would start itself again)."""
+    agent = os.environ.get("MAXXING_AGENT") or ""
+    if not agent:
+        return ""
+    try:
+        from . import agents
+        if not agents.exists(agent):
+            return ""
+        if any(t["kind"] == "feed" and t.get("source") == source for t in agents.load(agent)["triggers"]):
+            return (f"Refused: this agent watches the feed source {source!r}, posting there would start it again. "
+                    "Use another --source.")
+    except Exception:  # noqa: BLE001
+        return ""
+    return ""
+
+
 def _run(a) -> int:
     from . import feed
     from .feed import FeedError
     try:
         if a.feed_cmd == "post":
+            loop = _self_trigger(feed.clean_source(a.source))
+            if loop:
+                print(loop, file=sys.stderr)
+                return 2
             ev = feed.post(a.title, a.body, a.level, a.source, a.url, dedupe=a.dedupe, group=a.group,
                            notify=not a.quiet)
             if a.json:
