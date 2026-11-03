@@ -96,3 +96,53 @@ def test_the_secret_scan_has_a_budget_and_apply_does_not_scan_again(client, mx, 
     assert r.status_code == 200, r.text
     assert seen == []
     assert len(list((mx["ws"] / "projects/p/notes").iterdir())) == 3
+
+
+def _upload(client, data: bytes):
+    return client.post("/api/import/upload", files={"file": ("x.zip", data, "application/zip")})
+
+
+def test_an_encrypted_or_damaged_zip_is_a_400_and_is_not_kept(client, mx):
+    """zf.read() raised RuntimeError (encrypted entry) or BadZipFile (bad CRC): a 500, and the upload stayed."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("memory.md", "hi there, kept content\n")
+    plain = buf.getvalue()
+    enc = bytearray(plain)
+    enc[6] |= 1                                                   # local header: "encrypted" flag
+    central = plain.index(b"PK\x01\x02")
+    enc[central + 8] |= 1                                         # central directory: same flag
+    damaged = plain.replace(b"kept content", b"kxpt content")      # stored data no longer matches its CRC
+    for data in (bytes(enc), damaged):
+        r = _upload(client, data)
+        assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
+    from maxxing import importer
+    assert not any(importer.uploads_dir().iterdir())
+
+
+def test_two_applies_of_the_same_upload_at_once_never_crash(client, mx):
+    """A double click on Apply: one thread created the topics, the other raised WorkspaceError (a 500)."""
+    import threading
+    from maxxing import importer
+    files = {f"projects/race/topics/t{i}/memory.md": f"- {i}\n" for i in range(150)}
+    up = _upload(client, _zip(files))
+    assert up.status_code == 200, up.text
+    path = importer.upload_path(up.json()["id"])
+    out: list = []
+    go = threading.Barrier(2)
+
+    def run():
+        go.wait()
+        try:
+            out.append(("ok", len(importer.apply(path)["topics"])))
+        except importer.ImportFailed as e:
+            out.append((e.status, e.code))
+        except Exception as e:  # noqa: BLE001
+            out.append((type(e).__name__, str(e)))
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(o[0] for o in out if o[0] != "ok") in ([409], [404]), out
+    assert ("ok", 150) in out
