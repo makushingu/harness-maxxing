@@ -101,6 +101,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing packs list\|add <id>` | starter packs: ready-made projects (only missing files are added) |
 | `maxxing infra status\|list\|site\|db\|bucket\|server` | where every site / database / bucket / domain / server is; create them on this server the standard way |
 | `maxxing mcp list\|add\|remove` | MCP servers of Claude Code (every session or one topic), as in Settings -> MCP |
+| `maxxing agents list\|run\|send\|on\|off` | agents (Settings -> Features -> Agents): start one, hand work from one agent to another (`send`), switch on / off |
 | `maxxing video new DIR` / `video status` | Remotion video project linked to the shared install / tools check |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |
 | `maxxing setup-link` / `maxxing password` | first sign-in link / change the UI password |
@@ -135,6 +136,7 @@ would erase it". In this order:
 | `maxxing-extension` | build a dashboard widget (Card or HTML/game) or a page extension |
 | `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, "where is X / is it up" |
 | `maxxing-mcp` | add, connect or remove an MCP server (a service's tools for Claude), for every session or one topic |
+| `maxxing-agents` | create or configure an agent (a lasting role in a topic, started by a schedule, a webhook, the feed, Telegram or another agent, with a budget) |
 | `maxxing-customize` | change the product itself and keep it through updates; adapt customizations when an update conflicts |
 | `video-motion-design` | a video, an animation, a short / reel, a trailer (Remotion: `maxxing video new DIR`) |
 | `pdf-document` | a PDF: quote, invoice, report, guide (HTML -> `maxxing pdf IN.html OUT.pdf`) |

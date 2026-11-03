@@ -5,7 +5,7 @@
 // on a phone: filter field, All / Running / Unread chips, one view menu holding every display choice.
 import * as React from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import {
   Archive,
   ArrowDownAZ,
@@ -59,9 +59,12 @@ import {
   useSessions,
   useReorderProjects,
   useReorderTopics,
+  useSettings,
   useWorkspace,
+  agentRoute,
 } from '@/lib/queries'
-import type { PermissionMode, Project, Session, Topic } from '@/lib/types'
+import type { Agent, PermissionMode, Project, Session, Topic } from '@/lib/types'
+import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { OptionCard } from '@/features/common'
 import {
   Button,
@@ -95,7 +98,7 @@ import {
 import { SlugPreview } from '@/features/workspace/CreateProjectTopic'
 import { forgetLog } from './log'
 import { FLAT_SORTS, RECENT_COUNTS, saveDraft, saveQuotes, TREE_MODES, useSessionsUI, type FlatSort, type ListBy, type TreeMode } from './store'
-import { absTopicDir, modelLabel, topicLabel } from './util'
+import { absTopicDir, modelLabel, topicLabel, topicPathOf } from './util'
 
 const SESSIONS_SHOWN = 8
 /** While filtering, topics open by themselves: still cap their rows so a broad match does not mount thousands at once. */
@@ -107,6 +110,23 @@ const SHOW_OPEN_MAX = 6
 /** True during the first ~0.9 s after the tree data arrives: nodes mounted then rise in; nodes mounted later
  *  (a folder being opened) only unfold, so nothing animates twice. */
 const TreeIntro = React.createContext(false)
+/** Agents by path (Settings -> Features -> agents_page on): their sessions show the agent's face. */
+const AgentsCtx = React.createContext<Map<string, Agent>>(new Map())
+/** An agent row of a topic: the agent, its live sessions (filtered like the topic's) and its archived ones. */
+type AgentEntry = { a: Agent; sessions: Session[]; archived: Session[] }
+type TopicEntry = { tp: Topic; sessions: Session[]; agents: AgentEntry[] }
+/** Counters of a topic row, its agents included (their sessions are under it, in their rows or mixed in). */
+function topicCounts(tp: Topic) {
+  let running = tp.running
+  let unread = tp.unread
+  let count = tp.session_count
+  for (const a of tp.agents || []) {
+    running += a.running
+    unread += a.unread
+    count += a.session_count
+  }
+  return { running, unread, count }
+}
 /** Set once the tree intro has played in this tab (see SessionTree). */
 let introPlayed = false
 
@@ -131,6 +151,9 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   const reorderProjects = useReorderProjects()
   const reorderTopics = useReorderTopics()
   const live = useSessions(undefined, false)
+  const { data: settings } = useSettings()
+  // Agents on: each agent is a row of its topic with its sessions under it; off: its sessions are the topic's.
+  const agentsOn = !!settings?.agents_page
   const [q, setQ] = React.useState('')
   const [dialog, setDialog] = React.useState<DialogState>(null)
 
@@ -139,8 +162,8 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   // search looks into them; the folds show their count from the tree (topic.archived_count) meanwhile.
   const archOpen = useSessionsUI((s) => Object.entries(s.expanded).some(([k, v]) => v && k.startsWith('a:')))
   const archived = useSessions(undefined, true, archOpen || !!ql)
-  const byPath = React.useMemo(() => group(live.data), [live.data])
-  const archivedByPath = React.useMemo(() => group(archived.data), [archived.data])
+  const byPath = React.useMemo(() => group(live.data, agentsOn), [live.data, agentsOn])
+  const archivedByPath = React.useMemo(() => group(archived.data, agentsOn), [archived.data, agentsOn])
   // A badge was clicked (running / finished): only those sessions, unfolded. Typing a search leaves it.
   const show = useSessionsUI((s) => (ql ? null : s.show))
   const setShow = useSessionsUI((s) => s.setShow)
@@ -168,6 +191,14 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   }, [loaded, listBy])
 
   const projects = ws.data?.projects || []
+  // The session rows read it from a context: a new Map only when a face or a name changed (not on every refetch of
+  // the tree, which would re-render every memoized row).
+  const agentSig = agentsOn ? projects.flatMap((p) => p.topics.flatMap((tp) => (tp.agents || []).map((a) => `${a.path}:${a.display_name}:${Object.values(a.avatar).join(',')}`))).join('|') : ''
+  const agentMap = React.useMemo(() => {
+    const m = new Map<string, Agent>()
+    if (agentsOn) for (const p of projects) for (const tp of p.topics) for (const a of tp.agents || []) m.set(a.path, a)
+    return m
+  }, [agentSig]) // eslint-disable-line react-hooks/exhaustive-deps
   const mode = useSessionsUI((s) => s.treeMode)
   const expanded = useSessionsUI((s) => s.expanded)
   const setExpanded = useSessionsUI((s) => s.setExpanded)
@@ -178,7 +209,10 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     const nodes: Record<string, boolean> = {}
     for (const p of projects) {
       nodes[`p:${p.name}`] = open
-      for (const tp of p.topics || []) nodes[`t:${tp.path}`] = open
+      for (const tp of p.topics || []) {
+        nodes[`t:${tp.path}`] = open
+        for (const a of tp.agents || []) nodes[`g:${a.path}`] = open
+      }
     }
     setExpanded(nodes)
   }
@@ -193,36 +227,57 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     (s: Session) => {
       const m = /^projects\/([^/]+)/.exec(s.path)
       const e = m ? emojiOf.get(m[1]) : ''
-      const label = topicLabel(s.path, rootLabel, ' › ')
+      const label = topicLabel(s.path, rootLabel, ' › ', ws.data)
       return e ? `${e} ${label}` : label
     },
-    [emojiOf, rootLabel],
+    [emojiOf, rootLabel, ws.data],
   )
 
   const matches = (s: string) => !ql || s.toLowerCase().includes(ql)
   const filtered = React.useMemo(() => {
+    const agentsOf = (tp: Topic) => (agentsOn ? tp.agents || [] : [])
+    const out: { p: Project; topics: TopicEntry[] }[] = []
     if (show && !ql) {
-      const out: { p: Project; topics: { tp: Topic; sessions: Session[] }[] }[] = []
       for (const p of projects) {
-        const topics = p.topics.map((tp) => ({ tp, sessions: (byPath.get(tp.path) || []).filter(shows) })).filter((x) => x.sessions.length)
+        const topics = p.topics
+          .map((tp) => ({
+            tp,
+            sessions: (byPath.get(tp.path) || []).filter(shows),
+            agents: agentsOf(tp).map((a) => ({ a, sessions: (byPath.get(a.path) || []).filter(shows), archived: [] })).filter((x) => x.sessions.length),
+          }))
+          .filter((x) => x.sessions.length || x.agents.length)
         if (topics.length) out.push({ p, topics })
       }
       return out
     }
-    if (!ql) return projects.map((p) => ({ p, topics: p.topics.map((tp) => ({ tp, sessions: byPath.get(tp.path) || [] })) }))
-    const out: { p: Project; topics: { tp: Topic; sessions: Session[] }[] }[] = []
+    if (!ql)
+      return projects.map((p) => ({
+        p,
+        topics: p.topics.map((tp) => ({
+          tp,
+          sessions: byPath.get(tp.path) || [],
+          agents: agentsOf(tp).map((a) => ({ a, sessions: byPath.get(a.path) || [], archived: archivedByPath.get(a.path) || [] })),
+        })),
+      }))
+    const hits = (path: string) => (byPath.get(path) || []).concat(archivedByPath.get(path) || []).filter((s) => matches(s.title) || matches(s.last_text))
     for (const p of projects) {
       const pm = matches(p.name) || matches(p.description)
-      const topics = []
+      const topics: TopicEntry[] = []
       for (const tp of p.topics) {
         const tm = pm || matches(tp.name) || matches(tp.description)
-        const ss = (byPath.get(tp.path) || []).concat(archivedByPath.get(tp.path) || []).filter((s) => matches(s.title) || matches(s.last_text))
-        if (tm || ss.length) topics.push({ tp, sessions: tm && !ss.length ? byPath.get(tp.path) || [] : ss })
+        const ss = hits(tp.path)
+        const agents: AgentEntry[] = []
+        for (const a of agentsOf(tp)) {
+          const am = tm || matches(a.display_name) || matches(a.name) || matches(a.description)
+          const as = hits(a.path)
+          if (am || as.length) agents.push({ a, sessions: am && !as.length ? byPath.get(a.path) || [] : as, archived: [] })
+        }
+        if (tm || ss.length || agents.length) topics.push({ tp, sessions: tm && !ss.length ? byPath.get(tp.path) || [] : ss, agents })
       }
       if (pm || topics.length) out.push({ p, topics })
     }
     return out
-  }, [projects, byPath, archivedByPath, ql, show, shows]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projects, byPath, archivedByPath, ql, show, shows, agentsOn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const header = (
     <ListHeader
@@ -268,6 +323,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
         </div>
       )}
       <TreeIntro.Provider value={intro}>
+      <AgentsCtx.Provider value={agentMap}>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-4" role="tree">
         {ws.isPending || live.isPending ? (
           <TreeSkeleton />
@@ -302,6 +358,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
                 projects={projects}
                 byPath={byPath}
                 archivedByPath={archivedByPath}
+                agentsOn={agentsOn}
                 rootSessions={rootSessions}
                 openIds={openIds}
                 focusedId={focusedId}
@@ -326,8 +383,9 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
                 stagger={Math.min(pi * 2, 10)}
                 onMove={narrowed ? undefined : (dragged, before) => reorderProjects.mutate(moveName(projects.map((x) => x.name), dragged, p.name, before))}
               >
-                {topics.map(({ tp, sessions }, ti) => (
+                {topics.map(({ tp, sessions, agents }, ti) => (
                   <TopicNode
+                    agents={agents}
                     key={tp.path}
                     stagger={Math.min(pi * 2 + ti + 1, 10)}
                     topic={tp}
@@ -364,6 +422,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
           </>
         )}
       </div>
+      </AgentsCtx.Provider>
       </TreeIntro.Provider>
       <TreeDialogs state={dialog} onClose={() => setDialog(null)} onTopicCreated={(tp) => onNewSession(tp.path)} />
     </nav>
@@ -462,12 +521,14 @@ function ListHeader({
   )
 }
 
-function group(list: Session[] | undefined) {
+/** Sessions by folder. `agents` off: the sessions of an agent folder go with its topic's. */
+function group(list: Session[] | undefined, agents = false) {
   const m = new Map<string, Session[]>()
   for (const s of list || []) {
-    const a = m.get(s.path)
+    const k = agents ? s.path : topicPathOf(s.path)
+    const a = m.get(k)
     if (a) a.push(s)
-    else m.set(s.path, [s])
+    else m.set(k, [s])
   }
   return m
 }
@@ -655,8 +716,8 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
   const open = forceOpen ? !folded : stored !== false
   const [intro] = React.useState(React.useContext(TreeIntro))
   const [menu, setMenu] = React.useState(false)
-  const running = project.topics.reduce((n, tp) => n + tp.running, 0)
-  const unread = project.topics.reduce((n, tp) => n + tp.unread, 0)
+  const running = project.topics.reduce((n, tp) => n + topicCounts(tp).running, 0)
+  const unread = project.topics.reduce((n, tp) => n + topicCounts(tp).unread, 0)
   const dnd = useReorderRow(DND_PROJECT, project.name, onMove)
   const press = useLongPress(() => setMenu(true))
   return (
@@ -730,6 +791,7 @@ function Badges({ running, unread, count = 0 }: { running: number; unread: numbe
 function TopicNode({
   topic,
   sessions,
+  agents,
   archived,
   forceOpen,
   active,
@@ -746,6 +808,8 @@ function TopicNode({
   onMove?: (dragged: string, before: boolean) => void
   topic: Topic
   sessions: Session[]
+  /** Agent rows (Settings -> Features -> agents_page on), above the topic's own sessions. */
+  agents: AgentEntry[]
   archived: Session[]
   forceOpen: boolean
   active: boolean
@@ -763,8 +827,9 @@ function TopicNode({
   const nArchived = forceOpen ? archived.length : (topic.archived_count ?? archived.length)
   const toggle = useFoldToggle(forceOpen)
   const folded = useSessionsUI((s) => forceOpen && !!s.narrowFolded[id])
-  const open = forceOpen ? !folded : (stored ?? (active || sessions.some((s) => openIds.has(s.id))))
+  const open = forceOpen ? !folded : (stored ?? (active || sessions.some((s) => openIds.has(s.id)) || agents.some((g) => g.sessions.some((s) => openIds.has(s.id)))))
   const [intro] = React.useState(React.useContext(TreeIntro))
+  const counts = topicCounts(topic)
   const [all, setAll] = React.useState(false)
   const [menu, setMenu] = React.useState(false)
   const row = React.useRef<HTMLDivElement>(null)
@@ -795,7 +860,7 @@ function TopicNode({
           <span className="truncate">
             <Sensitive length={8}>{topic.name}</Sensitive>
           </span>
-          {(!open || topic.running > 0 || topic.unread > 0) && <Badges running={topic.running} unread={topic.unread} count={open ? 0 : topic.session_count} />}
+          {(!open || counts.running > 0 || counts.unread > 0) && <Badges running={counts.running} unread={counts.unread} count={open ? 0 : counts.count} />}
         </button>
         <Tooltip content={t('sessions.newIn')}>
           <Button
@@ -815,7 +880,10 @@ function TopicNode({
       </div>
       {open && (
         <div role="group" className={cn(!intro && 'mx-unfold')}>
-          {sessions.length === 0 && nArchived === 0 && (
+          {agents.map((g) => (
+            <AgentNode key={g.a.path} entry={g} forceOpen={forceOpen} openIds={openIds} focusedId={focusedId} onOpenSession={onOpenSession} onNewSession={onNewSession} depth={2} />
+          ))}
+          {sessions.length === 0 && nArchived === 0 && agents.length === 0 && (
             <button type="button" onClick={() => onNewSession(topic.path)} className="ml-9 flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-10">
               <Plus className="size-3.5" /> {t('sessions.newSession')}
             </button>
@@ -838,6 +906,112 @@ function TopicNode({
                 <Archive className="size-3.5" /> {t('sessions.tree.archived', { count: nArchived })}
               </button>
               {archOpen && <SessionRows sessions={archived} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} depth={3} still={forceOpen} />}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** An agent of a topic (Settings -> Features -> agents_page): its face and name (a link to its page), its counters,
+ *  and its sessions under it when unfolded (capped like a topic's, archived ones in their own fold). */
+function AgentNode({
+  entry,
+  forceOpen,
+  openIds,
+  focusedId,
+  onOpenSession,
+  onNewSession,
+  depth,
+}: {
+  entry: AgentEntry
+  forceOpen: boolean
+  openIds: Set<string>
+  focusedId: string | null
+  onOpenSession: (s: Session) => void
+  onNewSession: (path: string) => void
+  /** Indent level of the row (its sessions go one further). */
+  depth: number
+}) {
+  const t = useT()
+  const { a, sessions, archived } = entry
+  const id = `g:${a.path}`
+  const stored = useSessionsUI((s) => s.expanded[id])
+  const archOpen = useSessionsUI((s) => !!s.expanded[`a:${a.path}`])
+  const toggle = useFoldToggle(forceOpen)
+  const folded = useSessionsUI((s) => forceOpen && !!s.narrowFolded[id])
+  const open = forceOpen ? !folded : (stored ?? sessions.some((s) => openIds.has(s.id)))
+  const nArchived = forceOpen ? archived.length : (a.archived_count ?? archived.length)
+  const [all, setAll] = React.useState(false)
+  const cap = forceOpen ? SESSIONS_SHOWN_FILTERED : SESSIONS_SHOWN
+  const shown = all ? sessions : sessions.slice(0, cap)
+  const drop = useSessionDrop(a.path)
+  const pad = depth * 12 - 4
+  return (
+    <div role="treeitem" aria-expanded={open} data-testid="tree-agent">
+      <div
+        {...drop.props}
+        className={cn('group/row relative flex h-8 items-center gap-0.5 rounded-md pr-1 hover:bg-accent/60 max-md:h-12', !a.enabled && 'opacity-70', drop.over && dropCls)}
+        style={{ paddingLeft: pad }}
+      >
+        <button
+          type="button"
+          onClick={() => toggle(id, !open)}
+          aria-label={open ? t('sessions.agent.fold') : t('sessions.agent.unfold')}
+          className="flex size-6 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:size-9"
+        >
+          <Chevron open={open} />
+        </button>
+        <Link
+          to={agentRoute(a)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-md text-left text-[13px] hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:gap-2 max-md:text-[15px]"
+          title={t('sessions.agent.open')}
+        >
+          <AgentAvatarIcon avatar={a.avatar} size={16} />
+          <span className="truncate">
+            <Sensitive length={8}>{a.display_name}</Sensitive>
+          </span>
+          {(!open || a.running > 0 || a.unread > 0) && <Badges running={a.running} unread={a.unread} count={open ? 0 : a.session_count} />}
+        </Link>
+        <Tooltip content={t('sessions.agent.newSession')}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('sessions.agent.newSession')}
+            onClick={() => onNewSession(a.path)}
+            className={cn('size-7 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 max-md:size-10 max-md:opacity-100 pointer-coarse:opacity-100', HOVER_ACTION)}
+          >
+            <Plus />
+          </Button>
+        </Tooltip>
+      </div>
+      {open && (
+        <div role="group" className="mx-unfold">
+          {sessions.length === 0 && nArchived === 0 && (
+            <p className="flex h-7 items-center text-xs text-muted-foreground max-md:h-10" style={{ paddingLeft: (depth + 1) * 12 + 8 }}>
+              {t('sessions.agent.noSession')}
+            </p>
+          )}
+          <SessionRows sessions={shown} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} depth={depth + 1} still={forceOpen} />
+          {!all && sessions.length > cap && (
+            <button type="button" onClick={() => setAll(true)} className="h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground" style={{ marginLeft: (depth + 1) * 12 }}>
+              {t('sessions.tree.showMore', { count: sessions.length - cap })}
+            </button>
+          )}
+          {nArchived > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => toggle(`a:${a.path}`, !archOpen)}
+                aria-expanded={archOpen}
+                className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground max-md:h-10"
+                style={{ marginLeft: (depth + 1) * 12 - 8 }}
+              >
+                <Chevron open={archOpen} />
+                <Archive className="size-3.5" /> {t('sessions.tree.archived', { count: nArchived })}
+              </button>
+              {archOpen && <SessionRows sessions={archived} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} depth={depth + 2} still={forceOpen} />}
             </>
           )}
         </div>
@@ -943,6 +1117,7 @@ const SessionRow = React.memo(function SessionRow({
   const drop = useSessionDrop(s.path)
   const press = useLongPress(() => setMenu(true))
   const oneLine = compact && !touchLayout
+  const agent = React.useContext(AgentsCtx).get(s.path)
   return (
     <div
       role="treeitem"
@@ -967,13 +1142,17 @@ const SessionRow = React.memo(function SessionRow({
       {open && <span aria-hidden className="absolute top-2 bottom-2 left-1 w-0.5 rounded-full bg-primary/70" />}
       <button type="button" onClick={() => onOpen(s)} className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-session-row={s.id}>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
-          {s.state === 'running' ? (
+          {s.approvals ? (
+            <ShieldAlert className="size-3.5 text-warning" aria-label={t('approval.title')} />
+          ) : s.state === 'running' ? (
             <StatusDot tone="running" pulse label={t('sessions.state.running')} />
           ) : s.state === 'error' ? (
             <StatusDot tone="error" label={t('sessions.state.error')} />
           ) : s.unread ? (
             <StatusDot tone="unread" label={t('sessions.unreadOne')} />
-          ) : s.source === 'cron' ? (
+          ) : agent ? (
+            <AgentAvatarIcon avatar={agent.avatar} size={16} className="-m-px" title={agent.display_name} />
+          ) : s.source === 'cron' || s.source === 'agent' ? (
             <Clock className="size-3 text-muted-foreground" aria-label={t('sessions.source.cron')} />
           ) : (
             <StatusDot tone="idle" className="size-1.5" />
@@ -1210,6 +1389,7 @@ function DrillView({
   projects,
   byPath,
   archivedByPath,
+  agentsOn,
   rootSessions,
   openIds,
   focusedId,
@@ -1221,6 +1401,7 @@ function DrillView({
   projects: Project[]
   byPath: Map<string, Session[]>
   archivedByPath: Map<string, Session[]>
+  agentsOn: boolean
   rootSessions: Session[]
   openIds: Set<string>
   focusedId: string | null
@@ -1250,8 +1431,8 @@ function DrillView({
             name={p.name}
             bold
             count={p.topics.length}
-            running={p.topics.reduce((n, tp) => n + tp.running, 0)}
-            unread={p.topics.reduce((n, tp) => n + tp.unread, 0)}
+            running={p.topics.reduce((n, tp) => n + topicCounts(tp).running, 0)}
+            unread={p.topics.reduce((n, tp) => n + topicCounts(tp).unread, 0)}
             onOpen={() => setDrill({ project: p.name, topic: null })}
             menu={<ProjectMenuItems project={p} onDialog={onDialog} />}
           />
@@ -1277,9 +1458,9 @@ function DrillView({
             stagger={Math.min(i, 10)}
             icon={<Hash className="size-3.5 text-muted-foreground" />}
             name={tp.name}
-            count={tp.session_count}
-            running={tp.running}
-            unread={tp.unread}
+            count={topicCounts(tp).count}
+            running={topicCounts(tp).running}
+            unread={topicCounts(tp).unread}
             onOpen={() => setDrill({ project: project!.name, topic: tp.path })}
             onNew={() => onNewSession(tp.path)}
             menu={<TopicMenuItems topic={tp} rootDir={rootDirOf(tp.path)} onNewSession={onNewSession} onDialog={onDialog} />}
@@ -1296,6 +1477,7 @@ function DrillView({
   const sessions = byPath.get(topic!.path) || []
   const archived = archivedByPath.get(topic!.path) || []
   const nArchived = topic!.archived_count ?? archived.length
+  const agents = agentsOn ? topic!.agents || [] : []
   return (
     <div key={`t:${topic!.path}`} className="animate-in" data-testid="drill-sessions">
       <DrillHeader
@@ -1306,7 +1488,19 @@ function DrillView({
         onNew={() => onNewSession(topic!.path)}
         menu={<TopicMenuItems topic={topic!} rootDir={rootDirOf(topic!.path)} onNewSession={onNewSession} onDialog={onDialog} />}
       />
-      {sessions.length === 0 && nArchived === 0 && (
+      {agents.map((a) => (
+        <AgentNode
+          key={a.path}
+          entry={{ a, sessions: byPath.get(a.path) || [], archived: archivedByPath.get(a.path) || [] }}
+          forceOpen={false}
+          openIds={openIds}
+          focusedId={focusedId}
+          onOpenSession={onOpenSession}
+          onNewSession={onNewSession}
+          depth={1}
+        />
+      ))}
+      {sessions.length === 0 && nArchived === 0 && agents.length === 0 && (
         <button type="button" onClick={() => onNewSession(topic!.path)} className="ml-2 flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-10">
           <Plus className="size-3.5" /> {t('sessions.newSession')}
         </button>

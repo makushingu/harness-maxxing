@@ -44,7 +44,7 @@ from typing import Callable, Iterator
 if __package__ in (None, ""):                       # path invocation
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from maxxing import claude_auth, config, mcp_auto   # noqa: E402  (stdlib-only modules)
+from maxxing import approval_mcp, claude_auth, config, mcp_auto   # noqa: E402  (stdlib-only modules)
 from maxxing.sessions import clip, resume, spawn, store      # noqa: E402
 
 RESUME_LOST = re.compile(r"no conversation found|session .{0,80}not found|no such session|"
@@ -273,13 +273,17 @@ class Runner:
         from maxxing import agents                      # an agent folder: its model and tool lists
         agent = agents.run_settings(meta.get("path") or "")
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
+        approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
+        if agent.get("approvals") and not plan:
+            mode = "default"
+            approval = approval_args(self.sid, str(meta.get("path") or ""), agent.get("approval_timeout_s"))
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg, mcp_plan.hint)
         base += ["--model", model] if model else []
         base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
-        base += pcbridge.mcp_config_args() + mcp_plan.args
+        base += pcbridge.mcp_config_args() + mcp_plan.args + approval
         env = spawn.claude_env(meta.get("env") or {}, mode)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
@@ -303,6 +307,8 @@ class Runner:
         else:
             for line in a.held:                        # not a lost thread: keep what it printed
                 self._write_line(line)
+        if approval:                                   # nobody can use an answer any more
+            approval_mcp.expire(approvals_dir(), session=self.sid)
         if a.saw_init:
             store.update(self.sid, fresh=False)
         if a.stopped and self.interrupted and not a.timed_out:
@@ -599,8 +605,8 @@ class Runner:
                               "source": item.get("source") or "web", "refs": list(item.get("refs") or [])}
             if not m.get("title"):
                 m["title"] = " ".join((item.get("text") or "").split())[:60] or "Untitled"
-            if m.get("cron") and err is None and not m.get("queue"):
-                m["archived"] = True                   # successful cron sessions fold away
+            if m.get("cron") and m.get("source") != "agent" and err is None and not m.get("queue"):
+                m["archived"] = True                   # successful cron sessions fold away (an agent's stay listed)
         return err
 
     # ---- compact / handoff ---------------------------------------------------------------
@@ -770,6 +776,31 @@ def inline_image(path: str, root: Path) -> dict | None:
         return None
     return {"type": "image", "source": {"type": "base64", "media_type": info[0],
                                          "data": base64.b64encode(data).decode("ascii")}}
+
+
+def approvals_dir() -> Path:
+    return config.STATE / "approvals"
+
+
+def approval_args(sid: str, path: str, timeout_s: object) -> list[str]:
+    """`--mcp-config <file> --permission-prompt-tool mcp__maxxing-approval__approve`: Claude Code asks our approval
+    MCP server (approval_mcp.py) before every tool call that is not pre-allowed. The file is
+    <state>/approvals/config/<sid>.json (0600); it composes with the other --mcp-config files and
+    --strict-mcp-config (both are read)."""
+    folder = approvals_dir() / "config"
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        timeout = max(30, int(float(timeout_s)))       # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        timeout = int(approval_mcp.DEFAULT_TIMEOUT_S)
+    spec = {"type": "stdio", "command": sys.executable, "args": ["-I", str(Path(approval_mcp.__file__).resolve())],
+            "env": {"MAXXING_APPROVAL_DIR": str(approvals_dir()), "MAXXING_SESSION": sid,
+                    "MAXXING_AGENT_PATH": path, "MAXXING_APPROVAL_TIMEOUT": str(timeout)}}
+    f = folder / f"{sid}.json"
+    data = {"mcpServers": {approval_mcp.SERVER_NAME: spec}}
+    if config.read_json(f, None) != data:
+        config.write_json(f, data, mode=0o600)
+    return ["--mcp-config", str(f), "--permission-prompt-tool", approval_mcp.PROMPT_TOOL]
 
 
 def effective_mode(meta: dict, cfg: dict) -> str:
