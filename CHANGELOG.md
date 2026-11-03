@@ -3,6 +3,36 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.107 - 2026-11-03
+
+New:
+- Sessions: a session can take half the screen, and up to three sessions can be stacked in a column. With four
+  sessions or more, the layout picker offers half-screen and grid layouts.
+- Sessions: a column can be widened up to 2000 px and its text widens with it. A short stacked session gets a slim
+  one-line header.
+- Sessions: nothing you type is lost on a reload. The text, the attached files and a message cut while being sent
+  come back in the box. An automatic update waits until a send or an upload has finished.
+
+Changed:
+- Sessions: two stacked sessions each keep their message box. Only a stack of three folds them.
+- Sessions: the strip stays where you scroll it, with no snapping to a column.
+
+Fixes:
+- Crons: an unreadable jobs.json is never overwritten and the schedule is kept.
+- Tasks: a damaged tasks.json (odd numbers, odd characters, ids used twice, too deep) is repaired or reported
+  instead of breaking the page.
+- Keys: odd key names or values are refused cleanly, and long names wrap.
+- Import: an encrypted or damaged zip gives a clear error, two imports at once never crash, and big archives are
+  scanned once.
+- Infra: two servers added at once with the same name both stay, and a bad port in infra.json no longer breaks the
+  page.
+- Dashboard: one broken card no longer breaks the others.
+- Idle compaction: a malformed setting no longer makes the turn fail.
+- Larger touch targets in Tasks and Import, and the Infra title stays visible on phones.
+
+Faster:
+- Sessions: fewer re-renders with many sessions open.
+
 ## 2.0.0-alpha.106 - 2026-10-31
 
 Fixes:
