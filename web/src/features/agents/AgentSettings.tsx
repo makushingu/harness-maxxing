@@ -1,11 +1,12 @@
-// An agent's settings: on/off, model, permission mode, tools, approvals, guards, face, delete.
+// An agent's settings: on/off, safety (approvals, outside events, keys), model, permission mode, tools, guards,
+// face, delete.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { Trash2 } from 'lucide-react'
 import { useT } from '@/i18n'
-import { useDeleteAgent, usePatchAgent } from '@/lib/queries'
+import { useDeleteAgent, usePatchAgent, useSecrets } from '@/lib/queries'
 import type { AgentAvatar, AgentDetail, AgentLimits, PermissionMode } from '@/lib/types'
-import { Button, confirm, FormField, Input, Switch, Textarea, toast } from '@/components/ui'
+import { Button, Checkbox, confirm, FormField, Input, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 import { AvatarEditor } from './AvatarEditor'
@@ -65,10 +66,19 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
           <SettingRow label={t('agents.settings.enabled')} description={t('agents.settings.enabledDesc')} htmlFor="ag-enabled">
             <Switch id="ag-enabled" checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} />
           </SettingRow>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title={t('agents.settings.safety')} description={t('agents.settings.safetyDesc')}>
+        <div className="divide-y">
           <SettingRow label={t('agents.settings.approvals')} description={t('agents.settings.approvalsDesc')} htmlFor="ag-approvals">
             <Switch id="ag-approvals" checked={a.approvals} onCheckedChange={(v) => patch.mutate({ path: a.path, approvals: v })} data-testid="agent-approvals" />
           </SettingRow>
-          {a.approvals && a.permission_mode === 'bypass' && <p className="py-3 text-xs text-warning">{t('agents.settings.approvalsBypass')}</p>}
+          <SettingRow label={t('agents.settings.trustOutside')} description={t('agents.settings.trustOutsideDesc')} htmlFor="ag-trust">
+            <Switch id="ag-trust" checked={a.trust_outside} onCheckedChange={(v) => patch.mutate({ path: a.path, trust_outside: v })} data-testid="agent-trust-outside" />
+          </SettingRow>
+          {a.trust_outside && !a.approvals && <p className="py-3 text-xs text-warning">{t('agents.settings.trustOutsideWarn')}</p>}
+          <AgentKeys agent={a} />
         </div>
       </SettingsCard>
 
@@ -140,6 +150,35 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
           </Button>
         </SettingRow>
       </SettingsCard>
+    </div>
+  )
+}
+
+/** The Keys vault entries the agent's turns get as environment variables: none until checked here. */
+function AgentKeys({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  const patch = usePatchAgent()
+  const { data: secrets } = useSecrets()
+  const names = Array.from(new Set([...(secrets || []).map((x) => x.name), ...a.keys])).sort()
+  const toggle = (n: string, on: boolean) => patch.mutate({ path: a.path, keys: on ? [...a.keys, n] : a.keys.filter((k) => k !== n) })
+  return (
+    <div className="grid gap-2 py-3" data-testid="agent-keys">
+      <div className="grid gap-0.5">
+        <span className="text-sm font-medium">{t('agents.settings.keys')}</span>
+        <span className="text-xs text-muted-foreground">{t('agents.settings.keysDesc')}</span>
+      </div>
+      {names.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{t('agents.settings.keysNone')}</p>
+      ) : (
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {names.map((n) => (
+            <label key={n} className="flex min-w-0 items-center gap-2 text-[13px]">
+              <Checkbox checked={a.keys.includes(n)} onCheckedChange={(v) => toggle(n, v === true)} />
+              <span className="truncate font-mono">{n}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

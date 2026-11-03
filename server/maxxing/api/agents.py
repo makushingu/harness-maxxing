@@ -12,7 +12,7 @@ import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import agents
 from ..security import require_auth
@@ -74,6 +74,8 @@ class AgentIn(BaseModel):
     disallowed_tools: Optional[list[str]] = None
     telegram: Optional[bool] = None
     approvals: Optional[bool] = None
+    trust_outside: Optional[bool] = None
+    keys: Optional[list[str]] = Field(default=None, max_length=50)
     limits: Optional[Limits] = None
     triggers: Optional[list[Trigger]] = None
 
