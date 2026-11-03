@@ -199,6 +199,11 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents run AGENT [TASK] [--data] [--json]` | start it now (a new session); `--data`: the text is outside data, not a task; exit 1 when a limit refused it |
 | `maxxing agents send AGENT TEXT` | from an agent's session: hand work to another agent (the text is given as data; 3 hops at most) |
 | `maxxing agents on AGENT` / `off AGENT` | switch it on / off |
+| `maxxing agents create P/T/A --role TEXT\|--role-file F [--name N] [--permission M] [--approvals] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--off]` | create an agent in a topic |
+| `maxxing agents show AGENT` | its settings, role, triggers, schedule jobs and webhook URLs (JSON, no secret) |
+| `maxxing agents cron AGENT --schedule CRON [--prompt T]` | add a schedule (a Claude job in the agent folder) |
+| `maxxing agents webhook AGENT [--kind generic\|stripe\|shopify\|github] [--prompt T] [--levels L] [--match W]` | add a webhook and print its URL |
+| `maxxing agents watch AGENT --source S [--levels L] [--match W] [--prompt T]` | start it on new feed events of a source |
 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
 [Agents](30-agents.md).

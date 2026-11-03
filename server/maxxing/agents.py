@@ -673,6 +673,22 @@ def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list
 
 
 # ---- cron triggers ----------------------------------------------------------------------------------
+def add_cron(path: str, schedule: str = "", prompt: str = "", name: str = "", enabled: bool = True) -> dict:
+    """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too) -> the job."""
+    from . import bus, crons
+    if not exists(path):
+        raise AgentError(404, "not_found", f"Agent {path!r} not found")
+    a = load(path)
+    try:
+        job = crons.create_job({"name": name or f"{a['name'] or parse(path)[2]} - routine", "kind": "claude",
+                                "schedule": schedule or "0 8 * * *", "topic_path": path,
+                                "prompt": prompt or "Run your routine.", "notify": "never", "enabled": enabled})
+    except crons.CronError as e:
+        raise AgentError(400, e.code, str(e)) from None
+    bus.invalidate("crons", "agents")
+    return job
+
+
 def cron_jobs(path: str) -> list[dict]:
     try:
         from . import crons

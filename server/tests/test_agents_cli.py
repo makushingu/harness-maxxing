@@ -68,3 +68,38 @@ def test_run_and_send_without_the_server_loop(client, topic, capsys, monkeypatch
     assert cli.main(["agents", "send", "editor", "more"]) == 1
     assert "hops" in capsys.readouterr().err
     assert cli.main(["agents", "send", "writer", "me"]) == 2
+
+
+def test_create_and_add_triggers_from_a_session(client, topic, capsys, tmp_path):
+    """What a session runs when the user asks it for an agent: create, then schedule / webhook / watch."""
+    role = tmp_path / "role.md"
+    role.write_text("Sort the readers' comments.\n\nNever answer them yourself.")
+    assert cli.main(["agents", "create", "acme/blog/curator", "--name", "Curator", "--role-file", str(role),
+                     "--permission", "acceptEdits", "--usd-per-day", "1", "--json"]) == 0
+    path = json.loads(capsys.readouterr().out)["agent"]
+    assert path == "projects/acme/topics/blog/agents/curator"
+    a = agents.load(path)
+    assert a["name"] == "Curator" and a["permission_mode"] == "acceptEdits" and a["limits"]["usd_per_day"] == 1
+    assert a["limits"]["runs_per_hour"] == 6 and set(a["avatar"]) == set(agents.AVATAR)
+    assert "Never answer them yourself." in (agents.folder(path) / "CLAUDE.md").read_text()
+    assert cli.main(["agents", "create", "acme/blog/curator", "--role", "again"]) == 2
+    assert "already exists" in capsys.readouterr().err
+    assert cli.main(["agents", "create", "acme/blog", "--role", "x"]) == 2
+    assert cli.main(["agents", "create", "acme/nope/x", "--role", "x"]) == 2
+    capsys.readouterr()
+
+    assert cli.main(["agents", "cron", "curator", "--schedule", "0 9 * * 1", "--prompt", "Weekly digest"]) == 0
+    assert cli.main(["agents", "cron", "curator", "--schedule", "every monday"]) == 2
+    assert cli.main(["agents", "webhook", "curator", "--levels", "warning,error", "--json"]) == 0
+    hook = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert hook["name"] == "blog-curator" and "/api/hooks/" in hook["url"]
+    assert cli.main(["agents", "watch", "curator", "--source", "shop", "--match", "refund"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["agents", "show", "curator"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert [c["schedule"] for c in d["crons"]] == ["0 9 * * 1"] and d["crons"][0]["prompt"] == "Weekly digest"
+    assert [(t["source"], t["levels"], t["match"]) for t in d["triggers"]] == [
+        ("blog-curator", ["warning", "error"], ""), ("shop", [], "refund")]
+    assert d["webhooks"][0]["url"] == hook["url"] and "secret" not in d["webhooks"][0]
+    assert "Sort the readers' comments." in d["claude_md"]
