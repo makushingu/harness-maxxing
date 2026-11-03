@@ -332,7 +332,25 @@ def _check_dest(dest: Path, root: Path) -> None:
         raise PermissionError(f"{dest} leads outside the workspace")
 
 
+_APPLY_LOCK = threading.Lock()
+
+
 def apply(path: Path) -> dict[str, Any]:
+    """One import applied at a time (a double click on Apply raced on the projects and topics it creates)."""
+    from . import workspace
+    if not _APPLY_LOCK.acquire(blocking=False):
+        raise ImportFailed(409, "busy", "An import is already being applied")
+    try:
+        if not path.is_file():
+            raise ImportFailed(404, "not_found", "This upload expired - send the zip again")
+        return _apply(path)
+    except workspace.WorkspaceError as e:
+        raise ImportFailed(409, "conflict", str(e)) from None
+    finally:
+        _APPLY_LOCK.release()
+
+
+def _apply(path: Path) -> dict[str, Any]:
     from . import workspace
     workspace.ensure_root()
     root = workspace.root()
