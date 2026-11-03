@@ -270,11 +270,14 @@ class Runner:
             mode = "plan"
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
-        model = (meta.get("model") or cfg.get("default_model") or "").strip()
+        from maxxing import agents                      # an agent folder: its model and tool lists
+        agent = agents.run_settings(meta.get("path") or "")
+        model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg, mcp_plan.hint)
         base += ["--model", model] if model else []
+        base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
         base += pcbridge.mcp_config_args() + mcp_plan.args
         env = spawn.claude_env(meta.get("env") or {}, mode)

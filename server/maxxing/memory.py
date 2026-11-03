@@ -20,7 +20,7 @@ def max_lines() -> int:
 
 
 def files() -> list[dict]:
-    """Every memory.md (global, projects, topics) -> [{path (workspace-relative), level, lines, bytes, over}]."""
+    """Every memory.md (global, projects, topics, agents) -> [{path (workspace-relative), level, lines, bytes, over}]."""
     ws = config.workspace()
     limit = max_lines()
     found: list[tuple[str, Path]] = [("global", ws / "memory.md")]
@@ -28,6 +28,8 @@ def files() -> list[dict]:
         found.append(("project", p))
     for p in sorted((ws / "projects").glob("*/topics/*/memory.md")):
         found.append(("topic", p))
+    for p in sorted((ws / "projects").glob("*/topics/*/agents/*/memory.md")):
+        found.append(("agent", p))
     out = []
     for level, p in found:
         try:

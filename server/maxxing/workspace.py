@@ -8,7 +8,8 @@ Each CLAUDE.md starts with a heading, the level's description, then `@memory.md`
 imports the memory file). A session started in a topic folder therefore loads the workspace,
 project and topic context (Claude Code reads every CLAUDE.md of the cwd and its parents).
 
-*Topic path* = path relative to the workspace: "" (root), "projects/<p>", "projects/<p>/topics/<t>".
+*Topic path* = path relative to the workspace: "" (root), "projects/<p>", "projects/<p>/topics/<t>", or an agent
+folder "projects/<p>/topics/<t>/agents/<a>" (agents.py: a session can run there too).
 """
 from __future__ import annotations
 
@@ -31,7 +32,8 @@ from . import bus, config
 
 log = logging.getLogger("maxxing.workspace")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")
-_PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})(?:/topics/([a-z0-9][a-z0-9-]{0,47}))?\Z")
+_PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})"
+                      r"(?:/topics/([a-z0-9][a-z0-9-]{0,47})(?:/agents/([a-z0-9][a-z0-9-]{0,47}))?)?\Z")
 _callbacks: list[Callable[..., Any]] = []
 
 
@@ -227,7 +229,17 @@ def _topic_obj(project: str, name: str, stats: dict, threads: dict) -> dict:
             "description": read_description(folder),
             "permission_mode": mode if mode in PERMISSION_MODES else "",
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0), "running": st.get("running", 0),
-            "unread": st.get("unread", 0), "telegram_thread": thread if isinstance(thread, int) else None}
+            "unread": st.get("unread", 0), "telegram_thread": thread if isinstance(thread, int) else None,
+            "agents": _agents_of(project, name, stats)}
+
+
+def _agents_of(project: str, topic: str, stats: dict) -> list[dict]:
+    from . import agents
+    try:
+        return agents.list_in_topic(project, topic, stats)
+    except Exception:
+        log.exception("agents of %s/%s", project, topic)
+        return []
 
 
 def _dirs(folder: Path) -> list[str]:
@@ -325,7 +337,12 @@ def _meta(project: str) -> dict:
 
 
 def topic_permission_mode(path: str) -> str:
-    """The topic's own permission mode for Claude turns ("" = the global setting). `path` = projects/<p>/topics/<t>."""
+    """The topic's own permission mode for Claude turns ("" = the global setting). `path` = projects/<p>/topics/<t>.
+    An agent folder: the agent's mode (agent.json), else its topic's."""
+    from . import agents
+    if agents.is_agent_path(path):
+        own = (agents.run_settings(path) or {}).get("permission_mode") or ""
+        return own if own in PERMISSION_MODES else topic_permission_mode(agents.topic_of(path))
     try:
         mode = _folder_meta(topic_dir(path)).get("permission_mode")
     except (ValueError, OSError):
@@ -363,8 +380,9 @@ def set_project_emoji(project: str, emoji: str) -> None:
 def _project_obj(name: str, stats: dict, threads: dict) -> dict:
     topics = [_topic_obj(name, t, stats, threads) for t in topic_names(name)]
     own = stats.get(topic_path(name), {}).get("sessions", 0)
+    count = own + sum(t["session_count"] + sum(a["session_count"] for a in t["agents"]) for t in topics)
     return {"name": name, "path": topic_path(name), "description": read_description(project_dir(name)),
-            "emoji": project_emoji(name), "topics": topics, "session_count": own + sum(t["session_count"] for t in topics)}
+            "emoji": project_emoji(name), "topics": topics, "session_count": count}
 
 
 def tree() -> dict:
@@ -513,6 +531,11 @@ def _rename(old: str, new: str) -> None:
     from .sessions import service
     service.remap_paths(old, new, sessions)
     _remap_telegram(old, new)
+    from . import agents
+    try:
+        agents.remap(old, new)
+    except OSError:
+        log.exception("agent state files not moved (%s -> %s)", old, new)
 
 
 def _remap_telegram(old: str, new: str) -> None:
@@ -607,5 +630,5 @@ def describe(path: str) -> dict:
     m = _PATH_RE.match(p) if p else None
     folder = topic_dir(p)
     return {"path": p, "project": m.group(1) if m else None,
-            "name": (m.group(2) or m.group(1)) if m else "", "description": read_description(folder)}
+            "name": (m.group(3) or m.group(2) or m.group(1)) if m else "", "description": read_description(folder)}
 
