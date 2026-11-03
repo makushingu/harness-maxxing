@@ -87,6 +87,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "chat_id": None, "chat_title": "", "user_ids": [], "bot_username": "",
         "threads": {},                     # "#crons" / "#alerts" -> thread id
         "session_threads": {},             # session id -> {tid, name}: one thread per open session
+        "agent_threads": {},               # agent path -> {tid, name}: the thread of an agent with the telegram option
         "thread_days": 30,                 # open sessions idle longer than this lose their thread
         "sessions": {},                    # topic path -> session id (main chat when threads are off)
         "notify_crons": True, "login_alerts": True, "reply_mode": "progress",

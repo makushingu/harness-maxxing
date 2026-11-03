@@ -208,6 +208,10 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     for info, p in entries:
         parts = p.parts
         data_kind = "file"
+        if parts[0] == "projects" and len(parts) >= 6 and parts[2] == "topics" and parts[4] == "agents":
+            # an agent runs by itself (triggers, permissions): never planted by an import, created in Harness
+            skipped.append({"file": info.filename, "reason": "agent folder (not imported: create agents in Harness)"})
+            continue
         if parts[0] == "projects" and len(parts) >= 3:
             pr = proj(parts[1])
             if parts[2] == "topics" and len(parts) >= 5:

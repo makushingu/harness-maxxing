@@ -300,9 +300,13 @@ function JobSheet({
     if (!job.topic_path) return t('crons.workspaceRoot')
     for (const p of ws?.projects || []) {
       if (p.path === job.topic_path) return p.name
-      for (const tp of p.topics) if (tp.path === job.topic_path) return `${p.name} / ${tp.name}`
+      for (const tp of p.topics) {
+        if (tp.path === job.topic_path) return `${p.name} / ${tp.name}`
+        // an agent's cron (Settings -> Features -> agents_page): one of its triggers
+        for (const a of tp.agents || []) if (a.path === job.topic_path) return `${p.name} / ${tp.name} · ${a.display_name}`
+      }
     }
-    return job.topic_path
+    return job.topic_path.replace(/^projects\//, '').replace('/topics/', ' / ').replace('/agents/', ' · ')
   }, [job, ws, t])
   return (
     <Sheet open={!!id} onOpenChange={(o) => !o && onClose()}>

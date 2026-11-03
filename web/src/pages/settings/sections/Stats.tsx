@@ -94,7 +94,7 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 
 function rowsOf(data: TokenStats, group: Group, root: string) {
   if (group === 'projects') return data.projects.map((p) => ({ key: p.name || '~', label: p.name || root, href: null as string | null, c: p as Omit<TokenCounts, 'sessions'> & { sessions?: number } }))
-  if (group === 'topics') return data.topics.map((tp) => ({ key: tp.path || '~', label: tp.path ? tp.path.replace(/^projects\//, '').replace('/topics/', ' / ') : root, href: `/sessions?path=${encodeURIComponent(tp.path)}`, c: tp }))
+  if (group === 'topics') return data.topics.map((tp) => ({ key: tp.path || '~', label: tp.path ? tp.path.replace(/^projects\//, '').replace('/topics/', ' / ').replace('/agents/', ' · ') : root, href: `/sessions?path=${encodeURIComponent(tp.path)}`, c: tp }))
   return data.sessions.map((s) => ({ key: s.id, label: s.title, href: `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`, c: s }))
 }
 

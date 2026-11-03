@@ -191,6 +191,18 @@ Scripts read keys from the environment (`os.environ["NAME"]`, `$NAME`); a script
 
 OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. See [MCP servers](28-mcp.md).
 
+## Agents
+
+| Command | Purpose |
+|---|---|
+| `maxxing agents list [--json]` | every agent: path, name, on/off, triggers, cost of the day |
+| `maxxing agents run AGENT [TASK] [--data] [--json]` | start it now (a new session); `--data`: the text is outside data, not a task; exit 1 when a limit refused it |
+| `maxxing agents send AGENT TEXT` | from an agent's session: hand work to another agent (the text is given as data; 3 hops at most) |
+| `maxxing agents on AGENT` / `off AGENT` | switch it on / off |
+
+`AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
+[Agents](30-agents.md).
+
 ## Memory and sessions
 
 | Command | Purpose |

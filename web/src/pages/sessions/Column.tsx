@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router'
 import {
   Archive,
   ArchiveRestore,
+  Bot,
   Bell,
   BellOff,
   ChevronDown,
@@ -85,6 +86,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { TaskBar } from './Tasks'
 import { forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
+import { ApprovalCards } from './Approvals'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
 import { MobileTabsSlot, TabsToggle } from './Tabs'
@@ -99,7 +101,8 @@ import { QuotePill } from './Quote'
 import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
 import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
-import { absTopicDir, fileQuote, fmtCost, topicLabel } from './util'
+import { absTopicDir, fileQuote, findAgent, fmtCost, placeOptions, topicLabel, topicPathOf } from './util'
+import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
 
 export type ColumnVariant = 'column' | 'solo' | 'mobile'
@@ -780,6 +783,7 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
           />
         )}
         {!notFound && aside.aside && <AsidePanel aside={aside.aside} onClose={aside.close} />}
+        {!notFound && <ApprovalCards session={session} />}
         {!notFound && <TaskBar sid={sid} running={running} />}
         {!notFound && (
           <StackedComposer colKey={col.key} stacked={!!place && place.n >= 3}>
@@ -1088,11 +1092,15 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
   const patch = usePatchSession()
   const mask = useMask()
   const setExpanded = useSessionsUI((s) => s.setExpanded)
+  const { data: settings } = useSettings()
+  const agentsOn = !!settings?.agents_page
   const projects = ws?.projects || []
-  const m = /^projects\/([^/]+)(?:\/topics\/([^/]+))?$/.exec(session.path)
+  // projects/<p>[/topics/<t>[/agents/<a>]]
+  const m = /^projects\/([^/]+)(?:\/topics\/([^/]+)(?:\/agents\/([^/]+))?)?$/.exec(session.path)
   const project = m ? projects.find((p) => p.name === m[1]) : undefined
   const topic = m?.[2] ? project?.topics.find((tp) => tp.name === m[2]) : undefined
-  const options = projects.flatMap((p) => p.topics.map((tp) => ({ value: tp.path, label: mask(`${p.emoji ? p.emoji + ' ' : ''}${p.name} / ${tp.name}`, 10) })))
+  const agent = m?.[3] ? findAgent(ws, session.path) : undefined
+  const options = placeOptions(ws, agentsOn, (l) => mask(l, 10))
   const busy = session.state === 'running' || session.queue > 0
   const hint = t(busy ? 'sessions.move.busy' : 'where.move')
   const label = m ? (
@@ -1101,8 +1109,13 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
         {project?.emoji ? <span className="shrink-0 leading-none">{project.emoji}</span> : <FolderOpen className="size-3 shrink-0 opacity-70" />}
       </WhereBadge>
       {m[2] && (
-        <WhereBadge kind="topic" name={m[2]} description={topic?.description} dir={absTopicDir(ws, session.path)} hint={hint}>
+        <WhereBadge kind="topic" name={m[2]} description={topic?.description} dir={absTopicDir(ws, topicPathOf(session.path))} hint={hint}>
           <Hash className="size-3 shrink-0 opacity-70" />
+        </WhereBadge>
+      )}
+      {m[3] && (
+        <WhereBadge kind="agent" name={agent?.display_name || m[3]} description={agent?.description} dir={absTopicDir(ws, session.path)} hint={hint}>
+          <AgentAvatarIcon avatar={agent?.avatar} size={14} />
         </WhereBadge>
       )}
       {!busy && <ChevronDown className="size-3 shrink-0 opacity-60" />}
@@ -1138,7 +1151,8 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
             onSuccess: () => {
               // Show it where it now lives in the sessions list.
               const project = path.split('/')[1]
-              setExpanded({ [`p:${project}`]: true, [`t:${path}`]: true })
+              const tp = topicPathOf(path)
+              setExpanded({ [`p:${project}`]: true, [`t:${tp}`]: true, ...(tp !== path && { [`g:${path}`]: true }) })
               toast.success(t('sessions.move.done', { where: topicLabel(path, rootLabel) }))
             },
           },
@@ -1154,7 +1168,7 @@ function MoveSessionPicker({ session, rootLabel }: { session: Session; rootLabel
 }
 
 /** One part of the session's place (project or topic) as a badge; hovering it explains what it is. */
-export function WhereBadge({ kind, name, description, dir, hint, generic, children }: { kind: 'project' | 'topic'; name: string; description?: string; dir?: string | null; hint: string; /** The word itself (page subtitle): no name, no folder in the card. */ generic?: boolean; children?: React.ReactNode }) {
+export function WhereBadge({ kind, name, description, dir, hint, generic, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; /** The word itself (page subtitle): no name, no folder in the card. */ generic?: boolean; children?: React.ReactNode }) {
   const t = useT()
   return (
     <TooltipRoot delayDuration={350}>
@@ -1166,8 +1180,8 @@ export function WhereBadge({ kind, name, description, dir, hint, generic, childr
       </TooltipTrigger>
       <TooltipContent side="bottom" align="start" className="block w-72 rounded-lg border bg-popover p-3 text-popover-foreground font-normal">
         <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-          {kind === 'project' ? <FolderOpen className="size-3" /> : <Hash className="size-3" />}
-          {t(kind === 'project' ? 'where.project' : 'where.topic')}
+          {kind === 'project' ? <FolderOpen className="size-3" /> : kind === 'agent' ? <Bot className="size-3" /> : <Hash className="size-3" />}
+          {t(kind === 'project' ? 'where.project' : kind === 'agent' ? 'where.agent' : 'where.topic')}
         </span>
         {!generic && (
           <span className="mt-1 block text-sm font-semibold">
@@ -1175,7 +1189,7 @@ export function WhereBadge({ kind, name, description, dir, hint, generic, childr
           </span>
         )}
         {description && <span className="mt-0.5 block text-xs text-muted-foreground"><Sensitive length={20}>{description.replace(/[*`_]+/g, '')}</Sensitive></span>}
-        <span className="mt-2 block text-xs leading-relaxed">{t(kind === 'project' ? 'where.projectHelp' : generic ? 'where.topicHelpAny' : 'where.topicHelp')}</span>
+        <span className="mt-2 block text-xs leading-relaxed">{t(kind === 'project' ? 'where.projectHelp' : kind === 'agent' ? 'where.agentHelp' : generic ? 'where.topicHelpAny' : 'where.topicHelp')}</span>
         {dir && <span className="mt-2 block truncate font-mono text-[11px] text-muted-foreground"><Sensitive length={16}>{dir}</Sensitive></span>}
         <span className="mt-2 block border-t pt-2 text-[11px] text-muted-foreground">{hint}</span>
       </TooltipContent>
@@ -1198,9 +1212,10 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const composer = React.useRef<ComposerHandle>(null)
   const [dragFiles, setDragFiles] = React.useState(false)
   const mask = useMask()
-  const topics = (ws?.projects || []).flatMap((p) => p.topics)
-  const options = topics.map((tp) => ({ value: tp.path, label: mask(`${tp.project} / ${tp.name}`, 10) }))
-  const valid = topics.some((tp) => tp.path === col.path)
+  const { data: settings } = useSettings()
+  // An agent's folder is a place too (Settings -> Features -> agents_page): a normal session there has its role.
+  const options = placeOptions(ws, !!settings?.agents_page || !!findAgent(ws, col.path), (l) => mask(l, 10))
+  const valid = options.some((o) => o.value === col.path)
 
   // The session made by the first message: the messages sent while it was being created go to it (sends are
   // chained, so they run once it is known), never into a second session.

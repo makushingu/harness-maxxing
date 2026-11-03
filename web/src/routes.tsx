@@ -49,6 +49,8 @@ export const routes: RouteObject[] = [
           { path: 'feed', lazy: page(() => import('./pages/feed')) },
           // Optional feature pages (Settings -> Features)
           { path: 'git', lazy: page(() => import('./features/git/GitPage'), ['git']) },
+          { path: 'agents', lazy: page(() => import('./features/agents/AgentsPage'), ['agents', 'tasks']) },
+          { path: 'agents/:project/:topic/:name', lazy: page(() => import('./features/agents/AgentPage'), ['agents', 'tasks']) },
           { path: 'team', lazy: page(() => import('./features/team/TeamPage'), ['team']) },
           { path: 'infra', lazy: page(() => import('./features/infra/InfraPage'), ['infra']) },
           // Settings & docs

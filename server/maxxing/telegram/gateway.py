@@ -341,6 +341,28 @@ WORDS["fr"].update({
     "ev_opened": "Ouvert : {name}", "ev_started": "Session démarrée.",
 })
 
+# The thread of an agent (agent.json `telegram`): its results, and a message there starts the agent.
+WORDS["en"].update({
+    "agent_intro": "🤖 <b>{name}</b> posts its results here. Write here to give it a task.",
+    "agent_started": "⏳ {name} is on it.",
+    "agent_skipped": "{name} did not start: {reason}.",
+    "agent_command": "Commands work in session threads. Here every message is a task for {name}.",
+})
+WORDS["fr"].update({
+    "agent_intro": "🤖 <b>{name}</b> publie ses résultats ici. Écrivez ici pour lui confier une tâche.",
+    "agent_started": "⏳ {name} s'en occupe.",
+    "agent_skipped": "{name} n'a pas démarré : {reason}.",
+    "agent_command": "Les commandes marchent dans les fils de session. Ici chaque message est une tâche pour {name}.",
+})
+AGENT_REASONS = {
+    "en": {"disabled": "it is switched off", "budget": "its daily budget is reached",
+           "rate": "too many runs in the last hour", "missing": "it no longer exists",
+           "depth": "too many hops between agents"},
+    "fr": {"disabled": "il est désactivé", "budget": "son budget du jour est atteint",
+           "rate": "trop de tours dans la dernière heure", "missing": "il n'existe plus",
+           "depth": "trop d'allers-retours entre agents"},
+}
+
 TOPICS_HELP = ("Telegram refused to create topic threads in this chat, so everything goes to the main "
                "chat. To get one thread per topic, enable topics (\"threaded mode\") for your bot in "
                "@BotFather (open your bot's settings, \"Threaded Mode\"), then press \"Retry\" in "
@@ -477,6 +499,8 @@ def _forget_thread(tid: int) -> None:
         tg["threads"] = {k: v for k, v in (tg.get("threads") or {}).items() if v != tid}
         st = tg.get("session_threads") or {}
         tg["session_threads"] = {k: v for k, v in st.items() if not (isinstance(v, dict) and v.get("tid") == tid)}
+        at = tg.get("agent_threads") or {}
+        tg["agent_threads"] = {k: v for k, v in at.items() if not (isinstance(v, dict) and v.get("tid") == tid)}
     mutate_tg(fn)
     gw = _gw
     if gw is not None and gw.running:
@@ -536,11 +560,12 @@ def topic_label(path: str) -> str:
     """Human name of a topic path: "acme / blog", with the project's emoji in front when it has one."""
     if path in SPECIAL:
         return SPECIAL[path]
-    m = re.match(r"^projects/([^/]+)/topics/([^/]+)$", path)
+    m = re.match(r"^projects/([^/]+)/topics/([^/]+)(?:/agents/([^/]+))?$", path)
     if not m:
         return path[:128]
     e = _emoji(m.group(1))
-    return (f"{e} " if e else "") + f"{m.group(1)} / {m.group(2)}"[:120]
+    agent = f" / {AGENT_ICON} {m.group(3)}" if m.group(3) else ""
+    return (f"{e} " if e else "") + f"{m.group(1)} / {m.group(2)}{agent}"[:120]
 
 
 def _lang() -> str:
@@ -625,11 +650,12 @@ def is_human(s: dict) -> bool:
 def topic_name(path: str, topics: list[str] | None = None) -> str:
     """Topic part of a thread name: "acme/blog", with the project's emoji in front ("🛒 acme/blog").
     (`topics` is no longer needed - the project is always shown - and kept for callers.)"""
-    m = re.match(r"^projects/([^/]+)/topics/([^/]+)$", path or "")
+    m = re.match(r"^projects/([^/]+)/topics/([^/]+)(?:/agents/([^/]+))?$", path or "")
     if not m:
         return "General" if not path else path
     e = _emoji(m.group(1))
-    return (f"{e} " if e else "") + f"{m.group(1)}/{m.group(2)}"
+    agent = f"/{AGENT_ICON}{m.group(3)}" if m.group(3) else ""
+    return (f"{e} " if e else "") + f"{m.group(1)}/{m.group(2)}{agent}"
 
 
 def session_label(s: dict, topics: list[str] | None = None) -> str:
@@ -1219,6 +1245,11 @@ class Gateway:
                 if not any(k.startswith("forum_topic_") for k in msg):
                     await self._reply(msg, _w("notify_only"), silent=True)
                 return
+            agent = agent_of_thread(tid)
+            if agent:
+                if not msg.get("forum_topic_created"):
+                    await self._agent_message(msg, agent, cmd if known else None, text)
+                return
             sid, session = sid_of_thread(tid), None
             if sid:
                 session = await self._open_session(sid)
@@ -1252,6 +1283,53 @@ class Gateway:
         while len(self._edits_told) > 200:
             self._edits_told.pop(next(iter(self._edits_told)))
         await self._reply(msg, _w("edited"), silent=True)
+
+    async def _agent_message(self, msg: dict, path: str, cmd: str | None, text: str) -> None:
+        """A message in an agent's thread starts the agent: the user's words are its task (not framed as data)."""
+        from .. import agents
+        name = await asyncio.to_thread(_agent_display, path)
+        if cmd and cmd != "start":
+            await self._reply(msg, _w("agent_command", name=name), silent=True)
+            return
+        saved: list[str] = []
+        try:
+            if self._is_voice(msg):
+                from .. import voice
+                ready, reason = await asyncio.to_thread(voice.readiness)
+                if not ready:
+                    await self._reply(msg, _w("voice_off") if reason == "off" else
+                                      _w("voice_not_ready", reason=reason), silent=True)
+                    return
+                saved = await self._download(msg, path)
+                heard = ((await asyncio.to_thread(voice.transcribe_file, Path(saved[0]))).get("text") or "").strip() \
+                    if saved else ""
+                if not heard:
+                    await self._reply(msg, _w("voice_empty"), silent=True)
+                    return
+                await self._reply(msg, f"🎤 <blockquote><i>{fmt.escape(heard)}</i></blockquote>", html=True,
+                                  silent=True)
+                text = f"{text.strip()}\n\n{heard}" if text.strip() else heard
+            elif self._has_media(msg):
+                saved = await self._download(msg, path)
+        except Exception as e:  # noqa: BLE001 - download, transcription
+            await self._reply(msg, _w("save_failed", error=getattr(e, "description", None) or getattr(e, "message", e)))
+            if not text:
+                return
+        text = _with_context(msg, text) if text else \
+            f"(sent from Telegram: {', '.join(os.path.basename(a) for a in saved)})"
+        try:
+            res = await asyncio.to_thread(agents.fire, path, trigger="telegram", prompt=text, source="telegram",
+                                          attachments=saved or None)
+        except Exception as e:  # noqa: BLE001
+            log.exception("agent fire from Telegram failed")
+            await self._reply(msg, f"⚠️ {e}")
+            return
+        if res.get("started"):
+            await self._reply(msg, _w("agent_started", name=name), silent=True)
+        else:
+            reasons = AGENT_REASONS.get(_lang()) or AGENT_REASONS["en"]
+            r = res.get("reason") or ""
+            await self._reply(msg, _w("agent_skipped", name=name, reason=reasons.get(r, r)), silent=True)
 
     async def _open_session(self, sid: str) -> dict | None:
         """The session of a thread (un-archived when the user writes in its thread); None if gone."""
@@ -1694,6 +1772,7 @@ class Gateway:
             if tg.get("chat_id") != chat["id"]:
                 tg["threads"] = {}
                 tg["session_threads"] = {}
+                tg["agent_threads"] = {}
                 tg["sessions"] = {}
             tg["chat_id"] = chat["id"]
             tg["chat_title"] = title
@@ -2956,7 +3035,8 @@ async def set_token(tok: str) -> dict:
     await stop()
     if old.get("id") != bot["id"]:
         def fn(tg: dict) -> None:
-            tg.update(chat_id=None, chat_title="", user_ids=[], threads={}, session_threads={}, sessions={})
+            tg.update(chat_id=None, chat_title="", user_ids=[], threads={}, session_threads={}, agent_threads={},
+                      sessions={})
             tg.pop("two_factor", None)
         mutate_tg(fn)
         config.write_json(_offset_path(), {"offset": 0})
@@ -2996,7 +3076,7 @@ async def forget() -> None:
 
     def fn(tg: dict) -> None:
         tg.update(chat_id=None, chat_title="", user_ids=[], bot_username="", threads={}, session_threads={},
-                  sessions={})
+                  agent_threads={}, sessions={})
         tg.pop("two_factor", None)                     # no bridge, no second step
     mutate_tg(fn)
     for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path()):
@@ -3120,11 +3200,13 @@ def update_settings(**kw: Any) -> dict:
 
 
 # ---- notifications (thread-safe, any process) ------------------------------------------------
-def _send_sync(key: str, parts: list[str], silent: bool, markup: dict | None = None) -> bool:
+def _send_sync(key: str, parts: list[str], silent: bool, markup: dict | None = None,
+               target: tuple[int | None, int | None] | None = None) -> bool:
     """Direct blocking send (no gateway in this process): every part in order, each retried on its own (flood
-    limits waited out up to a minute). Returns False when a part could not be sent. Never raises."""
+    limits waited out up to a minute). Returns False when a part could not be sent. Never raises.
+    target: (chat, thread) instead of the one of `key` (an agent's thread)."""
     tok = token()
-    chat, thread = _target(key)
+    chat, thread = target if target is not None else _target(key)
     if not tok or not chat:
         return False
     ok = True
@@ -3212,6 +3294,144 @@ def notify_topic(path: str, text: str) -> None:
         _post(path or ROOT, fmt.plain(text), silent=False)
     except Exception:
         log.exception("telegram notify_topic failed")
+
+
+# ---- agents (option `telegram` of agent.json): one permanent thread per agent ------------------------
+# config.telegram.agent_threads = {agent path: {tid, name}}. The thread is created on the agent's first
+# message, renamed when its name changes, dropped with the agent; _sync_sessions never touches it (it only
+# deletes the threads of session_threads). A message the user writes in it starts the agent (agents.fire).
+AGENT_ICON = "🤖"
+_agent_lock = threading.Lock()
+
+
+def agent_threads() -> dict[str, dict]:
+    at = tg_config().get("agent_threads") or {}
+    return {k: v for k, v in at.items() if isinstance(v, dict) and v.get("tid") is not None}
+
+
+def agent_of_thread(tid: int | None) -> str | None:
+    if tid is None:
+        return None
+    return next((p for p, v in agent_threads().items() if v.get("tid") == tid), None)
+
+
+def _agent_display(path: str) -> str:
+    from .. import agents
+    p = agents.parse(path)
+    try:
+        name = agents.load(path).get("name") or ""
+    except Exception:  # noqa: BLE001 - a broken agent.json never breaks Telegram
+        name = ""
+    return name or (p[2] if p else path)
+
+
+def agent_label(path: str) -> str:
+    """Thread name of an agent: "🤖 Writer · acme/blog"."""
+    from .. import agents
+    p = agents.parse(path)
+    where = f"{p[0]}/{p[1]}" if p else path
+    return f"{AGENT_ICON} {_agent_display(path)} · {where}"[:128]
+
+
+def _set_agent_thread(path: str, tid: int, name: str) -> None:
+    mutate_tg(lambda tg: tg.setdefault("agent_threads", {}).__setitem__(path, {"tid": tid, "name": name}))
+
+
+def drop_agent_thread(path: str, delete: bool = False) -> None:
+    """Forget the thread of an agent (deleted agent); delete=True also deletes it in Telegram (best effort)."""
+    info = agent_threads().get(path)
+
+    def fn(tg: dict) -> None:
+        (tg.get("agent_threads") or {}).pop(path, None)
+    mutate_tg(fn)
+    tok, chat = token(), tg_config().get("chat_id")
+    if delete and info and tok and chat:
+        try:
+            call_sync(tok, "deleteForumTopic", chat_id=chat, message_thread_id=info["tid"])
+        except Exception as e:  # noqa: BLE001
+            log.info("deleteForumTopic of agent %s failed: %s", path, e)
+    bus.invalidate("telegram")
+
+
+def _agent_thread_sync(tok: str, chat: int, path: str) -> int | None:
+    """The agent's thread (created, or renamed when its name changed). None: main chat (threads off, refused)."""
+    if not threaded():
+        return None
+    name = agent_label(path)
+    with _agent_lock:
+        info = agent_threads().get(path)
+        if info:
+            if info.get("name") != name:
+                try:
+                    call_sync(tok, "editForumTopic", chat_id=chat, message_thread_id=info["tid"], name=name)
+                    _set_agent_thread(path, info["tid"], name)
+                except TelegramError as e:
+                    if "not_modified" in e.description.lower() or "not modified" in e.description.lower():
+                        _set_agent_thread(path, info["tid"], name)
+                    elif _thread_gone(e):
+                        drop_agent_thread(path)
+                        info = None
+                    else:
+                        log.info("editForumTopic of agent %s failed: %s", path, e.description)
+                except Exception as e:  # noqa: BLE001
+                    log.info("editForumTopic of agent %s failed: %s", path, e)
+            if info:
+                return info["tid"]
+        try:
+            r = call_sync(tok, "createForumTopic", chat_id=chat, name=name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("createForumTopic for agent %s failed: %s", path, e)
+            return None
+        tid = (r or {}).get("message_thread_id")
+        if tid is None:
+            return None
+        _set_agent_thread(path, tid, name)
+    bus.invalidate("telegram")
+    try:
+        call_sync(tok, "sendMessage", chat_id=chat, message_thread_id=tid, parse_mode="HTML",
+                  text=_w("agent_intro", name=fmt.escape(_agent_display(path))), disable_notification=True)
+    except Exception:  # noqa: BLE001
+        pass
+    return tid
+
+
+def _agent_send_sync(path: str, parts: list[str], silent: bool) -> bool:
+    tok, chat = token(), tg_config().get("chat_id")
+    if not tok or not chat:
+        return False
+    tid = _agent_thread_sync(tok, chat, path)
+    if tid is None:                                    # threads off: the main chat, the agent's name in front
+        head = f"{AGENT_ICON} <b>{fmt.escape(_agent_display(path))}</b>"
+        if parts and len(head) + 1 + len(parts[0]) <= fmt.LIMIT:
+            parts = [f"{head}\n{parts[0]}"] + parts[1:]
+        else:
+            parts = [head] + parts
+    return _send_sync("", parts, silent, target=(chat, tid))
+
+
+def notify_agent(path: str, text: str, ok: bool = True) -> None:
+    """The result of an agent's turn into the agent's own thread (created on first use). Any process, never blocks
+    an event loop, never raises."""
+    try:
+        if not token() or not tg_config().get("chat_id"):
+            return
+        body = (text or "").strip()
+        parts = fmt.render(fmt.head(body, REPORT_MAX)) if body else []
+        if not ok:
+            parts = [f"⚠️ {parts[0]}" if parts and len(parts[0]) < fmt.LIMIT - 3 else "⚠️"] + parts[1:]
+        if not parts:
+            parts = ["✅"]
+        try:
+            asyncio.get_running_loop()
+            in_loop = True
+        except RuntimeError:
+            in_loop = False
+        if in_loop:
+            threading.Thread(target=_agent_send_sync, args=(path, parts, False), daemon=True).start()
+        else:
+            _agent_send_sync(path, parts, False)
+    except Exception:
+        log.exception("telegram notify_agent failed")
 
 
 def _feed_on() -> bool:

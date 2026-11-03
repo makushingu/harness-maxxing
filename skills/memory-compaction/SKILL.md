@@ -1,6 +1,6 @@
 ---
 name: memory-compaction
-description: Compact memory.md files (global, projects, topics) that became long, redundant, contradictory or outdated. Run by the daily "Memory compaction" job; use it on demand when the user asks to clean up or shorten memory.
+description: Compact memory.md files (global, projects, topics, agents) that became long, redundant, contradictory or outdated. Run by the daily "Memory compaction" job; use it on demand when the user asks to clean up or shorten memory.
 ---
 
 # Memory compaction
@@ -10,7 +10,7 @@ is the expected outcome.
 
 ## Procedure
 1. Run `maxxing memory`: it lists every memory file (`memory.md`, `projects/*/memory.md`,
-   `projects/*/topics/*/memory.md`) with its line count, and the **line limit** set in
+   `projects/*/topics/*/memory.md`, `projects/*/topics/*/agents/*/memory.md`) with its line count, and the **line limit** set in
    Settings -> Memory (default 200; `none` = no limit). A limit given in the prompt wins.
 2. Compact a file **only if** at least one is true:
    - it has more lines than the limit (or, without a limit, larger than ~20 KB or ~400 lines);
@@ -24,7 +24,8 @@ is the expected outcome.
      `## Decisions`, `## References` (paths, URLs, commands), `## Context` (summarised history);
    - merge duplicates, settle contradictions (latest wins), keep dates on decisions;
    - summarise old history into one or two "Context" bullets, drop the rest;
-   - move a fact to the right level if it is obviously misplaced (topic fact in global memory);
+   - move a fact to the right level if it is obviously misplaced (topic fact in global memory, a fact
+     about the whole topic in an agent's memory);
    - **never remove**: what is needed to understand the project, the user's preferences and rules,
      structural decisions, conventions, paths/URLs still in use.
 4. Nothing to do -> change nothing.

@@ -544,7 +544,7 @@ def _remap_telegram(old: str, new: str) -> None:
         cfg = config.load_config()
         tg = cfg.get("telegram") or {}
         changed = False
-        for key in ("threads", "sessions"):
+        for key in ("threads", "sessions", "agent_threads"):
             m = tg.get(key) or {}
             for k in [k for k in m if _under(k, old)]:
                 m[new + k[len(old):]] = m.pop(k)
@@ -625,10 +625,12 @@ def _schedule(coro: Any) -> None:
 
 
 def describe(path: str) -> dict:
-    """Small helper for other modules: {path, project, name, description} of a topic path."""
+    """Small helper for other modules: {path, project, topic, agent, name, description} of a session path
+    (name = the last level: the agent, else the topic, else the project)."""
     p = normalize_path(path)
     m = _PATH_RE.match(p) if p else None
     folder = topic_dir(p)
-    return {"path": p, "project": m.group(1) if m else None,
+    return {"path": p, "project": m.group(1) if m else None, "topic": m.group(2) if m else None,
+            "agent": m.group(3) if m else None,
             "name": (m.group(3) or m.group(2) or m.group(1)) if m else "", "description": read_description(folder)}
 

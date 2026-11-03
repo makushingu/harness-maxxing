@@ -102,6 +102,9 @@ export function FeaturesSection() {
             <SettingRow label={t('features.team')} description={t('features.teamDesc')} htmlFor="ft-team">
               <Switch id="ft-team" checked={!!s.team_page} onCheckedChange={(v) => save.mutate({ team_page: v })} />
             </SettingRow>
+            <SettingRow label={t('features.agents')} description={t('features.agentsDesc')} htmlFor="ft-agents">
+              <Switch id="ft-agents" checked={!!s.agents_page} onCheckedChange={(v) => save.mutate({ agents_page: v })} />
+            </SettingRow>
             <SettingRow label={t('features.maxxing')} description={t('features.maxxingDesc')} htmlFor="ft-maxxing">
               <Switch id="ft-maxxing" checked={!!s.maxxing_mode} onCheckedChange={(v) => save.mutate({ maxxing_mode: v })} />
             </SettingRow>

@@ -47,6 +47,7 @@ class Limits(BaseModel):
     runs_per_hour: Optional[int] = None
     timeout_s: Optional[int] = None
     debounce_s: Optional[int] = None
+    approval_timeout_s: Optional[int] = None
 
 
 class Trigger(BaseModel):
