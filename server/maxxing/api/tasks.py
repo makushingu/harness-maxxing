@@ -33,7 +33,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .. import bus, config
 from ..security import require_auth
@@ -97,6 +97,49 @@ def _num(v: Any, default: Any) -> Any:
     return default
 
 
+def _no_constant(_: str) -> None:
+    """NaN / Infinity written by hand in tasks.json: read as null (the JSON response refuses them)."""
+    return None
+
+
+def _finite(v: str) -> float | None:
+    """1e999 is read as infinity: null instead, like NaN."""
+    f = float(v)
+    return f if math.isfinite(f) else None
+
+
+_SURROGATE = re.compile(r"\\u[dD][89a-fA-F]")
+
+
+def _scrub(v: Any) -> Any:
+    """A lone surrogate ("\\ud800" is valid JSON) cannot be written as UTF-8: replaced by U+FFFD."""
+    if isinstance(v, str):
+        return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    if isinstance(v, list):
+        return [_scrub(x) for x in v]
+    if isinstance(v, dict):
+        return {_scrub(k): _scrub(x) for k, x in v.items()}
+    return v
+
+
+def _id_of(v: Any) -> str:
+    """An id written by hand: text or a number; anything else (a list, an object) is no id."""
+    if isinstance(v, bool) or not isinstance(v, (str, int, float)):
+        return ""
+    return _text(v) if v else ""
+
+
+def _free_id(prefix: str, item: dict, taken: set) -> str:
+    """A stable id for a hand-written item: the same file gives the same id; two identical items get two."""
+    base = json.dumps(item, sort_keys=True, default=str)
+    n = 0
+    while True:
+        new = prefix + hashlib.sha1((base + (f"#{n}" if n else "")).encode()).hexdigest()[:6]
+        if new not in taken:
+            return new
+        n += 1
+
+
 def _norm_task(t: dict) -> dict:
     """Fill defaults for a task written by hand (keeps unknown keys)."""
     now = time.time()
@@ -140,7 +183,12 @@ def load(copy_: bool = True) -> dict:
             data: dict = {"version": 1, "projects": [], "tasks": []}
         else:
             try:
-                data = json.loads(p.read_text() or "{}")
+                raw = p.read_text() or "{}"
+                data = json.loads(raw, parse_constant=_no_constant, parse_float=_finite)
+                if _SURROGATE.search(raw):
+                    data = _scrub(data)
+            except RecursionError:                     # nested too deep to read: damaged, not a 500
+                raise CorruptFile("tasks.json is nested too deeply") from None
             except ValueError as e:
                 raise CorruptFile(f"tasks.json is not valid JSON ({e})") from None
             except OSError as e:
@@ -153,24 +201,28 @@ def load(copy_: bool = True) -> dict:
         for k in ("projects", "tasks"):
             if not isinstance(data.get(k) or [], list):
                 raise CorruptFile(f'tasks.json: "{k}" must be a list')
-        data["projects"] = [x for x in (data.get("projects") or []) if isinstance(x, dict) and x.get("id")]
+        projects, seen = [], set()
+        for x in data.get("projects") or []:
+            if isinstance(x, dict) and _id_of(x.get("id")):
+                pid = _id_of(x["id"])
+                if pid in seen:                        # same id twice: deleting one must not delete both
+                    pid = _free_id("p_", x, seen)
+                seen.add(pid)
+                projects.append({**x, "id": pid})
+        data["projects"] = projects
         for proj in data["projects"]:
             if "workspace" in proj and not isinstance(proj["workspace"], str):   # a list is not a dict key: _sync failed
                 proj.pop("workspace")
-        tasks = []
-        taken = {t.get("id") for t in data.get("tasks") or [] if isinstance(t, dict) and t.get("id")}
+        tasks, seen = [], set()
+        taken = {_id_of(t.get("id")) for t in data.get("tasks") or [] if isinstance(t, dict)} - {""}
         for t in data.get("tasks") or []:
             if isinstance(t, dict):
-                if not t.get("id"):                    # hand-written task: stable id until saved
-                    base = json.dumps(t, sort_keys=True, default=str)
-                    n = 0                              # two identical tasks must not share an id
-                    while True:
-                        digest = hashlib.sha1((base + (f"#{n}" if n else "")).encode()).hexdigest()
-                        if f"t_{digest[:6]}" not in taken:
-                            break
-                        n += 1
-                    t = {**t, "id": f"t_{digest[:6]}"}
-                    taken.add(t["id"])
+                tid = _id_of(t.get("id"))
+                if not tid or tid in seen:             # hand-written task, a list as id, or an id used twice
+                    tid = _free_id("t_", t, taken)     # stable until saved
+                    taken.add(tid)
+                    t = {**t, "id": tid}
+                seen.add(tid)
                 tasks.append(_norm_task(t))
         data["tasks"] = tasks
         _cache["sig"], _cache["data"] = sig, (copy.deepcopy(data) if copy_ else data)
@@ -358,7 +410,22 @@ def summary() -> dict:
 
 
 # ---- validation -----------------------------------------------------------------------------
-class TaskIn(BaseModel):
+class _Text(BaseModel):
+    """A lone surrogate ("\\ud800" is valid JSON) cannot be written as UTF-8 to tasks.json: a 422, not a 500."""
+
+    @field_validator("*")
+    @classmethod
+    def _utf8(cls, v: Any) -> Any:
+        for s in v if isinstance(v, list) else (v,):
+            if isinstance(s, str) and not s.isascii():
+                try:
+                    s.encode("utf-8")
+                except UnicodeEncodeError:
+                    raise ValueError("text cut inside a character (lone surrogate)") from None
+        return v
+
+
+class TaskIn(_Text):
     model_config = {"extra": "ignore"}
     title: Optional[str] = None
     notes: Optional[str] = None
@@ -371,7 +438,7 @@ class TaskIn(BaseModel):
     order: Optional[float] = Field(None, allow_inf_nan=False)   # inf/NaN broke every later listing
 
 
-class ProjectIn(BaseModel):
+class ProjectIn(_Text):
     name: Optional[str] = None
     color: Optional[str] = None
     hidden: Optional[bool] = None
@@ -551,7 +618,7 @@ def _apply_project(proj: dict, body: ProjectIn) -> None:
             proj.pop("hidden", None)
 
 
-class BulkIn(BaseModel):
+class BulkIn(_Text):
     model_config = {"extra": "ignore"}
     ids: list[str]
     patch: Optional[TaskIn] = None

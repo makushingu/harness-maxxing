@@ -140,7 +140,7 @@ def _label(base: str = HOSTINGER_LABEL) -> str:
 
 def _register_vps(v: dict, key: Path, label: str = "") -> dict:
     name = registry.free_name(v.get("hostname") or "vps-hostinger")
-    return registry.add_server(name, _vps_host(v), "root", 22, str(key), label=label or _label())
+    return registry.add_server(name, _vps_host(v), "root", 22, str(key), label=label or _label(), unique=True)
 
 
 def _matching_key(vm_id) -> Path | None:
@@ -228,7 +228,7 @@ def _connect_host(host: str, user: str, port: int, label: str) -> dict:
     for k in (str(key), ""):
         if can_login(host, user, port, k) is None:
             name = registry.free_name(label or ("server" if build.is_ip(host) else host))
-            return {**registry.add_server(name, host, user, port, k, label=label), "via": "existing_key" if k == "" else "harness_key"}
+            return {**registry.add_server(name, host, user, port, k, label=label, unique=True), "via": "existing_key" if k == "" else "harness_key"}
     raise ConnectError("no SSH key of this server is accepted there yet", "need_key", public_key=pub,
                        command=f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo 'no-agent-forwarding,no-X11-forwarding {pub}' >> ~/.ssh/authorized_keys"
                                " && chmod 600 ~/.ssh/authorized_keys")
