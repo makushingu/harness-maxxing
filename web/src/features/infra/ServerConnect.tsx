@@ -107,7 +107,7 @@ export function AddServer() {
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="infra-add-server">
-        <Plus /> {t('infra.srv.add')}
+        <Plus /> <span className="max-[429px]:sr-only">{t('infra.srv.add')}</span>
       </Button>
       <Dialog open={open} onOpenChange={(o) => !o && close()}>
         <DialogContent>
