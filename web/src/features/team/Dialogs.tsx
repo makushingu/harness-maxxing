@@ -171,7 +171,7 @@ export function PollDialog({ open, onOpenChange, chatId }: { open: boolean; onOp
             <Plus /> {t('team.poll.add')}
           </Button>
         </div>
-        <label className="flex cursor-pointer items-center gap-2.5 text-[13.5px]">
+        <label className="flex cursor-pointer items-center gap-2.5 text-[13.5px] pointer-coarse:min-h-10">
           <Checkbox checked={multi} onCheckedChange={(v) => setMulti(!!v)} />
           {t('team.poll.allowMulti')}
         </label>
