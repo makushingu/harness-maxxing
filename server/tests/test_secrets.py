@@ -35,6 +35,18 @@ def test_names(client):
     assert client.put("/api/secrets/A1", json={"value": "v"}).status_code == 200
 
 
+def test_a_name_with_a_trailing_newline_is_refused(client):
+    for bad in ("FOO\n", "PATH\n"):
+        try:
+            vault.check_name(bad)
+        except vault.VaultError:
+            continue
+        raise AssertionError(repr(bad))
+    assert client.put("/api/secrets/NLKEY%0A", json={"value": "v"}).status_code == 400
+    config.set_secret("vault", {"FOO\n": {"value": "v", "expose": True}})
+    assert vault.exposed_env() == {}
+
+
 def test_vault_tolerates_garbage(org):
     config.set_secret("vault", {"OK_ONE": {"value": "v", "expose": True}, "BAD": "string", "ALSO": {"no": 1}})
     assert [x["name"] for x in vault.list_secrets()] == ["OK_ONE"]

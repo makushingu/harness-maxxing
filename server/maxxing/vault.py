@@ -12,7 +12,7 @@ from typing import Any
 
 from . import config
 
-NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")
+NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}\Z")
 # Environment variables a secret must never shadow when exposed: system basics, and the ones that make
 # shells, interpreters, git or Claude load code or send credentials somewhere else.
 RESERVED = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD", "TERM", "LANG", "LC_ALL", "TZ",
