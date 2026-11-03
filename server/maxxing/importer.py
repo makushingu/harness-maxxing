@@ -25,6 +25,7 @@ import threading
 import time
 import unicodedata
 import zipfile
+import zlib
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -277,9 +278,21 @@ def _scans(path: Path) -> dict[str, list[str] | None]:
         return _SCANS[key]
 
 
+# zf.read() of an encrypted (RuntimeError, NotImplementedError) or damaged (BadZipFile: bad CRC, zlib.error,
+# EOFError) entry
+_UNREADABLE = (zipfile.BadZipFile, RuntimeError, zlib.error, EOFError)
+
+
+def _unreadable() -> ImportFailed:
+    return ImportFailed(400, "bad_zip", "A file of the zip cannot be read (encrypted or damaged)")
+
+
 def inspect(path: Path) -> dict[str, Any]:
-    with _open(path) as zf:
-        plan = _plan(zf, _scans(path))
+    try:
+        with _open(path) as zf:
+            plan = _plan(zf, _scans(path))
+    except _UNREADABLE:
+        raise _unreadable() from None
     plan.pop("_items")
     if not plan["files"]:
         raise ImportFailed(400, "empty", "Nothing to import: the zip has no projects/, skills/ or memory.md")
@@ -330,7 +343,10 @@ def apply(path: Path) -> dict[str, Any]:
     renamed_files: list[dict] = []
     skill_dirs: dict[str, str] = {}
     with _open(path) as zf:
-        plan = _plan(zf, _scans(path))
+        try:
+            plan = _plan(zf, _scans(path))
+        except _UNREADABLE:
+            raise _unreadable() from None
         if not plan["files"]:
             raise ImportFailed(400, "empty", "Nothing to import: the zip has no projects/, skills/ or memory.md")
         for pr in plan["projects"]:
@@ -344,7 +360,10 @@ def apply(path: Path) -> dict[str, Any]:
         new_levels = {f"projects/{p}" for p in created_projects} | {
             f"projects/{t.split('/')[0]}/topics/{t.split('/')[1]}" for t in created_topics}
         for item in plan["_items"]:
-            data = zf.read(item["src"])
+            try:
+                data = zf.read(item["src"])
+            except _UNREADABLE:
+                raise _unreadable() from None
             dest = root / item["dest"]
             if item["kind"] == "skill":                      # a whole skill folder: never mixed with an existing one
                 name = PurePosixPath(item["dest"]).parts[2]
