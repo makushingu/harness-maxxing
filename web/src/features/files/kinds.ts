@@ -175,7 +175,9 @@ export function crumbs(path: string, root: string): { name: string; path: string
 }
 /** "notes.md" → "notes (2).md" until `taken` says no. */
 export function uniqueName(name: string, taken: (n: string) => boolean, tag = ''): string {
-  const i = name.lastIndexOf('.')
+  // `backup.tar.gz` -> `backup (copy).tar.gz`, not `backup.tar (copy).gz`
+  const tar = /\.tar\.(gz|bz2|xz|zst|lz4?|z)$/i.exec(name)
+  const i = tar && tar.index > 0 ? tar.index : name.lastIndexOf('.')
   const stem = i > 0 ? name.slice(0, i) : name
   const ext = i > 0 ? name.slice(i) : ''
   let n = tag ? `${stem} (${tag})${ext}` : name
