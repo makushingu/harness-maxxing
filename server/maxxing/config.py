@@ -374,6 +374,16 @@ def save_config(cfg: dict) -> None:
         _atomic_write(config_path(), _chosen(cfg, DEFAULT_CONFIG, _document(config_path())))
 
 
+def int_setting(cfg: dict, name: str) -> int:
+    """A whole-number setting; a hand-edited "300k" / 1e999 / null gives the default, never a crashed turn."""
+    for v in (cfg.get(name), DEFAULT_CONFIG.get(name)):
+        try:
+            return int(v or 0)
+        except (TypeError, ValueError, OverflowError):
+            continue
+    return 0
+
+
 def update_config(**changes: Any) -> dict:
     """Shallow-merge top-level keys (dict values are deep-merged) and save."""
     with _lock:

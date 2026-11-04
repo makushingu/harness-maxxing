@@ -70,6 +70,14 @@ def test_settings(client):
     assert client.put("/api/claude/settings", json={"permission_mode": "yolo"}).status_code == 400
 
 
+def test_status_survives_a_hand_edited_number(client):
+    """The Settings -> Claude page must load to fix a "300k" typed into config.json (it was a 500)."""
+    config.update_config(auto_compact_tokens="300k", smart_resume_tokens=[100000])
+    st = client.get("/api/claude/status").json()
+    assert st["auto_compact_tokens"] == config.DEFAULT_CONFIG["auto_compact_tokens"]
+    assert st["smart_resume_tokens"] == config.DEFAULT_CONFIG["smart_resume_tokens"]
+
+
 def test_onboarding(client, monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     r = client.get("/api/onboarding").json()
