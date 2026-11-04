@@ -30,7 +30,7 @@ def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     s = _settings(argv)
     sb = s["sandbox"]
     assert sb["enabled"] and sb["allowUnsandboxedCommands"] is False and sb["failIfUnavailable"] is True
-    assert sb["excludedCommands"] == ["maxxing"]
+    assert sb["excludedCommands"] == ["maxxing:*"]
     assert sb["network"]["allowedDomains"] == ["api.github.com", "*.example.com"]
     root = client.get("/api/workspace/tree").json()["root"]
     assert sb["filesystem"]["allowWrite"][0] == f"{root}/{A}"

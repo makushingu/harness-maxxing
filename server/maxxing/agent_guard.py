@@ -135,7 +135,7 @@ def settings(path: str, a: dict) -> dict:
         write = [str(folder)] + [str((topic / w).resolve()) for w in a.get("writable") or []]
         secrets = secret_paths()
         out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
-                          "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing"],
+                          "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing:*"],
                           "filesystem": {"denyRead": secrets, "allowWrite": write},
                           "network": {"allowedDomains": list(a.get("domains") or [])}}
         deny = []
