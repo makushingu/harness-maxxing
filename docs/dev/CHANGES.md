@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.110 - 2026-11-04
 
 - `maxxing update` writes `<state>/update/in-progress.json` (rollback commit, starting branch, version, auto-save
   carried back) before the code moves and removes it when the update ends (any exit but 1, and `--rollback`). A run
@@ -28,7 +28,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `--empty=drop`). `customs.list_customs(head=)` lists another ref's customizations.
 
 
-## Unreleased
 
 - Sign-in global cap (`security.begin_attempt(key, trusted)`): two slots (`_last_global` for clients with failures
   in the window, `_last_fresh` for clients with none), and `trusted` (valid `mx_device`) or a client key in `_good`
@@ -83,7 +82,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `compact_log`: a read-only pass (`_log_shrinks`, stops at the first line it would change) first; a log that would
   not shrink is never copied to `.compact.tmp` and no longer needs `before + 256 MB` free (no more nightly `no_space`).
 
-## Unreleased
 
 - Crons DST: `iter_runs` compares instants (`ts >= first`), not aware datetimes (same tzinfo = wall-time compare,
   so 02:45 fold=0 passed after 02:30 fold=1), and yields the fold=1 instants when the hour field is full.
@@ -98,7 +96,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   saved any setting (the `*_chosen` flags of telegram/gateway.py were patches for this). Existing files keep the
   defaults they already froze.
 
-## Unreleased
 
 - Search index schema 2 (`search.SCHEMA_VERSION`, checked by `_migrate` when the writer connection opens): message
   rows have an empty `title` (the session title is on its title row, `body=''`, only), `items_au` is
@@ -117,7 +114,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   dropped the ended turn's ref as not live (answer never sent). New WORDS keys; `_sender_lang(msg)` for texts sent
   before the chat is linked.
 
-## Unreleased
 
 - Sessions `NewSessionColumn`: `made` ref = the session the first send created; chained later sends (text or voice)
   go to it through `send` instead of a second `create`. Its Composer now gets a `checkSent`: recent sessions of the
@@ -132,7 +128,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   seeds and prefills are keyed `new:<path>`, two columns on one path overwrote each other).
 
 
-## Unreleased
 
 - `components/ui/markdown.tsx`: remote images (`https?:` / `//host`) render as `RemoteImage`, a click-to-load button
   (then `referrerPolicy="no-referrer"`); same-site and relative pictures still load at once. `//host` links count as
