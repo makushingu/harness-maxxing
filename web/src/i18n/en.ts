@@ -2225,6 +2225,8 @@ export const en = {
   'show.look.body': 'The theme, accent and background you pick here now also color the sign-in page and any new browser (phone, private window).',
   'show.team.title': 'Team: chat with the people you work with',
   'show.team.body': 'Turn on Team here: direct messages and groups with other Harness users, server to server through a one-time invitation, with files and polls. Summarize asks Claude for a summary of the messages you pick, and any message can go to one of your sessions. Connect only with people you trust; it needs a public address (domain mode, not Tailscale).',
+  'show.agents.title': 'Agents: helpers that work by themselves in a topic',
+  'show.agents.body': 'Turn on Agents here: an Agents entry appears in the sidebar. An agent is a lasting role inside a topic, with its own memory and a little character. It starts by hand, on a schedule, on a webhook, on a notification, from its Telegram thread or from another agent, within a daily budget. Say in a sentence what it should do and when, and Claude prepares it with you, or start from a ready-made agent. Text from outside is data, never orders, and new agents run in a sandbox.',
   'show.infra.title': 'Infra: everything you host, in one page',
   'show.infra.body': 'Turn on the Infra page here: every site, database, bucket, domain and server - this server, your other servers, Cloudflare, Hostinger - with its status and its links. Then just ask Claude "put this folder online" or "create a database for my app": it is done the standard way and shows up there.',
   'show.infraServers.title': 'Your other servers, in one click',
@@ -2753,7 +2755,7 @@ export const en = {
   // ---- Agents (Settings -> Features -> agents_page)
   'nav.agents': 'Agents',
   'features.agents': 'Agents',
-  'features.agentsDesc': 'An "Agents" entry in the sidebar: lasting helpers that live in a topic, each with its role, its memory and its own sessions. They start by hand, on a schedule, on a webhook, on a notification or from Telegram, within a daily budget. In the sessions list, each agent gets its own row under its topic.',
+  'features.agentsDesc': 'An "Agents" entry in the sidebar: lasting helpers that live in a topic, each with its role, its memory and its own sessions. They start by hand, on a schedule, on a webhook, on a notification or from Telegram, within a daily budget. In the sessions list, the agents of a topic show under its row.',
   'crons.agentHint': 'agent',
   'where.agent': 'Agent',
   'where.agentHelp': "This session runs in an agent's folder: Claude works there with the agent's role and memory, plus the topic's, the project's and the global ones.",

@@ -379,11 +379,13 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 | GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], skin: [..], hair: [..], hair_color: [..], face: [..], accessory: [..]}}` (the pixel-art character's parts; `color` = an accent colour of the UI, unknown or missing values = a stable pick from the agent's name) |
 | GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
 | POST | `/api/agents` | `{topic_path, name, display_name?, description?, ...AgentFields}` | `Agent & Status` · `400 bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
-| GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob]}` (the cron jobs whose `topic_path` is the agent path) · `404` |
+| GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob], webhooks: [{id, name, kind, url, has_secret}], trigger_stats: {<trigger id>: {events, last_event_at}}}` (cron jobs whose `topic_path` is the agent path; the feed hooks behind its webhook triggers, never their secret; events of each feed trigger's source over the feed retention) · `404` |
 | PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
 | DELETE | `/api/agents/{p}/{t}/{a}` | – | `{ok}`: folder + sessions to the Trash, its cron jobs deleted, its thread, state and Telegram thread dropped · `409 has_running_sessions` |
 | GET | `/api/agents/{p}/{t}/{a}/thread?limit=100&before=<at>` | – | `{messages: [AgentMessage]}` oldest first (the Activity tab) |
-| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?}` | `{started: true, session: Session}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed) |
+| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?, reply_to?}` | `{started: true, session: Session, continued?: true}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed). `reply_to` = a thread message id: its session goes on with the text (`continued`, no new session; a gone session -> a new one). A new session gets the last 3 results of the thread as framed context |
+| POST | `/api/agents/{p}/{t}/{a}/seen` | – | `{ok}`: the thread is read (`thread_unread` 0) and the finished, read runs are archived (`agents.tidy`) |
+| POST | `/api/agents/{p}/{t}/{a}/triggers/{tid}/test` | – | `{event: FeedEvent}`: a sample feed event on the trigger's source (its first level, its `match` words), so the agent starts as for a real one · `404 not_found` |
 | POST | `/api/agents/{p}/{t}/{a}/webhook` | `{kind: "generic"\|"stripe"\|"shopify"\|"github", prompt?, levels?, match?}` | `{agent, hook: FeedHook}`: a feed hook named `<topic>-<agent>` + a feed trigger on its source |
 | GET | `/api/agents/sandbox` | – | `{ok, missing: ["bwrap"\|"socat"\|"apparmor"\|"linux"]}`: what Claude Code's sandbox needs on this server (`agent_guard.available`) |
 | POST | `/api/agents/import` | `{topic_path, markdown, name?}` | `Agent & Status & {ignored: [string]}`: a Claude Code agent file (`agent_format.parse_md`) made an agent (sandbox on, no trigger) · `400 bad_file` + the create errors |
@@ -395,7 +397,8 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?: ""|"bypass"|"acceptEdits"|"default",
                allowed_tools?: [string], disallowed_tools?: [string], telegram?: bool, approvals?: bool,
                trust_outside?: bool, keys?: [string] (vault names, max 50; 400 bad_key), limits?: Limits,
-               triggers?: [Trigger]}
+               triggers?: [Trigger], sandbox?: bool, domains?: [host] (max 50), writable?: [folder] (max 20),
+               rules?: [Rule] (max 20), subagent?: bool}
                approvals: every run asks before risky tools; a run started by outside text (feed / webhook event,
                another agent, `run --data`: session env MAXXING_AGENT_OUTSIDE=1) asks unless trust_outside.
                keys: the only vault entries its runs get as env vars (none by default, exposed or not).
@@ -406,7 +409,9 @@ Agent  = {path, project, topic, name (folder slug), display_name, description, a
           rules: [{tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match, reason}], subagent: bool,
           created, session_count, archived_count, running, unread}
 Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
-          (last result or skip), running_now: int}
+          (last result or skip), running_now: int, running_sessions: [{id, title, started}],
+          thread_unread: int (results after the last `seen`), waiting: int (approval requests pending)}
+Rule   = {tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match: string, reason: string}
 Avatar = {color (outfit), skin, hair, hair_color, face, accessory}   each one of the names listed by GET /api/agents (unknown -> default)
 Limits = {usd_per_day: 2.0 (0 = none), runs_per_hour: 6 (0 = none), timeout_s: 1800, debounce_s: 60,
           approval_timeout_s: 1800}
@@ -414,11 +419,13 @@ Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [
            match (substring of title / body, "" = any), prompt, hook_id? (the feed hook made for it)}
 AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
                 trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
-                session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note)}
+                session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note),
+                reply_to?: message id (run that continued a session)}
 ```
 Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:
-`maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent> | export <agent> |
-import <file> --topic <p>/<t> | sandbox-setup`.
+`maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent> | templates |
+create <p>/<t>/<a> | show | cron | webhook | watch | export <agent> | import <file> --topic <p>/<t> | sandbox-setup`
+(docs/user/17-cli-reference.md). The working directory of an agent turn is the agent folder.
 
 ## Sandbox, rules, subagents (agent_guard.py, agent_format.py)
 
@@ -442,7 +449,10 @@ A turn of an agent with `approvals: true` runs in permission mode `default` with
 `--permission-prompt-tool mcp__maxxing-approval__approve` (`maxxing/approval_mcp.py`, a stdio MCP server started by
 Claude Code): every tool call that is not pre-allowed (`allowed_tools`) waits for the user. Bus topics `approvals` +
 `sessions` on every new / decided request. A request nobody answers is denied after the agent's
-`limits.approval_timeout_s` (default 1800 s); a stopped turn marks its requests `expired`.
+`limits.approval_timeout_s` (default 1800 s); a stopped turn marks its requests `expired`. A run started by outside text
+(`MAXXING_AGENT_OUTSIDE=1`) asks too unless `trust_outside`. With Telegram linked, each pending request is also posted
+(agent thread when its `telegram` option is on, else Alerts) with Allow / Deny buttons (callback `p:<id>:allow|deny`,
+decided with `by: "telegram"`); the message is edited when the request ends, wherever it was answered.
 
 ```
 Approval { id: string (16 hex), session: string, agent_path: string, tool: string, input: object (clipped, secrets
