@@ -49,6 +49,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   invitation holder could say hello as a group member and post as them). A `request` from a group member keeps its
   group pair key for that group (`_key_to`), its group name and its place in `people()`. `_scopes` ignores
   `group_keys` of an accepted contact (the creator made that pair key); they stay stored for after a `bye`.
+- Webhooks: every delivery verified with a secret (shopify, github, generic; not Stripe: its timestamp is signed)
+  claims `_replay_key` in the new `hook_seen` table of feed.db (`feed.claim_delivery`, released when the delivery
+  fails) before parsing: an ignored GitHub body replayed with another `X-GitHub-Event`, or a deleted event, no
+  longer posts. Kept 30 days (`feed.RETENTION_DAYS`), generic 24 h (`GENERIC_REPLAY_S`: same alert again later).
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
