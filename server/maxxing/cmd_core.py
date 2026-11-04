@@ -2326,7 +2326,10 @@ def remove_caddy_site() -> str:
     from .infra import caddy
     route = caddy.traefik_route()
     if route.is_file() and "Harness Maxxing" in route.read_text(errors="replace"):
+        m = re.search(r'url: "http://([0-9.]+):(\d+)"', route.read_text(errors="replace"))
         route.unlink()                                  # Dokploy's Traefik drops it by itself (file provider)
+        for ifc in ("docker0", "docker_gwbridge") if m and shutil.which("ufw") else ():
+            _run_ok(["ufw", "delete", "allow", "in", "on", ifc, "to", m[1], "port", m[2], "proto", "tcp"])
     dropin = Path(os.environ.get("MAXXING_CADDY_DOCKER_DROPIN") or "/etc/systemd/system/caddy.service.d/20-harness-docker.conf")
     if dropin.is_file() and "Harness Maxxing" in dropin.read_text(errors="replace"):
         dropin.unlink()

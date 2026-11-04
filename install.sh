@@ -1632,14 +1632,18 @@ setup_caddy() {
     ok "Caddy installed"
     manifest "caddy installed"
   fi
-  (umask 022; mkdir -p /etc/caddy /etc/caddy/maxxing-paths)
+  local cdir
+  cdir=$(dirname "$CADDYFILE")
+  (umask 022; mkdir -p "$cdir" "$cdir/maxxing-paths")
   local before_cf=""
   [ -f "$CADDYFILE" ] && before_cf=$(cat "$CADDYFILE")
-  local site_addr="$DOMAIN" bind_line="" trust_line=""
+  local site_addr="$DOMAIN" bind_line="" from_traefik=""
   if [ "${BEHIND_TRAEFIK:-0}" = 1 ]; then            # TLS ends at Dokploy's Traefik; we only listen on the Docker bridge
     site_addr="http://$DOMAIN:$TRAEFIK_UPSTREAM_PORT"
     bind_line=$'\tbind '"$DOCKER_GW"
-    trust_line=$'\t\ttrusted_proxies private_ranges'
+    # only Traefik knows the secret: its X-Forwarded-For (the real client, set by Traefik) is kept for those requests;
+    # anything else on the bridge (an app container) keeps its own address, so it cannot pick a throttle key
+    from_traefik=$'\t@traefik header X-Harness-Proxy '"$TRAEFIK_SECRET"$'\n\treverse_proxy @traefik 127.0.0.1:'"$PORT"$' {\n\t\tflush_interval -1\n\t\theader_up X-Forwarded-For {header.X-Forwarded-For}\n\t\theader_up -X-Harness-Proxy\n\t}'
   fi
   (umask 022; cat > "$CADDY_SITE") <<EOF
 # Harness Maxxing (written by install.sh - re-run the installer to change it)
@@ -1657,10 +1661,10 @@ $bind_line
 		max_size 2100MB
 	}
 	# sites under this address (maxxing infra site add): https://$DOMAIN/<name>/, sandboxed
-	import /etc/caddy/maxxing-paths/*.caddy
+	import $cdir/maxxing-paths/*.caddy
+$from_traefik
 	reverse_proxy 127.0.0.1:$PORT {
 		flush_interval -1
-$trust_line
 	}
 }
 EOF
@@ -1676,7 +1680,9 @@ EOF
     fi
     printf '\nimport %s\n' "$CADDY_SITE" >> "$CADDYFILE"
   fi
-  chmod 644 "$CADDY_SITE" "$CADDYFILE"; chmod 755 /etc/caddy/maxxing-paths
+  chmod 644 "$CADDYFILE"; chmod "$([ "${BEHIND_TRAEFIK:-0}" = 1 ] && echo 640 || echo 644)" "$CADDY_SITE"
+  [ "${BEHIND_TRAEFIK:-0}" = 1 ] && { chgrp caddy "$CADDY_SITE" 2>/dev/null || chmod 644 "$CADDY_SITE"; }  # holds the secret
+  chmod 755 "$cdir/maxxing-paths"
   caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 \
     || die "invalid Caddy configuration - see: caddy validate --config $CADDYFILE --adapter caddyfile"
   systemctl enable --now caddy >/dev/null 2>&1 || true
@@ -1692,7 +1698,8 @@ EOF
 # docker_gateway - address of the host on Docker's default bridge (what a container such as Traefik reaches)
 docker_gateway() {
   local gw
-  gw=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null | head -n1 || true)
+  gw=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' 2>/dev/null \
+       | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
   case "$gw" in *.*.*.*) printf '%s' "$gw" ;; *) printf '172.17.0.1' ;; esac
 }
 
@@ -1721,9 +1728,16 @@ traefik_route() {
   while [ ! -d "$dir" ] && [ "$i" -lt 60 ]; do sleep 2; i=$((i + 2)); done   # a fresh Dokploy writes it on first boot
   [ -d "$dir" ] || die "Dokploy's Traefik folder $dir is missing - is Dokploy running? (or pick tailscale / local)"
   DOCKER_GW=$(docker_gateway)
-  while listeners | awk -v p="$TRAEFIK_UPSTREAM_PORT" '$2==p {f=1} END {exit !f}'; do
-    TRAEFIK_UPSTREAM_PORT=$((TRAEFIK_UPSTREAM_PORT + 1))
-  done
+  local prev
+  prev=$(sed -nE 's#^http://[^ ]+:([0-9]+) \{$#\1#p' "$CADDY_SITE" 2>/dev/null | head -n1 || true)
+  if [ -n "$prev" ]; then TRAEFIK_UPSTREAM_PORT=$prev                 # a re-run: our Caddy already listens there
+  else
+    while listeners | awk -v p="$TRAEFIK_UPSTREAM_PORT" '$2==p {f=1} END {exit !f}'; do
+      TRAEFIK_UPSTREAM_PORT=$((TRAEFIK_UPSTREAM_PORT + 1))
+    done
+  fi
+  TRAEFIK_SECRET=$(sed -nE 's#^ *X-Harness-Proxy: "([0-9a-f]{32,})"$#\1#p' "$f" 2>/dev/null | head -n1 || true)
+  [ -n "$TRAEFIK_SECRET" ] || TRAEFIK_SECRET=$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')
   caddy_after_docker
   BEHIND_TRAEFIK=1 setup_caddy
   (umask 022; cat > "$f") <<ROUTE
@@ -1733,6 +1747,7 @@ http:
     harness-maxxing:
       rule: "Host(\`$DOMAIN\`)"
       entryPoints: [websecure]
+      middlewares: [harness-maxxing-proxy]
       service: harness-maxxing
       tls:
         certResolver: letsencrypt
@@ -1741,6 +1756,11 @@ http:
       entryPoints: [web]
       middlewares: [redirect-to-https@file]
       service: harness-maxxing
+  middlewares:
+    harness-maxxing-proxy:
+      headers:
+        customRequestHeaders:
+          X-Harness-Proxy: "$TRAEFIK_SECRET"
   services:
     harness-maxxing:
       loadBalancer:
@@ -1748,8 +1768,15 @@ http:
         servers:
           - url: "http://$DOCKER_GW:$TRAEFIK_UPSTREAM_PORT"
 ROUTE
-  chmod 644 "$f"
+  chmod 600 "$f"
   manifest "traefik route $f"
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    local ifc                                          # Traefik reaches the bridge from a Docker interface: INPUT
+    for ifc in docker0 docker_gwbridge; do
+      ufw allow in on "$ifc" to "$DOCKER_GW" port "$TRAEFIK_UPSTREAM_PORT" proto tcp comment 'harness-maxxing traefik' >/dev/null 2>&1 || true
+    done
+    ok "ufw: Traefik may reach $DOCKER_GW:$TRAEFIK_UPSTREAM_PORT from the Docker interfaces"
+  fi
   ok "Dokploy's Traefik serves https://$DOMAIN -> Caddy on $DOCKER_GW:$TRAEFIK_UPSTREAM_PORT -> 127.0.0.1:$PORT"
 }
 

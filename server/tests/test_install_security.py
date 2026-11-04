@@ -240,27 +240,66 @@ def test_docker_alone_is_not_dokploy(tmp_path):
     assert "[0|docker-proxy]" in r.stdout, r.stdout + r.stderr
 
 
+def _traefik_setup(tmp_path, ufw_active=False, gw="172.18.0.1"):
+    stubs = ('caddy() { :; }; systemctl() { :; }; apt_wait() { :; }; manifest() { echo "MANIFEST $*"; }; '
+             'caddy_admin_dropin() { :; }; listeners() { :; }; chgrp() { :; }; '
+             f'docker() {{ printf "%s\n" {gw}; }}; ')
+    if ufw_active:
+        stubs += f'ufw() {{ case "$1" in status) echo "Status: active" ;; *) echo "UFW $*" >> "{tmp_path}/ufw.log" ;; esac; }}; '
+    return sh(stubs + f'DOKPLOY_ETC="{tmp_path}/dokploy"; CADDY_SITE="{tmp_path}/site.caddy"; CADDYFILE="{tmp_path}/Caddyfile"; '
+              f'CADDY_DOCKER_DROPIN="{tmp_path}/caddy.service.d/20-harness-docker.conf"; PATH="$PATH:/usr/sbin"; '
+              'DOMAIN=ui.example.com; PORT=8787; DOKPLOY_FOUND=1; ACCESS=domain; setup_access 2>&1')
+
+
 def test_dokploy_domain_goes_through_traefik_to_a_caddy_on_the_docker_bridge(tmp_path):
     """Traefik -> our Caddy (Docker bridge only, adds X-Forwarded-For) -> Harness: never a plain relay to 127.0.0.1,
     which would make any container look like a local client."""
     dyn = tmp_path / "dokploy" / "traefik" / "dynamic"
     dyn.mkdir(parents=True)
-    stubs = ('caddy() { :; }; systemctl() { :; }; apt_wait() { :; }; manifest() { echo "MANIFEST $*"; }; '
-             'caddy_admin_dropin() { :; }; listeners() { :; }; '
-             'docker() { echo 172.18.0.1; }; ')
-    r = sh(stubs + f'DOKPLOY_ETC="{tmp_path}/dokploy"; CADDY_SITE="{tmp_path}/site.caddy"; CADDYFILE="{tmp_path}/Caddyfile"; '
-           f'CADDY_DOCKER_DROPIN="{tmp_path}/caddy.service.d/20-harness-docker.conf"; '
-           'DOMAIN=ui.example.com; PORT=8787; DOKPLOY_FOUND=1; ACCESS=domain; setup_access 2>&1')
+    r = _traefik_setup(tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
     unit = (tmp_path / "caddy.service.d" / "20-harness-docker.conf").read_text()
     assert "After=docker.service" in unit and "Restart=on-failure" in unit   # the bridge exists only once Docker runs
-    assert r.returncode == 0, r.stdout + r.stderr
     site = (tmp_path / "site.caddy").read_text()
-    assert site.startswith("# Harness Maxxing") and "http://ui.example.com:8790 {" in site
-    assert "\tbind 172.18.0.1\n" in site and "trusted_proxies private_ranges" in site and "reverse_proxy 127.0.0.1:8787" in site
     route = (dyn / "harness-maxxing.yml").read_text()
+    secret = re.search(r'X-Harness-Proxy: "([0-9a-f]{48})"', route)[1]
+    assert site.startswith("# Harness Maxxing") and "http://ui.example.com:8790 {" in site and "\tbind 172.18.0.1\n" in site
+    # Traefik's X-Forwarded-For (the real client) is used only with the secret; anything else keeps its own address
+    assert f"@traefik header X-Harness-Proxy {secret}" in site and "header_up X-Forwarded-For {header.X-Forwarded-For}" in site
+    assert "header_up -X-Harness-Proxy" in site and "trusted_proxies" not in site
     assert "Host(`ui.example.com`)" in route and "certResolver: letsencrypt" in route
-    assert 'url: "http://172.18.0.1:8790"' in route
+    assert "middlewares: [harness-maxxing-proxy]" in route and 'url: "http://172.18.0.1:8790"' in route
     assert f"MANIFEST traefik route {dyn}/harness-maxxing.yml" in r.stdout
+    assert (dyn / "harness-maxxing.yml").stat().st_mode & 0o077 == 0     # the secret is root's only
+
+    r2 = _traefik_setup(tmp_path)                                          # a re-run: same port, same secret
+    assert r2.returncode == 0 and secret in (dyn / "harness-maxxing.yml").read_text()
+    assert "http://ui.example.com:8790 {" in (tmp_path / "site.caddy").read_text()
+
+
+def test_traefik_route_survives_set_e_on_a_first_install(tmp_path):
+    """install.sh runs with set -euo pipefail: reading a route or site that does not exist yet must not stop it."""
+    (tmp_path / "dokploy" / "traefik" / "dynamic").mkdir(parents=True)
+    stubs = ('caddy() { :; }; systemctl() { :; }; apt_wait() { :; }; manifest() { :; }; caddy_admin_dropin() { :; }; '
+             'listeners() { :; }; chgrp() { :; }; docker() { echo 172.17.0.1; }; ')
+    r = subprocess.run(["bash", "-c", f'MAXXING_INSTALL_LIB=1 source "{INSTALL}"; set -euo pipefail; {stubs}'
+                        f'DOKPLOY_ETC="{tmp_path}/dokploy"; CADDY_SITE="{tmp_path}/site.caddy"; CADDYFILE="{tmp_path}/Caddyfile"; '
+                        f'CADDY_DOCKER_DROPIN="{tmp_path}/d.conf"; DOMAIN=ui.example.com; PORT=8787; traefik_route; echo REACHED'],
+                       capture_output=True, text=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
+    assert "REACHED" in r.stdout, r.stdout + r.stderr
+
+
+def test_traefik_route_opens_ufw_from_the_docker_interfaces_only(tmp_path):
+    (tmp_path / "dokploy" / "traefik" / "dynamic").mkdir(parents=True)
+    _traefik_setup(tmp_path, ufw_active=True)
+    log = (tmp_path / "ufw.log").read_text()
+    assert "UFW allow in on docker0 to 172.18.0.1 port 8790 proto tcp" in log
+    assert "UFW allow in on docker_gwbridge to 172.18.0.1 port 8790 proto tcp" in log
+
+
+def test_docker_gateway_keeps_the_ipv4_one_of_a_dual_stack_bridge():
+    r = sh('docker() { printf "fd00::1\n172.17.0.1\n"; }; docker_gateway')
+    assert r.stdout == "172.17.0.1", r.stdout
 
 
 def test_without_dokploy_the_caddy_site_is_unchanged(tmp_path):
