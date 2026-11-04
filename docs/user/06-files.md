@@ -135,7 +135,8 @@ In a folder (the Files page list or grid, and the folder grid of the file viewer
 - Rename and move from the item menu.
 - **Delete moves to the trash**: Settings -> **Trash** lists what was deleted (files, folders,
   topics and projects with their sessions, sessions) - **Restore** puts it back where it was (under a new name
-  such as `blog-restored` when the place is taken; a long name is shortened to make room),
+  such as `blog-restored` when the place is taken; a long name is shortened to make room; a topic whose project
+  is also in the trash comes back after its project),
   *Delete forever* or *Empty the trash* frees the space. Items older than 30 days are removed
   automatically.
 - The workspace folder itself (and the folders that hold it) cannot be moved or deleted from here,

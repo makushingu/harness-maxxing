@@ -532,14 +532,15 @@ def _remap_telegram(old: str, new: str) -> None:
 
 def _delete(prefix: str, kind: str) -> None:
     sessions = _ensure_idle(prefix)
-    dest = move_to_trash(root() / prefix, label=f"{kind}-{prefix.rsplit('/', 1)[-1]}")
+    dest = move_to_trash(root() / prefix, label=f"{kind}-{prefix.rsplit('/', 1)[-1]}", kind=kind)
     from .sessions import service
     service.trash_sessions([s["id"] for s in sessions], dest.parent / (dest.name + ".sessions"))
     _changed("deleted", kind, prefix)
 
 
-def move_to_trash(src: Path, label: str | None = None) -> Path:
-    """Move a file/folder into state_dir('trash') with a `.json` sidecar keeping its origin."""
+def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) -> Path:
+    """Move a file/folder into state_dir('trash') with a `.json` sidecar keeping its origin
+    (`kind` project / topic: only for a workspace delete, never from the name of a file)."""
     trash = config.state_dir("trash")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     label = label or src.name
@@ -555,8 +556,7 @@ def move_to_trash(src: Path, label: str | None = None) -> Path:
         dest = trash / f"{base}-{n}"
     shutil.move(str(src), str(dest))
     side: dict = {"original": str(src), "at": time.time()}
-    if label and label.split("-", 1)[0] in ("project", "topic"):
-        side["kind"] = label.split("-", 1)[0]
+    side["kind"] = kind or ("folder" if dest.is_dir() else "file")
     config.write_json(dest.with_name(dest.name + ".json"), side)
     bus.invalidate("trash")
     return dest
