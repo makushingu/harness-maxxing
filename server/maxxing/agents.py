@@ -40,8 +40,8 @@ log = logging.getLogger("maxxing.agents")
 
 AGENT_FILE = "agent.json"
 AGENTS_DIR = "agents"
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
-PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})/topics/([a-z0-9][a-z0-9-]{0,47})/agents/([a-z0-9][a-z0-9-]{0,47})$")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")
+PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})/topics/([a-z0-9][a-z0-9-]{0,47})/agents/([a-z0-9][a-z0-9-]{0,47})\Z")
 MAX_PER_TOPIC = 20
 
 # The pixel-art character drawn by the UI (web/src/features/agents/Avatar.tsx): every part is one of these names.
@@ -222,8 +222,8 @@ def _clean_layout(data: Any, strict: bool = False) -> dict:
             parsed = parse(x) if isinstance(x, str) else None
             if not parsed or parsed[0] != p:
                 bad(f"Not an agent path of project {p}: {x!r}")
-            elif x not in keep:
-                keep.append(x)
+            elif (norm := "projects/{}/topics/{}/agents/{}".format(*parsed)) not in keep:
+                keep.append(norm)
         if len(keep) > MAX_LAYOUT_AGENTS:
             bad(f"At most {MAX_LAYOUT_AGENTS} agents per project")
             keep = keep[:MAX_LAYOUT_AGENTS]

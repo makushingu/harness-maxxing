@@ -20,7 +20,7 @@ import type { Status } from './parts'
 import type { CreateStart } from './CreateAgent'
 import { Cursor, hash, useDesk, useRoom } from './office'
 
-/** A console cell is W x H pixels of art (as in Gamified). */
+/** A console cell is W x H pixels of art . */
 const W = 30
 const H = 30
 const GAP = 2
