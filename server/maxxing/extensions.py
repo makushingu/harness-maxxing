@@ -226,6 +226,12 @@ def _load_one(d: Path) -> Extension:
             raise ValueError(f"manifest.json is not valid JSON ({e})") from None
         if not isinstance(m, dict):
             raise ValueError("manifest.json must contain an object")
+        try:
+            json.dumps(m, ensure_ascii=False).encode()
+        except UnicodeEncodeError:                     # a lone surrogate ("\ud800") would make the whole list a 500
+            raise ValueError("manifest.json contains invalid text (a lone \\uD800-\\uDFFF escape)") from None
+        except RecursionError:
+            raise ValueError("manifest.json is nested too deeply") from None
         if m.get("id", d.name) != d.name:
             raise ValueError(f"manifest id {m.get('id')!r} differs from the folder name {d.name!r}")
         raw = m.get("name")

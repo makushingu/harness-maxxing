@@ -343,3 +343,12 @@ def test_a_folder_name_ending_with_a_newline_is_refused(client, org):
     _ext(org, "abc\n", {"type": "widget"}, "def card(ctx):\n    return {}\n")
     ext = next(e for e in extensions.all_extensions() if e.id == "abc\n")
     assert "lowercase slug" in (ext.error or "")
+
+
+def test_a_lone_surrogate_in_a_manifest_marks_only_that_extension(client, org):
+    _ext(org, "good", {"type": "widget"}, "def card(ctx): return {'blocks': []}\n")
+    _ext(org, "bad", '{"type":"widget","name":"x\\ud800y","version":"\\ud800"}', "def card(ctx): return {'blocks': []}\n")
+    r = client.get("/api/extensions")
+    assert r.status_code == 200
+    d = {x["id"]: x for x in r.json()}
+    assert d["good"]["error"] is None and "invalid text" in d["bad"]["error"]
