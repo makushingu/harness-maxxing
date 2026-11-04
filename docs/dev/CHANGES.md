@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## 2.0.0-alpha.114 - 2026-11-04
+## 2.0.0-alpha.115 - 2026-11-04
 
 - Feed alerts: `feed.db` `events` gets `actions` (JSON), `ref`, `agent`, `resolved`, `resolution` (added on open,
   `ALTER TABLE`; index `events_ref`); `feed.post(..., actions=, ref=, agent=)`, `find`, `open_events`, `update`,
@@ -24,6 +24,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   refused, `scan_feed` skips that source. Agent status `alerts` (list badge); feed/agent changes invalidate `agents`.
 - Web: `FeedItem` buttons (`FeedActions`, `useFeedAct`) and resolution line; `/feed` **To handle** chip
   (`?pending=1`), dashboard panel "N to handle"; Settings -> Notifications health switch; Agents list alert badge.
+
+## 2.0.0-alpha.114 - 2026-11-04
 
 - Approvals on the Agents page (web only): `usePendingApprovals()` (`GET /api/approvals` without `session`, key
   `['approvals','pending']`); `features/agents/approvals.tsx`: `useThreadApprovals()` folds the `note` of a request
