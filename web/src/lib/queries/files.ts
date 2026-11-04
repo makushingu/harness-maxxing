@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, ApiError, isApiError, withQuery } from '../api'
 import type { FileContent, FileList, FileSearchHit, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
@@ -62,7 +63,9 @@ export const fileKindQuery = (qc: QueryClient, path: string) => ({
     const name = path.slice(path.lastIndexOf('/') + 1)
     return list.entries.find((x) => x.name === name)?.type ?? 'missing'
   },
-  staleTime: Infinity,
+  // a file opened before it is written (named in a message, still rendering) shows once it lands
+  staleTime: (q: { state: { data?: string } }) => (q.state.data === 'missing' ? 0 : Infinity),
+  refetchInterval: (q: { state: { data?: string } }) => (q.state.data === 'missing' ? 4000 : false),
   retry: false,
 })
 export function useFileSearch(q: string) {
@@ -79,8 +82,8 @@ export const fileRawUrl = (path: string, download = false, version?: number | nu
 /** A folder as a zip, made while it downloads. `check` = only `{count, size}` or the 413 that the zip would get. */
 export const fileZipUrl = (path: string, check = false) => withQuery('/api/files/zip', { path, check: check ? 1 : undefined })
 /** `anim`: a GIF (up to 8 MB) comes as it is, so it moves (chat); else a still WebP (file grids). */
-export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false) =>
-  withQuery('/api/files/thumb', { path, w, v: ver(version), anim: anim ? 1 : undefined })
+export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false, attempt = 0) =>
+  withQuery('/api/files/thumb', { path, w, v: ver(version), anim: anim ? 1 : undefined, try: attempt || undefined })
 /** Current mtime of the files shown as previews (chat thumbnails, viewer), asked in one batch per tick: it goes in
  *  their URLs, so a file rewritten under the same name shows its new version. Refreshed when a turn writes files
  *  (`refreshFileStamps`), on focus, and by any file mutation (key under `files`). */
@@ -109,12 +112,22 @@ async function flushStamps() {
       // unversioned URLs (revalidated by the browser) until the next refresh
     }
     for (const [p, fns] of part) {
+      if (mtimes[p] == null) {
+        if (!missingSince.has(p)) missingSince.set(p, Date.now())
+      } else missingSince.delete(p)
       known.set(p, mtimes[p] ?? null)
       for (const fn of fns) fn(mtimes[p] ?? null)
     }
   }
 }
 const seededAt = new Map<string, number>()
+/** A file named in a message before it exists (a render still running, a job that writes it after the turn): its
+ *  stamp is asked again, often at first then less, for 15 minutes - no event tells the page when it lands. */
+const missingSince = new Map<string, number>()
+function missingPoll(path: string): number | false {
+  const age = Date.now() - (missingSince.get(path) ?? Date.now())
+  return age < 30_000 ? 2000 : age < 120_000 ? 5000 : age < 900_000 ? 15_000 : false
+}
 /** mtimes a folder listing already gives: a preview opened from it starts at once, with no round trip. */
 export function seedFileStamps(entries: { path: string; type: string; mtime: number }[]) {
   const now = Date.now()
@@ -134,8 +147,11 @@ export function useFileStamp(path: string | null | undefined) {
     // a stamp already known (a listing, a thumbnail shown before): used at once, re-asked once it is stale
     initialData: known.has(p) ? () => known.get(p) ?? null : undefined,
     initialDataUpdatedAt: () => seededAt.get(p) ?? 0,
+    refetchInterval: (query) => (query.state.data === null ? missingPoll(p) : false),
   })
-  return { ready: !path || q.isFetched || q.data !== undefined, version: q.data ?? null }
+  const { refetch } = q
+  const recheck = React.useCallback(() => refetch(), [refetch])
+  return { ready: !path || q.isFetched || q.data !== undefined, version: q.data ?? null, recheck }
 }
 /** The stamp already known for a path (no request), for prefetching. */
 export const knownFileStamp = (path: string) => known.get(path) ?? null
