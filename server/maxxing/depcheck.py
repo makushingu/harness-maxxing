@@ -84,7 +84,7 @@ def osv_scan(timeout: float = 30) -> dict:
 
 # ---- Claude Code ---------------------------------------------------------------------------
 def _vtuple(v: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
+    return tuple(int(x) for x in re.findall(r"\d{1,9}", v)[:3])
 
 
 def claude_latest(timeout: float = 6) -> str | None:

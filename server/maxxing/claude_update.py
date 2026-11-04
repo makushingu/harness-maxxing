@@ -172,8 +172,16 @@ def busy_reason(now: float | None = None) -> str | None:
     return None
 
 
+_PLAIN_VERSION = re.compile(r"\d{1,9}\.\d{1,9}\.\d{1,9}")
+
+
+def _plain(v: object) -> bool:
+    """A bare x.y.z: the registry value is passed to `claude install` / `npm install -g` as is."""
+    return isinstance(v, str) and _PLAIN_VERSION.fullmatch(v) is not None
+
+
 def _newer(latest: str | None, installed: str | None) -> bool:
-    if not latest or not installed:
+    if not _plain(latest) or not installed:
         return False
     a, b = depcheck._vtuple(installed), depcheck._vtuple(latest)
     return len(a) == 3 and len(b) == 3 and b > a
@@ -204,7 +212,8 @@ def _tick(now: float, force_check: bool) -> str:
     d["installed"] = installed
     if due:
         d["checked_at"] = now
-        d["latest"] = latest_version() or d.get("latest")
+        v = latest_version()
+        d["latest"] = v if _plain(v) else d.get("latest")
     _save(d)
     latest = d.get("latest")
     if not latest:
