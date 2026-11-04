@@ -229,6 +229,37 @@ def test_thumb_concurrent_requests_never_serve_a_half_written_file(client, mx, m
     assert [f.name for f in (mx["state"] / "thumbs").glob("*.part.webp")] == []
 
 
+def test_thumb_and_preview_requests_for_the_same_image_share_one_render(client, mx, monkeypatch):
+    """Two requests for the same file and width (a grid and the viewer's prefetch) run ffmpeg once, niced, in the
+    thumbnail pool (a preview no longer takes one of the shared worker threads)."""
+    import threading
+    from maxxing.api import files as F
+    runs = mx["tmp"] / "runs"
+    bindir = _fake_ffmpeg(mx["tmp"], f"echo run >> {runs}\nsleep 1\nprintf 'RIFFWEBP-image' > \"$out\"\n")
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    seen = []
+    real = F._thumb
+    monkeypatch.setattr(F, "_thumb", lambda p, w: (seen.append(threading.current_thread().name), real(p, w))[1])
+    img = mx["files"] / "photo.jpg"
+    img.write_bytes(b"\xff\xd8" + b"0" * (F.PREVIEW_MIN_BYTES + 10))
+    out = {}
+
+    def get(name, url, w):
+        out[name] = client.get(url, params={"path": str(img), "w": w}).content
+
+    ts = [threading.Thread(target=get, args=("a", "/api/files/thumb", 2000)),
+          threading.Thread(target=get, args=("b", "/api/files/preview", 2048))]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert out == {"a": b"RIFFWEBP-image", "b": b"RIFFWEBP-image"}, out
+    assert runs.read_text() == "run\n"
+    assert seen and all(n.startswith("mx-thumb") for n in seen), seen
+    assert F._thumb_jobs == {}
+    assert F._nice()[1:] == ["-n", "10"] or not shutil.which("nice")
+
+
 def test_list_and_search_survive_a_non_utf8_name(client, mx):
     (mx["files"] / "ok.txt").write_text("x")
     open(os.fsencode(str(mx["files"])) + b"/caf\xe9.txt", "wb").close()      # Latin-1 name (zip, SMB copy)
