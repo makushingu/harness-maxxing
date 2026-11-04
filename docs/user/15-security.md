@@ -48,8 +48,10 @@ file still can.
 - **Local mode**: only through an SSH tunnel.
 - **Behind Dokploy** (domain mode on a server where Dokploy owns 80/443): Dokploy's Traefik handles HTTPS and hands
   the requests to Harness Maxxing's Caddy, which listens only on the Docker bridge (`172.17.0.1:8790` by default),
-  never on a public address. Caddy always adds `X-Forwarded-For`, so a container reaching that address is never
-  taken for a program of this machine; it still meets the sign-in page like anyone else.
+  never on a public address. Traefik's route carries a secret header (only root can read the route file): Caddy
+  takes the visitor's address from Traefik only with it, so sign-in limits count each visitor apart. A container
+  reaching Caddy directly keeps its own address and is never taken for a program of this machine; it still meets
+  the sign-in page like anyone else. With ufw active, the installer allows that port from the Docker interfaces only.
 
 ## The server itself
 
@@ -108,8 +110,14 @@ public is what your containers publish. With Dokploy:
   `maxxing dokploy`, which reads it itself, and asks you before every change. Disconnect it in Infra -> Sources
   (or `maxxing dokploy disconnect`) and revoke it in Dokploy when you no longer need it.
 - **Its installer** (`DOKPLOY=1`) is the official script at a pinned commit, checked against its sha256 and run from
-  a file; it installs Docker with Docker's own script. It is refused when a Docker swarm already runs (it would
-  leave it) or ports 80/443/3000 are taken.
+  a file. It installs Docker with Docker's own script (a pinned Docker version, not checked by a sha256 of ours). It
+  is refused when a Docker swarm already runs (it would leave it) or ports 80/443/3000 are taken.
+- **Docker Swarm** listens on 2377/tcp, 7946 and 4789/udp. They are protected by mutual TLS and a join token, but on
+  a single server nobody needs them from outside: close them in your provider's firewall.
+- **"Asks you first"** is how the skill tells Claude to work (`--yes` is a flag Claude passes itself), not a lock: a
+  session runs as root. Review what Claude proposes before you agree.
+- **Deployment logs** that Claude reads may contain environment values printed by a build: keep secrets out of build
+  output.
 
 Recommended on top: SSH keys instead of passwords (`PasswordAuthentication no` once your key works).
 `maxxing doctor` warns if any of the three is missing.

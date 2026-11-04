@@ -189,7 +189,7 @@ Scripts read keys from the environment (`os.environ["NAME"]`, `$NAME`); a script
 | `maxxing dokploy environments [--json]` | every project and environment with its id (what `app create --environment` takes) |
 | `maxxing dokploy deploy APP --yes` / `redeploy APP --yes` | start a deployment (APP = id, name or app name; a name used in two projects needs the id) |
 | `maxxing dokploy deployments APP [--json]` / `logs APP [--deployment ID] [--lines N]` | deployments newest first / the log of the last one (read on this server) |
-| `maxxing dokploy domain add APP HOST [--port N] [--path P] [--no-https] --yes` / `domain list APP` | serve an app on a domain through Dokploy's Traefik (Let's Encrypt unless `--no-https`) |
+| `maxxing dokploy domain add APP HOST [--port N] [--path P] [--service S] [--no-https] --yes` / `domain list APP` | serve an app on a domain through Dokploy's Traefik (Let's Encrypt unless `--no-https`); a compose stack needs `--service`, the container of the stack to serve |
 | `maxxing dokploy app create --environment ID --name N --repo URL [--branch B] [--build nixpacks\|dockerfile\|railpack\|…] --yes` | a new application from a git repository |
 
 Commands that change something need `--yes`; without it they stop and say what they would do. See [Infra](27-infra.md#dokploy).

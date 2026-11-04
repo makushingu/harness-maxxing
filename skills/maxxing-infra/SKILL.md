@@ -60,9 +60,11 @@ maxxing dokploy environments            # projects/environments and their ids (f
 maxxing dokploy deployments APP          # newest first;  maxxing dokploy logs APP [--deployment ID] [--lines N]
 maxxing dokploy app create --environment ENV_ID --name N --repo URL [--branch main] [--build nixpacks|dockerfile|railpack] --yes
 maxxing dokploy deploy APP --yes | redeploy APP --yes
-maxxing dokploy domain add APP HOST [--port N] [--path P] [--no-https] --yes | domain list APP
+maxxing dokploy domain add APP HOST [--port N] [--path P] [--service S] [--no-https] --yes | domain list APP
 ```
-- APP = the id, the name or the app name from `list`; a name used in two projects needs the id.
+- APP = the id, the name or the app name from `list`; a name used in two projects needs the id. A compose stack's
+  domain needs `--service` (the service of its compose file). Repository URLs: `https://`, `ssh://` or `git@host:path`.
+- Deployment logs can contain environment values: quote only the lines that explain an error, never secrets.
 - **Ask the user before every command with `--yes`** (create, deploy, redeploy, domain): say what will change,
   which project/environment, and wait for a yes. Never deploy to a production environment without that explicit yes.
 - After a deploy: `deployments APP` until it is `done` or `error`, then read `logs APP`; on `error`, quote the

@@ -27,7 +27,17 @@ Dokploy integration (opt-in, nothing changes without Dokploy):
   `remove` refused, updater skipped.
 - Doctor: `check_dokploy` (API with the key, WARN while port 3000 is public), `check_security` INFO instead of WARN
   when ufw is off because Docker runs.
-- Tests: `test_dokploy.py` (fake Dokploy API), install.sh library-mode tests in `test_install_security.py`.
+- Behind Traefik the client address comes from Traefik only with the route's secret header (`X-Harness-Proxy`,
+  48 hex, kept across re-runs; route file 600, Caddy site 640 root:caddy): `@traefik` reverse_proxy sets
+  `X-Forwarded-For {header.X-Forwarded-For}` (Traefik strips forged ones) and drops the header; any other client of
+  the bridge keeps its own address (no `trusted_proxies`). Upstream port read back from the site on re-runs; ufw
+  rule `allow in on docker0|docker_gwbridge to <gw> port <p>` when ufw is active (removed with the route).
+- `dokploy_url` in secrets.json (not config.json, no env override): the key only goes to the URL it was checked
+  against. Values passed on to Dokploy are validated (`_check`: host, branch, app name, git URL `https|ssh|scp-like`,
+  build path, port); compose domains need `serviceName`. `check_url` refuses link-local, accepts 100.64.0.0/10.
+- Tests: `test_dokploy.py` (fake Dokploy API shaped like v0.30: slim `project.all` + `<kind>.one`), install.sh
+  library-mode tests in `test_install_security.py` (one under `set -euo pipefail`); conftest points the Traefik route,
+  the Caddy drop-in and the Dokploy folder into tmp_path for every test.
 - Checked on Ubuntu 24.04 (WSL2 + systemd) with Dokploy v0.30.10: `DOKPLOY=1` install and a re-run, the Traefik
   names (`web`, `websecure`, `letsencrypt`, `redirect-to-https`), HTTPS and the http -> https redirect through
   Traefik -> Caddy -> Harness, a container reaching Harness only through Caddy, a reboot (Caddy drop-in
