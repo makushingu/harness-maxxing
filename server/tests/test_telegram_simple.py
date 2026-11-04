@@ -3,8 +3,6 @@ choosing a mode (fake Bot API, fake sessions service)."""
 from __future__ import annotations
 
 import asyncio
-import sys
-import types
 
 from _conn_helpers import TG_TOKEN, mx_state, wait_for  # noqa: F401  (fixture)
 from maxxing import config
@@ -196,33 +194,41 @@ async def test_health_problems_become_alerts(api, tg, svc, monkeypatch):
     assert not any("Backup old" in (p.get("text") or "") for p in tg.sent())
 
 
-async def test_post_alert_buttons_call_the_alerts_module(api, tg, svc, monkeypatch):
+async def test_feed_alerts_buttons_call_feed_act(api, tg, svc, monkeypatch):
     await _link_simple(api, tg)
+    from maxxing import feed, health
     acted: list = []
-    mod = types.ModuleType("maxxing.alerts")
+    ev = {"id": 7, "source": "agents", "level": "warning", "title": "Writer asks", "body": "rm -rf build",
+          "url": "/agents/acme/blog/writer", "count": 1, "read": False, "ref": "approval:r1", "agent": None,
+          "actions": [{"id": "allow", "label": "Allow", "style": "primary"},
+                      {"id": "deny", "label": "Deny", "style": "danger"},
+                      {"id": "open", "label": "Open", "style": "link"}],
+          "resolved": None, "resolution": None, "telegram": "off"}
 
-    def act(aid, action, by="web"):
-        acted.append((aid, action, by))
-        return {"id": aid, "level": "warn", "title": "Writer asks", "text": "rm -rf build", "resolved": True,
-                "note": "Allowed on Telegram"}
-    mod.act = act
-    monkeypatch.setitem(sys.modules, "maxxing.alerts", mod)
-    gateway.post_alert({"id": "ap1", "level": "warn", "kind": "agent_approval", "title": "Writer asks",
-                        "text": "rm -rf build", "actions": [{"id": "allow", "label": "Allow"},
-                                                            {"id": "deny", "label": "Deny"}]})
+    def act(eid, action, by="web"):
+        acted.append((eid, action, by))
+        return {**ev, "actions": [], "resolved": 1.0, "resolution": "Allowed on Telegram"}
+    monkeypatch.setattr(feed, "act", act, raising=False)
+    gateway.post_alert(ev)                                         # an approval goes even with "off"
     await wait_for(lambda: any("Writer asks" in (p.get("text") or "") for p in tg.sent()), what="alert")
     p = _bot("Writer asks", tg)
-    assert [b["callback_data"] for b in p["reply_markup"]["inline_keyboard"][0]] == ["al:ap1:allow", "al:ap1:deny"]
+    assert [b["callback_data"] for b in p["reply_markup"]["inline_keyboard"][0]] == ["al:7:allow", "al:7:deny"]
     assert not p.get("disable_notification") and p.get("message_thread_id") is None
-    mid = gateway._notes()["al:ap1"][1]
-    tg.callback("al:ap1:allow", message_id=mid)
-    await wait_for(lambda: acted == [("ap1", "allow", "telegram")], what="act")
+    mid = gateway._notes()["al:7"][1]
+    tg.callback("al:7:allow", message_id=mid)
+    await wait_for(lambda: acted == [(7, "allow", "telegram")], what="act")
     await wait_for(lambda: any("Allowed on Telegram" in (q.get("text") or "") for q in tg.sent("editMessageText")),
                    what="edited")
-    assert "al:ap1" not in gateway._notes()                       # resolved: forgotten
-    # while an alerts module exists, it posts the health problems itself
+    assert "al:7" not in gateway._notes()                         # resolved: forgotten
+    # "off" sends nothing else; "silent" is silent
+    gateway.post_alert({**ev, "id": 8, "ref": "agent:x#failed", "title": "Quiet one", "actions": []})
+    gateway.post_alert({**ev, "id": 9, "ref": "agent:x#failed", "title": "Soft one", "actions": [],
+                        "telegram": "silent", "level": "error", "count": 3})
+    await wait_for(lambda: any("Soft one" in (q.get("text") or "") for q in tg.sent()), what="silent")
+    assert _bot("Soft one", tg).get("disable_notification") and "×3" in _bot("Soft one", tg)["text"]
+    assert not any("Quiet one" in (q.get("text") or "") for q in tg.sent())
+    # the feed carries the alerts: the bridge no longer posts health problems itself
     gw = gateway.gateway()
-    from maxxing import health
     monkeypatch.setattr(health, "collect", lambda force=False: {"issues": [
         {"id": "zzz", "level": "error", "code": "disk_full", "text": "Disk full", "seen": False}]})
     await gw._health_pass()
