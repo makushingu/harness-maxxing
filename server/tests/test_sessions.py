@@ -877,3 +877,20 @@ def test_a_model_id_is_checked_before_it_reaches_the_command_line(client, topic,
     for good in ("claude-opus-5-5[1m]", "sonnet", " opus ", ""):
         r = client.patch(f"/api/sessions/{sid}", json={"model": good})
         assert r.status_code == 200 and r.json()["model"] == good.strip()
+
+
+def test_the_web_page_finds_its_message_ids_in_the_queue_and_the_log(client, topic):
+    """A page reloaded mid-send looks for its own ids (`client_ids`), not for the same text at about the same time:
+    two identical messages stay two, and the browser's clock does not matter."""
+    s = client.post("/api/sessions", json={"path": topic, "message": "SLOW long job", "client_id": "c-first"}).json()
+    sid = s["id"]
+    wait_for(lambda: any(e["type"] == "init" for e in all_events(client, sid)), 10)
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "continue NOTOOL", "client_id": "c1"})
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "continue NOTOOL", "client_id": "c2"})
+    items = client.get(f"/api/sessions/{sid}").json()["queue_items"]
+    assert [i.get("client_ids") for i in items] == [["c1"], ["c2"]]
+    assert client.post(f"/api/sessions/{sid}/steer").json()["session"]["queue_items"][0]["client_ids"] == ["c1", "c2"]
+    wait_idle(client, sid, 20)
+    users = [e for e in all_events(client, sid) if e["type"] == "user"]
+    assert [u.get("client_ids") for u in users] == [["c-first"], ["c1", "c2"]]
+    assert client.post(f"/api/sessions/{sid}/messages", json={"text": "x", "client_id": "bad id!"}).status_code == 422
