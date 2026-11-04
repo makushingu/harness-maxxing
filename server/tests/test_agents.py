@@ -75,6 +75,25 @@ def test_update_role_settings_and_runner_flags(client, topic):
     assert argv[argv.index("--model") + 1] == "sonnet"
     assert argv[argv.index("--allowedTools") + 1] == "Read,Bash(git:*)"
     assert "--permission-mode" in argv and argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+    assert argv[argv.index("--max-budget-usd") + 1] == "1.50"           # what is left of the day (nothing spent)
+
+
+def test_turn_stopped_by_the_budget_says_so(client, topic):
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0.02}})
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL a"}).json()   # spends 0.0123
+    wait_idle(client, run["session"]["id"])
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "OVERBUDGET"}).json()
+    wait_idle(client, run["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert argv[argv.index("--max-budget-usd") + 1] == "0.01"           # never 0: Claude Code needs a positive cap
+    s = client.get(f"/api/sessions/{run['session']['id']}").json()
+    assert "Daily budget of the agent reached" in (s.get("error") or ""), s.get("error")
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0}})
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL a"}).json()
+    wait_idle(client, run["session"]["id"])
+    assert "--max-budget-usd" not in _calls()[-1]["argv"]               # 0 = no budget
 
 
 def test_run_posts_to_the_thread_with_the_result(client, topic):
