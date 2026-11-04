@@ -52,7 +52,8 @@ def parse(argv: list[str]) -> dict:
                   "--resume": "resume", "--permission-mode": "permission_mode", "-r": "resume",
                   "--input-format": "input", "--settings": "settings", "--tools": "tools",
                   "--system-prompt": "system_prompt", "--append-system-prompt": "append_system_prompt",
-                  "--mcp-config": "mcp_config", "--permission-prompt-tool": "permission_prompt_tool"}
+                  "--mcp-config": "mcp_config", "--permission-prompt-tool": "permission_prompt_tool",
+                  "--max-budget-usd": "max_budget"}
     for a in it:
         if a in ("-p", "--print"):
             o["print"] = True
@@ -332,6 +333,11 @@ def main() -> int:
     if "FAIL" in prompt and "RESUME_FAIL" not in prompt:
         sys.stderr.write("API Error: simulated failure\n")
         emit(result(sid, model, "API Error: simulated failure", ok=False, errors=["simulated failure"], t0=t0))
+        return 1
+    if "OVERBUDGET" in prompt:                         # `--max-budget-usd` reached: Claude Code stops the turn
+        r = result(sid, model, "", ok=False, errors=["Reached maximum budget ($0.01)"], t0=t0)
+        r["subtype"] = "error_max_budget_usd"
+        emit(r)
         return 1
     if "SLOW" in prompt:
         emit(msg(sid, model, [{"type": "text", "text": "Starting a long task."}]))

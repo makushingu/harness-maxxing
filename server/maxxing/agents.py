@@ -242,7 +242,7 @@ def names(project: str, topic: str) -> list[str]:
 # ---- run settings read by the session runner -----------------------------------------------------
 def run_settings(path: str, outside: bool = False) -> dict:
     """{model, permission_mode, args, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
-    args = extra claude flags. outside: the session was started by text from outside (a webhook, a feed event, another
+    args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
     agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
     risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
     its turns see."""
@@ -254,6 +254,9 @@ def run_settings(path: str, outside: bool = False) -> dict:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
     if a["disallowed_tools"]:
         args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
+    if a["limits"]["usd_per_day"]:                  # Claude Code stops the turn itself once the day's budget is spent
+        left = a["limits"]["usd_per_day"] - day_cost(path)
+        args += ["--max-budget-usd", f"{max(left, 0.01):.2f}"]
     forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
