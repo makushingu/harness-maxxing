@@ -281,36 +281,40 @@ def humanize(expr: str) -> str:
     # -- time of day
     if len(mins) == 60 and len(hrs) == 24:
         when = "every minute"
-    elif len(hrs) == 24 and (s := _step(f[0], 0)):
+    elif len(hrs) == 24 and (s := _step(f[0], 0)) and 60 % s == 0:   # */45 = :00 and :45: listed below
         when = f"every {s} minutes"
     elif len(mins) == 60:
         when = f"every minute during hour{'s' if len(hrs) > 1 else ''} {_join([f'{h:02d}' for h in hrs])}"
     elif len(hrs) == 24:
         when = ("every hour at minute " + _join([str(m) for m in mins])) if mins != [0] else "every hour"
-    elif (s := _step(f[1], 0)) and len(mins) == 1:
+    elif (s := _step(f[1], 0)) and 24 % s == 0 and len(mins) == 1:
         when = f"every {s} hours at :{mins[0]:02d}"
     elif len(mins) * len(hrs) <= 6:
         when = "at " + _join([f"{h:02d}:{m:02d}" for h in hrs for m in mins])
     else:
         when = f"at minute {_join([str(m) for m in mins])} of hours {_join([str(h) for h in hrs])}"
 
-    # -- days
+    # -- days (dom_star / dow_star are cron's matching rule: "*/2" is still a restriction to describe)
+    dom_any, dow_any = c.doms == frozenset(range(1, 32)), c.dows == frozenset(range(7))
     days = ""
-    if not c.dom_star:
+    if not dom_any:
         if (s := _step(f[2], 1)):
             dom_txt = f"every {s} days"
         else:
             dom_txt = "on the " + _join([_ordinal(d) for d in sorted(c.doms)])
             dom_txt += " of the month" if c.months == frozenset(range(1, 13)) else ""
         days = dom_txt
-    if not c.dow_star:
+    if not dow_any:
         if c.dows == frozenset({1, 2, 3, 4, 5}):
             dow_txt = "on weekdays"
         elif c.dows == frozenset({0, 6}):
             dow_txt = "on weekends"
         else:
             dow_txt = "on " + _names(c.dows, DAY_NAMES)
-        days = f"{days} or {dow_txt}" if days else dow_txt
+        if days:                                   # both restricted and neither "*…": either day runs it
+            days = f"{days} or {dow_txt}" if not c.dom_star and not c.dow_star else f"{days} and only {dow_txt}"
+        else:
+            days = dow_txt
     if not days and when.startswith("at "):
         days = "every day"
     months = ""
