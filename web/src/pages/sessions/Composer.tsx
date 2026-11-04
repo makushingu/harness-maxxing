@@ -214,20 +214,25 @@ export const Composer = React.forwardRef<ComposerHandle, {
   // Messages that were being sent when the page went away: back in the box unless the server got them.
   const checkSent = props.checkSent
   React.useEffect(() => {
-    const left = leftOutbox(draftKey)
-    if (!left.length) return
     let off = false
-    void (checkSent ? checkSent(left) : Promise.resolve(left)).then((lost) => {
-      if (off || !lost) return // null: could not tell, they stay stored
-      // already back in the draft (refused, then the page went away before its entry was removed)
-      const back = lost.filter((e) => !(e.body && live.current.text.includes(e.body)))
-      try {
-        for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
-      } finally {
-        left.forEach((e) => outboxDone(draftKey, e.id)) // removed even if bringing one back failed: never again each load
-      }
-      if (back.length) toast.info(t('sessions.composer.sendInterrupted', { count: back.length }))
-    })
+    let left: OutboxEntry[] = []
+    void leftOutbox(draftKey)
+      .then((l) => {
+        left = l
+        if (off || !l.length) return null
+        return checkSent ? checkSent(l) : l
+      })
+      .then((lost) => {
+        if (off || !lost) return // null: could not tell, they stay stored
+        // already back in the draft (refused, then the page went away before its entry was removed)
+        const back = lost.filter((e) => !(e.body && live.current.text.includes(e.body)))
+        try {
+          for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
+        } finally {
+          left.forEach((e) => outboxDone(draftKey, e.id)) // removed even if bringing one back failed: never again each load
+        }
+        if (back.length) toast.info(t('sessions.composer.sendInterrupted', { count: back.length }))
+      })
     return () => {
       off = true
     }
