@@ -243,7 +243,16 @@ export const useSessionsUI = create<State>()(
           const cols = normalizeCols(s.cols.filter((c) => c !== dup).map((c) => (c.key === key ? ({ key, kind: 'session', id, ...(c.below && { below: true }), ...(c.wide && { wide: true }), ...(c.half && { half: true }) } as Col) : c)))
           return { cols }
         }),
-      setNewPath: (key, path) => set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) })),
+      setNewPath: (key, path) => {
+        // that topic already has a new column (the draft is per topic): this one goes, that one takes the focus
+        const other = get().cols.find((c) => c.kind === 'new' && c.path === path && c.key !== key)
+        if (other) {
+          get().close(key)
+          set({ focused: other.key })
+          return
+        }
+        set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) }))
+      },
       focus: (key) => {
         if (get().focused !== key) set({ focused: key })
       },
@@ -342,10 +351,20 @@ export const useSessionsUI = create<State>()(
         set((s) => {
           const ids = new Set(saved.cols.flatMap((c) => (c.kind === 'session' ? [c.id] : [])))
           const keys = new Set(saved.cols.map((c) => c.key))
-          const extra = s.cols.filter((c) => !keys.has(c.key) && !(c.kind === 'session' && ids.has(c.id))).map(({ below: _b, wide: _w, half: _h, ...r }) => r as Col)
+          // sessions by id (solo reuses the key of the column on screen for another session), new columns by key;
+          // one whose key is taken by the saved layout gets a fresh one
+          const renamed: Record<string, string> = {}
+          const extra = s.cols
+            .filter((c) => (c.kind === 'session' ? !ids.has(c.id) : !keys.has(c.key)))
+            .map(({ below: _b, wide: _w, half: _h, ...r }) => {
+              if (!keys.has(r.key)) return r as Col
+              renamed[r.key] = uid()
+              return { ...r, key: renamed[r.key] } as Col
+            })
           const cols = normalizeCols([...saved.cols, ...extra])
           const cur = s.cols.find((c) => c.key === s.focused)
-          const focused = cols.find((c) => c.key === s.focused || (cur?.kind === 'session' && c.kind === 'session' && c.id === cur.id))?.key ?? cols[0]?.key ?? null
+          const focused =
+            (cur?.kind === 'session' ? cols.find((c) => c.kind === 'session' && c.id === cur.id) : cols.find((c) => c.key === (renamed[s.focused ?? ''] ?? s.focused)))?.key ?? cols[0]?.key ?? null
           return { cols, widths: saved.widths, focused }
         }),
       setWidth: (key, w) =>

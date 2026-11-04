@@ -46,6 +46,7 @@ import {
   Skeleton,
   Spinner,
   Tooltip,
+  toast,
   usePresentation,
 } from '@/components/ui'
 import { hasThumb, iconFor, iconTone } from '@/features/files/kinds'
@@ -62,8 +63,8 @@ export type EntryActions = {
   copyPath: (e: FileEntry) => void
   /** Several entries to the trash, one confirmation. */
   removeMany: (paths: string[]) => void
-  /** Drag & drop: move a file/folder into a folder (same window). */
-  moveTo: (from: string, dir: string) => void
+  /** Drag & drop: move files/folders into a folder (same window). */
+  moveTo: (from: string[], dir: string) => void
   /** Drag & drop: files from the computer dropped on a folder row. */
   uploadTo: (files: File[], dir: string) => void
 }
@@ -72,18 +73,25 @@ export type EntryActions = {
  * Entries are draggable (HTML5 DnD, desktop). Drop on a folder row / tile / breadcrumb = move there;
  * files from the computer dropped on a folder = uploaded into it, anywhere else = into this folder. */
 export const MX_PATH_TYPE = 'application/x-maxxing-path'
-/** Path being dragged in this window (dataTransfer data cannot be read during dragover). */
-export const fileDrag: { path: string | null } = { path: null }
+/** Paths being dragged in this window (dataTransfer data cannot be read during dragover): the whole selection
+ * when the dragged entry is part of it, like a desktop file manager. `selection`: the listing's, kept up to date. */
+export const fileDrag: { paths: string[]; selection: ReadonlySet<string> } = { paths: [], selection: new Set() }
 export const hasPathDrag = (dt: DataTransfer) => Array.from(dt.types).includes(MX_PATH_TYPE)
+/** The paths of an entry drop: those of this window's drag, else the one path the data carries. */
+export function droppedPaths(dt: DataTransfer): string[] {
+  const from = dt.getData(MX_PATH_TYPE)
+  if (!from) return []
+  return fileDrag.paths.includes(from) ? fileDrag.paths : [from]
+}
 const hasFiles = (dt: DataTransfer) => Array.from(dt.types).includes('Files')
 /** Rows rendered per step in a big folder (see `shown`). */
 const RENDER_STEP = 200
 /** Can `dir` receive the dragged entry? (not itself, not one of its sub-folders, not where it already is) */
 export function canDropInto(dir: string): boolean {
-  const p = fileDrag.path
-  if (!p) return true
-  const parent = p.slice(0, p.lastIndexOf('/')) || '/'
-  return dir !== p && !dir.startsWith(p + '/') && dir !== parent
+  const ps = fileDrag.paths
+  if (!ps.length) return true
+  // not into one of them (or below it), and not where they all already are
+  return !ps.some((p) => dir === p || dir.startsWith(p + '/')) && ps.some((p) => (p.slice(0, p.lastIndexOf('/')) || '/') !== dir)
 }
 /** Mouse and trackpad only: on a touch screen a long press selects (iOS would start a drag instead). */
 const finePointer = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
@@ -92,13 +100,13 @@ function dragProps(e: FileEntry) {
   return {
     draggable: true,
     onDragStart: (ev: React.DragEvent) => {
-      fileDrag.path = e.path
+      fileDrag.paths = fileDrag.selection.has(e.path) ? [...fileDrag.selection] : [e.path]
       ev.dataTransfer.setData(MX_PATH_TYPE, e.path)
       ev.dataTransfer.setData('text/plain', e.path)
       ev.dataTransfer.effectAllowed = 'move'
     },
     onDragEnd: () => {
-      fileDrag.path = null
+      fileDrag.paths = []
     },
     ...(e.type === 'dir' ? { 'data-drop-dir': e.path } : {}),
   }
@@ -175,6 +183,12 @@ export function Listing({
   }, [more, rendered.length])
   const hiddenCount = list ? list.entries.filter((e) => e.name.startsWith('.')).length : 0
   const sel = useEntrySelection({ entries, onOpen: actions.open, root })
+  React.useEffect(() => {
+    fileDrag.selection = sel.selected
+    return () => {
+      fileDrag.selection = new Set()
+    }
+  }, [sel.selected])
   const picked = sel.selecting ? entries.filter((e) => sel.selected.has(e.path)) : NO_ENTRIES
   const selActions: SelectionActions = React.useMemo(
     () => ({ open: actions.open, rename: actions.rename, remove: (es) => actions.removeMany(es.map((e) => e.path)) }),
@@ -245,17 +259,22 @@ export function Listing({
         setDrag(false)
         setDropDir(null)
         if (hasPathDrag(e.dataTransfer)) {
-          const from = e.dataTransfer.getData(MX_PATH_TYPE)
-          fileDrag.path = null
-          if (!target || !from) return
+          const from = droppedPaths(e.dataTransfer)
+          fileDrag.paths = []
+          if (!target || !from.length) return
           e.preventDefault()
           actions.moveTo(from, target)
           return
         }
         if (!hasFiles(e.dataTransfer)) return
         e.preventDefault()
-        // Folders dropped show up as 0-byte entries without a type: skip them.
-        const files = Array.from(e.dataTransfer.files).filter((f) => f.type || f.size > 0)
+        // Folders cannot be uploaded: told apart by their entry (a 0-byte check also dropped empty files, and a
+        // folder dropped on macOS has a size). Every real file goes, empty or without a type.
+        const items = Array.from(e.dataTransfer.items).filter((it) => it.kind === 'file')
+        const isDir = items.map((it) => !!it.webkitGetAsEntry?.()?.isDirectory)
+        const all = Array.from(e.dataTransfer.files)
+        const files = all.filter((_, i) => !isDir[i])
+        if (files.length < all.length) toast.info(t('files.foldersSkipped', { count: all.length - files.length }))
         if (!files.length) return
         if (target) actions.uploadTo(files, target)
         else onUpload(files)

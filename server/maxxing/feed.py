@@ -106,6 +106,9 @@ def _open(path: Path, key: str) -> sqlite3.Connection:
                 CREATE UNIQUE INDEX IF NOT EXISTS events_dedupe ON events(source, dedupe) WHERE dedupe IS NOT NULL;
                 CREATE INDEX IF NOT EXISTS events_at ON events(at);
                 CREATE INDEX IF NOT EXISTS events_src ON events(source, read);
+                CREATE TABLE IF NOT EXISTS hook_seen (hook TEXT NOT NULL, key TEXT NOT NULL, at REAL NOT NULL,
+                                                      PRIMARY KEY (hook, key));
+                CREATE INDEX IF NOT EXISTS hook_seen_at ON hook_seen(at);
             """)
             _ready.add(key)
     return c
@@ -185,6 +188,26 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     if notify and not grouped:
         _to_telegram(ev)
     return ev
+
+
+def claim_delivery(hook: str, key: str, keep_s: float) -> bool:
+    """A signed webhook body seen for the first time within keep_s -> True (recorded), else False. Kept apart from
+    the events: a body the parser ignored, or whose event was deleted, must not post when replayed."""
+    now = time.time()
+    with _conn() as c:
+        c.execute("DELETE FROM hook_seen WHERE at<? OR (hook=? AND key=? AND at<?)",
+                  (now - RETENTION_DAYS * 86400, hook, key, now - keep_s))
+        try:
+            c.execute("INSERT INTO hook_seen(hook, key, at) VALUES (?,?,?)", (hook, key, now))
+        except sqlite3.IntegrityError:
+            return False
+    return True
+
+
+def release_delivery(hook: str, key: str) -> None:
+    """The delivery failed (bad body, feed error): the sender's retry must not be taken for a replay."""
+    with _conn() as c:
+        c.execute("DELETE FROM hook_seen WHERE hook=? AND key=?", (hook, key))
 
 
 # ---- read ----------------------------------------------------------------------------------

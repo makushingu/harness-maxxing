@@ -185,7 +185,7 @@ export default function TasksPage() {
   const moveStatus = (task: Task, status: TaskStatus) => patch.mutate({ id: task.id, status, order: endOf(status) })
   const toggleDone = (task: Task, done: boolean) => moveStatus(task, done ? 'done' : 'todo')
   const dropStatus = (task: Task, column: string, prev?: Task, next?: Task, extra: { project_id?: string | null } = {}) =>
-    patch.mutate({ id: task.id, status: column as TaskStatus, order: orderBetween(prev?.order, next?.order), ...extra })
+    patch.mutate({ id: task.id, status: column as TaskStatus, order: orderBetween(prev?.order, next?.order), prev_id: prev?.id, next_id: next?.id, ...extra })
   const dropWeek = (task: Task, column: string) => {
     const due = weekDropDue(column)
     if (due !== undefined && due !== task.due) patch.mutate({ id: task.id, due })

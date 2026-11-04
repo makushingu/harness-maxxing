@@ -22,13 +22,16 @@ def anon(mx, monkeypatch):
     from maxxing.app import create_app
     security.set_password("rightpassword")
     security._fails.clear()
+    security._good.clear()
     monkeypatch.setattr(security, "_last_global", 0.0)
+    monkeypatch.setattr(security, "_last_fresh", 0.0)
     calls: list[str] = []
     real = security.verify_password
     monkeypatch.setattr(security, "verify_password", lambda pw, stored: calls.append(pw) or real(pw, stored))
     with TestClient(create_app()) as c:
         yield c, calls
     security._fails.clear()
+    security._good.clear()
 
 
 # ---- login throttle --------------------------------------------------------------------------
@@ -48,11 +51,47 @@ def test_global_cap_slows_everyone_without_locking_out(anon):
     now = time.time()
     for i in range(security.GLOBAL_FAIL_MAX):                 # distributed: one failure per address
         security._fails[f"10.0.{i // 250}.{i % 250}"] = [now]
-    assert c.post("/api/auth/login", json={"password": "rightpassword"}, headers=H).status_code == 200
+    security._last_global = now                               # the retry slot was just taken
+    r = c.post("/api/auth/login", json={"password": "wrongpassword"}, headers=H)
+    assert r.status_code == 401                               # first try of this client: the "fresh" slot
     r = c.post("/api/auth/login", json={"password": "rightpassword"}, headers=H)
     assert r.status_code == 429 and len(calls) == 1            # second check within GLOBAL_GAP_S: refused
     security._last_global = time.time() - security.GLOBAL_GAP_S - 1
     assert c.post("/api/auth/login", json={"password": "rightpassword"}, headers=H).status_code == 200
+    # a client that signed in skips the global cap from now on
+    assert c.post("/api/auth/login", json={"password": "rightpassword"}, headers=H).status_code == 200
+
+
+def test_flooding_clients_cannot_take_the_slot_of_a_first_try(mx):
+    """~25 networks failing in turn kept the single global slot busy: the owner never got a password check."""
+    security._fails.clear()
+    security._good.clear()
+    now = time.time()
+    for i in range(security.GLOBAL_FAIL_MAX):
+        security._fails[f"attacker{i}"] = [now]
+    security._last_fresh = 0.0
+    security._last_global = now                                 # an attacker just took the retry slot
+    assert security.begin_attempt("attacker1")[0] == "global"
+    assert security.begin_attempt("owner")[0] is None           # first try: its own slot
+    assert security.begin_attempt("other")[0] == "global"       # that slot is gated too: still a crawl
+    security._fails.clear()
+
+
+def test_trusted_browser_and_known_client_skip_the_global_cap(mx):
+    security._fails.clear()
+    security._good.clear()
+    now = time.time()
+    for i in range(security.GLOBAL_FAIL_MAX):
+        security._fails[f"attacker{i}"] = [now]
+    security._last_fresh = security._last_global = now
+    assert security.begin_attempt("phone")[0] == "global"
+    assert security.begin_attempt("phone", trusted=True)[0] is None
+    security.end_attempt("laptop", True)                        # signed in earlier from there
+    assert security.begin_attempt("laptop")[0] is None
+    security._fails["phone"] = [now] * security.FAIL_MAX
+    assert security.begin_attempt("phone", trusted=True)[0] == "client"   # the per-client limit still applies
+    security._fails.clear()
+    security._good.clear()
 
 
 def test_parallel_attempts_count_up_front_and_old_entries_are_pruned(mx):
@@ -94,7 +133,9 @@ def test_site_token_never_serves_dotfiles(client, tree):  # noqa: F811
     url = _site_url(client, site / "page.html")
     base = url.rsplit("/", 1)[0]
     client.cookies.clear()
-    assert client.get(url).status_code == 200
+    r = client.get(url)
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "private, no-cache"           # a sign-out is not undone by the cache
     assert client.get(base + "/.ssh/id_rsa").status_code == 403
     assert client.get(base + "/%2Essh/id_rsa").status_code == 403
     assert client.get(base + "/.env").status_code == 403

@@ -170,6 +170,8 @@ def test_html_widget(client, org):
     r = client.get("/ext/snake/widget.html")
     assert r.status_code == 200 and "<canvas" in r.text
     assert r.headers["content-type"].startswith("text/plain")        # never runs with the app's origin
+    h = client.head("/ext/snake/widget.html")                        # the dashboard's existence check: no body
+    assert h.status_code == 200 and h.content == b""
     f = client.get("/ext/snake/widget-frame")                     # the frame: bridge + widget, its own sandbox
     assert f.status_code == 200 and f.headers["content-type"].startswith("text/html")
     assert f.text.index("window.maxxing=") < f.text.index("<canvas")
@@ -183,6 +185,7 @@ def test_html_widget(client, org):
     assert k.status_code == 200 and k.headers["content-type"].startswith("text/css") and ".ui-btn" in k.text
     client.patch("/api/extensions/snake", json={"enabled": False})
     assert client.get("/ext/snake/widget.html").status_code == 404
+    assert client.head("/ext/snake/widget.html").status_code == 404
     assert client.get("/ext/snake/widget-frame").status_code == 404
     # a widget with neither card nor html is an error
     (org.ws / "extensions" / "empty").mkdir()

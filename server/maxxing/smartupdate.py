@@ -155,7 +155,7 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
     other_dirty = [f for f in dirty if not f.startswith("web/")]
     mine = customs.list_customs(branch)
     behind = 0
-    if base and target:
+    if target:                                         # as check_update: also with no common ancestor (rewritten)
         c, cnt = _git("rev-list", "--count", f"HEAD..{upstream}")
         behind = int(cnt.strip()) if c == 0 and cnt.strip().isdigit() else 0
     rep: dict[str, Any] = {
@@ -168,7 +168,9 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
         rep["sig"] = _signature()
         return _write(PREFLIGHT, rep)
     rep["changelog"] = changelog_since("HEAD", upstream)
-    _, changed = _git("diff", "--name-only", f"{base}..{target}") if base else (0, "")
+    if not base:                                       # rewritten history: what upstream changed is diffed from
+        base = _rev(f"HEAD~{len(mine)}") or head       # the code under the customizations
+    _, changed = _git("diff", "--name-only", f"{base}..{target}")
     upstream_files = {f for f in changed.splitlines() if f.strip()}
     rep["upstream_files"] = len(upstream_files)
     rep["customs"] = _replay(mine, target, upstream_files)

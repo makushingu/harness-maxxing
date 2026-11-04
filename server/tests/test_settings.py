@@ -84,7 +84,17 @@ def test_kept_server_clock_is_never_switched(client, monkeypatch):
 def test_align_system_timezone_is_skipped_in_isolation(monkeypatch):
     from maxxing import crons
     monkeypatch.setattr(crons.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("ran")))
-    assert crons.align_system_timezone("Europe/Paris") is False         # MAXXING_SYSTEM_TZ=0 in conftest
+    assert crons.align_system_timezone("Europe/Paris") is True          # MAXXING_SYSTEM_TZ=0 in conftest: not a failure
+
+
+def test_a_system_zone_that_cannot_be_switched_keeps_the_server_clock(client, monkeypatch):
+    """timedatectl failed (container without timedated): jobs would fire in the old zone while the UI shows the new."""
+    from maxxing import config, crons
+    synced = []
+    monkeypatch.setattr(crons, "align_system_timezone", lambda tz: False)
+    monkeypatch.setattr(crons, "sync_crontab", lambda *a: synced.append(1) or "")
+    client.put("/api/settings", json={"timezone": "Europe/Paris"})
+    assert config.load_config()["system_clock"] == "keep" and synced == [1]
 
 
 def test_profile_pseudo(client):

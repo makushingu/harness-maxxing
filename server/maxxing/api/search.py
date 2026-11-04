@@ -4,8 +4,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import contextlib
+import threading
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from .. import search as engine
 from ..security import require_auth
@@ -45,9 +46,17 @@ async def shutdown() -> None:
 
 
 @router.get("")
-async def search(q: str = "", kinds: str = "", limit: int = Query(30, ge=1, le=100)):
+async def search(request: Request, q: str = "", kinds: str = "", limit: int = Query(30, ge=1, le=100)):
     wanted = [k for k in kinds.split(",") if k] or None
-    return await asyncio.to_thread(engine.search, q, wanted, limit)
+    # The palette aborts a query when the next keystroke comes: its worker thread (shared with the whole API)
+    # stops too, instead of ranking for nobody.
+    gone = threading.Event()
+    job = asyncio.ensure_future(asyncio.to_thread(engine.search, q, wanted, limit, gone.is_set))
+    while not job.done():
+        await asyncio.wait({job}, timeout=0.1)
+        if not job.done() and not gone.is_set() and await request.is_disconnected():
+            gone.set()
+    return job.result()
 
 
 @router.get("/stats")

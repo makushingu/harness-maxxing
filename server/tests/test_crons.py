@@ -65,6 +65,27 @@ def test_dst_is_monotonic():
     assert runs == sorted(set(runs))
 
 
+
+def test_dst_repeated_hour_is_never_in_the_past():
+    after = ts(2026, 10, 25, 1, 30)                                   # 02:30 CET, the second 02:30 in Paris
+    assert crons.next_runs("45 2 * * *", 1, after, PARIS) == [ts(2026, 10, 26, 1, 45)]   # 02:45 CEST is past
+    # an "every 10 minutes" job runs in both passes of the repeated hour, a fixed time once
+    runs = crons.next_runs("*/10 * * * *", 12, ts(2026, 10, 25, 0, 30), PARIS)
+    assert runs == [ts(2026, 10, 25, 0, 40) + 600 * i for i in range(12)]
+    assert crons.next_runs("30 2 * * *", 2, ts(2026, 10, 24, 22), PARIS) == [ts(2026, 10, 25, 0, 30),
+                                                                             ts(2026, 10, 26, 1, 30)]
+
+
+def test_kept_clock_is_due_once_on_dst_days(org, monkeypatch):
+    """system_clock = keep: the hourly guarded line runs a 02:30 job once in autumn and still runs it in spring."""
+    config.update_config(timezone="Europe/Paris", system_clock="keep")
+    autumn = [m for m in range(int(ts(2026, 10, 24, 22)), int(ts(2026, 10, 25, 4)), 60) if crons.is_due("30 2 * * *", m)]
+    assert autumn == [ts(2026, 10, 25, 0, 30)]
+    spring = [m for m in range(int(ts(2026, 3, 28, 23)), int(ts(2026, 3, 29, 4)), 60) if crons.is_due("30 2 * * *", m)]
+    assert spring == [ts(2026, 3, 29, 1, 30)]                         # 03:30 CEST, the time the UI shows
+    assert crons.is_due("*/10 * * * *", ts(2026, 10, 25, 1, 10) + 59)   # any second of the minute
+
+
 @pytest.mark.parametrize("expr,text", [
     ("* * * * *", "every minute"),
     ("*/5 * * * *", "every 5 minutes"),
@@ -79,6 +100,12 @@ def test_dst_is_monotonic():
     ("@reboot", "at boot"),
     ("@weekly", "every Sunday at 00:00"),
     ("0 6,18 * * *", "every day at 06:00 and 18:00"),
+    ("0 5 */2 * *", "at 05:00 every 2 days"),                       # "*/2" is still a restriction
+    ("0 5 * * */2", "at 05:00 on Sunday, Tuesday, Thursday and Saturday"),
+    ("0 5 */2 * 1", "at 05:00 every 2 days and only on Monday"),      # "*…" day field: both must match
+    ("0 5 1 * 1", "at 05:00 on the 1st of the month or on Monday"),
+    ("*/45 * * * *", "every hour at minute 0 and 45"),                # not every 45 minutes: :45 then :00
+    ("0 */5 * * *", "every day at 00:00, 05:00, 10:00, 15:00 and 20:00"),
     ("not valid", "not valid"),
 ])
 def test_humanize(expr, text):
@@ -113,6 +140,18 @@ def test_crontab_block_preserves_external_lines(org, monkeypatch):
     ext = crons.external_jobs()
     assert ext == [{"schedule": "0 3 * * *", "command": "/usr/bin/backup.sh --all", "human": "every day at 03:00"},
                    {"schedule": "@reboot", "command": "/opt/start.sh", "human": "at boot"}]
+
+
+def test_another_state_dir_keeps_the_lines_of_the_main_install(org):
+    """A dev copy / preview / script with its own MAXXING_STATE replaced the whole block: the live jobs stopped."""
+    live = "30 2 * * * MAXXING_CRON_DETACH=1 /usr/local/bin/maxxing cron run c_live01 >/dev/null 2>&1"
+    other = "0 * * * * MAXXING_STATE=/srv/preview MAXXING_CRON_DETACH=1 /usr/local/bin/maxxing cron run c_prev01"
+    org.crontab.write_text(f"{EXTERNAL}\n{crons.BLOCK_BEGIN}\n{live}\n{other}\n{crons.BLOCK_END}\n")
+    j = crons.create_job({"name": "Scratch", "schedule": "@hourly", "command": "true"})
+    lines = org.crontab.read_text().splitlines()
+    assert live in lines and other in lines and sum(f"cron run {j['id']}" in ln for ln in lines) == 1
+    crons.delete_job(j["id"])
+    assert org.crontab.read_text() == f"{EXTERNAL}\n{crons.BLOCK_BEGIN}\n{live}\n{other}\n{crons.BLOCK_END}\n"
 
 
 def test_kept_server_clock_guards_lines(org, monkeypatch):
@@ -265,6 +304,9 @@ def test_claude_job_validation(org):
     with pytest.raises(crons.CronError):
         crons.create_job({"name": "", "command": "true"})
     with pytest.raises(crons.CronError) as e:
+        crons.create_job({"name": "a\x00b", "command": "true"})      # would break every run (Popen env)
+    assert e.value.code == "invalid_name"
+    with pytest.raises(crons.CronError) as e:
         crons.create_job({"name": "x", "command": "true", "permission_mode": "yolo"})
     assert e.value.code == "invalid_permission_mode"
 
@@ -302,6 +344,17 @@ def test_overlap_lock(org):
         with pytest.raises(crons.CronError):
             crons.spawn_run(j["id"])
     assert not crons.is_running(j["id"])
+
+
+def test_a_status_probe_never_makes_a_run_refuse(org):
+    """is_running() holds the job lock for an instant: a run starting at that moment waits for it."""
+    import fcntl
+    import threading
+    j = crons.create_job({"name": "x", "command": "true"})
+    f = open(crons._lock_path(j["id"]), "a+")
+    fcntl.flock(f, fcntl.LOCK_EX)                                     # a probe from another process
+    threading.Timer(0.2, lambda: (fcntl.flock(f, fcntl.LOCK_UN), f.close())).start()
+    assert crons.run_job(j["id"])["ok"]
 
 
 # ---- API ------------------------------------------------------------------------------------
@@ -621,3 +674,29 @@ def test_killed_run_is_recorded_as_interrupted_on_the_next_run(org, monkeypatch)
     finally:
         if orphan.poll() is None:
             orphan.kill()
+
+
+def test_lock_watcher_rests_while_no_browser_is_connected(org, monkeypatch):
+    """The 2 s pass flocks every job's lock file only to refresh the UI: nothing is done while no browser listens,
+    and a change made meanwhile is still announced once one connects."""
+    import asyncio
+    from maxxing import bus
+    from maxxing.api import crons as crons_api
+    passes, sent, browsers = [], [], [0]
+    sig = [("a",)]
+    monkeypatch.setattr(crons_api, "_signature", lambda: (passes.append(1), sig[0])[1])
+    monkeypatch.setattr(bus, "browser_count", lambda: browsers[0])
+    monkeypatch.setattr(bus, "invalidate", lambda *t: sent.append(t))
+
+    async def run():
+        task = asyncio.create_task(crons_api._watch(interval=0.01))
+        await asyncio.sleep(0.2)
+        idle = len(passes)
+        sig[0] = ("b",)
+        browsers[0] = 1
+        await asyncio.sleep(0.1)
+        task.cancel()
+        return idle
+    idle = asyncio.run(run())
+    assert idle == 1                                         # the baseline only
+    assert sent and sent[0] == ("crons", "health")

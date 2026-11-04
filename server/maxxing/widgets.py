@@ -196,8 +196,10 @@ def day(force: bool = False) -> dict:
     from . import crons as cr
     zone = _zone()
     now = time.time()
-    start = dt.datetime.now(zone).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-    end = start + 86400
+    today = dt.datetime.fromtimestamp(now, zone).date()
+    start = dt.datetime(today.year, today.month, today.day, tzinfo=zone).timestamp()
+    tomorrow = today + dt.timedelta(days=1)                # a DST day lasts 23 or 25 h, not 86400 s
+    end = dt.datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=zone).timestamp()
     runs = [r for r in cr.read_runs(limit=2000) if start <= (r.get("at") or 0) < end]
     by_job: dict[str, list[dict]] = {}
     for r in runs:

@@ -3,6 +3,45 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.110 - 2026-11-04
+
+Security:
+- **Sign-in**: wrong passwords sent from many addresses no longer keep you out; a browser or address that signed in
+  recently skips the wait.
+- **Two-step sign-in**: turning it off from the web asks for your password, and turning it off or unlinking Telegram
+  sends a notice in Telegram and the feed.
+- **Answers**: a picture from another website in an answer loads only when you click it, and `//host` links open in
+  a new tab.
+- **Team**: someone holding an invitation can no longer post as a member of your groups.
+- **Webhooks**: a captured signed webhook sent again no longer posts again.
+- Thumbnails, path sites, the nightly database backup and page previews closed small holes.
+
+Fixes:
+- **Updates**: going back to the previous version keeps the customizations saved since; switching branch no longer
+  fails on a customization the branch already has, nor brings back one you dropped; an update cut off midway is
+  finished by the next one.
+- **Scheduled jobs**: renaming a topic or project moves its jobs with it; daylight saving days run each job once
+  and the right times show; clearer schedule texts; a run is no longer skipped as "already running".
+- **Telegram**: "Ask Harness" answers in the new thread, an answer survives a server restart, an album with a file
+  that cannot be saved still sends the others, and the last English-only bot replies follow your language.
+- **Sessions**: two messages sent fast in a new session no longer make two sessions, a reload during the first send
+  opens the session, a refused send keeps its attachments, two tabs no longer erase each other's draft, and leaving
+  Maxxing mode keeps the session on screen.
+- **Tasks**: edits Claude makes while the page saves are kept, hand-written values survive, an impossible due date no
+  longer breaks the page, and cards land where they are dropped.
+- **Keys**: Add key no longer replaces a key of the same name, and a pasted private key keeps its line breaks.
+- **Files**: dragging a selected item moves the whole selection; dropped empty files are uploaded.
+- **Search**: a session whose title matches no longer hides the others.
+- **Settings**: saving a setting no longer freezes the other defaults, so future default changes reach you.
+- Backup saves the files of a git worktree inside an extension or skill; import keeps two same-named projects apart;
+  trash restores files named project-… as files.
+
+Faster:
+- Long sessions and pages over a sub-agent's work open faster; huge files written by Claude no longer go whole to
+  the browser.
+- Image previews and uploads no longer slow the server down; big Git repositories and huge commits open at once.
+- Short searches, an idle server, the dashboard's slow cards, long threads and big task lists all do less work.
+
 ## 2.0.0-alpha.109 - 2026-11-04
 
 Changed (dashboard):

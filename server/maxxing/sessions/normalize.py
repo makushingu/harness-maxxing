@@ -15,6 +15,8 @@ import re
 from datetime import datetime
 from typing import Any, Iterable
 
+from . import clip
+
 TOOL_RESULT_MAX = 20_000
 SUMMARY_MAX = 120
 TASK_KINDS = {"local_agent": "agent", "local_bash": "shell"}
@@ -23,17 +25,24 @@ TASK_STATES = {"completed": "completed", "failed": "failed", "stopped": "stopped
 # surrogate it decodes to cannot be encoded as UTF-8 (the events response and the search index failed on it)
 _LONE_SURROGATE = re.compile(r"\\u[dD][89abAB][0-9a-fA-F]{2}(?!\\u[dD][c-fC-F])"
                              r"|(?<!\\u[dD][89abAB][0-9a-fA-F]{2})\\u[dD][c-fC-F][0-9a-fA-F]{2}")
+_SURROGATE_ESC = re.compile(r"\\u[dD][89a-fA-F]")
+# a sub-agent line (top-level parent_tool_use_id, a non-empty string) gives no event: recognised on the text so its
+# often large tool results are not parsed for nothing (read_back over a long foreground agent)
+_PARENT = re.compile(r'"parent_tool_use_id"\s*:\s*"[^"]')
+_MX_TYPE = re.compile(r'"type"\s*:\s*"mx_')
+_JSON_STR = re.compile(r'"(?:[^"\\]|\\.)*"')
 
 
 def normalize_lines(lines: Iterable[str]) -> list[dict]:
     out: list[dict] = []
     for line in lines:
         line = line.strip()
-        if not line:
+        if not line or _sub_agent_line(line):
             continue
         try:
             ev = json.loads(line)
-            if _LONE_SURROGATE.search(line):
+            # JSON carries a surrogate only as a \u escape: cheap checks first, the full pattern is slow on long lines
+            if "\\u" in line and _SURROGATE_ESC.search(line) and _LONE_SURROGATE.search(line):
                 ev = _no_surrogates(ev)
         except (ValueError, RecursionError):                # not JSON, or nested too deep to read
             continue
@@ -43,6 +52,27 @@ def normalize_lines(lines: Iterable[str]) -> list[dict]:
             except (AttributeError, TypeError, ValueError, ArithmeticError, RecursionError):
                 continue                                    # a field of an unexpected type or size: skip that line
     return out
+
+
+def _sub_agent_line(line: str) -> bool:
+    """True only when normalize() would drop the line as sub-agent internals: the last parent_tool_use_id key holds
+    a non-empty string at the top level (what follows it closes exactly one object) and the line is not an mx_* one.
+    Anything unsure goes through the full parse."""
+    if '"parent_tool_use_id"' not in line:
+        return False
+    m = None
+    for m in _PARENT.finditer(line, max(0, len(line) - 4096)):
+        pass
+    if m is None:
+        return False
+    if '"parent_tool_use_id"' in line[m.end():]:                # a later duplicate key (null?) is the one json keeps
+        return False
+    rest = _JSON_STR.sub("", line[m.end() - 2:])               # from the value's opening quote, strings removed
+    if rest.count("{") + rest.count("[") - rest.count("}") - rest.count("]") != -1:
+        return False
+    if not rest.rstrip().endswith("}") or ('"mx_' in line and _MX_TYPE.search(line)):
+        return False
+    return True
 
 
 def _no_surrogates(v: Any) -> Any:
@@ -173,8 +203,16 @@ def _assistant(ev: dict, at: float | None) -> list[dict]:
             out.append({"type": "thinking", "text": b["thinking"], "at": at})
         elif bt == "tool_use":
             inp = b.get("input") if isinstance(b.get("input"), dict) else {}
-            out.append({"type": "tool_use", "id": b.get("id") or "", "name": b.get("name") or "",
-                        "input": inp, "summary": tool_summary(b.get("name") or "", inp), "at": at})
+            summary = tool_summary(b.get("name") or "", inp)
+            if b.get("mx_clipped"):                          # clipped when written (runner, compact-logs)
+                lines = b.get("mx_lines")
+            else:                                            # a log older than that: clipped here
+                inp, lines = clip.clipped_input(inp)
+            use = {"type": "tool_use", "id": b.get("id") or "", "name": b.get("name") or "", "input": inp,
+                   "summary": summary, "at": at}
+            if isinstance(lines, dict) and lines:
+                use["input_lines"] = {str(k): int(v) for k, v in lines.items() if isinstance(v, int)}
+            out.append(use)
     return out
 
 

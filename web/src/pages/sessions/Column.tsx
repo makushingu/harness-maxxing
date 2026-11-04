@@ -56,6 +56,7 @@ import {
   useTelegram,
   useWorkspace,
   uploadAttachment,
+  sessionsQuery,
 } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
 import type { Session } from '@/lib/types'
@@ -91,7 +92,7 @@ import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
 import { EASE_OUT, reducedMotion } from '@/lib/presence'
-import { canShift, focusComposer, groupAt, MAX_STACK, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
+import { canShift, focusComposer, groupAt, MAX_STACK, outboxMove, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
 import { Thread, type ThreadHandle } from './Thread'
 import { Composer, type ComposerHandle } from './Composer'
 import { QuotePill } from './Quote'
@@ -1190,6 +1191,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const becomeSession = useSessionsUI((s) => s.becomeSession)
   const setNewPath = useSessionsUI((s) => s.setNewPath)
   const create = useCreateSession()
+  const send = useSendMessage()
   const [title, setTitle] = React.useState('')
   const [model, setModel] = React.useState('')
   const [planMode, setPlanMode] = React.useState(false)
@@ -1200,9 +1202,31 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const options = topics.map((tp) => ({ value: tp.path, label: mask(`${tp.project} / ${tp.name}`, 10) }))
   const valid = topics.some((tp) => tp.path === col.path)
 
+  // The session made by the first message: the messages sent while it was being created go to it (sends are
+  // chained, so they run once it is known), never into a second session.
+  const made = React.useRef<string | null>(null)
+  const toMade = async (sid: string, text: string, attachments: string[], extra: { client_id?: string; voice?: string }) => {
+    const { add, remove } = usePending.getState()
+    const voice = extra.voice ? { voice: true } : {}
+    const lid = add(sid, { text, attachments, queued: true, ...voice })
+    try {
+      const r = await send.mutateAsync({ id: sid, text, attachments, ...extra })
+      if (!r.queued) {
+        remove(sid, lid)
+        add(sid, { text, attachments, queued: false, ...voice })
+      }
+      return true
+    } catch {
+      remove(sid, lid)
+      return false
+    }
+  }
+
   const onSend = async (text: string, attachments: string[], clientId?: string) => {
+    if (made.current) return toMade(made.current, text, attachments, { client_id: clientId })
     try {
       const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, attachments, plan_mode: planMode || undefined })
+      made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text, attachments, queued: false })
       saveDraft(`new:${col.path}`, '')
@@ -1218,7 +1242,9 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const onSendVoice = async (file: File) => {
     try {
       const up = await uploadAttachment(col.path, file)
+      if (made.current) return toMade(made.current, '', [], { voice: up.path })
       const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, plan_mode: planMode || undefined, voice: up.path })
+      made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text: '', attachments: [], queued: false, voice: true })
       becomeSession(col.key, s.id)
@@ -1229,6 +1255,39 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
       return false
     }
   }
+
+  // The first message was being sent when the page went away: if the server made the session (its first message,
+  // or one queued in it, carries the outbox id), that session takes the column and its own composer checks the
+  // other entries. null = could not tell (kept for the next load).
+  const qc = useQueryClient()
+  const checkSent = React.useCallback(
+    async (left: OutboxEntry[]) => {
+      let list: Session[]
+      try {
+        list = await qc.fetchQuery({ ...sessionsQuery(col.path, false), staleTime: 0 })
+      } catch {
+        return null
+      }
+      const since = Math.min(...left.map((e) => e.at)) / 1000 - 600 // the browser clock may be off
+      const recent = list.filter((x) => x.path === col.path && x.created >= since).sort((a, b) => b.created - a.created).slice(0, 5)
+      for (const x of recent) {
+        await loadLog(x.id)
+        const st = getLog(x.id)
+        if (st.status !== 'ready') return null
+        const got = (e: OutboxEntry) =>
+          e.tagged
+            ? st.items.some((it) => it.kind === 'user' && it.ev.client_ids?.includes(e.id)) || !!x.queue_items?.some((q) => q.client_ids?.includes(e.id))
+            : st.items.some((it) => it.kind === 'user' && it.ev.text.trim() === e.text.trim())
+        if (!left.some(got)) continue
+        made.current = x.id
+        outboxMove(`new:${col.path}`, x.id)
+        becomeSession(col.key, x.id)
+        return []
+      }
+      return left
+    },
+    [qc, col.path, col.key, becomeSession],
+  )
 
   // (a picture dragged from a thread carries a file too: that is a content drag)
   const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
@@ -1305,6 +1364,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
           topicPath={col.path}
           disabledReason={!valid ? t('sessions.new.pickTopic') : claude && !claude.auth.ok ? t(claude.auth.method ? 'sessions.composer.authExpired' : 'sessions.composer.noAuth') : null}
           onSend={onSend}
+          checkSent={checkSent}
           onSendVoice={onSendVoice}
           autoFocus={variant !== 'mobile'}
           placeholder={planMode ? t('plan.placeholder') : t('sessions.new.placeholder')}

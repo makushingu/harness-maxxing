@@ -32,7 +32,12 @@ export function TaskCalendar({ tasks, projects, today, hideProject, onOpen, onSe
   const projById = React.useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
   const byDay = React.useMemo(() => {
     const m = new Map<string, Task[]>()
-    for (const x of tasks) if (x.due) m.set(x.due, [...(m.get(x.due) || []), x])
+    for (const x of tasks) {
+      if (!x.due) continue
+      const a = m.get(x.due)
+      if (a) a.push(x)
+      else m.set(x.due, [x])
+    }
     for (const l of m.values()) l.sort(cmp)
     return m
   }, [tasks])

@@ -251,10 +251,12 @@ def put_settings(body: SettingsIn):
         config.update_config(**changes)
         if "timezone" in changes:
             from .. import crons
+            if not crons.keep_system_clock() and not crons.align_system_timezone(changes["timezone"]):
+                # cron must fire at the times the UI shows: the system zone cannot be switched, so the server
+                # clock is kept and the crontab lines check the schedule in the new zone
+                config.update_config(system_clock="keep")
             if crons.keep_system_clock():
                 crons.sync_crontab()                          # guarded lines follow the new zone
-            else:
-                crons.align_system_timezone(changes["timezone"])  # cron must fire at the times the UI shows
         topics = ["health"]
         if "timezone" in changes:
             topics += ["crons", "tasks"]

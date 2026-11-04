@@ -143,7 +143,7 @@ export type SessionEvent =
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number }
   | { type: 'thinking'; text: string; at: number }
-  | { type: 'tool_use'; id: string; name: string; input: unknown; summary: string; at: number }
+  | { type: 'tool_use'; id: string; name: string; input: unknown; input_lines?: Record<string, number>; summary: string; at: number }
   | { type: 'tool_result'; tool_use_id: string; text: string; is_error: boolean; at: number }
   | { type: 'init'; model: string; cwd: string; at: number }
   | { type: 'result'; ok: boolean; cost_usd: number; duration_ms: number; model: string; usage: Usage; at: number }
@@ -292,6 +292,8 @@ export type Task = {
 export type TaskProject = { id: string; name: string; color: string; workspace?: string | null; hidden?: boolean }
 export type TasksPayload = { projects: TaskProject[]; tasks: Task[] }
 export type TaskInput = Partial<Omit<Task, 'id' | 'created' | 'updated'>> & { title?: string }
+/** PATCH extras: the cards a task was dropped between (the server places it there, renumbering when needed). */
+export type TaskPlace = { prev_id?: string; next_id?: string }
 export type TaskProjectInput = { name: string; color: string; hidden?: boolean }
 export type TaskBulkBody = {
   ids: string[]
@@ -484,7 +486,7 @@ export type TokenStats = {
 export type ChangelogEntry = { version: string; label: string; current: boolean; body: string }
 export type Changelog = { version: string; entries: ChangelogEntry[] }
 export type Secret = { name: string; note: string; expose: boolean; updated: number; preview: string }
-export type SecretPutBody = { value?: string; note?: string; expose?: boolean }
+export type SecretPutBody = { value?: string; note?: string; expose?: boolean; create?: boolean }
 
 /* ---------------------------------------------------------------- System */
 /** `seen`: marked as seen - it does not count in the sidebar until it changes or for 24 h. */
@@ -631,6 +633,8 @@ export type Widget = {
   hidden?: boolean
   /** Still computing when the dashboard answered: fetch it alone (GET /api/dashboard/widgets/{id}). */
   pending?: boolean
+  /** With pending: `card` is the last one computed (past its TTL), shown until the new one arrives. */
+  stale?: boolean
 }
 export type DashboardPayload = { widgets: Widget[] }
 export type DashboardLayout = { order: string[]; hidden: string[] }

@@ -147,6 +147,8 @@ def _served() -> list[dict]:
 
 HARNESS_COOKIE_NAME = r"mx_[A-Za-z0-9_]+"
 HARNESS_COOKIE_RE = HARNESS_COOKIE_NAME + r"=[^;]*;?\s*"       # one Harness cookie in a Cookie header (Caddy regex)
+# a Set-Cookie of a Harness cookie: browsers trim spaces and tabs around the name ("mx_session =x" is mx_session)
+HARNESS_SET_COOKIE_RE = r"^[ \t]*" + HARNESS_COOKIE_NAME + r"[ \t]*=.*$"
 SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")      # written as is in a Caddy file: no space, quote, newline
 
 
@@ -162,7 +164,7 @@ def _block(name: str, root: str | None, port: int | None, upstream_host: str | N
         if sandbox:
             # a path site shares the Harness origin: its app never sees the Harness cookies (mx_session, mx_device)
             # and cannot set one; its own cookies (a login of the app) still work
-            opts += [f'header_up Cookie "{HARNESS_COOKIE_RE}" ""', f'header_down Set-Cookie "^{HARNESS_COOKIE_NAME}=.*$" ""']
+            opts += [f'header_up Cookie "{HARNESS_COOKIE_RE}" ""', f'header_down Set-Cookie "{HARNESS_SET_COOKIE_RE}" ""']
         up = f"reverse_proxy 127.0.0.1:{port}"
         inner.append(up + (" {\n" + "".join(f"\t\t{o}\n" for o in opts) + "\t}" if opts else ""))
     return "\n".join("\t" + ln for ln in inner)
