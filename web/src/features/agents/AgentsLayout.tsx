@@ -20,7 +20,6 @@ import { AgentsList } from './AgentsList'
 import { AgentsEmpty, AgentsOverview } from './AgentsPage'
 import AgentPage from './AgentPage'
 import { RunView } from './RunView'
-import { useCreateWithClaude } from './EditWithClaude'
 import { CreateAgent, type CreateStart } from './CreateAgent'
 import { AgentsOff, useAgentsOn } from './parts'
 
@@ -43,7 +42,7 @@ export default function AgentsLayout() {
       ),
     [setParams],
   )
-  // The empty page offers Create with Claude, the gallery and the manual / import links: the last three open the sheet.
+  // "New agent" and the empty page (its manual / template / import choices, with the picked topic) open the sheet.
   const [start, setStart] = React.useState<CreateStart | null>(null)
   const openWith = React.useCallback(
     (s: CreateStart) => {
@@ -54,9 +53,8 @@ export default function AgentsLayout() {
   )
   const topic = params.get('topic') || ''
   const topicPath = topic ? `projects/${topic.replace('/', '/topics/')}` : undefined
-  // "New agent": a new session (of the listed topic, if the list is narrowed to one) with the request started.
-  const createWithClaude = useCreateWithClaude()
-  const newAgent = React.useCallback(() => createWithClaude(topicPath), [createWithClaude, topicPath])
+  // "New agent": the sheet asks where (the listed topic if the list is narrowed to one), then With Claude / By hand.
+  const newAgent = React.useCallback(() => openWith({}), [openWith])
   const home = /^\/agents\/?$/.test(location.pathname)
 
   if (on === false) return <AgentsOff />
