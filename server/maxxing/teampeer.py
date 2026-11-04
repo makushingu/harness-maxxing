@@ -268,8 +268,8 @@ def people() -> dict:
     out = {}
     now = time.time()
     for addr, p in _peek()["peers"].items():
-        if p.get("status") not in ("accepted", "group"):
-            continue
+        if p.get("status") not in ("accepted", "group") and not p.get("group_keys"):
+            continue                # a group member with a request not answered yet stays in its groups
         seen = now - float(p.get("last_seen") or 0)
         out[pid(addr)] = {"name": p.get("name") or urlsplit(addr).hostname, "emoji": p.get("emoji", ""),
                           "color": p.get("color") or "zinc", "server": urlsplit(addr).hostname, "address": addr,
@@ -421,7 +421,11 @@ def hello(body: dict, ip: str) -> dict:
         key0 = _unb64(found["code"])
         nonce_a = _b64(secrets.token_bytes(16))
         key = _unb64(_mac_b(key0, "key", me, frm, nonce_a, nonce_b))
-        doc["peers"][frm] = {**old, **_clean_profile(body.get("profile")), "key": _b64(key), "status": "request",
+        prof = _clean_profile(body.get("profile"))
+        # a group member's address: the request may come from anybody holding the invitation, so the member keeps
+        # its name in the groups (a real contact sends its profile once accepted)
+        prof = prof | old if old.get("status") == "group" else old | prof
+        doc["peers"][frm] = {**prof, "key": _b64(key), "status": "request",
                              "fingerprint": fingerprint(key), "since": now, "last_seen": now}
         _save(doc)
     return {"nonce": nonce_a, "proof": _mac(key0, "welcome", me, frm, nonce_a, nonce_b), "profile": _profile()}
@@ -481,12 +485,19 @@ def _key_ok(k: object) -> bytes | None:
     return b if len(b) == 32 else None
 
 
+PENDING = "~pending"                # scope of a link key not accepted yet: accept / refuse / bye only
+
+
 def _scopes(p: dict) -> list[tuple[str, bytes]]:
-    """(scope, key) a sender may sign with: "" = its contact link, else the id of the one group the key is for."""
+    """(scope, key) a sender may sign with: "" = its contact link, PENDING = a link still waiting for an answer (whoever
+    holds an invitation can make one under any address: it proves nothing yet), else the id of the one group the key
+    is for. A contact's group keys are ignored: the group's creator made them and knows them."""
     out = []
-    if p.get("key") and p.get("status") in ("accepted", "waiting", "request") and _key_ok(p["key"]):
-        out.append(("", _unb64(p["key"])))
-    out += [(cid, k) for cid, k in ((cid, _key_ok(v)) for cid, v in (p.get("group_keys") or {}).items()) if k]
+    status = p.get("status")
+    if p.get("key") and status in ("accepted", "waiting", "request") and _key_ok(p["key"]):
+        out.append(("" if status == "accepted" else PENDING, _unb64(p["key"])))
+    if status != "accepted":
+        out += [(cid, k) for cid, k in ((cid, _key_ok(v)) for cid, v in (p.get("group_keys") or {}).items()) if k]
     return out
 
 
@@ -564,7 +575,10 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
     from . import team
     event = _scrub(event)  # type: ignore[assignment]
     kind = event.get("type")
-    if scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave") or str(event.get("chat") or "") != scope):
+    if scope == PENDING:
+        if kind not in ("accept", "refuse", "bye"):
+            raise PeerError(403, "forbidden", "Not a contact yet")
+    elif scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave") or str(event.get("chat") or "") != scope):
         raise PeerError(403, "forbidden", "A group key only works in its own group")
     with _lock:
         doc = _load() if kind in ("accept", "refuse", "bye", "profile") else _peek()   # the others only read
@@ -651,11 +665,13 @@ def new_pair_key() -> str:
 def _key_to(address: str, chat: str | None) -> bytes:
     with _lock:
         p = _peek()["peers"].get(address) or {}
-    if p.get("status") == "accepted" or (p.get("status") in ("waiting", "request") and p.get("key")):
+    if p.get("status") == "accepted":
         return _unb64(p["key"])
     gk = (p.get("group_keys") or {}).get(chat or "")
-    if gk:
+    if gk:                          # a group member with a request not answered yet: its group still uses the pair key
         return _unb64(gk)
+    if p.get("status") in ("waiting", "request") and p.get("key"):
+        return _unb64(p["key"])
     raise PeerError(404, "no_key", "Not connected with " + address)
 
 

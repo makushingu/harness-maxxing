@@ -45,6 +45,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   keeps the old line until `maxxing infra site remove` + `add`.
 - `infra db backup`: `pg_dump -Fc --dbname=dbname='<quoted>'` (a database named `-f/x` was an option, `host=...` a
   connection string); a name outside `[A-Za-z0-9_.-]` (or starting with `-`/`.`) gets a cleaned file name + sha1[:8].
+- Team peers: a `waiting`/`request` link key verifies with scope `teampeer.PENDING` (only accept / refuse / bye; an
+  invitation holder could say hello as a group member and post as them). A `request` from a group member keeps its
+  group pair key for that group (`_key_to`), its group name and its place in `people()`. `_scopes` ignores
+  `group_keys` of an accepted contact (the creator made that pair key); they stay stored for after a `bye`.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
