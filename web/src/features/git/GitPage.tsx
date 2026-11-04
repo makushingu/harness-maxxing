@@ -70,11 +70,11 @@ function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: 
         <FolderGit2 className="mt-0.5 size-5 shrink-0 text-primary" />
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{r.name}</span>
+            <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{r.name}</span>
             {/* the repository only: its branches (and the worktree folders of the same clone) are in its graph;
                 the checked-out branch shows only when it is not the usual one (or HEAD is detached) */}
             {!r.error && !(r.branch && ['main', 'master'].includes(r.branch)) && (
-              <span className="rounded bg-primary/15 px-1.5 py-px font-mono text-[11px] text-primary">
+              <span className="max-w-full rounded bg-primary/15 px-1.5 py-px font-mono text-[11px] break-all text-primary">
                 {r.branch ?? t('git.detached')}
               </span>
             )}
@@ -85,8 +85,8 @@ function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: 
               </span>
             )}
             {r.github && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Github className="size-3" />
+              <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                <Github className="size-3 shrink-0" />
                 {r.github}
               </span>
             )}
@@ -265,7 +265,7 @@ function RepoList({ onOpen }: { onOpen: (repo: string) => void }) {
         local.length ? (
           <>
             <p className="text-xs text-muted-foreground">{t('git.localHint', { root: data!.root })}</p>
-            <ul className="grid gap-2 lg:grid-cols-2">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
               {local.map((r) => (
                 <LocalRow key={r.path} r={r} root={data!.root} onOpen={() => onOpen(r.path)} />
               ))}
@@ -309,7 +309,7 @@ function RepoList({ onOpen }: { onOpen: (repo: string) => void }) {
             </Link>
           </div>
           <TokenErrors errors={gh.errors} />
-          <ul className="grid gap-2 lg:grid-cols-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
             {remote.map((r) => (
               <GithubRow key={r.full_name} r={r} onOpen={() => onOpen(`github:${r.full_name}`)} />
             ))}
@@ -341,17 +341,17 @@ function RepoView({ repo, onBack, onSwitch }: { repo: string; onBack: () => void
       : null
   const ghInfo = isGh ? overview?.github.repos.find((g) => `github:${g.full_name}`.toLowerCase() === repo.toLowerCase()) : null
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft /> {t('git.allRepos')}
         </Button>
         {isGh ? <Github className="size-5 text-primary" /> : <FolderGit2 className="size-5 text-primary" />}
-        <h2 className="text-lg font-semibold">{isGh ? repo.slice(7) : r?.name || repo.split('/').pop()}</h2>
-        {r?.branch && <span className="rounded bg-primary/15 px-1.5 py-px font-mono text-xs text-primary">{r.branch}</span>}
+        <h2 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">{isGh ? repo.slice(7) : r?.name || repo.split('/').pop()}</h2>
+        {r?.branch && <span className="max-w-full rounded bg-primary/15 px-1.5 py-px font-mono text-xs [overflow-wrap:anywhere] text-primary">{r.branch}</span>}
         {(r?.permission || ghInfo?.permission) && <PermBadge p={(r?.permission || ghInfo?.permission)!} />}
         <Sync ahead={r?.ahead} behind={r?.behind} changed={(r?.changed || 0) + (r?.untracked || 0)} />
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex max-w-full flex-wrap items-center gap-2">
           {other && (
             <Button variant="outline" size="sm" onClick={() => onSwitch(other)}>
               {isGh ? <Server /> : <Github />} {isGh ? t('git.seeLocal') : t('git.seeGithub')}
@@ -422,17 +422,19 @@ function RepoView({ repo, onBack, onSwitch }: { repo: string; onBack: () => void
               ) : !pulls.data?.length ? (
                 <p className="text-xs text-muted-foreground">{t('git.noPulls')}</p>
               ) : (
-                <ul className="grid gap-1.5">
+                <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                   {pulls.data.map((p) => (
                     <li key={p.number}>
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="grid gap-0.5 rounded-md p-1.5 text-[13px] hover:bg-accent/60">
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-[13px] hover:bg-accent/60">
                         <span className="truncate">
                           <span className="text-muted-foreground">#{p.number}</span> {p.title}
                           {p.draft && <span className="ml-1 text-xs text-muted-foreground">({t('git.draft')})</span>}
                         </span>
-                        <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                          <GitBranch className="size-3" />
-                          {p.head} → {p.base} · {p.author} · {fmtRelative(p.updated, lang)}
+                        <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                          <GitBranch className="size-3 shrink-0" />
+                          <span className="truncate">
+                            {p.head} → {p.base} · {p.author} · {fmtRelative(p.updated, lang)}
+                          </span>
                         </span>
                       </a>
                     </li>

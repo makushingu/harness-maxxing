@@ -24,7 +24,7 @@ export default function FeedPage() {
   const sources = summary?.sources ?? []
   const unread = summary?.unread ?? 0
   const chip = (active: boolean) =>
-    cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors max-md:h-10 pointer-coarse:h-10', active ? 'border-primary bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')
+    cn('inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors max-md:h-10 pointer-coarse:h-10', active ? 'border-primary bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')
   return (
     <Page
       title={t('feed.title')}
@@ -40,15 +40,15 @@ export default function FeedPage() {
         </>
       }
     >
-      <div className="grid gap-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('feed.sources')}>
           <button type="button" className={chip(source === null)} onClick={() => setSource(null)}>
             {t('feed.allSources')}
           </button>
           {sources.map((s) => (
-            <button key={s.source} type="button" className={chip(source === s.source)} onClick={() => setSource(s.source)} data-testid="feed-chip">
-              {s.source}
-              {s.unread > 0 && <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground tabular-nums">{s.unread}</span>}
+            <button key={s.source} type="button" className={chip(source === s.source)} onClick={() => setSource(s.source)} data-testid="feed-chip" title={s.source}>
+              <span className="truncate">{s.source}</span>
+              {s.unread > 0 && <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground tabular-nums">{s.unread}</span>}
             </button>
           ))}
           <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
