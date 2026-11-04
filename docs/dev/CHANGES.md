@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.110 - 2026-11-04
 
 Dokploy integration (opt-in, nothing changes without Dokploy):
 - `maxxing.dokploy` (API client, `x-api-key`, vault `DOKPLOY_API_KEY` not exposed, the URL it was checked against in secrets.json `dokploy_url`),
@@ -44,8 +44,6 @@ Dokploy integration (opt-in, nothing changes without Dokploy):
   `connect`, `environments`, `app create`, `deploy`, `redeploy`, `deployments`, `logs`, `domain add|list` and the
   Infra reader. `project.all` (v0.30) gives apps / compose stacks only `{id, name, status}`: `inventory()` reads
   `<kind>.one` for the rest. Not checked: Let's Encrypt with a real domain, compose stacks, the dashboard URLs.
-
-## 2.0.0-alpha.110 - 2026-11-04
 
 - `maxxing update` writes `<state>/update/in-progress.json` (rollback commit, starting branch, version, auto-save
   carried back) before the code moves and removes it when the update ends (any exit but 1, and `--rollback`). A run
