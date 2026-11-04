@@ -74,6 +74,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "profile": {"name": "", "color": "", "emoji": ""},   # the user's pseudo: messages, notifications
     "usage_widget": False,
     "maxxing_mode": False,             # Settings -> Features (beta): a finished session comes to the front (Sessions page)
+    "health_feed": False,              # server health problems also in the Notifications feed (`maxxing init`: on when new)
     "agents_page": False,              # Settings -> Features: the Agents page (lasting roles of a topic, with triggers)
     "team_page": False,                # Settings -> Features: the Team page (chats between people) and its sidebar entry
     "git_page": False,                 # Settings -> Features: the Git & GitHub page and its sidebar entry
