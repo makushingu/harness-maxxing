@@ -1,11 +1,11 @@
 // The Agents page (/agents/*, Settings -> Features -> agents_page), laid out like a messaging app: the list of
 // agents on the left (AgentsList), the selected agent on the right.
-//   /agents                                  -> the overview on the right (the pixel office, or cards)
+//   /agents                                  -> the overview on the right (agents at their desks, by project)
 //   /agents/<project>/<topic>/<name>         -> the agent: its conversation + its profile (AgentPage)
 //   /agents/<project>/<topic>/<name>/runs/<sid> -> one run, the full session in place (RunView)
 //   ?new=1 opens the creation sheet, ?topic=<project>/<topic> narrows the list.
-// Touch layout: /agents is the office or the list (same choice as the overview's Office / List); an agent or a
-// run opens full screen with a back button.
+// Touch layout: /agents is the list (like the contacts of a chat app: search, grouping, unread counts - easier to
+// scan on a phone than the cards); an agent or a run opens full screen with a back button.
 // Agents and their runs never show in Sessions (sessions = where the user works, agents = automatic work).
 import * as React from 'react'
 import { Route, Routes, useLocation, useSearchParams } from 'react-router'
@@ -14,7 +14,7 @@ import { useCompact } from '@/stores/media'
 import { PageHeader } from '@/components/shell/Page'
 import { PreviewProvider } from '@/pages/sessions/FilePreview'
 import { AgentsList } from './AgentsList'
-import { AgentsOverview, OverviewModeToggle, useOverviewMode } from './AgentsPage'
+import { AgentsOverview } from './AgentsPage'
 import AgentPage from './AgentPage'
 import { RunView } from './RunView'
 import { CreateAgent } from './CreateAgent'
@@ -41,14 +41,13 @@ export default function AgentsLayout() {
   )
   const topic = params.get('topic') || ''
   const home = /^\/agents\/?$/.test(location.pathname)
-  const [mode, setMode] = useOverviewMode()
 
   if (on === false) return <AgentsOff />
 
   const detail = (
     <PreviewProvider>
       <Routes>
-        <Route index element={<AgentsOverview onNew={() => setCreating(true)} mode={mode} onMode={setMode} title={touch ? t('agents.title') : undefined} />} />
+        <Route index element={<AgentsOverview onNew={() => setCreating(true)} />} />
         <Route path=":project/:topic/:name" element={<AgentPage />} />
         <Route path=":project/:topic/:name/runs/:sid" element={<RunView />} />
       </Routes>
@@ -60,9 +59,9 @@ export default function AgentsLayout() {
   if (touch)
     return (
       <>
-        {home && mode === 'list' ? (
+        {home ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <PageHeader title={t('agents.title')} actions={<OverviewModeToggle value={mode} onChange={setMode} />} />
+            <PageHeader title={t('agents.title')} />
             <AgentsList onNew={() => setCreating(true)} className="flex-1" />
           </div>
         ) : (

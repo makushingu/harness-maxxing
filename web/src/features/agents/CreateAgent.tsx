@@ -6,7 +6,7 @@
 // "Import a Claude Code agent file": a .claude/agents/<name>.md file (picked or pasted) becomes an agent of a topic.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, Clock, FileUp, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Clock, Dices, FileUp, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
 import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useCreateSession, useImportAgent, useWorkspace } from '@/lib/queries'
@@ -15,7 +15,7 @@ import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
-import { AVATAR_OPTIONS, AgentAvatarIcon, projectColor, randomAvatar } from './Avatar'
+import { AgentAvatarIcon, projectColor, randomAvatar } from './Avatar'
 import { sessionsUrl } from '@/pages/sessions/util'
 import { AvatarEditor } from './AvatarEditor'
 import { DEFAULT_LIMITS, FeedTriggerFields, KeyChecks, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
@@ -77,12 +77,33 @@ const fresh = (topicPath?: string): Form => {
   }
 }
 
-/** The face in the outfit colour of `project` (its agents are told apart by it); the tile moves off that colour. */
+/** The character of the new agent: small with "Change" (and Random), the editor unfolds under it. */
+function CharacterField({ value, project, onChange }: { value: AgentAvatar; project: string; onChange: (a: AgentAvatar) => void }) {
+  const t = useT()
+  const [open, setOpen] = React.useState(false)
+  return (
+    <div className="grid gap-3" data-testid="agent-character">
+      <div className="flex items-center gap-3">
+        <AgentAvatarIcon avatar={value} size={48} animate />
+        <div className="grid min-w-0 flex-1">
+          <span className="text-sm font-medium">{t('agents.create.face')}</span>
+          <span className="text-xs text-muted-foreground">{t('agents.create.faceHint')}</span>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange(randomAvatar(project))} aria-label={t('agents.avatar.random')} title={t('agents.avatar.random')}>
+          <Dices />
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="agent-character-edit">
+          {open ? t('common.close') : t('agents.create.faceEdit')}
+        </Button>
+      </div>
+      {open && <AvatarEditor value={value} onChange={onChange} project={project} preview={false} className="rounded-xl border p-4" />}
+    </div>
+  )
+}
+
+/** The character in the outfit colour of `project` (its agents are told apart by it). */
 function dressFor(a: AgentAvatar, project: string): AgentAvatar {
-  if (!project) return a
-  const color = projectColor(project)
-  const bg = a.bg === color ? AVATAR_OPTIONS.bg[(AVATAR_OPTIONS.bg.indexOf(color as never) + 3) % AVATAR_OPTIONS.bg.length] : a.bg
-  return { ...a, color, bg }
+  return project ? { ...a, color: projectColor(project) } : a
 }
 
 /** The form filled from a ready-made agent: its name, face, role, safety settings and first trigger. */
@@ -298,10 +319,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
                   />
                 </FormField>
               </div>
-              <div className="grid gap-1.5">
-                <span className="text-sm font-medium">{t('agents.create.face')}</span>
-                <AvatarEditor value={f.avatar} project={f.project} onChange={(a) => setF((x) => ({ ...x, avatar: a, colorEdited: x.colorEdited || a.color !== x.avatar.color }))} />
-              </div>
+              <CharacterField value={f.avatar} project={f.project} onChange={(a) => setF((x) => ({ ...x, avatar: a, colorEdited: x.colorEdited || a.color !== x.avatar.color }))} />
               <FormField label={t('agents.create.role')} hint={t('agents.create.roleHint')}>
                 <Textarea minRows={4} maxRows={14} value={f.role} onChange={(e) => set('role', e.target.value)} placeholder={t('agents.create.rolePlaceholder')} data-testid="agent-role" />
               </FormField>

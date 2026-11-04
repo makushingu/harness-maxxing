@@ -17,12 +17,12 @@ itself lives. Agents and their runs never show in Sessions: the Agents page has 
 face, `project · topic`, a dot for running / waiting for you / to read / failed / off), grouped **by state** or **by
 project**, with a search and **New agent**. In Sessions, a topic's menu offers **Agents of this topic**.
 
-With no agent open, the page shows the **office**: one room per project, its banner in the project's color, every
-agent a pixel character at its desk. A bubble above the head says what it is doing: dots while it works, **!** for a
-new result (red when the run failed), a shield when it waits for your OK, **z** when it is off. Click a character to
-open the agent; point at it (or tap its name tag) to see its card in the room: last result, cost today, the on/off
-switch and **Run**. **Office / List** switches to plain cards, and the choice is kept in this browser (on a phone,
-List is the agents list).
+With no agent open, the page shows every agent **at its desk**, one section per project (the dot is the project's
+color). Under each one, its name and one line that says where it is: *Working…*, *2 new results*, *Waiting for your
+OK*, *Last run failed*, *Off*, *Ran 7 min ago*, *Never run*. A small bubble above the head points out what needs you
+(dots while it works, the number of new results, a shield for an OK, **!** for a failure); an agent that is off sleeps.
+Click a card to open the agent; point at it for its on/off switch and **Run** (always shown on a touch screen). On a
+phone, the Agents page is the list.
 
 ## What an agent is made of
 
@@ -67,8 +67,8 @@ top says what is left to connect (a webhook address in Shopify, a key, the list 
 **Set it up by hand instead** gives the three steps:
 
 1. **Where**: the project and the topic it works in.
-2. **Who**: its name, its pixel character (face: skin, head shape, eyes, mouth; hair: haircut and color; style: hat,
-   outfit, background - the outfit takes the project's color, so its agents are easy to spot), its role in a few lines, and optionally
+2. **Who**: its name, its pixel character (it wears the project's color, so its agents are easy to spot; **Change**
+   picks the outfit, skin, hair, hair color, face and an accessory, or Random), its role in a few lines, and optionally
    the model, the permission mode and the tools it may use.
 3. **When**: its triggers, whether it asks before risky actions, the keys it can use, and its limits (below).
 
@@ -95,16 +95,20 @@ The page is a **conversation** with the agent, like a contact in a chat app:
 
 On the right (**Profile** on a phone):
 
+- **Its character and name** at the top: click them to change its **name and look** (a pencil shows on hover).
 - **Its role**: click it to edit (its `CLAUDE.md`).
 - **When it works**: its triggers as sentences. A webhook shows its address (copy it), what came in ("3 received · the
   last 10 min ago") and **Send a test**, which posts a test event so you see it start. Add a schedule, a webhook or a
   notification filter from here; switch Telegram on or off.
 - **Guards**: today's cost against its budget, its runs this hour, what it may do without asking.
 - **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
-- **Advanced settings**: name, face, model, permissions, tools, limits, delete.
+- **Advanced settings**, in sections (the chips on top jump to them): **Model**; **What it may do** (permission mode,
+  ask before risky actions, outside events, keys, allowed and forbidden tools); **Safety** (sandbox, the sites it may
+  reach, the folders it may write in, rules); **Limits**; **Claude Code** (callable from the topic's sessions, export
+  as a Claude Code file). Delete is at the bottom.
 
-Opening the page marks its results as read. The **Agents** list shows first the agents **to read** (a new result,
-waiting for your OK, or working now), each card with its last result.
+Opening the page marks its results as read. In the list on the left, **By state** shows first the agents waiting for
+your OK, then those with something **to read**.
 
 ## Triggers
 

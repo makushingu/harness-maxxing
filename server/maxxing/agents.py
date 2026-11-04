@@ -44,24 +44,26 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})/topics/([a-z0-9][a-z0-9-]{0,47})/agents/([a-z0-9][a-z0-9-]{0,47})$")
 MAX_PER_TOPIC = 20
 
-# The pixel-art character drawn by the UI (web/src/features/agents/Avatar.tsx): every option is one of these names.
-# `color` = outfit (the colour that tells projects apart), `bg` = background tile.
+# The pixel-art character drawn by the UI (web/src/features/agents/Avatar.tsx): every part is one of these names.
+# `color` = its outfit, one of the UI accent colours; a new agent wears its project's (project_color).
 AVATAR = {
-    "color": ("violet", "blue", "teal", "green", "amber", "orange", "rose", "slate"),
-    "eyes": ("dots", "happy", "wide", "sleepy", "wink", "visor", "glasses", "angry"),
-    "mouth": ("smile", "grin", "flat", "open", "smirk", "tongue", "mustache"),
-    "hat": ("none", "antenna", "cap", "beanie", "crown", "headphones", "wizard", "bow"),
-    "bg": ("violet", "blue", "teal", "green", "amber", "orange", "rose", "slate"),
-    "skin": ("light", "fair", "tan", "brown", "dark", "green", "blue", "metal"),
-    "head": ("round", "square", "long", "wide"),
-    "hair": ("none", "short", "spiky", "long", "bob", "mohawk", "curly", "bun", "side"),
-    "hair_color": ("black", "brown", "blond", "red", "white", "pink", "blue", "green"),
+    "color": ("blue", "clay", "violet", "green", "amber", "rose"),
+    "skin": ("light", "tan", "brown", "dark"),
+    "hair": ("none", "short", "spiky", "long", "curly", "bun"),
+    "hair_color": ("black", "brown", "blond", "red", "white"),
+    "face": ("smile", "happy", "focused", "sleepy", "wink", "surprised"),
+    "accessory": ("none", "glasses", "headphones", "cap", "crown", "antenna"),
 }
-DEFAULT_AVATAR = {"color": "violet", "eyes": "dots", "mouth": "smile", "hat": "antenna", "bg": "slate",
-                  "skin": "light", "head": "round", "hair": "short", "hair_color": "brown"}
-# Parts added after the first characters (04/11): an agent.json without them gets a stable pick from its
-# name, so older agents do not all wear the same haircut.
-LATER_PARTS = ("skin", "head", "hair", "hair_color")
+DEFAULT_AVATAR = {"color": "blue", "skin": "light", "hair": "short", "hair_color": "brown", "face": "smile",
+                  "accessory": "none"}
+# Characters saved by the first drawings (before 04/11, never released): what each old value becomes.
+_OLD_AVATAR = {
+    "color": {"teal": "green", "orange": "clay", "slate": "blue"},
+    "skin": {"fair": "light"},
+    "hair": {"bob": "long", "mohawk": "spiky", "side": "short"},
+    "face": {"dots": "smile", "happy": "happy", "wide": "surprised", "sleepy": "sleepy", "wink": "wink"},
+    "accessory": {"antenna": "antenna", "cap": "cap", "beanie": "cap", "crown": "crown", "headphones": "headphones"},
+}
 PERMISSION_MODES = ("bypass", "acceptEdits", "default")
 FEED_LEVELS = ("info", "success", "warning", "error")   # feed.LEVELS
 LIMITS = {  # name: (default, min, max)
@@ -150,15 +152,16 @@ def project_color(project: str) -> str:
 
 
 def _clean_avatar(a: Any, seed: str = "") -> dict:
+    """Known names kept, old ones translated (_OLD_AVATAR), anything else a stable pick from the agent's name."""
     a = a if isinstance(a, dict) else {}
+    old = {"face": a.get("eyes"), "accessory": "glasses" if a.get("eyes") == "glasses" else a.get("hat")}
     out = {}
     for k, opts in AVATAR.items():
-        if a.get(k) in opts:
-            out[k] = a[k]
-        elif k in LATER_PARTS and k not in a and seed:
-            out[k] = opts[int(hashlib.sha1(f"{seed}:{k}".encode()).hexdigest(), 16) % len(opts)]
-        else:
-            out[k] = DEFAULT_AVATAR[k]
+        v = a.get(k) if k in a else old.get(k)
+        v = v if v in opts else _OLD_AVATAR.get(k, {}).get(v)
+        if v is None and seed:
+            v = opts[int(hashlib.sha1(f"{seed}:{k}".encode()).hexdigest(), 16) % len(opts)]
+        out[k] = v or DEFAULT_AVATAR[k]
     return out
 
 

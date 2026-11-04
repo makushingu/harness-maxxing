@@ -71,7 +71,7 @@ field), or add a trigger with the commands above.
 ## agent.json
 ```json
 {"version": 1, "name": "Writer", "enabled": true,
- "avatar": {"color": "violet", "eyes": "dots", "mouth": "smile", "hat": "antenna", "bg": "slate"},
+ "avatar": {"color": "violet", "skin": "light", "hair": "short", "hair_color": "brown", "face": "smile", "accessory": "none"},
  "model": "", "permission_mode": "acceptEdits",
  "allowed_tools": [], "disallowed_tools": [],
  "telegram": false, "approvals": false, "trust_outside": false, "keys": ["SHOPIFY_TOKEN"],
