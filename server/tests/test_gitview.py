@@ -371,7 +371,8 @@ def test_github_name_needs_github_com_itself():
                          ("https://www.GitHub.com/acme/site/", "acme/site"),
                          ("https://notgithub.com/own/repo.git", None), ("https://gitlab.com/x/github.com/own/repo", None),
                          ("git@gitlab.com:github.com/own/repo.git", None), ("git@evilgithub.com:own/repo", None),
-                         ("https://github.com.evil.io/own/repo", None), ("/srv/github.com/own/repo", None)):
+                         ("https://github.com.evil.io/own/repo", None), ("/srv/github.com/own/repo", None),
+                         ("http://[foo/x", None), ("https://[::1/acme/site", None)):
         assert gitview.github_name(remote) == name, remote
 
 
@@ -416,3 +417,17 @@ def test_huge_subjects_and_messages_are_cut(repo):
     assert len(json.dumps(graph)) < 50_000
     message = gitview.commit(str(repo), top["sha"])["message"]
     assert len(message) == gitview.MESSAGE_MAX + 1 and message.endswith("…")
+
+
+def test_a_malformed_remote_url_does_not_break_the_repo_summary(repo):
+    _git(repo, "config", "remote.origin.url", "http://[foo/x")
+    gitview.clear_cache()
+    assert gitview.summary(repo)["github"] is None
+
+
+def test_a_nul_byte_in_a_branch_or_argument_is_not_a_500(repo):
+    gitview.clear_cache()
+    assert gitview.graph(str(repo), branches=["main", "main\x00x"])["commits"]
+    with pytest.raises(gitview.GitError) as e:
+        gitview._git(repo, "log", "a\x00b")
+    assert e.value.status == 400

@@ -160,6 +160,8 @@ def _git(repo: Path, *args: str, timeout: int = GIT_TIMEOUT) -> str:
                            capture_output=True, text=True, timeout=timeout, env=env, errors="replace")
     except FileNotFoundError:
         raise GitError(500, "no_git", "git is not installed on this server") from None
+    except ValueError:                                 # a NUL byte in an argument
+        raise GitError(400, "bad_argument", "a git argument contains a NUL byte") from None
     except subprocess.TimeoutExpired:
         raise GitError(504, "git_timeout", f"git {args[0]} took more than {timeout} s") from None
     if r.returncode != 0:
@@ -198,8 +200,11 @@ def github_name(remote: str) -> str | None:
     """owner/repo of a remote on github.com itself (URL or scp form `git@github.com:o/r`), else None."""
     remote = remote.strip()
     if "://" in remote:
-        u = urlsplit(remote)
-        host, path = u.hostname or "", u.path
+        try:
+            u = urlsplit(remote)
+            host, path = u.hostname or "", u.path
+        except ValueError:                             # "http://[foo/x": a bad remote must not break the repo list
+            return None
     else:
         m = SCP_REMOTE_RE.fullmatch(remote)
         if not m:
@@ -340,7 +345,7 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
         refs = []
         for b in branches[:MAX_BRANCHES]:
             b = b.strip()
-            if not b or b.startswith("-") or ".." in b:
+            if not b or b.startswith("-") or ".." in b or "\0" in b:
                 continue
             for cand in (b, f"origin/{b}"):
                 try:
