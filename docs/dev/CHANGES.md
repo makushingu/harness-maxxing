@@ -100,6 +100,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Search index schema 2 (`search.SCHEMA_VERSION`, checked by `_migrate` when the writer connection opens): message
+  rows have an empty `title` (the session title is on its title row, `body=''`, only), `items_au` is
+  `AFTER UPDATE OF title, body` (a path change re-indexes nothing). Existing indexes: one `UPDATE` of the message
+  rows at the first start (~9 s for 300k rows). The query groups by `(kind, ref)` in SQL (MATERIALIZED CTE: bm25 /
+  snippet cannot run inside an aggregate) and bounds the match with `rowid >= floor`, floor = the `RANK_MAX`-th
+  newest match (`rowid IN (...)` runs the MATCH once per row: minutes on a prefix). `fts_query`: prefix from 3
+  characters. `search(..., cancelled=)`: gives up waiting for `_rlock` and interrupts the query (progress handler);
+  `/api/search` sets it when `request.is_disconnected()`. A log ending in an unterminated line is marked as seen and
+  its `src` row is written only when its signature changes (no write + checkpoint per query).
 - Telegram: `<state>/telegram/replies.json` (sid -> chat, thread, refs, at; written on every change of `_pending`,
   never while stopping, dropped after 24 h) lets the next process answer a turn sent before a restart
   (`Gateway._left`, matched on `last_turn.refs` in `on_turn_end`, merged into `_pending` when the session gets a

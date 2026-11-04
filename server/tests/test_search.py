@@ -281,3 +281,90 @@ def test_a_link_to_a_file_outside_the_workspace_is_not_indexed(client, mx, tmp_p
     os.symlink(d / "notes.md", d / "inside.md")              # a link inside the workspace is still read
     search.refresh()
     assert sorted(r["title"] for r in _q(client, "zqxsecretvalue123")) == ["inside.md", "notes.md"]
+def test_a_session_whose_title_matches_never_hides_the_others(mx):
+    big = _session("", "Kangaroo planning", [("user", f"step {i} of the plan") for i in range(200)])
+    others = {_session("", f"Shop {i}", [("user", "we should buy a kangaroo plush")]) for i in range(5)}
+    search.refresh()
+    ids = [x["id"] for x in search.search("kangaroo")["results"]]
+    assert set(ids) == others | {big} and len(ids) == 6          # one entry per session
+    # a message row shows its session's title; a rename rewrites the title row only
+    assert {x["title"] for x in search.search("plush")["results"]} == {f"Shop {i}" for i in range(5)}
+    store.update(big, title="Wallaby planning")
+    con = search._db()
+    before = con.total_changes
+    search.refresh()
+    assert con.total_changes - before < 50                       # the title row, not its 200 messages
+    assert [x["title"] for x in search.search("wallaby")["results"]] == ["Wallaby planning"]
+    assert search.search("step 7")["results"][0]["title"] == "Wallaby planning"
+
+
+def test_an_index_of_the_previous_schema_is_migrated(mx):
+    sid = _session("", "Kangaroo planning", [("user", f"step {i}") for i in range(80)])
+    other = _session("", "Shop", [("user", "a kangaroo plush")])
+    search.refresh()
+    con = search._db()                                           # as version 1 wrote it: title on every row
+    con.executescript("""
+        DROP TRIGGER items_au;
+        CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
+            INSERT INTO fts(fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+            INSERT INTO fts(rowid, title, body) VALUES (new.id, new.title, new.body); END;
+        UPDATE items SET title = (SELECT t.title FROM items t WHERE t.src = items.src AND t.body = '')
+            WHERE kind = 'session';
+        UPDATE meta SET v = '1' WHERE k = 'schema';
+    """)
+    search._con = None                                           # next start
+    search.refresh()
+    con = search._db()
+    assert con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()[0] == search.SCHEMA_VERSION
+    assert con.execute("SELECT COUNT(*) FROM items WHERE kind='session' AND title!=''").fetchone()[0] == 2
+    assert {x["id"] for x in search.search("kangaroo")["results"]} == {sid, other}
+
+
+def test_a_log_ending_in_a_cut_line_is_not_rewritten_on_every_query(mx):
+    sid = _session("", "Cut", [("user", "complete message")])
+    with open(store.log_path(sid), "a") as fh:
+        fh.write('{"type":"mx_user","text":"cut in the mid')         # a runner killed mid-write
+    search.refresh()
+    con = search._db()
+    before = con.total_changes
+    search.refresh()
+    search.search("complete")
+    assert con.total_changes == before and f"s:{sid}" in search._seen
+    with open(store.log_path(sid), "a") as fh:                      # the line is completed later: indexed
+        fh.write('dle zanzibar","attachments":[],"source":"web","at":2.0}\n')
+    search.refresh()
+    assert search.search("zanzibar")["results"][0]["id"] == sid
+
+
+def test_broad_queries_rank_only_the_newest_matches_and_can_be_cancelled(mx, monkeypatch):
+    old = _session("", "Old", [("user", "deploy the server")])
+    search.refresh()
+    new = _session("", "New", [("user", "deploy again")])
+    search.refresh()
+    monkeypatch.setattr(search, "RANK_MAX", 1)
+    assert [x["id"] for x in search.search("deploy")["results"]] == [new]
+    monkeypatch.setattr(search, "RANK_MAX", 5000)
+    assert {x["id"] for x in search.search("deploy")["results"]} == {old, new}
+    assert search.fts_query("de facture") == '"de" "facture"*'   # 2 letters: the word itself, not a prefix
+    r = search.search("deploy", cancelled=lambda: True)          # the palette already sent the next query
+    assert r["results"] == [] and r.get("cancelled")
+    with search._rlock:                                          # waiting for the reader: gives up when cancelled
+        assert search.search("deploy", cancelled=lambda: True).get("cancelled")
+
+
+async def test_an_aborted_request_stops_its_query(monkeypatch):
+    import asyncio
+    import time as _time
+    from maxxing.api import search as search_api
+
+    def slow(q, kinds, limit, cancelled):                       # a query that only ends when cancelled
+        while not cancelled():
+            _time.sleep(0.01)
+        return {"results": [], "cancelled": True}
+    monkeypatch.setattr(search_api.engine, "search", slow)
+
+    class Gone:                                                  # the palette aborted the request
+        async def is_disconnected(self):
+            return True
+    r = await asyncio.wait_for(search_api.search(Gone(), q="de", kinds="", limit=30), 5)
+    assert r["cancelled"]
