@@ -11,7 +11,7 @@
 // The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, ChevronDown, LayoutGrid, Play, Plus, Rocket, ShieldCheck, WandSparkles } from 'lucide-react'
+import { ArrowLeft, ChevronDown, LayoutGrid, Play, Plus, Rocket, WandSparkles } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentRoute, useAgents, useExtensions, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
@@ -39,6 +39,7 @@ import {
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
 import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
+import { WaitingBubble } from './approvals'
 import { QuickCreate, type CreateStart } from './CreateAgent'
 import { OfficeFuture } from './OfficeFuture'
 import { OfficeCustom } from './OfficeCustom'
@@ -317,9 +318,12 @@ function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
     )
   if (s.id === 'waiting')
     return (
-      <span className={cn(box, 'text-warning')}>
-        <ShieldCheck className="size-3" strokeWidth={2.5} />
-      </span>
+      // A quest marker: a big yellow "!" with a dark outline that hops, no bubble around it.
+      <WaitingBubble agent={a} className="absolute -top-4 -right-2 z-20 grid h-8 w-6 place-items-center rounded-sm transition-transform hover:scale-115">
+        <span className="mx-game-hop text-[26px] leading-none font-black text-[#ffcc4d] [paint-order:stroke_fill] [-webkit-text-stroke:3px_#3b2a00] drop-shadow-[0_1px_0_rgb(0_0_0/0.35)]">
+          !
+        </span>
+      </WaitingBubble>
     )
   if (s.id === 'unread') return <span className={cn(box, 'text-success tabular-nums')}>{a.thread_unread}</span>
   if (s.id === 'failed') return <span className={cn(box, 'text-destructive')}>!</span>
