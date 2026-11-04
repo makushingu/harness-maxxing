@@ -12,7 +12,7 @@ from .. import team, teampeer
 from ..security import require_auth
 from ..sessions import service
 from ..sessions.service import SessionError
-from .sessions import save_upload
+from .sessions import save_uploads
 
 router = APIRouter(prefix="/api/team", tags=["team"], dependencies=[Depends(require_auth)])
 
@@ -161,7 +161,7 @@ async def send(cid: str, body: MessageIn):
 async def upload(file: list[UploadFile] = File(...)):
     """Files for a message (then sent with POST /chats/{cid}/messages `files`)."""
     folder = await _call(team.files_dir)
-    return {"files": [await asyncio.to_thread(save_upload, f, folder) for f in file]}
+    return {"files": await asyncio.to_thread(save_uploads, file, folder)}
 
 
 @router.post("/chats/{cid}/messages/{mid}/react")
