@@ -39,6 +39,7 @@ import {
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
 import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
+import { WaitingBubble } from './approvals'
 import { QuickCreate, type CreateStart } from './CreateAgent'
 import { OfficeFuture } from './OfficeFuture'
 import { OfficeCustom } from './OfficeCustom'
@@ -317,9 +318,9 @@ function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
     )
   if (s.id === 'waiting')
     return (
-      <span className={cn(box, 'text-warning')}>
+      <WaitingBubble agent={a} className={cn(box, 'z-20 text-warning hover:border-warning')}>
         <ShieldCheck className="size-3" strokeWidth={2.5} />
-      </span>
+      </WaitingBubble>
     )
   if (s.id === 'unread') return <span className={cn(box, 'text-success tabular-nums')}>{a.thread_unread}</span>
   if (s.id === 'failed') return <span className={cn(box, 'text-destructive')}>!</span>

@@ -17,6 +17,7 @@ import { useMediaQuery } from '@/stores/media'
 import { AgentAvatarIcon } from './Avatar'
 import { DropBar, ProjectMenu, type AgentsLayoutApi, type ProjectGroup } from './layout'
 import type { Status } from './parts'
+import { WaitingBubble } from './approvals'
 import type { CreateStart } from './CreateAgent'
 import { Cursor, hash, useDesk, useRoom } from './office'
 
@@ -458,8 +459,9 @@ function StatusChip({ agent: a, status: st, s }: { agent: Agent; status: Status;
     )
   const ink = st.id === 'waiting' ? HOLO.waiting : st.id === 'unread' ? HOLO.unread : st.id === 'running' ? HOLO.running : ''
   if (!ink) return null
-  return (
-    <span aria-hidden className="absolute z-10 -translate-x-1/2 -translate-y-full" style={{ left: 11 * s, top: 2 * s }}>
+  const where = { className: 'absolute z-10 -translate-x-1/2 -translate-y-full', style: { left: 11 * s, top: 2 * s } }
+  const chip = (
+    <>
       <span
         className={cn('flex h-5 min-w-5 items-center justify-center gap-0.5 border px-1 font-mono text-[12px] leading-none font-bold tabular-nums', st.id === 'waiting' && 'mx-game-hop', st.id === 'running' && 'mx-px-dots')}
         style={{ color: ink, borderColor: ink, backgroundColor: 'rgba(6,9,20,0.85)', boxShadow: `0 0 8px ${ink}66, inset 0 0 6px ${ink}33`, textShadow: `0 0 5px ${ink}` }}
@@ -474,6 +476,18 @@ function StatusChip({ agent: a, status: st, s }: { agent: Agent; status: Status;
       </span>
       {/* the beam down to the head */}
       <span className="mx-auto block h-1 w-0.5" style={{ backgroundColor: ink, opacity: 0.6 }} />
+    </>
+  )
+  // Waiting: the "!" is a button that opens the requests with Allow / Deny (approvals.tsx).
+  if (st.id === 'waiting')
+    return (
+      <WaitingBubble agent={a} {...where}>
+        {chip}
+      </WaitingBubble>
+    )
+  return (
+    <span aria-hidden {...where}>
+      {chip}
     </span>
   )
 }
