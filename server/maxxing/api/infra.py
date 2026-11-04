@@ -201,3 +201,30 @@ async def remove_domain(body: DomainIn):
         raise HTTPException(404, detail={"error": "not_found", "message": f"{body.name} was not added by hand"})
     _after_server_change()
     return {"removed": body.name}
+
+
+class DokployIn(BaseModel):
+    url: str
+    key: str
+
+
+@router.post("/dokploy/connect")
+async def connect_dokploy(body: DokployIn):
+    _need_on()
+    from .. import dokploy
+    from ..infra.providers import ProviderError
+    try:
+        res = await asyncio.to_thread(dokploy.connect, body.url, body.key)
+    except ProviderError as e:
+        raise HTTPException(422, detail=e.as_dict())
+    _after_server_change()
+    return res
+
+
+@router.post("/dokploy/disconnect")
+async def disconnect_dokploy():
+    _need_on()
+    from .. import dokploy
+    removed = await asyncio.to_thread(dokploy.disconnect)
+    _after_server_change()
+    return {"removed": removed}

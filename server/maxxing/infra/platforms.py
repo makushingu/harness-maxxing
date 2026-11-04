@@ -1,5 +1,5 @@
 """Hosting platforms read through their APIs with a key of the vault (read-only calls only): Vercel, Netlify, Supabase,
-GitHub Pages. Written from each platform's published API reference (OpenAPI); `VERIFIED` lists the ones checked
+GitHub Pages, Dokploy. Written from each platform's published API reference (OpenAPI); `VERIFIED` lists the ones checked
 against a real account, the others show as beta on the page.
 
 Each platform returns the same shape, so build.py handles them all the same way:
@@ -13,7 +13,7 @@ Each platform returns the same shape, so build.py handles them all the same way:
 
 A section that fails is {"error": code, "message"} on its own (the others still show). `group` ties the resources of
 one Supabase project together. API bases can be redirected for tests: MAXXING_VERCEL_API, MAXXING_NETLIFY_API,
-MAXXING_SUPABASE_API (GitHub uses MAXXING_GITHUB_API).
+MAXXING_SUPABASE_API (GitHub uses MAXXING_GITHUB_API, Dokploy MAXXING_DOKPLOY_API).
 """
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ PLATFORMS = {
     "supabase": {"label": "Supabase", "keys": ("SUPABASE_ACCESS_TOKEN", "SUPABASE_TOKEN"),
                  "token_url": "https://supabase.com/dashboard/account/tokens"},
     "github": {"label": "GitHub Pages", "keys": (), "token_url": "https://github.com/settings/personal-access-tokens"},
+    "dokploy": {"label": "Dokploy", "keys": ("DOKPLOY_API_KEY",), "token_url": "https://docs.dokploy.com/docs/api"},
 }
 VERIFIED: set[str] = set()                # none seen on a real account with data yet: all beta
 SECTIONS = ("sites", "databases", "buckets", "functions", "domains")
@@ -307,7 +308,40 @@ def github_pages() -> dict:
     return _run(out, {"sites": sites})
 
 
-READERS: dict[str, Callable[[], dict]] = {"vercel": vercel, "netlify": netlify, "supabase": supabase, "github": github_pages}
+# ---- Dokploy (maxxing.dokploy: own URL, key never exposed) ------------------------------------------
+DOKPLOY_STATE = {"done": "ok", "error": "failed", "running": "building", "idle": "paused"}
+
+
+def dokploy() -> dict:
+    from .. import dokploy as dk
+    name, token = _key(PLATFORMS["dokploy"]["keys"])
+    if not token:
+        return {"connected": False, "key": None}
+    out: dict[str, Any] = {"connected": True, "key": name}
+    base = dk.url()
+    try:
+        with dk.Client(base, token) as c:
+            svcs = dk.inventory(c)
+    except ProviderError as e:
+        return {**out, "sites": e.as_dict(), "databases": e.as_dict()}
+    sites, dbs = [], []
+    for x in svcs[:MAX_ITEMS]:
+        dash = f"{base}/dashboard/project/{x['project_id']}" if x["project_id"] else f"{base}/dashboard/projects"
+        state = DOKPLOY_STATE.get(x["status"] or "", "unknown")
+        if x["kind"] in dk.DB_KINDS:
+            dbs.append({"id": f"{x['kind']}:{x['id']}", "name": x["name"], "engine": x["kind"], "state": state,
+                        "dashboard": dash, "group": x["project_id"]})
+            continue
+        repo = x["repo"] if x["repo"] and "://" not in x["repo"] and x["repo"].count("/") == 1 else None
+        sites.append({"id": x["id"], "name": x["name"], "state": state, "framework": x["build"] or x["kind"],
+                      "urls": [("https://" if d["https"] else "http://") + d["host"] + (d["path"] if d["path"] != "/" else "/")
+                               for d in x["domains"]],
+                      "repo": repo, "team": x["project"], "dashboard": dash})
+    return {**out, "sites": sites, "databases": dbs}
+
+
+READERS: dict[str, Callable[[], dict]] = {"vercel": vercel, "netlify": netlify, "supabase": supabase, "github": github_pages,
+                                         "dokploy": dokploy}
 
 
 def read_all() -> dict[str, dict]:
@@ -329,6 +363,9 @@ def source_state(data: dict[str, dict]) -> dict[str, dict]:
         meta = PLATFORMS[pid]
         s = {"connected": bool(d.get("connected")), "key": d.get("key"), "error": d.get("error"), "label": meta["label"],
              "beta": pid not in VERIFIED, "token_url": meta["token_url"], "keys": list(meta["keys"])}
+        if pid == "dokploy":
+            from .. import dokploy as dk
+            s["url"] = dk.url()
         if d.get("connected") and not d.get("error"):
             s["sections"] = {k: (d[k].get("error") if isinstance(d[k], dict) else "ok") for k in SECTIONS if k in d}
         out[pid] = s

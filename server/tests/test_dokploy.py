@@ -4,7 +4,7 @@ import json
 import pytest
 
 from _conn_helpers import _Server
-from _org_helpers import org  # noqa: F401
+from _org_helpers import client, org  # noqa: F401
 from maxxing import config, dokploy, vault
 from maxxing.infra.providers import ProviderError
 
@@ -170,3 +170,32 @@ def test_cli_connects_lists_and_asks_yes_before_writing(fake, monkeypatch, capsy
     assert "ambiguous" in capsys.readouterr().err
     assert run(monkeypatch, "domain", "add", "a1", "www.example.com", "--yes") == 0
     assert run(monkeypatch, "disconnect") == 0 and vault.get(dokploy.KEY) is None
+
+
+def test_infra_reads_dokploy_as_a_platform(fake):
+    from maxxing.infra import build, platforms
+    assert platforms.dokploy() == {"connected": False, "key": None}
+    dokploy.connect(fake.url, KEY)
+    d = platforms.dokploy()
+    sites = {x["id"]: x for x in d["sites"]}
+    assert sites["a1"]["urls"] == ["https://web.example.com/"] and sites["a1"]["repo"] == "acme/web"
+    assert sites["a1"]["state"] == "ok" and sites["a2"]["state"] == "failed" and sites["a2"]["repo"] is None
+    assert sites["c1"]["state"] == "building" and sites["a3"]["state"] == "paused"
+    assert d["databases"] == [{"id": "postgres:pg1", "name": "db", "engine": "postgres", "state": "unknown",
+                               "dashboard": f"{fake.url}/dashboard/project/p1", "group": "p1"}]
+    state = platforms.source_state({"dokploy": d})["dokploy"]
+    assert state["beta"] and state["url"] == fake.url and state["sections"] == {"sites": "ok", "databases": "ok"}
+    res = {r["id"]: r for r in build.build({build.LOCAL: {}}, [], {}, {}, {}, {}, "/w", None, platforms={"dokploy": d})}
+    assert res["pages:dokploy:a2"]["status"] == "down" and res["pages:dokploy:a1"]["details"]["repo"]["git"] == "github:acme/web"
+    assert "db:dokploy:postgres:pg1" in res
+    vault.put(dokploy.KEY, "revoked", expose=False)
+    assert platforms.dokploy()["sites"]["error"] == "missing_permission"
+
+
+def test_infra_api_connects_dokploy(fake, client):
+    config.update_config(infra_page=True)
+    r = client.post("/api/infra/dokploy/connect", json={"url": "http://dokploy.example.com", "key": KEY})
+    assert r.status_code == 422 and r.json()["error"] == "invalid_url"
+    r = client.post("/api/infra/dokploy/connect", json={"url": fake.url, "key": KEY})
+    assert r.status_code == 200 and r.json()["projects"] == 2
+    assert client.post("/api/infra/dokploy/disconnect").json() == {"removed": True}
