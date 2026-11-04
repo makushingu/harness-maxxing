@@ -189,11 +189,29 @@ until you switch it on):
 - inside its runs, `maxxing` only does the agent's own work: `feed post|list`, `agents send|show|list|templates`,
   `keys get|list` (its keys only), `status`. Anything that changes the server (a schedule, an MCP server, an update…)
   is refused.
+- it **never changes itself**: its settings (`agent.json`: triggers, limits, keys, sandbox...), its role
+  (`CLAUDE.md`) and the Claude Code project files of its folder and topic (`.claude/`, `.mcp.json`) are read-only in
+  its runs. Its memory stays its own.
+
+When to switch it off: the agent must write outside its topic, use the server's own logins (git or `gh`
+credentials, SSH keys) or deploy into system folders. Off, its commands can do everything the server's user can.
 
 The sandbox needs `bubblewrap` and `socat`, and on Ubuntu 24.04+ a small AppArmor profile; the installer adds them.
 If one is missing, the agent's page says so and its runs stop instead of running without walls:
 `maxxing agents sandbox-setup` (as root) installs them, `maxxing doctor` checks them. It is a strong fence, not a
 vault: the turn still runs as the server's user, MCP servers and tools you allow outside the shell are not inside it.
+
+### Who changes an agent
+
+Only you. In every run, sandboxed or not, the agent is told that its role, settings and triggers are yours, and
+`maxxing agents create|cron|webhook|watch|on|off|import` is refused: when something should change, it says so in its
+answer. Without the sandbox nothing can stop it from editing its files, so a run that changes its `agent.json` or
+`CLAUDE.md` is reported in its conversation ("This run changed ...").
+
+To change an agent, use its page, or **Edit with Claude** (agent page, top right or in its profile): say what should
+change ("run it every morning at 8", "let it write in drafts/"), and a session of the topic - with your rights, not
+the agent's - opens in the Agents page and applies it with the `maxxing-agents` skill. **Create in a sentence** opens
+the same kind of session.
 
 ### Rules
 

@@ -318,7 +318,11 @@ function SandboxFields({ agent: a }: { agent: AgentDetail }) {
           />
         </SettingRow>
         <Details>
-          <p className="text-xs text-muted-foreground">{t('agents.sandbox.desc')}</p>
+          <div className="grid gap-2 text-xs text-muted-foreground" data-testid="agent-sandbox-help">
+            <p>{t('agents.sandbox.desc')}</p>
+            <p>{t('agents.sandbox.whenOff')}</p>
+            <p>{t('agents.sandbox.offMeans')}</p>
+          </div>
         </Details>
       </div>
       {!a.sandbox && <p className="py-3 text-xs text-warning">{t('agents.sandbox.offWarn')}</p>}
