@@ -226,6 +226,12 @@ def _load_one(d: Path) -> Extension:
             raise ValueError(f"manifest.json is not valid JSON ({e})") from None
         if not isinstance(m, dict):
             raise ValueError("manifest.json must contain an object")
+        try:
+            json.dumps(m, ensure_ascii=False).encode()
+        except UnicodeEncodeError:                     # a lone surrogate ("\ud800") would make the whole list a 500
+            raise ValueError("manifest.json contains invalid text (a lone \\uD800-\\uDFFF escape)") from None
+        except RecursionError:
+            raise ValueError("manifest.json is nested too deeply") from None
         if m.get("id", d.name) != d.name:
             raise ValueError(f"manifest id {m.get('id')!r} differs from the folder name {d.name!r}")
         raw = m.get("name")
@@ -303,7 +309,7 @@ def _import(ext: Extension) -> ModuleType:
 
 
 def _signature() -> tuple:
-    """Folder names + mtimes of manifest/api/page: a change triggers a rescan (hot reload)."""
+    """Folder names + mtimes of manifest/api/page/widget.html: a change triggers a rescan (hot reload)."""
     r = root()
     if not r.is_dir():
         return ()
@@ -312,7 +318,7 @@ def _signature() -> tuple:
         if not d.is_dir() or d.name.startswith((".", "_")):
             continue
         stamps = []
-        for f in ("manifest.json", "api.py", "page.js"):
+        for f in ("manifest.json", "api.py", "page.js", "widget.html"):
             try:
                 stamps.append((d / f).stat().st_mtime_ns)
             except OSError:

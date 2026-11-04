@@ -93,7 +93,7 @@ export type PatchNameBody = { name?: string; description?: string; /** Projects 
 /* ---------------------------------------------------------------- Sessions */
 export type SessionState = 'idle' | 'running' | 'error'
 export type SessionSource = 'web' | 'telegram' | 'cron'
-export type QueueItem = { text: string; attachments: number; source: 'web' | 'telegram' | 'cron' | 'system' | string; kind: string; /** A voice message sent directly (transcribed before its turn). */ voice?: boolean }
+export type QueueItem = { text: string; attachments: number; source: 'web' | 'telegram' | 'cron' | 'system' | string; kind: string; /** A voice message sent directly (transcribed before its turn). */ voice?: boolean; client_ids?: string[] }
 export type Session = {
   id: string
   title: string
@@ -124,9 +124,9 @@ export type Session = {
   /** A plan-mode turn finished: its plan waits for the user's validation. */
   plan_ready: boolean
 }
-export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string }
+export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string }
 export type PatchSessionBody = { title?: string; model?: string; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
-export type SendMessageBody = { text: string; attachments?: string[]; hud?: boolean; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string }
+export type SendMessageBody = { text: string; attachments?: string[]; hud?: boolean; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string }
 export type SendMessageResult = { queued: boolean; session: Session }
 export type SessionSearchHit = { id: string; title: string; path: string; snippet: string; at: number }
 export type SearchKind = 'session' | 'file' | 'memory' | 'task'
@@ -138,7 +138,7 @@ export type UploadResult = { files: Upload[] }
 
 export type Usage = { input: number; output: number; cache_read: number; cache_write: number }
 export type SessionEvent =
-  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[] }
+  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[] }
   /** Transcript of the voice message just above (or why it failed). */
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number }

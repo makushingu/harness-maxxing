@@ -207,19 +207,24 @@ def start(purpose: str, ip: str, ua: str) -> Challenge:
         drop = mine[:max(0, len(mine) - PENDING_PER_CLIENT + 1)]       # a reloaded page replaces its old request
         rest = [c for c in waiting if c not in drop]
         drop += rest[:max(0, len(rest) - PENDING_MAX + 1)]              # full: the oldest give way (a few clients
-        for old in drop:                                                # cannot lock the owner out)
-            del _ch[old.id]
-            _close(old, _w("gone"))
-        _new.setdefault(ip, []).append(now)
+        _new.setdefault(ip, []).append(now)                             # cannot lock the owner out), once the new
         c = Challenge(id=secrets.token_urlsafe(12), code=f"{secrets.randbelow(10 ** 6):06d}", purpose=purpose,
                       ip=ip, ua=ua[:120], expires=now + TTL, created=now)
         _ch[c.id] = c
     if not _send(c):
         with _lock:
             _ch.pop(c.id, None)
+            sent = _new.get(ip, [])
+            if now in sent:                            # a request Telegram refused does not count against the quota
+                sent.remove(now)
         raise Refused("two_factor_unavailable",
                       "Telegram did not accept the sign-in request - on the server, `maxxing 2fa off` turns "
                       "two-step sign-in off")
+    with _lock:                                        # one is sent: a failed send keeps the older ones answerable
+        for old in drop:
+            if _ch.get(old.id) is old and old.status == "pending":
+                del _ch[old.id]
+                _close(old, _w("gone"))
     return c
 
 
