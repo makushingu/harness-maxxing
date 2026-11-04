@@ -221,7 +221,8 @@ def _create(a) -> int:
         return 2
     limits = {k: v for k, v in (("usd_per_day", a.usd_per_day), ("runs_per_hour", a.runs_per_hour)) if v is not None}
     keys = [k.strip() for k in a.keys.split(",") if k.strip()]
-    fields = {"avatar": {k: random.choice(list(v)) for k, v in agents.AVATAR.items()}, "permission_mode": "",
+    fields = {"avatar": {**{k: random.choice(list(v)) for k, v in agents.AVATAR.items()},
+                         "color": agents.project_color(project)}, "permission_mode": "",
               **(agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]) if tpl else {})}
     fields.update({"name": a.name or fields.get("name") or name, "model": a.model, "telegram": a.telegram,
                    "enabled": not a.off, "trust_outside": a.trust_outside,

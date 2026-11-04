@@ -15,7 +15,7 @@ import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
-import { AgentAvatarIcon, randomAvatar } from './Avatar'
+import { AVATAR_OPTIONS, AgentAvatarIcon, projectColor, randomAvatar } from './Avatar'
 import { sessionsUrl } from '@/pages/sessions/util'
 import { AvatarEditor } from './AvatarEditor'
 import { DEFAULT_LIMITS, FeedTriggerFields, KeyChecks, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
@@ -28,6 +28,8 @@ type Form = {
   slug: string
   slugEdited: boolean
   avatar: AgentAvatar
+  /** the user picked the outfit colour: changing the project no longer changes it */
+  colorEdited: boolean
   role: string
   model: string
   permission: '' | PermissionMode
@@ -54,7 +56,8 @@ const fresh = (topicPath?: string): Form => {
     display: '',
     slug: '',
     slugEdited: false,
-    avatar: randomAvatar(),
+    avatar: randomAvatar(m?.[1]),
+    colorEdited: false,
     role: '',
     model: '',
     permission: '',
@@ -74,11 +77,19 @@ const fresh = (topicPath?: string): Form => {
   }
 }
 
+/** The face in the outfit colour of `project` (its agents are told apart by it); the tile moves off that colour. */
+function dressFor(a: AgentAvatar, project: string): AgentAvatar {
+  if (!project) return a
+  const color = projectColor(project)
+  const bg = a.bg === color ? AVATAR_OPTIONS.bg[(AVATAR_OPTIONS.bg.indexOf(color as never) + 3) % AVATAR_OPTIONS.bg.length] : a.bg
+  return { ...a, color, bg }
+}
+
 /** The form filled from a ready-made agent: its name, face, role, safety settings and first trigger. */
 const fromTemplate = (tp: AgentTemplate, topicPath?: string): Form => ({
   ...fresh(topicPath),
   display: tp.name,
-  avatar: { ...tp.avatar },
+  avatar: dressFor({ ...tp.avatar }, fresh(topicPath).project),
   role: tp.role,
   permission: tp.permission_mode,
   approvals: tp.approvals,
@@ -254,7 +265,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
               <FormField label={t('agents.create.project')}>
                 <Select
                   value={f.project || undefined}
-                  onValueChange={(v) => setF((x) => ({ ...x, project: v, topic: projects.find((p) => p.name === v)?.topics[0]?.name || '' }))}
+                  onValueChange={(v) => setF((x) => ({ ...x, project: v, topic: projects.find((p) => p.name === v)?.topics[0]?.name || '', avatar: x.colorEdited ? x.avatar : dressFor(x.avatar, v) }))}
                   placeholder={t('agents.create.pickProject')}
                   options={projects.map((p) => ({ value: p.name, label: mask(p.emoji ? `${p.emoji} ${p.name}` : p.name, 6) }))}
                 />
@@ -289,7 +300,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
               </div>
               <div className="grid gap-1.5">
                 <span className="text-sm font-medium">{t('agents.create.face')}</span>
-                <AvatarEditor value={f.avatar} onChange={(a) => set('avatar', a)} />
+                <AvatarEditor value={f.avatar} project={f.project} onChange={(a) => setF((x) => ({ ...x, avatar: a, colorEdited: x.colorEdited || a.color !== x.avatar.color }))} />
               </div>
               <FormField label={t('agents.create.role')} hint={t('agents.create.roleHint')}>
                 <Textarea minRows={4} maxRows={14} value={f.role} onChange={(e) => set('role', e.target.value)} placeholder={t('agents.create.rolePlaceholder')} data-testid="agent-role" />

@@ -17,6 +17,13 @@ itself lives. Agents and their runs never show in Sessions: the Agents page has 
 face, `project · topic`, a dot for running / waiting for you / to read / failed / off), grouped **by state** or **by
 project**, with a search and **New agent**. In Sessions, a topic's menu offers **Agents of this topic**.
 
+With no agent open, the page shows the **office**: one room per project, its banner in the project's color, every
+agent a pixel character at its desk. A bubble above the head says what it is doing: dots while it works, **!** for a
+new result (red when the run failed), a shield when it waits for your OK, **z** when it is off. Click a character to
+open the agent; point at it (or tap its name tag) to see its card in the room: last result, cost today, the on/off
+switch and **Run**. **Office / List** switches to plain cards, and the choice is kept in this browser (on a phone,
+List is the agents list).
+
 ## What an agent is made of
 
 An agent is a folder of its topic: `projects/acme/topics/blog/agents/writer/`.
@@ -60,7 +67,8 @@ top says what is left to connect (a webhook address in Shopify, a key, the list 
 **Set it up by hand instead** gives the three steps:
 
 1. **Where**: the project and the topic it works in.
-2. **Who**: its name, its character (color, eyes, mouth, hat, background), its role in a few lines, and optionally
+2. **Who**: its name, its pixel character (face: skin, head shape, eyes, mouth; hair: haircut and color; style: hat,
+   outfit, background - the outfit takes the project's color, so its agents are easy to spot), its role in a few lines, and optionally
    the model, the permission mode and the tools it may use.
 3. **When**: its triggers, whether it asks before risky actions, the keys it can use, and its limits (below).
 

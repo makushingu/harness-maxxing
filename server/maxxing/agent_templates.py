@@ -19,7 +19,7 @@ READ = ["Read", "Grep", "Glob", "Edit(./memory.md)"]
 TEMPLATES: list[dict[str, Any]] = [
     {
         "id": "support",
-        "avatar": {"color": "teal", "eyes": "happy", "mouth": "smile", "hat": "headphones", "bg": "teal"},
+        "avatar": {"color": "teal", "eyes": "happy", "mouth": "smile", "hat": "headphones", "bg": "teal", "skin": "tan", "head": "round", "hair": "bob", "hair_color": "black"},
         "name": {"en": "Customer support", "fr": "SAV"},
         "summary": {"en": "Drafts the answer to each customer request, never sends it alone",
                     "fr": "Prépare la réponse à chaque demande client, n'envoie jamais seul"},
@@ -45,7 +45,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "sales",
-        "avatar": {"color": "green", "eyes": "dots", "mouth": "grin", "hat": "crown", "bg": "green"},
+        "avatar": {"color": "green", "eyes": "dots", "mouth": "grin", "hat": "crown", "bg": "green", "skin": "light", "head": "square", "hair": "side", "hair_color": "blond"},
         "name": {"en": "Sales of the day", "fr": "Ventes du jour"},
         "summary": {"en": "Every evening, the day's sales in five lines", "fr": "Chaque soir, les ventes du jour en cinq lignes"},
         "role": {
@@ -67,7 +67,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "orders",
-        "avatar": {"color": "amber", "eyes": "wide", "mouth": "smile", "hat": "cap", "bg": "amber"},
+        "avatar": {"color": "amber", "eyes": "wide", "mouth": "smile", "hat": "cap", "bg": "amber", "skin": "brown", "head": "round", "hair": "curly", "hair_color": "brown"},
         "name": {"en": "Orders to handle", "fr": "Commandes à traiter"},
         "summary": {"en": "Every morning, the list of orders waiting for you", "fr": "Chaque matin, la liste des commandes qui vous attendent"},
         "role": {
@@ -89,7 +89,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "watch",
-        "avatar": {"color": "blue", "eyes": "wide", "mouth": "smile", "hat": "antenna", "bg": "blue"},
+        "avatar": {"color": "blue", "eyes": "wide", "mouth": "smile", "hat": "antenna", "bg": "blue", "skin": "metal", "head": "square", "hair": "none", "hair_color": "white"},
         "name": {"en": "Watch", "fr": "Veille"},
         "summary": {"en": "Every morning, only what is new on the sites you follow", "fr": "Chaque matin, seulement ce qui est nouveau sur les sites suivis"},
         "role": {
@@ -109,7 +109,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "pr-review",
-        "avatar": {"color": "slate", "eyes": "visor", "mouth": "flat", "hat": "headphones", "bg": "slate"},
+        "avatar": {"color": "slate", "eyes": "visor", "mouth": "flat", "hat": "headphones", "bg": "slate", "skin": "dark", "head": "wide", "hair": "short", "hair_color": "black"},
         "name": {"en": "Pull request review", "fr": "Relecture des PR"},
         "summary": {"en": "Reviews each new GitHub pull request, never merges", "fr": "Relit chaque nouvelle PR GitHub, ne fusionne jamais"},
         "role": {
@@ -135,7 +135,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "writer",
-        "avatar": {"color": "violet", "eyes": "happy", "mouth": "smirk", "hat": "beanie", "bg": "violet"},
+        "avatar": {"color": "violet", "eyes": "happy", "mouth": "smirk", "hat": "beanie", "bg": "violet", "skin": "fair", "head": "long", "hair": "long", "hair_color": "red"},
         "name": {"en": "Blog writer", "fr": "Rédacteur"},
         "summary": {"en": "Every week, a draft article, never published alone", "fr": "Chaque semaine, un brouillon d'article, jamais publié seul"},
         "role": {
@@ -156,7 +156,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "uptime",
-        "avatar": {"color": "rose", "eyes": "sleepy", "mouth": "flat", "hat": "antenna", "bg": "rose"},
+        "avatar": {"color": "rose", "eyes": "sleepy", "mouth": "flat", "hat": "antenna", "bg": "rose", "skin": "green", "head": "round", "hair": "spiky", "hair_color": "pink"},
         "name": {"en": "Site monitor", "fr": "Site surveillé"},
         "summary": {"en": "Every hour, checks your sites are up, speaks only when one is not",
                     "fr": "Chaque heure, vérifie que vos sites répondent, ne parle que si l'un ne répond pas"},
@@ -176,7 +176,7 @@ TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "id": "feedback",
-        "avatar": {"color": "orange", "eyes": "wide", "mouth": "smile", "hat": "cap", "bg": "orange"},
+        "avatar": {"color": "orange", "eyes": "wide", "mouth": "smile", "hat": "cap", "bg": "orange", "skin": "light", "head": "wide", "hair": "short", "hair_color": "brown"},
         "name": {"en": "Feedback analyst", "fr": "Analyste de retours"},
         "summary": {"en": "Groups user feedback and proposes improvements", "fr": "Regroupe les retours des utilisateurs et propose des améliorations"},
         "role": {
