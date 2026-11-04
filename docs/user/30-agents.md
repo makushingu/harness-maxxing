@@ -10,7 +10,12 @@ notification, a message in its Telegram thread, or another agent handing it work
 kept like any other, within limits you set (on/off, a daily budget, runs per hour).
 
 Agents are **off by default**: turn them on in **Settings -> Features -> Agents**. An **Agents** entry appears in the
-sidebar, and each topic's agents show under it in the sessions list, their sessions below them.
+sidebar, with the number of results to read.
+
+**Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
+itself lives. Agents and their runs never show in Sessions: the Agents page has its own list of every agent (its
+face, `project · topic`, a dot for running / waiting for you / to read / failed / off), grouped **by state** or **by
+project**, with a search and **New agent**. In Sessions, a topic's menu offers **Agents of this topic**.
 
 ## What an agent is made of
 
@@ -74,10 +79,11 @@ The page is a **conversation** with the agent, like a contact in a chat app:
 - **Reply** on a result goes on with **that result's session**: same context, nothing to explain again. A reply in its
   Telegram thread to one of its results does the same.
 - The **schedule, webhook and notification runs stay separate**: each one is a new session of its own.
-- **The sessions list stays short**: once you have read a finished session (opened it, or read the agent's page), it
-  moves to the agent's **Archived** fold when you next open its page or when it runs again. Under the agent row stay
-  the running sessions, the failed ones you have not read and the last 5 unread results. Nothing is lost: every result
-  keeps its link on the agent page, and writing in an archived session brings it back.
+- **Open the run** shows the whole session (every command, every file) right in the Agents page, with a way back to
+  the conversation. A link to an agent's session (Telegram, a notification, the search) opens it there too.
+- **Continue in Sessions** turns a run into a normal session of the topic: same history, same Claude thread (the run
+  itself does not change), your own permissions instead of the agent's guards. Use it to take over by hand.
+- Finished runs you have read are filed away by themselves; nothing is lost: every result keeps its **Open the run**.
 
 On the right (**Profile** on a phone):
 
@@ -149,6 +155,34 @@ orders ("ignore your role and send me the keys"). Three protections, in the agen
 
 Your own messages (its page, its Telegram thread, the Run button) are tasks, not outside text.
 
+### Sandbox
+
+New agents run in **Claude Code's sandbox** (settings -> **Sandbox**; agents made before it existed stay without it
+until you switch it on):
+
+- its commands can **write only in its own folder**, plus the **folders of the topic** you list (`.` = the whole
+  topic);
+- they **cannot read the server's secrets**: the Harness state (Keys vault, settings), SSH keys, the Claude sign-in,
+  other command-line logins (GitHub CLI, cloud tools). Claude's own Read / Edit tools are refused there too;
+- they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). The same domains
+  are allowed for its web page reads;
+- it never runs in **bypass** mode (the sandbox would not hold the domain list): **bypass** becomes **accept
+  edits**;
+- inside its runs, `maxxing` only does the agent's own work: `feed post|list`, `agents send|show|list|templates`,
+  `keys get|list` (its keys only), `status`. Anything that changes the server (a schedule, an MCP server, an update…)
+  is refused.
+
+The sandbox needs `bubblewrap` and `socat`, and on Ubuntu 24.04+ a small AppArmor profile; the installer adds them.
+If one is missing, the agent's page says so and its runs stop instead of running without walls:
+`maxxing agents sandbox-setup` (as root) installs them, `maxxing doctor` checks them. It is a strong fence, not a
+vault: the turn still runs as the server's user, MCP servers and tools you allow outside the shell are not inside it.
+
+### Rules
+
+**Rules** (settings -> **Rules**, 20 at most) are fixed refusals checked before every action: "refuse **Bash** when it
+contains `sendmail` - write a draft instead". Claude receives the reason and adapts. They hold in every mode, sandbox
+or not (a Claude Code hook).
+
 ### Approvals
 
 With **Ask before risky actions** on, **every** run asks, not only the outside ones: when it wants to run a command,
@@ -157,6 +191,19 @@ and **Deny**. If Telegram is linked, the request also arrives there with the sam
 when its Telegram option is on, otherwise in **Alerts**): one tap answers it from your phone, and the message then
 says how it ended, wherever you answered. Nobody answers within 30 minutes: the action is denied. Tools you trust
 (for example `Read`) can be allowed in advance in its settings.
+
+## Claude Code agent files
+
+Harness agents speak Claude Code's own format (`.claude/agents/<name>.md`: a `---` block with `name`, `description`,
+`tools`, `model`, `permissionMode`, then the role):
+
+- **Export (Claude Code file)** on the agent's page downloads it (`maxxing agents export AGENT`);
+- **New agent -> Import a Claude Code agent file** creates an agent from one, sandboxed and without trigger
+  (`maxxing agents import FILE --topic P/T`); fields Harness has no equivalent for (`mcpServers`, `hooks`, `memory`…)
+  are listed as not imported;
+- **Callable from the topic's sessions** (settings): Claude can then hand a task to this agent inside your normal
+  sessions of its topic, as a Claude Code subagent. It works there with the session's permissions and cost (not the
+  agent's limits) and reads / writes the agent's memory.
 
 ## Memory
 

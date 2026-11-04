@@ -33,6 +33,7 @@ one message**, only those you cannot infer:
 | **When it runs** | "every morning / each Monday" -> schedule; "when an order / a payment / a PR / a form arrives" -> webhook of that service; "when the feed shows…" -> feed trigger on an existing source; "I'll write to it" -> Telegram or manual | nothing in the request says when |
 | **Results** | its Activity thread (always); Telegram if the user wants it on the phone | - |
 | **Safety** | runs started by outside text (webhook, feed, another agent) always ask before risky actions (never `--trust-outside` unless the user insists); `--approvals` if even its own runs may send, pay, delete or publish; `--keys A,B` = only the vault keys it needs (none by default); budget $2/day, 6 runs/hour | it acts on money, customers or public posts |
+| **Sandbox** | on by default: its commands write only in its folder (`--writable drafts,.` = folders of the topic too) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default). `--no-sandbox` only if the user insists (it then reaches the whole server) | its role calls an API whose host you cannot deduce |
 | **Name** | short and human ("Game Dev", "Support"); folder = lowercase-dashes of it | - |
 
 Then, before creating, show a short summary (name, topic, role in 2-3 lines, trigger in plain words,
@@ -49,7 +50,7 @@ maxxing agents webhook game-dev [--kind generic|stripe|shopify|github] [--prompt
 maxxing agents watch   game-dev --source shop --levels warning,error --match refund     # existing feed events
 maxxing agents show    game-dev                                                         # check it
 ```
-Other `create` options: `--model`, `--approvals`, `--keys A,B`, `--trust-outside`, `--telegram`, `--usd-per-day N`, `--runs-per-hour N`, `--off`.
+Other `create` options: `--model`, `--approvals`, `--keys A,B`, `--domains H,H`, `--writable D,D`, `--no-sandbox`, `--trust-outside`, `--telegram`, `--usd-per-day N`, `--runs-per-hour N`, `--off`.
 Rules: `name` (the folder) = 1-48 lowercase letters, digits or dashes; at most 20 agents per topic; the role
 is written like a topic CLAUDE.md, in the user's language. Never a secret in the role (keys -> Settings -> Keys).
 
@@ -84,6 +85,12 @@ field), or add a trigger with the commands above.
   run ask. `keys`: the only Keys vault entries its turns get as `$NAME` (none by default, even exposed ones);
   inside its turns `maxxing keys get` only answers for these.
 - `allowed_tools` / `disallowed_tools`: Claude Code tool rules (`Read`, `Bash(git:*)`...).
+- `sandbox` (Claude Code's sandbox; never bypass, `maxxing` limited to feed / agents send / keys get / status in its
+  runs), `domains` (hosts its commands may reach), `writable` (topic folders it may write in, `.` = all), `rules`
+  (`[{"tool": "Bash", "match": "sendmail", "reason": "write a draft instead"}]`: refused before running, reason shown
+  to Claude), `subagent` (callable as a Claude Code subagent from the topic's sessions). A run that fails with
+  "sandbox cannot run on this server" -> `maxxing agents sandbox-setup` as root (or `maxxing doctor`).
+- Claude Code agent files: `maxxing agents export <agent>` / `maxxing agents import FILE --topic P/T`.
 - Unknown or invalid values fall back to their default; keep every field when editing by hand.
 
 ## Triggers
