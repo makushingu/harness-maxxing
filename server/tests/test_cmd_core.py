@@ -988,6 +988,7 @@ def test_new_weekly_jobs_arrive_off_on_an_existing_install(env):
     assert not jobs["Check dependencies for vulnerabilities"]["enabled"]
     assert config.load_config()["cron_keep_background"] is True       # their background programs keep living
     assert config.load_config()["unit_hardening"] is False            # protections new there: off
+    assert config.load_config()["health_feed"] is False               # health in the feed (may reach Telegram): off
 
 
 def test_a_new_install_ends_jobs_background_programs(env):
@@ -996,6 +997,7 @@ def test_a_new_install_ends_jobs_background_programs(env):
     assert run_cli("init", "--workspace", str(env["ws"]), "--quiet") == 0    # a re-run does not flip it
     assert config.load_config()["cron_keep_background"] is False
     assert config.load_config()["unit_hardening"] is True
+    assert config.load_config()["health_feed"] is True
     jobs = {j["name"]: j for j in crons.list_jobs()}
     assert jobs["Clean caches and old versions"]["enabled"]
 

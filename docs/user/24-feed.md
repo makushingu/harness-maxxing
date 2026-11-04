@@ -18,6 +18,19 @@ Click an event to mark it read and open its link (the cron job's history, the St
 GitHub run…). Its **…** menu marks it read or deletes it. Repeated routine events fold into one row
 (*Cron jobs succeeded ×12*) until you read it.
 
+## Alerts: events with buttons
+
+Some events wait for you and carry buttons:
+
+- an agent waiting for your OK: **Allow** / **Deny** in one click (the same answer as in its thread or its run);
+- a server problem: **Seen** (the same as *Seen* in the server health card);
+- an agent that needs a look (failed run, daily budget reached...): **Open**.
+
+Once handled, or when the cause goes away (the request was answered elsewhere, the problem is fixed, the agent
+runs again), the event says how it ended (*Allowed*, *Denied*, *No answer in time*, *Fixed*...) and its buttons go.
+Clicking twice, or on the web and then on Telegram, gives the same answer. The **To handle** filter of the `/feed`
+page (and the *to handle* count of the dashboard panel) shows only the alerts still waiting.
+
 ## What arrives by itself
 
 | Source | Events |
@@ -25,6 +38,10 @@ GitHub run…). Its **…** menu marks it read or deletes it. Repeated routine e
 | **Cron jobs** | every run: failures one by one (with the error), successes folded into one row |
 | **Harness Maxxing** | an update is available, an update needs attention (customizations, roll-back) |
 | **Sign-ins** | sign-ins (folded), several wrong passwords |
+| **Agents** | an agent waits for your OK (Allow / Deny), a run failed (repeats folded), its daily budget or its runs per hour are reached, its sandbox cannot run, a trigger lost its webhook (Agents page on only) |
+| **Server health** | each new problem of the health card (disk, services, Claude sign-in, backup, failed sign-ins), with *Seen*; ends as *Fixed*. On for new installs; turn it on in Settings -> Notifications -> **Server problems in the notifications** |
+
+Agents never start on the source *Agents* (an agent would start itself again).
 
 ## Connect a service (webhooks)
 
@@ -78,6 +95,7 @@ Settings -> Notifications -> **Sources**, per source:
 
 Cron jobs, updates and sign-ins already report in their own threads (*Crons*, *Alerts*): they are not
 repeated in *Notifications* unless you choose so. The switch at the top turns the Telegram thread off.
+An agent waiting for your OK always reaches Telegram, with its Allow / Deny buttons.
 
 ## Good to know
 

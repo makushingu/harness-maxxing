@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.115 - 2026-11-04
+
+Changes:
+- **Notifications you can act on.** What needs you now lands in the Notifications with its buttons: an agent waiting
+  for your OK (Allow / Deny in one click), a failed run, an agent at its daily budget or its runs per hour. Once
+  handled, the notification says how it ended. New **To handle** filter, and a red badge on the agent in the Agents list.
+- **Server problems in the Notifications** (disk, services, Claude sign-in, backup), with **Seen**. On for new
+  installs; for yours: Settings -> Notifications -> *Server problems in the notifications*.
+
 ## 2.0.0-alpha.114 - 2026-11-04
 
 Changes:
