@@ -770,7 +770,7 @@ function TopicAgents({ topic, className }: { topic: Topic; className?: string })
         const s = agentState(a)
         const dot = AGENT_DOT[s]
         return (
-          <Link key={a.path} to={agentRoute(a)} title={`${a.display_name} - ${stateText(a)}`} className={cn(chip, 'max-w-[45%]')} data-testid="topic-agent" data-state={s}>
+          <Link key={a.path} to={agentRoute(a)} title={`${a.display_name} - ${stateText(a)}`} className={cn(chip, list.length > 1 && 'max-w-[45%]')} data-testid="topic-agent" data-state={s}>
             <AgentAvatarIcon avatar={a.avatar} size={16} mood={s === 'off' ? 'sleep' : 'idle'} className={cn(s === 'off' && 'opacity-60')} />
             <span className={cn('truncate', (s === 'waiting' || s === 'unread') && 'font-medium text-foreground')}>
               <Sensitive length={6}>{a.display_name}</Sensitive>
