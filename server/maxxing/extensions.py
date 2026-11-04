@@ -309,7 +309,7 @@ def _import(ext: Extension) -> ModuleType:
 
 
 def _signature() -> tuple:
-    """Folder names + mtimes of manifest/api/page: a change triggers a rescan (hot reload)."""
+    """Folder names + mtimes of manifest/api/page/widget.html: a change triggers a rescan (hot reload)."""
     r = root()
     if not r.is_dir():
         return ()
@@ -318,7 +318,7 @@ def _signature() -> tuple:
         if not d.is_dir() or d.name.startswith((".", "_")):
             continue
         stamps = []
-        for f in ("manifest.json", "api.py", "page.js"):
+        for f in ("manifest.json", "api.py", "page.js", "widget.html"):
             try:
                 stamps.append((d / f).stat().st_mtime_ns)
             except OSError:

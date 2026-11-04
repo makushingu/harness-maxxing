@@ -362,3 +362,13 @@ def test_too_deeply_nested_json_in_or_out_of_handle_is_handled(client, org):
          "        x = [x]\n    return x\n", page="x")
     r = client.get("/api/ext/d/p")
     assert r.status_code == 500 and r.json()["error"] == "extension_error"
+
+
+def test_adding_or_removing_widget_html_is_seen_by_the_hot_reload(client, org):
+    d = _ext(org, "w", {"type": "widget"})
+    assert {x["id"]: x for x in client.get("/api/extensions").json()}["w"]["error"]
+    (d / "widget.html").write_text("<p>hi</p>")
+    e = {x["id"]: x for x in client.get("/api/extensions").json()}["w"]
+    assert e["error"] is None and e["has_html"]
+    (d / "widget.html").unlink()
+    assert {x["id"]: x for x in client.get("/api/extensions").json()}["w"]["error"]
