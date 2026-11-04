@@ -40,6 +40,8 @@ def display_name(name: str) -> str:
     text = "".join(out).strip().rstrip(".").rstrip()
     if text.startswith(".."):                    # one leading dot stays (`.env`), a run of them goes (`../x`)
         text = text.lstrip(".").lstrip()
+    if not text.strip("."):                       # `. ..` cleans to `.`: never a `.` or `..` entry
+        return "download"
     if len(text) > NAME_MAX:
         stem, dot, ext = text.rpartition(".")
         ext = ext if dot and stem and 0 < len(ext) <= 16 else ""
