@@ -64,6 +64,7 @@ STDERR_TAIL = 4000
 CGROUP_FS = Path("/sys/fs/cgroup")
 OOM_ERROR = ("Claude was killed by the kernel: the turn ran out of memory (a command used too much RAM; "
              "`journalctl -k | grep -i oom` shows which).")
+BUDGET_ERROR = "Daily budget of the agent reached: turn stopped (Agent settings -> Limits)."
 LATENCY_KEPT = 20                                     # per session: seconds to the first event / answer
 
 
@@ -569,6 +570,8 @@ class Runner:
                    or f"Claude exited with code {a.rc}")[-300:]
             if a.oom and not a.timed_out:
                 err = OOM_ERROR
+            elif res.get("subtype") == "error_max_budget_usd":   # `--max-budget-usd` of an agent folder
+                err = BUDGET_ERROR
         if not (a.stopped and not a.timed_out):
             auth_err = _auth_error(a, ok)
             if auth_err:
