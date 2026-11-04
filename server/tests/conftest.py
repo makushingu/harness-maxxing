@@ -15,6 +15,7 @@ import pytest
 os.environ.setdefault("MAXXING_STATE", os.path.join(tempfile.gettempdir(), "mx-test-boot-state"))
 os.environ["MAXXING_SPAWN"] = "direct"
 os.environ["MAXXING_SYSTEM_TZ"] = "0"                # never switch the real system clock
+os.environ.setdefault("MAXXING_SANDBOX_CHECK", "0")  # agents' sandbox: never depends on bubblewrap here
 os.environ.setdefault("MAXXING_AUTH_CHECK", "0")     # no background `claude -p` check (tests opt in)
 os.environ["MAXXING_CLAUDE_UPDATE"] = "0"          # no background `claude update` (tests call tick())
 os.environ["MAXXING_LICENSE_PING"] = "0"           # no call to the cloud (registration heartbeat) from the test servers

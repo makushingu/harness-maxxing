@@ -64,6 +64,8 @@ STDERR_TAIL = 4000
 CGROUP_FS = Path("/sys/fs/cgroup")
 OOM_ERROR = ("Claude was killed by the kernel: the turn ran out of memory (a command used too much RAM; "
              "`journalctl -k | grep -i oom` shows which).")
+SANDBOX_ERROR = ("The agent's sandbox cannot run on this server: run `maxxing agents sandbox-setup` as root, or turn the "
+                 "sandbox off in the agent settings (missing: ")
 BUDGET_ERROR = "Daily budget of the agent reached: turn stopped (Agent settings -> Limits)."
 LATENCY_KEPT = 20                                     # per session: seconds to the first event / answer
 
@@ -275,6 +277,14 @@ class Runner:
         agent = agents.run_settings(meta.get("path") or "", (meta.get("env") or {}).get("MAXXING_AGENT_OUTSIDE") == "1")
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
+        if agent.get("sandbox"):                        # Claude Code's sandbox; never bypass (domains not enforced)
+            from maxxing import agent_guard
+            if not agent_guard.available()["ok"]:
+                err = SANDBOX_ERROR + ", ".join(agent_guard.available()["missing"]) + ")."
+                self.note(err, "error")
+                self._record(Attempt(rc=1, stderr=err), item)
+                return err
+            mode = agent_guard.mode(mode)
         if agent.get("approvals") and not plan:
             if agent.get("approvals_forced") and meta.get("fresh", True):
                 self.note("Started by an outside event: asks before risky actions (agent setting: trust outside events)")
@@ -282,7 +292,11 @@ class Runner:
             approval = approval_args(self.sid, str(meta.get("path") or ""), agent.get("approval_timeout_s"))
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg) + spawn.agents_args(cfg, mcp_plan.hint)
+        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"))
+        base += spawn.agents_args(cfg, mcp_plan.hint)
+        if not agent:                                   # a topic's agents with `subagent` on: callable from its sessions
+            from maxxing import agent_format
+            base += agent_format.subagents_args(meta.get("path") or "")
         base += ["--model", model] if model else []
         base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules

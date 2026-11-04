@@ -81,6 +81,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("password", help="set a new UI password").set_defaults(fn=cmd_password)
     _load_plugins()
     args = sys.argv[1:] if argv is None else argv
+    from . import agent_guard                       # a sandboxed agent turn: only a few sub-commands
+    refused = agent_guard.check_cli(args)
+    if refused:
+        print(refused, file=sys.stderr)
+        return 2
     chosen = next((x for x in args if not x.startswith("-")), None)
     for name, (hlp, configure, handler) in COMMANDS.items():
         s = sub.add_parser(name, help=hlp)

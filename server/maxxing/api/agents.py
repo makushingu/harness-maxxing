@@ -61,6 +61,18 @@ class Trigger(BaseModel):
     hook_id: Optional[str] = None
 
 
+class Rule(BaseModel):
+    tool: str = "*"
+    match: str = ""
+    reason: Optional[str] = None
+
+
+class ImportIn(BaseModel):
+    topic_path: str
+    markdown: str = Field(max_length=64_000)
+    name: Optional[str] = None
+
+
 class AgentIn(BaseModel):
     topic_path: Optional[str] = None          # create only
     name: Optional[str] = None                # create only: the folder slug
@@ -78,6 +90,11 @@ class AgentIn(BaseModel):
     keys: Optional[list[str]] = Field(default=None, max_length=50)
     limits: Optional[Limits] = None
     triggers: Optional[list[Trigger]] = None
+    sandbox: Optional[bool] = None
+    domains: Optional[list[str]] = Field(default=None, max_length=50)
+    writable: Optional[list[str]] = Field(default=None, max_length=20)
+    rules: Optional[list[Rule]] = Field(default=None, max_length=20)
+    subagent: Optional[bool] = None
 
 
 def _fields(body: AgentIn) -> dict:
@@ -129,6 +146,27 @@ def list_templates(lang: Optional[str] = Query(default=None, max_length=8)):
     return {"templates": out}
 
 
+@router.get("/sandbox")
+def sandbox_status():
+    """What the sandbox of agents needs on this server: {ok, missing: [bwrap|socat|apparmor|linux]}."""
+    from .. import agent_guard
+    _on()
+    return agent_guard.available(fresh=True)
+
+
+@router.post("/import")
+def import_agent(body: ImportIn):
+    """Create an agent from a Claude Code agent file (.claude/agents/<name>.md)."""
+    from .. import agent_format
+    _on()
+    try:
+        return agent_format.import_md(body.topic_path, body.markdown, body.name or None)
+    except ValueError as e:
+        raise HTTPException(400, detail={"error": "bad_file", "message": str(e)}) from None
+    except agents.AgentError as e:
+        raise _bad(e) from None
+
+
 @router.post("")
 def create_agent(body: AgentIn):
     _on()
@@ -167,6 +205,29 @@ def delete_agent(project: str, topic: str, name: str):
     except agents.AgentError as e:
         raise _bad(e) from None
     return {"ok": True}
+
+
+@router.get("/{project}/{topic}/{name}/export")
+def export_agent(project: str, topic: str, name: str):
+    """The agent as a Claude Code agent file (.claude/agents/<name>.md)."""
+    from fastapi.responses import PlainTextResponse
+    from .. import agent_format
+    _on()
+    path = _path(project, topic, name)
+    if not agents.exists(path):
+        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
+    return PlainTextResponse(agent_format.export_md(path), media_type="text/markdown; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{name}.md"'})
+
+
+@router.post("/{project}/{topic}/{name}/runs/{sid}/continue")
+def continue_run(project: str, topic: str, name: str, sid: str):
+    """Continue in Sessions: a copy of this run as a normal session of the topic (same history and Claude thread)."""
+    _on()
+    try:
+        return {"session": agents.continue_in_sessions(_path(project, topic, name), sid)}
+    except agents.AgentError as e:
+        raise _bad(e) from None
 
 
 @router.get("/{project}/{topic}/{name}/thread")
