@@ -1921,6 +1921,8 @@ class Gateway:
         started, typed, checked = time.monotonic(), 0.0, time.monotonic()
         while sid in self._pending and not self._stopping and time.monotonic() - started < TYPING_MAX:
             p = self._pending[sid]
+            if p.get("ending"):                        # the turn ended (see on_turn_end)
+                return
             now = time.monotonic()
             if now - checked >= RECHECK_EVERY:
                 checked = now
@@ -2022,8 +2024,12 @@ class Gateway:
         if p is not None:
             t = p.get("task")                           # stop the status loop first: an edit still in
             if t is not None and not t.done():          # flight must not land after the final summary
+                # the flag too: a cancel landing inside an HTTP call can be swallowed by the HTTP stack, and the
+                # loop would then go on and drop this turn's message as no longer live (answer never sent)
+                p["ending"] = True
                 t.cancel()
                 await asyncio.gather(t, return_exceptions=True)
+            p["ending"] = False
             # after the loop stopped: it may have dropped refs that were no longer live meanwhile
             if isinstance(last, dict):
                 done = [r for r in p["refs"] if r in set(last.get("refs") or [])]
