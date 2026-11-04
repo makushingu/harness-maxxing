@@ -143,3 +143,30 @@ def test_deployment_logs_are_read_only_from_the_dokploy_log_folder(fake):
     with pytest.raises(ProviderError) as e:
         dokploy.log(deps[0])
     assert e.value.code == "remote_log"
+
+
+def run(monkeypatch, *argv, stdin=""):
+    import io
+    from maxxing import cli
+    monkeypatch.setattr("sys.stdin", io.StringIO(stdin))
+    return cli.main(["dokploy", *argv])
+
+
+def test_cli_connects_lists_and_asks_yes_before_writing(fake, monkeypatch, capsys):
+    assert run(monkeypatch, "status") == 1
+    assert run(monkeypatch, "list") == 2                           # not connected
+    assert "not_connected" in capsys.readouterr().err
+    assert run(monkeypatch, "connect", "--url", fake.url, stdin=KEY + "\n") == 0
+    assert vault.get(dokploy.KEY) == KEY
+    capsys.readouterr()
+    assert run(monkeypatch, "list") == 0
+    out = capsys.readouterr().out
+    assert "web.example.com" in out and "acme/production" in out and KEY not in out
+    assert run(monkeypatch, "deploy", "a1") == 3                   # no --yes: nothing sent
+    assert not [c for c in fake.calls if c[1] == "application.deploy"]
+    assert run(monkeypatch, "deploy", "acme-web-x1", "--yes") == 0
+    assert [c[2] for c in fake.calls if c[1] == "application.deploy"] == [{"applicationId": "a1"}]
+    assert run(monkeypatch, "deploy", "web", "--yes") == 2         # ambiguous name: nothing sent
+    assert "ambiguous" in capsys.readouterr().err
+    assert run(monkeypatch, "domain", "add", "a1", "www.example.com", "--yes") == 0
+    assert run(monkeypatch, "disconnect") == 0 and vault.get(dokploy.KEY) is None
