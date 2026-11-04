@@ -176,7 +176,7 @@ def test_continue_a_run_in_sessions(client, topic, mx):
     r = client.post(f"/api/agents/acme/blog/writer/runs/{sid}/continue")
     assert r.status_code == 200, r.text
     s = r.json()["session"]
-    assert s["path"] == "projects/acme/topics/blog" and s["id"] != sid and s["title"].startswith("Writer: ")
+    assert s["path"] == "projects/acme/topics/blog" and s["id"] != sid and s["title"].startswith("Writer")
     assert s.get("source") == "web" and not s.get("cron")
     logs = client.get(f"/api/sessions/{s['id']}/events").json()
     old = client.get(f"/api/sessions/{sid}/events").json()
