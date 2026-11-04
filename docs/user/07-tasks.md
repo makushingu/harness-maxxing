@@ -27,7 +27,8 @@ A link to one project: `/tasks?project=<workspace project name>`.
 
 ## Views
 
-- **Board**: drag cards between columns and to reorder them. In **All tasks**, **By project** shows one
+- **Board**: drag cards between columns and to reorder them (a task whose status you change in its sheet goes
+  on top of Done, at the bottom of the other columns). In **All tasks**, **By project** shows one
   board row per project (fold a row with its arrow).
 - **Week**: open tasks in columns by due date: overdue, today, the next six days, later, no date. Drag a
   card onto a day (or onto **No date**) to change its due date; **Add a task** under a day creates it for
@@ -78,5 +79,8 @@ on top of the file as Claude left it.
 - Unknown fields are preserved, so you can add your own.
 - A field of the wrong type (a list of notes, a number as a title) is read as text instead of breaking
   the page or the search.
+- A value the page does not understand (`"status": "in_progress"`, `"due": "2026-13-01"`) shows as the
+  default (to do, no date) but stays as written in the file until you change that field in the page; a
+  project written without an `id` gets one instead of being dropped.
 - If the file is not valid JSON, the page shows an error and never overwrites it: fix the file
   (or ask Claude to) and reload.

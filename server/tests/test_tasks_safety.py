@@ -119,3 +119,84 @@ def test_reading_the_tasks_does_not_copy_the_whole_file(client, mx, monkeypatch)
     assert r.status_code == 200 and copies
     tasks = {t["id"]: t for t in client.get("/api/tasks").json()["tasks"]}
     assert tasks["t_1"]["title"] == "renamed" and tasks["t_2"]["title"] == "task 2"
+
+
+def test_an_edit_landing_while_the_server_writes_is_kept(client, mx, monkeypatch):
+    """The signature was checked before the dump and the fsync (71 ms for 5000 tasks): a rename by Claude in that
+    window was replaced by the server's copy. Now it is checked again right before the server's rename."""
+    t = client.post("/api/tasks", json={"title": "ui"}).json()
+    real, calls = tasks_api.config._atomic_write, []
+
+    def claude_renames_during_the_dump(path, data, mode=None, before_replace=None):
+        def edit_then_check():
+            if not calls:
+                _edit_on_disk("added by Claude")
+            calls.append(1)
+            if before_replace:
+                before_replace()
+        real(path, data, mode, edit_then_check)
+
+    monkeypatch.setattr(tasks_api.config, "_atomic_write", claude_renames_during_the_dump)
+    r = client.patch(f"/api/tasks/{t['id']}", json={"title": "ui 2"})
+    monkeypatch.setattr(tasks_api.config, "_atomic_write", real)
+    assert r.status_code == 200, r.text
+    assert len(calls) == 2                                          # applied again on the fresh file
+    titles = {x["title"] for x in client.get("/api/tasks").json()["tasks"]}
+    assert titles == {"added by Claude", "ui 2"}
+
+
+def test_a_server_write_keeps_hand_written_projects_and_values(client, mx):
+    """A project without an id was dropped by the next UI action, and values the reader does not understand
+    ("in_progress", a due date with a time, labels as text) were reset to their defaults on disk."""
+    (mx["ws"] / "tasks.json").write_text(json.dumps({"version": 1, "projects": [{"name": "Personal", "color": "blue"}], "tasks": [
+        {"id": "t_1", "title": "hand", "status": "in_progress", "due": "2026-11-05T10:00", "labels": "urgent", "priority": "high"},
+    ]}))
+    listed = client.get("/api/tasks").json()
+    pid = listed["projects"][0]["id"]
+    assert pid.startswith("p_") and listed["tasks"][0]["status"] == "todo"
+    assert client.get("/api/tasks").json()["projects"][0]["id"] == pid      # stable until saved
+    assert client.post("/api/tasks", json={"title": "ui", "project_id": pid}).status_code == 200
+    d = json.loads((mx["ws"] / "tasks.json").read_text())
+    assert [p["name"] for p in d["projects"]] == ["Personal"] and d["projects"][0]["id"] == pid
+    hand = next(x for x in d["tasks"] if x["id"] == "t_1")
+    assert (hand["status"], hand["due"], hand["labels"], hand["priority"]) == ("in_progress", "2026-11-05T10:00", "urgent", "high")
+    # a field the API changes is written normalised
+    client.patch("/api/tasks/t_1", json={"status": "doing", "labels": ["a"]})
+    hand = next(x for x in json.loads((mx["ws"] / "tasks.json").read_text())["tasks"] if x["id"] == "t_1")
+    assert (hand["status"], hand["labels"], hand["due"]) == ("doing", ["a"], "2026-11-05T10:00")
+
+
+def test_an_impossible_due_date_written_by_hand_is_no_date(client, mx):
+    """"2026-13-01" matched the YYYY-MM-DD pattern and crashed every page that formats the date."""
+    (mx["ws"] / "tasks.json").write_text(json.dumps({"version": 1, "projects": [], "tasks": [
+        {"id": "t_1", "title": "a", "due": "2026-13-01"}, {"id": "t_2", "title": "b", "due": "2026-02-30"},
+        {"id": "t_3", "title": "c", "due": "2026-02-28"}]}))
+    due = {t["id"]: t["due"] for t in client.get("/api/tasks").json()["tasks"]}
+    assert due == {"t_1": None, "t_2": None, "t_3": "2026-02-28"}
+
+
+def test_a_card_dropped_between_two_equal_orders_lands_there(client, mx):
+    """Hand-written tasks all have order 0: the old midpoint (0 + 0.0005) sent the card to the end of the run."""
+    (mx["ws"] / "tasks.json").write_text(json.dumps({"version": 1, "projects": [], "tasks": [
+        {"id": f"t_{c}", "title": c, "created": i} for i, c in enumerate("ABCD")]}))
+    r = client.patch("/api/tasks/t_D", json={"status": "todo", "order": 0.0005, "prev_id": "t_A", "next_id": "t_B"})
+    assert r.status_code == 200, r.text
+    tasks = sorted(client.get("/api/tasks").json()["tasks"], key=lambda t: (t["order"], t["created"]))
+    assert "".join(t["title"] for t in tasks) == "ADBC"
+    # room left: only the dropped card moves
+    r = client.patch("/api/tasks/t_C", json={"status": "todo", "prev_id": "t_A", "next_id": "t_D"}).json()
+    assert 1.0 < r["order"] < 2.0
+
+
+def test_a_status_change_without_order_puts_the_task_on_top_of_done(client, mx):
+    """The task sheet changes only the status: the task kept its old order and could sink past Done's first page."""
+    ids = [client.post("/api/tasks", json={"title": f"d{i}", "status": "done"}).json()["id"] for i in range(3)]
+    t = client.post("/api/tasks", json={"title": "todo"}).json()
+    for _ in range(5):
+        client.post("/api/tasks", json={"title": "more"})
+    moved = client.patch(f"/api/tasks/{t['id']}", json={"status": "done"}).json()
+    done = [x for x in client.get("/api/tasks").json()["tasks"] if x["status"] == "done"]
+    assert moved["order"] < min(x["order"] for x in done if x["id"] in ids)
+    back = client.patch(f"/api/tasks/{t['id']}", json={"status": "todo"}).json()
+    todo = [x for x in client.get("/api/tasks").json()["tasks"] if x["status"] == "todo" and x["id"] != t["id"]]
+    assert back["order"] > max(x["order"] for x in todo)

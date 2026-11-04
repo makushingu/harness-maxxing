@@ -140,6 +140,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `Markdown` is `React.memo`: a dictionary group arriving (re-renders every `useT` user) no longer re-parses and
   re-highlights every message on screen. Tasks List/Calendar group with push (was a copy per task, quadratic) and the
   List renders 200 rows per step (sentinel + IntersectionObserver, like the Files listing).
+- tasks.json: `save()` re-checks the signature right before the rename (`config.write_json(before_replace=)`, run
+  after the dump + fsync), so an edit landing during the write is retried, not overwritten. On save, a field
+  `_norm_task` rewrote and the API did not change is written back raw (`_cache["raw"]`, `_with_raw`); id-less
+  projects get a `_free_id("p_")` instead of being dropped. `_norm_task` checks `due` with `date.fromisoformat`;
+  the UI `fmtDue` / quick-add `parseDue` guard impossible dates too.
+- PATCH task: `prev_id` / `next_id` (sent by the Board drop) place the card server-side, renumbering the column 1..n
+  when the neighbours' orders are equal or < 1e-6 apart; a status change without `order` goes on top of done /
+  bottom elsewhere (the task sheet).
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
