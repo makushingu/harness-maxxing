@@ -132,6 +132,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   seeds and prefills are keyed `new:<path>`, two columns on one path overwrote each other).
 
 
+## Unreleased
+
+- `components/ui/markdown.tsx`: remote images (`https?:` / `//host`) render as `RemoteImage`, a click-to-load button
+  (then `referrerPolicy="no-referrer"`); same-site and relative pictures still load at once. `//host` links count as
+  external (new tab, rel noopener). Key `md.loadImage` (core).
+
 ## 2.0.0-alpha.109 - 2026-11-04
 
 - Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events

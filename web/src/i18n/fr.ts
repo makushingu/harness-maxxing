@@ -20,6 +20,7 @@ export const fr: Record<keyof typeof en, string> = {
   'media.open': 'Ouvrir dans la visionneuse',
   'common.undo': 'Annuler',
   'common.copy': 'Copier',
+  'md.loadImage': "Charger l'image de {host}",
   'common.delete': 'Supprimer',
   'common.edit': 'Modifier',
   'common.failed': 'Échec',

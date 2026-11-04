@@ -20,6 +20,7 @@ export const en = {
   'media.open': 'Open in the viewer',
   'common.undo': 'Undo',
   'common.copy': 'Copy',
+  'md.loadImage': 'Load image from {host}',
   'common.delete': 'Delete',
   'common.edit': 'Edit',
   'common.failed': 'Failed',
