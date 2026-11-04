@@ -142,6 +142,18 @@ def test_crontab_block_preserves_external_lines(org, monkeypatch):
                    {"schedule": "@reboot", "command": "/opt/start.sh", "human": "at boot"}]
 
 
+def test_another_state_dir_keeps_the_lines_of_the_main_install(org):
+    """A dev copy / preview / script with its own MAXXING_STATE replaced the whole block: the live jobs stopped."""
+    live = "30 2 * * * MAXXING_CRON_DETACH=1 /usr/local/bin/maxxing cron run c_live01 >/dev/null 2>&1"
+    other = "0 * * * * MAXXING_STATE=/srv/preview MAXXING_CRON_DETACH=1 /usr/local/bin/maxxing cron run c_prev01"
+    org.crontab.write_text(f"{EXTERNAL}\n{crons.BLOCK_BEGIN}\n{live}\n{other}\n{crons.BLOCK_END}\n")
+    j = crons.create_job({"name": "Scratch", "schedule": "@hourly", "command": "true"})
+    lines = org.crontab.read_text().splitlines()
+    assert live in lines and other in lines and sum(f"cron run {j['id']}" in ln for ln in lines) == 1
+    crons.delete_job(j["id"])
+    assert org.crontab.read_text() == f"{EXTERNAL}\n{crons.BLOCK_BEGIN}\n{live}\n{other}\n{crons.BLOCK_END}\n"
+
+
 def test_kept_server_clock_guards_lines(org, monkeypatch):
     """system_clock = keep: the system zone is never touched, lines fire hourly and check the schedule."""
     monkeypatch.setattr(crons, "maxxing_bin", lambda: "/usr/local/bin/maxxing")
