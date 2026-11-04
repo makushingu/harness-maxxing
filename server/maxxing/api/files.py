@@ -42,6 +42,7 @@ THUMB_TIMEOUT_S = 30
 # here instead of filling the shared worker threads every other request (health, lists, settings) needs.
 THUMB_JOBS = 3
 _thumb_pool = ThreadPoolExecutor(max_workers=THUMB_JOBS, thread_name_prefix="mx-thumb")
+_thumb_jobs: dict[tuple[str, int], asyncio.Future] = {}   # (file, width) -> its render in flight (shared)
 SEARCH_MAX = 50
 SEARCH_SCAN_MAX = 200_000
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache", ".next", "dist",
@@ -354,7 +355,7 @@ async def preview(path: str, w: int = Query(2048, ge=64, le=4096), v: str = ""):
     convert = ext in CONVERT_EXT
     if not convert and (size <= PREVIEW_MIN_BYTES or ext in PREVIEW_ORIGINAL_EXT):
         return _serve(p, v)
-    f, mime = await _t(_thumb, p, w)
+    f, mime = await _render(p, w)
     if f == p:                                # no ffmpeg: the original (or nothing the browser can show)
         if convert:
             raise _err(415, "unsupported", "This image format cannot be converted on this server")
@@ -415,6 +416,12 @@ async def video_stream(path: str, q: int, v: str = ""):
 
 
 # ---- thumbnails ----------------------------------------------------------------------------
+def _nice() -> list[str]:
+    """Renders run below the server and the sessions (like video copies)."""
+    nice = shutil.which("nice")
+    return [nice, "-n", "10"] if nice else []
+
+
 def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -430,7 +437,7 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool:
             # a "%" in the path: image2 would read it as a sequence pattern (a%d.png -> a1.png, maybe a link out of
             # the root); force image2 with no pattern (its private option: refused by the other demuxers)
             single = ["-f", "image2", "-pattern_type", "none"] if not video and "%" in str(src) else []
-            cmd = [ffmpeg, "-v", "error", "-y", "-protocol_whitelist", "file",
+            cmd = [*_nice(), ffmpeg, "-v", "error", "-y", "-protocol_whitelist", "file",
                    "-format_whitelist", videos.VIDEO_FORMATS if video else IMAGE_FORMATS, *seek, *single, "-i", str(src),
                    "-frames:v", "1", "-vf", scale, "-c:v", "libwebp", "-quality", "78", "-f", "webp", str(tmp)]
             try:
@@ -455,7 +462,7 @@ def _pdf_thumb(src: Path, dest: Path, w: int) -> bool:
     with tempfile.TemporaryDirectory(prefix="mx-pdf-") as tmp:
         out = Path(tmp) / "page"
         try:
-            r = subprocess.run([pdftoppm, "-f", "1", "-l", "1", "-singlefile", "-png", "-scale-to", str(w),
+            r = subprocess.run([*_nice(), pdftoppm, "-f", "1", "-l", "1", "-singlefile", "-png", "-scale-to", str(w),
                                 str(src), str(out)], capture_output=True, timeout=THUMB_TIMEOUT_S)
         except (subprocess.TimeoutExpired, OSError):
             return False
@@ -523,6 +530,25 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
     return p, _mime(p)                        # fallback: the original image
 
 
+async def _render(p: Path, w: int) -> tuple[Path, str]:
+    """_thumb in the thumbnail pool (previews too: up to 30 s of ffmpeg each, never in the shared worker threads);
+    requests for the same file and width wait for one render instead of running ffmpeg each."""
+    key = (str(p), next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1]))
+    loop = asyncio.get_running_loop()
+    fut = _thumb_jobs.get(key)
+    if fut is None or fut.get_loop() is not loop:
+        fut = loop.run_in_executor(_thumb_pool, _thumb, p, w)
+        _thumb_jobs[key] = fut
+
+        def done(f: asyncio.Future) -> None:
+            if _thumb_jobs.get(key) is f:
+                del _thumb_jobs[key]
+            if not f.cancelled():
+                f.exception()                 # retrieved: no "never retrieved" warning when every waiter left
+        fut.add_done_callback(done)
+    return await asyncio.shield(fut)
+
+
 GIF_ANIM_MAX = 8 * 1024**2                # anim=1: a GIF up to this size is served as it is (it moves), else a still
 
 
@@ -531,7 +557,7 @@ async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = "", ani
     p = resolve(path)
     if anim and p.suffix.lower() == ".gif" and await _t(p.is_file) and (await _t(p.stat)).st_size <= GIF_ANIM_MAX:
         return _serve(p, v)
-    f, mime = await asyncio.get_running_loop().run_in_executor(_thumb_pool, _thumb, p, w)
+    f, mime = await _render(p, w)
     return FileResponse(f, media_type=mime, headers=_file_headers(mime, _cache(v)))
 
 
