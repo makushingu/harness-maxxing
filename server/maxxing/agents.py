@@ -68,6 +68,10 @@ EVENT_MAX = 8000                               # characters of trigger text sent
 THREAD_KEEP = 500                              # messages kept in an agent's thread
 TEXT_MAX = 4000                                # characters of a turn result kept in the thread
 MAX_DEPTH = 3                                  # agent -> agent hops
+MAX_DOMAINS = 50
+MAX_RULES = 20
+RULE_TOOLS = ("Bash", "Write", "Edit", "WebFetch", "*")   # `rules`: the tool a rule watches (* = any tool)
+DOMAIN_RE = re.compile(r"^(\*\.)?[a-z0-9]([a-z0-9-]{0,62}\.)*[a-z0-9-]{1,63}$")
 
 
 class AgentError(Exception):
@@ -159,6 +163,51 @@ def _clean_tools(v: Any) -> list[str]:
     return out[:50]
 
 
+def _clean_domains(v: Any, strict: bool = False) -> list[str]:
+    """Hosts the agent's shell commands may reach in its sandbox ("api.github.com", "*.example.com")."""
+    out: list[str] = []
+    for d in v if isinstance(v, list) else []:
+        d = str(d).strip().lower().removeprefix("https://").removeprefix("http://").rstrip("/")
+        if not DOMAIN_RE.match(d) or len(d) > 253:
+            if strict:
+                raise AgentError(400, "bad_domain", f"Not a host name: {d!r}")
+            continue
+        if d not in out:
+            out.append(d)
+    return out[:MAX_DOMAINS]
+
+
+def _clean_writable(v: Any, strict: bool = False) -> list[str]:
+    """Folders of the topic (relative to it, "." = the whole topic) the agent may write in, besides its own folder."""
+    out: list[str] = []
+    for p in v if isinstance(v, list) else []:
+        p = str(p).strip().strip("/") or "."
+        parts = p.split("/")
+        if len(p) > 200 or any(x in ("..", "") for x in parts) or any(c in p for c in "\n\r\0*?["):
+            if strict:
+                raise AgentError(400, "bad_path", f"Not a folder of the topic: {p!r}")
+            continue
+        if p not in out:
+            out.append(p)
+    return out[:20]
+
+
+def _clean_rules(v: Any, strict: bool = False) -> list[dict]:
+    """Fixed rules checked before every tool call (a Claude Code PreToolUse hook): {tool, match, reason} refuses a
+    call of `tool` whose input contains `match` (case-insensitive)."""
+    out: list[dict] = []
+    for r in v if isinstance(v, list) else []:
+        if not isinstance(r, dict):
+            continue
+        tool, match = str(r.get("tool") or "*"), " ".join(str(r.get("match") or "").split())[:200]
+        if tool not in RULE_TOOLS or not match:
+            if strict:
+                raise AgentError(400, "bad_rule", "A rule needs a tool (Bash, Write, Edit, WebFetch or *) and a text")
+            continue
+        out.append({"tool": tool, "match": match, "reason": " ".join(str(r.get("reason") or "").split())[:300]})
+    return out[:MAX_RULES]
+
+
 def _clean_trigger(t: Any, strict: bool) -> dict | None:
     if not isinstance(t, dict) or t.get("kind") not in TRIGGER_KINDS:
         if strict:
@@ -203,6 +252,10 @@ def clean(data: Any, strict: bool = False) -> dict:
             "allowed_tools": _clean_tools(d.get("allowed_tools")), "disallowed_tools": _clean_tools(d.get("disallowed_tools")),
             "telegram": bool(d.get("telegram")), "approvals": bool(d.get("approvals")),
             "trust_outside": bool(d.get("trust_outside")), "keys": _clean_keys(d.get("keys"), strict),
+            # sandbox: off for agents made before it existed (no field), on for new ones (create())
+            "sandbox": bool(d.get("sandbox")), "domains": _clean_domains(d.get("domains"), strict),
+            "writable": _clean_writable(d.get("writable"), strict), "rules": _clean_rules(d.get("rules"), strict),
+            "subagent": bool(d.get("subagent")),
             "limits": limits, "triggers": triggers,
             "created": d.get("created") if isinstance(d.get("created"), (int, float)) else time.time()}
 
@@ -241,7 +294,7 @@ def names(project: str, topic: str) -> list[str]:
 
 # ---- run settings read by the session runner -----------------------------------------------------
 def run_settings(path: str, outside: bool = False) -> dict:
-    """{model, permission_mode, args, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
+    """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
     args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
     agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
     risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
@@ -257,10 +310,51 @@ def run_settings(path: str, outside: bool = False) -> dict:
     if a["limits"]["usd_per_day"]:                  # Claude Code stops the turn itself once the day's budget is spent
         left = a["limits"]["usd_per_day"] - day_cost(path)
         args += ["--max-budget-usd", f"{max(left, 0.01):.2f}"]
+    from . import agent_guard
+    args += agent_guard.add_dirs(path, a)
     forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
+            "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
             "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"]}
+
+
+def continue_in_sessions(path: str, sid: str) -> dict:
+    """"Continue in Sessions": a copy of one run of the agent as a normal session of its topic - same history and the
+    same Claude thread (forked: the run itself is not changed), no agent rules (the user's own permissions)."""
+    import shutil
+    from .sessions import service, store
+    src = store.read(sid) if store.is_valid_id(sid) else None
+    if not src or (src.get("path") or "") != path:
+        raise AgentError(404, "not_found", "This run is not one of the agent's sessions")
+    if src.get("state") == "running" or src.get("queue"):
+        raise AgentError(409, "busy", "Wait for the run to finish")
+    a = load(path)
+    title = f"{a['name'] or parse(path)[2]}: {src.get('title') or 'run'}"[:120]
+    meta = store.new_meta(topic_of(path), title, model=src.get("model") or "", source="web")
+    csid = src.get("csid") or sid
+    meta.update(csid=csid, fresh=bool(src.get("fresh", True)), from_agent={"path": path, "session": sid},
+                last_text=src.get("last_text") or "", turns=src.get("turns") or 0)
+    if isinstance(src.get("thread_cost"), dict):
+        meta["thread_cost"] = dict(src["thread_cost"])
+    try:
+        shutil.copyfile(store.log_path(sid), store.log_path(meta["id"]))
+    except OSError:
+        pass
+    root = config.workspace()
+    projects = config.claude_dir() / "projects"
+    t_src = projects / service._claude_slug(root / path) / f"{csid}.jsonl"
+    t_dst = projects / service._claude_slug(root / topic_of(path)) / f"{csid}.jsonl"
+    if t_src.is_file() and not t_dst.exists():
+        t_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(t_src, t_dst)
+    elif not t_src.is_file():
+        meta["fresh"] = True                         # nothing to resume: the history is shown, Claude starts anew
+        meta["csid"] = meta["id"]
+    store.create(meta)
+    from . import bus
+    bus.invalidate("sessions", "workspace")
+    return service.get_session(meta["id"]) or service.public(meta)
 
 
 # ---- public shape ----------------------------------------------------------------------------------
@@ -274,7 +368,8 @@ def public(path: str, stats: dict | None = None) -> dict:
     return {"path": path, "project": p[0], "topic": p[1], "name": p[2], "display_name": a["name"] or p[2],
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
-                "approvals", "trust_outside", "keys", "limits", "triggers", "created")},
+                "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
+                "limits", "triggers", "created")},
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": st.get("unread", 0)}
 
@@ -335,7 +430,7 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
         raise AgentError(409, "too_many", f"At most {MAX_PER_TOPIC} agents per topic")
     f = dict(fields or {})
     description = str(f.pop("description", "") or "")
-    data = clean({**f, "created": time.time()}, strict=True)
+    data = clean({"sandbox": True, **f, "created": time.time()}, strict=True)
     folder(path).mkdir(parents=True)
     workspace._init_level(folder(path), "agent", name, description)
     _save(path, data)

@@ -1209,6 +1209,22 @@ def check_voice() -> Check:
     return _c("voice", lvl, title, detail, fix)
 
 
+def check_agent_sandbox() -> Check | None:
+    """Only when a sandboxed agent exists: bubblewrap, socat and (Ubuntu 24.04+) the AppArmor profile."""
+    from . import agent_guard, agents
+    try:
+        boxed = [a["path"] for a in agents.list_agents() if a.get("sandbox") and a.get("enabled")]
+    except Exception:  # noqa: BLE001 - no workspace yet
+        return None
+    if not boxed:
+        return None
+    st = agent_guard.available(fresh=True)
+    if st["ok"]:
+        return _c("agent-sandbox", OK, f"agents' sandbox ready ({len(boxed)} sandboxed)", "")
+    return _c("agent-sandbox", FAIL, f"agents' sandbox missing: {', '.join(st['missing'])} - their runs stop",
+              ", ".join(boxed[:5]), "maxxing agents sandbox-setup   (as root)")
+
+
 def check_tools() -> Check:
     """Node.js + Remotion (videos) + headless browser (PDF) + Scrapling: optional, never a failure."""
     from . import cmd_video
@@ -1451,7 +1467,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_agent_sandbox, check_managed_deps, check_security, check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])

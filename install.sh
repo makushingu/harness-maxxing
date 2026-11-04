@@ -896,7 +896,7 @@ align_tz() {
 # uv, Python and Claude Code are set up: apt_wait waits for it before anything else uses apt (Caddy, the security
 # step). Each "a:b" entry takes the first name this release knows (Ubuntu 24.04 renamed libraries to *t64).
 BASE_PKGS="git curl ca-certificates cron openssl python3 gnupg openssh-client xz-utils tzdata"
-TOOL_PKGS="ffmpeg zip unzip jq ripgrep imagemagick poppler-utils"
+TOOL_PKGS="ffmpeg zip unzip jq ripgrep imagemagick poppler-utils bubblewrap socat"
 SEC_PKGS="unattended-upgrades fail2ban python3-systemd"
 BROWSER_PKGS="libnss3 libnspr4 libdbus-1-3 libatk1.0-0t64:libatk1.0-0 libatk-bridge2.0-0t64:libatk-bridge2.0-0 libgbm1
   libasound2t64:libasound2 libxrandr2 libxkbcommon0 libxfixes3 libxcomposite1 libxdamage1 libdrm2 libpango-1.0-0
@@ -957,6 +957,25 @@ install_packages() {
   [ -n "${BG_PID[apt]:-}" ] || command -v ffmpeg >/dev/null 2>&1 \
     || warn "ffmpeg not installed: no video thumbnails in Files, no voice messages"
   systemctl enable --now cron >/dev/null 2>&1 || warn "could not start the cron service"
+}
+
+# agent_sandbox_profile - Ubuntu 24.04+ restricts user namespaces: bubblewrap (the sandbox of agents, installed with
+# the tools) needs this AppArmor profile, or every sandboxed command fails. Never blocks the install.
+agent_sandbox_profile() {
+  [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ] || return 0
+  [ -f /etc/apparmor.d/bwrap-maxxing ] && return 0
+  command -v apparmor_parser >/dev/null 2>&1 || return 0
+  cat > /etc/apparmor.d/bwrap-maxxing <<'PROFILE'
+# Harness Maxxing: lets bubblewrap (Claude Code sandbox of agents) create user namespaces on Ubuntu 24.04+
+abi <abi/4.0>,
+include <tunables/global>
+profile bwrap-maxxing /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap-maxxing>
+}
+PROFILE
+  apparmor_parser -r /etc/apparmor.d/bwrap-maxxing 2>/dev/null \
+    || warn "AppArmor profile for the agents' sandbox not loaded (maxxing agents sandbox-setup retries)"
 }
 
 # apt_tools ENTRY... - the background apt job: names this release knows, one install; skipped ones and the count
@@ -1475,6 +1494,7 @@ init_state() {
   rm -f "$STATE_DIR/logs/install-init.log"     # holds the setup link: 0600 (umask), removed after the banner
   mx "${args[@]}" > "$STATE_DIR/logs/install-init.log" 2>&1 || { cat "$STATE_DIR/logs/install-init.log"; die "maxxing init failed"; }
   grep -E '^ *[✔!✘–]' "$STATE_DIR/logs/install-init.log" | sed -E 's/^ *//; s/^/      /' || true
+  agent_sandbox_profile
   if [ "$TOKEN_USED" = 1 ] && [ -n "$GH_TOKEN" ]; then
     printf '%s' "$GH_TOKEN" | mx init --quiet --no-crons --secret-from-stdin github_update_token \
       && ok "update token stored in $STATE_DIR/secrets.json (used by maxxing update)"

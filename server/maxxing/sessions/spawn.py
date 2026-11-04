@@ -179,10 +179,14 @@ def agents_args(cfg: dict, extra: str = "") -> list[str]:
     return ["--append-system-prompt", "\n\n".join(parts)] if parts else []
 
 
-def settings_args(cfg: dict) -> list[str]:
+def settings_args(cfg: dict, extra: dict | None = None) -> list[str]:
     """`--settings` for the turn: deny rules (they apply in every permission mode, bypass included, and add to
-    the user's own settings files)."""
-    return ["--settings", json.dumps({"permissions": {"deny": deny_rules(cfg)}}, separators=(",", ":"))]
+    the user's own settings files), + `extra` (an agent's sandbox and hooks, agent_guard.settings). One flag only."""
+    s: dict = {"permissions": {"deny": deny_rules(cfg)}}
+    if extra:
+        from maxxing import agent_guard
+        s = agent_guard.merge(s, extra)
+    return ["--settings", json.dumps(s, separators=(",", ":"))]
 
 
 def claude_env(extra: dict | None = None, permission_mode: str = "bypass", keys: list[str] | None = None) -> dict[str, str]:

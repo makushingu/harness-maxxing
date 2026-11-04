@@ -10,6 +10,9 @@
   maxxing agents cron <agent> --schedule …   add a schedule (a Claude cron job in the agent folder)
   maxxing agents webhook <agent> [--kind …]  add a webhook (a feed hook + a feed trigger on it); prints its URL
   maxxing agents watch <agent> --source …    add a feed trigger on existing events (a source, levels, words)
+  maxxing agents export <agent> [-o FILE]    the agent as a Claude Code agent file (.claude/agents/<name>.md)
+  maxxing agents import FILE --topic <p>/<t> create an agent from a Claude Code agent file
+  maxxing agents sandbox-setup               install what the sandbox needs (root): bubblewrap, socat, AppArmor
 
 <agent> = projects/<p>/topics/<t>/agents/<a>, <p>/<t>/<a>, or just <a> when only one agent has that name.
 Works without the server: fire() only writes files and starts the turn's unit; the server's session watcher
@@ -58,6 +61,11 @@ def _configure(p) -> None:
     s.add_argument("--approvals", action="store_true", help="ask before risky actions (answered in the UI)")
     s.add_argument("--telegram", action="store_true", help="its own Telegram thread (results + messages start it)")
     s.add_argument("--keys", default="", help="Keys vault entries its turns see, comma-separated (default: none)")
+    s.add_argument("--domains", default="", help="hosts its shell commands may reach in its sandbox, comma-separated "
+                                                 "(e.g. api.github.com,*.example.com; default: none)")
+    s.add_argument("--writable", default="", help="folders of the topic it may write in besides its own, comma-"
+                                                  "separated (. = the whole topic)")
+    s.add_argument("--no-sandbox", action="store_true", help="no sandbox: its commands reach the whole server")
     s.add_argument("--trust-outside", action="store_true",
                    help="runs started by outside events (webhooks, feed, other agents) do not ask first: risky")
     s.add_argument("--usd-per-day", type=float, help="daily budget in $ (default 2, 0 = none)")
@@ -66,6 +74,14 @@ def _configure(p) -> None:
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("show", help="an agent's settings, role, triggers, cron jobs and webhook URLs (JSON)")
     s.add_argument("agent")
+    s = sub.add_parser("export", help="the agent as a Claude Code agent file (.claude/agents/<name>.md)")
+    s.add_argument("agent")
+    s.add_argument("-o", "--output", default="", help="write it to this file (default: print it)")
+    s = sub.add_parser("import", help="create an agent from a Claude Code agent file (.claude/agents/<name>.md)")
+    s.add_argument("file")
+    s.add_argument("--topic", required=True, help="<project>/<topic> where it lives")
+    s.add_argument("--name", default="", help="folder name (default: from the file)")
+    sub.add_parser("sandbox-setup", help="install what the agents' sandbox needs (root): bubblewrap, socat, AppArmor")
     s = sub.add_parser("cron", help="add a schedule to an agent")
     s.add_argument("agent")
     s.add_argument("--schedule", required=True, help='5-field cron, server time zone, e.g. "0 8 * * 1"')
@@ -217,6 +233,12 @@ def _create(a) -> int:
         fields["permission_mode"] = a.permission
     if keys:
         fields["keys"] = keys
+    for k in ("domains", "writable"):
+        v = [x.strip() for x in getattr(a, k).split(",") if x.strip()]
+        if v:
+            fields[k] = v
+    if a.no_sandbox:
+        fields["sandbox"] = False
     try:
         r = agents.create(f"projects/{project}/topics/{topic}", name, fields)
     except agents.AgentError as e:
@@ -252,6 +274,44 @@ def _create(a) -> int:
     return 0
 
 
+def _sandbox_setup() -> int:
+    from . import agent_guard
+    if os.geteuid() != 0:
+        print("Run it as root.", file=sys.stderr)
+        return 2
+    try:
+        done = agent_guard.setup()
+    except Exception as e:  # noqa: BLE001 - apt or apparmor_parser failed: say it
+        print(f"sandbox setup failed: {e}", file=sys.stderr)
+        return 1
+    st = agent_guard.available(fresh=True)
+    print("\n".join(done) or "nothing to do")
+    print("sandbox: ready" if st["ok"] else f"sandbox: still missing {', '.join(st['missing'])}")
+    return 0 if st["ok"] else 1
+
+
+def _import(a) -> int:
+    from . import agent_format, agents
+    t = a.topic.strip("/")
+    topic = t if t.startswith("projects/") else ("projects/{}/topics/{}".format(*t.split("/")) if t.count("/") == 1 else "")
+    if not topic:
+        print("Give --topic <project>/<topic>", file=sys.stderr)
+        return 2
+    try:
+        text = open(a.file, encoding="utf-8").read()
+        r = agent_format.import_md(topic, text, a.name or None)
+    except (OSError, ValueError) as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except agents.AgentError as e:
+        print(e.message, file=sys.stderr)
+        return 2
+    print(f"created {r['path']}")
+    if r["ignored"]:
+        print("not imported (no equivalent in Harness): " + ", ".join(r["ignored"]), file=sys.stderr)
+    return 0
+
+
 def _handler(a) -> int:
     from . import agents
     if a.agents_cmd == "list":
@@ -260,6 +320,10 @@ def _handler(a) -> int:
         return _create(a)
     if a.agents_cmd == "templates":
         return _templates(a)
+    if a.agents_cmd == "sandbox-setup":
+        return _sandbox_setup()
+    if a.agents_cmd == "import":
+        return _import(a)
     try:
         path = resolve(a.agent)
     except ValueError as e:
@@ -269,6 +333,16 @@ def _handler(a) -> int:
         agents.update(path, {"enabled": a.agents_cmd == "on"})
         print(f"{path}: {a.agents_cmd}")
         return 0
+    if a.agents_cmd == "export":
+        from . import agent_format
+        md = agent_format.export_md(path)
+        if a.output:
+            with open(a.output, "w", encoding="utf-8") as f:
+                f.write(md)
+            print(f"written {a.output}")
+        else:
+            sys.stdout.write(md)
+        return 0
     if a.agents_cmd == "show":
         d = agents.get(path)
         try:
@@ -276,7 +350,8 @@ def _handler(a) -> int:
         except OSError:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
-                                                    "approvals", "trust_outside", "keys", "telegram", "limits", "triggers")},
+                                                    "approvals", "trust_outside", "keys", "telegram", "sandbox", "domains",
+                                                    "writable", "rules", "subagent", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
                           "webhooks": agents.hooks(path)}, indent=2, ensure_ascii=False))
