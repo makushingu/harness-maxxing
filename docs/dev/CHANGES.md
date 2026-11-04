@@ -38,6 +38,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   shared `_check_current`) when 2FA is on, then `twofactor.notify("off_ui")` + a feed warning. `DELETE
   /api/telegram` with 2FA on sends `notify("unlinked", wait=True)` (blocking `_send_sync`: the gateway is stopped
   right after) and a feed warning. Unlinking itself still needs no password.
+- `_ffmpeg_thumb`: an image path with a `%` gets `-f image2 -pattern_type none` (image2 expanded `a%d.png` to
+  `a1.png`, possibly a link out of the files root). Only then: the other demuxers refuse that option (exit 8).
 
 ## 2.0.0-alpha.109 - 2026-11-04
 

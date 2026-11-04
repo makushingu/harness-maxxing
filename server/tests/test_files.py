@@ -142,6 +142,30 @@ def test_thumb_does_not_render_a_file_outside_the_root_through_ffconcat(client, 
         info = {}
     assert not info.get("width"), info
 
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_thumb_of_a_name_with_percent_d_is_that_file_not_a_sequence(client, mx):
+    """image2 reads "a%d.png" as a pattern: it opened a1.png, a link to an image outside the root."""
+    from maxxing.api import files as F
+    outside = mx["tmp"] / "outside-img"
+    outside.mkdir()
+    secret = outside / "secret.png"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1",
+                    str(secret)], check=True)
+    root = mx["files"]
+    asked = root / "a%d.png"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=64x64", "-frames:v", "1",
+                    "-update", "1", str(asked)], check=True)
+    assert asked.exists()
+    os.symlink(secret, root / "a1.png")
+    out = mx["tmp"] / "t.webp"
+    assert F._ffmpeg_thumb(asked, out, 64, False)
+    px = subprocess.run(["ffmpeg", "-v", "error", "-i", str(out), "-frames:v", "1", "-f", "rawvideo", "-pix_fmt",
+                         "rgb24", "-"], capture_output=True, check=True).stdout
+    r, g, b = px[0], px[1], px[2]
+    assert b > 200 and r < 50, (r, g, b)                     # blue: the requested file, not the red one outside
+
+
 def test_stat_gives_current_mtimes(client, tree, mx):
     f = tree / "pic.png"
     f.write_bytes(b"x")
