@@ -217,6 +217,9 @@ def start(purpose: str, ip: str, ua: str) -> Challenge:
     if not _send(c):
         with _lock:
             _ch.pop(c.id, None)
+            sent = _new.get(ip, [])
+            if now in sent:                            # a request Telegram refused does not count against the quota
+                sent.remove(now)
         raise Refused("two_factor_unavailable",
                       "Telegram did not accept the sign-in request - on the server, `maxxing 2fa off` turns "
                       "two-step sign-in off")
