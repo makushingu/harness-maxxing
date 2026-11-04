@@ -171,7 +171,9 @@ into another app, the content arrives as plain text (a file as its path).
 
 ## What you see
 
-- Answers stream live (markdown, code, images).
+- Answers stream live (markdown, code, images). A picture from another website shows as a **Load image from …**
+  button and loads only when you click it (a page Claude read cannot make the answer send data to its server);
+  links to other websites open in a new tab.
 - **Tool calls** (reading files, running commands, editing) appear as compact cards; expand them
   to see input and output. Edits are shown as diffs.
 - **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
