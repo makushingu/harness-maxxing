@@ -14,6 +14,7 @@ Item sizes are cached per item, keyed by the (inode, mtime) of the item and of i
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -120,7 +121,18 @@ def _side(item: Path) -> dict:
         d = json.loads(item.with_name(item.name + ".json").read_text())
     except (OSError, ValueError):
         return {}
-    return d if isinstance(d, dict) else {}
+    if not isinstance(d, dict):
+        return {}
+    # A damaged sidecar loses its bad fields, not the whole listing: texts are strings without NUL, the
+    # date a finite number.
+    side = {k: v for k, v in d.items() if not isinstance(v, str) or "\0" not in v}
+    for k in ("original", "path", "title"):
+        if k in side and not isinstance(side[k], str):
+            del side[k]
+    at = side.get("at")
+    if at is not None and (isinstance(at, bool) or not isinstance(at, (int, float)) or not math.isfinite(at)):
+        del side["at"]
+    return side
 
 
 def _is_extra(p: Path) -> bool:

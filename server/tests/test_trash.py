@@ -208,3 +208,18 @@ def test_the_size_of_a_link_is_the_link_not_its_target(client, topic, mx):
     workspace.move_to_trash(d)
     sizes = {i["name"]: i["size"] for i in client.get("/api/trash").json()["items"]}
     assert sizes["lnk"] < 1000 and 3 <= sizes["folder"] < 1000, sizes
+
+
+def test_a_damaged_sidecar_does_not_break_the_trash(client, topic, mx):
+    from maxxing import workspace
+    for name, side in (("a.txt", {"original": 12, "at": "soon"}), ("b.txt", {"original": "x\u0000y", "at": 1e400}),
+                       ("c.txt", {"title": ["x"], "at": True})):
+        (mx["ws"] / topic / name).write_text("a")
+        workspace.move_to_trash(mx["ws"] / topic / name)
+        sc = next(j for j in trash.trash_dir().glob("*.json") if j.name.endswith(f"-{name}.json"))
+        sc.write_text(json.dumps(side).replace("Infinity", "1e400"))
+    r = client.get("/api/trash")
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert len(items) == 3 and not any(i["restorable"] for i in items)
+    assert trash.purge_old() == 0
