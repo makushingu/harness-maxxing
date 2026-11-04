@@ -100,6 +100,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing keys list\|get\|set\|delete` | the Keys vault from a script: `printf %s "$V" \| maxxing keys set NAME` (value on stdin); scripts read keys as env vars (`$NAME`) |
 | `maxxing packs list\|add <id>` | starter packs: ready-made projects (only missing files are added) |
 | `maxxing infra status\|list\|site\|db\|bucket\|server` | where every site / database / bucket / domain / server is; create them on this server the standard way |
+| `maxxing dokploy list\|deploy\|logs\|domain\|app` | when Dokploy is connected: deploy apps through it (ask before every `--yes`; its key is never exposed) |
 | `maxxing mcp list\|add\|remove` | MCP servers of Claude Code (every session or one topic), as in Settings -> MCP |
 | `maxxing video new DIR` / `video status` | Remotion video project linked to the shared install / tools check |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |
@@ -133,7 +134,7 @@ would erase it". In this order:
 | `maxxing-cron` | create or change a scheduled job |
 | `maxxing-tasks` | read or edit the task board (tasks.json) |
 | `maxxing-extension` | build a dashboard widget (Card or HTML/game) or a page extension |
-| `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, "where is X / is it up" |
+| `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, deploy through Dokploy, "where is X / is it up" |
 | `maxxing-mcp` | add, connect or remove an MCP server (a service's tools for Claude), for every session or one topic |
 | `maxxing-customize` | change the product itself and keep it through updates; adapt customizations when an update conflicts |
 | `video-motion-design` | a video, an animation, a short / reel, a trailer (Remotion: `maxxing video new DIR`) |

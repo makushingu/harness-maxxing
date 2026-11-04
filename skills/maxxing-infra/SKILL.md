@@ -1,6 +1,6 @@
 ---
 name: maxxing-infra
-description: Put a site online, create a database or an S3 bucket on this server the standard way, add another server, or answer "where is X / what runs where / is it up" - sites (Caddy), PostgreSQL/SQLite, Garage buckets, domains, other servers over SSH, Cloudflare (Workers, Pages, R2, D1) and Hostinger. Use when the user wants something hosted, published, stored, or asks about their sites, databases, buckets, domains or servers.
+description: Put a site online, create a database or an S3 bucket on this server the standard way, add another server, or answer "where is X / what runs where / is it up" - sites (Caddy), PostgreSQL/SQLite, Garage buckets, domains, other servers over SSH, Cloudflare (Workers, Pages, R2, D1), Hostinger and Dokploy (deploy through it with `maxxing dokploy`). Use when the user wants something hosted, published, stored, or asks about their sites, databases, buckets, domains or servers.
 ---
 
 # Infra: see everything, create on this server the standard way
@@ -48,6 +48,32 @@ maxxing infra site list | site remove NAME | reserved
 - An app needs a process: write a systemd unit (`/etc/systemd/system/<name>.service`, `Restart=always`,
   `WorkingDirectory=`, the port on 127.0.0.1 only), `systemctl enable --now`, then `site add --port`.
   Pick a free port (`ss -ltn`), 3100-3999 by convention.
+
+## Dokploy: when it runs here, deploy through it
+When `maxxing dokploy status` says connected, **Dokploy is how apps go online on this server**: it builds them from
+git (nixpacks, Dockerfile, railpack...), serves them through its Traefik with Let's Encrypt, keeps every deployment
+and its log, and rolls back. Do not hand-write a systemd unit or `site add --port` for an app that belongs in
+Dokploy; `maxxing infra site add` stays for static pages and what is not in Dokploy.
+```bash
+maxxing dokploy list [--json]            # projects/environments, apps, compose stacks, databases, state, ids, domains
+maxxing dokploy deployments APP          # newest first;  maxxing dokploy logs APP [--deployment ID] [--lines N]
+maxxing dokploy app create --environment ENV_ID --name N --repo URL [--branch main] [--build nixpacks|dockerfile|railpack] --yes
+maxxing dokploy deploy APP --yes | redeploy APP --yes
+maxxing dokploy domain add APP HOST [--port N] [--path P] [--no-https] --yes | domain list APP
+```
+- APP = the id, the name or the app name from `list`; a name used in two projects needs the id.
+- **Ask the user before every command with `--yes`** (create, deploy, redeploy, domain): say what will change,
+  which project/environment, and wait for a yes. Never deploy to a production environment without that explicit yes.
+- After a deploy: `deployments APP` until it is `done` or `error`, then read `logs APP`; on `error`, quote the
+  relevant lines and fix the cause (Dockerfile, build command, missing env) - do not loop on redeploys.
+- A new domain: its DNS A record must point to this server (`--dns` of `site add` does not apply; tell the user the
+  record, or create it on Cloudflare if the token allows), then the domain gets its certificate on the next deploy.
+- The API key is in the vault as `DOKPLOY_API_KEY` and **never exposed**: never look for it, never `keys get` it,
+  never call the Dokploy API with curl. What `maxxing dokploy` cannot do (env variables, volumes, databases,
+  backups, rollbacks) is done by the user in the Dokploy UI: give the steps.
+- Not connected yet but Dokploy runs here (`docker service ls` shows `dokploy`)? Tell the user to create a key in
+  Dokploy (Profile -> API keys) and connect it in Infra -> Sources (or `printf %s "$KEY" | maxxing dokploy connect`
+  in their own terminal - never ask them to paste the key in the chat).
 
 ## Databases
 ```bash
@@ -98,6 +124,8 @@ provider and host come from RDAP and the public DNS. Use it for every domain the
   Workers Routes, Pages, R2, D1, Registrar (Account settings: Read). `--dns` needs DNS Edit. A missing right
   only hides that part (`maxxing infra status` says which).
 - **Hostinger**: `HOSTINGER_API_TOKEN` (hPanel -> API): domains with their expiry, VPS, DNS zones.
+- **Dokploy** `DOKPLOY_API_KEY` (beta, connected with `maxxing dokploy connect`, never exposed): projects,
+  apps, compose stacks, databases and domains; see "Dokploy" above.
 - **Vercel** `VERCEL_TOKEN`, **Netlify** `NETLIFY_AUTH_TOKEN`, **Supabase** `SUPABASE_ACCESS_TOKEN` (beta): sites and
   deployments, domains, Supabase databases/buckets/functions. **GitHub Pages**: the GitHub tokens of the vault.
 - Other registrars and hosts: no key, `maxxing infra domain add` (RDAP + public DNS: registrar, expiry, DNS

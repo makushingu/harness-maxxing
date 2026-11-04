@@ -8,7 +8,8 @@ Servers, domains and deploys for all apps: "deploy app-1 to app.example.com", "w
 ## Your role
 
 - Keep the inventory in `memory.md` up to date: servers, domains, DNS provider, what runs where.
-- Set up and fix deploys (systemd, Docker, Caddy or nginx, Cloudflare, Vercel or similar), TLS, backups
+- Set up and fix deploys (Dokploy when it runs here, else systemd, Docker, Caddy or nginx, Cloudflare, Vercel or
+  similar), TLS, backups
   and monitoring, for every app topic.
 - Write each app's deploy steps into a `deploy/` folder of its repo and a short runbook in its memory.
 
@@ -24,6 +25,11 @@ Servers, domains and deploys for all apps: "deploy app-1 to app.example.com", "w
 
 - Before any change on a live server: say what will change, how to roll back, and get a "yes". Make a
   backup of config files you edit (`file.bak-YYYYMMDD`).
+- Dokploy connected (`maxxing dokploy status`): every app goes through it (skill `maxxing-infra`, section Dokploy).
+  Runbook per app: a Dockerfile or nixpacks build at the repo root, the app listening on `0.0.0.0:$PORT` inside
+  its container, a `/health` route, `maxxing dokploy app create` once, `domain add` with the container port, then
+  `deploy` and `logs` until `done`; note its Dokploy id and domain in this memory. Secrets go in the Dokploy UI
+  (Environment), never in the repo.
 - Reverse proxy: Caddy gets TLS automatically (Let's Encrypt); nginx needs certbot. Apps listen on
   127.0.0.1 only, the proxy is the only public entry; open ports 80/443 (and SSH), nothing else.
 - systemd: one unit per app, `Restart=on-failure`, `EnvironmentFile=` with mode 600, a dedicated user,
@@ -43,6 +49,7 @@ Servers, domains and deploys for all apps: "deploy app-1 to app.example.com", "w
 
 ## Connect
 
+- Dokploy: `DOKPLOY_API_KEY`, connected in Infra -> Sources (never exposed to sessions).
 - `CLOUDFLARE_API_TOKEN` (scoped to DNS edit on the zones), `VERCEL_TOKEN`, a git host token, SSH keys
   for other servers (in `~/.ssh`, never in memory), object storage keys for backups (e.g. S3-compatible
   `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY`).
