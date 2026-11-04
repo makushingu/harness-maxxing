@@ -4,7 +4,8 @@
 // - the box at the bottom writes to it: a new message starts a new session (the server adds its last results as
 //   context), "Reply" on a result goes on with that result's session (same context, same session);
 // - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
-//   webhook address, what came in, test), guards, memory, advanced settings (a sheet).
+//   webhook address, what came in, test), guards, memory, advanced settings (a sheet), "Edit with Claude" (a session
+//   of its topic configures it: an agent cannot change its own role or settings).
 // Opening the page marks its results as read (POST /seen). Its runs open in place (RunView), never in Sessions.
 import * as React from 'react'
 import { Link, useParams } from 'react-router'
@@ -28,6 +29,7 @@ import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/session
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings } from './AgentSettings'
+import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 
@@ -123,6 +125,7 @@ export default function AgentPage() {
                 <EnabledSwitch agent={a} />
               </span>
             </Tooltip>
+            <EditWithClaude agent={a} />
             {!wide && (
               <Button variant="outline" size="sm" onClick={() => setProfile(true)} data-testid="agent-profile-open">
                 <Info /> <span className="max-sm:sr-only">{t('agents.panel.open')}</span>
@@ -502,6 +505,9 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
       <PanelSection title={t('agents.panel.when')}>
         <p className="text-xs text-muted-foreground">{t('agents.when.manual')}</p>
         <AgentTriggers agent={a} />
+        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground" data-testid="agent-self-locked">
+          <Lock className="mt-px size-3 shrink-0" /> {t('agents.edit.selfLocked')}
+        </p>
       </PanelSection>
 
       <PanelSection title={t('agents.panel.guards')}>
@@ -552,13 +558,16 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
         <MemoryPreview agent={a} />
       </PanelSection>
 
-      <button type="button" onClick={() => setAdvanced(true)} className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent" data-testid="agent-advanced">
-        <Settings2 className="size-4 shrink-0 text-muted-foreground" />
-        <span className="grid min-w-0 flex-1">
-          <span className="text-sm">{t('agents.panel.advanced')}</span>
-          <span className="truncate text-xs text-muted-foreground">{t('agents.panel.advancedDesc')}</span>
-        </span>
-      </button>
+      <div className="grid gap-2">
+        <EditWithClaude agent={a} variant="row" />
+        <button type="button" onClick={() => setAdvanced(true)} className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent" data-testid="agent-advanced">
+          <Settings2 className="size-4 shrink-0 text-muted-foreground" />
+          <span className="grid min-w-0 flex-1">
+            <span className="text-sm">{t('agents.panel.advanced')}</span>
+            <span className="truncate text-xs text-muted-foreground">{t('agents.panel.advancedDesc')}</span>
+          </span>
+        </button>
+      </div>
       <Sheet open={advanced} onOpenChange={setAdvanced}>
         <SheetContent side="right" className="md:w-[520px]">
           <SheetHeader>

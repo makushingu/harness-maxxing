@@ -266,7 +266,9 @@ call it), only the API and the page are cut.
   `permissions.deny` on secrets + `allow Bash(maxxing:*)` / `WebFetch(domain:..)` + `hooks.PreToolUse` when `rules`),
   `add_dirs`, `merge(base, extra)` (`spawn.settings_args`), `check_rules` / `hook(path)` (`python -m
   maxxing.agent_guard hook <agent path>`, deny + reason), `sandboxed_turn()` (cgroup `maxxing-<sid8>.service` of a
-  sandboxed agent session) and `check_cli(argv)` (`CLI_ALLOWED`, called by `cli.main`). Runner: sandbox on and not
+  sandboxed agent session), `locked_paths(path)` (`denyWrite` + `Edit` deny: the agent's `agent.json`, `CLAUDE.md`,
+  `.claude/`, `.mcp.json` and its topic's `.claude/`, `.mcp.json`) and `check_cli(argv)` (`CLI_ALLOWED` in a sandboxed
+  turn; `AGENT_OWNER_ONLY` sub-commands of `agents` refused whenever `MAXXING_AGENT` is set; called by `cli.main`). Runner: sandbox on and not
   available -> the turn fails before Claude starts (`SANDBOX_ERROR`); doctor `check_agent_sandbox` only when an
   enabled sandboxed agent exists.
 - **maxxing.agent_format**: `export_md(path)` / `parse_md(text)` (`{name, description, fields, ignored}`, ValueError when not one) / `import_md(topic_path, text,

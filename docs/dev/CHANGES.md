@@ -7,6 +7,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.113 - 2026-11-04
 
+- Owner-only agent settings: `agent_guard.locked_paths()` (agent `agent.json`, `CLAUDE.md`, `.claude/`, `.mcp.json`,
+  topic `.claude/`, `.mcp.json`) go to `sandbox.filesystem.denyWrite` + `Edit(...)` deny rules; `check_cli` refuses
+  `agents create|cron|webhook|watch|on|off|import|sandbox-setup` whenever `MAXXING_AGENT` is set (sandboxed or not);
+  every agent turn gets `--append-system-prompt agents.OWNER_NOTE`; `agents._snapshot()` at `fire()` +
+  `_changed_during()` at `on_turn_end` post a `note` (`status: changed`, `files`) when a run changed `agent.json` /
+  `CLAUDE.md` (owner `update()` meanwhile sets `owner_at` and is not reported). Verified with a real sandboxed run:
+  Edit refused by permissions, `sed -i` EBUSY, `>>` read-only, `.claude/` read-only, CLI refused.
+- UI: `EditWithClaude.tsx` (agent page: a normal session in the agent's topic with `agents.edit.prompt`) and
+  `SetupView.tsx` (routes `/agents/:p/:t/:a/setup/:sid` and `/agents/setup/:sid`, the session in place); QuickCreate
+  now lands on `/agents/setup/<sid>`.
+
 - `agents._git_exclude()`: creating an agent in a topic that is (or sits in) a git clone adds `/<rel>/agents/` to
   that clone's `.git/info/exclude` (worktrees/submodules through `gitdir:` + `commondir`), never a tracked `.gitignore`:
   an agent's turn that commits the blog no longer commits `agent.json`.
