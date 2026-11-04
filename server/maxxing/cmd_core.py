@@ -1342,7 +1342,7 @@ def check_dokploy(fetch: bool = True) -> Check | None:
     from .infra import caddy
     from .infra.providers import ProviderError
     st = dokploy.status()
-    here = Path("/etc/dokploy/traefik").is_dir() or caddy.traefik_route().exists()
+    here = (Path(os.environ.get("MAXXING_DOKPLOY_ETC") or "/etc/dokploy") / "traefik").is_dir()         or caddy.traefik_route().exists()
     if not st["connected"] and not here:
         return None
     if 3000 in _public_tcp_ports():
@@ -2327,6 +2327,10 @@ def remove_caddy_site() -> str:
     route = caddy.traefik_route()
     if route.is_file() and "Harness Maxxing" in route.read_text(errors="replace"):
         route.unlink()                                  # Dokploy's Traefik drops it by itself (file provider)
+    dropin = Path(os.environ.get("MAXXING_CADDY_DOCKER_DROPIN") or "/etc/systemd/system/caddy.service.d/20-harness-docker.conf")
+    if dropin.is_file() and "Harness Maxxing" in dropin.read_text(errors="replace"):
+        dropin.unlink()
+        systemctl("daemon-reload", timeout=30)
     if not CADDY_SITE.exists() and not (CADDYFILE.exists() and str(CADDY_SITE) in CADDYFILE.read_text()):
         return "no Caddy site"
     if CADDYFILE.exists():

@@ -249,7 +249,10 @@ def test_dokploy_domain_goes_through_traefik_to_a_caddy_on_the_docker_bridge(tmp
              'caddy_admin_dropin() { :; }; listeners() { :; }; '
              'docker() { echo 172.18.0.1; }; ')
     r = sh(stubs + f'DOKPLOY_ETC="{tmp_path}/dokploy"; CADDY_SITE="{tmp_path}/site.caddy"; CADDYFILE="{tmp_path}/Caddyfile"; '
+           f'CADDY_DOCKER_DROPIN="{tmp_path}/caddy.service.d/20-harness-docker.conf"; '
            'DOMAIN=ui.example.com; PORT=8787; DOKPLOY_FOUND=1; ACCESS=domain; setup_access 2>&1')
+    unit = (tmp_path / "caddy.service.d" / "20-harness-docker.conf").read_text()
+    assert "After=docker.service" in unit and "Restart=on-failure" in unit   # the bridge exists only once Docker runs
     assert r.returncode == 0, r.stdout + r.stderr
     site = (tmp_path / "site.caddy").read_text()
     assert site.startswith("# Harness Maxxing") and "http://ui.example.com:8790 {" in site

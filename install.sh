@@ -138,6 +138,7 @@ DOKPLOY_FOUND=0     # 1 = Dokploy runs here (its Traefik holds 80/443, its UI 30
 DOKPLOY_ETC=/etc/dokploy
 DOCKERENV=/.dockerenv   # present inside a Docker container
 TRAEFIK_ROUTE_NAME=harness-maxxing.yml   # in $DOKPLOY_ETC/traefik/dynamic: Dokploy's Traefik -> our Caddy
+CADDY_DOCKER_DROPIN=/etc/systemd/system/caddy.service.d/20-harness-docker.conf   # Caddy waits for the bridge
 TRAEFIK_UPSTREAM_PORT="${TRAEFIK_UPSTREAM_PORT:-8790}"   # our Caddy behind Traefik, on the Docker bridge gateway only
 OTHER_CRON=0        # root crontab lines that are not ours
 NODE_OLD=""         # an older Node.js already installed (path) -> ours stays in <state>/tools/nodejs
@@ -1695,6 +1696,22 @@ docker_gateway() {
   case "$gw" in *.*.*.*) printf '%s' "$gw" ;; *) printf '172.17.0.1' ;; esac
 }
 
+# caddy_after_docker - our Caddy binds the Docker bridge address, which exists only once Docker runs: at boot Caddy
+# would fail with "cannot assign requested address" and the UI stay down
+caddy_after_docker() {
+  (umask 022; mkdir -p "$(dirname "$CADDY_DOCKER_DROPIN")"; cat > "$CADDY_DOCKER_DROPIN") <<UNIT
+# Harness Maxxing (install.sh): Caddy listens on the Docker bridge, created by Docker
+[Unit]
+After=docker.service
+Wants=docker.service
+[Service]
+Restart=on-failure
+RestartSec=5
+UNIT
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  manifest "caddy waits for docker $CADDY_DOCKER_DROPIN"
+}
+
 # traefik_route - Dokploy owns 80/443: its Traefik gets a file route for $DOMAIN (Let's Encrypt there) to our Caddy,
 # which listens on the Docker bridge only and always adds X-Forwarded-For (a container is never taken for a local client)
 traefik_route() {
@@ -1707,6 +1724,7 @@ traefik_route() {
   while listeners | awk -v p="$TRAEFIK_UPSTREAM_PORT" '$2==p {f=1} END {exit !f}'; do
     TRAEFIK_UPSTREAM_PORT=$((TRAEFIK_UPSTREAM_PORT + 1))
   done
+  caddy_after_docker
   BEHIND_TRAEFIK=1 setup_caddy
   (umask 022; cat > "$f") <<ROUTE
 # Harness Maxxing (written by install.sh - re-run the installer to change it; maxxing uninstall removes it)
@@ -2086,7 +2104,8 @@ main() {
   [ -z "$RESTORE_FROM" ] || { run_step "Memory restore" restore_backup; restore_review; }
   [ "${DOKPLOY_NOW:-0}" = 1 ] && run_step "Dokploy (Docker Swarm + Traefik)" install_dokploy
   case "$ACCESS" in
-    domain) run_step "HTTPS with Caddy" setup_access ;;
+    domain) if [ "$DOKPLOY_FOUND" = 1 ]; then run_step "HTTPS through Dokploy's Traefik" setup_access
+            else run_step "HTTPS with Caddy" setup_access; fi ;;
     *) run_step "Access ($ACCESS)" setup_access ;;
   esac
   run_step "Server security" secure_server
