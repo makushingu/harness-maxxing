@@ -326,11 +326,11 @@ def short_ua(ua: str) -> str:
 
 
 def _send(c: Challenge) -> bool:
+    """The request with its Allow / Deny buttons, in Alerts (the main chat in the simple mode), loud."""
     from .telegram import client, gateway
     from .telegram.format import escape
-    tok = gateway.token()
-    chat, tid = gateway._target(gateway.ALERTS)                  # noqa: SLF001
-    if not tok or not chat:
+    chat, _ = gateway._target(gateway.ALERTS)                    # noqa: SLF001
+    if not gateway.token() or not chat:
         return False
     lines = [_w(c.purpose)]
     if c.purpose == "login":
@@ -339,30 +339,12 @@ def _send(c: Challenge) -> bool:
               f"<i>{_w('hint_' + c.purpose)}</i>"]
     c.text = "\n".join(lines)
     markup = client.keyboard([[(_w("allow"), f"a:{c.id}:y"), (_w("deny"), f"a:{c.id}:n")]])
-    params = {"chat_id": chat, "message_thread_id": tid, "text": c.text, "parse_mode": "HTML",
-              "reply_markup": markup, "link_preview_options": {"is_disabled": True}}
-    reopened = False
-    for _ in range(3):
-        try:
-            res = client.call_sync(tok, "sendMessage", **params)
-            c.msg = (chat, int(res["message_id"]))
-            return True
-        except client.TelegramError as e:
-            if gateway._thread_closed(e) and params.get("message_thread_id") and not reopened:  # noqa: SLF001
-                reopened = True                                        # closed by the user: open it again
-                if not gateway.reopen_sync(tok, chat, params["message_thread_id"]):
-                    params["message_thread_id"] = None
-                continue
-            if gateway._thread_gone(e) and params.get("message_thread_id"):    # noqa: SLF001
-                gateway._forget_thread(params["message_thread_id"])           # noqa: SLF001
-                params["message_thread_id"] = None
-                continue
-            log.warning("two-step sign-in request not sent: %s", e)
-            return False
-        except Exception as e:  # noqa: BLE001
-            log.warning("two-step sign-in request not sent: %s", e)
-            return False
-    return False
+    sent: list = []
+    if not gateway._send_sync(gateway.ALERTS, [c.text], False, markup, sent=sent) or not sent:   # noqa: SLF001
+        log.warning("two-step sign-in request not sent")
+        return False
+    c.msg = (chat, int(sent[-1]))
+    return True
 
 
 def _close(c: Challenge, line: str) -> None:

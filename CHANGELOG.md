@@ -3,6 +3,22 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.115 - 2026-11-04
+
+Changes:
+- **Telegram: one chat to follow.** The new **Simple** mode (the default of new installations) keeps everything in one
+  chat: write a message, choose its topic (or **↩ Continue** the last session), and the answer comes as a reply to
+  your message; reply to any message of a session to continue it. The alerts land there too: the server's problems
+  of the dashboard (with a **Seen** button, and *Resolved* once fixed), sign-ins, failed jobs and agents' requests.
+  Agents with the Telegram option keep their own thread. One thread per session (as before) and threads with the web
+  conversations copied are the two other modes, in Settings -> Telegram -> Mode; an installation that already has
+  threads keeps them, and choosing Simple deletes them from Telegram (the sessions stay).
+- **Telegram: the bell of a session rings when you worked in the web UI**, also for a session started on the phone;
+  replying to it continues the session.
+- Telegram fixes: a reply to an agent's message in the main chat goes to the agent; an approval message is still
+  updated after a restart; a voice note for an agent no longer holds up the other messages; *Ask Harness* answers at
+  once.
+
 ## 2.0.0-alpha.114 - 2026-11-04
 
 Changes:

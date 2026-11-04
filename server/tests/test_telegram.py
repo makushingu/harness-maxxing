@@ -316,29 +316,6 @@ async def test_web_turns_are_mirrored(api, tg, svc):
     assert len(tg.sent()) == n
 
 
-async def test_migration_from_topic_threads(api, tg, svc):
-    """2.0.0a4 layout (one thread per topic + General): the topic's Telegram session keeps its thread."""
-    await _link(api, tg)
-    sid = svc.create_session(TOPIC, title="Telegram", source="telegram")["id"]
-    # The new session wakes the background sync (its own loop): let it finish (same lock as /sync) so it
-    # cannot write a thread for the session after the legacy layout below is in place.
-    await api.post("/api/telegram/sync")
-    stray = gateway.thread_of(sid)
-    if stray:
-        tg.topics.pop(stray, None)
-    tg.topics.update({50: "General", 51: "acme / blog"})
-
-    def legacy(t: dict) -> None:
-        t["threads"].update({"": 50, TOPIC: 51})
-        t["sessions"] = {TOPIC: sid}
-        t["session_threads"] = {}            # the a4 layout had no session threads
-    gateway.mutate_tg(legacy)
-    await api.post("/api/telegram/sync")
-    assert gateway.thread_of(sid) == 51 and tg.topics[51] == "acme/blog · Telegram"
-    assert 50 not in tg.topics                                # General is gone: the main chat replaces it
-    assert set(gateway.tg_config()["threads"]) == {"#crons", "#alerts", "#feed"}
-
-
 async def test_new_session_from_the_main_chat(api, tg, svc, monkeypatch):
     await _link(api, tg)
     tg.message("Write a plan for the launch")
@@ -410,29 +387,19 @@ async def test_topics_disabled_fallback(api, tg, svc):
     st = gateway.status()
     assert st["topics_enabled"] is False and "BotFather" in st["topics_notice"] and st["threads"] == []
     assert st["last_error"] is None and st["sync_error"] is None
-    # the main chat talks to the workspace root
+    # whatever the mode, a chat without threads works as the simple mode: "where?", then replies in the main chat
+    assert gateway.uses_threads() is False
     tg.message("hi from the main chat")
+    await wait_for(lambda: any("Where should" in (p.get("text") or "") for p in tg.sent()), what="where?")
+    tg.callback(f"w:0:{gateway._path_hash(TOPIC)}")
     await wait_for(lambda: svc.sent, what="message")
     sid = svc.sent[0]["sid"]
-    assert svc.sessions[sid]["path"] == "" and svc.sessions[sid]["source"] == "telegram"
-    # /topic switches the main chat to a topic
-    tg.callback(f"t:{gateway._path_hash(TOPIC)}")
-    await wait_for(lambda: gateway.load_state().get("fallback_path") == TOPIC, what="topic switch")
-    tg.message("now in blog")
-    await wait_for(lambda: len(svc.sent) == 2, what="second message")
-    blog = svc.sent[1]["sid"]
-    assert svc.sessions[blog]["path"] == TOPIC
-    # /new + /sessions + switching back
-    tg.message("/new Research")
-    await wait_for(lambda: gateway.tg_config()["sessions"][TOPIC] != blog, what="/new")
-    tg.message("/sessions")
-    await wait_for(lambda: any(p.get("reply_markup") for p in tg.sent()), what="/sessions")
-    tg.callback(f"s:{blog}")
-    await wait_for(lambda: gateway.tg_config()["sessions"][TOPIC] == blog, what="switch")
+    assert svc.sessions[sid]["path"] == TOPIC and svc.sessions[sid]["source"] == "telegram"
+    assert [p["name"] for p in tg.sent("createForumTopic")] == ["Crons"]     # the refused try at the link only
     # notifications go to the main chat (no thread)
-    gateway.notify_cron("cron ok")
-    await wait_for(lambda: any(p["text"] == "cron ok" for p in tg.sent()), what="cron notify")
-    assert next(p for p in tg.sent() if p["text"] == "cron ok").get("message_thread_id") is None
+    gateway.notify_cron_report("cron ok", markdown=False, loud=False)
+    await wait_for(lambda: any("cron ok" in (p.get("text") or "") for p in tg.sent()), what="cron notify")
+    assert next(p for p in tg.sent() if "cron ok" in (p.get("text") or "")).get("message_thread_id") is None
 
 
 # =============================================================================================
@@ -785,15 +752,13 @@ async def test_notifications_without_gateway(api, tg):
     crons_thread = _thread("#crons")
     await gateway.stop()
     assert gateway.status()["running"] is False
-    await asyncio.to_thread(gateway.notify_cron, "OK - nightly (3 s)")
+    await asyncio.to_thread(gateway.notify_cron_report, "OK - nightly (3 s)", "", False, False)
     p = tg.sent()[-1]
-    assert p["text"] == "OK - nightly (3 s)" and p["message_thread_id"] == crons_thread
-    await asyncio.to_thread(gateway.notify_topic, TOPIC, "a <b> c")
-    assert tg.sent()[-1]["text"] == "a &lt;b&gt; c" and tg.sent()[-1].get("message_thread_id") is None
+    assert p["text"] == "<b>OK - nightly (3 s)</b>" and p["message_thread_id"] == crons_thread
     # from the event loop itself it must not block: sent from a helper thread
-    gateway.notify_topic("projects/none/topics/x", "to the main chat")
-    await wait_for(lambda: tg.sent()[-1]["text"] == "to the main chat", what="loop-safe notify")
-    assert tg.sent()[-1].get("message_thread_id") is None
+    gateway.system_alert("a <b> c")
+    await wait_for(lambda: tg.sent()[-1]["text"] == "a &lt;b&gt; c", what="loop-safe notify")
+    assert tg.sent()[-1].get("message_thread_id") == _thread("#alerts")
 
 
 async def test_web_session_notify(api, tg, svc):
@@ -839,7 +804,7 @@ async def test_forget(api, tg):
     st = gateway.status()
     assert not st["configured"] and not st["running"] and st["chat"] is None and st["threads"] == []
     assert config.get_secret("telegram_token") == ""
-    assert gateway.tg_config()["sessions"] == {} and gateway.tg_config()["session_threads"] == {}
+    assert gateway.tg_config()["session_threads"] == {} and not gateway._msgs_path().exists()
 
 
 async def test_token_rejected_stops_gateway(api, tg):
