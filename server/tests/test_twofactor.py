@@ -206,3 +206,12 @@ def test_a_call_without_session_does_not_consume_an_approved_enable_request(tg):
         c.cookies.update(cookies)                                  # signed in again: the approval is still there
         assert c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H).json()["status"] == "approved"
         assert twofactor.is_on()
+
+
+def test_a_failed_telegram_send_does_not_use_up_the_request_quota(tg):
+    """Telegram refusing the message keeps answering 503 with the `2fa off` hint, never 429 "try again in 15 min"."""
+    _on()
+    tg.close()
+    with TestClient(_app()) as c:
+        codes = [c.post("/api/auth/login", json={"password": PW}, headers=H).status_code for _ in range(7)]
+    assert codes == [503] * 7
