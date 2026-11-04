@@ -192,3 +192,19 @@ def test_a_link_to_a_folder_is_emptied_from_the_trash_and_its_target_kept(client
     assert client.delete("/api/trash").status_code == 200
     assert client.get("/api/trash").json()["items"] == []
     assert (outside / "keep.txt").exists()
+
+
+def test_the_size_of_a_link_is_the_link_not_its_target(client, topic, mx):
+    from maxxing import workspace
+    outside = mx["tmp"] / "outside"
+    outside.mkdir()
+    (outside / "big.bin").write_bytes(b"x" * 5000)
+    os.symlink(outside, mx["ws"] / topic / "lnk")
+    d = mx["ws"] / topic / "folder"
+    d.mkdir()
+    (d / "small.txt").write_text("abc")
+    os.symlink(outside / "big.bin", d / "big-link")
+    workspace.move_to_trash(mx["ws"] / topic / "lnk")
+    workspace.move_to_trash(d)
+    sizes = {i["name"]: i["size"] for i in client.get("/api/trash").json()["items"]}
+    assert sizes["lnk"] < 1000 and 3 <= sizes["folder"] < 1000, sizes

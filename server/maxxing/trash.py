@@ -45,12 +45,20 @@ def trash_dir() -> Path:
 
 
 def _size(p: Path) -> int:
+    """Bytes the item takes in the trash: a link counts for itself, never for what it points to."""
     try:
-        if p.is_file():
-            return p.stat().st_size
-        return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+        if p.is_symlink() or not p.is_dir():
+            return p.lstat().st_size
     except OSError:
         return 0
+    n = 0
+    for cur, _dirs, files in os.walk(p):
+        for name in files:
+            try:
+                n += os.lstat(os.path.join(cur, name)).st_size
+            except OSError:
+                pass
+    return n
 
 
 def _sig(p: Path) -> tuple:
