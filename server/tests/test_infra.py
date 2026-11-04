@@ -2,8 +2,11 @@
 psql and garage), API and CLI. Never touches the real web server, databases or provider accounts."""
 import json
 import os
+import re
 import stat
+import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -693,7 +696,13 @@ def test_infra_json_cannot_run_commands_through_ssh(org, tmp_path):
 def test_path_sites_never_see_the_session(fake_caddy, tmp_path):
     caddy.add_site("app2", port=3101)
     text = (fake_caddy / "maxxing-paths" / "app2.caddy").read_text()
-    assert 'header_up Cookie "mx_[A-Za-z0-9_]+=[^;]*;?\\s*" ""' in text and 'header_down Set-Cookie "^mx_' in text
+    assert 'header_up Cookie "mx_[A-Za-z0-9_]+=[^;]*;?\\s*" ""' in text
+    assert 'header_down Set-Cookie "^[ \\t]*mx_[A-Za-z0-9_]+[ \\t]*=.*$" ""' in text
+    # browsers trim spaces and tabs around a cookie name: "mx_session =x" would replace the Harness session
+    rx = re.compile(caddy.HARNESS_SET_COOKIE_RE)              # same meaning in Go's RE2 (Caddy)
+    for forged in ("mx_session=a; Path=/", "mx_session =a; Path=/", " mx_device=b", "mx_session\t=c"):
+        assert rx.match(forged), forged
+    assert not rx.match("app=1; Path=/") and not rx.match("my_mx_session=1")
     assert "-Authorization" not in text                  # the app's own logins keep working
     www = tmp_path / "www2"
     www.mkdir()
