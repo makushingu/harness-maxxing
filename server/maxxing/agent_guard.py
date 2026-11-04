@@ -142,8 +142,10 @@ def settings(path: str, a: dict) -> dict:
         for p in secrets:
             g = p + "/**" if not Path(p).is_file() and not p.endswith(".json") else p
             deny += [f"Read(/{g})", f"Edit(/{g})"]
+        # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
+        # server state is hidden): `maxxing` is allowed, check_cli limits what it does
         out["permissions"] = {"deny": deny,
-                              "allow": [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
+                              "allow": ["Bash(maxxing:*)"] + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
     if a.get("rules"):
         cmd = f"{shlex.quote(sys.executable)} -m maxxing.agent_guard hook {shlex.quote(path)}"
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}

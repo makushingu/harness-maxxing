@@ -39,7 +39,7 @@ def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     assert str(config.STATE) in sb["filesystem"]["denyRead"]
     deny = s["permissions"]["deny"]
     assert f"Read(/{config.STATE}/**)" in deny and any(r.startswith("Edit(/") and ".maxxing.json" in r for r in deny)
-    assert "WebFetch(domain:api.github.com)" in s["permissions"]["allow"]
+    assert s["permissions"]["allow"] == ["Bash(maxxing:*)", "WebFetch(domain:api.github.com)", "WebFetch(domain:*.example.com)"]
     assert argv[argv.index("--add-dir") + 1].endswith("/drafts")
     # switched off: the agent's own mode, no sandbox
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
