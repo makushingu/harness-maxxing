@@ -29,6 +29,23 @@ def test_damaged_config_falls_back_to_defaults(mx):
     assert config.damaged_copy_of(config.config_path()) is not None and config.load_config()["language"] == "fr"
 
 
+def test_a_save_writes_only_what_was_set_so_new_defaults_reach_existing_installs(mx, monkeypatch):
+    config.config_path().write_text(json.dumps({"language": "fr", "telegram": {"mode": "final"}}))
+    config.update_config(onboarding_completed=True)
+    raw = json.loads(config.config_path().read_text())
+    assert raw == {"language": "fr", "telegram": {"mode": "final"}, "onboarding_completed": True}
+    cfg = config.load_config()
+    cfg["telegram"]["threads"] = {"projects/a/topics/b": 7}           # the load / change / save pattern
+    config.save_config(cfg)
+    raw = json.loads(config.config_path().read_text())
+    assert raw["telegram"] == {"mode": "final", "threads": {"projects/a/topics/b": 7}}
+    assert "auto_compact_tokens" not in raw and "port" not in raw
+    monkeypatch.setitem(config.DEFAULT_CONFIG, "auto_compact_tokens", 300000)   # a later release's default
+    assert config.load_config()["auto_compact_tokens"] == 300000
+    config.update_config(language=config.DEFAULT_CONFIG["language"])  # set before: kept, even = default
+    assert "language" in json.loads(config.config_path().read_text())
+
+
 def test_load_config_cache_sees_every_write_and_returns_copies(mx, monkeypatch):
     config.update_config(language="fr")
     a = config.load_config()
