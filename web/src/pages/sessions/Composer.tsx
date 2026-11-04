@@ -345,8 +345,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
           setAtts((cur) => [...keep, ...cur])
           setQuotes(back)
         } else {
+          const files = toDraftAtts(keep)
           saveDraft(draftKey, restore(loadDraft(draftKey)))
           saveQuotes(draftKey, back(loadQuotes(draftKey)))
+          saveAtts(draftKey, [...files, ...loadAtts(draftKey).filter((a) => !files.some((f) => f.path === a.path))])
         }
       } else keep.forEach((a) => releasePreview(a.preview))
     })
