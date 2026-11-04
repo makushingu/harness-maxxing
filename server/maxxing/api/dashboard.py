@@ -89,6 +89,10 @@ async def _render(d: dict, force: bool = False, soft: float | None = None) -> di
     except asyncio.TimeoutError:
         if soft and not task.done():
             out["pending"] = True
+            # past its TTL: the last card stays on screen (flagged) until the new one is patched in
+            stale = extensions.cached_card(d["id"]) if d["source"] != "builtin" else None
+            if stale is not None:
+                out["card"], out["stale"] = widgets.strip_none(stale), True
         else:
             out["error"] = f"timed out after {TIMEOUT_S:.0f} s"
     except extensions.ExtensionBusy as e:

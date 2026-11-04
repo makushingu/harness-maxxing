@@ -631,6 +631,8 @@ export type Widget = {
   hidden?: boolean
   /** Still computing when the dashboard answered: fetch it alone (GET /api/dashboard/widgets/{id}). */
   pending?: boolean
+  /** With pending: `card` is the last one computed (past its TTL), shown until the new one arrives. */
+  stale?: boolean
 }
 export type DashboardPayload = { widgets: Widget[] }
 export type DashboardLayout = { order: string[]; hidden: string[] }
