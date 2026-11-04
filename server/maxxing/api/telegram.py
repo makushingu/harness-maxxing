@@ -27,6 +27,7 @@ class WebhookIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
+    mode: Literal["simple", "threads", "mirror"] | None = None
     notify_crons: bool | None = None
     notify_system: bool | None = None
     login_alerts: bool | None = None
@@ -101,10 +102,10 @@ async def sync():
 @router.put("/settings")
 async def put_settings(body: SettingsIn):
     try:
-        gateway.update_settings(**body.model_dump(exclude_none=True))
+        res = gateway.update_settings(**body.model_dump(exclude_none=True))
     except ValueError as e:
         raise _bad("invalid", e) from None
-    return {"ok": True}
+    return {"ok": True, "mode": res["mode"], "deleting": res["deleting"]}
 
 
 @router.post("/test")

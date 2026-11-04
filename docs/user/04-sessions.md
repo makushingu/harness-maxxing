@@ -340,7 +340,8 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 
 ## Notify, archive, delete
 
-- **Notify** (bell): when a turn ends, a short message is posted in the topic's Telegram thread.
+- **Notify** (bell): when a turn that did not come from Telegram ends, a short message rings on Telegram - in the
+  session's thread, else in the main chat (reply to it to continue the session). See [Telegram](telegram).
 - **In the browser**: Settings -> **Notifications** -> *Notify me when a session finishes* shows a
   system notification when the tab is in the background (a small banner with **Open** otherwise),
   with an optional chime. A failed turn is notified too; scheduled jobs are not. **Test** checks that

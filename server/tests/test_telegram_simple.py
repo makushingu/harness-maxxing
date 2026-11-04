@@ -1,0 +1,242 @@
+"""Telegram modes: the simple mode (one chat, replies continue a session), the bell, health problems and alerts,
+choosing a mode (fake Bot API, fake sessions service)."""
+from __future__ import annotations
+
+import asyncio
+import sys
+import types
+
+from _conn_helpers import TG_TOKEN, mx_state, wait_for  # noqa: F401  (fixture)
+from maxxing import config
+from maxxing.telegram import gateway
+from test_telegram import TOPIC, _link, api, svc, tg, ws  # noqa: F401  (fixtures)
+
+
+def _simple() -> None:
+    config.update_config(telegram={"mode": "simple"})
+
+
+async def _link_simple(api, tg) -> None:
+    _simple()
+    r = await api.post("/api/telegram/token", json={"token": TG_TOKEN})
+    assert r.status_code == 200, r.text
+    code = (await api.post("/api/telegram/link")).json()["code"]
+    tg.message(f"/start {code}")
+    await wait_for(lambda: gateway.link_status()["linked"], what="link")
+
+
+def _bot(text_part: str, tg) -> dict:
+    return next(p for p in tg.sent() if text_part in (p.get("text") or ""))
+
+
+def _reply_to(p: dict, mid: int) -> dict:
+    return {"reply_to_message": {"message_id": mid, "from": {"id": 1, "is_bot": True}, "text": p.get("text", "")}}
+
+
+async def _start(tg, svc, text: str = "Plan the launch") -> tuple[str, int]:
+    """A message, "where?", the topic tapped -> (session id, message id of the user's message)."""
+    tg.message(text)
+    mid = tg.next_msg
+    await wait_for(lambda: any("Where should" in (p.get("text") or "") for p in tg.sent()), what="where?")
+    tg.callback(f"w:0:{gateway._path_hash(TOPIC)}")
+    await wait_for(lambda: any(m["text"] == text for m in svc.sent), what="sent")
+    return next(m["sid"] for m in svc.sent if m["text"] == text), mid
+
+
+async def test_simple_mode_no_threads_and_replies_continue(api, tg, svc):
+    await _link_simple(api, tg)
+    assert gateway.mode() == "simple" and gateway.status()["mode"] == "simple"
+    await asyncio.sleep(0.3)
+    assert not tg.sent("createForumTopic")                       # no Crons / Alerts / Notifications either
+    assert "reply to a message" in _bot("Linked to Harness", tg)["text"]
+    sid, mid = await _start(tg, svc)
+    assert svc.sessions[sid]["path"] == TOPIC and svc.sessions[sid]["source"] == "telegram"
+    assert not tg.sent("createForumTopic")
+    svc.finish(sid, "Here is the plan")
+    await wait_for(lambda: any(p.get("text") == "Here is the plan" for p in tg.sent()), what="answer")
+    ans = _bot("Here is the plan", tg)
+    assert ans["reply_parameters"]["message_id"] == mid and ans.get("message_thread_id") is None
+    # the answer's message id (bound to the session)
+    bound = config.read_json(gateway._msgs_path(), {})
+    answer_mid = max(int(k.split(":")[1]) for k, v in bound.items() if v.get("sid") == sid)
+    tg.message("and the budget?", **_reply_to(ans, answer_mid))
+    await wait_for(lambda: len(svc.sent) == 2, what="continued")
+    assert svc.sent[1]["sid"] == sid
+    assert "Replying to" not in svc.sent[1]["text"]               # the bot's own answer is not quoted back
+    # replying to my own first message continues it too
+    svc.finish(sid, "Budget: 1k")
+    await wait_for(lambda: any(p.get("text") == "Budget: 1k" for p in tg.sent()), what="second answer")
+    tg.message("one more", reply_to_message={"message_id": mid, "from": {"id": 555, "is_bot": False}, "text": "x"})
+    await wait_for(lambda: len(svc.sent) == 3, what="reply to own message")
+    assert svc.sent[2]["sid"] == sid
+
+
+async def test_simple_mode_continue_button_and_commands(api, tg, svc):
+    await _link_simple(api, tg)
+    sid, _ = await _start(tg, svc)
+    svc.finish(sid, "done")
+    await wait_for(lambda: any(p.get("text") == "done" for p in tg.sent()), what="answer")
+    # a new message (not a reply): "↩ Continue" the last session is offered first
+    n = len(tg.sent())
+    tg.message("also this")
+    await wait_for(lambda: any("Where should" in (p.get("text") or "") for p in tg.sent()[n:]), what="where? 2")
+    where = next(p for p in tg.sent()[n:] if "Where should" in (p.get("text") or ""))
+    first = where["reply_markup"]["inline_keyboard"][0][0]
+    assert first["callback_data"] == "w:0:s" and "Continue" in first["text"]
+    tg.callback("w:0:s")
+    await wait_for(lambda: len(svc.sent) == 2, what="continued")
+    assert svc.sent[1]["sid"] == sid and svc.sent[1]["text"] == "also this"
+    # /stop without a reply: the last session
+    tg.message("/stop")
+    await wait_for(lambda: sid in svc.stopped, what="/stop")
+    # /status replying to nothing still knows the session; /sessions lists it and a tap posts a card to reply to
+    tg.message("/sessions")
+    await wait_for(lambda: any(p.get("reply_markup") and "Recent sessions" in (p.get("text") or "")
+                               for p in tg.sent()), what="/sessions")
+    tg.callback(f"o:{sid}")
+    await wait_for(lambda: any("Reply to this message" in (p.get("text") or "") for p in tg.sent()), what="card")
+    # /help is the simple one
+    tg.message("/help")
+    await wait_for(lambda: any("continue a recent session" in (p.get("text") or "") for p in tg.sent()), what="/help")
+
+
+async def test_bell_follows_the_turn_not_the_session(api, tg, svc):
+    await _link_simple(api, tg)
+    config.update_config(public_url="https://ui.example.com")
+    sid, _ = await _start(tg, svc)
+    svc.update_session(sid, notify=True)
+    svc.finish(sid, "phone answer")                              # a Telegram turn: answered, no bell
+    await wait_for(lambda: any(p.get("text") == "phone answer" for p in tg.sent()), what="answer")
+    await asyncio.sleep(0.3)
+    assert not any("✅ <b>" in (p.get("text") or "") for p in tg.sent())
+    # the same session continued in the web UI: the bell rings in the main chat (it used to stay silent)
+    svc.send_message(sid, "from the browser", source="web")
+    svc.finish(sid, "web answer")
+    await wait_for(lambda: any("✅ <b>" in (p.get("text") or "") for p in tg.sent()), what="bell")
+    bell = next(p for p in tg.sent() if "✅ <b>" in (p.get("text") or ""))
+    assert bell.get("message_thread_id") is None and not bell.get("disable_notification")
+    bound = config.read_json(gateway._msgs_path(), {})
+    assert sum(1 for v in bound.values() if v.get("sid") == sid) >= 3    # message, answer, bell…
+    # a job's turn never rings
+    job = svc.create_session(TOPIC, title="Nightly", source="cron", cron=True, notify=True)["id"]
+    svc.send_message(job, "run", source="cron")
+    n = len(tg.sent())
+    svc.finish(job, "ok")
+    await asyncio.sleep(0.3)
+    assert len(tg.sent()) == n
+
+
+def test_mode_of_older_installs(mx_state):
+    def set_tg(**kw) -> None:
+        def fn(t: dict) -> None:
+            t.pop("mode", None)
+            t.update(kw)
+        gateway.mutate_tg(fn)
+    set_tg(session_threads={}, threads={})
+    assert gateway.mode() == "simple"                              # nothing yet: a new install
+    set_tg(threads={"#crons": 5, "#alerts": 6})
+    assert gateway.mode() == "threads"                             # it had threads: kept
+    set_tg(mirror_web=True, mirror_web_chosen=True)
+    assert gateway.mode() == "mirror"
+    gateway.mutate_tg(lambda t: t.__setitem__("chat_id", 555))
+    gateway._settle_mode()
+    assert config.read_json(config.config_path(), {})["telegram"]["mode"] == "mirror"
+    gateway.update_settings(mirror_web=False)                      # older clients
+    assert gateway.mode() == "threads"
+
+
+async def test_threads_to_simple_deletes_the_threads(api, tg, svc):
+    await _link(api, tg)                                           # threads mode (test default)
+    web = svc.create_session(TOPIC, title="Plan", source="web")["id"]
+    await api.post("/api/telegram/sync")
+    tid = gateway.thread_of(web)
+    agent_tid = tg.next_thread + 100
+    tg.topics[agent_tid] = "🤖 Writer · acme/blog"
+    gateway.mutate_tg(lambda t: t.__setitem__("agent_threads", {"projects/acme/topics/blog/agents/writer":
+                                                                  {"tid": agent_tid, "name": "x"}}))
+    r = await api.put("/api/telegram/settings", json={"mode": "simple"})
+    assert r.json()["mode"] == "simple" and r.json()["deleting"] == 4  # the session + Crons, Alerts, Notifications
+    await wait_for(lambda: gateway.tg_config()["session_threads"] == {} and gateway.tg_config()["threads"] == {},
+                   what="purged")
+    assert tid not in tg.topics and agent_tid in tg.topics         # agents keep their thread
+    # back to threads: the sync makes them again
+    await api.put("/api/telegram/settings", json={"mode": "threads"})
+    await api.post("/api/telegram/sync")
+    assert gateway.thread_of(web) and set(gateway.tg_config()["threads"]) == {"#crons", "#alerts", "#feed"}
+
+
+async def test_health_problems_become_alerts(api, tg, svc, monkeypatch):
+    await _link_simple(api, tg)
+    from maxxing import health
+    issues = [{"id": "aaa", "level": "error", "code": "disk_full", "text": "Disk 97 % full", "seen": False},
+              {"id": "bbb", "level": "warn", "code": "cron_failed", "text": "Job failed", "seen": False}]
+    seen: list = []
+    monkeypatch.setattr(health, "collect", lambda force=False: {"issues": [dict(i) for i in issues]})
+    monkeypatch.setattr(health, "mark_seen", lambda iid, s=True: seen.append(iid) or True)
+    gw = gateway.gateway()
+    await gw._health_pass()
+    sent = [p for p in tg.sent() if "Disk" in (p.get("text") or "")]
+    assert len(sent) == 1 and sent[0]["text"].startswith("🚨") and not sent[0].get("disable_notification")
+    assert sent[0]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "h:aaa"
+    assert not any("Job failed" in (p.get("text") or "") for p in tg.sent())   # failed jobs: their own report
+    await gw._health_pass()
+    assert len([p for p in tg.sent() if "Disk" in (p.get("text") or "")]) == 1   # once
+    mid = gateway.load_state()["health"]["aaa"]["mid"]
+    tg.callback("h:aaa", message_id=mid)
+    await wait_for(lambda: seen == ["aaa"], what="seen")
+    await wait_for(lambda: any("✓ Seen" in (p.get("text") or "") for p in tg.sent("editMessageText")), what="edited")
+    issues.clear()                                                 # fixed
+    await gw._health_pass()
+    assert any("Resolved" in (p.get("text") or "") for p in tg.sent("editMessageText"))
+    assert gateway.load_state()["health"] == {}
+    # notify_system off: nothing
+    gateway.update_settings(notify_system=False)
+    issues.append({"id": "ccc", "level": "warn", "code": "backup_old", "text": "Backup old", "seen": False})
+    await gw._health_pass()
+    assert not any("Backup old" in (p.get("text") or "") for p in tg.sent())
+
+
+async def test_post_alert_buttons_call_the_alerts_module(api, tg, svc, monkeypatch):
+    await _link_simple(api, tg)
+    acted: list = []
+    mod = types.ModuleType("maxxing.alerts")
+
+    def act(aid, action, by="web"):
+        acted.append((aid, action, by))
+        return {"id": aid, "level": "warn", "title": "Writer asks", "text": "rm -rf build", "resolved": True,
+                "note": "Allowed on Telegram"}
+    mod.act = act
+    monkeypatch.setitem(sys.modules, "maxxing.alerts", mod)
+    gateway.post_alert({"id": "ap1", "level": "warn", "kind": "agent_approval", "title": "Writer asks",
+                        "text": "rm -rf build", "actions": [{"id": "allow", "label": "Allow"},
+                                                            {"id": "deny", "label": "Deny"}]})
+    await wait_for(lambda: any("Writer asks" in (p.get("text") or "") for p in tg.sent()), what="alert")
+    p = _bot("Writer asks", tg)
+    assert [b["callback_data"] for b in p["reply_markup"]["inline_keyboard"][0]] == ["al:ap1:allow", "al:ap1:deny"]
+    assert not p.get("disable_notification") and p.get("message_thread_id") is None
+    mid = gateway._notes()["al:ap1"][1]
+    tg.callback("al:ap1:allow", message_id=mid)
+    await wait_for(lambda: acted == [("ap1", "allow", "telegram")], what="act")
+    await wait_for(lambda: any("Allowed on Telegram" in (q.get("text") or "") for q in tg.sent("editMessageText")),
+                   what="edited")
+    assert "al:ap1" not in gateway._notes()                       # resolved: forgotten
+    # while an alerts module exists, it posts the health problems itself
+    gw = gateway.gateway()
+    from maxxing import health
+    monkeypatch.setattr(health, "collect", lambda force=False: {"issues": [
+        {"id": "zzz", "level": "error", "code": "disk_full", "text": "Disk full", "seen": False}]})
+    await gw._health_pass()
+    assert not any("Disk full" in (q.get("text") or "") for q in tg.sent())
+
+
+async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypatch):
+    await _link_simple(api, tg)
+    got: list = []
+
+    async def fake(self, msg, path, cmd, text):
+        got.append((path, text))
+    monkeypatch.setattr(gateway.Gateway, "_agent_message", fake)
+    gateway.bind_messages(555, [4242], {"agent": "projects/acme/topics/blog/agents/writer"})
+    tg.message("do it again", reply_to_message={"message_id": 4242, "from": {"id": 1, "is_bot": True}, "text": "r"})
+    await wait_for(lambda: got, what="agent")
+    assert got[0] == ("projects/acme/topics/blog/agents/writer", "do it again") and not svc.sent
