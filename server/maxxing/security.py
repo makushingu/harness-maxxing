@@ -12,8 +12,10 @@
   then 429 for the rest of the window, checked BEFORE the password (no scrypt, even a correct
   password is refused). Every attempt counts as a failure up front (parallel requests count too),
   a success clears its client. Global cap: past GLOBAL_FAIL_MAX failures from all clients in the
-  window, at most one password check every GLOBAL_GAP_S for everyone (others get 429 and retry):
-  distributed guessing slows to a crawl, the owner still gets in.
+  window, at most one password check every GLOBAL_GAP_S for clients that already failed, and one more every
+  GLOBAL_GAP_S for clients with no failure yet (others get 429 and retry): distributed guessing slows to a crawl,
+  and clients that keep failing never take the slot of a first try. A browser trusted by two-step sign-in and a
+  client key that signed in within GOOD_KEEP_S (in memory) skip the global cap: the owner still gets in.
 - CSRF: non-GET requests must carry `X-Maxxing: 1` (a header a cross-site form cannot set).
 - Streams (SSE) re-check their cookie (`StreamAuth`) before each batch they send: a sign-out, a password change,
   `sessions_not_before` or the cookie's expiry closes a stream already open.
@@ -41,10 +43,14 @@ GLOBAL_FAIL_MAX = 30
 GLOBAL_GAP_S = 5.0
 REVOKED_MAX = 500                  # revoked cookie ids kept; past it: sessions_not_before = now
 KEEP_S = 3600                      # failures kept this long (failures_last_hour), then pruned
+GOOD_KEEP_S = 30 * 24 * 3600       # a client key that signed in skips the global cap this long
+GOOD_MAX = 64
 
 _fails: dict[str, list[float]] = {}
 _fails_lock = threading.Lock()
 _last_global = 0.0
+_last_fresh = 0.0
+_good: dict[str, float] = {}       # client key -> last successful sign-in
 
 
 # ---- password ------------------------------------------------------------------------------
@@ -247,21 +253,28 @@ def _recent(lst: list[float], now: float) -> int:
     return sum(1 for t in lst if now - t < FAIL_WINDOW)
 
 
-def begin_attempt(key: str) -> tuple[str | None, int]:
+def begin_attempt(key: str, trusted: bool = False) -> tuple[str | None, int]:
     """Before checking a password -> (refusal, failures_in_window). refusal: "client" (this client
     is over FAIL_MAX), "global" (global cap reached, wait GLOBAL_GAP_S) or None: go ahead - the
-    attempt is already recorded as a failure, `end_attempt(key, True)` clears it."""
-    global _last_global
+    attempt is already recorded as a failure, `end_attempt(key, True)` clears it. `trusted`: the request holds a
+    trusted-browser cookie (skips the global cap, never the per-client one)."""
+    global _last_global, _last_fresh
     now = time.time()
     with _fails_lock:
         _prune(now)
         n = _recent(_fails.get(key, []), now)
         if n >= FAIL_MAX:
             return "client", n
-        if sum(_recent(lst, now) for lst in _fails.values()) >= GLOBAL_FAIL_MAX:
-            if now - _last_global < GLOBAL_GAP_S:
+        known = trusted or now - _good.get(key, 0.0) < GOOD_KEEP_S
+        if not known and sum(_recent(lst, now) for lst in _fails.values()) >= GLOBAL_FAIL_MAX:
+            # two slots: clients that keep failing cannot take the one of a client trying for the first time
+            last = _last_fresh if n == 0 else _last_global
+            if now - last < GLOBAL_GAP_S:
                 return "global", n
-            _last_global = now
+            if n == 0:
+                _last_fresh = now
+            else:
+                _last_global = now
         _fails.setdefault(key, []).append(now)
         return None, n + 1
 
@@ -271,6 +284,9 @@ def end_attempt(key: str, ok: bool) -> float:
     if ok:
         with _fails_lock:
             _fails.pop(key, None)
+            _good[key] = time.time()
+            if len(_good) > GOOD_MAX:
+                del _good[min(_good, key=_good.__getitem__)]
         return 0.0
     with _fails_lock:
         n = _recent(_fails.get(key, []), time.time())

@@ -208,6 +208,56 @@ def test_an_invitation_never_replaces_a_contact_key(client, monkeypatch):
     assert teampeer.peers()[MALLORY]["status"] == "request"
 
 
+TOM = "http://127.0.0.1:8804"
+GROUP = "g_00000000cafecafe"
+
+
+def _group_with_tom(gk: bytes) -> None:
+    doc = teampeer._load()
+    doc["peers"][TOM] = {"status": "group", "name": "Tom", "group_keys": {GROUP: teampeer._b64(gk)}}
+    teampeer._save(doc)
+    tdoc = team._load()
+    tdoc["chats"].append({"id": GROUP, "kind": "group", "name": "G", "emoji": "", "created": 0, "read_at": 0,
+                          "messages": [], "remote": True, "admin": teampeer.pid(LEA),
+                          "members": [teampeer.pid(LEA), teampeer.pid(TOM)]})
+    team._save(tdoc)
+
+
+def test_an_invitation_never_lets_its_holder_speak_as_a_group_member(client, monkeypatch):
+    """Eve, given an invitation, says hello as Tom (a group member, not a contact): the request waits, but its key
+    must not post in Tom's groups, nor cut the real Tom off them."""
+    _setup(monkeypatch)
+    gk = b"g" * 32
+    _group_with_tom(gk)
+    code = teampeer._unb64(teampeer.create_invite()["invitation"].rsplit("#", 1)[1])
+    me = "http://127.0.0.1:8801"
+    body = {"from": TOM, "to": me, "nonce": "n1", "proof": teampeer._mac(code, "hello", TOM, me, "n1"),
+            "profile": {"name": "Not Tom"}}
+    r = client.post("/api/team-peer/hello", json=body)
+    assert r.status_code == 200 and teampeer.peers()[TOM]["status"] == "request"
+    k = teampeer._unb64(teampeer._mac_b(code, "key", me, TOM, r.json()["nonce"], "n1"))     # Eve's link key
+    for ev in (_msg(GROUP, "Tom here: wire the money", mid="m_eeee0001"), {"type": "leave", "chat": GROUP},
+               {"type": "profile", "profile": {"name": "x"}}):
+        assert _post(client, k, ev, frm=TOM).status_code == 403
+    assert not [m for c in team._load()["chats"] if c["id"] == GROUP for m in c["messages"]]
+    assert teampeer.pid(TOM) in teampeer.people() and teampeer.people()[teampeer.pid(TOM)]["name"] == "Tom"
+    assert teampeer._key_to(TOM, GROUP) == gk                         # the real Tom still reads the group
+    assert _post(client, gk, _msg(GROUP, "real Tom", mid="m_eeee0002"), frm=TOM).status_code == 200
+    assert _post(client, k, {"type": "bye"}, frm=TOM).status_code == 200      # the request can still be withdrawn
+    assert teampeer.peers()[TOM]["status"] == "group"
+
+
+def test_a_group_key_made_by_the_creator_stops_working_once_the_member_is_a_contact(client, monkeypatch):
+    _setup(monkeypatch)
+    gk = b"g" * 32                                                    # made by Lea, the group's creator
+    _group_with_tom(gk)
+    doc = teampeer._load()
+    doc["peers"][TOM].update(key=teampeer._b64(b"t" * 32), status="accepted")    # Tom became a contact since
+    teampeer._save(doc)
+    assert _post(client, gk, {"type": "leave", "chat": GROUP}, frm=TOM).status_code == 403
+    assert _post(client, b"t" * 32, _msg(GROUP, "me", mid="m_eeee0003"), frm=TOM).status_code == 200
+
+
 def test_one_undeliverable_event_never_blocks_the_others(mx, monkeypatch):
     _setup(monkeypatch)
     round_ = teampeer._outbox_round

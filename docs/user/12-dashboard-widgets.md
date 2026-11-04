@@ -83,7 +83,7 @@ The id (folder name) is a lowercase slug: letters, digits, dashes. Reserved ids:
 | `api` | version of the extension contract it is written for (default 1); a release that stops supporting it is announced by the update preflight before you update |
 | `icon` | an icon name in kebab-case (`gauge`, `chart-line`, `shopping-cart`, `users`, `receipt`...) from the app's set of [lucide](https://lucide.dev/icons) icons; a name the app does not ship shows a puzzle piece |
 | `span` | width in grid columns: 1, 2 or 3 |
-| `ttl` | seconds the result is cached (default 300). The refresh button bypasses it. |
+| `ttl` | seconds the result is cached (default 300). The refresh button bypasses it. Past it, a slow card keeps showing its last result while the new one is computed. |
 
 ### 3. api.py
 

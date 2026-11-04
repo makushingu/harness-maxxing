@@ -820,6 +820,22 @@ def _add_task_starts(f, before: int, events: list[dict]) -> None:
 COMPACT_FREE_MARGIN = 256 * 1024 * 1024               # free space kept beyond the copy of a log
 
 
+def _log_shrinks(path: Path, size: int) -> bool:
+    """Whether compact_log would drop or shorten a line among the first `size` bytes (stops at the first one)."""
+    consumed = 0
+    with open(path, "rb") as src:
+        for raw in src:
+            consumed += len(raw)
+            line = raw[:-1] if raw.endswith(b"\n") else raw
+            if clip.drop_line(line):
+                return True
+            if clip.worth_clipping(line) and len(clip.clip_line(line.decode("utf-8", "replace"))) < len(line):
+                return True
+            if consumed >= size:
+                break
+    return False
+
+
 def compact_log(sid: str, dry_run: bool = False) -> dict:
     """Rewrite a raw log with clipped tool outputs and slimmed system lines (clip.py), atomically,
     streaming line by line.
@@ -838,6 +854,8 @@ def compact_log(sid: str, dry_run: bool = False) -> dict:
     tmp = path.with_name(f"{path.name}.compact.tmp")
     marker = store.compacting_path(sid)
     try:
+        if not dry_run and not _log_shrinks(path, before):   # most logs (clipped when written): no copy at all
+            return {"id": sid, "status": "unchanged", "before": before, "after": before}
         if not dry_run and shutil.disk_usage(path.parent).free < before + COMPACT_FREE_MARGIN:
             return {"id": sid, "status": "no_space", "before": before, "after": before}
         if not dry_run:
@@ -1084,10 +1102,12 @@ def on_turn_end(cb: Callable[[dict, dict | None], Any]) -> None:
 
 # A meta change wakes the watcher at once (wake.py: inotify); it also passes every WATCH_WAKE_RUNNING_S while a session
 # runs (dead runner check: an unchanged running session is re-read at most every RUNNING_RECHECK_S) and every
-# `interval` otherwise. Without inotify it polls: every WATCH_RUNNING_S while a session runs (its turn end - Telegram
+# `interval` otherwise - every WATCH_IDLE_WAKE_S when nothing runs (inotify already wakes it on every change; only a
+# hand-off hold expiry is due by time, and it shortens the wait). Without inotify it polls: every WATCH_RUNNING_S while a session runs (its turn end - Telegram
 # reply, notification, cron result - is seen within 0.25 s instead of 1 s), every `interval` otherwise.
 WATCH_RUNNING_S = 0.25
 WATCH_WAKE_RUNNING_S = 2.0
+WATCH_IDLE_WAKE_S = 30.0
 RUNNING_RECHECK_S = 1.0
 _checked: dict[str, float] = {}
 
@@ -1256,7 +1276,13 @@ async def _watch(interval: float) -> None:
             log.exception("session watcher pass failed")
         running = any(v[2] == "running" for v in _known.values())
         if ev is not None:
-            await wake.wait(ev, WATCH_WAKE_RUNNING_S if running else interval)
+            if running:
+                timeout = WATCH_WAKE_RUNNING_S
+            else:
+                timeout = max(interval, WATCH_IDLE_WAKE_S)
+                if _held:
+                    timeout = min(timeout, max(interval, min(_held.values()) - time.time() + 0.05))
+            await wake.wait(ev, timeout)
         else:
             await asyncio.sleep(min(interval, WATCH_RUNNING_S) if running else interval)
 

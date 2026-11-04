@@ -86,3 +86,14 @@ def test_state_files_are_private(mx):
     store.append_log("12345678-1234-1234-1234-123456789012", {"type": "mx_note", "text": "x"})
     log = store.log_path("12345678-1234-1234-1234-123456789012")
     assert stat.S_IMODE(os.stat(log).st_mode) == 0o600
+
+
+def test_add_key_does_not_replace_a_key_of_that_name(client):
+    """"Add key" with a name already in the vault silently replaced its value, note and expose."""
+    client.put("/api/secrets/SHOP_DB", json={"value": "postgres://old", "note": "infra", "expose": True})
+    r = client.put("/api/secrets/SHOP_DB", json={"value": "new", "create": True})
+    assert r.status_code == 409 and r.json()["error"] == "exists"
+    assert vault.get("SHOP_DB") == "postgres://old" and vault.list_secrets()[0]["note"] == "infra"
+    assert client.put("/api/secrets/OTHER", json={"value": "v", "create": True}).status_code == 200
+    assert client.put("/api/secrets/SHOP_DB", json={"value": "edited"}).status_code == 200     # Edit still updates
+

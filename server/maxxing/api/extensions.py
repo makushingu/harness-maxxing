@@ -213,9 +213,10 @@ async def widget_frame(eid: str):
         "Cache-Control": "no-store", "Content-Security-Policy": WIDGET_FRAME_CSP, "Referrer-Policy": "no-referrer"})
 
 
-@router.get("/ext/{eid}/widget.html", include_in_schema=False)
+@router.api_route("/ext/{eid}/widget.html", methods=["GET", "HEAD"], include_in_schema=False)
 async def widget_html(eid: str):
-    """Raw widget.html; the UI loads it into a sandboxed iframe (srcdoc, no access to the app)."""
+    """Raw widget.html; the UI loads it into a sandboxed iframe (srcdoc, no access to the app). HEAD: the dashboard
+    only checks that the widget exists (the frame loads /widget-frame)."""
     ext = await asyncio.to_thread(extensions.get, eid)
     if ext is None or not ext.enabled or ext.error or not ext.has_html:
         raise _err(404, "not_found", f"no HTML widget for extension {eid}")

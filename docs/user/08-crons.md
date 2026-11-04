@@ -16,7 +16,7 @@ Click **New job** and fill in:
 | Schedule | cron expression; the editor shows it in words and lists the next runs |
 | Type | **Shell** (a command run with bash) or **Claude** (a prompt sent to a session in a topic) |
 | Command | shell: e.g. `/root/maxxing/projects/acme/scripts/report.sh` |
-| Topic, prompt, model | Claude: where the session runs, what to do, which model |
+| Topic, prompt, model | Claude: where the session runs (follows a rename of the topic or its project), what to do, which model |
 | Reuse session | Claude: keep one session across runs (it accumulates context) instead of a new session each time |
 | Notify | Telegram report: never, on failure (default), always |
 | Timeout | maximum duration (default 1 hour) |
@@ -42,13 +42,19 @@ Five fields: `minute hour day-of-month month day-of-week`.
 The cron daemon fires jobs in the **server's system time zone**, while the UI (schedule preview,
 next runs, history) uses the time zone of Settings -> General. Both must be the same, otherwise a
 job shown "at 07:00" runs at another hour. On a fresh server, the zone you pick in the onboarding
-(or Settings -> General) also becomes the system zone; `maxxing doctor` warns if they differ.
+(or Settings -> General) also becomes the system zone; `maxxing doctor` warns if they differ. If the system
+zone cannot be switched (a container without `timedatectl`, for example), Harness Maxxing keeps the server clock
+(see below) so jobs still run at the times shown.
 
 On a server already in use (other scheduled jobs, other services), the installer **keeps the server
 clock** (`system_clock = keep` in the configuration): Harness Maxxing then writes each job's crontab
 line to fire every hour at its minutes, and `maxxing cron run <id> --if-due` checks the schedule in
 your zone before running - so jobs still run at the times you see, daylight saving included, and
 the other programs keep their clock. Switch with `maxxing init --system-clock keep|follow`.
+
+On daylight saving days, a job at a fixed time (`30 2 * * *`) runs once when the clock goes back, a job
+that runs every hour or every few minutes also runs in the repeated hour, and a time skipped in spring
+runs just after the change. The schedule preview and Today's schedule show the same runs.
 
 To change the system zone by hand (mode `follow`):
 

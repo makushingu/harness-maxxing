@@ -196,6 +196,22 @@ def deliver(token: str, headers: dict, body: bytes) -> tuple[int, dict]:
         return 401, {"error": "bad_signature"}
     if s.get("secret") and _limited(h["id"]):
         return 429, {"error": "rate_limited"}
+    lower = {k.lower(): v for k, v in headers.items()}
+    # A signed body is accepted once, whatever the unsigned headers say (a new delivery id, another X-GitHub-Event)
+    # and even when it was ignored: Stripe signs a timestamp instead
+    claim = _replay_key(h["kind"], lower, body) if s.get("secret") and h["kind"] in REPLAY_KINDS else None
+    if claim and not feed.claim_delivery(h["id"], claim, REPLAY_KEEP_S.get(h["kind"], DEFAULT_REPLAY_S)):
+        return 200, {"ok": True, "duplicate": True, "id": None}
+    status = 500
+    try:
+        status, out = _deliver_verified(h, lower, body)
+    finally:
+        if claim and status != 200:                  # the sender retries a failed delivery: not a replay
+            feed.release_delivery(h["id"], claim)
+    return status, out
+
+
+def _deliver_verified(h: dict, lower: dict, body: bytes) -> tuple[int, dict]:
     try:
         payload = json.loads(body.decode("utf-8") or "{}")
     except RecursionError:                             # "[[[[…" nested deeper than Python can parse
@@ -204,7 +220,6 @@ def deliver(token: str, headers: dict, body: bytes) -> tuple[int, dict]:
         if h["kind"] != "generic":
             return 400, {"error": "bad_json"}
         payload = {"title": body.decode("utf-8", "replace")[:200]}
-    lower = {k.lower(): v for k, v in headers.items()}
     try:
         ev = PARSERS[h["kind"]](payload if isinstance(payload, dict) else {"value": payload}, lower)
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):   # a field of an unexpected shape
@@ -224,6 +239,12 @@ def deliver(token: str, headers: dict, body: bytes) -> tuple[int, dict]:
 
 
 BODY_DEDUPE = ("shopify", "github")
+REPLAY_KINDS = ("shopify", "github", "generic")
+# a generic sender may post the very same alert again later ({"title": "Server down"}): its body is a replay only
+# within a day; Shopify and GitHub bodies are unique per event
+GENERIC_REPLAY_S = 24 * 3600
+DEFAULT_REPLAY_S = feed.RETENTION_DAYS * 86400
+REPLAY_KEEP_S = {"generic": GENERIC_REPLAY_S}
 _SHOPIFY_TOPICS = ("orders/create", "orders/paid", "orders/cancelled", "refunds/create", "inventory_levels/update")
 
 

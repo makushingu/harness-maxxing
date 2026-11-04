@@ -7,9 +7,12 @@ See docs/dev/API.md#search.
   what was indexed: log offset, file mtime/size, tasks.json signature).
 - Incremental: a session log is read from the last indexed offset (a rewritten log - compact-logs -
   is reindexed); a file is reindexed when its mtime/size changes; gone sources are dropped.
-- Tokenizer `unicode61 remove_diacritics 2` (tache = tâche) with prefix indexes: every word of the
-  query is a prefix ("fact" finds "facture"), all words must match, in any order. Ranked with BM25,
-  the title weighs 4x the body.
+- Tokenizer `unicode61 remove_diacritics 2` (tache = tâche) with prefix indexes: every word of 3+
+  characters of the query is a prefix ("fac" finds "facture"; "fa" is the word "fa"), all words must
+  match, in any order. Ranked with BM25, the title weighs 4x the body. A session's title sits on its
+  title row only (not on each message row): a title match never crowds out the other sessions, and a
+  rename rewrites one row. Results are deduplicated in SQL (best row per session / file / task), and a
+  broad query ranks only its RANK_MAX newest matching rows.
 - Refresh: a background loop (api/search.py, every 30 s) and, before each query, the sessions only
   (cheap: one stat per log, only the new bytes are read). The loop re-reads the memory files (CLAUDE.md /
   memory.md at their known places: a few stats) every pass, and walks the other files only every
@@ -36,12 +39,13 @@ import threading
 import time
 import zlib
 from pathlib import Path
+from typing import Callable
 
 from . import config
 
 log = logging.getLogger("maxxing.search")
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"                 # 2: session title on the title row only (see _migrate)
 KINDS = ("session", "file", "memory", "task")
 TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".org", ".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
             ".css", ".scss", ".html", ".htm", ".vue", ".svelte", ".astro", ".php", ".rb", ".go", ".rs", ".java",
@@ -61,6 +65,7 @@ MAX_MESSAGE_CHARS = 20_000
 READ_CHUNK = 4 * 1024 * 1024         # session log bytes read per pass and session
 WAL_LIMIT = 4 * 1024 * 1024          # journal_size_limit: bytes the WAL keeps after a checkpoint
 CHECKPOINT_BUSY_MS = 200             # a TRUNCATE checkpoint waits at most this long for readers
+RANK_MAX = 5_000                     # a query ranks at most this many matching rows (the newest ones)
 # Rows replaced as logs and files change leave free pages behind: after a files walk, search.db is VACUUMed when more
 # than VACUUM_FREE of it is free (and it is at least VACUUM_MIN_BYTES), at most every VACUUM_EVERY_S.
 VACUUM_FREE = 0.25
@@ -101,15 +106,37 @@ def _connect() -> sqlite3.Connection:
             INSERT INTO fts(rowid, title, body) VALUES (new.id, new.title, new.body); END;
         CREATE TRIGGER IF NOT EXISTS items_ad AFTER DELETE ON items BEGIN
             INSERT INTO fts(fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body); END;
-        CREATE TRIGGER IF NOT EXISTS items_au AFTER UPDATE ON items BEGIN
-            INSERT INTO fts(fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
-            INSERT INTO fts(rowid, title, body) VALUES (new.id, new.title, new.body); END;
-    """)
+    """ + _AU_TRIGGER)
     row = con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
     if row is None:
         con.execute("INSERT INTO meta VALUES('schema', ?)", (SCHEMA_VERSION,))
         con.commit()
     return con
+
+
+# OF title, body: a session moved to another topic changes the path of its rows without re-indexing them
+_AU_TRIGGER = """
+        CREATE TRIGGER IF NOT EXISTS items_au AFTER UPDATE OF title, body ON items BEGIN
+            INSERT INTO fts(fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+            INSERT INTO fts(rowid, title, body) VALUES (new.id, new.title, new.body); END;
+"""
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    """Bring an index built by an older version up to SCHEMA_VERSION (writer connection, under _lock)."""
+    row = con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
+    if row and row[0] == SCHEMA_VERSION:
+        return
+    # 1 -> 2: the session title was copied into every message row (a session whose title matched filled the
+    # results on its own, and a rename re-indexed all its messages): keep it on the title row only. One pass
+    # over the message rows, once.
+    t0 = time.monotonic()
+    con.execute("DROP TRIGGER IF EXISTS items_au")
+    con.executescript(_AU_TRIGGER)
+    con.execute("UPDATE items SET title='' WHERE kind='session' AND body!='' AND title!=''")
+    con.execute("INSERT OR REPLACE INTO meta VALUES('schema', ?)", (SCHEMA_VERSION,))
+    con.commit()
+    log.info("search index moved to schema %s in %.1f s", SCHEMA_VERSION, time.monotonic() - t0)
 
 
 _con: sqlite3.Connection | None = None
@@ -123,6 +150,7 @@ def _db() -> sqlite3.Connection:
         if _con is not None:
             _con.close()
         _con, _con_path = _connect(), db_path()
+        _migrate(_con)
         _state.update(sessions_at=0.0, full_at=0.0, files_at=0.0)   # another index: nothing is fresh
         _seen.clear()
     return _con
@@ -172,6 +200,7 @@ def _index_sessions(con: sqlite3.Connection) -> None:
         title, path = m.get("title") or "Untitled", m.get("path") or ""
         row = con.execute("SELECT sig FROM src WHERE key=?", (key,)).fetchone()
         sig = json.loads(row[0]) if row else None
+        read_all = True
         ident = _log_ident(p)
         if sig and (sig.get("ident") != ident or sig.get("offset", 0) > size):
             _drop(con, key)                                  # log rewritten: start over
@@ -182,12 +211,16 @@ def _index_sessions(con: sqlite3.Connection) -> None:
             con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
                         (key, "session", sid, path, title, "", m.get("updated") or m.get("created")))
         elif sig.get("title") != title or sig.get("path") != path:   # renamed, or moved to another topic
-            con.execute("UPDATE items SET title=?, path=? WHERE src=?", (title, path, key))
+            if sig.get("title") != title:                    # the title row only (messages have no title)
+                con.execute("UPDATE items SET title=? WHERE src=? AND body=''", (title, key))
+            if sig.get("path") != path:                      # not indexed: no FTS work (items_au)
+                con.execute("UPDATE items SET path=? WHERE src=?", (path, key))
             sig["title"], sig["path"] = title, path
         if sig["offset"] < size:
             with open(p, "rb") as f:
                 f.seek(sig["offset"])
                 chunk = f.read(READ_CHUNK)
+            read_all = len(chunk) < READ_CHUNK               # what is left is at most an unterminated last line
             end = chunk.rfind(b"\n") + 1                     # complete lines only
             if not end and len(chunk) == READ_CHUNK:
                 # One line longer than READ_CHUNK (an old unclipped tool result, a huge paste): skip it,
@@ -199,10 +232,13 @@ def _index_sessions(con: sqlite3.Connection) -> None:
                     if ev.get("type") in ("user", "assistant", "voice_text") and (ev.get("text") or "").strip():
                         con.execute(
                             "INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                            (key, "session", sid, path, title, ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
+                            (key, "session", sid, path, "", ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
                 sig["offset"] += end
-        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
-        if sig["offset"] >= size:                            # all read: skipped until something changes
+        new = json.dumps(sig)
+        if not row or new != row[0]:                         # unchanged (a log ending in a cut line): no write
+            con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, new))
+        # all read - or only a cut last line left (a runner killed mid-write): skipped until something changes
+        if sig["offset"] >= size or read_all:
             _seen[key] = stamp
     for key in known - alive:
         _drop(con, key)
@@ -499,11 +535,12 @@ _WORD = re.compile(r"\w+", re.UNICODE)
 
 
 def fts_query(q: str) -> str | None:
-    """User text -> FTS5 query: every word is required, as a prefix when it has 2+ characters."""
+    """User text -> FTS5 query: every word is required, as a prefix when it has 3+ characters (a 2-letter
+    prefix matches most of the index: "de", "th"...)."""
     words = _WORD.findall(q or "")[:12]
     if not words:
         return None
-    return " ".join(f'"{w}"*' if len(w) >= 2 else f'"{w}"' for w in words)
+    return " ".join(f'"{w}"*' if len(w) >= 3 else f'"{w}"' for w in words)
 
 
 _rcon: sqlite3.Connection | None = None
@@ -519,8 +556,12 @@ def _reader() -> sqlite3.Connection:
     return _rcon
 
 
-def search(q: str, kinds: list[str] | None = None, limit: int = 30) -> dict:
+def search(q: str, kinds: list[str] | None = None, limit: int = 30,
+           cancelled: Callable[[], bool] | None = None) -> dict:
+    """`cancelled`: True once nobody waits for the answer (the palette sent the next query): stops waiting for
+    the reader and interrupts the query."""
     t0 = time.perf_counter()
+    gone = cancelled or (lambda: False)
     match = fts_query(q)
     wanted = [k for k in (kinds or KINDS) if k in KINDS]
     if not match or not wanted or len(q.strip()) < 2:
@@ -535,25 +576,52 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30) -> dict:
         finally:
             _lock.release()
     marks = ",".join("?" * len(wanted))
-    with _rlock:
-        rows = _reader().execute(
-            f"""SELECT items.kind, items.ref, items.path, items.title, items.at,
-                       snippet(fts, 1, char(2), char(3), '…', 16), bm25(fts, 4.0, 1.0) AS score
-                FROM fts JOIN items ON items.id = fts.rowid
-                WHERE fts MATCH ? AND items.kind IN ({marks})
-                ORDER BY score LIMIT ?""",
-            (match, *wanted, max(limit * 6, 60))).fetchall()
-    out, seen = [], set()
+    while not _rlock.acquire(timeout=0.05):                  # one reader: queries take turns
+        if gone():
+            return {"results": [], "took_ms": 0, "cancelled": True}
+    try:
+        if gone():
+            return {"results": [], "took_ms": 0, "cancelled": True}
+        con = _reader()
+        con.set_progress_handler(lambda: 1 if gone() else 0, 20_000)
+        try:
+            # only the RANK_MAX newest matching rows are ranked: the rowid of the oldest of them bounds the query
+            # (a rowid range is cheap for FTS5; `rowid IN (...)` would run the match once per row)
+            floor = con.execute(
+                f"""SELECT MIN(id) FROM (SELECT fts.rowid AS id FROM fts JOIN items ON items.id = fts.rowid
+                    WHERE fts MATCH ? AND items.kind IN ({marks}) ORDER BY fts.rowid DESC LIMIT ?)""",
+                (match, *wanted, RANK_MAX)).fetchone()[0] or 0
+            # best row per session / file / task (bare columns of MIN)
+            # (MATERIALIZED: bm25/snippet cannot run inside the aggregate itself)
+            rows = con.execute(
+                f"""WITH hits AS MATERIALIZED (
+                        SELECT items.kind AS kind, items.ref AS ref, items.path AS path, items.title AS title,
+                               items.at AS at, snippet(fts, 1, char(2), char(3), '…', 16) AS snip,
+                               bm25(fts, 4.0, 1.0) AS score
+                        FROM fts JOIN items ON items.id = fts.rowid
+                        WHERE fts MATCH ? AND fts.rowid >= ? AND items.kind IN ({marks}))
+                    SELECT kind, ref, path, title, at, snip, MIN(score) AS best FROM hits
+                    GROUP BY kind, ref ORDER BY best LIMIT ?""",
+                (match, floor, *wanted, limit)).fetchall()
+            untitled = [f"s:{r[1]}" for r in rows if r[0] == "session" and not r[3]]
+            titles = dict(con.execute(
+                f"SELECT ref, title FROM items WHERE body='' AND src IN ({','.join('?' * len(untitled))})",
+                untitled).fetchall()) if untitled else {}
+        except sqlite3.OperationalError:
+            if gone():                                       # interrupted by the progress handler
+                return {"results": [], "took_ms": 0, "cancelled": True}
+            raise
+        finally:
+            con.set_progress_handler(None, 0)
+    finally:
+        _rlock.release()
+    out = []
     for kind, ref, path, title, at, snip, score in rows:
-        if (kind, ref) in seen:
-            continue                                         # best row per session / file / task
-        seen.add((kind, ref))
+        title = title or titles.get(ref) or "Untitled"       # a message row: the title of its session
         if not snip.strip() and kind == "session":
             snip = title
         out.append({"kind": kind, "id": ref, "path": path, "title": title, "snippet": snip, "at": at,
                     "score": round(-score, 3)})
-        if len(out) >= limit:
-            break
     return {"results": out, "took_ms": round((time.perf_counter() - t0) * 1000, 1)}
 
 

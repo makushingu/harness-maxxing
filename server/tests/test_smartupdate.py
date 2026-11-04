@@ -6,7 +6,7 @@ import subprocess
 
 from maxxing import config, customs, extensions, smartupdate
 from test_cmd_core import _git, env, repos, run_cli  # noqa: F401  (fixtures)
-from test_customs import _head, _upstream_release, code  # noqa: F401  (fixture)
+from test_customs import _head, _rewrite_upstream, _upstream_release, code  # noqa: F401  (fixture)
 
 
 def _worktrees(clone) -> int:
@@ -59,6 +59,22 @@ def test_preflight_conflict_included_and_review(code):
     assert _worktrees(clone) == 1 and "LIMIT = 50" in rules.read_text()       # the install is untouched
     prompt = smartupdate.assist_prompt(rep)
     assert "CONFLICTS" in prompt and "INCLUDED" in prompt and "maxxing update --resume" in prompt
+
+
+def test_preflight_after_a_rewritten_history(code):
+    """No common ancestor left: the new version is still seen (the auto update runs), conflicts and notes too."""
+    clone, work = code["clone"], code["work"]
+    (clone / "server/maxxing/rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    customs.save("Raise the limit")
+    (clone / "server/maxxing/extra.py").write_text("X = 1\n")
+    customs.save("Add extra")
+    _rewrite_upstream(work)
+    (work / "docs/upgrade").mkdir(parents=True)
+    (work / "docs/upgrade/1.1.0.md").write_text("# Upgrade notes - 1.1.0\n\nAdd a line to memory.md.\n")
+    _upstream_release(work, "1.1.0", rules="LIMIT = 20\nNAME = 'product'\n")
+    rep = smartupdate.preflight()
+    assert rep["behind"] > 0 and rep["latest"] == "1.1.0" and rep["notes"] == [{"version": "1.1.0"}]
+    assert _status(rep) == {"Raise the limit": "conflict", "Add extra": "ok"} and rep["verdict"] == "adapt"
 
 
 def test_review_when_a_customization_touches_changed_code(code):

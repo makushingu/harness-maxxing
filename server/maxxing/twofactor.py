@@ -51,7 +51,9 @@ WORDS = {
            "allowed": "✅ Allowed", "allowed_code": "✅ Allowed with the code", "denied": "❌ Denied",
            "gone": "This request expired.",
            "on": "🔐 Two-step sign-in is on. Without the web UI (Telegram down...): on the server, run maxxing 2fa off",
-           "off_cli": "🔓 Two-step sign-in was turned off from the server (maxxing 2fa off)."},
+           "off_cli": "🔓 Two-step sign-in was turned off from the server (maxxing 2fa off).",
+           "off_ui": "🔓 Two-step sign-in was turned off from the web UI. Not you? Change the password.",
+           "unlinked": "🔓 Telegram is being unlinked from the web UI: two-step sign-in is off. Not you? Change the password."},
     "fr": {"login": "🔐 <b>Demande de connexion</b>", "enable": "🔐 <b>Activer la double authentification</b>",
            "ip": "IP", "browser": "Navigateur", "code": "Code", "expires": "Expire dans {m} min.",
            "hint_login": "Ce n'est pas toi ? Refuse, puis change le mot de passe : le bon a été tapé.",
@@ -60,7 +62,9 @@ WORDS = {
            "allowed": "✅ Autorisée", "allowed_code": "✅ Autorisée avec le code", "denied": "❌ Refusée",
            "gone": "Cette demande a expiré.",
            "on": "🔐 La double authentification est activée. Sans l'interface web (Telegram en panne…) : sur le serveur, lance maxxing 2fa off",
-           "off_cli": "🔓 La double authentification a été désactivée depuis le serveur (maxxing 2fa off)."},
+           "off_cli": "🔓 La double authentification a été désactivée depuis le serveur (maxxing 2fa off).",
+           "off_ui": "🔓 La double authentification a été désactivée depuis l'interface web. Ce n'est pas toi ? Change le mot de passe.",
+           "unlinked": "🔓 Telegram est en train d'être délié depuis l'interface web : la double authentification est désactivée. Ce n'est pas toi ? Change le mot de passe."},
 }
 
 
@@ -377,10 +381,14 @@ def _close(c: Challenge, line: str) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
-def notify(key: str) -> None:
-    """A plain message in the "Alerts" thread, whatever the sign-in alerts setting ("on", "off_cli")."""
+def notify(key: str, wait: bool = False) -> None:
+    """A plain message in the "Alerts" thread, whatever the sign-in alerts setting ("on", "off_cli", "off_ui",
+    "unlinked"). `wait`: sent before returning (blocking), for a bridge about to be unlinked."""
     try:
         from .telegram import gateway
-        gateway._post(gateway.ALERTS, gateway.fmt.plain(_w(key)), silent=False)      # noqa: SLF001
+        if wait:
+            gateway._send_sync(gateway.ALERTS, gateway.fmt.plain(_w(key)), silent=False)      # noqa: SLF001
+        else:
+            gateway._post(gateway.ALERTS, gateway.fmt.plain(_w(key)), silent=False)      # noqa: SLF001
     except Exception:  # noqa: BLE001
         log.info("two-step sign-in notice not sent", exc_info=True)

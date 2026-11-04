@@ -29,6 +29,7 @@ import math
 import os
 import re
 import secrets as _secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -185,20 +186,26 @@ def iter_runs(expr: str | CronExpr, after: float | None = None, zone: ZoneInfo |
     if c.reboot:
         return
     zone = zone or tz()
-    start = dt.datetime.fromtimestamp(after if after is not None else time.time(), zone)
-    start = start.replace(second=0, microsecond=0) + dt.timedelta(minutes=1)
-    hours, minutes = sorted(c.hours), sorted(c.minutes)
-    day = start.date()
+    at = after if after is not None else time.time()
+    first = (at // 60 + 1) * 60                   # the next whole minute: compared as instants, never as wall
+    hours, minutes = sorted(c.hours), sorted(c.minutes)   # times (02:45 of a repeated hour is two instants)
+    every_hour = len(hours) == 24                 # "*/10 * * * *" also runs in the repeated autumn hour;
+    day = dt.datetime.fromtimestamp(at, zone).date()      # a fixed time ("45 2 * * *") runs once
     last = -1.0
     for _ in range(366 * 5):                      # at most 5 years ahead (e.g. Feb 29 on a Monday)
         if c.day_matches(day):
             for h in hours:
+                folds: list[float] = []
                 for m in minutes:
                     local = dt.datetime(day.year, day.month, day.day, h, m, tzinfo=zone)
-                    if local < start:
-                        continue
-                    ts = local.timestamp()
-                    if ts > last:                 # DST: never yield the same/earlier instant twice
+                    ts = local.timestamp()        # a time skipped in spring lands just after the gap
+                    if every_hour and (ts1 := local.replace(fold=1).timestamp()) > ts:
+                        folds.append(ts1)         # the second pass of a repeated hour
+                    if ts >= first and ts > last:  # DST: never yield the same/earlier instant twice
+                        last = ts
+                        yield ts
+                for ts in folds:
+                    if ts >= first and ts > last:
                         last = ts
                         yield ts
         day += dt.timedelta(days=1)
@@ -275,36 +282,40 @@ def humanize(expr: str) -> str:
     # -- time of day
     if len(mins) == 60 and len(hrs) == 24:
         when = "every minute"
-    elif len(hrs) == 24 and (s := _step(f[0], 0)):
+    elif len(hrs) == 24 and (s := _step(f[0], 0)) and 60 % s == 0:   # */45 = :00 and :45: listed below
         when = f"every {s} minutes"
     elif len(mins) == 60:
         when = f"every minute during hour{'s' if len(hrs) > 1 else ''} {_join([f'{h:02d}' for h in hrs])}"
     elif len(hrs) == 24:
         when = ("every hour at minute " + _join([str(m) for m in mins])) if mins != [0] else "every hour"
-    elif (s := _step(f[1], 0)) and len(mins) == 1:
+    elif (s := _step(f[1], 0)) and 24 % s == 0 and len(mins) == 1:
         when = f"every {s} hours at :{mins[0]:02d}"
     elif len(mins) * len(hrs) <= 6:
         when = "at " + _join([f"{h:02d}:{m:02d}" for h in hrs for m in mins])
     else:
         when = f"at minute {_join([str(m) for m in mins])} of hours {_join([str(h) for h in hrs])}"
 
-    # -- days
+    # -- days (dom_star / dow_star are cron's matching rule: "*/2" is still a restriction to describe)
+    dom_any, dow_any = c.doms == frozenset(range(1, 32)), c.dows == frozenset(range(7))
     days = ""
-    if not c.dom_star:
+    if not dom_any:
         if (s := _step(f[2], 1)):
             dom_txt = f"every {s} days"
         else:
             dom_txt = "on the " + _join([_ordinal(d) for d in sorted(c.doms)])
             dom_txt += " of the month" if c.months == frozenset(range(1, 13)) else ""
         days = dom_txt
-    if not c.dow_star:
+    if not dow_any:
         if c.dows == frozenset({1, 2, 3, 4, 5}):
             dow_txt = "on weekdays"
         elif c.dows == frozenset({0, 6}):
             dow_txt = "on weekends"
         else:
             dow_txt = "on " + _names(c.dows, DAY_NAMES)
-        days = f"{days} or {dow_txt}" if days else dow_txt
+        if days:                                   # both restricted and neither "*…": either day runs it
+            days = f"{days} or {dow_txt}" if not c.dom_star and not c.dow_star else f"{days} and only {dow_txt}"
+        else:
+            days = dow_txt
     if not days and when.startswith("at "):
         days = "every day"
     months = ""
@@ -449,6 +460,8 @@ def _clean(job: dict) -> dict:
     j["name"] = str(j["name"]).strip()
     if not j["name"] or len(j["name"]) > 80:
         raise CronError("name is required (max 80 characters)", "invalid_name")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in j["name"]):   # goes into the run's environment
+        raise CronError("the name cannot contain control characters", "invalid_name")
     j["schedule"] = validate(str(j["schedule"]))
     if j["kind"] not in KINDS:
         raise CronError("kind must be shell or claude", "invalid_kind")
@@ -543,6 +556,25 @@ def create_job(fields: dict) -> dict:
         _save_raw(jobs)
         sync_crontab(jobs)
     return get_job(j["id"])  # type: ignore[return-value]
+
+
+def on_workspace_change(change: dict) -> None:
+    """A renamed project / topic keeps its Claude jobs: their topic_path follows (else every run fails)."""
+    old, new = change.get("old_path") or "", change.get("path") or ""
+    if change.get("action") != "renamed" or not old or not new:
+        return
+    with _lock:
+        jobs = _read_raw()
+        if jobs is None:
+            return
+        moved = False
+        for j in jobs:
+            tp = str(j.get("topic_path") or "")
+            if tp == old or tp.startswith(old + "/"):
+                j["topic_path"] = new + tp[len(old):]
+                moved = True
+        if moved:
+            _save_raw(jobs)                    # the crontab lines do not change (they name the job id)
 
 
 def update_job(cid: str, fields: dict) -> dict | None:
@@ -704,16 +736,18 @@ def write_crontab(text: str) -> None:
 
 def align_system_timezone(tz: str) -> bool:
     """cron fires in the SYSTEM zone: switch it to `tz` (timedatectl) and restart cron.
-    Skipped with an isolated crontab (tests, dev) or MAXXING_SYSTEM_TZ=0. -> True if changed."""
+    Skipped with an isolated crontab (tests, dev) or MAXXING_SYSTEM_TZ=0. -> False only when the system zone
+    could not be switched (no systemd-timedated, polkit...): cron then still fires in the old zone."""
     if _crontab_file() is not None or os.environ.get("MAXXING_SYSTEM_TZ") == "0":
-        return False
+        return True
     try:
         cur = subprocess.run(["timedatectl", "show", "-p", "Timezone", "--value"],
                              capture_output=True, text=True, timeout=10).stdout.strip()
         if cur == tz:
-            return False
+            return True
         r = subprocess.run(["timedatectl", "set-timezone", tz], capture_output=True, text=True, timeout=20)
         if r.returncode != 0:
+            log.warning("timedatectl set-timezone %s failed: %s", tz, r.stderr.strip()[:200])
             return False
         subprocess.run(["systemctl", "restart", "cron"], capture_output=True, timeout=30)
         return True
@@ -745,6 +779,24 @@ def _env_prefix() -> str:
     if st and Path(st) != Path("/var/lib/claude-maxxing"):
         return f"MAXXING_STATE={_shq(st)} "
     return ""
+
+
+_LINE_STATE = re.compile(r"(?:^|\s)MAXXING_STATE=('(?:[^']|'\\'')*'|\S+)")
+
+
+def _ours(line: str) -> bool:
+    """Is this managed line one of this install's? Another state dir on the same user (a dev copy, a preview
+    server, a script run against a copy) writes its own lines, prefixed with its MAXXING_STATE: kept as they are."""
+    m = _LINE_STATE.search(line)
+    st = ""
+    if m:
+        try:
+            st = shlex.split(m.group(1))[0]
+        except (ValueError, IndexError):
+            st = m.group(1)
+    mine = os.environ.get("MAXXING_STATE") or ""
+    norm = lambda x: "" if not x or Path(x) == Path("/var/lib/claude-maxxing") else str(Path(x))  # noqa: E731
+    return norm(st) == norm(mine)
 
 
 def _shq(s: str) -> str:
@@ -814,8 +866,10 @@ def is_due(expr: str, at: float | None = None) -> bool:
     c = parse(expr)
     if c.reboot:
         return True
-    t = dt.datetime.fromtimestamp(at if at is not None else time.time(), tz())
-    return t.minute in c.minutes and t.hour in c.hours and c.day_matches(t.date())
+    minute = (at if at is not None else time.time()) // 60 * 60
+    # the same runs as iter_runs (next run, preview): one run in the repeated autumn hour, and a time
+    # skipped in spring runs just after the gap instead of never
+    return next(iter_runs(c, minute - 1, tz()), None) == minute
 
 
 DETACH_ENV = "MAXXING_CRON_DETACH"   # set by the crontab lines = `--detach` (a flag would break a rolled-back version)
@@ -853,10 +907,10 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
                 log.warning("jobs.json cannot be read: crontab left as it is")
                 return read_crontab()
             _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
-        outside, _ = split_crontab(read_crontab())
+        outside, inside = split_crontab(read_crontab())
         while outside and not outside[-1].strip():
             outside.pop()
-        lines = managed_lines(jobs)
+        lines = [ln for ln in inside if not _ours(ln)] + managed_lines(jobs)
         new = list(outside)
         if lines:
             if new:
@@ -897,15 +951,27 @@ def _lock_path(cid: str) -> Path:
     return config.state_dir("crons", "locks") / f"{cid}.lock"
 
 
-def is_running(cid: str) -> bool:
+def _flock_within(f, wait: float) -> bool:
+    """Take the job lock, retrying for `wait` s: another process's is_running() holds it for an instant."""
+    end = time.monotonic() + wait
+    while True:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            if time.monotonic() >= end:
+                return False
+            time.sleep(0.02)
+
+
+def is_running(cid: str, wait: float = 0.0) -> bool:
+    """The probe takes the lock for an instant: callers that refuse to start on True pass `wait`."""
     p = _lock_path(cid)
     if not p.exists():
         return False
     try:
         with open(p) as f:
-            try:
-                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
+            if not _flock_within(f, wait):
                 return True
             fcntl.flock(f, fcntl.LOCK_UN)
     except OSError:
@@ -1167,9 +1233,7 @@ def run_job(cid: str) -> dict | None:
     lockf = open(_lock_path(cid), "a+")                 # not "w": the mark of a killed run is read first
     lost = run = None
     try:
-        try:
-            fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+        if not _flock_within(lockf, 1.0):
             return None
         lost = _interrupted(cid, job, lockf)
         if lost:
@@ -1297,7 +1361,7 @@ def spawn_run(cid: str) -> None:
     """Start `maxxing cron run <id>` detached: in a transient systemd unit (`maxxing-cron-<id>`), or a plain
     subprocess when units are not available (MAXXING_SPAWN=direct, no systemd). Used by "Run now" and by the
     crontab lines (MAXXING_CRON_DETACH / `--detach`). Raises CronError('already_running') if the job is running."""
-    if is_running(cid):
+    if is_running(cid, wait=1.0):
         raise CronError("this job is already running", "already_running")
     cmd = [sys.executable, "-m", "maxxing", "cron", "run", cid]
     if not units_available():

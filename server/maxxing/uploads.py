@@ -1,20 +1,25 @@
 """Upload limits: a size cap and a free-disk reserve, enforced before and while the body is read.
 
-Starlette spools every multipart file to the temp dir BEFORE the endpoint (and its auth dependency)
+Starlette spools every multipart file to a temp dir BEFORE the endpoint (and its auth dependency)
 runs, so the checks live in an ASGI middleware (`UploadGuard`, multipart requests under /api/):
 - the session cookie and the CSRF header are checked first: no byte of an unauthenticated body is read;
 - `Content-Length` above `upload_max_mb` -> 413 `too_large`; a body that would not fit in the temp dir
   with TMP_MARGIN (min(upload_min_free_mb, 128 MB)) to spare -> 507 `disk_full` - both before reading.
   The temp dir is often a small tmpfs (RAM): the full reserve is for the destination disk only;
 - while streaming (also without Content-Length) the same two limits abort the request.
+The spool dir is <state>/tmp/uploads (`spool_dir`, on disk), not the system temp dir: /tmp is often a tmpfs, so a
+multi-GB upload was held in RAM while it streamed and refused when larger than the tmpfs.
 `save_upload` (api/sessions.py) then checks each file against the cap and the destination's free space
 (`check_room`) and counts bytes while copying.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
+
+from starlette import formparsers
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
@@ -26,6 +31,25 @@ DEFAULT_MAX_MB = 2048
 DEFAULT_MIN_FREE_MB = 1024
 _CHECK_EVERY = 16 * MB             # free space re-checked every 16 MB received
 TMP_MARGIN = 128 * MB              # what must stay free in the temp dir while spooling (capped by the reserve)
+
+
+def spool_dir() -> str:
+    """Where multipart files are spooled: <state>/tmp/uploads (private, on disk); the system temp dir if unwritable."""
+    d = config.STATE / "tmp" / "uploads"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        os.chmod(d.parent, 0o700)
+        return str(d)
+    except OSError:
+        return tempfile.gettempdir()
+
+
+def _spooled(*a, **kw) -> tempfile.SpooledTemporaryFile:
+    kw.setdefault("dir", spool_dir())
+    return tempfile.SpooledTemporaryFile(*a, **kw)
+
+
+formparsers.SpooledTemporaryFile = _spooled          # Starlette's multipart parser spools there (no option for it)
 
 
 def _num(key: str, default: int) -> int:
@@ -89,7 +113,7 @@ class UploadGuard:
             return await _reply(scope, receive, send, 403, "csrf", "Missing X-Maxxing header")
         max_b, reserve = limits()
         reserve = min(reserve, TMP_MARGIN)          # temp dir: the body must fit, the full reserve is for the disk
-        tmp = tempfile.gettempdir()
+        tmp = spool_dir()
         try:
             length = int(headers.get("content-length", ""))
         except ValueError:

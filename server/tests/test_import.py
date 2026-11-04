@@ -122,6 +122,21 @@ def test_bad_uploads(client):
     assert client.post("/api/import/bad/apply").status_code == 400
 
 
+def test_names_that_give_the_same_folder_stay_apart(client, mx):
+    """"Блог" and "Продажи" both slug to "imported" (and "My Blog" / "my-blog" to "my-blog"): never merged."""
+    p = _upload(client, _zip({"projects/Блог/CLAUDE.md": "# Blog\n\nRules A\n",
+                              "projects/Продажи/CLAUDE.md": "# Sales\n\nRules B\n",
+                              "projects/acme/topics/My Blog/memory.md": "- one\n",
+                              "projects/acme/topics/my-blog/memory.md": "- two\n"}, top="")).json()
+    assert [x["name"] for x in p["projects"]] == ["acme", "imported", "imported-2"]
+    assert [t["name"] for t in p["projects"][0]["topics"]] == ["my-blog", "my-blog-2"]
+    assert {r["from"] for r in p["renamed"]} == {"Блог", "Продажи", "acme/My Blog", "acme/my-blog"}   # all shown
+    client.post(f"/api/import/{p['id']}/apply")
+    assert "Rules A" in (mx["ws"] / "projects/imported/CLAUDE.md").read_text()
+    assert "Rules B" in (mx["ws"] / "projects/imported-2/CLAUDE.md").read_text()
+    assert "two" in (mx["ws"] / "projects/acme/topics/my-blog-2/memory.md").read_text()
+
+
 def test_slug():
     assert importer.slug("Café Crème !") == "cafe-creme" and importer.slug("***") == "imported"
 

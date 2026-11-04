@@ -62,6 +62,25 @@ def test_disk_reserve(client, mx, monkeypatch):
     assert list(mx["files"].iterdir()) == [mx["files"] / "up.bin"]     # only the first upload
 
 
+def test_uploads_are_spooled_on_disk_under_the_state_dir(client, mx, monkeypatch):
+    """Not in the system temp dir (often a tmpfs: the whole upload sat in RAM); its free space is what is checked."""
+    import tempfile
+    from starlette import formparsers
+    dirs, seen = [], []
+    real = tempfile.SpooledTemporaryFile
+
+    def spy(*a, **kw):
+        dirs.append(kw.get("dir"))
+        return real(*a, **kw)
+    monkeypatch.setattr(tempfile, "SpooledTemporaryFile", spy)
+    monkeypatch.setattr(uploads, "free_bytes", lambda p: (seen.append(str(p)), 1 << 40)[1])
+    assert formparsers.SpooledTemporaryFile is uploads._spooled
+    assert _post(client, mx["files"], b"x" * (2 * uploads.MB)).status_code == 200
+    spool = str(config.STATE / "tmp" / "uploads")
+    assert dirs == [spool] and spool in seen
+    assert (mx["files"] / "up.bin").stat().st_size == 2 * uploads.MB
+
+
 def test_chat_uploads_share_the_limits(client, mx, topic):
     config.update_config(upload_max_mb=1)
     r = client.post("/api/uploads", params={"path": topic},
