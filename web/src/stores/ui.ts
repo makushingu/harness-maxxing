@@ -138,6 +138,7 @@ export const useUI = create<UIState>()(
         if (out.tint !== 'tinted') out.tint = 'neutral'
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
+        out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
         if (out.touchHome !== 'dashboard') out.touchHome = 'session'
         return out
       },
