@@ -7,8 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.113 - 2026-11-04
 
-- Owner-only agent settings: `agent_guard.locked_paths()` (agent `agent.json`, `CLAUDE.md`, `.claude/`, `.mcp.json`,
-  topic `.claude/`, `.mcp.json`) go to `sandbox.filesystem.denyWrite` + `Edit(...)` deny rules; `check_cli` refuses
+- Owner-only agent settings: `agent_guard.locked_paths()` (agent `agent.json`, `CLAUDE.md`, `.claude/`, an existing `.mcp.json`,
+  topic `.claude/` and existing `.mcp.json`; a missing one would get a placeholder mount that breaks `git add -A`) go to `sandbox.filesystem.denyWrite` + `Edit(...)` deny rules; `check_cli` refuses
   `agents create|cron|webhook|watch|on|off|import|sandbox-setup` whenever `MAXXING_AGENT` is set (sandboxed or not);
   every agent turn gets `--append-system-prompt agents.OWNER_NOTE`; `agents._snapshot()` at `fire()` +
   `_changed_during()` at `on_turn_end` post a `note` (`status: changed`, `files`) when a run changed `agent.json` /
