@@ -54,6 +54,7 @@ import hashlib
 import hmac
 import importlib
 import inspect
+import json
 import logging
 import os
 import re
@@ -391,6 +392,15 @@ def _offset_path() -> Path:
 def _new_path() -> Path:
     """Messages waiting for the "where?" buttons (kept across a restart: the buttons still work after it)."""
     return config.state_dir("telegram") / "new.json"
+
+
+def _replies_path() -> Path:
+    """Telegram messages whose turn has not been answered yet (sid -> chat, thread, refs): the turn's process
+    outlives a server restart, so the next start must still answer it in the right thread."""
+    return config.state_dir("telegram") / "replies.json"
+
+
+REPLIES_KEEP = 86400           # a message waiting longer for its answer than this is forgotten
 
 
 def _inflight_path() -> Path:
@@ -888,6 +898,8 @@ class Gateway:
         self._inflight: dict[str, dict] = {}               # messages of the lanes still running (see _inflight_path)
         self._inflight_taken = False
         self._inflight_lock = threading.Lock()              # also dropped from the worker thread of send_message
+        self._left: dict[str, dict] = {}                   # replies a previous process still owed (_replies_path)
+        self._replies_saved = ""
         self._beat = 0.0                                   # last heartbeat written (see _poll_ok)
         self._poll_err = bool(load_state().get("poll_error"))
 
@@ -896,6 +908,7 @@ class Gateway:
         self.loop = asyncio.get_running_loop()
         self._sync_lock = asyncio.Lock()
         self._stopping = False
+        self._replies_load()
         self.running = True
         self._task = self.loop.create_task(self._run(), name="telegram-gateway")
         self.spawn(self._watch_sessions(), "session-threads")
@@ -1368,6 +1381,39 @@ class Gateway:
         with self._inflight_lock:
             if self._inflight.pop(mark, None) is not None:
                 self._inflight_save()
+
+    def _replies_load(self) -> None:
+        """At start: the answers the previous process still owed (see _replies_path)."""
+        try:
+            raw = config.read_json(_replies_path(), {}) or {}
+        except (TypeError, ValueError, AttributeError):
+            raw = {}
+        now, self._left = time.time(), {}
+        for sid, v in (raw.items() if isinstance(raw, dict) else []):
+            if isinstance(v, dict) and isinstance(v.get("chat"), int) and isinstance(v.get("refs"), list) \
+                    and now - float(v.get("at") or 0) < REPLIES_KEEP:
+                self._left[sid] = {"chat": v["chat"], "thread": v["thread"] if isinstance(v.get("thread"), int) else None,
+                                   "refs": [str(r) for r in v["refs"]], "at": float(v["at"])}
+        self._replies_saved = ""
+        self._replies_save()
+
+    def _replies_save(self) -> None:
+        """Write the messages still waiting for their answer (a stopping gateway keeps the file as it is)."""
+        if self._stopping:
+            return
+        out = {sid: dict(v) for sid, v in self._left.items()}
+        for sid, p in self._pending.items():
+            if p["refs"]:
+                out[sid] = {"chat": p["chat"], "thread": p["thread"], "refs": list(p["refs"]),
+                            "at": p.get("since") or time.time()}
+        data = json.dumps(out, sort_keys=True)
+        if data == self._replies_saved:
+            return
+        try:
+            config.write_json(_replies_path(), out)
+            self._replies_saved = data
+        except OSError:
+            log.warning("telegram replies list not saved", exc_info=True)
 
     def _inflight_save(self) -> None:
         try:
@@ -1878,11 +1924,15 @@ class Gateway:
             p = self._pending.get(sid)                   # another message may have started it meanwhile
             if p is None:
                 p = self._pending[sid] = {"chat": chat, "thread": thread, "refs": [], "sending": set(), "dead": {},
-                                          "offset": offset, "task": None}
+                                          "offset": offset, "task": None, "since": time.time()}
                 self._reset_status(p)
+                left = self._left.pop(sid, None)        # owed by the previous process: answered by this loop now
+                if left:
+                    p["refs"] += [r for r in left["refs"] if r != ref]
         p.update(chat=chat, thread=thread)
         p["refs"].append(ref)
         p["sending"].add(ref)
+        self._replies_save()
         if p.get("task") is None or p["task"].done():
             p["task"] = self.spawn(self._typing(sid), "typing")
         return p
@@ -1906,6 +1956,7 @@ class Gateway:
             t = p.get("task")
             if t is not None and not t.done() and t is not asyncio.current_task():
                 t.cancel()
+        self._replies_save()
         return p
 
     async def _recheck(self, sid: str, p: dict) -> None:
@@ -1927,6 +1978,8 @@ class Gateway:
                 p["refs"].remove(r)
         if not p["refs"] and self._pending.get(sid) is p:
             self._untrack(sid)
+        else:
+            self._replies_save()
 
     async def _typing(self, sid: str) -> None:
         """'typing…' every few seconds while a Telegram turn runs, and the live status message."""
@@ -2055,6 +2108,7 @@ class Gateway:
                     except Exception:  # noqa: BLE001
                         log.exception("telegram status update failed")
                 p["refs"] = [r for r in p["refs"] if r not in done]
+                self._replies_save()
                 await self._answer(sid, session, result, p["chat"], p["thread"])
             elif session.get("state") == "error":       # the turn never started (or its runner died)
                 self._untrack(sid)
@@ -2070,6 +2124,15 @@ class Gateway:
             if done:
                 return
         if kind in ("compact", "handoff", "seed"):      # a summary or its seed: not an answer to show
+            return
+        left = self._left.get(sid) if p is None else None
+        done = [r for r in left["refs"] if r in set((last or {}).get("refs") or [])] if left else []
+        if left and done:                               # sent before a restart: answered all the same
+            left["refs"] = [r for r in left["refs"] if r not in done]
+            if not left["refs"]:
+                self._left.pop(sid, None)
+            self._replies_save()
+            await self._answer(sid, session, result, left["chat"], left["thread"])
             return
         if mirror_web() and threaded() and is_human(session) \
                 and not session.get("archived") and await self._mirror(session, result):
@@ -2936,7 +2999,7 @@ async def forget() -> None:
                   sessions={})
         tg.pop("two_factor", None)                     # no bridge, no second step
     mutate_tg(fn)
-    for p in (_state_path(), _offset_path(), _inflight_path()):
+    for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path()):
         try:
             p.unlink()
         except OSError:
