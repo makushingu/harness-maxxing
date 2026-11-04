@@ -15,6 +15,8 @@ import re
 from datetime import datetime
 from typing import Any, Iterable
 
+from . import clip
+
 TOOL_RESULT_MAX = 20_000
 SUMMARY_MAX = 120
 TASK_KINDS = {"local_agent": "agent", "local_bash": "shell"}
@@ -201,8 +203,16 @@ def _assistant(ev: dict, at: float | None) -> list[dict]:
             out.append({"type": "thinking", "text": b["thinking"], "at": at})
         elif bt == "tool_use":
             inp = b.get("input") if isinstance(b.get("input"), dict) else {}
-            out.append({"type": "tool_use", "id": b.get("id") or "", "name": b.get("name") or "",
-                        "input": inp, "summary": tool_summary(b.get("name") or "", inp), "at": at})
+            summary = tool_summary(b.get("name") or "", inp)
+            if b.get("mx_clipped"):                          # clipped when written (runner, compact-logs)
+                lines = b.get("mx_lines")
+            else:                                            # a log older than that: clipped here
+                inp, lines = clip.clipped_input(inp)
+            use = {"type": "tool_use", "id": b.get("id") or "", "name": b.get("name") or "", "input": inp,
+                   "summary": summary, "at": at}
+            if isinstance(lines, dict) and lines:
+                use["input_lines"] = {str(k): int(v) for k, v in lines.items() if isinstance(v, int)}
+            out.append(use)
     return out
 
 

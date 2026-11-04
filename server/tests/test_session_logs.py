@@ -57,7 +57,25 @@ def test_runner_clips_tool_outputs(client, topic):
     assert any(r["text"] == "[image]" for r in results)
     write = next(e for e in evs if e["type"] == "tool_use" and e["name"] == "Write")
     assert len(write["input"]["content"]) < clip.INPUT_MAX + 200 and "100,000" in write["input"]["content"]
+    assert write["input_lines"] == {"content": 1}                  # the real line count of the file written
     assert evs[-1]["type"] == "result" and evs[-1]["ok"]
+
+
+def test_a_huge_tool_input_of_an_old_log_is_clipped_when_read():
+    """A log written before the runner clipped inputs: a 400 kB Write / Edit no longer goes whole to the browser,
+    and the Write card still gets the real line count."""
+    from maxxing.sessions.normalize import normalize_lines
+    content = "line of text\n" * 30_000
+    blocks = [{"type": "tool_use", "id": "w", "name": "Write", "input": {"file_path": "/x", "content": content}},
+              {"type": "tool_use", "id": "e", "name": "MultiEdit", "input": {"file_path": "/x", "edits": [
+                  {"old_string": "a", "new_string": "b" * 50_000}]}},
+              {"type": "tool_use", "id": "s", "name": "Write", "input": {"file_path": "/y", "content": "small"}}]
+    w, e, small = normalize_lines([json.dumps({"type": "assistant", "message": {"content": blocks}})])
+    assert len(w["input"]["content"]) < clip.INPUT_MAX + 200 and w["input_lines"] == {"content": 30_001}
+    assert w["summary"].endswith("/x")
+    assert len(e["input"]["edits"][0]["new_string"]) < clip.INPUT_MAX + 200 and "input_lines" not in e
+    assert small["input"] == {"file_path": "/y", "content": "small"} and "input_lines" not in small
+    assert len(blocks[0]["input"]["content"]) == len(content)       # the parsed line itself is not changed
 
 
 def test_tail_and_before_paging(client, topic):

@@ -58,6 +58,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `normalize_lines`: the lone-surrogate pattern runs only on lines holding a `\uD8..`-`\uDF..` escape (it cost 4-6x
   the JSON parse on every line); sub-agent lines (top-level non-empty string `parent_tool_use_id`) are recognised on
   the text (`_sub_agent_line`, unsure cases still parsed) instead of being parsed then dropped.
+- `tool_use` events: input text fields over `clip.INPUT_MAX` are clipped at read time too (logs older than the
+  write-time clipping), and the event carries `input_lines` (real line count of each clipped top-level field; the
+  runner stores it as `mx_lines` on the block). The Write card header counts the file's real lines (it said "+200"
+  for any file over 200 lines).
 - Turn watcher: with inotify and nothing running it waits up to `WATCH_IDLE_WAKE_S` (30 s, shorter when a hand-off
   hold expires sooner) instead of a full `_scan` every second.
 - `compact_log`: a read-only pass (`_log_shrinks`, stops at the first line it would change) first; a log that would

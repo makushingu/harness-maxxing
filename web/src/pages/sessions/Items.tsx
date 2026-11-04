@@ -574,8 +574,10 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   const root = React.useRef<HTMLDivElement>(null)
   useOpenTaskLine(task ? use.id : undefined, React.useCallback(() => setOpen(true), []), root)
   const input = (use.input && typeof use.input === 'object' ? use.input : {}) as Record<string, unknown>
-  const diff = React.useMemo(() => (open || ['Edit', 'MultiEdit', 'Write'].includes(use.name) ? toolDiff(use.name, input) : null), [open, use.name, input])
-  const stats = diff ? diffStats(diff) : null
+  // A long Write comes clipped: the server sends the file's real line count.
+  const writeLines = use.name === 'Write' ? (use.input_lines?.content ?? (typeof input.content === 'string' ? input.content.split('\n').length : 0)) : 0
+  const diff = React.useMemo(() => (open || ['Edit', 'MultiEdit', 'Write'].includes(use.name) ? toolDiff(use.name, input, writeLines) : null), [open, use.name, input, writeLines])
+  const stats = diff ? (use.name === 'Write' ? { add: writeLines, del: 0 } : diffStats(diff)) : null
   const authServer = authServerOf(use.name)
   const name = use.name.startsWith('mcp__') ? use.name.split('__').slice(2).join('__') || use.name : use.name
   const { topicDir = null, wsRoot = null } = React.useContext(ItemContext)
@@ -628,7 +630,7 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   )
 }
 
-function toolDiff(name: string, input: Record<string, unknown>): DiffLine[] | null {
+function toolDiff(name: string, input: Record<string, unknown>, writeLines = 0): DiffLine[] | null {
   const s = (v: unknown) => (typeof v === 'string' ? v : '')
   if (name === 'Edit') return lineDiff(s(input.old_string), s(input.new_string))
   if (name === 'MultiEdit' && Array.isArray(input.edits)) {
@@ -642,7 +644,8 @@ function toolDiff(name: string, input: Record<string, unknown>): DiffLine[] | nu
   if (name === 'Write') {
     const lines = s(input.content).split('\n')
     const shown: DiffLine[] = lines.slice(0, 200).map((l) => ({ t: '+' as const, s: l }))
-    if (lines.length > 200) shown.push({ t: ' ', s: `⋯ ${lines.length - 200}` })
+    const rest = Math.max(writeLines, lines.length) - shown.length
+    if (rest > 0) shown.push({ t: ' ', s: `⋯ ${rest}` })
     return shown
   }
   return null
