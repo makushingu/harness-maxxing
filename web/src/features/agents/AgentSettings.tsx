@@ -1,16 +1,20 @@
-// An agent's settings: on/off, safety (approvals, outside events, keys), sandbox (domains, writable folders),
-// rules, model, permission mode, tools, subagent, guards, face, delete.
+// An agent's advanced settings (the sheet opened from its profile), in five labelled sections with a small nav on top:
+//   Model · What it may do (permission mode, approvals, outside events, keys, tools) · Safety (sandbox, domains,
+//   writable folders, rules) · Limits · Claude Code (subagent, export, import), then the danger zone.
+// Switches save at once; the fields (model, mode, tools, rules, limits) wait for the Save bar. Its name and character
+// are edited elsewhere: click the character at the top of its profile (Appearance.tsx).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, Trash2, X } from 'lucide-react'
+import { ChevronRight, Download, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { useDeleteAgent, usePatchAgent } from '@/lib/queries'
-import type { AgentAvatar, AgentDetail, AgentLimits, AgentRule, AgentRuleTool, PermissionMode } from '@/lib/types'
+import { agentExportUrl, useDeleteAgent, usePatchAgent } from '@/lib/queries'
+import type { AgentDetail, AgentLimits, AgentRule, AgentRuleTool, PermissionMode } from '@/lib/types'
+import { cn } from '@/lib/utils'
 import { Button, confirm, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
-import { AvatarEditor } from './AvatarEditor'
+import { AppearanceDialog } from './Appearance'
 import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect } from './parts'
 
 const toolsText = (l: string[]) => l.join('\n')
@@ -20,17 +24,90 @@ const toolsList = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean)
 
-type Draft = { display: string; model: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; avatar: AgentAvatar; rules: AgentRule[] }
+type Draft = { model: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; rules: AgentRule[] }
 const draftOf = (a: AgentDetail): Draft => ({
   rules: (a.rules || []).map((r) => ({ ...r, reason: r.reason || '' })),
-  display: a.display_name,
   model: a.model,
   permission: a.permission_mode,
   allowed: toolsText(a.allowed_tools),
   disallowed: toolsText(a.disallowed_tools),
   limits: { ...a.limits },
-  avatar: { ...a.avatar },
 })
+
+const SECTIONS = ['model', 'may', 'safety', 'limits', 'claude'] as const
+type SectionId = (typeof SECTIONS)[number]
+
+/** A section of the sheet: a title, one line of plain words, its settings. */
+function Section({ id, title, description, children }: { id: SectionId; title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section id={`ag-sec-${id}`} data-section={id} className="grid scroll-mt-14 gap-4 border-t pt-6" aria-labelledby={`ag-sec-${id}-t`}>
+      <div className="grid gap-1">
+        <h3 id={`ag-sec-${id}-t`} className="text-[15px] font-semibold tracking-tight">
+          {title}
+        </h3>
+        {description && <p className="text-[13px] text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** The chips on top of the sheet: jump to a section; the one in view is marked. */
+function SectionNav({ titles }: { titles: Record<SectionId, string> }) {
+  const t = useT()
+  const ref = React.useRef<HTMLElement>(null)
+  const [current, setCurrent] = React.useState<SectionId>('model')
+  React.useEffect(() => {
+    const box = ref.current?.parentElement
+    if (!box) return
+    const onScroll = () => {
+      const top = box.getBoundingClientRect().top + 64
+      let cur: SectionId = 'model'
+      for (const el of box.querySelectorAll<HTMLElement>('[data-section]')) if (el.getBoundingClientRect().top <= top) cur = el.dataset.section as SectionId
+      // at the very bottom the last section is the one being read
+      if (box.scrollTop + box.clientHeight >= box.scrollHeight - 4) cur = SECTIONS[SECTIONS.length - 1]
+      setCurrent(cur)
+    }
+    box.addEventListener('scroll', onScroll, { passive: true })
+    return () => box.removeEventListener('scroll', onScroll)
+  }, [])
+  const go = (id: SectionId) => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    document.getElementById(`ag-sec-${id}`)?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+    setCurrent(id)
+  }
+  return (
+    <nav ref={ref} aria-label={t('agents.settings.nav')} className="sticky top-0 z-10 -mx-5 flex gap-1 overflow-x-auto border-b bg-popover px-5 py-2" data-testid="agent-settings-nav">
+      {SECTIONS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => go(id)}
+          aria-current={current === id ? 'true' : undefined}
+          className={cn(
+            'h-7 shrink-0 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-9',
+            current === id && 'bg-secondary text-foreground',
+          )}
+        >
+          {titles[id]}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+/** Technical help folded under "Details". */
+function Details({ children, open }: { children: React.ReactNode; open?: boolean }) {
+  const t = useT()
+  return (
+    <details className="group/det" open={open}>
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3.5 transition-transform group-open/det:rotate-90" /> {t('agents.settings.details')}
+      </summary>
+      <div className="mt-3 grid gap-3">{children}</div>
+    </details>
+  )
+}
 
 export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
@@ -41,6 +118,7 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
   const del = useDeleteAgent()
   const [d, setD] = React.useState<Draft>(() => draftOf(a))
   const [dirty, setDirty] = React.useState(false)
+  const [look, setLook] = React.useState(false)
   React.useEffect(() => {
     if (!dirty) setD(draftOf(a))
   }, [a, dirty])
@@ -52,13 +130,11 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
     saver.mutate(
       {
         path: a.path,
-        display_name: d.display.trim() || a.name,
         model: d.model,
         permission_mode: d.permission,
         allowed_tools: toolsList(d.allowed),
         disallowed_tools: toolsList(d.disallowed),
         limits: d.limits,
-        avatar: d.avatar,
         // a rule needs a text; empty rows are dropped
         rules: d.rules.filter((r) => r.match.trim()).map((r) => ({ tool: r.tool, match: r.match.trim(), reason: r.reason.trim() })),
       },
@@ -69,108 +145,135 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
       },
     )
   const ruleError = saver.error && isApiError(saver.error) && saver.error.code === 'bad_rule' ? errorMessage(saver.error) : null
+  const titles: Record<SectionId, string> = {
+    model: t('agents.settings.sec.model'),
+    may: t('agents.settings.sec.may'),
+    safety: t('agents.settings.sec.safety'),
+    limits: t('agents.settings.sec.limits'),
+    claude: t('agents.settings.sec.claude'),
+  }
+  const hasTools = a.allowed_tools.length > 0 || a.disallowed_tools.length > 0
 
   return (
-    <div className="grid max-w-3xl gap-6">
-      <SettingsCard title={t('agents.settings.general')}>
+    <>
+      <SectionNav titles={titles} />
+      <div className="grid max-w-3xl gap-6 pt-4" data-testid="agent-settings">
         <div className="divide-y">
           <SettingRow label={t('agents.settings.enabled')} description={t('agents.settings.enabledDesc')} htmlFor="ag-enabled">
             <Switch id="ag-enabled" checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} />
           </SettingRow>
-        </div>
-      </SettingsCard>
-
-      <SettingsCard title={t('agents.settings.safety')} description={t('agents.settings.safetyDesc')}>
-        <div className="divide-y">
-          <SettingRow label={t('agents.settings.approvals')} description={t('agents.settings.approvalsDesc')} htmlFor="ag-approvals">
-            <Switch id="ag-approvals" checked={a.approvals} onCheckedChange={(v) => patch.mutate({ path: a.path, approvals: v })} data-testid="agent-approvals" />
+          <SettingRow label={t('agents.look.title')} description={t('agents.settings.look')}>
+            <Button variant="outline" size="sm" onClick={() => setLook(true)} data-testid="agent-settings-look">
+              <Pencil /> {t('agents.create.faceEdit')}
+            </Button>
           </SettingRow>
-          <SettingRow label={t('agents.settings.trustOutside')} description={t('agents.settings.trustOutsideDesc')} htmlFor="ag-trust">
-            <Switch id="ag-trust" checked={a.trust_outside} onCheckedChange={(v) => patch.mutate({ path: a.path, trust_outside: v })} data-testid="agent-trust-outside" />
-          </SettingRow>
-          {a.trust_outside && !a.approvals && <p className="py-3 text-xs text-warning">{t('agents.settings.trustOutsideWarn')}</p>}
-          <AgentKeys agent={a} />
         </div>
-      </SettingsCard>
+        <AppearanceDialog agent={a} open={look} onOpenChange={setLook} />
 
-      <SandboxCard agent={a} />
+        <Section id="model" title={titles.model} description={t('agents.settings.sec.modelDesc')}>
+          <div>
+            <label htmlFor="ag-model" className="sr-only">
+              {t('agents.field.model')}
+            </label>
+            <ModelSelect id="ag-model" value={d.model} onChange={(v) => set('model', v)} />
+          </div>
+        </Section>
 
-      <SettingsCard title={t('agents.rules.title')} description={t('agents.rules.desc')}>
-        <RulesEditor value={d.rules} onChange={(r) => set('rules', r)} error={ruleError} />
-      </SettingsCard>
-
-      <SettingsCard title={t('agents.settings.identity')}>
-        <div className="grid gap-4">
-          <FormField label={t('agents.create.name')} hint={t('agents.settings.folder', { name: a.name })}>
-            <Input value={d.display} maxLength={60} onChange={(e) => set('display', e.target.value)} />
+        <Section id="may" title={titles.may} description={t('agents.settings.sec.mayDesc')}>
+          <FormField label={t('agents.field.permission')} hint={a.sandbox ? t('agents.sandbox.permissionHint') : t('agents.field.permissionHint')}>
+            <PermissionSelect value={d.permission} onChange={(v) => set('permission', v)} />
           </FormField>
-          <AvatarEditor value={d.avatar} onChange={(v) => set('avatar', v)} project={a.project} />
-        </div>
-      </SettingsCard>
+          <div className="divide-y">
+            <SettingRow label={t('agents.settings.approvals')} description={t('agents.settings.approvalsDesc')} htmlFor="ag-approvals">
+              <Switch id="ag-approvals" checked={a.approvals} onCheckedChange={(v) => patch.mutate({ path: a.path, approvals: v })} data-testid="agent-approvals" />
+            </SettingRow>
+            <SettingRow label={t('agents.settings.trustOutside')} description={t('agents.settings.trustOutsideDesc')} htmlFor="ag-trust">
+              <Switch id="ag-trust" checked={a.trust_outside} onCheckedChange={(v) => patch.mutate({ path: a.path, trust_outside: v })} data-testid="agent-trust-outside" />
+            </SettingRow>
+            {a.trust_outside && !a.approvals && <p className="py-3 text-xs text-warning">{t('agents.settings.trustOutsideWarn')}</p>}
+            <AgentKeys agent={a} />
+            <div className="grid gap-1 pt-4">
+              <span className="text-sm font-medium">{t('agents.settings.tools')}</span>
+              <span className="text-[13px] text-muted-foreground">{t('agents.settings.toolsDesc')}</span>
+              <Details open={hasTools}>
+                <FormField label={t('agents.settings.allowed')} hint={t('agents.settings.allowedHint')}>
+                  <Textarea minRows={3} maxRows={10} value={d.allowed} onChange={(e) => set('allowed', e.target.value)} className="font-mono text-[13px]" placeholder="Read&#10;Grep&#10;Bash(git status:*)" />
+                </FormField>
+                <FormField label={t('agents.settings.disallowed')} hint={t('agents.settings.disallowedHint')}>
+                  <Textarea minRows={3} maxRows={10} value={d.disallowed} onChange={(e) => set('disallowed', e.target.value)} className="font-mono text-[13px]" placeholder="WebFetch&#10;Bash(rm:*)" />
+                </FormField>
+              </Details>
+            </div>
+          </div>
+        </Section>
 
-      <SettingsCard title={t('agents.settings.claude')}>
-        <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label={t('agents.field.model')}>
-              <ModelSelect value={d.model} onChange={(v) => set('model', v)} />
-            </FormField>
-            <FormField label={t('agents.field.permission')} hint={a.sandbox ? t('agents.sandbox.permissionHint') : t('agents.field.permissionHint')}>
-              <PermissionSelect value={d.permission} onChange={(v) => set('permission', v)} />
-            </FormField>
+        <Section id="safety" title={titles.safety} description={t('agents.settings.sec.safetyDesc')}>
+          <SandboxFields agent={a} />
+          <div className="grid gap-3 border-t pt-4">
+            <div className="grid gap-0.5">
+              <span className="text-sm font-medium">{t('agents.rules.title')}</span>
+              <span className="text-[13px] text-muted-foreground">{t('agents.rules.desc')}</span>
+            </div>
+            <RulesEditor value={d.rules} onChange={(r) => set('rules', r)} error={ruleError} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label={t('agents.settings.allowed')} hint={t('agents.settings.allowedHint')}>
-              <Textarea minRows={3} maxRows={10} value={d.allowed} onChange={(e) => set('allowed', e.target.value)} className="font-mono text-[13px]" placeholder="Read&#10;Grep&#10;Bash(git status:*)" />
-            </FormField>
-            <FormField label={t('agents.settings.disallowed')} hint={t('agents.settings.disallowedHint')}>
-              <Textarea minRows={3} maxRows={10} value={d.disallowed} onChange={(e) => set('disallowed', e.target.value)} className="font-mono text-[13px]" placeholder="WebFetch&#10;Bash(rm:*)" />
-            </FormField>
+        </Section>
+
+        <Section id="limits" title={titles.limits} description={t('agents.limits.desc')}>
+          <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} />
+        </Section>
+
+        <Section id="claude" title={titles.claude} description={t('agents.settings.sec.claudeDesc')}>
+          <div className="divide-y">
+            <SettingRow label={t('agents.settings.subagent')} description={t('agents.settings.subagentDesc')} htmlFor="ag-subagent">
+              <Switch id="ag-subagent" checked={a.subagent} onCheckedChange={(v) => patch.mutate({ path: a.path, subagent: v })} data-testid="agent-subagent" />
+            </SettingRow>
+            <SettingRow label={t('agents.export.button')} description={t('agents.export.tip')}>
+              <Button asChild variant="outline" size="sm">
+                <a href={agentExportUrl(a.path)} download={`${a.name}.md`} data-testid="agent-export">
+                  <Download /> {t('agents.export.download')}
+                </a>
+              </Button>
+            </SettingRow>
+            <p className="pt-4 text-xs text-muted-foreground">{t('agents.settings.importHint')}</p>
           </div>
-          <SettingRow label={t('agents.settings.subagent')} description={t('agents.settings.subagentDesc')} htmlFor="ag-subagent" className="border-t pt-4 first:pt-4">
-            <Switch id="ag-subagent" checked={a.subagent} onCheckedChange={(v) => patch.mutate({ path: a.path, subagent: v })} data-testid="agent-subagent" />
+        </Section>
+
+        <div className="sticky bottom-[calc(var(--safe-bottom)+0.5rem)] z-10 flex justify-end gap-2 empty:hidden">
+          {dirty && (
+            <div className="flex gap-2 rounded-xl border bg-popover p-2 shadow-pop animate-in">
+              <Button variant="ghost" onClick={() => (setD(draftOf(a)), setDirty(false))}>
+                {t('common.cancel')}
+              </Button>
+              <Button loading={saver.isPending} onClick={save} data-testid="agent-settings-save">
+                {t('common.save')}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <SettingsCard title={t('agents.settings.danger')} danger>
+          <SettingRow label={t('agents.settings.delete')} description={t('agents.settings.deleteDesc')}>
+            <Button
+              variant="destructive"
+              loading={del.isPending}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: t('agents.settings.deleteTitle', { name: a.display_name }),
+                  description: t('agents.settings.deleteDesc'),
+                  destructive: true,
+                  confirmText: t('common.delete'),
+                  typeToConfirm: a.name,
+                })
+                if (ok) del.mutate(a.path, { onSuccess: () => (toast.success(t('agents.settings.deleted')), navigate('/agents')) })
+              }}
+              data-testid="agent-delete"
+            >
+              <Trash2 /> {t('common.delete')}
+            </Button>
           </SettingRow>
-        </div>
-      </SettingsCard>
-
-      <SettingsCard title={t('agents.limits.title')} description={t('agents.limits.desc')}>
-        <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} />
-      </SettingsCard>
-
-      <div className="sticky bottom-[calc(var(--safe-bottom)+0.5rem)] z-10 flex justify-end gap-2">
-        {dirty && (
-          <div className="flex gap-2 rounded-xl border bg-popover p-2 shadow-pop animate-in">
-            <Button variant="ghost" onClick={() => (setD(draftOf(a)), setDirty(false))}>
-              {t('common.cancel')}
-            </Button>
-            <Button loading={saver.isPending} onClick={save} data-testid="agent-settings-save">
-              {t('common.save')}
-            </Button>
-          </div>
-        )}
+        </SettingsCard>
       </div>
-
-      <SettingsCard title={t('agents.settings.danger')} danger>
-        <SettingRow label={t('agents.settings.delete')} description={t('agents.settings.deleteDesc')}>
-          <Button
-            variant="destructive"
-            loading={del.isPending}
-            onClick={async () => {
-              const ok = await confirm({
-                title: t('agents.settings.deleteTitle', { name: a.display_name }),
-                description: t('agents.settings.deleteDesc'),
-                destructive: true,
-                confirmText: t('common.delete'),
-                typeToConfirm: a.name,
-              })
-              if (ok) del.mutate(a.path, { onSuccess: () => (toast.success(t('agents.settings.deleted')), navigate('/agents')) })
-            }}
-            data-testid="agent-delete"
-          >
-            <Trash2 /> {t('common.delete')}
-          </Button>
-        </SettingRow>
-      </SettingsCard>
-    </div>
+    </>
   )
 }
 
@@ -190,7 +293,7 @@ function AgentKeys({ agent: a }: { agent: AgentDetail }) {
 }
 
 /** The sandbox: on/off, the hosts its commands may reach, the folders of the topic it may write in. */
-function SandboxCard({ agent: a }: { agent: AgentDetail }) {
+function SandboxFields({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const patch = usePatchAgent({ errorToast: false })
   // the field the last refusal belongs to (bad_domain / bad_path), shown under it
@@ -204,9 +307,9 @@ function SandboxCard({ agent: a }: { agent: AgentDetail }) {
       },
     )
   return (
-    <SettingsCard title={t('agents.sandbox.title')} description={t('agents.sandbox.desc')}>
-      <div className="divide-y" data-testid="agent-sandbox">
-        <SettingRow label={t('agents.sandbox.toggle')} description={t('agents.sandbox.toggleDesc')} htmlFor="ag-sandbox">
+    <div className="divide-y" data-testid="agent-sandbox">
+      <div className="grid gap-2 pb-4">
+        <SettingRow label={t('agents.sandbox.toggle')} description={t('agents.sandbox.toggleDesc')} htmlFor="ag-sandbox" className="py-0">
           <Switch
             id="ag-sandbox"
             checked={a.sandbox}
@@ -214,37 +317,40 @@ function SandboxCard({ agent: a }: { agent: AgentDetail }) {
             data-testid="agent-sandbox-toggle"
           />
         </SettingRow>
-        {!a.sandbox && <p className="py-3 text-xs text-warning">{t('agents.sandbox.offWarn')}</p>}
-        <div className="grid gap-2 py-4">
-          <div className="grid gap-0.5">
-            <span className="text-sm font-medium">{t('agents.sandbox.domains')}</span>
-            <span className="text-xs text-muted-foreground">{t('agents.sandbox.domainsDesc')}</span>
-          </div>
-          <ListEditor
-            value={a.domains || []}
-            onChange={(l, saved) => save('domains', l, saved)}
-            placeholder="api.github.com, *.example.com"
-            empty={t('agents.sandbox.domainsNone')}
-            error={err?.field === 'domains' ? err.text : null}
-            testid="agent-domains"
-          />
-        </div>
-        <div className="grid gap-2 py-4 last:pb-0">
-          <div className="grid gap-0.5">
-            <span className="text-sm font-medium">{t('agents.sandbox.writable')}</span>
-            <span className="text-xs text-muted-foreground">{t('agents.sandbox.writableDesc')}</span>
-          </div>
-          <ListEditor
-            value={a.writable || []}
-            onChange={(l, saved) => save('writable', l, saved)}
-            placeholder={t('agents.sandbox.writablePlaceholder')}
-            empty={t('agents.sandbox.writableNone')}
-            error={err?.field === 'writable' ? err.text : null}
-            testid="agent-writable"
-          />
-        </div>
+        <Details>
+          <p className="text-xs text-muted-foreground">{t('agents.sandbox.desc')}</p>
+        </Details>
       </div>
-    </SettingsCard>
+      {!a.sandbox && <p className="py-3 text-xs text-warning">{t('agents.sandbox.offWarn')}</p>}
+      <div className="grid gap-2 py-4">
+        <div className="grid gap-0.5">
+          <span className="text-sm font-medium">{t('agents.sandbox.domains')}</span>
+          <span className="text-xs text-muted-foreground">{t('agents.sandbox.domainsDesc')}</span>
+        </div>
+        <ListEditor
+          value={a.domains || []}
+          onChange={(l, saved) => save('domains', l, saved)}
+          placeholder="api.github.com, *.example.com"
+          empty={t('agents.sandbox.domainsNone')}
+          error={err?.field === 'domains' ? err.text : null}
+          testid="agent-domains"
+        />
+      </div>
+      <div className="grid gap-2 py-4 last:pb-0">
+        <div className="grid gap-0.5">
+          <span className="text-sm font-medium">{t('agents.sandbox.writable')}</span>
+          <span className="text-xs text-muted-foreground">{t('agents.sandbox.writableDesc')}</span>
+        </div>
+        <ListEditor
+          value={a.writable || []}
+          onChange={(l, saved) => save('writable', l, saved)}
+          placeholder={t('agents.sandbox.writablePlaceholder')}
+          empty={t('agents.sandbox.writableNone')}
+          error={err?.field === 'writable' ? err.text : null}
+          testid="agent-writable"
+        />
+      </div>
+    </div>
   )
 }
 

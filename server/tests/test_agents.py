@@ -37,9 +37,9 @@ def test_off_by_default(client, topic):
 
 def test_create_folder_tree_and_paths(client, topic, mx):
     _on(client)
-    a = _create(client, avatar={"color": "teal", "hat": "crown", "eyes": "nope"})
+    a = _create(client, avatar={"color": "clay", "accessory": "crown", "face": "nope"})
     assert a["path"] == A and a["display_name"] == "Writer" and a["description"] == "You write the blog posts."
-    assert a["avatar"]["color"] == "teal" and a["avatar"]["hat"] == "crown" and a["avatar"]["eyes"] == "dots"
+    assert a["avatar"]["color"] == "clay" and a["avatar"]["accessory"] == "crown" and a["avatar"]["face"] in agents.AVATAR["face"]
     d = Path(client.get("/api/workspace/tree").json()["root"]) / A
     assert (d / "CLAUDE.md").read_text().startswith("# Agent writer\n\nYou write the blog posts.\n\n@memory.md")
     assert (d / "memory.md").exists() and json.loads((d / "agent.json").read_text())["name"] == "Writer"
@@ -60,14 +60,14 @@ def test_create_folder_tree_and_paths(client, topic, mx):
 
 def test_update_role_settings_and_runner_flags(client, topic):
     _on(client)
-    _create(client)
+    before = _create(client)["avatar"]
     r = client.patch(f"/api/agents/acme/blog/writer", json={
         "description": "New role.", "model": "sonnet", "permission_mode": "acceptEdits",
-        "allowed_tools": ["Read", "Bash(git:*)"], "limits": {"usd_per_day": 1.5}, "avatar": {"mouth": "grin"}})
+        "allowed_tools": ["Read", "Bash(git:*)"], "limits": {"usd_per_day": 1.5}, "avatar": {"face": "wink"}})
     assert r.status_code == 200, r.text
     a = r.json()
     assert a["description"] == "New role." and a["limits"]["usd_per_day"] == 1.5 and a["limits"]["runs_per_hour"] == 6
-    assert a["avatar"]["mouth"] == "grin" and a["avatar"]["color"] == "violet"
+    assert a["avatar"]["face"] == "wink" and a["avatar"]["color"] == before["color"]
     assert client.patch("/api/agents/acme/blog/writer", json={"permission_mode": "nope"}).status_code == 422
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL write"}).json()
     assert run["started"]
@@ -329,11 +329,11 @@ def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
     wait_idle(client, c)
 
 
-def test_avatar_later_parts_and_project_color():
-    old = {"color": "teal", "eyes": "wink", "mouth": "grin", "hat": "cap", "bg": "rose"}
+def test_avatar_old_values_and_project_color():
+    old = {"color": "teal", "eyes": "glasses", "mouth": "grin", "hat": "beanie", "bg": "rose", "hair": "bob"}
     a = agents._clean_avatar(old, "Writer")
-    assert {k: a[k] for k in old} == old and set(a) == set(agents.AVATAR)
+    assert set(a) == set(agents.AVATAR) and all(a[k] in v for k, v in agents.AVATAR.items())
+    assert (a["color"], a["hair"], a["accessory"]) == ("green", "long", "glasses")
     assert a == agents._clean_avatar(old, "Writer")                     # stable for the same name
-    assert agents._clean_avatar({**old, "hair": "mohawk", "skin": "nope"}, "Writer")["hair"] == "mohawk"
-    assert agents._clean_avatar({**old, "skin": "nope"}, "Writer")["skin"] == "light"   # invalid -> default
+    assert agents._clean_avatar({"accessory": "cap", "skin": "nope"}, "")["skin"] == "light"
     assert agents.project_color("acme") == agents.project_color("acme") in agents.AVATAR["color"]

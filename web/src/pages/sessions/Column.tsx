@@ -1126,7 +1126,7 @@ function MoveSessionPicker({ session, rootLabel, locked }: { session: Session; r
       )}
       {m[3] && (
         <WhereBadge kind="agent" name={agent?.display_name || m[3]} description={agent?.description} dir={absTopicDir(ws, session.path)} hint={hint}>
-          <AgentAvatarIcon avatar={agent?.avatar} size={14} />
+          <AgentAvatarIcon avatar={agent?.avatar} size={16} />
         </WhereBadge>
       )}
       {!busy && <ChevronDown className="size-3 shrink-0 opacity-60" />}

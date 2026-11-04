@@ -48,7 +48,7 @@ export function RunView() {
               </Button>
             </Tooltip>
             <Link to={back} className="shrink-0" tabIndex={-1} aria-hidden>
-              <AgentAvatarIcon avatar={a?.avatar} size={28} />
+              <AgentAvatarIcon avatar={a?.avatar} size={32} />
             </Link>
           </div>
         }
