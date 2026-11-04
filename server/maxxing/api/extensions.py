@@ -5,6 +5,8 @@ See docs/dev/API.md#dashboard--extensions and maxxing/extensions.py.
 worker thread. The return value is sent as JSON; a `(status, body)` tuple sets the status code;
 `ValueError` -> 400, `LookupError` -> 404, anything else -> 500 `extension_error`.
 `GET /ext/{id}/page.js` serves the page module (auth required, never cached).
+`GET /ext/{id}/widget-frame` / `agents-view-frame` serve an HTML widget / an Office view of the Agents page in their
+own sandbox (bridge + UI kit + the extension's file).
 `GET /ext/ui-kit.css` serves the shared UI kit (`ui-*` classes, maxxing/assets/ui-kit.css), loaded by the app for
 page extensions and inlined in every HTML widget frame.
 """
@@ -178,7 +180,8 @@ async def page_js(eid: str):
                         headers={"Cache-Control": "no-store"})
 
 
-# The HTML widget's frame: the bridge (maxxing.api / resize / theme, see web/src/pages/dashboard/HtmlWidget.tsx)
+# The HTML widget's frame: the bridge (maxxing.api / resize / theme, see web/src/pages/dashboard/HtmlWidget.tsx;
+# an Office view of the Agents page also gets maxxing.data / onData / app / navigate, answered by its host only)
 # then the extension's widget.html. Served as a document of its own (not an iframe srcdoc, which would inherit the
 # app's strict script policy): sandboxed by the iframe AND by its own CSP, so even opened directly it has no access to
 # the app, its cookies or its API. The theme comes in the URL fragment (#{"theme":..,"vars":{..}}); the UI kit
@@ -186,20 +189,32 @@ async def page_js(eid: str):
 # not a class: the parser drops the attributes of the widget's own <html> that the bridge already set).
 WIDGET_BRIDGE = """<!doctype html><meta charset="utf-8"><script>(function(){
 var init={};try{init=JSON.parse(decodeURIComponent(location.hash.slice(1))||'{}')}catch(_){}
-var seq=0,pending={},cbs=[],root=document.documentElement;
+var seq=0,pending={},cbs=[],dcbs=[],root=document.documentElement;
 root.setAttribute('data-mx-kit','');
 function apply(v){for(var k in v||{})root.style.setProperty(k,v[k]);root.dataset.theme=window.maxxing.theme;root.style.colorScheme=window.maxxing.theme}
 window.maxxing={theme:init.theme||'dark',
- api:function(path,o){o=o||{};return new Promise(function(res,rej){var s=++seq;pending[s]=[res,rej];parent.postMessage({mx:'api',seq:s,path:String(path||''),method:o.method||'GET',body:o.body,query:o.query},'*')})},
+ api:function(path,o){o=o||{};return ask({mx:'api',path:String(path||''),method:o.method||'GET',body:o.body,query:o.query})},
+ app:function(path,o){o=o||{};return ask({mx:'app',path:String(path||''),query:o.query})},
+ navigate:function(route){parent.postMessage({mx:'navigate',route:String(route||'')},'*')},
  resize:function(h){parent.postMessage({mx:'resize',height:Number(h)||0},'*')},
+ data:null,onData:function(f){dcbs.push(f);if(window.maxxing.data!==null)try{f(window.maxxing.data)}catch(_){}},
  onTheme:function(f){cbs.push(f)}};
+function ask(m){return new Promise(function(res,rej){var s=++seq;pending[s]=[res,rej];m.seq=s;parent.postMessage(m,'*')})}
 addEventListener('message',function(e){if(e.source!==parent)return;var m=e.data||{};
  if(m.mx==='reply'){var p=pending[m.seq];if(p){delete pending[m.seq];m.ok?p[0](m.data):p[1](new Error(m.error||'request failed'))}}
- if(m.mx==='theme'){window.maxxing.theme=m.theme;apply(m.vars);cbs.forEach(function(f){try{f(m.theme)}catch(_){}})}});
+ if(m.mx==='theme'){window.maxxing.theme=m.theme;apply(m.vars);cbs.forEach(function(f){try{f(m.theme)}catch(_){}})}
+ if(m.mx==='data'){window.maxxing.data=m.data;dcbs.forEach(function(f){try{f(m.data)}catch(_){}})}});
 apply(init.vars);})();</script>
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;background:transparent;color:var(--mx-fg);font:13px/1.45 Inter,system-ui,sans-serif}</style>
 """
 WIDGET_FRAME_CSP = "sandbox allow-scripts allow-pointer-lock; frame-ancestors 'self'"
+
+
+async def _frame(ext: extensions.Extension, name: str) -> HTMLResponse:
+    html = await asyncio.to_thread(_own_file(ext, name).read_text, "utf-8", "replace")
+    kit = await asyncio.to_thread(ui_kit_css)
+    return HTMLResponse(WIDGET_BRIDGE + f"<style>{kit}</style>\n" + html, headers={
+        "Cache-Control": "no-store", "Content-Security-Policy": WIDGET_FRAME_CSP, "Referrer-Policy": "no-referrer"})
 
 
 @router.get("/ext/{eid}/widget-frame", include_in_schema=False)
@@ -207,10 +222,28 @@ async def widget_frame(eid: str):
     ext = await asyncio.to_thread(extensions.get, eid)
     if ext is None or not ext.enabled or ext.error or not ext.has_html:
         raise _err(404, "not_found", f"no HTML widget for extension {eid}")
-    html = await asyncio.to_thread(_own_file(ext, "widget.html").read_text, "utf-8", "replace")
-    kit = await asyncio.to_thread(ui_kit_css)
-    return HTMLResponse(WIDGET_BRIDGE + f"<style>{kit}</style>\n" + html, headers={
-        "Cache-Control": "no-store", "Content-Security-Policy": WIDGET_FRAME_CSP, "Referrer-Policy": "no-referrer"})
+    return await _frame(ext, "widget.html")
+
+
+async def _view(eid: str) -> extensions.Extension:
+    ext = await asyncio.to_thread(extensions.get, eid)
+    if ext is None or not ext.enabled or ext.error or not ext.agents_view:
+        raise _err(404, "not_found", f"no Office view for extension {eid}")
+    return ext
+
+
+@router.get("/ext/{eid}/agents-view-frame", include_in_schema=False)
+async def agents_view_frame(eid: str):
+    """An Office view of the Agents page (agents-view.html): the same frame, bridge and sandbox as an HTML widget."""
+    return await _frame(await _view(eid), "agents-view.html")
+
+
+@router.api_route("/ext/{eid}/agents-view.html", methods=["GET", "HEAD"], include_in_schema=False)
+async def agents_view_html(eid: str):
+    """Raw agents-view.html (text/plain); HEAD = the Office's existence check before it loads the frame."""
+    ext = await _view(eid)
+    return FileResponse(_own_file(ext, "agents-view.html"), media_type="text/plain; charset=utf-8",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @router.api_route("/ext/{eid}/widget.html", methods=["GET", "HEAD"], include_in_schema=False)

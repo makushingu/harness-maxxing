@@ -173,3 +173,37 @@ get the same kit. Inputs of the kit are 16 px on phones (no zoom on iPhone).
 - **Settings -> Extensions -> Reload**, then open the page from the sidebar (Extensions, or its own entry once pinned). Errors appear on the
   extension's row.
 
+
+## Office views of the Agents page
+
+An extension can also bring a **view of the Office** (the overview of the Agents page): it is listed in the Office's
+view menu after Classic, Gamified and Futuristic. **Create my custom view**, at the end of that menu, opens a session
+that builds one with you.
+
+```
+/root/maxxing/extensions/mission-control/
+  manifest.json      {"id": "mission-control", "name": "Mission control", "type": "view", "icon": "radar",
+                      "version": "1.0.0", "api": 1,
+                      "agents_view": {"name": {"en": "Mission control", "fr": "Contrôle de mission"}, "icon": "radar"}}
+  agents-view.html   the view (one self-contained file, like an HTML widget)
+  api.py             optional: its own API, as for any extension
+```
+
+- `"agents_view"`: `{"name", "icon"}` (both optional: the extension's own by default) or simply `true`. It needs
+  `agents-view.html` in the folder. `"type": "view"` is an extension that only brings views; a widget or a page can
+  declare one too.
+- `agents-view.html` runs in the same **sandboxed frame** as HTML widgets (scripts yes; no cookies, no storage, no
+  direct access to the app), with the same UI kit, theme variables and `maxxing.api` / `maxxing.resize` /
+  `maxxing.theme` / `maxxing.onTheme`, plus:
+
+| In the frame | |
+|---|---|
+| `maxxing.onData(fn)` / `maxxing.data` | the Office, given at once and again at every change: `{lang, new_agent_route, projects: [{name, emoji, color, agents: [...]}]}`, projects and agents in the user's order, `color` = the project's color (hex). Each agent: `path`, `project`, `topic`, `name`, `display_name`, `description`, `enabled`, `model`, `status` (`running`, `waiting`, `unread`, `failed`, `off`, `idle`), `status_text` (in the UI language), `running`, `waiting`, `unread`, `cost_today`, `last_run` (`{at, kind, ok, text}`, text cut at 300 characters), `avatar` (its 6 parts), `avatar_svg` (its pixel character as SVG markup: `img.src = "data:image/svg+xml," + encodeURIComponent(a.avatar_svg)`), `route` |
+| `maxxing.navigate(route)` | opens a route of the Agents page: an agent's `route`, or `new_agent_route` (New agent); other routes are ignored |
+| `maxxing.app(path)` | a read-only GET of `/api/agents` or `/api/agents/layout` (the raw API, for more fields); any other path is refused |
+
+- The frame grows with `maxxing.resize(px)` (up to 6000 px). Make it work in light and dark (`maxxing.theme`) and on
+  a phone.
+- What the view sees: your agents' names, roles, states and the start of their last results. As for any extension,
+  it is code you trust: do not load scripts from sites you do not trust.
+- If the extension is turned off, deleted or in error, the Office shows Classic (the choice comes back with it).

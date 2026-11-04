@@ -120,6 +120,26 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   its agents, 2-5 columns, SVG pixel desks at 4 px per pixel, 3 on phones, free desk -> creation sheet on the room's
   main topic; `mx-game-*` keyframes in `globals.css`). `statusOf` / `Status` moved to `parts.tsx`. i18n: removed
   `agents.side.{overview,grouping,byState,byProject}`, added `agents.side.{filter,all}`, `agents.office.*`.
+- Office views: the Segmented became a menu (`ViewMenu` in `AgentsPage.tsx`: current view icon + name; radio items,
+  separator, "Create my custom view" -> `draftUrl(projects/general/topics/inbox | first non-system topic,
+  agents.office.customPrompt)`). `mx-agents-office-view` = `classic` | `game` | `future` | `x:<extension id>`; an
+  `x:` view whose extension is gone / off / in error renders Classic without rewriting the key. Futuristic =
+  `OfficeFuture.tsx` (bays, hover consoles, holo screens, `mx-future-*` keyframes in `globals.css`); what both pixel
+  views share moved to `office.tsx` (`useRoom`, `useDesk`, `Cursor`, `hash`, `colsFor`); `pixels.avatarSvg()`.
+- Extension Office views: manifest `"agents_view": true | {"name"?: str | {lang: str}, "icon"?}` + `agents-view.html`
+  (`extensions._agents_view`, errors on the extension: missing file, bad value; new type `"view"` = only that,
+  requires `agents_view`; `agents-view.html` in the hot-reload signature). `/api/extensions` items get
+  `agents_view: {name, icon} | null`. Routes `/ext/{id}/agents-view-frame` (same document, CSP sandbox and UI kit
+  as `widget-frame`, `api.extensions._frame`) and `/ext/{id}/agents-view.html` (GET/HEAD, raw). `WIDGET_BRIDGE`
+  gains `maxxing.data`, `onData(fn)`, `app(path, {query})` and `navigate(route)`; web `HtmlWidget` takes `frame`,
+  `maxHeight`, `className` and `host: {reads, routes, data}`: `app` answers only exact paths of `reads` (GET), else
+  an error reply; `navigate` only routes under `routes` (no `//`, `/.`, backslash, spaces); `data` posted on load and
+  on change. The dashboard passes no host (app refused, navigate ignored). `OfficeCustom.tsx` = host with reads
+  `/api/agents`, `/api/agents/layout`, routes `/agents`, data = `{lang, new_agent_route, projects: [{name, emoji,
+  color, agents: [{path, project, topic, name, display_name, description, enabled, model, status, status_text,
+  running, waiting, unread, cost_today, last_run (text <= 300 chars), avatar, avatar_svg, route}]}]}` (pushed again
+  only when its JSON changes). Docs: `13-page-extensions.md` "Office views", skill `maxxing-extension`. Tests
+  `test_agents_view`, `test_editing_agents_view_html_is_seen_by_the_hot_reload`.
 - Layout of the Agents page, shared by every device: `<state>/agents/layout.json` = `{projects: [name], colors:
   {project: color}, agents: {project: [agent path]}}` (`agents.load_layout` tolerant, `save_layout` strict ->
   `400 bad_layout`; colours = `AVATAR["color"]`, 500 projects / 500 agents per project max; unknown fields of the

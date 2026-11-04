@@ -8,17 +8,16 @@
 // Click (or Enter on) a desk = open the agent. Drag a room by its wall to move the project, a desk to move the agent in
 // its room; the "..." on the sign = Move up / down and the project colour (layout.tsx). Animations stop under prefers-reduced-motion (globals.css).
 import * as React from 'react'
-import { useNavigate } from 'react-router'
-import { useLang, useT } from '@/i18n'
-import { agentRoute, useWorkspace } from '@/lib/queries'
+import { useT } from '@/i18n'
 import type { Agent } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Sensitive, StatusDot, Tooltip, useMask } from '@/components/ui'
 import { useMediaQuery } from '@/stores/media'
-import { AgentAvatarIcon, INK, OUTFIT } from './Avatar'
-import { DropBar, ProjectMenu, useReorder, type AgentsLayoutApi, type ProjectGroup } from './layout'
-import { statusOf, type Status } from './parts'
+import { AgentAvatarIcon, INK } from './Avatar'
+import { DropBar, ProjectMenu, type AgentsLayoutApi, type ProjectGroup } from './layout'
+import type { Status } from './parts'
 import type { CreateStart } from './CreateAgent'
+import { Cursor, hash, useDesk, useRoom } from './office'
 
 /** A desk cell is W x H pixels of art. */
 const W = 30
@@ -40,12 +39,6 @@ const SCREEN: Record<Status['id'] | 'free', { bg: string; ink: string }> = {
 }
 
 const px = (x: number, y: number, w: number, h: number, fill: string, k?: string) => <rect key={k ?? `${x}.${y}.${w}.${h}`} x={x} y={y} width={w} height={h} fill={fill} />
-
-/** A small stable number from a string (which decoration sits on which desk). */
-const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
-
-/** How many desk columns a room gets for `n` cells (2-5, growing with the room); fewer on a phone. */
-const colsFor = (n: number, phone: boolean) => Math.min(phone ? 3 : 5, Math.max(2, Math.ceil(Math.sqrt(n * 1.8))))
 
 export function OfficeGame({ groups, layout, onStart }: { groups: ProjectGroup[]; layout: AgentsLayoutApi; onStart: (s: CreateStart) => void }) {
   const phone = useMediaQuery('(max-width: 639px)')
@@ -69,20 +62,9 @@ export function OfficeGame({ groups, layout, onStart }: { groups: ProjectGroup[]
 
 function Room({ project, agents, index, layout, s, phone, onStart }: { project: string; agents: Agent[]; index: number; layout: AgentsLayoutApi; s: number; phone: boolean; onStart: (s: CreateStart) => void }) {
   const t = useT()
-  const dnd = useReorder({ kind: 'project', id: project, project, index }, (p) => layout.moveProject(p, project))
   const mask = useMask()
-  const { data: ws } = useWorkspace()
-  const emoji = ws?.projects.find((x) => x.name === project)?.emoji || ''
-  const c = OUTFIT[layout.colorOf(project)]
-  const cells = agents.length + 1
-  const cols = colsFor(cells, phone)
-  const fillers = (cols - (cells % cols)) % cols
   // The free desk goes to the topic most of the room's agents live in (the sheet lets the user change it).
-  const topic = React.useMemo(() => {
-    const n = new Map<string, number>()
-    for (const a of agents) n.set(a.topic, (n.get(a.topic) || 0) + 1)
-    return [...n.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]
-  }, [agents])
+  const { dnd, emoji, color: c, cols, fillers, create } = useRoom(project, agents, index, layout, phone, onStart)
   const wallH = 15 * s
   const style = {
     '--room': c,
@@ -146,7 +128,7 @@ function Room({ project, agents, index, layout, s, phone, onStart }: { project: 
         {agents.map((a, i) => (
           <Desk key={a.path} agent={a} index={i} layout={layout} s={s} />
         ))}
-        <FreeDesk s={s} label={t('agents.office.freeDesk')} onClick={() => onStart(topic ? { topic: `projects/${project}/topics/${topic}` } : {})} />
+        <FreeDesk s={s} label={t('agents.office.freeDesk')} onClick={create} />
         {Array.from({ length: fillers }, (_, i) => (
           <Filler key={i} kind={(hash(project) + i) % 3} s={s} />
         ))}
@@ -157,28 +139,12 @@ function Room({ project, agents, index, layout, s, phone, onStart }: { project: 
 
 /** One agent at its desk; the whole cell opens it. */
 function Desk({ agent: a, index, layout, s }: { agent: Agent; index: number; layout: AgentsLayoutApi; s: number }) {
-  const t = useT()
-  const dnd = useReorder({ kind: 'agent', id: a.path, project: a.project, index }, (path) => layout.moveAgent(path, a))
-  const lang = useLang()
-  const navigate = useNavigate()
-  const st = statusOf(a, t, lang)
-  const open = () => navigate(agentRoute(a))
+  const { st, dnd, props } = useDesk(a, index, layout)
   const working = st.id === 'running'
   const off = st.id === 'off'
   return (
     <Tooltip content={`${a.display_name} · ${st.text}`}>
-      <div
-        role="link"
-        tabIndex={0}
-        aria-label={`${t('agents.overview.open', { name: a.display_name })} · ${st.text}`}
-        onClick={open}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && (e.preventDefault(), open())}
-        {...dnd.props}
-        className={cn('group/desk relative grid cursor-pointer justify-items-center outline-none', dnd.dragging && 'opacity-50')}
-        data-testid="office-desk"
-        data-state={st.id}
-        data-path={a.path}
-      >
+      <div {...props} className={cn('group/desk relative grid cursor-pointer justify-items-center outline-none', dnd.dragging && 'opacity-50')} data-testid="office-desk">
         <DropBar side={dnd.side} vertical={false} />
         <Cursor />
         <div className="relative" style={{ width: W * s, height: H * s }}>
@@ -215,19 +181,6 @@ function FreeDesk({ s, label, onClick }: { s: number; label: string; onClick: ()
       </div>
       <Plate dashed>{label}</Plate>
     </button>
-  )
-}
-
-/** Corner brackets around the hovered / focused desk, like the selection cursor of a game. */
-function Cursor() {
-  const b = 'absolute size-2.5 border-primary opacity-0 transition-opacity group-hover/desk:opacity-100 group-focus-visible/desk:opacity-100'
-  return (
-    <span aria-hidden className="pointer-events-none absolute -inset-1">
-      <i className={cn(b, 'top-0 left-0 border-t-[3px] border-l-[3px]')} />
-      <i className={cn(b, 'top-0 right-0 border-t-[3px] border-r-[3px]')} />
-      <i className={cn(b, 'bottom-0 left-0 border-b-[3px] border-l-[3px]')} />
-      <i className={cn(b, 'right-0 bottom-0 border-r-[3px] border-b-[3px]')} />
-    </span>
   )
 }
 
