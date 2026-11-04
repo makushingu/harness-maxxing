@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -189,8 +190,40 @@ def _service(kind: str, s: dict, p: dict, e: dict) -> dict:
             "build": s.get("buildType") if kind == "application" else None}
 
 
+def environments(projects: Any) -> list[dict]:
+    """Where an app can be created: {id, name, project, project_id} (an older Dokploy without environments: none)."""
+    out = []
+    for p in projects if isinstance(projects, list) else []:
+        for e in (p.get("environments") or []) if isinstance(p, dict) else []:
+            if isinstance(e, dict) and e.get("environmentId"):
+                out.append({"id": e["environmentId"], "name": e.get("name"), "project": p.get("name"),
+                            "project_id": p.get("projectId")})
+    return out
+
+
 def inventory(c: Client) -> list[dict]:
-    return services(c.get("project.all"))
+    """project.all, then <kind>.one of each app / compose stack: project.all (v0.30) gives only their id, name and
+    state, not their app name, domains or repository."""
+    projects = c.get("project.all")
+    svcs = services(projects)
+    todo = [s for s in svcs if s["kind"] in _PLURAL]
+
+    def one(s: dict) -> dict:
+        try:
+            full = c.get(f"{s['kind']}.one", {_ID[s['kind']]: s["id"]})
+        except ProviderError:
+            return s                                   # shown with what project.all gave
+        if not isinstance(full, dict):
+            return s
+        more = _service(s["kind"], {**full, _ID[s["kind"]]: s["id"]}, {"name": s["project"], "projectId": s["project_id"]},
+                        {"name": s["environment"], "environmentId": s["environment_id"]})
+        return {**s, **{k: v for k, v in more.items() if v not in (None, [], "") or k == "domains"},
+                "environment": s["environment"]}
+    if todo:
+        with ThreadPoolExecutor(max_workers=min(8, len(todo))) as ex:
+            done = {s["id"]: x for s, x in zip(todo, ex.map(one, todo))}
+        svcs = [done.get(s["id"], s) if s["kind"] in _PLURAL else s for s in svcs]
+    return svcs
 
 
 def find(svcs: list[dict], ref: str) -> dict:
@@ -263,8 +296,9 @@ def deployments(c: Client, svc: dict) -> list[dict]:
     proc, key = ("deployment.all", "applicationId") if svc["kind"] == "application" \
         else ("deployment.allByCompose", "composeId")
     rows = c.get(proc, {key: svc["id"]}) or []
-    out = [{"id": d.get("deploymentId"), "title": d.get("title"), "status": d.get("status"),
-            "created": d.get("createdAt"), "log_path": d.get("logPath")} for d in rows if isinstance(d, dict)]
+    out = [{"id": d.get("deploymentId"), "title": (d.get("title") or "").strip().split("\n")[0][:120] or None,
+            "status": d.get("status"), "created": d.get("createdAt"), "log_path": d.get("logPath")}
+           for d in rows if isinstance(d, dict)]  # Dokploy titles a git deployment with the whole commit message
     return sorted(out, key=lambda d: d["created"] or "", reverse=True)
 
 

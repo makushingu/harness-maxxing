@@ -23,6 +23,22 @@ PROJECTS = [{"projectId": "p1", "name": "acme", "environments": [{
                                                          "applicationStatus": "idle"}]}]
 
 
+def _all(projects, plural):
+    for p in projects:
+        for e in p.get("environments") or [p]:
+            yield from e.get(plural) or []
+
+
+def _slim(projects):
+    """What project.all really gives (Dokploy v0.30): no app name, domains nor git source on apps / compose."""
+    keep = {"applications": ("applicationId", "name", "applicationStatus"), "compose": ("composeId", "name", "composeStatus")}
+
+    def env(e):
+        return {k: ([{f: x[f] for f in keep[k] if f in x} for x in v] if k in keep else v) for k, v in e.items()}
+    return [{**p, **({"environments": [env(e) for e in p["environments"]]} if "environments" in p else env(p))}
+            for p in projects]
+
+
 class FakeDokploy:
     def __init__(self, logs=None):
         self.calls: list[tuple[str, str, dict]] = []
@@ -36,8 +52,15 @@ class FakeDokploy:
         proc, _, query = path.removeprefix("/api/").partition("?")
         data = json.loads(body) if body else {}
         self.calls.append((method, proc, data or dict(q.split("=") for q in query.split("&") if q)))
-        if proc == "project.all":
-            return 200, PROJECTS, "application/json"
+        if proc == "project.all":                          # v0.30: apps and stacks carry only id, name and state
+            return 200, _slim(PROJECTS), "application/json"
+        if proc in ("application.one", "compose.one"):
+            key = "applicationId" if proc == "application.one" else "composeId"
+            want = self.calls[-1][2].get(key)
+            for x in _all(PROJECTS, "applications" if key == "applicationId" else "compose"):
+                if x[key] == want:
+                    return 200, x, "application/json"
+            return 404, {"message": "not found"}, "application/json"
         if proc == "application.create":
             return 200, {"applicationId": "new1", "name": data["name"]}, "application/json"
         if proc == "deployment.all":
@@ -101,6 +124,7 @@ def test_services_flatten_environments_and_old_projects(fake):
     assert by["c1"]["status"] == "running" and by["pg1"]["kind"] == "postgres"
     assert by["a3"]["environment"] is None and by["a1"]["environment"] == "production"
     assert dokploy.find(svcs, "acme-api-x2")["id"] == "a2"
+    assert dokploy.environments(PROJECTS) == [{"id": "e1", "name": "production", "project": "acme", "project_id": "p1"}]
     with pytest.raises(ProviderError) as e:
         dokploy.find(svcs, "web")                                  # two projects have one
     assert e.value.code == "ambiguous" and "a1" in e.value.message and "a3" in e.value.message
@@ -225,6 +249,7 @@ def test_deps_pin_dokploy_and_never_remove_it():
 def test_doctor_checks_dokploy(fake, monkeypatch, tmp_path):
     from maxxing import cmd_core
     monkeypatch.setenv("MAXXING_TRAEFIK_ROUTE", str(tmp_path / "none.yml"))
+    monkeypatch.setenv("MAXXING_DOKPLOY_ETC", str(tmp_path / "no-dokploy"))
     monkeypatch.setattr(cmd_core, "_public_tcp_ports", lambda: set())
     assert cmd_core.check_dokploy() is None                        # no Dokploy here, none connected
     dokploy.connect(fake.url, KEY)
