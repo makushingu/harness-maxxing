@@ -1326,11 +1326,7 @@ def _notify(job: dict, run: dict, answer: str | None = None) -> None:
             body = _clip_tail(run.get("output_tail") or "", 600 if not run["ok"] else 1500)
     try:
         from .telegram import gateway
-        report = getattr(gateway, "notify_cron_report", None)
-        if report is not None:
-            report(header, body, markdown=claude, loud=not run["ok"])
-        else:
-            gateway.notify_cron(header + ("\n" + body if body else ""))
+        gateway.notify_cron_report(header, body, markdown=claude, loud=not run["ok"])
     except Exception:
         pass
 

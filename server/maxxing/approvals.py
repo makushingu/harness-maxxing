@@ -157,10 +157,11 @@ def _post(d: dict, kind: str, text: str, **extra: Any) -> None:
 
 def _telegram(fn: str, *args: Any) -> None:
     """The older Telegram way (its own Allow / Deny message): only while the bridge has no `post_alert`, which then
-    gets the request through its feed event instead (one message, not two)."""
+    gets the request through its feed event instead (one message, not two). `approval_done` always: it only edits an
+    older Allow / Deny message of that request (posted before the feed alerts), if there is one."""
     try:
         from .telegram import gateway
-        if getattr(gateway, "post_alert", None) is None:
+        if fn == "approval_done" or getattr(gateway, "post_alert", None) is None:
             getattr(gateway, fn)(*args)
     except Exception:  # noqa: BLE001 - Telegram is a nicety
         log.exception("telegram %s failed", fn)

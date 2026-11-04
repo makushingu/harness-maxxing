@@ -2,7 +2,7 @@
 import { Link } from 'react-router'
 import { useUI } from '@/stores/ui'
 import { useT } from '@/i18n'
-import { useSaveSettings, useSettings, useTelegram, useTelegramSettings } from '@/lib/queries'
+import { useSaveSettings, useSettings, useTelegram } from '@/lib/queries'
 import { Skeleton, Switch, toast } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
 import { telegramStage } from '@/features/telegram/TelegramSetup'
@@ -15,7 +15,6 @@ export function FeaturesSection() {
   const { data: s } = useSettings()
   const save = useSaveSettings()
   const { data: tg } = useTelegram()
-  const saveTg = useTelegramSettings()
   const [perm, ask] = usePermission()
   const tgReady = telegramStage(tg) === 'done'
 
@@ -51,10 +50,10 @@ export function FeaturesSection() {
         ) : (
           <div className="divide-y">
             <SettingRow
-              label={t('telegram.mirrorWeb')}
+              label={t('telegram.mode')}
               description={
                 tgReady ? (
-                  t('telegram.mirrorWebDesc')
+                  t(`telegram.mode.${tg?.settings?.mode ?? 'simple'}.desc` as 'telegram.mode.simple.desc')
                 ) : (
                   <>
                     {t('features.telegramFirst')}{' '}
@@ -64,9 +63,12 @@ export function FeaturesSection() {
                   </>
                 )
               }
-              htmlFor="ft-mirror"
             >
-              <Switch id="ft-mirror" disabled={!tgReady} checked={!!tg?.settings?.mirror_web} onCheckedChange={(v) => saveTg.mutate({ mirror_web: v })} />
+              {tgReady && (
+                <Link to="/settings/telegram" className="text-sm font-medium text-primary hover:underline">
+                  {t(`telegram.mode.${tg?.settings?.mode ?? 'simple'}` as 'telegram.mode.simple')}
+                </Link>
+              )}
             </SettingRow>
             <SettingRow label={t('settings.usageWidget')} description={t('settings.usageWidgetDesc')} htmlFor="ft-usage">
               <Switch id="ft-usage" checked={!!s.usage_widget} onCheckedChange={(v) => save.mutate({ usage_widget: v })} />

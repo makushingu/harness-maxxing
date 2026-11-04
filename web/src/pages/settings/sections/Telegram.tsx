@@ -3,12 +3,49 @@ import { Link2, RefreshCw, Send, Unlink } from 'lucide-react'
 import { useSessions, useTelegram, useTelegramSettings, useTelegramSync, useTelegramTest, useTelegramUnlink } from '@/lib/queries'
 import { useLang, useT } from '@/i18n'
 import { fmtRelative } from '@/lib/format'
-import type { Session, TelegramSettings, TelegramStatus, TelegramTestResult } from '@/lib/types'
+import type { Session, TelegramMode, TelegramSettings, TelegramStatus, TelegramTestResult } from '@/lib/types'
 import { Badge, Button, Segmented, Sensitive, Skeleton, StatusDot, Switch, confirm, toast } from '@/components/ui'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
 import { ChangeBot, LinkPanel, TelegramErrors, TelegramSetup, ThreadList, TokenRejected, TopicsNotice, telegramStage, tokenRejected } from '@/features/telegram/TelegramSetup'
-import { Callout, SettingRow } from '@/features/common'
+import { Callout, OptionCard, SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
+
+/** Simple (one chat) / one thread per session / threads + web mirror. Leaving the threads asks first: they are
+ * deleted from Telegram. */
+function ModeCard({ status: s }: { status: TelegramStatus }) {
+  const t = useT()
+  const save = useTelegramSettings()
+  const mode = s.settings.mode ?? s.mode ?? 'simple'
+  const pick = async (m: TelegramMode) => {
+    if (m === mode) return
+    const n = s.threads.length
+    if (m === 'simple' && n > 0 && !(await confirm({ title: t('telegram.modeConfirm', { count: n }), description: t('telegram.modeConfirmDesc'), destructive: true, confirmText: t('telegram.modeConfirmOk') }))) return
+    save.mutate({ mode: m, mirror_web: m === 'mirror' })
+  }
+  return (
+    <SettingsCard title={t('telegram.mode')} description={t('telegram.modeDesc')}>
+      <div className="grid gap-2">
+        {(['simple', 'threads', 'mirror'] as const).map((m) => (
+          <OptionCard
+            key={m}
+            name="telegram-mode"
+            value={m}
+            selected={mode === m}
+            onSelect={() => pick(m)}
+            title={t(`telegram.mode.${m}`)}
+            description={t(`telegram.mode.${m}.desc`)}
+            badge={m === 'simple' ? <Badge variant="muted">{t('telegram.mode.recommended')}</Badge> : undefined}
+          />
+        ))}
+      </div>
+      {mode !== 'simple' && !s.topics_enabled && (
+        <Callout tone="info" className="mt-3">
+          {t('telegram.mode.needsThreads')}
+        </Callout>
+      )}
+    </SettingsCard>
+  )
+}
 
 function DisconnectCard() {
   const t = useT()
@@ -50,6 +87,7 @@ export function TelegramSection() {
       </SectionStack>
     )
   const set = (patch: Partial<TelegramSettings>) => save.mutate(patch)
+  const threads = (s.settings.mode ?? s.mode) !== 'simple'
   const linkPending = !!s.link && !s.link.expired
   const lastPoll = s.last_poll_ok ? fmtRelative(s.last_poll_ok, lang) : t('telegram.never')
   return (
@@ -137,10 +175,15 @@ export function TelegramSection() {
         </div>
       </SettingsCard>
 
+      <ModeCard status={s} />
+
       <SettingsCard title={t('telegram.behaviour')}>
         <div className="divide-y">
           <SettingRow label={t('telegram.notifyCrons')} description={t('telegram.notifyCronsDesc')} htmlFor="tg-crons">
             <Switch id="tg-crons" checked={s.settings.notify_crons} onCheckedChange={(v) => set({ notify_crons: v })} />
+          </SettingRow>
+          <SettingRow label={t('telegram.notifySystem')} description={t('telegram.notifySystemDesc')} htmlFor="tg-system">
+            <Switch id="tg-system" checked={s.settings.notify_system ?? true} onCheckedChange={(v) => set({ notify_system: v })} />
           </SettingRow>
           <SettingRow label={t('telegram.loginAlerts')} description={t('telegram.loginAlertsDesc')} htmlFor="tg-login">
             <Switch id="tg-login" checked={s.settings.login_alerts} onCheckedChange={(v) => set({ login_alerts: v })} />
@@ -157,10 +200,7 @@ export function TelegramSection() {
               ]}
             />
           </SettingRow>
-          <SettingRow label={t('telegram.mirrorWeb')} description={t('telegram.mirrorWebDesc')} htmlFor="tg-mirror">
-            <Switch id="tg-mirror" checked={s.settings.mirror_web ?? false} onCheckedChange={(v) => set({ mirror_web: v })} />
-          </SettingRow>
-          <SettingRow label={t('telegram.threadDays')} description={t('telegram.threadDaysDesc')}>
+          {threads && <SettingRow label={t('telegram.threadDays')} description={t('telegram.threadDaysDesc')}>
             <Segmented
               value={String(s.settings.thread_days ?? 30)}
               onChange={async (v) => {
@@ -172,11 +212,11 @@ export function TelegramSection() {
               aria-label={t('telegram.threadDays')}
               options={[7, 14, 30, 90].map((d) => ({ value: String(d), label: t('telegram.days', { count: d }) }))}
             />
-          </SettingRow>
+          </SettingRow>}
         </div>
       </SettingsCard>
 
-      <SettingsCard
+      {threads && <SettingsCard
         title={
           <span className="flex items-center gap-2">
             {t('telegram.threads')} <Badge variant="muted">{s.threads.length}</Badge>
@@ -190,7 +230,26 @@ export function TelegramSection() {
         }
       >
         <ThreadList status={s} />
-      </SettingsCard>
+      </SettingsCard>}
+
+      {!threads && !!s.agent_threads?.length && (
+        <SettingsCard
+          title={
+            <span className="flex items-center gap-2">
+              {t('telegram.agentThreads')} <Badge variant="muted">{s.agent_threads.length}</Badge>
+            </span>
+          }
+          description={t('telegram.agentThreadsDesc')}
+        >
+          <ul className="grid gap-1 text-sm">
+            {s.agent_threads.map((a) => (
+              <li key={a.path} className="truncate">
+                {a.name || a.path}
+              </li>
+            ))}
+          </ul>
+        </SettingsCard>
+      )}
 
       <DisconnectCard />
     </SectionStack>
