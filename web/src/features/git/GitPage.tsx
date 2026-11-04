@@ -70,11 +70,11 @@ function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: 
         <FolderGit2 className="mt-0.5 size-5 shrink-0 text-primary" />
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{r.name}</span>
+            <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{r.name}</span>
             {/* the repository only: its branches (and the worktree folders of the same clone) are in its graph;
                 the checked-out branch shows only when it is not the usual one (or HEAD is detached) */}
             {!r.error && !(r.branch && ['main', 'master'].includes(r.branch)) && (
-              <span className="rounded bg-primary/15 px-1.5 py-px font-mono text-[11px] text-primary">
+              <span className="max-w-full rounded bg-primary/15 px-1.5 py-px font-mono text-[11px] break-all text-primary">
                 {r.branch ?? t('git.detached')}
               </span>
             )}
@@ -85,8 +85,8 @@ function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: 
               </span>
             )}
             {r.github && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Github className="size-3" />
+              <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                <Github className="size-3 shrink-0" />
                 {r.github}
               </span>
             )}
@@ -265,7 +265,7 @@ function RepoList({ onOpen }: { onOpen: (repo: string) => void }) {
         local.length ? (
           <>
             <p className="text-xs text-muted-foreground">{t('git.localHint', { root: data!.root })}</p>
-            <ul className="grid gap-2 lg:grid-cols-2">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
               {local.map((r) => (
                 <LocalRow key={r.path} r={r} root={data!.root} onOpen={() => onOpen(r.path)} />
               ))}
@@ -309,7 +309,7 @@ function RepoList({ onOpen }: { onOpen: (repo: string) => void }) {
             </Link>
           </div>
           <TokenErrors errors={gh.errors} />
-          <ul className="grid gap-2 lg:grid-cols-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
             {remote.map((r) => (
               <GithubRow key={r.full_name} r={r} onOpen={() => onOpen(`github:${r.full_name}`)} />
             ))}
