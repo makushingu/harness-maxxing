@@ -21,8 +21,8 @@ from pathlib import Path
 
 from .. import config
 
-NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-HOST_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}\Z")
+HOST_RE = re.compile(r"^(?=.{1,253}\Z)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\Z")
 SANDBOX = "sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
 UI_ROUTES = {"api", "ext", "x", "git", "infra", "tasks", "settings", "sessions", "files", "docs", "feed", "crons", "login",
              "setup", "welcome", "hud", "solo", "abs", "assets", "icons", "stream", "hooks", "health", "index.html"}
