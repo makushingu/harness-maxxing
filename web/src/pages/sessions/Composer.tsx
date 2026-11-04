@@ -104,7 +104,13 @@ export const Composer = React.forwardRef<ComposerHandle, {
     }
   }, [draftKey])
   const unsaved = React.useRef(false)
+  const loaded = React.useRef<string | null>(draftKey) // the text was just read from this draft: nothing to store yet
   React.useEffect(() => {
+    if (loaded.current === draftKey) {
+      loaded.current = null
+      return
+    }
+    loaded.current = null
     unsaved.current = true
     const id = setTimeout(() => {
       saveDraft(draftKey, text)
@@ -135,9 +141,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
     mounted.current = true
     return () => {
       mounted.current = false
-      saveDraft(live.current.draftKey, live.current.text)
-      saveQuotes(live.current.draftKey, live.current.quotes)
-      saveAtts(live.current.draftKey, toDraftAtts(live.current.atts))
+      // Only what this box has not stored yet (quotes and files are stored at once): another tab on the same
+      // session may have written the draft since.
+      if (unsaved.current) saveDraft(live.current.draftKey, live.current.text)
       ctrls.current.forEach((c) => c.abort())
       previews.current.forEach((p) => URL.revokeObjectURL(p))
       previews.current.clear()
