@@ -322,6 +322,12 @@ def names(project: str, topic: str) -> list[str]:
 
 
 # ---- run settings read by the session runner -----------------------------------------------------
+OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep there what will matter next time. "
+              "Your role (CLAUDE.md), your settings and triggers (agent.json) and the `maxxing agents` commands that "
+              "change agents belong to the owner: never change them. When they should change, say so in your answer "
+              "(what and why); the owner applies it.")
+
+
 def run_settings(path: str, outside: bool = False) -> dict:
     """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
     args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
@@ -341,6 +347,7 @@ def run_settings(path: str, outside: bool = False) -> dict:
         args += ["--max-budget-usd", f"{max(left, 0.01):.2f}"]
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
+    args += ["--append-system-prompt", OWNER_NOTE]
     forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a),
@@ -512,6 +519,9 @@ def update(path: str, fields: dict) -> dict:
     known = set(clean({}).keys()) - {"version", "created"}
     data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
     _save(path, data)
+    st = _read_state(path)
+    st["owner_at"] = time.time()
+    _write_state(path, st)
     if description is not None:
         workspace._write_claude_md(folder(path), "agent", parse(path)[2], str(description))
     _invalidate()
@@ -612,6 +622,46 @@ def _read_state(path: str) -> dict:
 
 def _write_state(path: str, st: dict) -> None:
     config.write_json(_state_file(path, "json"), st)
+
+
+# ---- what the owner set: a run that changes it is reported ------------------------------------------------
+OWNED_FILES = (AGENT_FILE, "CLAUDE.md")
+
+
+def _fingerprint(path: str) -> dict[str, str]:
+    out = {}
+    for n in OWNED_FILES:
+        try:
+            out[n] = hashlib.sha1((folder(path) / n).read_bytes()).hexdigest()
+        except OSError:
+            out[n] = ""
+    return out
+
+
+def _snapshot(path: str, sid: str) -> None:
+    """At the start of a run: what its settings and role look like (compared at its end, on_turn_end)."""
+    try:
+        st = _read_state(path)
+        snaps = {k: v for k, v in (st.get("snapshots") or {}).items()
+                 if isinstance(v, dict) and time.time() - float(v.get("at") or 0) < 2 * 86400}
+        snaps[sid] = {"at": time.time(), "files": _fingerprint(path)}
+        st["snapshots"] = snaps
+        _write_state(path, st)
+    except Exception:  # noqa: BLE001 - never stops a run
+        log.exception("agent %s: snapshot", path)
+
+
+def _changed_during(path: str, sid: str) -> list[str]:
+    """The owned files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
+    st = _read_state(path)
+    snap = (st.get("snapshots") or {}).pop(sid, None)
+    if not isinstance(snap, dict):
+        return []
+    _write_state(path, st)
+    if float(st.get("owner_at") or 0) >= float(snap.get("at") or 0):
+        return []
+    now = _fingerprint(path)
+    return [n for n in OWNED_FILES if (snap.get("files") or {}).get(n) != now.get(n)]
 
 
 # ---- budget and rate ----------------------------------------------------------------------------------
@@ -849,6 +899,7 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     sid = _reply_session(path, reply_to) if reply_to else None
     if sid:
         r = service.send_message(sid, message, attachments=attachments, source="agent")
+        _snapshot(path, sid)
         post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=sid,
              reply_to=reply_to)
         return {"started": True, "continued": True, "session": r["session"]}
@@ -865,6 +916,7 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=timeout_s or a["limits"]["timeout_s"],
                                permission_mode=a["permission_mode"])
+    _snapshot(path, s["id"])
     post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"])
     return {"started": True, "session": s}
 
@@ -889,6 +941,13 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                 cost = round(float(result[k]), 4)
                 break
     msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost)
+    try:
+        changed = _changed_during(path, session["id"])
+        if changed:
+            post(path, "note", f"This run changed {' and '.join(changed)} (its own settings or role): check them on "
+                               "the agent page.", status="changed", session=session["id"], files=changed)
+    except Exception:  # noqa: BLE001
+        log.exception("agent %s: changed files check", path)
     if load(path)["telegram"]:
         try:
             from .telegram import gateway
