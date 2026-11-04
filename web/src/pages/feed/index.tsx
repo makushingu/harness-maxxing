@@ -14,7 +14,8 @@ export default function FeedPage() {
   const navigate = useNavigate()
   const [source, setSource] = React.useState<string | null>(null)
   const [unreadOnly, setUnreadOnly] = React.useState(false)
-  const pages = useFeedPages(source, unreadOnly)
+  const [pendingOnly, setPendingOnly] = React.useState(() => new URLSearchParams(window.location.search).get('pending') === '1')
+  const pages = useFeedPages(pendingOnly ? null : source, unreadOnly, pendingOnly)
   const read = useMarkFeedRead()
   const events = pages.data?.pages.flatMap((p) => p.events) ?? []
   // Every page carries the totals of all sources (whatever the filter): keep the last ones while a filter loads.
@@ -23,6 +24,7 @@ export default function FeedPage() {
   if (head && head !== summary) setSummary(head)
   const sources = summary?.sources ?? []
   const unread = summary?.unread ?? 0
+  const pending = summary?.pending ?? 0
   const chip = (active: boolean) =>
     cn('inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors max-md:h-10 pointer-coarse:h-10', active ? 'border-primary bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')
   return (
@@ -42,11 +44,17 @@ export default function FeedPage() {
     >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('feed.sources')}>
-          <button type="button" className={chip(source === null)} onClick={() => setSource(null)}>
+          <button type="button" className={chip(source === null && !pendingOnly)} onClick={() => (setSource(null), setPendingOnly(false))}>
             {t('feed.allSources')}
           </button>
+          {(pending > 0 || pendingOnly) && (
+            <button type="button" className={chip(pendingOnly)} onClick={() => setPendingOnly(!pendingOnly)} data-testid="feed-pending">
+              <span className="truncate">{t('feed.pending')}</span>
+              {pending > 0 && <span className="shrink-0 rounded-full bg-warning/15 px-1.5 text-[10px] font-medium text-warning tabular-nums">{pending}</span>}
+            </button>
+          )}
           {sources.map((s) => (
-            <button key={s.source} type="button" className={chip(source === s.source)} onClick={() => setSource(s.source)} data-testid="feed-chip" title={s.source}>
+            <button key={s.source} type="button" className={chip(source === s.source && !pendingOnly)} onClick={() => (setSource(s.source), setPendingOnly(false))} data-testid="feed-chip" title={s.source}>
               <span className="truncate">{s.source}</span>
               {s.unread > 0 && <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground tabular-nums">{s.unread}</span>}
             </button>

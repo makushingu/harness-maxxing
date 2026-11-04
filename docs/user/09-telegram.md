@@ -17,14 +17,15 @@ program to install. One bot, linked to **your** private chat only.
 In every mode, an [agent](agents) with the Telegram option keeps **its own thread** (its results, a reply there
 goes on with that result, its approval requests). The alerts are, in the main chat (Simple) or in *Alerts*:
 
-- **server alerts** (Settings -> Telegram -> *Server alerts*, on by default): a problem of the dashboard's health
-  card (disk almost full, a service down, Claude signed out, a backup that failed or is old) arrives once, loud for
-  an error, with a **Seen** button (the same as *Seen* on the dashboard; seen on the web, the message says so too);
-  fixed, the message says *Resolved*. Also an update that failed or was rolled back, an update available, a known
-  vulnerability, Claude Code that could not update;
+- the [notifications you can act on](feed): an agent's request (**Allow** / **Deny**, always sent and loud), a failed
+  run, an agent at its budget or its runs per hour, and the server's problems (disk almost full, a service down,
+  Claude signed out, a backup that failed or is old; Settings -> Notifications -> *Server problems in the
+  notifications*), with their buttons; once handled, the message says how it ended. In the agent's thread when it
+  has the Telegram option;
+- **server alerts** (Settings -> Telegram -> *Server alerts*, on by default): an update that failed or was rolled
+  back, an update available, a known vulnerability, Claude Code that could not update;
 - **sign-in alerts** and the [two-step sign-in](#two-step-sign-in) requests;
 - **job reports** (*Cron reports*): per job, failures only (default) or every run; failures ring;
-- agents' **approval requests** (Allow / Deny), in the agent's thread when it has the Telegram option;
 - the [notifications feed](feed) when its Telegram option is on (sales, orders, your scripts…, with an *Ask
   Harness* button).
 
@@ -79,6 +80,10 @@ are. Successful reports arrive silently; failures ring.
 | Delete a thread by hand in Telegram | the session stays open (Telegram does not tell bots) and gets a new thread the next time it is used - e.g. you write in it from the web UI. To really close it: `/close` |
 | Write in a session from the **web UI** | mode *Threads + web conversations*: your message ("🖥 …") and Claude's answer are copied into its thread, silently; the session's **bell** makes its answers ring on the phone |
 | Reply in the **main chat** to a message of a session (its bell, for instance) | it goes to that session |
+
+A thread is named `<project>/<topic> · <session title>`, with the project's emoji in front when it has one (project
+**…** menu in Sessions -> *Set an emoji…*), e.g. `🛒 acme/blog · Launch plan`. Changing only the emoji does not rename
+existing threads (each rename posts a notice in the chat); new threads get it.
 
 Mirrored sessions: the ones you talk to (not those started by scheduled jobs - their reports go to
 *Crons*), not archived, active in the last **30 days** (Settings -> Telegram -> *Keep a thread for*:

@@ -100,6 +100,9 @@ From a terminal: `maxxing cron list`, `maxxing cron run <id>` (runs it in your t
 `maxxing cron sync` (rewrites the block), `maxxing cron deleted` (the removed jobs kept) and
 `maxxing cron restore <id>` (puts one back). Two runs of the same job never overlap.
 
+An [agent](agents)'s schedule is a job of this page too: its link opens the agent, and the agent's limits decide
+(switched off, daily budget or runs per hour reached: the run is skipped, with the reason in its history).
+
 ### Memory and time limits
 
 A scheduled run starts exactly like **Run now**: in its own systemd unit (`maxxing-cron-<id>`, see

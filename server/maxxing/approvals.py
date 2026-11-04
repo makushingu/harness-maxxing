@@ -156,11 +156,77 @@ def _post(d: dict, kind: str, text: str, **extra: Any) -> None:
 
 
 def _telegram(fn: str, *args: Any) -> None:
+    """The older Telegram way (its own Allow / Deny message): only while the bridge has no `post_alert`, which then
+    gets the request through its feed event instead (one message, not two). `approval_done` always: it only edits an
+    older Allow / Deny message of that request (posted before the feed alerts), if there is one."""
     try:
         from .telegram import gateway
-        getattr(gateway, fn)(*args)
+        if fn == "approval_done" or getattr(gateway, "post_alert", None) is None:
+            getattr(gateway, fn)(*args)
     except Exception:  # noqa: BLE001 - Telegram is a nicety
         log.exception("telegram %s failed", fn)
+
+
+def _agent_url(path: str) -> str:
+    from . import agents
+    p = agents.parse(path)
+    return f"/agents/{p[0]}/{p[1]}/{p[2]}" if p else "/agents"
+
+
+def _agent_name(path: str) -> str:
+    try:
+        from . import agents
+        return agents.public(path)["display_name"]
+    except Exception:  # noqa: BLE001
+        return path.rsplit("/", 1)[-1] or "An agent"
+
+
+def _feed_new(d: dict) -> None:
+    """A waiting request = a Notifications event with Allow / Deny (source `agents`), once per request."""
+    try:
+        from . import feed
+        path = d.get("agent_path") or ""
+        feed.post(f"{_agent_name(path)} is waiting for your OK", short(str(d.get("tool") or ""), d.get("input")),
+                  "warning", "agents", _agent_url(path), dedupe=f"approval:{d['id']}", ref=f"approval:{d['id']}",
+                  agent=path or None, actions=[{"id": "allow", "label": "Allow", "style": "primary"},
+                                               {"id": "deny", "label": "Deny", "style": "danger"}])
+    except Exception:  # noqa: BLE001 - the feed is a nicety here
+        log.exception("feed event for an approval failed")
+
+
+FEED_DONE = {"allow": "Allowed", "deny": "Denied", "timeout": "No answer in time, denied",
+             "expired": "Expired (the run stopped)"}
+
+
+def _feed_done(d: dict) -> None:
+    try:
+        from . import feed
+        st = str(d.get("status") or "")
+        how = FEED_DONE.get(st, st)
+        if st in ("allow", "deny") and d.get("decided_by") == "telegram":
+            how += " on Telegram"
+        # answered = handled (read); no answer in time stays unread: the user may want to know what was missed
+        feed.resolve(f"approval:{d.get('id')}", how, read=True if st in DECISIONS else None,
+                     level="info" if st == "allow" else "warning")
+    except Exception:  # noqa: BLE001
+        log.exception("feed event update for an approval failed")
+
+
+def feed_action(rid: str, action: str, by: str, ev: dict) -> None:
+    """A button of the request's feed event (web or Telegram). Already answered: nothing to do, the event says how."""
+    if action not in DECISIONS:
+        return
+    try:
+        decide(rid, action, by=by)
+    except ApprovalError as e:
+        if e.status != 409:
+            raise
+        d = approval_mcp.read(_file(rid)) if ID_RE.match(rid or "") else None
+        if d:
+            _feed_done(d)                       # make sure the event shows the answer it already got
+        else:
+            from . import feed
+            feed.update(ev["id"], resolve=True, resolution="Expired (the run stopped)")
 
 
 def _note(d: dict) -> None:
@@ -169,6 +235,7 @@ def _note(d: dict) -> None:
     if st == "deny" and d.get("message"):
         text += f" ({d['message']})"
     _post(d, "note", text, status=st)
+    _feed_done(d)
     _telegram("approval_done", str(d.get("id") or ""), st)
 
 
@@ -212,6 +279,7 @@ def scan(force: bool = False) -> bool:
         changed = True
         if st == "pending":
             _post(d, "approval", short(str(d.get("tool") or ""), d.get("input")), status="pending")
+            _feed_new(d)
             _telegram("notify_approval", d)
         elif prev is not None:                  # decided elsewhere (timeout, expired): our own decide() noted it
             _note(d)
@@ -229,6 +297,8 @@ def prime() -> None:
     """At startup: what is already there is not new (no repeated thread messages after a restart)."""
     now = time.time()
     for d in _all():
+        if d.get("status") != "pending":
+            _feed_done(d)                       # answered or expired while the server was down: its event says so
         if d.get("status") != "pending" and now - float(d.get("decided_at") or d.get("at") or now) > KEEP_S:
             _file(d["id"]).unlink(missing_ok=True)
         else:
