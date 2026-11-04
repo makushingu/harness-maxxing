@@ -152,3 +152,8 @@ def test_clean():
     assert titles.clean("« Refonte du blog »") == "Refonte du blog"
     assert titles.clean("") is None and titles.clean("x" * 61) is None
     assert titles.clean("Sure! Here is a long answer with many many words in it") is None
+
+
+def test_lone_surrogate_in_the_message_still_gets_a_title(client, mx, on, monkeypatch):
+    monkeypatch.setenv("FAKE_CLAUDE_TITLE", '"Automatisation E-ink."')
+    assert titles.ask_claude(MSG + " \ud800") == "Automatisation E-ink"   # no UnicodeEncodeError
