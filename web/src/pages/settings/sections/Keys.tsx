@@ -39,6 +39,7 @@ const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChange: (o: boolean) => void; editing: Secret | null }) {
   const t = useT()
   const put = usePutSecret()
+  const { data: existing } = useSecrets()
   const [name, setName] = React.useState('')
   const [value, setValue] = React.useState('')
   const [note, setNote] = React.useState('')
@@ -57,18 +58,21 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
     const errs: typeof errors = {}
     const n = name.trim()
     if (!NAME_RE.test(n)) errs.name = t('keys.nameInvalid')
+    else if (!editing && existing?.some((s) => s.name === n)) errs.name = t('keys.exists')
     if (!editing && !value) errs.value = t('keys.valueRequired')
     setErrors(errs)
     if (Object.keys(errs).length) return
     put.mutate(
-      { name: n, note: note.trim(), expose, ...(value ? { value } : {}) },
+      // create: the server refuses (409) a name added meanwhile instead of replacing that key
+      { name: n, note: note.trim(), expose, ...(value ? { value } : {}), ...(editing ? {} : { create: true }) },
       {
         onSuccess: () => {
           toast.success(editing ? t('keys.updated') : t('keys.added'))
           onOpenChange(false)
         },
         onError: (err) => {
-          if (isApiError(err) && ['invalid_name', 'reserved_name'].includes(err.code)) setErrors({ name: errorMessage(err) })
+          if (isApiError(err, 'exists')) setErrors({ name: t('keys.exists') })
+          else if (isApiError(err) && ['invalid_name', 'reserved_name'].includes(err.code)) setErrors({ name: errorMessage(err) })
           else if (isApiError(err, 'value_required')) setErrors({ value: errorMessage(err) })
           else setErrors({ form: errorMessage(err) })
         },
@@ -87,7 +91,7 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
             <Input value={name} onChange={(e) => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))} disabled={!!editing} className="font-mono" placeholder="OPENAI_API_KEY" autoComplete="off" spellCheck={false} autoFocus={!editing} />
           </FormField>
           <FormField label={t('keys.value')} error={errors.value} hint={editing ? t('keys.valueKeep') : undefined}>
-            <SecretInput value={value} onChange={(e) => setValue(e.target.value)} autoFocus={!!editing} placeholder={editing ? '••••••••' : ''} />
+            <SecretInput value={value} onValueChange={setValue} autoFocus={!!editing} placeholder={editing ? '••••••••' : ''} />
           </FormField>
           <FormField label={t('keys.note')}>
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('keys.notePlaceholder')} autoComplete="off" />

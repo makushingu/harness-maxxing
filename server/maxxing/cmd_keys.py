@@ -44,10 +44,13 @@ def _handler(a) -> int:
         if v is None:
             print(f"{a.name}: no such key (Settings -> Keys)", file=sys.stderr)
             return 1
-        print(v)
+        print(v, end="" if v.endswith("\n") else "\n")
         return 0
     if a.action == "set":
-        value = sys.stdin.read().strip()
+        raw = sys.stdin.read()
+        value = raw.strip()
+        if "\n" in value and raw.rstrip(" \t\r").endswith("\n"):
+            value += "\n"          # a multi-line value (PEM, SSH key) keeps its final line break: OpenSSH wants it
         if not value:
             print("the value is read from stdin: printf %s \"$VALUE\" | maxxing keys set NAME", file=sys.stderr)
             return 2

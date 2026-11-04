@@ -148,6 +148,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - PATCH task: `prev_id` / `next_id` (sent by the Board drop) place the card server-side, renumbering the column 1..n
   when the neighbours' orders are equal or < 1e-6 apart; a status change without `order` goes on top of done /
   bottom elsewhere (the task sheet).
+- Keys: PUT `create: true` (the Add dialog) -> `409 exists` instead of replacing (`vault.put(create=)`).
+  `SecretInput onValueChange` switches to a masked textarea (`-webkit-text-security`) when a paste or the value
+  has line breaks (an `<input>` strips them). `maxxing keys set` keeps the final newline of a multi-line value;
+  `get` does not add a second one.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 

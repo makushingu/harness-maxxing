@@ -1221,6 +1221,7 @@ export const en = {
   'keys.value': 'Value',
   'keys.valueKeep': 'Leave empty to keep the current value.',
   'keys.valueRequired': 'Enter a value.',
+  'keys.exists': 'A key with this name already exists: open it with Edit to change it.',
   'keys.note': 'Note',
   'keys.notePlaceholder': 'What it is for, where it comes from',
   'keys.noNote': 'No note',
