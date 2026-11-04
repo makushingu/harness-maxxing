@@ -784,12 +784,15 @@ export type DashboardLayout = { order: string[]; hidden: string[] }
 export type Extension = {
   id: string
   name: string
-  type: 'widget' | 'page'
+  /** view = an extension that only brings views (agents_view) */
+  type: 'widget' | 'page' | 'view'
   icon: string
   version: string
   enabled: boolean
   error: string | null
   has_api: boolean
+  /** An Office view of the Agents page (manifest "agents_view" + agents-view.html), in the UI language; null without. */
+  agents_view?: { name: string; icon: string } | null
   /** Page extensions: own entry in the sidebar (otherwise listed under "Extensions"). */
   pinned?: boolean
   /** page.js mtime (ms): version of the module URL (the browser reuses it until the file changes). */

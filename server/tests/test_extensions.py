@@ -375,3 +375,68 @@ def test_adding_or_removing_widget_html_is_seen_by_the_hot_reload(client, org):
     assert e["error"] is None and e["has_html"]
     (d / "widget.html").unlink()
     assert {x["id"]: x for x in client.get("/api/extensions").json()}["w"]["error"]
+
+
+def test_agents_view(client, org, tmp_path):
+    # an Office view of the Agents page: "agents_view" + agents-view.html, in the same sandboxed frame as HTML widgets
+    d = _ext(org, "neon", {"type": "view", "name": "Neon", "icon": "star",
+                           "agents_view": {"name": {"en": "Neon office", "fr": "Bureau néon"}, "icon": "sparkles"}})
+    (d / "agents-view.html").write_text("<div id=office></div><script>maxxing.onData(function(d){})</script>")
+    lst = {e["id"]: e for e in client.get("/api/extensions").json()}
+    assert lst["neon"]["error"] is None and lst["neon"]["type"] == "view"
+    assert lst["neon"]["agents_view"] == {"name": "Neon office", "icon": "sparkles"}
+    config.update_config(language="fr")
+    assert {e["id"]: e for e in client.get("/api/extensions").json()}["neon"]["agents_view"]["name"] == "Bureau néon"
+    config.update_config(language="en")
+    # a view is not a dashboard widget
+    assert "neon" not in {w["id"] for w in client.get("/api/dashboard").json()["widgets"]}
+    f = client.get("/ext/neon/agents-view-frame")
+    assert f.status_code == 200 and f.headers["content-type"].startswith("text/html")
+    assert f.headers["content-security-policy"].startswith("sandbox allow-scripts")
+    bridge = f.text[:f.text.index("</script>")]
+    assert "onData:" in bridge and "navigate:" in bridge and "app:" in bridge
+    assert f.text.index("window.maxxing=") < f.text.index('<div id=office>') and ".ui-card" in f.text
+    r = client.get("/ext/neon/agents-view.html")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain") and "office" in r.text
+    assert client.head("/ext/neon/agents-view.html").status_code == 200
+    # `true` = the extension's own name and icon; a widget or a page may bring a view too
+    w = _ext(org, "game-w", {"type": "widget", "name": "Game", "icon": "gamepad-2", "agents_view": True})
+    (w / "widget.html").write_text("<p>w</p>")
+    (w / "agents-view.html").write_text("<p>v</p>")
+    assert {e["id"]: e for e in client.get("/api/extensions").json()}["game-w"]["agents_view"] == {"name": "Game", "icon": "gamepad-2"}
+    assert client.get("/ext/game-w/widget-frame").status_code == 200
+    # no Office view: 404 (a widget without one, a disabled one)
+    plain = _ext(org, "plain", {"type": "widget", "name": "Plain"})
+    (plain / "widget.html").write_text("<p>p</p>")
+    (plain / "agents-view.html").write_text("<p>not declared</p>")
+    assert {e["id"]: e for e in client.get("/api/extensions").json()}["plain"]["agents_view"] is None
+    assert client.get("/ext/plain/agents-view-frame").status_code == 404
+    client.patch("/api/extensions/neon", json={"enabled": False})
+    assert client.get("/ext/neon/agents-view-frame").status_code == 404
+    assert client.head("/ext/neon/agents-view.html").status_code == 404
+    # mistakes are shown on the extension: no file, a bad value, a view type with no view
+    _ext(org, "nofile", {"type": "view", "agents_view": {"name": "X"}})
+    _ext(org, "badval", {"type": "view", "agents_view": "yes"})
+    (org.ws / "extensions" / "badval" / "agents-view.html").write_text("<p>v</p>")
+    _ext(org, "noview", {"type": "view"})
+    lst = {e["id"]: e for e in client.get("/api/extensions").json()}
+    assert "agents-view.html" in lst["nofile"]["error"] and lst["nofile"]["agents_view"] is None
+    assert "must be true or an object" in lst["badval"]["error"]
+    assert "agents_view" in lst["noview"]["error"]
+    # never a file outside the folder
+    secret = tmp_path / "credentials.json"
+    secret.write_text('{"token": "SECRET"}')
+    leak = _ext(org, "leakview", {"type": "view", "agents_view": True})
+    (leak / "agents-view.html").symlink_to(secret)
+    client.post("/api/extensions/reload")
+    for url in ("/ext/leakview/agents-view-frame", "/ext/leakview/agents-view.html"):
+        r = client.get(url)
+        assert r.status_code == 404 and "SECRET" not in r.text, url
+
+
+def test_editing_agents_view_html_is_seen_by_the_hot_reload(client, org):
+    d = _ext(org, "v", {"type": "view", "agents_view": True})
+    assert {x["id"]: x for x in client.get("/api/extensions").json()}["v"]["error"]
+    (d / "agents-view.html").write_text("<p>hi</p>")
+    e = {x["id"]: x for x in client.get("/api/extensions").json()}["v"]
+    assert e["error"] is None and e["agents_view"] == {"name": "v", "icon": "puzzle"}
