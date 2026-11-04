@@ -178,3 +178,12 @@ def test_long_non_latin_file_name_is_cut_in_bytes(tmp_path):
     p = gateway._unique(tmp_path / name)
     p.with_name(p.name + ".part").write_bytes(b"x")                # still a valid name with the suffix
     assert gateway._safe_name("a" * 50 + ".txt", "file") == "a" * 50 + ".txt"
+
+
+def test_inline_code_inside_a_link_url_never_lands_in_href():
+    for md in ("[x](http://a.b/`c`)", "<http://a.b/`c`>"):
+        out = "".join(fmt.render(md))
+        for href in re.findall(r'href="([^"]*)"', out):
+            assert "<" not in href and "\x00" not in href
+        assert "<code>c</code>" in out
+
