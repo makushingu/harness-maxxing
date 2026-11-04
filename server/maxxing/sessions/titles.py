@@ -105,10 +105,12 @@ def ask_claude(message: str) -> str | None:
     b = spawn.claude_bin()
     cmd = [b, "-p", "--output-format", "json", "--model", MODEL, "--tools", "", "--no-session-persistence",
            "--strict-mcp-config", "--disable-slash-commands", "--system-prompt", SYSTEM_PROMPT]
+    # a lone surrogate (badly decoded text) cannot be written to the pipe
+    prompt = message[:MESSAGE_CHARS].encode("utf-8", "replace").decode("utf-8")
     try:
-        r = subprocess.run(cmd, input=message[:MESSAGE_CHARS], capture_output=True, text=True, timeout=TIMEOUT_S,
+        r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=TIMEOUT_S,
                            cwd=config.state_dir("claude-titles"), env=spawn.claude_env(None, "default"))
-    except (OSError, subprocess.TimeoutExpired) as e:
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
         log.info("title call failed: %s", e)
         return None
     try:
