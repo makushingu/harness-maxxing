@@ -203,6 +203,50 @@ def test_branch_switch_with_a_customization_already_in_the_target_branch(code, c
     assert customs.list_customs() == [] and "LIMIT = 50" in (clone / "server/maxxing/rules.py").read_text()
 
 
+def test_rollback_keeps_a_customization_saved_after_the_update(code, capsys):
+    clone, work, ws = code["clone"], code["work"], code["ws"]
+    (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    customs.save("Raise the limit")
+    before = _head(clone)
+    _upstream_release(work, "1.1.0", extra="feature.txt")
+    assert run_cli("update", "--no-restart") == 0
+    (clone / "server" / "maxxing" / "extra.py").write_text("X = 1\n")
+    customs.save("Add extra")
+    assert run_cli("update", "--rollback", "--no-restart") == 0
+    assert 'customization "Add extra" kept' in capsys.readouterr().out
+    assert _rev(clone, "HEAD~1") == before and not (clone / "feature.txt").exists()
+    assert [c["title"] for c in customs.list_customs()] == ["Raise the limit", "Add extra"]
+    assert (clone / "server/maxxing/extra.py").exists()
+    _upstream_release(work, "1.2.0")
+    assert run_cli("update", "--no-restart") == 0                 # the next update keeps its patch
+    assert len(list((ws / "customizations").glob("*.patch"))) == 2
+
+
+def test_rollback_after_a_branch_switch_keeps_the_changes_it_auto_saved(code, capsys):
+    clone, work = code["clone"], code["work"]
+    before = _head(clone)
+    _push_dev(work, "1.9.0")
+    (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 99\nNAME = 'product'\n")   # not saved yet
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 0
+    assert run_cli("update", "--rollback", "--no-restart") == 0
+    assert _branch(clone) == "main" and _rev(clone, "HEAD~1") == before
+    assert "LIMIT = 99" in (clone / "server/maxxing/rules.py").read_text()
+    assert [c["title"] for c in customs.list_customs()] == ["Unsaved changes found by the update"]
+
+
+def test_rollback_refuses_when_a_later_customization_does_not_fit_the_old_code(code, capsys):
+    clone, work = code["clone"], code["work"]
+    _upstream_release(work, "1.1.0", rules="LIMIT = 20\nNAME = 'product'\n")
+    assert run_cli("update", "--no-restart") == 0
+    (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 30\nNAME = 'product'\n")
+    customs.save("Raise the limit")
+    after = _head(clone)
+    assert run_cli("update", "--rollback", "--no-restart") == 1
+    assert "nothing changed" in capsys.readouterr().out
+    assert _head(clone) == after and _branch(clone) == "main" and customs.dirty_files() == []
+    assert "LIMIT = 30" in (clone / "server/maxxing/rules.py").read_text()
+
+
 def test_conflict_with_web_edits_prints_instructions_that_work(code, capsys):
     """The web/ edits are back in place after a conflict: the printed instructions set them aside again first,
     else git refuses the rebase (unstaged changes)."""

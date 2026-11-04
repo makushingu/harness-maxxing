@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `maxxing update --rollback`: customizations of the running code missing at `refs/maxxing/pre-update` (saved after
+  the update, or auto-saved on the new branch by `--branch`) are cherry-picked back onto it, then `customs.export()`
+  rewrites the registry (before, the reset dropped them and the next export deleted their patch). One that does not
+  apply to the old code: everything is put back as it was, exit 1.
 - `maxxing update --branch X`: the local branch X is rebuilt from `origin/X` (`checkout -B`) + the customizations of
   the branch left, instead of reusing a stale local X (it resurrected customizations dropped or changed meanwhile);
   commits only on the old local X are listed and kept under `refs/maxxing/before-switch/X`. Customizations are
