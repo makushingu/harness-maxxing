@@ -27,8 +27,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   chat, bound; the no-gateway fallback sends to the session's thread too.
 - Alerts: `_watch_health` / `_health_pass` (every `HEALTH_EVERY` 60 s, not `HEALTH_SKIP` = `cron_failed`,
   `login_failures`; `state.health = {id: {chat, mid, html, seen}}`; callback `h:<id>` -> `health.mark_seen`), skipped
-  when a `maxxing.alerts` module exists; `post_alert(alert)` / `update_alert(alert)` (callback `al:<id>:<action>` ->
-  `alerts.act(id, action, by="telegram")`, `notes.json` "al:<id>"); approval messages also kept in `notes.json`
+  when the feed carries the alerts (`feed.act` exists); `post_alert(ev)` / `update_alert(ev)` take a feed event
+  (rule `ev.telegram` off|silent|loud, approvals always sent and loud; `open` = URL button; callback
+  `al:<id>:<action>` -> `feed.act(int(id), action, by="telegram")`, `notes.json` "al:<id>", dropped once resolved); approval messages also kept in `notes.json`
   ("p:<id>") so `approval_done` edits them after a restart; approvals and alerts of an agent without a thread are
   bound to the agent.
 - Clean-up: texts in `telegram/texts.py` (French duplicates removed, missing `save_failed` added); removed the

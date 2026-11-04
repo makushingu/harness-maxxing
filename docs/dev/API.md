@@ -254,11 +254,14 @@ chat with `🤖 <name>` in front, and a reply to one of them fires the agent the
 Replies (every mode): `state_dir('telegram')/messages.json` maps `"<chat>:<message id>"` -> `{sid}` or `{agent}`
 (newest 5000, 60 days): the user's messages, the live status, the answers, the bell, `/sessions` cards. A message that
 replies to a mapped one goes to that session (un-archived) or fires that agent, unless it is written in a session's own
-thread. Alerts posted by other modules: `gateway.post_alert(alert)` / `update_alert(alert)` with `alert = {id, level:
-error|warn|info, kind, title, text, url, agent, actions:[{id, label}], seen, resolved, note}` - one message (the
-agent's thread when it has the Telegram option, else Alerts / the main chat), a button per action (callback
-`al:<id>:<action>` -> `maxxing.alerts.act(id, action, by="telegram")`, ≤ 64 bytes), edited on update. Without a
-`maxxing.alerts` module the gateway posts the dashboard's health problems itself every 60 s (not `cron_failed` nor
+thread. Alerts = events of the Notifications feed with buttons: `feed.py` calls `gateway.post_alert(ev)` /
+`update_alert(ev)` with the feed event (`{id, source, level: info|success|warning|error, title, body, url, count, read,
+actions:[{id, label, style}], ref, agent, resolved, resolution, telegram: off|silent|loud}`) - one message (the agent's
+thread when it has the Telegram option, else Alerts / the main chat), nothing when `telegram` is `off` except a pending
+request (`ref` `approval:…`), loud only when `loud`; a button per action (`open` / style `link` = URL button to
+`public_url` + `url`, the others callback `al:<id>:<action>` -> `feed.act(id, action, by="telegram")`), edited on
+update (`resolution`, no buttons once resolved). Without `feed.act` (older feed) the gateway posts the dashboard's
+health problems itself every 60 s (not `cron_failed` nor
 `login_failures`; button `h:<issue id>` = `health.mark_seen`; edited "Seen" / "Resolved"; off with `notify_system`).
 
 ## Backup
