@@ -15,6 +15,8 @@ program to install.
 - A thread is the session itself: what you write on the phone appears in the web UI and you can
   continue there, and the other way round.
 - Write in the **main chat** (or create a thread) to start a new session: the bot asks in which topic.
+- [Agents](agents) can get their **own thread** (an option on the agent): its results are posted there and what you
+  write there starts it. When an agent waits for your OK, its request comes with **Allow** / **Deny** buttons.
 
 ## Setup (Settings -> Telegram)
 
