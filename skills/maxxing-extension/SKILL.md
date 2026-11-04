@@ -216,7 +216,7 @@ Copy `<code dir>/examples/extensions/snake-widget/` (a working game) and adapt i
   for phones.
 
 ## Office view - `extensions/mission-control/`
-A view of the Office (the overview of the Agents page), listed in its view menu after Classic and Futuristic.
+A view of the Office (the overview of the Agents page), listed in its view menu after Classic and Space.
 `manifest.json`
 ```json
 {"id": "mission-control", "name": "Mission control", "type": "view", "icon": "radar", "version": "1.0.0", "api": 1,

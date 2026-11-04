@@ -127,7 +127,7 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   `OfficeFuture.tsx` (bays, hover consoles, holo screens, `mx-future-*` keyframes in `globals.css`); what both pixel
   views share moved to `office.tsx` (`useRoom`, `useDesk`, `Cursor`, `hash`, `colsFor`); `pixels.avatarSvg()`.
 - Agents Office: Futuristic replaces Gamified (`OfficeGame.tsx` removed; a stored `game` view reads as `future`); its
-  holographic screens stay still (no float, glitch, scan or scrolling lines; only the glow pulses while it works).
+  holographic screens stay still (no float, glitch, scan or scrolling lines; only the glow pulses while it works). The view is labelled **Space** (id `future` kept).
 - Extension Office views: manifest `"agents_view": true | {"name"?: str | {lang: str}, "icon"?}` + `agents-view.html`
   (`extensions._agents_view`, errors on the extension: missing file, bad value; new type `"view"` = only that,
   requires `agents_view`; `agents-view.html` in the hot-reload signature). `/api/extensions` items get
