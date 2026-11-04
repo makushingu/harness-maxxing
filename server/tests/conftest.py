@@ -47,6 +47,10 @@ def _never_the_real_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(cmd_core, "F2B_JAIL", fake / "fail2ban" / "harness-maxxing.local")
     monkeypatch.setattr(cmd_core, "CADDY_ADMIN_DROPIN", fake / "caddy.service.d" / "harness-maxxing-admin.conf")
     monkeypatch.setattr(cmd_core, "FSTAB", fake / "fstab")
+    monkeypatch.setenv("MAXXING_TRAEFIK_ROUTE", str(fake / "dokploy" / "harness-maxxing.yml"))
+    monkeypatch.setenv("MAXXING_CADDY_DOCKER_DROPIN", str(fake / "caddy.service.d" / "20-harness-docker.conf"))
+    monkeypatch.setenv("MAXXING_DOKPLOY_ETC", str(fake / "dokploy"))
+    monkeypatch.setenv("MAXXING_DOKPLOY_LOGS", str(fake / "dokploy" / "logs"))
 
 
 @pytest.fixture(autouse=True)
