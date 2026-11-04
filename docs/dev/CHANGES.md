@@ -65,6 +65,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Files: `/preview` renders in `_thumb_pool` like `/thumb` (it took a shared `to_thread` worker for up to 30 s),
   ffmpeg / pdftoppm run under `nice -n 10`, and concurrent requests for the same (file, width bucket) share one
   render (`_render`, `_thumb_jobs`).
+- Uploads: Starlette's multipart spool goes to `<state>/tmp/uploads` (`uploads.spool_dir`, patched into
+  `starlette.formparsers.SpooledTemporaryFile`) instead of the system temp dir (a tmpfs here: an 800 MB upload added
+  800 MB of shmem). Not via `TMPDIR` in the unit: spawn.py passes TMPDIR on to the sessions.
 - Turn watcher: with inotify and nothing running it waits up to `WATCH_IDLE_WAKE_S` (30 s, shorter when a hand-off
   hold expires sooner) instead of a full `_scan` every second.
 - `compact_log`: a read-only pass (`_log_shrinks`, stops at the first line it would change) first; a log that would

@@ -10,7 +10,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 - Multipart requests (uploads, import, voice): the cookie and the CSRF header are checked **before** the body is
   read (`401` / `403`). Then `413 too_large` if `Content-Length` (or the streamed body) exceeds config
   `upload_max_mb` (default 2048; 0 = no cap; + 1 MB of multipart framing), and `507 disk_full` if the body does not fit
-  in the temp dir (where the server spools uploads, often a small tmpfs) with min(`upload_min_free_mb`, 128 MB)
+  in the spool dir (`<state>/tmp/uploads`, where the server spools uploads) with min(`upload_min_free_mb`, 128 MB)
   to spare. The full `upload_min_free_mb` reserve (default 1024) is checked on the destination disk per file.
   Both keys are read from config.json on every request (no restart).
 - Other request bodies (JSON, forms...) are capped before they are read (`maxxing/bodylimit.py`), on the declared
