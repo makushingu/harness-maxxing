@@ -232,7 +232,7 @@ export function CommandPalette() {
                 className="h-13 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground max-md:h-14 max-md:text-base"
               />
               {loading && <Spinner className="text-muted-foreground" />}
-              <button type="button" onClick={close} className="text-sm text-muted-foreground md:hidden">
+              <button type="button" onClick={close} className="text-sm text-muted-foreground md:hidden pointer-coarse:min-h-11 pointer-coarse:px-2">
                 {t('common.cancel')}
               </button>
               <Kbd className="max-md:hidden">Esc</Kbd>
