@@ -144,11 +144,130 @@ def _num(v: Any, default: float, lo: float, hi: float, integer: bool) -> float |
 
 
 def project_color(project: str) -> str:
-    """The outfit colour a new agent of `project` starts with (FNV-1a, same as projectColor() in Avatar.tsx)."""
+    """The outfit colour a new agent of `project` starts with: the one picked on the Agents page (layout.json),
+    else a stable pick from the name (FNV-1a, same as projectColor() in pixels.ts)."""
+    c = load_layout()["colors"].get(project)
+    if c in AVATAR["color"]:
+        return c
     h = 0x811C9DC5
     for ch in project:
         h = ((h ^ ord(ch)) * 0x01000193) & 0xFFFFFFFF
     return AVATAR["color"][h % len(AVATAR["color"])]
+
+
+# ---- the layout of the Agents page (<state>/agents/layout.json) -----------------------------------
+# Shared by every browser: {"projects": [name, ...], "colors": {project: color}, "agents": {project: [agent path]}}.
+# Only the order picked by hand: projects or agents not listed come after, in the default order (the UI sorts).
+# Names that no longer exist are kept (a project renamed back finds its place); unknown fields are kept.
+LAYOUT_FILE = "layout.json"
+MAX_LAYOUT_PROJECTS = 500
+MAX_LAYOUT_AGENTS = 500                                 # per project
+_layout_lock = config.ProcessLock("agents-layout")
+
+
+def _layout_file() -> Path:
+    return config.state_dir("agents") / LAYOUT_FILE
+
+
+def _clean_layout(data: Any, strict: bool = False) -> dict:
+    """Keep what is well-formed; `strict` = raise AgentError(400, "bad_layout") instead of dropping."""
+    def bad(msg: str) -> None:
+        if strict:
+            raise AgentError(400, "bad_layout", msg)
+
+    d = data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        bad("The layout must be an object")
+    out = {k: v for k, v in d.items() if k not in ("projects", "colors", "agents")}
+    projects: list[str] = []
+    raw = d.get("projects", [])
+    if not isinstance(raw, list):
+        bad("projects must be a list of project names")
+        raw = []
+    for p in raw:
+        if not isinstance(p, str) or not SLUG_RE.match(p):
+            bad(f"Not a project name: {p!r}")
+        elif p not in projects:
+            projects.append(p)
+    if len(projects) > MAX_LAYOUT_PROJECTS:
+        bad(f"At most {MAX_LAYOUT_PROJECTS} projects")
+        projects = projects[:MAX_LAYOUT_PROJECTS]
+    colors: dict[str, str] = {}
+    raw = d.get("colors", {})
+    if not isinstance(raw, dict):
+        bad("colors must be an object {project: color}")
+        raw = {}
+    for p, c in raw.items():
+        if not isinstance(p, str) or not SLUG_RE.match(p):
+            bad(f"Not a project name: {p!r}")
+        elif c not in AVATAR["color"]:
+            bad(f"Not a colour: {c!r} (one of {', '.join(AVATAR['color'])})")
+        elif len(colors) < MAX_LAYOUT_PROJECTS:
+            colors[p] = c
+    if len(raw) > MAX_LAYOUT_PROJECTS:
+        bad(f"At most {MAX_LAYOUT_PROJECTS} colours")
+    order: dict[str, list[str]] = {}
+    raw = d.get("agents", {})
+    if not isinstance(raw, dict):
+        bad("agents must be an object {project: [agent path]}")
+        raw = {}
+    if len(raw) > MAX_LAYOUT_PROJECTS:
+        bad(f"At most {MAX_LAYOUT_PROJECTS} projects")
+    for p, paths in list(raw.items())[:MAX_LAYOUT_PROJECTS]:
+        if not isinstance(p, str) or not SLUG_RE.match(p) or not isinstance(paths, list):
+            bad(f"agents.{p}: a project name and a list of agent paths")
+            continue
+        keep: list[str] = []
+        for x in paths:
+            parsed = parse(x) if isinstance(x, str) else None
+            if not parsed or parsed[0] != p:
+                bad(f"Not an agent path of project {p}: {x!r}")
+            elif x not in keep:
+                keep.append(x)
+        if len(keep) > MAX_LAYOUT_AGENTS:
+            bad(f"At most {MAX_LAYOUT_AGENTS} agents per project")
+            keep = keep[:MAX_LAYOUT_AGENTS]
+        if keep:
+            order[p] = keep
+    return {**out, "projects": projects, "colors": colors, "agents": order}
+
+
+def load_layout() -> dict:
+    """The saved layout; a missing or damaged file = the empty layout (default order and colours)."""
+    return _clean_layout(config.read_json(_layout_file(), {}))
+
+
+def save_layout(data: Any) -> dict:
+    """Replace the layout (validated: AgentError 400 bad_layout). Unknown fields of the request are dropped, those
+    already in the file (a newer version's) are kept."""
+    new = {k: v for k, v in _clean_layout(data, strict=True).items() if k in ("projects", "colors", "agents")}
+    with _layout_lock:
+        old = config.read_json(_layout_file(), {})
+        extra = {k: v for k, v in (old.items() if isinstance(old, dict) else ()) if k not in new}
+        config.write_json(_layout_file(), {**extra, **new})
+    from . import bus
+    bus.invalidate("agents")
+    return load_layout()
+
+
+def _remap_layout(old_prefix: str, new_prefix: str) -> None:
+    """A project or topic was renamed: its place, colour and agents' order follow."""
+    f = _layout_file()
+    if not f.exists():
+        return
+    with _layout_lock:
+        lay = _clean_layout(config.read_json(f, {}))
+        op = old_prefix.split("/")[1] if old_prefix.count("/") == 1 else None
+        np_ = new_prefix.split("/")[1] if op else None
+        if op and np_:
+            lay["projects"] = [np_ if p == op else p for p in lay["projects"]]
+            if op in lay["colors"]:
+                lay["colors"][np_] = lay["colors"].pop(op)
+            if op in lay["agents"]:
+                lay["agents"][np_] = lay["agents"].pop(op)
+        lay["agents"] = {p: [new_prefix + x[len(old_prefix):] if x.startswith(old_prefix + "/") else x for x in xs]
+                         for p, xs in lay["agents"].items()}
+        config.write_json(f, _clean_layout(lay))
 
 
 def _clean_avatar(a: Any, seed: str = "") -> dict:
@@ -557,6 +676,10 @@ def delete(path: str) -> None:
 
 def remap(old_prefix: str, new_prefix: str) -> None:
     """A topic or project was renamed: move the state files of its agents."""
+    try:
+        _remap_layout(old_prefix, new_prefix)
+    except OSError:
+        log.exception("agents layout not moved (%s -> %s)", old_prefix, new_prefix)
     d = config.state_dir("agents")
     old_k, new_k = old_prefix.replace("/topics/", "__").replace("projects/", ""), \
         new_prefix.replace("/topics/", "__").replace("projects/", "")

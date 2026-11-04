@@ -120,6 +120,18 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   its agents, 2-5 columns, SVG pixel desks at 4 px per pixel, 3 on phones, free desk -> creation sheet on the room's
   main topic; `mx-game-*` keyframes in `globals.css`). `statusOf` / `Status` moved to `parts.tsx`. i18n: removed
   `agents.side.{overview,grouping,byState,byProject}`, added `agents.side.{filter,all}`, `agents.office.*`.
+- Layout of the Agents page, shared by every device: `<state>/agents/layout.json` = `{projects: [name], colors:
+  {project: color}, agents: {project: [agent path]}}` (`agents.load_layout` tolerant, `save_layout` strict ->
+  `400 bad_layout`; colours = `AVATAR["color"]`, 500 projects / 500 agents per project max; unknown fields of the
+  file kept, of the request dropped; a project / topic rename rewrites it in `agents.remap`). `GET/PUT
+  /api/agents/layout`, bus `agents`. `agents.project_color` honours the picked colour (outfit of new agents, CLI
+  included). Order: listed projects first then workspace order; listed agents first then topic, name. Web:
+  `features/agents/layout.tsx` = `useAgentsLayout()` (sort, `colorOf`, moves; used by `AgentsList`, Classic and
+  `OfficeGame`), `useProjectColorOf()` (creation form, `AvatarEditor`; `randomAvatar(color)` now takes a colour),
+  `useReorder` (HTML5 drag and drop, off on touch; an agent drops only in its project; `DropBar` indicator),
+  `ProjectMenu` (Move up / down + 6 swatches); queries `useAgentsLayoutData` / `useSaveAgentsLayout` (optimistic).
+  i18n `agents.layout.*`. Fix: the creation sheet's first step now starts on the topic it was opened with (the free
+  desk of a room).
 - `web/src/pages/pageData.ts`: `staleTime` accepts a function (the type broke `tsc -b` after the file kind query
   change of a111).
 

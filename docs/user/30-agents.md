@@ -34,6 +34,12 @@ Click a card to open the agent; point at it for its on/off switch and **Run** (a
   its last run failed, and an agent that is off sleeps (**z Z**). Click a desk to open the agent; the **free desk**
   (**+**) of a room creates a new agent in that project.
 
+**Your order, your colors.** Drag a project (its name in the list or in Classic, the wall of its room in Gamified)
+to move it, and drag an agent onto another of the same project to take its place; an agent never leaves its project.
+The **...** next to a project's name (on its sign in Gamified) moves it up or down and sets its **color**, also the
+outfit of its new agents; use it on a touch screen, where dragging is not available. The order and colors are saved
+on the server: every browser and phone shows the same.
+
 On a phone, the Agents page is the list; **Office** opens the office full screen.
 
 ## What an agent is made of

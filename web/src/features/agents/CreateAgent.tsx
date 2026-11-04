@@ -17,6 +17,7 @@ import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, Sheet
 import { Callout } from '@/features/common'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { AgentAvatarIcon, projectColor, randomAvatar } from './Avatar'
+import { useProjectColorOf } from './layout'
 import { AvatarEditor } from './AvatarEditor'
 import { useCreateWithClaude } from './EditWithClaude'
 import { DEFAULT_LIMITS, FeedTriggerFields, KeyChecks, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
@@ -49,7 +50,8 @@ type Form = {
   keys: string[]
 }
 
-const fresh = (topicPath?: string): Form => {
+/** `colorOf` = the project's colour (useProjectColorOf: the one picked on the Agents page). */
+const fresh = (topicPath?: string, colorOf: ColorOf = projectColor): Form => {
   const m = topicPath ? /^projects\/([^/]+)\/topics\/([^/]+)$/.exec(topicPath) : null
   return {
     project: m?.[1] || '',
@@ -57,7 +59,7 @@ const fresh = (topicPath?: string): Form => {
     display: '',
     slug: '',
     slugEdited: false,
-    avatar: randomAvatar(m?.[1]),
+    avatar: randomAvatar(m?.[1] ? colorOf(m[1]) : undefined),
     colorEdited: false,
     role: '',
     model: '',
@@ -81,6 +83,7 @@ const fresh = (topicPath?: string): Form => {
 /** The character of the new agent: small with "Change" (and Random), the editor unfolds under it. */
 function CharacterField({ value, project, onChange }: { value: AgentAvatar; project: string; onChange: (a: AgentAvatar) => void }) {
   const t = useT()
+  const colorOf = useProjectColorOf()
   const [open, setOpen] = React.useState(false)
   return (
     <div className="grid gap-3" data-testid="agent-character">
@@ -90,7 +93,7 @@ function CharacterField({ value, project, onChange }: { value: AgentAvatar; proj
           <span className="text-sm font-medium">{t('agents.create.face')}</span>
           <span className="text-xs text-muted-foreground">{t('agents.create.faceHint')}</span>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => onChange(randomAvatar(project))} aria-label={t('agents.avatar.random')} title={t('agents.avatar.random')}>
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange(randomAvatar(project ? colorOf(project) : undefined))} aria-label={t('agents.avatar.random')} title={t('agents.avatar.random')}>
           <Dices />
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="agent-character-edit">
@@ -103,15 +106,16 @@ function CharacterField({ value, project, onChange }: { value: AgentAvatar; proj
 }
 
 /** The character in the outfit colour of `project` (its agents are told apart by it). */
-function dressFor(a: AgentAvatar, project: string): AgentAvatar {
-  return project ? { ...a, color: projectColor(project) } : a
+function dressFor(a: AgentAvatar, project: string, colorOf: ColorOf): AgentAvatar {
+  return project ? { ...a, color: colorOf(project) } : a
 }
+type ColorOf = (project: string) => string
 
 /** The form filled from a ready-made agent: its name, face, role, safety settings and first trigger. */
-const fromTemplate = (tp: AgentTemplate, topicPath?: string): Form => ({
-  ...fresh(topicPath),
+const fromTemplate = (tp: AgentTemplate, topicPath: string | undefined, colorOf: ColorOf): Form => ({
+  ...fresh(topicPath, colorOf),
   display: tp.name,
-  avatar: dressFor({ ...tp.avatar }, fresh(topicPath).project),
+  avatar: dressFor({ ...tp.avatar }, fresh(topicPath).project, colorOf),
   role: tp.role,
   permission: tp.permission_mode,
   approvals: tp.approvals,
@@ -135,6 +139,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
   const mask = useMask()
   const navigate = useNavigate()
   const { data: ws } = useWorkspace()
+  const colorOf = useProjectColorOf()
   const create = useCreateAgent()
   const addCron = useAddAgentCron()
   const addHook = useAddAgentWebhook()
@@ -145,7 +150,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
   const [tpl, setTpl] = React.useState<AgentTemplate | null>(null)
   // The topic picked in QuickCreate (or on the empty page) wins over the list's filter.
   const [where, setWhere] = React.useState(topicPath)
-  const [f, setF] = React.useState<Form>(() => fresh(topicPath))
+  const [f, setF] = React.useState<Form>(() => fresh(topicPath, colorOf))
   const [errors, setErrors] = React.useState<{ name?: string; form?: string; schedule?: string }>({})
   const [made, setMade] = React.useState<{ agent: Agent; hook?: AgentWebhookResult['hook']; warn?: string } | null>(null)
   const busy = create.isPending || addCron.isPending || addHook.isPending
@@ -154,7 +159,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
     if (open) {
       const tp = start?.template || null
       const w = start?.topic || topicPath
-      const next = tp ? fromTemplate(tp, w) : fresh(w)
+      const next = tp ? fromTemplate(tp, w, colorOf) : fresh(w, colorOf)
       setWhere(w)
       setF(next)
       setStep(tp && next.project && next.topic ? 1 : 0)
@@ -265,9 +270,10 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
             />
           ) : !made && !manual ? (
             <QuickCreate
-              topicPath={topicPath}
+              key={where || ''}
+              topicPath={where}
               onManual={(w) => {
-                const next = fresh(w)
+                const next = fresh(w, colorOf)
                 setWhere(w)
                 setF(next)
                 setManual(true)
@@ -278,7 +284,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
                 setImporting(true)
               }}
               onTemplate={(tp, w) => {
-                const next = fromTemplate(tp, w)
+                const next = fromTemplate(tp, w, colorOf)
                 setWhere(w)
                 setF(next)
                 setTpl(tp)
@@ -307,7 +313,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
               <FormField label={t('agents.create.project')}>
                 <Select
                   value={f.project || undefined}
-                  onValueChange={(v) => setF((x) => ({ ...x, project: v, topic: projects.find((p) => p.name === v)?.topics[0]?.name || '', avatar: x.colorEdited ? x.avatar : dressFor(x.avatar, v) }))}
+                  onValueChange={(v) => setF((x) => ({ ...x, project: v, topic: projects.find((p) => p.name === v)?.topics[0]?.name || '', avatar: x.colorEdited ? x.avatar : dressFor(x.avatar, v, colorOf) }))}
                   placeholder={t('agents.create.pickProject')}
                   options={projects.map((p) => ({ value: p.name, label: mask(p.emoji ? `${p.emoji} ${p.name}` : p.name, 6) }))}
                 />
