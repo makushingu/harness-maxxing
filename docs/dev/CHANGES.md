@@ -117,6 +117,21 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   dropped the ended turn's ref as not live (answer never sent). New WORDS keys; `_sender_lang(msg)` for texts sent
   before the chat is linked.
 
+## Unreleased
+
+- Sessions `NewSessionColumn`: `made` ref = the session the first send created; chained later sends (text or voice)
+  go to it through `send` instead of a second `create`. Its Composer now gets a `checkSent`: recent sessions of the
+  path (created >= oldest entry - 600 s) whose log or queue holds an entry's `client_id` take the column
+  (`outboxMove` to that session first, its own `checkSent` sorts the rest).
+- Composer unmount stores the text only when `unsaved` (quotes / attachments are already stored by their effects; it
+  used to overwrite another tab's draft); the debounce no longer marks the text just loaded as unsaved. A refused send
+  whose composer is gone puts its attachments back in the stored draft too.
+- `restoreLayout` matches the current session columns by id (solo reuses the on-screen key): a session not in the
+  saved layout is added with a fresh key when its key is taken, and keeps the focus.
+- Sessions: `setNewPath` to a topic that already has a `new` column closes this one and focuses that one (drafts,
+  seeds and prefills are keyed `new:<path>`, two columns on one path overwrote each other).
+
+
 ## 2.0.0-alpha.109 - 2026-11-04
 
 - Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events
