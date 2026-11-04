@@ -2572,7 +2572,8 @@ class Gateway:
         rid, _, decision = val.rpartition(":")
         try:
             await asyncio.to_thread(approvals.decide, rid, decision, "", "telegram")
-            return _w(f"approval_{decision}")              # approval_done() edits the message
+            approval_done(rid, decision)                   # edited here: with feed alerts approvals.py no longer does
+            return _w(f"approval_{decision}")
         except approvals.ApprovalError as e:               # answered elsewhere, or before a restart: drop the buttons
             try:
                 await self.client.call("editMessageReplyMarkup", chat_id=msg["chat"]["id"],
@@ -3707,7 +3708,20 @@ def post_alert(ev: dict) -> None:
 def update_alert(ev: dict) -> None:
     """An alert changed (decided, seen, resolved, its title or count): its message is edited. Never raises."""
     try:
-        if isinstance(ev, dict) and f"al:{ev.get('id')}" in _notes():
+        if not isinstance(ev, dict):
+            return
+        ref = str(ev.get("ref") or "")
+        if ev.get("resolved") and ref.startswith("approval:"):
+            rid = ref.split(":", 1)[1]                     # a request posted before the feed alerts (button p:)
+            if rid in _approval_msgs or f"p:{rid}" in _notes():
+                from .. import approvals
+                try:
+                    status = str((approvals.get(rid) or {}).get("status") or "")
+                except Exception:  # noqa: BLE001
+                    status = ""
+                _approval_done_sync(rid, status if status in ("allow", "deny", "timeout", "expired")
+                                    else str(ev.get("resolution") or "✓"))
+        if f"al:{ev.get('id')}" in _notes():
             _alert_update_sync(dict(ev))
     except Exception:
         log.exception("telegram update_alert failed")

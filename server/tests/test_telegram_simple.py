@@ -166,6 +166,7 @@ async def test_threads_to_simple_deletes_the_threads(api, tg, svc):
 async def test_health_problems_become_alerts(api, tg, svc, monkeypatch):
     await _link_simple(api, tg)
     from maxxing import health
+    monkeypatch.setattr(gateway, "_feed_alerts", lambda: False)   # an older feed: the bridge posts them itself
     issues = [{"id": "aaa", "level": "error", "code": "disk_full", "text": "Disk 97 % full", "seen": False},
               {"id": "bbb", "level": "warn", "code": "cron_failed", "text": "Job failed", "seen": False}]
     seen: list = []
@@ -219,7 +220,7 @@ async def test_feed_alerts_buttons_call_feed_act(api, tg, svc, monkeypatch):
     await wait_for(lambda: acted == [(7, "allow", "telegram")], what="act")
     await wait_for(lambda: any("Allowed on Telegram" in (q.get("text") or "") for q in tg.sent("editMessageText")),
                    what="edited")
-    assert "al:7" not in gateway._notes()                         # resolved: forgotten
+    await wait_for(lambda: "al:7" not in gateway._notes(), what="forgotten")   # resolved: forgotten
     # "off" sends nothing else; "silent" is silent
     gateway.post_alert({**ev, "id": 8, "ref": "agent:x#failed", "title": "Quiet one", "actions": []})
     gateway.post_alert({**ev, "id": 9, "ref": "agent:x#failed", "title": "Soft one", "actions": [],
