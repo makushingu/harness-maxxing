@@ -42,7 +42,7 @@ THUMB_TIMEOUT_S = 30
 # here instead of filling the shared worker threads every other request (health, lists, settings) needs.
 THUMB_JOBS = 3
 _thumb_pool = ThreadPoolExecutor(max_workers=THUMB_JOBS, thread_name_prefix="mx-thumb")
-_thumb_jobs: dict[tuple[str, int], asyncio.Future] = {}   # (file, width) -> its render in flight (shared)
+_thumb_jobs: dict[tuple[str, int, int], asyncio.Future] = {}   # (file, mtime, width) -> its render in flight (shared)
 SEARCH_MAX = 50
 SEARCH_SCAN_MAX = 200_000
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache", ".next", "dist",
@@ -532,8 +532,13 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
 
 async def _render(p: Path, w: int) -> tuple[Path, str]:
     """_thumb in the thumbnail pool (previews too: up to 30 s of ffmpeg each, never in the shared worker threads);
-    requests for the same file and width wait for one render instead of running ffmpeg each."""
-    key = (str(p), next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1]))
+    requests for the same version of a file and width wait for one render instead of running ffmpeg each (a file
+    rewritten meanwhile - a video still being written - gets its own render, never the old one's result)."""
+    try:
+        mtime = (await _t(p.stat)).st_mtime_ns
+    except OSError:
+        mtime = 0
+    key = (str(p), mtime, next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1]))
     loop = asyncio.get_running_loop()
     fut = _thumb_jobs.get(key)
     if fut is None or fut.get_loop() is not loop:
