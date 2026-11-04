@@ -71,3 +71,12 @@ def test_chat_thumbnail_of_a_big_gif_stays_still(client, tree, monkeypatch):  # 
     r = client.get("/api/files/thumb", params={"path": str(gif), "w": 320, "anim": 1})
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
     assert client.get("/api/files/thumb", params={"path": str(tree / "none.gif"), "anim": 1}).status_code == 404
+
+
+def test_media_paths_is_linear_on_a_run_of_slashes():
+    # ",/a" * 40000 took ~40 s (a frozen event loop) when every "/" restarted a full scan
+    import time
+    text = ",/a" * 40000 + " /x/shot.png"
+    t = time.perf_counter()
+    assert media.media_paths(text) == ["/x/shot.png"]
+    assert time.perf_counter() - t < 1
