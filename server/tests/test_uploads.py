@@ -35,6 +35,16 @@ def test_cap_per_file_in_save_upload(client, mx, monkeypatch):
     assert not (mx["files"] / "up.bin").exists()
 
 
+def test_a_refused_file_removes_the_ones_saved_before_it(client, mx):
+    # all or nothing: a client retrying the request must not find f0.bin kept (and get f0-1.bin)
+    config.update_config(upload_max_mb=1)
+    r = client.post("/api/files/upload", params={"dir": str(mx["files"])},
+                    files=[("file", (f"f{i}.bin", b, "application/octet-stream"))
+                           for i, b in enumerate([b"a" * 1000, b"x" * (uploads.MB + 1000)])])
+    assert r.status_code == 413 and r.json()["error"] == "too_large"
+    assert not (mx["files"] / "f0.bin").exists() and not (mx["files"] / "f1.bin").exists()
+
+
 def test_cap_while_streaming_without_content_length(client, mx):
     config.update_config(upload_max_mb=1)
 
