@@ -246,3 +246,25 @@ def test_a_moved_session_is_found_under_its_new_topic(client, mx):
     store.update(sid, path="projects/zeta/topics/t2")
     search.refresh()
     assert [x["path"] for x in search.search("okapiword")["results"]] == ["projects/zeta/topics/t2"]
+
+
+def test_a_fifo_named_like_a_text_file_does_not_block_the_index(client, mx):
+    import threading
+    d = config.workspace() / "projects" / "acme" / "topics" / "blog"
+    d.mkdir(parents=True)
+    os.mkfifo(d / "pipe.md")
+    os.mkfifo(d / "memory.md")
+    (d / "notes.md").write_text("une note sur le fromage\n")
+    t = threading.Thread(target=search.refresh, daemon=True)
+    t.start()
+    t.join(8)
+    blocked = t.is_alive()
+    for _ in range(20):                                  # unblock the reader (each FIFO in turn) before failing
+        if not t.is_alive():
+            break
+        for name in ("memory.md", "pipe.md"):
+            os.close(os.open(d / name, os.O_RDWR))
+        t.join(0.5)
+    assert not blocked, "the index blocked reading a FIFO"
+    assert [r["title"] for r in _q(client, "fromage")] == ["notes.md"]
+
