@@ -486,7 +486,7 @@ export type TokenStats = {
 export type ChangelogEntry = { version: string; label: string; current: boolean; body: string }
 export type Changelog = { version: string; entries: ChangelogEntry[] }
 export type Secret = { name: string; note: string; expose: boolean; updated: number; preview: string }
-export type SecretPutBody = { value?: string; note?: string; expose?: boolean }
+export type SecretPutBody = { value?: string; note?: string; expose?: boolean; create?: boolean }
 
 /* ---------------------------------------------------------------- System */
 /** `seen`: marked as seen - it does not count in the sidebar until it changes or for 24 h. */

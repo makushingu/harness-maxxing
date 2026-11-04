@@ -34,3 +34,15 @@ def test_set_refuses_empty_value_bad_name_and_can_stay_private(mx, monkeypatch):
     assert run(monkeypatch, "set", "bad-name", stdin="x") == 2
     assert run(monkeypatch, "set", "PRIVATE_ONE", "--no-expose", stdin="v") == 0
     assert "PRIVATE_ONE" not in vault.exposed_env()
+
+
+def test_a_multi_line_value_keeps_its_final_line_break(mx, monkeypatch, capsys):
+    """`cat key.pem | maxxing keys set` lost the last newline, which some OpenSSH versions refuse."""
+    pem = "-----BEGIN OPENSSH " "PRIVATE KEY-----\nabc\n-----END OPENSSH " "PRIVATE KEY-----\n"   # split: not a real key
+    assert run(monkeypatch, "set", "SSH_KEY", stdin=pem) == 0
+    assert vault.get("SSH_KEY") == pem
+    capsys.readouterr()
+    assert run(monkeypatch, "get", "SSH_KEY") == 0
+    assert capsys.readouterr().out == pem                          # not followed by an empty line
+    assert run(monkeypatch, "set", "SSH_KEY", stdin="token\n") == 0
+    assert vault.get("SSH_KEY") == "token"                         # one line: `echo "$V" |` adds no break
