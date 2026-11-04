@@ -133,7 +133,9 @@ def test_site_token_never_serves_dotfiles(client, tree):  # noqa: F811
     url = _site_url(client, site / "page.html")
     base = url.rsplit("/", 1)[0]
     client.cookies.clear()
-    assert client.get(url).status_code == 200
+    r = client.get(url)
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "private, no-cache"           # a sign-out is not undone by the cache
     assert client.get(base + "/.ssh/id_rsa").status_code == 403
     assert client.get(base + "/%2Essh/id_rsa").status_code == 403
     assert client.get(base + "/.env").status_code == 403
