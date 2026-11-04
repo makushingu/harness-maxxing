@@ -306,6 +306,27 @@ def test_pg_create(org, monkeypatch):
     assert e.value.code == "invalid_name"
 
 
+
+def test_pg_create_undoes_the_database_when_it_cannot_be_recorded(org, monkeypatch):
+    # the password lives only in the vault: a failed record left a role and a base nobody could use or re-create
+    sql = []
+
+    def fake_run(args, input=None, timeout=60):
+        sql.append(input or "")
+        if args[:2] == ["systemctl", "is-active"]:
+            return 0, "active\n", ""
+        return 0, "", ""
+    monkeypatch.setattr(actions, "_run", fake_run)
+    monkeypatch.setattr(actions.shutil, "which", lambda b: "/usr/bin/" + b)
+    monkeypatch.setattr(registry, "declare", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(actions.ActionError) as e:
+        actions.pg_create("shop")
+    assert e.value.code == "record_failed"
+    after = sql[next(n for n, q in enumerate(sql) if q.startswith("create database")) + 1:]
+    assert any('drop database if exists "shop"' in q for q in after)
+    assert any('drop role if exists "shop"' in q for q in after)
+    assert vault.get("DB_SHOP_URL") is None
+
 def test_sqlite_declare_and_backup(org, monkeypatch, tmp_path):
     import sqlite3
     db = tmp_path / "app.db"
