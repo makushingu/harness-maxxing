@@ -463,7 +463,7 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     description = str(f.pop("description", "") or "")
     data = clean({"sandbox": True, **f, "created": time.time()}, strict=True)
     folder(path).mkdir(parents=True)
-    workspace._init_level(folder(path), "agent", name, description)
+    workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
     _save(path, data)
     post(path, "note", "Agent created", status="created")
     _invalidate()
