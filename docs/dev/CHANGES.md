@@ -5,6 +5,14 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.112 - 2026-11-04
+
+- `download.ts`: the Blob shortcut for images up to 20 MB (`fromCache`, `BLOB_MAX`) is gone: the viewer shows
+  `/api/files/preview` for heavy images, so the raw URL was rarely cached and the click waited for the whole
+  transfer. Every download is `?download=1` through `<a download>`. iOS app: `fetchUpTo(url, SHARE_MAX,
+  SHARE_WAIT_MS = 2500)` aborts and opens the file in the app when it is not read in time (the share sheet needs a
+  fresh tap anyway; before, a slow file was fetched whole, the share failed, and it was fetched a second time).
+
 ## 2.0.0-alpha.111 - 2026-11-04
 
 - `useFileStamp`: a null stamp (missing file or failed `/api/files/stat`) is asked again by `refetchInterval`
