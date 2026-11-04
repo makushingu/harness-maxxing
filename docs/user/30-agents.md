@@ -190,7 +190,7 @@ until you switch it on):
   `keys get|list` (its keys only), `status`. Anything that changes the server (a schedule, an MCP server, an update…)
   is refused.
 - it **never changes itself**: its settings (`agent.json`: triggers, limits, keys, sandbox...), its role
-  (`CLAUDE.md`) and the Claude Code project files of its folder and topic (`.claude/`, `.mcp.json`) are read-only in
+  (`CLAUDE.md`) and the Claude Code project files of its folder and topic (`.claude/`, an existing `.mcp.json`) are read-only in
   its runs. Its memory stays its own.
 
 When to switch it off: the agent must write outside its topic, use the server's own logins (git or `gh`

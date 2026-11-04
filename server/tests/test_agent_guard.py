@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from conftest import wait_idle
 from test_agents import A, _calls, _create, _on
@@ -201,14 +202,16 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     from maxxing import agent_guard, agents
     _on(client)
     _create(client)
+    root = client.get("/api/workspace/tree").json()["root"]
+    (Path(root) / "projects/acme/topics/blog/.mcp.json").write_text("{}")
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
     wait_idle(client, run["session"]["id"])
     s = _settings(_calls()[-1]["argv"])
-    root = client.get("/api/workspace/tree").json()["root"]
     locked = s["sandbox"]["filesystem"]["denyWrite"]
     for p in (f"{root}/{A}/agent.json", f"{root}/{A}/CLAUDE.md", f"{root}/{A}/.claude",
               f"{root}/projects/acme/topics/blog/.claude", f"{root}/projects/acme/topics/blog/.mcp.json"):
         assert p in locked
+    assert f"{root}/{A}/.mcp.json" not in locked                         # missing: no placeholder in the folder
     deny = s["permissions"]["deny"]
     assert f"Edit(/{root}/{A}/agent.json)" in deny and f"Edit(/{root}/{A}/.claude/**)" in deny
     # the CLI: no agent turn (sandboxed or not) changes an agent; sending work stays allowed
