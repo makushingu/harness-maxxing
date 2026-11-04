@@ -23,9 +23,23 @@ _pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="media-warm")   # g
 _seen: OrderedDict[str, None] = OrderedDict()
 
 
+# A failed MEDIA_RE try from a "/" scans the whole run of path characters, and finditer retries
+# from every later "/" of that run: quadratic on ",/a,/a,/a..." (seconds of a frozen event loop).
+# If the first start of a run fails, every later start of the same run fails too, so skip the run.
+_START_RE = re.compile(r"(?<![\w:/.~-])/")
+_RUN_RE = re.compile(r"[^\s`'\"<>()\[\]{}|]*")
+
+
 def media_paths(text: str, limit: int = 12) -> list[str]:
     out: list[str] = []
-    for m in MEDIA_RE.finditer(text or ""):
+    text = text or ""
+    pos = 0
+    while (start := _START_RE.search(text, pos)) is not None:
+        m = MEDIA_RE.match(text, start.start())
+        if m is None:
+            pos = _RUN_RE.match(text, start.start()).end() or start.start() + 1
+            continue
+        pos = m.end()
         if m.group(1) not in out:
             out.append(m.group(1))
         if len(out) >= limit:
