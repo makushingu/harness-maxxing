@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 
 from .. import config, downloads, security, videos, workspace
 from ..security import require_auth
-from .sessions import save_upload
+from .sessions import save_uploads
 
 router = APIRouter(prefix="/api/files", tags=["files"], dependencies=[Depends(require_auth)])
 
@@ -866,7 +866,7 @@ async def upload(dir: str, file: list[UploadFile] = File(...)):
     folder = resolve(dir)
     if not await _t(folder.is_dir):
         raise _err(404, "not_found", "Folder not found")
-    return {"files": [await _t(save_upload, f, folder) for f in file]}
+    return {"files": await _t(save_uploads, file, folder)}
 
 
 # ---- search --------------------------------------------------------------------------------

@@ -398,8 +398,21 @@ def save_upload(up: UploadFile, folder: Path) -> dict:
             "mime": up.content_type or mimetypes.guess_type(dest.name)[0] or "application/octet-stream"}
 
 
+def save_uploads(files: list[UploadFile], folder: Path) -> list[dict]:
+    """All the files of one request, or none: a 413/507 on one removes those saved before it
+    (a client retrying the request would otherwise get `f0-1.bin` next to the kept `f0.bin`)."""
+    saved: list[dict] = []
+    try:
+        for up in files:
+            saved.append(save_upload(up, folder))
+    except BaseException:
+        for done in saved:
+            Path(done["path"]).unlink(missing_ok=True)
+        raise
+    return saved
+
+
 @router.post("/uploads")
 async def uploads(path: str = "", file: list[UploadFile] = File(...)):
     folder = await _call(service.uploads_dir, path.strip("/"))
-    saved = [await asyncio.to_thread(save_upload, f, folder) for f in file]
-    return {"files": saved}
+    return {"files": await asyncio.to_thread(save_uploads, file, folder)}
