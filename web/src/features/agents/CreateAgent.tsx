@@ -16,7 +16,6 @@ import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, Sheet
 import { Callout } from '@/features/common'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { AgentAvatarIcon, projectColor, randomAvatar } from './Avatar'
-import { sessionsUrl } from '@/pages/sessions/util'
 import { AvatarEditor } from './AvatarEditor'
 import { DEFAULT_LIMITS, FeedTriggerFields, KeyChecks, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
 
@@ -470,7 +469,8 @@ export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone,
     const path = where || (topics.some((x) => x.value === 'projects/general/topics/inbox') ? 'projects/general/topics/inbox' : topics[0]?.value)
     if (!path) return
     const message = where ? t('agents.quick.promptHere', { text: v }) : t('agents.quick.prompt', { text: v })
-    start.mutate({ path, message }, { onSuccess: (s) => (onDone(), navigate(sessionsUrl({ id: s.id, path: s.path }))) })
+    // the session opens in place on the Agents page (SetupView), "Open in Sessions" from there
+    start.mutate({ path, message }, { onSuccess: (s) => (onDone(), navigate(`/agents/setup/${s.id}`)) })
   }
   return (
     <div className="grid gap-4" data-testid="agent-quick">

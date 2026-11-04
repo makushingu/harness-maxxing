@@ -18,7 +18,8 @@ Changes:
   as orders, runs started from outside that ask before acting, only the keys you give it, and for new agents
   Claude Code's sandbox (its commands write only in its folder and reach only the sites you list; on a server
   installed before this version, the agent's page tells you if `maxxing agents sandbox-setup` is needed). Approval
-  requests can be answered from Telegram with Allow / Deny. Agents also read and write Claude Code agent files, and a
+  requests can be answered from Telegram with Allow / Deny. An agent never changes its own role, settings or
+  triggers: you do, from its page or with **Edit with Claude**, a session that applies what you ask. Agents also read and write Claude Code agent files, and a
   topic's agents show under it in the Sessions list. **Off by default**: turn it on in Settings -> Features -> Agents.
   [Show me](#show:agents)
 
