@@ -215,3 +215,13 @@ def test_a_failed_telegram_send_does_not_use_up_the_request_quota(tg):
     with TestClient(_app()) as c:
         codes = [c.post("/api/auth/login", json={"password": PW}, headers=H).status_code for _ in range(7)]
     assert codes == [503] * 7
+
+
+def test_a_failed_send_keeps_the_older_pending_requests(tg, monkeypatch):
+    """A reload while Telegram flakes must not close the older request that can still be answered."""
+    _on()
+    with TestClient(_app()) as c:
+        ids = [_login(c)["two_factor"]["challenge"] for _ in range(3)]
+        monkeypatch.setattr(twofactor, "_send", lambda ch: False)
+        assert c.post("/api/auth/login", json={"password": PW}, headers=H).status_code == 503
+        assert [twofactor.purpose(i) for i in ids] == ["login"] * 3
