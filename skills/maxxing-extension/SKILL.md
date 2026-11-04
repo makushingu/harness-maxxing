@@ -234,8 +234,8 @@ UI kit and theme variables, no cookies or storage), plus:
   with `image-rendering: pixelated`, sizes in multiples of 16.
 - `maxxing.navigate(a.route)` opens an agent; `maxxing.navigate(data.new_agent_route)` = New agent (only routes of the
   Agents page).
-- `maxxing.app("/api/agents")` / `maxxing.app("/api/agents/layout")`: read-only GET of the raw API (every other path is
-  refused); use `onData` first, it is live.
+- `maxxing.app("/api/agents/layout")`: read-only GET of the raw order and colors (every other path is refused); use
+  `onData` first, it is live and has everything a view needs.
 Rules: render from `onData` every time (it is called again on each change, rebuild or diff, never append), use
 `textContent` for names and texts, show every state (`waiting` = needs the user, `unread` = new results, `failed`,
 `off`), make every agent clickable (also with the keyboard: a `<button>`), `maxxing.resize(document.body.scrollHeight)`

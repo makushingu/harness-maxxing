@@ -36,11 +36,13 @@ def test_endpoints_validate(client, topic):
     assert r.json() == {"projects": ["acme", "general"], "colors": {"acme": "violet"}, "agents": {"acme": [B, A]}}
     assert client.get("/api/agents/layout").json()["agents"] == {"acme": [B, A]}
     for bad in ([1], {"projects": "acme"}, {"projects": ["../x"]}, {"colors": {"acme": "pink"}}, {"colors": []},
-                {"agents": {"acme": ["projects/other/topics/x/agents/y"]}}, {"agents": {"acme": "x"}},
+                {"agents": {"acme": ["projects/other/topics/x/agents/y"]}}, {"agents": {"acme": "x"}}, {"projects": ["acme\n"]},
                 {"projects": [f"p{i}" for i in range(agents.MAX_LAYOUT_PROJECTS + 1)]}):
         r = client.put("/api/agents/layout", json=bad)
         assert r.status_code == 400 and r.json()["error"] == "bad_layout", (bad, r.text)
     assert client.get("/api/agents/layout").json()["colors"] == {"acme": "violet"}   # refused = unchanged
+    r = client.put("/api/agents/layout", json={"agents": {"acme": [f" /{A}/ "]}})          # stored normalised
+    assert r.status_code == 200 and r.json()["agents"] == {"acme": [A]}
 
 
 def test_off_feature_hides_the_layout(client, topic):

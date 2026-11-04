@@ -200,7 +200,7 @@ that builds one with you.
 |---|---|
 | `maxxing.onData(fn)` / `maxxing.data` | the Office, given at once and again at every change: `{lang, new_agent_route, projects: [{name, emoji, color, agents: [...]}]}`, projects and agents in the user's order, `color` = the project's color (hex). Each agent: `path`, `project`, `topic`, `name`, `display_name`, `description`, `enabled`, `model`, `status` (`running`, `waiting`, `unread`, `failed`, `off`, `idle`), `status_text` (in the UI language), `running`, `waiting`, `unread`, `cost_today`, `last_run` (`{at, kind, ok, text}`, text cut at 300 characters), `avatar` (its 6 parts), `avatar_svg` (its pixel character as SVG markup: `img.src = "data:image/svg+xml," + encodeURIComponent(a.avatar_svg)`), `route` |
 | `maxxing.navigate(route)` | opens a route of the Agents page: an agent's `route`, or `new_agent_route` (New agent); other routes are ignored |
-| `maxxing.app(path)` | a read-only GET of `/api/agents` or `/api/agents/layout` (the raw API, for more fields); any other path is refused |
+| `maxxing.app(path)` | a read-only GET of `/api/agents/layout` (the raw order and colors); any other path is refused |
 
 - The frame grows with `maxxing.resize(px)` (up to 6000 px). Make it work in light and dark (`maxxing.theme`) and on
   a phone.
