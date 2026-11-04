@@ -62,6 +62,26 @@ async def test_typing_stops_after_a_web_stop(api, tg, svc, monkeypatch):
     await wait_for(lambda: gateway.gateway()._pending == {}, timeout=5, what="typing stopped")
 
 
+async def test_turn_end_during_a_typing_call_is_still_answered(api, tg, svc, monkeypatch):
+    monkeypatch.setattr(gateway, "RECHECK_EVERY", 0.1)
+    monkeypatch.setattr(gateway, "REF_GRACE", 0.2)
+    calls = []
+
+    async def swallowing_action(self, p):                             # a cancel landing in an HTTP call can be
+        calls.append(1)                                               # swallowed by the HTTP stack
+        try:
+            await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.5)
+    monkeypatch.setattr(gateway.Gateway, "_chat_action", swallowing_action)
+    await _link(api, tg)
+    sid, tid = await _open(api, svc)
+    tg.message("quick one", thread=tid)
+    await wait_for(lambda: svc.sent and calls, what="typing")
+    svc.finish(sid, "QUICK ANSWER")
+    await wait_for(lambda: any("QUICK ANSWER" in t for t in _texts(tg, tid)), timeout=5, what="answer")
+
+
 async def test_steer_merges_and_typing_ends(api, tg, svc):
     await _link(api, tg)
     sid, tid = await _open(api, svc)
