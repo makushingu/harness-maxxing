@@ -918,10 +918,10 @@ class Gateway:
     async def _health_pass(self) -> None:
         """A new problem of the dashboard's health card (not seen there) -> one alert with a "Seen" button; seen on
         the web -> the message says so; gone -> "Resolved". Off with `notify_system`; skipped while a
-        `maxxing.alerts` module posts the alerts itself (`post_alert`). Failed jobs and sign-ins have their own
+        feed carries the alerts (`feed.act`; health problems there with `health_feed`). Failed jobs and sign-ins have their own
         messages (cron reports, sign-in alerts)."""
         tg = tg_config()
-        if not tg.get("chat_id") or not tg.get("notify_system", True) or _alerts_module() is not None:
+        if not tg.get("chat_id") or not tg.get("notify_system", True) or _feed_alerts():
             return
         from .. import health
         issues = [i for i in (await asyncio.to_thread(health.collect)).get("issues") or []
@@ -967,19 +967,20 @@ class Gateway:
         return _w("cb_seen")
 
     async def _on_alert(self, msg: dict, val: str) -> str:
-        """A button of a `post_alert` message: alerts.act(id, action, by="telegram") -> the message is updated."""
+        """A button of an alert: feed.act(id, action, by="telegram"); feed.py then calls update_alert (edited here
+        too, at once)."""
         aid, _, action = val.rpartition(":")
-        mod = _alerts_module()
-        if mod is None or not hasattr(mod, "act"):
+        from .. import feed
+        if not _feed_alerts():
             await self._edit_markup(msg, None)
             return _w("cb_done")
         try:
-            alert = await asyncio.to_thread(mod.act, aid, action, by="telegram")
-        except Exception as e:  # noqa: BLE001 - already decided, gone…: the buttons go
+            ev = await asyncio.to_thread(feed.act, int(aid), action, by="telegram")
+        except Exception as e:  # noqa: BLE001 - FeedError (bad action, gone), ApprovalError (unknown request)
             await self._edit_markup(msg, None)
             return str(getattr(e, "message", None) or e)[:190] or _w("cb_done")
-        if isinstance(alert, dict):
-            await asyncio.to_thread(_alert_update_sync, alert)
+        if isinstance(ev, dict):
+            await asyncio.to_thread(_alert_update_sync, ev)
         return "OK"
 
     async def _edit_markup(self, msg: dict, markup: dict | None) -> None:
@@ -2454,7 +2455,7 @@ class Gateway:
                 answer = await asyncio.to_thread(twofactor.decide, cid, yes == "y")
             elif kind == "h":                              # a health problem: Seen
                 answer = await self._on_health_seen(msg, val)
-            elif kind == "al":                             # an alert's action (alerts.act)
+            elif kind == "al":                             # an alert's action (feed.act)
                 answer = await self._on_alert(msg, val)
             elif kind == "o":                              # /sessions (mode "simple"): a card to reply to
                 answer = await self._on_open(msg, val)
@@ -3600,102 +3601,114 @@ def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None =
         log.exception("telegram notify_agent failed")
 
 
-# ---- alerts of other modules (`maxxing.alerts`): one message each, its actions as buttons ---------------------
-# alert = {id (short: it goes into the button data "al:<id>:<action>"), level: error|warn|info, kind, title, text,
-# url, agent (path or None), actions: [{id, label}], seen, resolved, note (how it ended: "Allowed by …")}.
-# In the agent's thread when the agent has the `telegram` option, else in Alerts (the main chat in "simple").
-# A tap calls alerts.act(id, action, by="telegram"); the module then calls update_alert (the tap does too).
-ALERT_ICON = {"error": "🚨", "warn": "⚠️", "warning": "⚠️", "info": "ℹ️"}
+# ---- alerts: events of the Notifications feed with buttons (feed.py calls post_alert / update_alert) -------------
+# ev = {id: int, source, level: info|success|warning|error, title, body, url (UI path), count, read,
+#       actions: [{id, label, style: primary|danger|default|link}] ([] once resolved), ref ("approval:<rid>",
+#       "health:<id>", "agent:<path>#…"), agent (path or None), resolved, resolution, telegram: off|silent|loud}.
+# In the agent's thread when the agent has the `telegram` option, else in Alerts (the main chat in "simple"). "off"
+# sends nothing, except a request waiting for an answer (ref "approval:"). A button "open" / style "link" opens the
+# UI; the others are `al:<id>:<action>` -> feed.act(id, action, by="telegram"); feed.py then calls update_alert,
+# which edits the message (resolution, no buttons once resolved).
+ALERT_ICON = {"error": "🚨", "warning": "⚠️", "success": "✅", "info": "ℹ️"}
 
 
-def _alerts_module():
+def _feed_alerts() -> bool:
+    """The feed carries the alerts (feed.act exists): health problems come from it, not from `_health_pass`."""
     try:
-        return importlib.import_module("maxxing.alerts")
-    except ImportError:
-        return None
+        from .. import feed
+        return callable(getattr(feed, "act", None))
+    except Exception:  # noqa: BLE001
+        return False
 
 
-def _alert_html(a: dict) -> str:
-    html = f"{ALERT_ICON.get(str(a.get('level')), 'ℹ️')} <b>{fmt.escape(fmt.head(str(a.get('title') or ''), 200))}</b>"
-    if a.get("text"):
-        html += "\n" + fmt.escape(fmt.head(str(a["text"]), 1500))
+def _alert_html(ev: dict) -> str:
+    count = f" ×{ev['count']}" if int(ev.get("count") or 1) > 1 else ""
+    html = (f"{ALERT_ICON.get(str(ev.get('level')), 'ℹ️')} <b>{fmt.escape(str(ev.get('title') or '')[:300])}"
+            f"</b>{count}")
+    if ev.get("body"):
+        html += "\n" + fmt.escape(str(ev["body"])[:1500])
+    if ev.get("resolved") and ev.get("resolution"):
+        html += f"\n<i>{fmt.escape(str(ev['resolution'])[:200])}</i>"
     return html
 
 
-def _alert_markup(a: dict) -> dict | None:
-    if a.get("resolved"):
+def _alert_markup(ev: dict) -> dict | None:
+    if ev.get("resolved"):
         return None
     row: list[dict] = []
-    for act in (a.get("actions") or [])[:4]:
-        data = f"al:{a['id']}:{act.get('id')}"
-        if isinstance(act, dict) and act.get("id") and len(data.encode()) <= 64:
+    for act in (ev.get("actions") or [])[:4]:
+        if not isinstance(act, dict) or not act.get("id"):
+            continue
+        if act["id"] == "open" or act.get("style") == "link":
+            url = str(ev.get("url") or "")
+            if url.startswith("/"):
+                base = (config.load_config().get("public_url") or "").rstrip("/")
+                url = base + url if base.startswith("https://") else ""
+            if url.startswith("https://"):
+                row.append({"text": str(act.get("label") or _w("open_btn"))[:40], "url": url})
+            continue
+        if act["id"] == "seen" and ev.get("read"):
+            continue                                       # already seen (on the web)
+        data = f"al:{ev['id']}:{act['id']}"
+        if len(data.encode()) <= 64:
             row.append({"text": str(act.get("label") or act["id"])[:40], "callback_data": data})
-    url = str(a.get("url") or "")
-    if url.startswith("/"):
-        base = (config.load_config().get("public_url") or "").rstrip("/")
-        url = base + url if base.startswith("https://") else ""
-    if url.startswith("https://"):
-        row.append({"text": _w("open_btn"), "url": url})
     return {"inline_keyboard": [row]} if row else None
 
 
-def _alert_send_sync(a: dict) -> None:
+def _alert_send_sync(ev: dict) -> None:
     from .. import agents
     tok, chat = token(), tg_config().get("chat_id")
-    if not tok or not chat or not a.get("id"):
+    if not tok or not chat or ev.get("id") is None:
         return
-    kind = str(a.get("kind") or "")
-    if kind.startswith(("health", "system")) and not tg_config().get("notify_system", True):
+    asks = str(ev.get("ref") or "").startswith("approval:")
+    rule = ev.get("telegram") or "silent"
+    if rule == "off" and not asks:
         return
-    path = a.get("agent") or ""
+    if ev.get("source") in ("health", "system") and not asks and not tg_config().get("notify_system", True):
+        return
+    path = ev.get("agent") or ""
     target = None
     try:
         if path and agents.exists(path) and agents.load(path)["telegram"]:
             target = (chat, _agent_thread_sync(tok, chat, path))
     except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
         log.exception("agent thread for an alert")
-    html = _alert_html(a)
     sent: list = []
-    loud = a.get("level") == "error" or bool(a.get("actions"))
-    _send_sync(ALERTS, [html], not loud, _alert_markup(a), target=target, sent=sent,
+    _send_sync(ALERTS, [_alert_html(ev)], not (asks or rule == "loud"), _alert_markup(ev), target=target, sent=sent,
                bind={"agent": path} if path and (target is None or target[1] is None) else None)
     if sent:
-        _note_set(f"al:{a['id']}", [(target or _target(ALERTS))[0] or chat, sent[-1], html])
+        _note_set(f"al:{ev['id']}", [(target or _target(ALERTS))[0] or chat, sent[-1], ""])
 
 
-def _alert_update_sync(a: dict) -> None:
-    info, tok = _notes().get(f"al:{a.get('id')}"), token()
+def _alert_update_sync(ev: dict) -> None:
+    info, tok = _notes().get(f"al:{ev.get('id')}"), token()
     if not info or not tok:
         return
     chat, mid, _ = info
-    html = _alert_html(a)
-    note = a.get("note") or (_w("resolved") if a.get("resolved") else _w("seen") if a.get("seen") else "")
-    if note:
-        html += f"\n<i>{fmt.escape(str(note)[:200])}</i>"
-    markup = _alert_markup(a) if not a.get("seen") or a.get("actions") else None
+    markup = _alert_markup(ev)
     try:
-        call_sync(tok, "editMessageText", chat_id=chat, message_id=mid, text=html, parse_mode="HTML",
+        call_sync(tok, "editMessageText", chat_id=chat, message_id=mid, text=_alert_html(ev), parse_mode="HTML",
                   reply_markup=markup or {"inline_keyboard": []}, link_preview_options={"is_disabled": True})
     except Exception as e:  # noqa: BLE001 - too old to edit, deleted, not modified
-        log.info("alert message %s not edited: %s", a.get("id"), e)
-    if a.get("resolved"):
-        _note_set(f"al:{a['id']}", None)
+        log.info("alert message %s not edited: %s", ev.get("id"), e)
+    if ev.get("resolved"):
+        _note_set(f"al:{ev['id']}", None)
 
 
-def post_alert(alert: dict) -> None:
-    """A new alert (`maxxing.alerts`). Any process, never blocks, never raises."""
+def post_alert(ev: dict) -> None:
+    """A new alert of the feed. Blocking (feed.py calls it in a thread, or directly in a CLI process); never raises."""
     try:
-        if token() and tg_config().get("chat_id") and isinstance(alert, dict):
-            threading.Thread(target=_alert_send_sync, args=(dict(alert),), daemon=True).start()
+        if token() and tg_config().get("chat_id") and isinstance(ev, dict):
+            _alert_send_sync(dict(ev))
     except Exception:
         log.exception("telegram post_alert failed")
 
 
-def update_alert(alert: dict) -> None:
-    """An alert changed (seen, decided, resolved): its message is edited. Never blocks, never raises."""
+def update_alert(ev: dict) -> None:
+    """An alert changed (decided, seen, resolved, its title or count): its message is edited. Never raises."""
     try:
-        if isinstance(alert, dict) and f"al:{alert.get('id')}" in _notes():
-            threading.Thread(target=_alert_update_sync, args=(dict(alert),), daemon=True).start()
+        if isinstance(ev, dict) and f"al:{ev.get('id')}" in _notes():
+            _alert_update_sync(dict(ev))
     except Exception:
         log.exception("telegram update_alert failed")
 
