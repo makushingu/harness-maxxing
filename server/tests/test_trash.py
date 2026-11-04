@@ -223,3 +223,24 @@ def test_a_damaged_sidecar_does_not_break_the_trash(client, topic, mx):
     items = r.json()["items"]
     assert len(items) == 3 and not any(i["restorable"] for i in items)
     assert trash.purge_old() == 0
+
+
+def test_restore_never_writes_outside_the_workspace(client, topic, mx):
+    from maxxing import workspace
+    target = mx["tmp"] / "elsewhere" / "pwn.txt"
+    climb = str(mx["ws"] / topic / "../../../../../pwn.txt")             # the folder above the workspace
+    for name, original in (("a.txt", str(target)), ("b.txt", climb)):
+        (mx["ws"] / topic / name).write_text("a")
+        workspace.move_to_trash(mx["ws"] / topic / name)
+        sc = next(j for j in trash.trash_dir().glob("*.json") if j.name.endswith(f"-{name}.json"))
+        sc.write_text(json.dumps({"original": original, "at": 1}))
+        r = client.post(f"/api/trash/{sc.name[:-5]}/restore")
+        assert r.status_code == 409, r.text
+    assert not target.exists() and not (mx["ws"].parent / "pwn.txt").exists()
+    sid = client.post("/api/sessions", json={"path": topic}).json()["id"]
+    assert client.delete(f"/api/sessions/{sid}").status_code == 200
+    item = next(i for i in client.get("/api/trash").json()["items"] if i["kind"] == "session")
+    sc = trash.trash_dir() / (item["id"] + ".json")
+    sc.write_text(json.dumps({**json.loads(sc.read_text()), "path": "../../outside"}))
+    r = client.post(f"/api/trash/{item['id']}/restore")
+    assert r.status_code == 200 and r.json()["restored_to"] == "", r.text

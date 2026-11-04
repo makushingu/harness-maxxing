@@ -287,7 +287,10 @@ def restore(item_id: str) -> dict[str, Any]:
     kind = _kind(p, side)
     from . import workspace
     if kind == "session":
-        path = side.get("path") or ""
+        try:
+            path = workspace.normalize_path(side.get("path"))
+        except ValueError:                                  # not a topic path ("/etc", "../x"): workspace root
+            path = ""
         if not (workspace.root() / path).is_dir():          # its topic was deleted since: workspace root
             path = ""
         for mp in p.glob("*.json"):
@@ -302,6 +305,9 @@ def restore(item_id: str) -> dict[str, Any]:
         bus.invalidate("sessions", "workspace", "trash")
         return {"ok": True, "kind": kind, "restored_to": path, "sessions": n}
     original = Path(side["original"])
+    parents = original.resolve().parents                    # a sidecar never sends a file out of the roots
+    if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):
+        raise TrashError(409, "not_restorable", "This item cannot be restored from here")
     dest = _free_dir_name(original) if kind in ("project", "topic") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
