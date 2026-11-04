@@ -5,7 +5,7 @@ import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, HandHeart, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
-import { useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
+import { useAgentsAttention, useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
 import { useUI, type Theme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { useLang, useT, withGroups } from '@/i18n'
@@ -147,6 +147,13 @@ const tile =
 const row =
   'flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-[15px] outline-none transition-colors active:bg-accent hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring [&>svg]:size-5 [&>svg]:shrink-0 [&>svg]:text-muted-foreground'
 
+/** The Agents tile: new results + approvals waiting. */
+function AgentsTileBadge() {
+  const t = useT()
+  const n = useAgentsAttention()
+  return <CountBadge count={n} className="absolute top-2 right-2" title={t('nav.agentsUnread', { count: n })} />
+}
+
 /** Right drawer: everything the desktop sidebar holds. */
 function AppPanel() {
   const t = useT()
@@ -204,6 +211,7 @@ function AppPanel() {
           <NavLink key={n.to} to={n.to} end={n.end} className={linkCls} data-tour={navTourId(n)} onClick={close}>
             <n.icon strokeWidth={1.9} />
             <span className="max-w-full truncate">{t(n.short ?? n.label)}</span>
+            {n.to === '/agents' && <AgentsTileBadge />}
           </NavLink>
         ))}
         <NavLink to="/feed" className={linkCls} onClick={close}>

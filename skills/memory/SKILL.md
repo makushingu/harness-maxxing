@@ -5,7 +5,7 @@ description: Update the right memory.md at the end of a significant exchange. Us
 
 # Memory
 
-The workspace has three memory levels. Each `CLAUDE.md` imports its `memory.md` (`@memory.md`), so
+The workspace has three memory levels, four with agents. Each `CLAUDE.md` imports its `memory.md` (`@memory.md`), so
 whatever you write here is loaded automatically in the next session of that topic.
 
 ## When
@@ -18,6 +18,10 @@ At the end of an exchange that produced something worth knowing next time:
 Nothing durable (a quick question, reading a file, a failed attempt with no lesson) -> write nothing.
 
 ## Where (pick the narrowest level that is true)
+0. **Agent** - `<workspace>/projects/<project>/topics/<topic>/agents/<agent>/memory.md`, only when the
+   session runs in an agent folder (the working directory ends in `agents/<agent>`): what this agent
+   learned doing its role (sources it uses, what worked, its own conventions). A fact true for the whole
+   topic goes one level up, in the topic memory.
 1. **Topic** - `<workspace>/projects/<project>/topics/<topic>/memory.md`: the current mission. Most
    common; the session's working directory tells you the topic.
 2. **Project** - `<workspace>/projects/<project>/memory.md`: true for every topic of the project.

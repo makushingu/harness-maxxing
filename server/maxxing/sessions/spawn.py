@@ -93,10 +93,25 @@ def _exposed_vault(secrets: dict) -> dict[str, str]:
             and k not in _RESERVED and not k.startswith("MAXXING_")}
 
 
-def auth_env(secrets: dict | None = None) -> dict[str, str]:
-    """Claude credentials stored in secrets.json + the user's vault entries flagged `expose`."""
+def _named_vault(names: list[str]) -> dict[str, str]:
+    """The vault entries `names` (an agent's keys), exposed or not."""
+    try:
+        from .. import vault
+    except ImportError:
+        return {}
+    out = {}
+    for n in names:
+        v = vault.get(n) if ENV_NAME_RE.match(n) and n not in _RESERVED and not n.startswith("MAXXING_") else None
+        if v is not None and "\0" not in v:
+            out[n] = v
+    return out
+
+
+def auth_env(secrets: dict | None = None, keys: list[str] | None = None) -> dict[str, str]:
+    """Claude credentials stored in secrets.json + the user's vault entries flagged `expose`.
+    keys: only these vault entries instead (an agent's turn sees the keys of its agent.json, nothing else)."""
     s = secrets if secrets is not None else config.load_secrets()
-    out = _exposed_vault(s)
+    out = _exposed_vault(s) if keys is None else _named_vault(keys)
     if s.get("claude_oauth_token"):
         out["CLAUDE_CODE_OAUTH_TOKEN"] = str(s["claude_oauth_token"])
     if s.get("anthropic_api_key"):
@@ -164,13 +179,17 @@ def agents_args(cfg: dict, extra: str = "") -> list[str]:
     return ["--append-system-prompt", "\n\n".join(parts)] if parts else []
 
 
-def settings_args(cfg: dict) -> list[str]:
+def settings_args(cfg: dict, extra: dict | None = None) -> list[str]:
     """`--settings` for the turn: deny rules (they apply in every permission mode, bypass included, and add to
-    the user's own settings files)."""
-    return ["--settings", json.dumps({"permissions": {"deny": deny_rules(cfg)}}, separators=(",", ":"))]
+    the user's own settings files), + `extra` (an agent's sandbox and hooks, agent_guard.settings). One flag only."""
+    s: dict = {"permissions": {"deny": deny_rules(cfg)}}
+    if extra:
+        from maxxing import agent_guard
+        s = agent_guard.merge(s, extra)
+    return ["--settings", json.dumps(s, separators=(",", ":"))]
 
 
-def claude_env(extra: dict | None = None, permission_mode: str = "bypass") -> dict[str, str]:
+def claude_env(extra: dict | None = None, permission_mode: str = "bypass", keys: list[str] | None = None) -> dict[str, str]:
     env = base_env()
     cfg = config.load_config()
     env.setdefault("BASH_MAX_OUTPUT_LENGTH", str(BASH_OUTPUT_MAX))
@@ -179,7 +198,7 @@ def claude_env(extra: dict | None = None, permission_mode: str = "bypass") -> di
     window = compact_window(cfg)
     if window:
         env.setdefault("CLAUDE_CODE_AUTO_COMPACT_WINDOW", str(window))
-    env.update(auth_env())
+    env.update(auth_env(keys=keys))
     env.update(permission_args(permission_mode)[1])
     env.update({str(k): str(v) for k, v in (extra or {}).items() if ENV_NAME_RE.match(str(k))})
     return env

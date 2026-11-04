@@ -132,7 +132,11 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
     const out = [{ value: '__root', label: t('crons.workspaceRoot'), hint: '' }]
     for (const p of ws?.projects || []) {
       out.push({ value: p.path, label: mask(p.name, 6), hint: t('crons.projectHint') })
-      for (const tp of p.topics) out.push({ value: tp.path, label: mask(`${p.name} / ${tp.name}`, 9), hint: '' })
+      for (const tp of p.topics) {
+        out.push({ value: tp.path, label: mask(`${p.name} / ${tp.name}`, 9), hint: '' })
+        // Agents (Settings -> Features -> agents_page): a cron in an agent folder is one of its triggers.
+        for (const a of tp.agents || []) out.push({ value: a.path, label: mask(`${p.name} / ${tp.name} · ${a.display_name}`, 12), hint: t('crons.agentHint') })
+      }
     }
     return out
   }, [ws, t, mask])

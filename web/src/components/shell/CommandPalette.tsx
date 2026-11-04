@@ -4,7 +4,7 @@ import { Command as Cmdk } from 'cmdk'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun } from 'lucide-react'
 import { api } from '@/lib/api'
-import { useDocs, useLogout, useWorkspace } from '@/lib/queries'
+import { AGENT_PATH_RE, agentRunRoute, useDocs, useLogout, useWorkspace } from '@/lib/queries'
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
 import { useUI, resolveTheme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -80,7 +80,9 @@ export function CommandPalette() {
           perform: ({ navigate }) =>
             navigate(
               h.kind === 'session'
-                ? `/sessions?path=${encodeURIComponent(h.path)}&session=${h.id}`
+                ? AGENT_PATH_RE.test(h.path)
+                  ? agentRunRoute(h.path, h.id) // a run of an agent: on the Agents page
+                  : `/sessions?path=${encodeURIComponent(h.path)}&session=${h.id}`
                 : h.kind === 'task'
                   ? `/tasks?task=${encodeURIComponent(h.id)}`
                   : `/files?path=${encodeURIComponent(h.path)}`,

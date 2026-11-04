@@ -3,7 +3,7 @@ import { NavLink } from 'react-router'
 import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
-import { useTeam, useWorkspace } from '@/lib/queries'
+import { useAgentsAttention, useTeam, useWorkspace } from '@/lib/queries'
 import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -62,6 +62,18 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
         <PanelRight className="size-3.5" />
       </span>
       <CountBadge count={unread} />
+    </span>
+  )
+}
+
+/** Agents entry: new results + approvals waiting, summed over the agents. */
+function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
+  const t = useT()
+  const n = useAgentsAttention()
+  if (collapsed) return n ? <span className="absolute top-0.5 right-1 flex size-4 items-center justify-center"><CountDot tone="unread" /></span> : null
+  return (
+    <span className="empty:hidden">
+      <CountBadge count={n} title={t('nav.agentsUnread', { count: n })} />
     </span>
   )
 }
@@ -189,6 +201,7 @@ export function Sidebar() {
                     <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
                     {!collapsed && <span className="flex-1 truncate">{label}</span>}
                     {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
+                    {item.to === '/agents' && <AgentsNavExtra collapsed={collapsed} />}
                     {showBadge &&
                       (collapsed ? (
                         badge.unread ? (
