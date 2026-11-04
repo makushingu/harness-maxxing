@@ -41,7 +41,8 @@ A session of the agent runs in that folder, so Claude also knows the topic, the 
 it: the writer knows the blog's tone without repeating it. Its commands start in the agent's folder: a file it
 writes without a path lands there (`drafts/` = `agents/writer/drafts/`). To make it work in the topic's own folders,
 say so in its role and, with the sandbox, list them under **Other folders it can write in**. The three files are in
-the daily [memory backup](backup).
+the daily [memory backup](backup). When the topic is a git clone (a blog, an app), the `agents/` folder is left out of
+its commits (the clone's local `.git/info/exclude`).
 
 ## Create an agent
 

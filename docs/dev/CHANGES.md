@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.113 - 2026-11-04
 
+- `agents._git_exclude()`: creating an agent in a topic that is (or sits in) a git clone adds `/<rel>/agents/` to
+  that clone's `.git/info/exclude` (worktrees/submodules through `gitdir:` + `commondir`), never a tracked `.gitignore`:
+  an agent's turn that commits the blog no longer commits `agent.json`.
+
 Agents (`agents_page`, off by default for new and existing installs; the module works anyway for crons and the CLI): a lasting role in a topic folder
 `projects/<p>/topics/<t>/agents/<a>/` (CLAUDE.md role + memory.md + agent.json), see INTERNALS.md#maxxingagents and
 API.md#agents. Server core: `maxxing/agents.py` (agent.json validation, `fire()` = the only way in with guards
