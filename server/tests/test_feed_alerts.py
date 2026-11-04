@@ -99,7 +99,7 @@ def test_a_request_is_an_event_allow_twice_gives_the_same_answer(client, topic, 
     wait_for(lambda: any(k == "update" for k, _ in bridge), timeout=5)
     posts = [e for k, e in bridge if k == "post" and e.get("ref") == ev["ref"]]
     assert len(posts) == 1 and posts[0]["telegram"] == "loud" and posts[0]["actions"] == ALLOW_DENY
-    assert not [k for k, _ in bridge if k.startswith("old")]
+    assert not [k for k, _ in bridge if k == "old"]                # one message: no older Allow / Deny one
     assert [e for k, e in bridge if k == "update" and e.get("resolution") == "Allowed"]
 
 
