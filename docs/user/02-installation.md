@@ -121,6 +121,7 @@ When the server is already in use, the installer asks for confirmation and then:
 |---|---|
 | other services reachable from outside, or Docker | does **not** turn the firewall on (it could cut them off). Force it with `FIREWALL=1 bash /opt/claude-maxxing/install.sh --secure` |
 | an active ufw firewall | keeps your rules and only adds SSH (+ 80/443 for a domain, + Tailscale) |
+| [Dokploy](infra#dokploy) | keeps its Traefik on 80/443; with a domain, adds a route there to Harness Maxxing (HTTPS by Traefik), its Caddy listening only on the Docker bridge. Connect Dokploy afterwards in Infra -> Sources |
 | nginx, Apache or another web server on 80/443 | does not install Caddy; with a domain, saves the reverse-proxy block to add to your web server in `/var/lib/claude-maxxing/reverse-proxy.conf` |
 | a Caddy you already use | adds its own site with one `import` line, your sites stay as they are |
 | other scheduled jobs | **never changes the server clock**: your jobs keep their times, Harness Maxxing jobs run at the times you pick in your own zone |
@@ -175,6 +176,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=d
 | `TOOLS` | `background` | `background` = Node.js, Chromium, Remotion, Scrapling and the speech model are installed once the service runs, `foreground` = wait for them, `0` = skip (`maxxing deps update` later) |
 | `SWAP` | `auto` | `auto` = a 2 GB `/swapfile` under 4 GB of RAM when there is no swap, on a fresh server only (not in containers, not on a server already in use or a re-run), `1` = the same on any server, `0` = never |
 | `SOURCE_DIR` | – | install this local copy of the code (see "Install from a local copy") |
+| `DOKPLOY` | `0` | `1` = also install [Dokploy](infra#dokploy) (deployments): its official installer at a pinned version, checked by sha256. Refused, before anything changes, in a container, under 2 GB of RAM, when ports 80/443/3000 are taken or a Docker swarm already runs. Leaves the firewall off (Docker publishes ports around it) |
 | `CACHE_DIR` | `/var/cache/harness-maxxing` | where downloads are kept until the install succeeds, so a re-run after a failure does not download them again |
 | `ASSUME_YES` | `0` | `1` = never ask, use defaults |
 

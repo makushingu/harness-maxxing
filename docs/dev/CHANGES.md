@@ -8,6 +8,30 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.108 - 2026-11-03
 
+Dokploy integration (opt-in, nothing changes without Dokploy):
+- `maxxing.dokploy` (API client, `x-api-key`, URL in config.json `dokploy.url`, vault `DOKPLOY_API_KEY` never exposed),
+  `cmd_dokploy.py` (`maxxing dokploy ...`, writes need `--yes`), `platforms.dokploy()` reader (beta, `project.all`
+  with environments or the older flat shape), `POST /api/infra/dokploy/connect|disconnect`, web
+  `features/infra/DokployConnect.tsx`, i18n `infra.dokploy.*` / `infra.src.dokploy`.
+- install.sh: `dokploy_present` -> `DOKPLOY_FOUND`, WEB_BUSY "Dokploy (Traefik)". Domain mode with Dokploy:
+  `traefik_route` writes `/etc/dokploy/traefik/dynamic/harness-maxxing.yml` (websecure + letsencrypt, http ->
+  `redirect-to-https@file`) to our Caddy, which then listens on `http://<domain>:8790` bound to the Docker bridge
+  gateway (`docker_gateway`, default 172.17.0.1) with `trusted_proxies private_ranges`. Not a plain relay to
+  127.0.0.1: `api/pc.py` treats a loopback client without X-Forwarded-For as local, so a container must never reach
+  the server that way. Manifest `traefik route <file>`; `remove_caddy_site` deletes it; `caddy.add_site --host`
+  refuses (`behind_traefik`) while the route exists (`MAXXING_TRAEFIK_ROUTE`).
+- `DOKPLOY=1`: deps.toml `[dokploy]` (installer at a Dokploy/website commit, sha256, run from a file with
+  `DOKPLOY_VERSION` = the pinned image tag), `dokploy_refusal` (container, < 2 GB, 80/443/3000 taken, active swarm)
+  checked in main before any change and in `--check`; step before the access step; `FIREWALL=auto` -> 0.
+  deps.py: `installed()` from `docker service inspect dokploy`, `owned_paths` empty (its /etc/dokploy is 777),
+  `remove` refused, updater skipped.
+- Doctor: `check_dokploy` (API with the key, WARN while port 3000 is public), `check_security` INFO instead of WARN
+  when ufw is off because Docker runs.
+- Tests: `test_dokploy.py` (fake Dokploy API), install.sh library-mode tests in `test_install_security.py`.
+- To check on a real server before release: the Traefik entry point / resolver / middleware names of the current
+  Dokploy (`web`, `websecure`, `letsencrypt`, `redirect-to-https`), the dashboard URLs, Traefik reaching the bridge
+  gateway, and the API procedure names against Dokploy's OpenAPI.
+
 Release of `beta` to `main`: a103 (Team friends, edits, presence) and a104 (session list rewrite) were on `beta` only
 while a105-a107 went straight to `main`. No code change in this commit: version bump and notes only. The public
 CHANGELOG entry summarises a103 + a104 because installs on `stable` jump from a107 and `maxxing update` only prints

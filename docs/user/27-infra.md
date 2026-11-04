@@ -51,6 +51,7 @@ The page itself never changes your sites or databases; the only thing it does on
 | Netlify *(beta)* | sites with their last deployment and git repository, Netlify DNS zones | the key `NETLIFY_AUTH_TOKEN` |
 | Supabase *(beta)* | each project: its database (state, region, Postgres version; a paused free project shows "paused"), its Storage buckets, its Edge Functions, linked together | the key `SUPABASE_ACCESS_TOKEN` |
 | GitHub Pages *(beta)* | the Pages sites of your repositories, their address and build state | the GitHub tokens already in your keys (Git page) |
+| Dokploy *(beta)* | every project and environment: applications and compose stacks with their state, git repository and domains, databases | its address and an API key: **Connect Dokploy** in the sources (see [Dokploy](#dokploy)) |
 
 Keys go in **Settings -> Keys** (the Infra page links to them). Harness only **reads** with them. Give read rights
 where the provider allows it (Cloudflare, GitHub); Vercel, Netlify and Supabase tokens cannot be limited to reading:
@@ -82,8 +83,32 @@ seen on a real account: if a line shows an error, ask Claude from that line (it 
   example.com"): its registrar, expiry date, DNS provider and host are read from public information, and it is
   linked to your server when it points to it. Alerts before expiry work the same.
 - **A server** (OVH, DigitalOcean, Hetzner, Scaleway...): **Add a server**, it is read over SSH like any other.
+- **Your own deployment platform**: [Dokploy](#dokploy) is supported; Coolify and others show through their
+  domains and Docker containers.
 - **A platform** (Render, Railway, Fly.io, Firebase, AWS...): its sites still show through their domains (the page
   says who hosts each address). Full support is planned provider by provider.
+
+## Dokploy
+
+[Dokploy](https://dokploy.com) is a self-hosted deployment platform (Docker Swarm + Traefik): it builds your apps
+from git, serves them with HTTPS, keeps every deployment and its log, and rolls back. When it runs on your server,
+Harness Maxxing works **with** it instead of next to it:
+
+- **Install**: the installer finds an existing Dokploy. With a domain, the web UI goes through Dokploy's Traefik
+  (it keeps ports 80/443, Harness Maxxing gets a route and its certificate there). On a new server,
+  `DOKPLOY=1` installs Dokploy too (refused when ports 80/443/3000 are taken or a Docker swarm already runs).
+  See [Installation](installation).
+- **Connect**: in Dokploy, Profile -> API keys -> Generate. Then Infra -> Sources -> **Connect Dokploy** with its
+  address (`http://127.0.0.1:3000` when it runs on this server) and the key. The key is checked, then kept in
+  Keys as `DOKPLOY_API_KEY`, **not exposed**: sessions never see it.
+- **See**: projects, apps, compose stacks, databases and domains show on the Infra page with their state (a failed
+  deployment is down), linked to their domains and repositories.
+- **Deploy with Claude**: "deploy the shop", "why did the last deployment fail?", "put the blog on
+  blog.example.com". Claude uses `maxxing dokploy` (list, deploy, logs, domains, new app from a repository) and
+  **asks you before every change**. Environment variables, volumes, backups and rollbacks stay in Dokploy's UI:
+  Claude gives the steps.
+- **Safety**: after installing Dokploy, give it a domain and close its port 3000 (`maxxing doctor` warns while it
+  is open). See [Security](security).
 
 ## Other servers
 

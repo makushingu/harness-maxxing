@@ -8,6 +8,13 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 This version brings to every install the Team and session list changes of 2.0.0-alpha.103 and 2.0.0-alpha.104
 (details below, under those versions).
 
+New (Dokploy):
+- **Deploy through Dokploy.** On a server with Dokploy, connect it in Infra -> Sources: its apps, databases and
+  domains show on the Infra page, and Claude deploys, reads the deployment logs and adds domains with
+  `maxxing dokploy`, asking you first. The key stays in your keys: sessions never see it.
+- **Harness Maxxing installs next to Dokploy.** The installer finds it and, with a domain, serves the web UI through
+  Dokploy's HTTPS instead of fighting for ports 80/443. `DOKPLOY=1` also installs Dokploy on a new server.
+
 New (Team, Settings -> Features -> Team):
 - **Friends**, with who is online, pending requests and **Add a friend**; private chats and groups.
 - **Reply, edit, delete** your messages, "Seen" and "writing…", notifications and **Mute**.
