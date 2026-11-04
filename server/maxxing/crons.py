@@ -459,6 +459,8 @@ def _clean(job: dict) -> dict:
     j["name"] = str(j["name"]).strip()
     if not j["name"] or len(j["name"]) > 80:
         raise CronError("name is required (max 80 characters)", "invalid_name")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in j["name"]):   # goes into the run's environment
+        raise CronError("the name cannot contain control characters", "invalid_name")
     j["schedule"] = validate(str(j["schedule"]))
     if j["kind"] not in KINDS:
         raise CronError("kind must be shell or claude", "invalid_kind")
