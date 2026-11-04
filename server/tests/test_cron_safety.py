@@ -45,7 +45,7 @@ def test_background_child_holding_the_output_does_not_hold_the_run(mx):
 def test_sync_keeps_user_lines_when_the_end_marker_was_deleted(mx, monkeypatch, tmp_path):
     tab = tmp_path / "crontab"
     monkeypatch.setenv("MAXXING_CRONTAB_FILE", str(tab))
-    tab.write_text(f"{crons.BLOCK_BEGIN}\n0 5 * * * /usr/local/bin/maxxing cron run c_aaaaaa >/dev/null 2>&1\n"
+    tab.write_text(f"{crons.BLOCK_BEGIN}\n0 5 * * * {crons._env_prefix()}/usr/local/bin/maxxing cron run c_aaaaaa >/dev/null 2>&1\n"
                    "30 3 * * * /root/bin/my-own-backup.sh\n")              # the user deleted the END line by hand
     crons.sync_crontab([])
     text = tab.read_text()
