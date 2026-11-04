@@ -341,17 +341,17 @@ function RepoView({ repo, onBack, onSwitch }: { repo: string; onBack: () => void
       : null
   const ghInfo = isGh ? overview?.github.repos.find((g) => `github:${g.full_name}`.toLowerCase() === repo.toLowerCase()) : null
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft /> {t('git.allRepos')}
         </Button>
         {isGh ? <Github className="size-5 text-primary" /> : <FolderGit2 className="size-5 text-primary" />}
-        <h2 className="text-lg font-semibold">{isGh ? repo.slice(7) : r?.name || repo.split('/').pop()}</h2>
-        {r?.branch && <span className="rounded bg-primary/15 px-1.5 py-px font-mono text-xs text-primary">{r.branch}</span>}
+        <h2 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">{isGh ? repo.slice(7) : r?.name || repo.split('/').pop()}</h2>
+        {r?.branch && <span className="max-w-full rounded bg-primary/15 px-1.5 py-px font-mono text-xs [overflow-wrap:anywhere] text-primary">{r.branch}</span>}
         {(r?.permission || ghInfo?.permission) && <PermBadge p={(r?.permission || ghInfo?.permission)!} />}
         <Sync ahead={r?.ahead} behind={r?.behind} changed={(r?.changed || 0) + (r?.untracked || 0)} />
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex max-w-full flex-wrap items-center gap-2">
           {other && (
             <Button variant="outline" size="sm" onClick={() => onSwitch(other)}>
               {isGh ? <Server /> : <Github />} {isGh ? t('git.seeLocal') : t('git.seeGithub')}
@@ -422,17 +422,19 @@ function RepoView({ repo, onBack, onSwitch }: { repo: string; onBack: () => void
               ) : !pulls.data?.length ? (
                 <p className="text-xs text-muted-foreground">{t('git.noPulls')}</p>
               ) : (
-                <ul className="grid gap-1.5">
+                <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                   {pulls.data.map((p) => (
                     <li key={p.number}>
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="grid gap-0.5 rounded-md p-1.5 text-[13px] hover:bg-accent/60">
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-[13px] hover:bg-accent/60">
                         <span className="truncate">
                           <span className="text-muted-foreground">#{p.number}</span> {p.title}
                           {p.draft && <span className="ml-1 text-xs text-muted-foreground">({t('git.draft')})</span>}
                         </span>
-                        <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                          <GitBranch className="size-3" />
-                          {p.head} → {p.base} · {p.author} · {fmtRelative(p.updated, lang)}
+                        <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                          <GitBranch className="size-3 shrink-0" />
+                          <span className="truncate">
+                            {p.head} → {p.base} · {p.author} · {fmtRelative(p.updated, lang)}
+                          </span>
                         </span>
                       </a>
                     </li>
