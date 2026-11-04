@@ -5,19 +5,21 @@ import { tDyn, useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { AgentAvatar } from '@/lib/types'
 import { Button } from '@/components/ui'
-import { AVATAR_OPTIONS, AVATAR_PARTS, AgentAvatarIcon, HAIR, OUTFIT, SKIN, projectColor, randomAvatar, type AvatarPart } from './Avatar'
+import { AVATAR_OPTIONS, AVATAR_PARTS, AgentAvatarIcon, HAIR, OUTFIT, SKIN, randomAvatar, type AvatarPart } from './Avatar'
+import { useProjectColorOf } from './layout'
 
 const SWATCHES: Partial<Record<AvatarPart, Record<string, string>>> = { color: OUTFIT, skin: SKIN, hair_color: HAIR }
 
 /** `preview` false = the rows only (the caller shows the character and Random, as the creation form does). */
 export function AvatarEditor({ value, onChange, project, className, preview = true }: { value: AgentAvatar; onChange: (a: AgentAvatar) => void; project?: string; className?: string; preview?: boolean }) {
   const t = useT()
+  const colorOf = useProjectColorOf()
   return (
     <div className={cn('@container', className)} data-testid="avatar-editor">
       <div className={cn('grid gap-4', preview && '@lg:grid-cols-[auto_minmax(0,1fr)] @lg:gap-6')}>
         <div className={cn('flex items-center gap-3 @lg:flex-col', !preview && 'hidden')}>
           <AgentAvatarIcon avatar={value} size={96} animate />
-          <Button type="button" variant="outline" size="sm" onClick={() => onChange(randomAvatar(project))} data-testid="avatar-random">
+          <Button type="button" variant="outline" size="sm" onClick={() => onChange(randomAvatar(project ? colorOf(project) : undefined))} data-testid="avatar-random">
             <Dices /> {t('agents.avatar.random')}
           </Button>
         </div>
@@ -34,7 +36,8 @@ export function AvatarEditor({ value, onChange, project, className, preview = tr
 function PartRow({ part, value, onChange, project }: { part: AvatarPart; value: AgentAvatar; onChange: (a: AgentAvatar) => void; project?: string }) {
   const t = useT()
   const label = t(`agents.avatar.${part}` as 'agents.avatar.color')
-  const mine = part === 'color' && project ? projectColor(project) : null
+  const colorOf = useProjectColorOf()
+  const mine = part === 'color' && project ? colorOf(project) : null
   const swatches = SWATCHES[part]
   return (
     <div className="grid items-center gap-1.5 @sm:grid-cols-[6rem_minmax(0,1fr)]" role="radiogroup" aria-label={label}>

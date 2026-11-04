@@ -181,6 +181,8 @@ export type AgentTemplate = {
 export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
 export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
 export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }
+/** The order and colours picked by hand on the Agents page (GET/PUT /api/agents/layout), the same on every device. */
+export type AgentsLayout = { projects: string[]; colors: Record<string, string>; agents: Record<string, string[]> }
 export type AgentInput = {
   topic_path?: string
   name?: string
