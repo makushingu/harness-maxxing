@@ -423,3 +423,11 @@ def test_a_malformed_remote_url_does_not_break_the_repo_summary(repo):
     _git(repo, "config", "remote.origin.url", "http://[foo/x")
     gitview.clear_cache()
     assert gitview.summary(repo)["github"] is None
+
+
+def test_a_nul_byte_in_a_branch_or_argument_is_not_a_500(repo):
+    gitview.clear_cache()
+    assert gitview.graph(str(repo), branches=["main", "main\x00x"])["commits"]
+    with pytest.raises(gitview.GitError) as e:
+        gitview._git(repo, "log", "a\x00b")
+    assert e.value.status == 400
