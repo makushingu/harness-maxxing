@@ -40,6 +40,10 @@ class Avatar(BaseModel):
     mouth: Optional[str] = None
     hat: Optional[str] = None
     bg: Optional[str] = None
+    skin: Optional[str] = None
+    head: Optional[str] = None
+    hair: Optional[str] = None
+    hair_color: Optional[str] = None
 
 
 class Limits(BaseModel):

@@ -91,8 +91,9 @@ export type Project = { name: string; path: string; description: string; /** "" 
 export type WorkspaceTree = { root: string; projects: Project[] }
 
 /* ---------------------------------------------------------------- Agents (Settings -> Features -> agents_page) */
-export type AgentAvatar = { color: string; eyes: string; mouth: string; hat: string; bg: string }
-export type AgentAvatarOptions = { color: string[]; eyes: string[]; mouth: string[]; hat: string[]; bg: string[] }
+/** The pixel character of an agent: `color` = outfit (tells projects apart), `bg` = background tile. */
+export type AgentAvatar = { color: string; eyes: string; mouth: string; hat: string; bg: string; skin: string; head: string; hair: string; hair_color: string }
+export type AgentAvatarOptions = Record<keyof AgentAvatar, string[]>
 export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_s: number; debounce_s: number }
 export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source: string; levels: FeedLevel[]; match: string; prompt: string; hook_id?: string }
 export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
