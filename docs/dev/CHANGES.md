@@ -28,6 +28,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `--empty=drop`). `customs.list_customs(head=)` lists another ref's customizations.
 
 
+## Unreleased
+
+- Sign-in global cap (`security.begin_attempt(key, trusted)`): two slots (`_last_global` for clients with failures
+  in the window, `_last_fresh` for clients with none), and `trusted` (valid `mx_device`) or a client key in `_good`
+  (successful sign-in within `GOOD_KEEP_S`, memory only, `GOOD_MAX` keys) skips the cap. ~25 rotating /64s used to
+  hold the single slot and lock the owner out.
+
 ## 2.0.0-alpha.109 - 2026-11-04
 
 - Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events
