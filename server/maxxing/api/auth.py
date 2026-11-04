@@ -45,7 +45,7 @@ def _check_strength(pw: str) -> None:
     try:
         pw.encode()
     except UnicodeEncodeError:                        # a lone surrogate ("\ud800" is valid JSON): hashing raised, 500
-        raise HTTPException(400, detail={"error": "bad_password",
+        raise HTTPException(400, detail={"error": "invalid_password",    # not bad_password: that one means a wrong current
                                          "message": "The password has a character that cannot be stored"}) from None
 
 
