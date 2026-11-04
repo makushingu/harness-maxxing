@@ -55,6 +55,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   longer posts. Kept 30 days (`feed.RETENTION_DAYS`), generic 24 h (`GENERIC_REPLAY_S`: same alert again later).
 - File site (preview) responses: `Cache-Control: private, no-cache` (was `max-age=300`: a page stayed viewable
   from the browser cache for 5 min after a sign-out).
+- `normalize_lines`: the lone-surrogate pattern runs only on lines holding a `\uD8..`-`\uDF..` escape (it cost 4-6x
+  the JSON parse on every line); sub-agent lines (top-level non-empty string `parent_tool_use_id`) are recognised on
+  the text (`_sub_agent_line`, unsure cases still parsed) instead of being parsed then dropped.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
