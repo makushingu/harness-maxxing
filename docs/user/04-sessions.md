@@ -362,9 +362,11 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
   data files (`.json`, `.csv`, `.xml`, `.svg`) are left out, as are links to files outside the workspace. New files show up within 10 minutes, memory at once;
 - pages, settings, topics and actions.
 
-Type a few words in any order: each word may be the start of a word ("fact" finds "facture"),
-accents do not matter, and the best matches come first with the matched words highlighted. A
-message is searchable a second after it is written; edited files within half a minute.
+Type a few words in any order: a word of 3 letters or more may be the start of a word ("fac" finds
+"facture"; 2 letters find that word only), accents do not matter, and the best matches come first with the
+matched words highlighted, one line per session. A session whose title matches no longer hides the other
+sessions that match. A very common word ranks its newest matches. A message is searchable a second after it is
+written; edited files within half a minute.
 
 ## Sessions from Telegram and crons
 
