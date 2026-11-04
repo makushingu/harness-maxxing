@@ -38,6 +38,8 @@ def _names(header: str) -> tuple[str, str]:
     ("\ud800x.txt", "?x.txt", "?x.txt"),                         # a surrogate that is no byte (JSON from a peer)
     ("", "download", "download"),
     ("...", "download", "download"),
+    (". ..", "download", "download"),                           # cleans to `.`: never a `.` entry
+    (". .", "download", "download"),
     (".env", ".env", ".env"),                                    # a hidden file keeps its dot
     ("notes.", "notes", "notes"),
 ])
