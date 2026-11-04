@@ -86,7 +86,7 @@ messages) it deletes.
   and sent as one message.
 - Editing a message you already sent does nothing: the bot says so once - send a new message instead.
 - The bot answers in the language of the web UI (English or French), and the command menu is
-  translated.
+  translated. While linking, it uses the language of your Telegram app.
 - Commands:
 
 | Command | Effect |
