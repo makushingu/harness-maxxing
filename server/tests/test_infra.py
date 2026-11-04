@@ -1033,8 +1033,10 @@ def test_rdap_lookup_is_capped_and_redirects_stay_on_https(monkeypatch):
 
 
 def test_names_with_a_trailing_newline_are_refused():
-    for rx in (actions.DB_NAME_RE, actions.BUCKET_RE, registry.NAME_RE, registry.DOMAIN_RE):
+    for rx in (actions.DB_NAME_RE, actions.BUCKET_RE, registry.NAME_RE, registry.DOMAIN_RE, caddy.NAME_RE, caddy.HOST_RE):
         assert not rx.match("abcd\n") and not rx.match("abc.com\n")
+    with pytest.raises(caddy.CaddyError):
+        caddy.check_name("site\n")
     with pytest.raises(actions.ActionError):
         actions.pg_create("app\n")
     with pytest.raises(actions.ActionError):
