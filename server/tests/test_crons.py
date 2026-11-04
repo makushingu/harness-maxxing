@@ -621,3 +621,29 @@ def test_killed_run_is_recorded_as_interrupted_on_the_next_run(org, monkeypatch)
     finally:
         if orphan.poll() is None:
             orphan.kill()
+
+
+def test_lock_watcher_rests_while_no_browser_is_connected(org, monkeypatch):
+    """The 2 s pass flocks every job's lock file only to refresh the UI: nothing is done while no browser listens,
+    and a change made meanwhile is still announced once one connects."""
+    import asyncio
+    from maxxing import bus
+    from maxxing.api import crons as crons_api
+    passes, sent, browsers = [], [], [0]
+    sig = [("a",)]
+    monkeypatch.setattr(crons_api, "_signature", lambda: (passes.append(1), sig[0])[1])
+    monkeypatch.setattr(bus, "browser_count", lambda: browsers[0])
+    monkeypatch.setattr(bus, "invalidate", lambda *t: sent.append(t))
+
+    async def run():
+        task = asyncio.create_task(crons_api._watch(interval=0.01))
+        await asyncio.sleep(0.2)
+        idle = len(passes)
+        sig[0] = ("b",)
+        browsers[0] = 1
+        await asyncio.sleep(0.1)
+        task.cancel()
+        return idle
+    idle = asyncio.run(run())
+    assert idle == 1                                         # the baseline only
+    assert sent and sent[0] == ("crons", "health")
