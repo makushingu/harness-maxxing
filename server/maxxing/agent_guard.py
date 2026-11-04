@@ -123,12 +123,15 @@ def secret_paths() -> list[str]:
 
 def locked_paths(path: str) -> list[str]:
     """What a sandboxed agent never writes even in its own folder: its settings (agent.json: triggers, budget, keys,
-    sandbox...), its role (CLAUDE.md), and the Claude Code project files that could widen its rights (.claude/,
-    .mcp.json) in its folder and its topic. The owner changes them from the agent page, the CLI or a session."""
+    sandbox...), its role (CLAUDE.md), and the Claude Code project files that could widen its rights (.claude/, an
+    existing .mcp.json) in its folder and its topic. The owner changes them from the agent page, the CLI or a session."""
     folder = config.workspace() / path
     topic = folder.parent.parent
-    return [str(folder / "agent.json"), str(folder / "CLAUDE.md"), str(folder / ".claude"), str(folder / ".mcp.json"),
-            str(topic / ".claude"), str(topic / ".mcp.json")]
+    out = [str(folder / "agent.json"), str(folder / "CLAUDE.md"), str(folder / ".claude"), str(topic / ".claude")]
+    # a missing .mcp.json is not locked: the sandbox would mount a placeholder there for the run, which breaks a
+    # `git add -A` in a topic that is a clone; a new one is never trusted in a headless run anyway (its servers need
+    # an approval)
+    return out + [str(p) for p in (folder / ".mcp.json", topic / ".mcp.json") if p.exists()]
 
 
 def mode(requested: str) -> str:
