@@ -198,8 +198,11 @@ def github_name(remote: str) -> str | None:
     """owner/repo of a remote on github.com itself (URL or scp form `git@github.com:o/r`), else None."""
     remote = remote.strip()
     if "://" in remote:
-        u = urlsplit(remote)
-        host, path = u.hostname or "", u.path
+        try:
+            u = urlsplit(remote)
+            host, path = u.hostname or "", u.path
+        except ValueError:                             # "http://[foo/x": a bad remote must not break the repo list
+            return None
     else:
         m = SCP_REMOTE_RE.fullmatch(remote)
         if not m:
