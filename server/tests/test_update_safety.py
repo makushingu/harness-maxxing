@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import subprocess
 
-from maxxing import cmd_core, customs
+import pytest
+
+from maxxing import cmd_core, config, customs, smartupdate
 from test_cmd_core import _git, env, repos, run_cli  # noqa: F401  (fixtures)
 from test_customs import _head, _upstream_release, code  # noqa: F401  (fixtures)
 
@@ -245,6 +247,34 @@ def test_rollback_refuses_when_a_later_customization_does_not_fit_the_old_code(c
     assert "nothing changed" in capsys.readouterr().out
     assert _head(clone) == after and _branch(clone) == "main" and customs.dirty_files() == []
     assert "LIMIT = 30" in (clone / "server/maxxing/rules.py").read_text()
+
+
+def test_an_interrupted_update_keeps_its_rollback_point_and_notes(code, monkeypatch, capsys):
+    """Killed after the code moved: the re-run (new code, so a new __version__) resumes from what ran before."""
+    clone, work = code["clone"], code["work"]
+    before = _head(clone)
+    (work / "docs" / "upgrade").mkdir(parents=True)
+    (work / "docs" / "upgrade" / "1.1.0.md").write_text("# Upgrade notes - 1.1.0\n\nAdd a line to memory.md.\n")
+    _upstream_release(work, "1.1.0", extra="feature.txt")
+
+    def killed():
+        raise KeyboardInterrupt
+    monkeypatch.setattr(cmd_core, "_sync_deps", killed)
+    monkeypatch.setattr(cmd_core, "__version__", "1.0.0")
+    with pytest.raises(KeyboardInterrupt):
+        run_cli("update", "--no-restart")
+    assert (clone / "feature.txt").exists()
+    monkeypatch.setattr(cmd_core, "_sync_deps", lambda: (True, ""))
+    monkeypatch.setattr(cmd_core, "__version__", "1.1.0")      # the re-run imports the new code
+    capsys.readouterr()
+    assert run_cli("update", "--no-restart", "--smart") == 0
+    out = capsys.readouterr().out
+    assert "the last update was interrupted" in out and "Workspace upgrade notes 1.0.0 -> 1.1.0" in out
+    assert smartupdate._read(smartupdate.AFTER)["from"] == "1.0.0"
+    assert _rev(clone, customs.PRE_UPDATE_REF) == before
+    assert not (config.STATE / cmd_core.IN_PROGRESS).exists()
+    assert run_cli("update", "--rollback", "--no-restart") == 0
+    assert _head(clone) == before
 
 
 def test_conflict_with_web_edits_prints_instructions_that_work(code, capsys):

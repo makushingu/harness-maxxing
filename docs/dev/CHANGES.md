@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `maxxing update` writes `<state>/update/in-progress.json` (rollback commit, starting branch, version, auto-save
+  carried back) before the code moves and removes it when the update ends (any exit but 1, and `--rollback`). A run
+  that finds it (the previous one was killed after the rebase / fast-forward) takes it over: `refs/maxxing/pre-update`
+  keeps the old commit and `upgrade_notes()` / `after.json` use the old version (`_from_version()`), not this
+  process's `__version__` (already the new code). The conflict `pending.json` also records `from_version` for
+  `--resume`.
 - `smartupdate.preflight`: `behind` = `rev-list --count HEAD..origin/<branch>` even without a merge-base (as
   `check_update`); before, a rewritten upstream history gave `up_to_date` forever (no auto update, conflicts and
   upgrade notes hidden). Without a base, upstream's changed files are diffed from `HEAD~<number of customizations>`.
