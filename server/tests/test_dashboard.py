@@ -112,6 +112,26 @@ def test_slow_widget_does_not_hold_the_page(client, org, fakes, monkeypatch):
     assert one["card"]["blocks"] and "pending" not in one and calls == ["server"]
 
 
+def test_slow_extension_card_past_its_ttl_stays_on_screen_while_recomputed(client, org, fakes, monkeypatch):
+    """A card() slower than SOFT_S whose cache expired: the dashboard answers with the last card (stale, pending),
+    not an empty placeholder; the follow-up fetch gets the new one."""
+    from maxxing.api import dashboard
+    monkeypatch.setattr(dashboard, "SOFT_S", 0.2)
+    d = org.ws / "extensions" / "slowcard"
+    d.mkdir(parents=True)
+    (d / "manifest.json").write_text(json.dumps({"name": "Slow", "type": "widget", "ttl": 1}))
+    (d / "api.py").write_text("import time\nN = [0]\ndef card(ctx):\n    N[0] += 1\n    if N[0] > 1:\n"
+                              "        time.sleep(0.6)\n    return {'blocks': [{'type': 'stat', 'label': 'n', "
+                              "'value': N[0]}]}\n")
+    first = _by_id(client)["slowcard"]
+    assert first["card"]["blocks"][0]["value"] == 1 and "stale" not in first
+    time.sleep(1.1)                                                      # past the ttl
+    w = _by_id(client)["slowcard"]
+    assert w["pending"] is True and w["stale"] is True and w["card"]["blocks"][0]["value"] == 1
+    one = client.get("/api/dashboard/widgets/slowcard").json()
+    assert one["card"]["blocks"][0]["value"] == 2 and "stale" not in one and "pending" not in one
+
+
 def test_french_labels(client, org, fakes):
     config.update_config(language="fr")
     ws = _by_id(client)
@@ -185,6 +205,23 @@ def test_day_timeline(client, org, fakes):
     assert all(tl["start"] <= e["at"] < tl["end"] for e in h["events"])
     assert lanes["Every minute"]["dense"] is True                     # too many runs: drawn as a band
     assert len(lanes["Every minute"]["events"]) <= widgets.MAX_PLANNED
+
+
+def test_day_timeline_on_a_dst_day(client, org, fakes, monkeypatch):
+    """25 October 2026 lasts 25 h in Paris: the axis ends at the next local midnight, not 86400 s later."""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from maxxing import widgets
+    config.update_config(timezone="Europe/Paris")
+    paris = ZoneInfo("Europe/Paris")
+    noon = dt.datetime(2026, 10, 25, 12, 0, tzinfo=paris).timestamp()
+    monkeypatch.setattr(widgets, "time", types.SimpleNamespace(time=lambda: noon))
+    crons.create_job({"name": "Late", "command": "true", "schedule": "30 23 * * *"})
+    tl = widgets.day()["blocks"][1]
+    assert tl["start"] == dt.datetime(2026, 10, 25, tzinfo=paris).timestamp()
+    assert tl["end"] == dt.datetime(2026, 10, 26, tzinfo=paris).timestamp() and tl["end"] - tl["start"] == 25 * 3600
+    late = {l["name"]: l for l in tl["lanes"]}["Late"]
+    assert [e["label"] for e in late["events"]] == ["23:30"]          # was cut off at 23:00
 
 
 def test_day_timeline_empty(client, org, fakes):

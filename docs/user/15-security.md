@@ -115,7 +115,9 @@ Recommended on top: SSH keys instead of passwords (`PasswordAuthentication no` o
 - **Throttling**: after a wrong password the next attempts are delayed (1, 2, 4, 8 s); after 8 wrong
   passwords that address is blocked for 15 minutes - even the right password is refused until then.
   If many addresses fail at once (more than 30 wrong passwords in 15 minutes), the server checks at
-  most one password every 5 seconds for everyone: retry after a few seconds.
+  most one password every 5 seconds from addresses that already failed and one every 5 seconds from new ones:
+  retry after a few seconds. A browser trusted by two-step sign-in, and an address that signed in during the
+  last 30 days (since the server started), are never held back by this.
 - **Alerts**: with Telegram linked, every sign-in and repeated wrong passwords are reported in the
   *Alerts* thread.
 

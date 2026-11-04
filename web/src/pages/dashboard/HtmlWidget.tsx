@@ -65,11 +65,11 @@ export function HtmlWidget({ id, src, height, title }: { id: string; src: string
     () => `${src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), vars: themeVars() }))}`,
   )
 
-  // A missing or disabled widget: say so instead of an empty frame.
+  // A missing or disabled widget: say so instead of an empty frame (HEAD: the frame downloads the page itself).
   React.useEffect(() => {
     let cancelled = false
     setError(null)
-    fetch(src, { credentials: 'same-origin', cache: 'no-store', method: 'GET' })
+    fetch(src, { credentials: 'same-origin', method: 'HEAD' })
       .then((r) => !cancelled && !r.ok && setError(`HTTP ${r.status}`))
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
     return () => {

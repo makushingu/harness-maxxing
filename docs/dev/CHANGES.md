@@ -5,6 +5,151 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.110 - 2026-11-04
+
+- `maxxing update` writes `<state>/update/in-progress.json` (rollback commit, starting branch, version, auto-save
+  carried back) before the code moves and removes it when the update ends (any exit but 1, and `--rollback`). A run
+  that finds it (the previous one was killed after the rebase / fast-forward) takes it over: `refs/maxxing/pre-update`
+  keeps the old commit and `upgrade_notes()` / `after.json` use the old version (`_from_version()`), not this
+  process's `__version__` (already the new code). The conflict `pending.json` also records `from_version` for
+  `--resume`.
+- `smartupdate.preflight`: `behind` = `rev-list --count HEAD..origin/<branch>` even without a merge-base (as
+  `check_update`); before, a rewritten upstream history gave `up_to_date` forever (no auto update, conflicts and
+  upgrade notes hidden). Without a base, upstream's changed files are diffed from `HEAD~<number of customizations>`.
+- `maxxing update --rollback`: customizations of the running code missing at `refs/maxxing/pre-update` (saved after
+  the update, or auto-saved on the new branch by `--branch`) are cherry-picked back onto it, then `customs.export()`
+  rewrites the registry (before, the reset dropped them and the next export deleted their patch). One that does not
+  apply to the old code: everything is put back as it was, exit 1.
+- `maxxing update --branch X`: the local branch X is rebuilt from `origin/X` (`checkout -B`) + the customizations of
+  the branch left, instead of reusing a stale local X (it resurrected customizations dropped or changed meanwhile);
+  commits only on the old local X are listed and kept under `refs/maxxing/before-switch/X`. Customizations are
+  replayed with `customs.pick()`: a cherry-pick that becomes empty (already merged in X) is skipped as "now included"
+  instead of failing with exit 3 (`--allow-empty` only accepts originally empty commits; git < 2.45 has no
+  `--empty=drop`). `customs.list_customs(head=)` lists another ref's customizations.
+
+
+
+- Sign-in global cap (`security.begin_attempt(key, trusted)`): two slots (`_last_global` for clients with failures
+  in the window, `_last_fresh` for clients with none), and `trusted` (valid `mx_device`) or a client key in `_good`
+  (successful sign-in within `GOOD_KEEP_S`, memory only, `GOOD_MAX` keys) skips the cap. ~25 rotating /64s used to
+  hold the single slot and lock the owner out.
+- `PUT /api/auth/two-factor {"enabled": false}` now needs `password` (same "pw:" throttle as `/api/auth/password`,
+  shared `_check_current`) when 2FA is on, then `twofactor.notify("off_ui")` + a feed warning. `DELETE
+  /api/telegram` with 2FA on sends `notify("unlinked", wait=True)` (blocking `_send_sync`: the gateway is stopped
+  right after) and a feed warning. Unlinking itself still needs no password.
+- `_ffmpeg_thumb`: an image path with a `%` gets `-f image2 -pattern_type none` (image2 expanded `a%d.png` to
+  `a1.png`, possibly a link out of the files root). Only then: the other demuxers refuse that option (exit 8).
+- Path sites: `header_down Set-Cookie` uses `caddy.HARNESS_SET_COOKIE_RE` (spaces/tabs allowed around the name:
+  browsers trim them, `mx_session =x` replaced the session). Only new site files get it: a path site added before
+  keeps the old line until `maxxing infra site remove` + `add`.
+- `infra db backup`: `pg_dump -Fc --dbname=dbname='<quoted>'` (a database named `-f/x` was an option, `host=...` a
+  connection string); a name outside `[A-Za-z0-9_.-]` (or starting with `-`/`.`) gets a cleaned file name + sha1[:8].
+- Team peers: a `waiting`/`request` link key verifies with scope `teampeer.PENDING` (only accept / refuse / bye; an
+  invitation holder could say hello as a group member and post as them). A `request` from a group member keeps its
+  group pair key for that group (`_key_to`), its group name and its place in `people()`. `_scopes` ignores
+  `group_keys` of an accepted contact (the creator made that pair key); they stay stored for after a `bye`.
+- Webhooks: every delivery verified with a secret (shopify, github, generic; not Stripe: its timestamp is signed)
+  claims `_replay_key` in the new `hook_seen` table of feed.db (`feed.claim_delivery`, released when the delivery
+  fails) before parsing: an ignored GitHub body replayed with another `X-GitHub-Event`, or a deleted event, no
+  longer posts. Kept 30 days (`feed.RETENTION_DAYS`), generic 24 h (`GENERIC_REPLAY_S`: same alert again later).
+- File site (preview) responses: `Cache-Control: private, no-cache` (was `max-age=300`: a page stayed viewable
+  from the browser cache for 5 min after a sign-out).
+- `normalize_lines`: the lone-surrogate pattern runs only on lines holding a `\uD8..`-`\uDF..` escape (it cost 4-6x
+  the JSON parse on every line); sub-agent lines (top-level non-empty string `parent_tool_use_id`) are recognised on
+  the text (`_sub_agent_line`, unsure cases still parsed) instead of being parsed then dropped.
+- `tool_use` events: input text fields over `clip.INPUT_MAX` are clipped at read time too (logs older than the
+  write-time clipping), and the event carries `input_lines` (real line count of each clipped top-level field; the
+  runner stores it as `mx_lines` on the block). The Write card header counts the file's real lines (it said "+200"
+  for any file over 200 lines).
+- Files: `/preview` renders in `_thumb_pool` like `/thumb` (it took a shared `to_thread` worker for up to 30 s),
+  ffmpeg / pdftoppm run under `nice -n 10`, and concurrent requests for the same (file, width bucket) share one
+  render (`_render`, `_thumb_jobs`).
+- Uploads: Starlette's multipart spool goes to `<state>/tmp/uploads` (`uploads.spool_dir`, patched into
+  `starlette.formparsers.SpooledTemporaryFile`) instead of the system temp dir (a tmpfs here: an 800 MB upload added
+  800 MB of shmem). Not via `TMPDIR` in the unit: spawn.py passes TMPDIR on to the sessions.
+- Git graph (local): plain `git log -n<limit+1>` then `_topo` (equal dates now keep git's order) instead of
+  `--topo-order`, which walked the whole history first (4 s at 600k commits); commits cached (`_graphs`, 32 entries)
+  on repo + limit + selection + HEAD + a hash of `for-each-ref`. Commit detail: `--no-renames` first, `-M` only
+  when the commit touches at most `RENAMES_MAX_FILES` (2000) files.
+- Crons watcher (`api/crons.py:_watch`): no pass (glob + flock of every lock file each 2 s) while
+  `bus.browser_count() == 0`; nothing server-side listens to `crons` / `health`.
+- Dashboard: an extension card still computing at `SOFT_S` comes back with its last card
+  (`extensions.cached_card`) plus `stale: true` and `pending: true` (the UI shows it, no skeleton, until
+  `/widgets/{id}` patches the new one). `/ext/{id}/widget.html` answers HEAD; HtmlWidget's existence check uses it
+  (it downloaded the whole file with `no-store` before the frame downloaded it again).
+- Turn watcher: with inotify and nothing running it waits up to `WATCH_IDLE_WAKE_S` (30 s, shorter when a hand-off
+  hold expires sooner) instead of a full `_scan` every second.
+- `compact_log`: a read-only pass (`_log_shrinks`, stops at the first line it would change) first; a log that would
+  not shrink is never copied to `.compact.tmp` and no longer needs `before + 256 MB` free (no more nightly `no_space`).
+
+
+- Crons DST: `iter_runs` compares instants (`ts >= first`), not aware datetimes (same tzinfo = wall-time compare,
+  so 02:45 fold=0 passed after 02:30 fold=1), and yields the fold=1 instants when the hour field is full.
+  `is_due` (guarded lines, `system_clock = keep`) is now `next(iter_runs(minute - 1)) == minute`: one run in the
+  repeated hour, the skipped spring time runs after the gap. `widgets.day()` ends at the next local midnight.
+- Crontab block shared by state dirs: `sync_crontab` replaces only the managed lines of the current state
+  (`crons._ours`: the line's `MAXXING_STATE=` prefix, none = `/var/lib/claude-maxxing`) and keeps the others, so a
+  dev copy, preview server or script run with another `MAXXING_STATE` no longer wipes the live install's lines.
+- `config.save_config` (so `update_config` too) writes `_chosen(cfg, DEFAULT_CONFIG, raw)`: keys already in
+  config.json (new value, even if equal to the default) + values that differ from the defaults, recursively. Before,
+  every save froze all merged defaults into config.json, so a changed default never reached an install that had
+  saved any setting (the `*_chosen` flags of telegram/gateway.py were patches for this). Existing files keep the
+  defaults they already froze.
+
+
+- Search index schema 2 (`search.SCHEMA_VERSION`, checked by `_migrate` when the writer connection opens): message
+  rows have an empty `title` (the session title is on its title row, `body=''`, only), `items_au` is
+  `AFTER UPDATE OF title, body` (a path change re-indexes nothing). Existing indexes: one `UPDATE` of the message
+  rows at the first start (~9 s for 300k rows). The query groups by `(kind, ref)` in SQL (MATERIALIZED CTE: bm25 /
+  snippet cannot run inside an aggregate) and bounds the match with `rowid >= floor`, floor = the `RANK_MAX`-th
+  newest match (`rowid IN (...)` runs the MATCH once per row: minutes on a prefix). `fts_query`: prefix from 3
+  characters. `search(..., cancelled=)`: gives up waiting for `_rlock` and interrupts the query (progress handler);
+  `/api/search` sets it when `request.is_disconnected()`. A log ending in an unterminated line is marked as seen and
+  its `src` row is written only when its signature changes (no write + checkpoint per query).
+- Telegram: `<state>/telegram/replies.json` (sid -> chat, thread, refs, at; written on every change of `_pending`,
+  never while stopping, dropped after 24 h) lets the next process answer a turn sent before a restart
+  (`Gateway._left`, matched on `last_turn.refs` in `on_turn_end`, merged into `_pending` when the session gets a
+  new message). "Ask Harness" turns are tracked (`_track` + `ref`). `on_turn_end` also sets `p["ending"]` before
+  cancelling the typing loop: a cancel landing inside an httpx call was sometimes swallowed, and the loop then
+  dropped the ended turn's ref as not live (answer never sent). New WORDS keys; `_sender_lang(msg)` for texts sent
+  before the chat is linked.
+
+
+- Sessions `NewSessionColumn`: `made` ref = the session the first send created; chained later sends (text or voice)
+  go to it through `send` instead of a second `create`. Its Composer now gets a `checkSent`: recent sessions of the
+  path (created >= oldest entry - 600 s) whose log or queue holds an entry's `client_id` take the column
+  (`outboxMove` to that session first, its own `checkSent` sorts the rest).
+- Composer unmount stores the text only when `unsaved` (quotes / attachments are already stored by their effects; it
+  used to overwrite another tab's draft); the debounce no longer marks the text just loaded as unsaved. A refused send
+  whose composer is gone puts its attachments back in the stored draft too.
+- `restoreLayout` matches the current session columns by id (solo reuses the on-screen key): a session not in the
+  saved layout is added with a fresh key when its key is taken, and keeps the focus.
+- Sessions: `setNewPath` to a topic that already has a `new` column closes this one and focuses that one (drafts,
+  seeds and prefills are keyed `new:<path>`, two columns on one path overwrote each other).
+
+
+
+- `components/ui/markdown.tsx`: remote images (`https?:` / `//host`) render as `RemoteImage`, a click-to-load button
+  (then `referrerPolicy="no-referrer"`); same-site and relative pictures still load at once. `//host` links count as
+  external (new tab, rel noopener). Key `md.loadImage` (core).
+- `Markdown` is `React.memo`: a dictionary group arriving (re-renders every `useT` user) no longer re-parses and
+  re-highlights every message on screen. Tasks List/Calendar group with push (was a copy per task, quadratic) and the
+  List renders 200 rows per step (sentinel + IntersectionObserver, like the Files listing).
+- tasks.json: `save()` re-checks the signature right before the rename (`config.write_json(before_replace=)`, run
+  after the dump + fsync), so an edit landing during the write is retried, not overwritten. On save, a field
+  `_norm_task` rewrote and the API did not change is written back raw (`_cache["raw"]`, `_with_raw`); id-less
+  projects get a `_free_id("p_")` instead of being dropped. `_norm_task` checks `due` with `date.fromisoformat`;
+  the UI `fmtDue` / quick-add `parseDue` guard impossible dates too.
+- PATCH task: `prev_id` / `next_id` (sent by the Board drop) place the card server-side, renumbering the column 1..n
+  when the neighbours' orders are equal or < 1e-6 apart; a status change without `order` goes on top of done /
+  bottom elsewhere (the task sheet).
+- Keys: PUT `create: true` (the Add dialog) -> `409 exists` instead of replacing (`vault.put(create=)`).
+  `SecretInput onValueChange` switches to a masked textarea (`-webkit-text-security`) when a paste or the value
+  has line breaks (an `<input>` strips them). `maxxing keys set` keeps the final newline of a multi-line value;
+  `get` does not add a second one.
+- Files listing DnD: `fileDrag.paths` (the selection when the dragged entry is in it, `fileDrag.selection` kept by
+  Listing) + `droppedPaths()`; `EntryActions.moveTo(from[], dir)`. Drop-upload tells folders apart with
+  `webkitGetAsEntry().isDirectory` (was `type || size > 0`, which dropped empty files) and toasts the skipped ones.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 

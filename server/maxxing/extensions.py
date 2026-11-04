@@ -437,6 +437,13 @@ def widget_card(ext: Extension, force: bool = False) -> dict:
     return card
 
 
+def cached_card(ext_id: str) -> dict | None:
+    """The last card computed for an extension, however old (shown while a new one is computed)."""
+    with _lock:
+        hit = _cards.get(ext_id)
+    return hit[1] if hit else None
+
+
 def handler(ext: Extension) -> Callable[..., Any]:
     fn = getattr(ext.module, "handle", None) if ext.module else None
     if not callable(fn):

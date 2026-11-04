@@ -36,7 +36,7 @@ import {
 } from '@/components/ui'
 import { basename, crumbs, dirname, iconFor, isInside, kindOf, resolvePath } from '@/features/files/kinds'
 import { useRemoveEntries } from '@/features/files/selection'
-import { Listing, MX_PATH_TYPE, canDropInto, fileDrag, hasPathDrag, type EntryActions } from './Listing'
+import { Listing, canDropInto, droppedPaths, fileDrag, hasPathDrag, type EntryActions } from './Listing'
 import { FileView, type FileViewActions } from './FileView'
 import { NameDialog, type NameDialogState } from './dialogs'
 import { sortEntries, useFilePrefs, useTopicFor, useUploads } from './state'
@@ -208,28 +208,39 @@ export default function FilesPage() {
 
   const pickFiles = React.useCallback(() => fileInput.current?.click(), [])
   const upload = React.useCallback((files: File[]) => cwd && uploads.add(cwd, files), [cwd, uploads])
-  const moveTo = React.useCallback(
-    async (from: string, dir: string) => {
+  const moveOne = React.useCallback(
+    async (from: string, dir: string, quiet: boolean): Promise<boolean> => {
       const parent = dirname(from)
-      if (dir === from || dir.startsWith(from + '/') || dir === parent) return
+      if (dir === from || dir.startsWith(from + '/') || dir === parent) return false
       const to = `${dir.replace(/\/$/, '')}/${basename(from)}`
       if (root && !isInside(to, root)) {
         toast.error(t('files.outsideRoot'))
-        return
+        return false
       }
       try {
         await api.post('/api/files/move', { from, to })
       } catch (e) {
-        toast.error(isApiError(e, 'exists') ? t('files.exists') : errorMessage(e))
-        return
+        toast.error(isApiError(e, 'exists') ? `${mask(basename(from), 8)}: ${t('files.exists')}` : errorMessage(e))
+        return false
       }
       qc.removeQueries({ queryKey: qk.files.read(from) })
       qc.removeQueries({ queryKey: ['files', 'kind', from] })
       await Promise.all([qc.invalidateQueries({ queryKey: qk.files.list(parent) }), qc.invalidateQueries({ queryKey: qk.files.list(dir) })])
-      toast.success(t('files.movedTo', { name: mask(basename(from), 8), dir: mask(basename(dir) || dir, 8) }))
+      if (!quiet) toast.success(t('files.movedTo', { name: mask(basename(from), 8), dir: mask(basename(dir) || dir, 8) }))
       if (path === from || path.startsWith(from + '/')) go(to + path.slice(from.length), undefined, true)
+      return true
     },
     [go, mask, path, qc, root, t],
+  )
+  /** A dragged selection moves as a whole (one after the other, one toast). */
+  const moveTo = React.useCallback(
+    async (froms: string[], dir: string) => {
+      if (froms.length === 1) return void (await moveOne(froms[0], dir, false))
+      let n = 0
+      for (const from of froms) if (await moveOne(from, dir, true)) n++
+      if (n) toast.success(t('files.movedManyTo', { count: n, dir: mask(basename(dir) || dir, 8) }))
+    },
+    [mask, moveOne, t],
   )
 
   const addUploads = uploads.add
@@ -440,7 +451,7 @@ export default function FilesPage() {
 }
 
 /* ------------------------------------------------------------------ breadcrumb */
-function Breadcrumb({ segs, onGo, onDropPath }: { segs: { name: string; path: string }[]; onGo: (p: string) => void; onDropPath: (from: string, dir: string) => void }) {
+function Breadcrumb({ segs, onGo, onDropPath }: { segs: { name: string; path: string }[]; onGo: (p: string) => void; onDropPath: (from: string[], dir: string) => void }) {
   const t = useT()
   const [over, setOver] = React.useState<string | null>(null)
   const drop = (dir: string) => ({
@@ -453,10 +464,10 @@ function Breadcrumb({ segs, onGo, onDropPath }: { segs: { name: string; path: st
     onDragLeave: () => setOver((o) => (o === dir ? null : o)),
     onDrop: (e: React.DragEvent) => {
       setOver(null)
-      const from = e.dataTransfer.getData(MX_PATH_TYPE)
-      if (!from) return
+      const from = droppedPaths(e.dataTransfer)
+      if (!from.length) return
       e.preventDefault()
-      fileDrag.path = null
+      fileDrag.paths = []
       onDropPath(from, dir)
     },
   })

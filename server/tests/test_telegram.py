@@ -897,6 +897,10 @@ async def test_feed_thread_and_ask_claude(api, tg, svc, monkeypatch):
     assert s["plan_mode"] is True                                           # reads and explains, changes nothing
     assert s["title"].startswith("About: Payment failed") and gateway.thread_of(s["id"])
     assert not any("FYI" in p["text"] for p in tg.sent())
+    # the explanation is answered in the new session's thread (mirror of web turns off, the default)
+    svc.finish(s["id"], "THE EXPLANATION")
+    await wait_for(lambda: any(p.get("message_thread_id") == gateway.thread_of(s["id"]) and "THE EXPLANATION" in p["text"]
+                               for p in tg.sent()), what="explanation")
 
 
 async def test_only_the_linked_owner_is_authorized(api, tg):

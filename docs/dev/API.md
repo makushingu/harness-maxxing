@@ -10,7 +10,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 - Multipart requests (uploads, import, voice): the cookie and the CSRF header are checked **before** the body is
   read (`401` / `403`). Then `413 too_large` if `Content-Length` (or the streamed body) exceeds config
   `upload_max_mb` (default 2048; 0 = no cap; + 1 MB of multipart framing), and `507 disk_full` if the body does not fit
-  in the temp dir (where the server spools uploads, often a small tmpfs) with min(`upload_min_free_mb`, 128 MB)
+  in the spool dir (`<state>/tmp/uploads`, where the server spools uploads) with min(`upload_min_free_mb`, 128 MB)
   to spare. The full `upload_min_free_mb` reserve (default 1024) is checked on the destination disk per file.
   Both keys are read from config.json on every request (no restart).
 - Other request bodies (JSON, forms...) are capped before they are read (`maxxing/bodylimit.py`), on the declared
@@ -38,7 +38,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 | POST | `/api/auth/setup` | `{token, password}` | `200 {ok}` + cookie. Only while `setup_required`; token = one-time setup token. `403 bad_token` |
 | POST | `/api/auth/login` | `{password}` | `200 {ok:true}` + cookie, or with two-step sign-in on and no trusted-browser cookie `200 {ok:false, two_factor:{challenge, expires_in}}` (no cookie; `429 throttled` past 5 requests / 15 min per client or 10 pending; `503 two_factor_unavailable` when Telegram refused the message) · `401 bad_password` (after a delay) · `429 throttled` (checked before the password: 8 failures / 15 min per client, or the global cap - 30 failures from all clients - then one check per 5 s) |
 | POST | `/api/auth/two-factor` | `{challenge, code?, trust?:bool(true)}` | poll: `{ok:false, status:"pending", expires_in}` · `{ok:true, status:"approved"}` + session cookie (+ `mx_device` cookie, path `/api/auth`, 30 days, when `trust`) - once only · `400 bad_code` `{tries_left}` (also a code that is not 6 ASCII digits) · `429 codes_paused` (20 wrong codes server-wide in the last hour: only Allow works) · `403 denied` · `410 expired` (also after 5 wrong codes, after TTL + 60 s even once approved, and after a password change / 2FA off / forget-browsers). A challenge of `PUT /two-factor` needs the session cookie and turns two-step sign-in on instead |
-| PUT | `/api/auth/two-factor` | `{enabled}` | auth. `false`: off at once (trusted browsers forgotten) → `{ok, enabled:false}`. `true`: `409 not_linked` without a Telegram chat; already on → `{ok, enabled:true}`; else `{ok:false, two_factor:{challenge, expires_in}}`, on only once approved (poll `POST /two-factor`), this browser becomes trusted |
+| PUT | `/api/auth/two-factor` | `{enabled, password?}` | auth. `false`: needs the current `password` when on (`401 bad_password`, `429 throttled`, own counter like `/password`), then off (trusted browsers forgotten, notice in Telegram + feed) → `{ok, enabled:false}`. `true`: `409 not_linked` without a Telegram chat; already on → `{ok, enabled:true}`; else `{ok:false, two_factor:{challenge, expires_in}}`, on only once approved (poll `POST /two-factor`), this browser becomes trusted |
 | POST | `/api/auth/two-factor/forget-browsers` | – | auth. New `device_key`: every trusted browser asks again, this one is re-trusted → `{ok}` |
 | POST | `/api/auth/logout` | – | `{ok}` + cookie cleared. The cookie is also revoked server-side (`secrets.revoked_sessions`, kept until it would have expired): a copy of it is refused afterwards; other browsers stay signed in |
 | POST | `/api/auth/password` | `{current, new}` | `{ok}` (min length 12, `security.MIN_PASSWORD`; `400 weak_password`, `400 bad_password` for a character UTF-8 cannot store, same on setup) + new cookie · wrong `current`: `401` after the sign-in delay, `429 throttled` past `FAIL_MAX` (own counter `pw:<client>`); rotates the cookie key: every other browser is signed out |
@@ -142,7 +142,8 @@ previous night — open streams then receive `reset`. **Event** (normalised):
 {type:"voice_text", text, error:str|null, stopped?:true, at}   // transcript of the voice message just above (error: not transcribed, nothing sent to Claude)
 {type:"assistant", text, at}                       // markdown
 {type:"thinking", text, at}
-{type:"tool_use", id, name, input, summary, at}     // summary = one-line human string ("Read src/app.py", "Bash: ls -la")
+{type:"tool_use", id, name, input, input_lines?, summary, at}     // summary = one-line human string ("Read src/app.py", "Bash: ls -la")
+                                                    // input text fields over 20,000 chars are clipped; input_lines = {field: real line count} of the clipped top-level ones
 {type:"tool_result", tool_use_id, text, is_error, at}   // text truncated to 20 kB
 {type:"init", model, cwd, at}
 {type:"result", ok, cost_usd, duration_ms, model, usage:{input,output,cache_read,cache_write}, at}   // cost_usd = this turn only (the raw total_cost_usd is the thread's running total)
@@ -206,7 +207,7 @@ below) is a read-modify-write under one lock; when the file changed on disk betw
 the change is re-applied on the fresh file (3 tries), then `409 conflict`. Not valid JSON: every route `409 corrupt_file`.
 | GET | `/api/tasks` | – | `{projects:[TaskProject], tasks:[Task]}` |
 | POST | `/api/tasks` | partial Task (title required) | `Task` · `422` when `order` is not a finite number |
-| PATCH | `/api/tasks/{id}` | partial Task | `Task` · `422` when `order` is not a finite number |
+| PATCH | `/api/tasks/{id}` | partial Task, optional `prev_id` / `next_id` (the cards it was dropped between: placed there, the column renumbered when their orders leave no room) | `Task` · a status change without `order` puts it on top of `done`, at the bottom elsewhere · `422` when `order` is not a finite number |
 | DELETE | `/api/tasks/{id}` | – | `{ok}` |
 | POST | `/api/tasks/bulk` | `{ids:[id], patch?:{status?, priority?, project_id?, due?, topic_path?, labels?}, labels_add?:[str], labels_remove?:[str], delete?:bool}` | `{ok, updated, deleted}` — one atomic write; unknown ids ignored; tasks entering a column keep their relative order (top of `done`, bottom elsewhere) · `400 invalid_ids`/`too_many_ids` (more than 1000 ids)/`invalid_labels` (more than 50 labels on a task)/validation codes of PATCH |
 | POST / PATCH / DELETE | `/api/tasks/projects[/{id}]` | `{name, color, hidden?}` | `TaskProject` · DELETE `409 linked_project` |
@@ -258,7 +259,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET / POST | `/api/settings/feedback` | POST `{email, type: bug\|idea\|other, message}` | GET `{email, version}` (prefill); POST `{ok}`. Feedback to the authors (`maxxing/feedback.py` -> cloud `/v1/feedback`). Errors: 400 `invalid_email` / `message_required` / `too_long` / cloud codes, 429 `rate`, 502 `unreachable`, 503 `offline`. |
 | GET / PUT / DELETE | `/api/settings/license` | PUT `{key}` (`HM-XXXX-XXXX-XXXX-XXXX`) | `{has_key, key_hint, kind, email, max_servers, expires_at, activated_at, enabled, moved_to_git}` (bus `license`, never the key). Optional Enterprise key: PUT = `license.activate` (cloud `/v1/activate`: checks it, counts this server; 400 `invalid_key` / `limit` / `revoked` / `expired` with the cloud message), DELETE = `remove_key` (frees the seat). Changes nothing else: code and updates stay on git. |
 | GET | `/api/secrets` | – | `[{name, note, expose, updated, preview}]` (preview = first 4 chars + …, only `…` for values < 8 chars) |
-| PUT | `/api/secrets/{name}` | `{value?, note?, expose?}` | `{ok}` · `400 invalid_name\|reserved_name\|value_required\|invalid_value\|invalid_note` (PATH, HOME…, MAXXING_* are reserved; a value has 1 to 16384 characters, no null byte, no lone surrogate) — `expose` = exported as env var to Claude sessions |
+| PUT | `/api/secrets/{name}` | `{value?, note?, expose?, create?}` | `{ok}` · `409 exists` with `create: true` when the name is taken · `400 invalid_name\|reserved_name\|value_required\|invalid_value\|invalid_note` (PATH, HOME…, MAXXING_* are reserved; a value has 1 to 16384 characters, no null byte, no lone surrogate) — `expose` = exported as env var to Claude sessions |
 | GET | `/api/secrets/{name}/reveal` | – | `{value}` |
 | DELETE | `/api/secrets/{name}` | – | `{ok}` |
 
@@ -515,7 +516,7 @@ folded repeats). Kept 30 days in `<state>/feed.db`.
 | PATCH | `/api/feed/hooks/{id}` | `{secret?, regenerate?: bool}` | `FeedHook` (regenerate = new token, the old URL dies) |
 | DELETE | `/api/feed/hooks/{id}` | – | `{ok}` |
 | POST | `/api/feed/hooks/{id}/test` | – | `{event}` |
-| POST | `/api/hooks/{token}` | the service's payload (<= 1 MB) | **public** (no cookie, no CSRF header: the token is the permission). Signatures: Stripe `Stripe-Signature` (5 min tolerance), Shopify `X-Shopify-Hmac-Sha256`, GitHub `X-Hub-Signature-256`, generic `X-Signature: sha256=<hex>` - checked when the hook has a secret; a stripe/shopify/github hook WITHOUT a secret refuses every delivery with `401 secret_required` (+ one folded `security` warning in the feed); a generic hook without a secret accepts the token alone. `200 {ok, duplicate, id}` / `{ok, ignored}` (Shopify / GitHub: a delivery whose signed body was already posted is a duplicate whatever its delivery-id header; Shopify keys a known topic too) · `401 bad_signature\|secret_required`, `404` (unknown token: checked before the body is read), `413` (Content-Length or streamed body over 1 MB), `429` (120/min/hook), `400 bad_json` (also for JSON nested too deep), `400 bad_payload` (valid JSON whose fields have an unexpected shape for that service) |
+| POST | `/api/hooks/{token}` | the service's payload (<= 1 MB) | **public** (no cookie, no CSRF header: the token is the permission). Signatures: Stripe `Stripe-Signature` (5 min tolerance), Shopify `X-Shopify-Hmac-Sha256`, GitHub `X-Hub-Signature-256`, generic `X-Signature: sha256=<hex>` - checked when the hook has a secret; a stripe/shopify/github hook WITHOUT a secret refuses every delivery with `401 secret_required` (+ one folded `security` warning in the feed); a generic hook without a secret accepts the token alone. `200 {ok, duplicate, id}` / `{ok, ignored}` (a delivery verified with a secret whose body was already received is a duplicate whatever its unsigned headers, even if it was ignored or its event deleted: 30 days, generic 24 h; Shopify keys a known topic too) · `401 bad_signature\|secret_required`, `404` (unknown token: checked before the body is read), `413` (Content-Length or streamed body over 1 MB), `429` (120/min/hook), `400 bad_json` (also for JSON nested too deep), `400 bad_payload` (valid JSON whose fields have an unexpected shape for that service) |
 
 Telegram: rule `auto` = error -> loud, warning -> silent, else off; built-in `crons`, `system`, `security` default to off
 (own threads). The bot posts in the thread "Notifications" (`telegram.threads["#feed"]`) with buttons *Ask Claude*
@@ -547,5 +548,5 @@ a day, `search.db` is VACUUMed when more than 25 % of its pages are free (and it
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/search?q=&kinds=session,file,memory,task&limit=30` | – | `{results:[{kind, id (session id / file path / task id), path, title, snippet, at, score}], took_ms}` — every word required, as a prefix, accent-insensitive, BM25 (title x4), one result per session/file/task; `snippet` marks matches with `\u0002`…`\u0003` |
+| GET | `/api/search?q=&kinds=session,file,memory,task&limit=30` | – | `{results:[{kind, id (session id / file path / task id), path, title, snippet, at, score}], took_ms}` — every word required, as a prefix from 3 characters, accent-insensitive, BM25 (title x4; a session's title is on its title row only), one result per session/file/task (deduplicated in SQL), only the `RANK_MAX` (5 000) newest matching rows ranked, `cancelled: true` (no results) when the client went away; `snippet` marks matches with `\u0002`…`\u0003` |
 | GET | `/api/search/stats` | – | `{counts:{session, file, memory, task}, bytes, refreshed_at}` |

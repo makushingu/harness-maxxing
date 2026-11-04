@@ -15,8 +15,9 @@ Nothing outside that folder is reachable from the UI.
   the server refuses an upload that would leave less than 1 GB free on its disk ("Not enough free disk
   space"). Both limits are `upload_max_mb` and `upload_min_free_mb` in
   `/var/lib/claude-maxxing/config.json` (`upload_max_mb: 0` removes the size limit; no restart needed).
+  Empty files are uploaded too; a dropped folder is skipped (a message says so): drop the files inside it.
 - Drag a file or folder onto another folder (or onto a folder of the breadcrumb at the top) to
-  **move** it there. Desktop browsers only; on a phone use *Rename / move* in the item menu.
+  **move** it there; dragging one of the selected items moves the whole selection. Desktop browsers only; on a phone use *Rename / move* in the item menu.
 
 ## Preview
 
@@ -135,7 +136,8 @@ In a folder (the Files page list or grid, and the folder grid of the file viewer
 - Rename and move from the item menu.
 - **Delete moves to the trash**: Settings -> **Trash** lists what was deleted (files, folders,
   topics and projects with their sessions, sessions) - **Restore** puts it back where it was (under a new name
-  such as `blog-restored` when the place is taken; a long name is shortened to make room),
+  such as `blog-restored` when the place is taken; a long name is shortened to make room; a topic whose project
+  is also in the trash comes back after its project),
   *Delete forever* or *Empty the trash* frees the space. Items older than 30 days are removed
   automatically.
 - The workspace folder itself (and the folders that hold it) cannot be moved or deleted from here,

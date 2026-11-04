@@ -153,8 +153,8 @@ def _norm_task(t: dict) -> dict:
         out["priority"] = min(3, max(0, int(out.get("priority") or 0)))
     except (TypeError, ValueError, OverflowError):     # OverflowError: 1e999 is read as infinity
         out["priority"] = 0
-    if not (isinstance(out.get("due"), str) and _DATE.match(out["due"])):
-        out["due"] = None
+    if not (isinstance(out.get("due"), str) and _real_date(out["due"])):
+        out["due"] = None   # "2026-13-01" crashed every page that shows the date
     for key in ("project_id", "topic_path"):
         out[key] = _text(out.get(key)) or None
     labels = out.get("labels")
@@ -169,6 +169,32 @@ def _norm_task(t: dict) -> dict:
     except (TypeError, ValueError, OverflowError):
         out["order"] = 0.0
     return out
+
+
+def _real_date(v: str) -> bool:
+    try:
+        dt.date.fromisoformat(v)
+    except ValueError:
+        return False
+    return bool(_DATE.match(v))
+
+
+# Fields `_norm_task` may rewrite: on save, a hand-written value the API did not change is written back as it was
+# ("in_progress", "2026-11-05T10:00", "urgent"...), not replaced by its normalised default.
+_NORMED = ("title", "notes", "status", "priority", "due", "project_id", "topic_path", "labels", "created", "updated",
+           "done_at", "order")
+
+
+def _with_raw(task: dict, raw: dict | None) -> dict:
+    if raw is None:
+        return task
+    norm = _norm_task(raw)
+    out = None
+    for k in _NORMED:
+        if k in raw and raw[k] != norm[k] and task.get(k) == norm[k]:
+            out = out or dict(task)
+            out[k] = raw[k]
+    return out or task
 
 
 def load(copy_: bool = True) -> dict:
@@ -202,18 +228,19 @@ def load(copy_: bool = True) -> dict:
             if not isinstance(data.get(k) or [], list):
                 raise CorruptFile(f'tasks.json: "{k}" must be a list')
         projects, seen = [], set()
+        ptaken = {_id_of(x.get("id")) for x in data.get("projects") or [] if isinstance(x, dict)} - {""}
         for x in data.get("projects") or []:
-            if isinstance(x, dict) and _id_of(x.get("id")):
-                pid = _id_of(x["id"])
-                if pid in seen:                        # same id twice: deleting one must not delete both
-                    pid = _free_id("p_", x, seen)
+            if isinstance(x, dict):
+                pid = _id_of(x.get("id"))
+                if not pid or pid in seen:             # hand-written (kept, like tasks) or the same id twice
+                    pid = _free_id("p_", x, ptaken | seen)
                 seen.add(pid)
                 projects.append({**x, "id": pid})
         data["projects"] = projects
         for proj in data["projects"]:
             if "workspace" in proj and not isinstance(proj["workspace"], str):   # a list is not a dict key: _sync failed
                 proj.pop("workspace")
-        tasks, seen = [], set()
+        tasks, seen, raw = [], set(), {}
         taken = {_id_of(t.get("id")) for t in data.get("tasks") or [] if isinstance(t, dict)} - {""}
         for t in data.get("tasks") or []:
             if isinstance(t, dict):
@@ -223,20 +250,30 @@ def load(copy_: bool = True) -> dict:
                     taken.add(tid)
                     t = {**t, "id": tid}
                 seen.add(tid)
+                raw[tid] = t
                 tasks.append(_norm_task(t))
         data["tasks"] = tasks
-        _cache["sig"], _cache["data"] = sig, (copy.deepcopy(data) if copy_ else data)
+        _cache["sig"], _cache["data"], _cache["raw"] = sig, (copy.deepcopy(data) if copy_ else data), raw
         return data
 
 
 def save(data: dict) -> None:
     """Write `data` (loaded by this request under `_lock`); raises _Changed when the file changed meanwhile."""
     with _lock:
-        if _sig(tasks_path()) != _cache["sig"]:
-            _cache["sig"] = None
-            raise _Changed()
-        config.write_json(tasks_path(), data)
+        raw = _cache.get("raw") or {}
+        out = {**data, "tasks": [_with_raw(t, raw.get(t["id"])) for t in data["tasks"]]}
+
+        def unchanged() -> None:
+            # Checked after the dump and the fsync, right before the rename: an edit landing while the file was
+            # serialised (tens of ms for a big board) is not overwritten.
+            if _sig(tasks_path()) != _cache["sig"]:
+                _cache["sig"] = None
+                raise _Changed()
+
+        unchanged()
+        config.write_json(tasks_path(), out, before_replace=unchanged)
         _cache["sig"], _cache["data"] = _sig(tasks_path()), copy.deepcopy(data)
+        _cache["raw"] = {t["id"]: t for t in copy.deepcopy(out["tasks"])}
     bus.invalidate("tasks")
 
 
@@ -436,6 +473,10 @@ class TaskIn(_Text):
     topic_path: Optional[str] = None
     labels: Optional[list[str]] = None
     order: Optional[float] = Field(None, allow_inf_nan=False)   # inf/NaN broke every later listing
+    # PATCH only: the cards it was dropped between (Board). The server places it there, renumbering the column when
+    # their orders are equal or too close to split (hand-written tasks all at 0, or many drops at the same place).
+    prev_id: Optional[str] = None
+    next_id: Optional[str] = None
 
 
 class ProjectIn(_Text):
@@ -691,10 +732,48 @@ def patch_task(tid: str, body: TaskIn):
         task = next((t for t in data["tasks"] if t["id"] == tid), None)
         if task is None:
             raise _err(404, "not_found", f"no task {tid}")
-        _apply(task, body, data, set(body.model_fields_set))
+        fields = set(body.model_fields_set)
+        was = task["status"]
+        _apply(task, body, data, fields)
+        if body.prev_id or body.next_id:
+            _place(task, data, body.prev_id, body.next_id)
+        elif task["status"] != was and body.order is None:
+            # Like the Board and the bulk path: on top of "done", at the bottom elsewhere (the old column's
+            # order could leave it past the first page of Done).
+            others = [t["order"] for t in data["tasks"] if t["status"] == task["status"] and t is not task]
+            if task["status"] == "done":
+                task["order"] = min(others, default=1.0) - 1.0
+            else:
+                task["order"] = max(others, default=0.0) + 1.0
         task["updated"] = time.time()
         save(data)
     return task
+
+
+def _place(task: dict, data: dict, prev_id: str | None, next_id: str | None) -> None:
+    """Order `task` right before `next_id` (else right after `prev_id`) in its column, sorted like the UI
+    (order, then created)."""
+    col = sorted((t for t in data["tasks"] if t["status"] == task["status"] and t is not task),
+                 key=lambda t: (t["order"], t["created"]))
+    ids = [t["id"] for t in col]
+    if next_id in ids:
+        i = ids.index(next_id)
+    elif prev_id in ids:
+        i = ids.index(prev_id) + 1
+    else:
+        return                                          # neighbours gone meanwhile: keep the order sent
+    prev = col[i - 1]["order"] if i > 0 else None
+    nxt = col[i]["order"] if i < len(col) else None
+    if prev is not None and nxt is not None and nxt - prev > 1e-6:
+        task["order"] = (prev + nxt) / 2
+    elif prev is None and nxt is not None:
+        task["order"] = nxt - 1.0
+    elif nxt is None and prev is not None:
+        task["order"] = prev + 1.0
+    elif prev is not None:                              # no room between them: renumber the column
+        col.insert(i, task)
+        for n, t in enumerate(col):
+            t["order"] = float(n + 1)
 
 
 @router.delete("/{tid}")

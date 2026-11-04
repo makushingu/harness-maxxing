@@ -139,6 +139,8 @@ async def _watch(interval: float = 2.0) -> None:
     last = await asyncio.to_thread(_signature)
     while True:
         await asyncio.sleep(interval)
+        if not bus.browser_count():
+            continue                  # only browsers show it (a flock per job each pass): compared again once one is back
         try:
             cur = await asyncio.to_thread(_signature)
         except Exception:
@@ -150,6 +152,8 @@ async def _watch(interval: float = 2.0) -> None:
 
 async def startup() -> None:
     global _task
+    from .. import workspace
+    workspace.on_change(crons.on_workspace_change)
     _task = asyncio.create_task(_watch())
 
 

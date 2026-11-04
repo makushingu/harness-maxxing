@@ -166,7 +166,7 @@ Remotion, the Whisper models, Garage). As root.
 |---|---|
 | `maxxing keys list [--json]` | names, notes and whether each key is exposed (never the values) |
 | `maxxing keys get NAME` | print a value (exit code 1 when missing) |
-| `printf %s "$VALUE" \| maxxing keys set NAME [--note TEXT] [--no-expose]` | create or update a key; the value comes from stdin, never from the command line. A new key is exposed (environment variable of every session and shell job) unless `--no-expose`; an update keeps its note and exposure |
+| `printf %s "$VALUE" \| maxxing keys set NAME [--note TEXT] [--no-expose]` | create or update a key; the value comes from stdin, never from the command line. A new key is exposed (environment variable of every session and shell job) unless `--no-expose`; an update keeps its note and exposure; a multi-line value (PEM, SSH key) keeps its final line break |
 | `maxxing keys delete NAME` | remove a key |
 | `maxxing infra status` / `infra list [--kind K] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot) |
 | `maxxing infra refresh` | read everything now (this server, other servers over SSH, Cloudflare, Hostinger, URL checks) |

@@ -94,8 +94,8 @@ def invalidate_sizes() -> None:
 
 
 def _kind(item: Path, side: dict) -> str:
-    if side.get("kind"):
-        return str(side["kind"])
+    if side.get("kind") and (item.is_dir() or side["kind"] not in ("project", "topic")):   # older sidecars
+        return str(side["kind"])                     # called a deleted file "project-plan.md" a project
     name = re.sub(r"^\d{8}-\d{6}-", "", item.name)
     if name.startswith(("project-", "topic-")) and item.is_dir():
         return name.split("-", 1)[0]
@@ -278,6 +278,14 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
     return done
 
 
+def _project_in_trash(folder: Path) -> bool:
+    for p in _entries():
+        side = _side(p)
+        if side.get("original") == str(folder) and _kind(p, side) == "project":
+            return True
+    return False
+
+
 def restore(item_id: str) -> dict[str, Any]:
     """Put an item back where it was (a free name next to it if the place is taken now)."""
     p = _item(item_id)
@@ -308,6 +316,9 @@ def restore(item_id: str) -> dict[str, Any]:
     parents = original.resolve().parents                    # a sidecar never sends a file out of the roots
     if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):
         raise TrashError(409, "not_restorable", "This item cannot be restored from here")
+    if kind == "topic" and not original.parent.parent.is_dir() and _project_in_trash(original.parent.parent):
+        # restoring it first would make a bare project folder, and the project then come back as "-restored"
+        raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
     dest = _free_dir_name(original) if kind in ("project", "topic") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
