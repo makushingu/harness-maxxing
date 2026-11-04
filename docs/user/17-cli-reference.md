@@ -186,6 +186,7 @@ Scripts read keys from the environment (`os.environ["NAME"]`, `$NAME`); a script
 | `printf %s "$KEY" \| maxxing dokploy connect [--url URL]` | check a Dokploy API key, then keep it in the vault as `DOKPLOY_API_KEY`, never exposed to sessions (default address `http://127.0.0.1:3000`; plain http only to this machine or a private network) |
 | `maxxing dokploy status` / `disconnect` | connected or not / forget the address and the key |
 | `maxxing dokploy list [--json]` | every project, application, compose stack and database, with its state, id and domains |
+| `maxxing dokploy environments [--json]` | every project and environment with its id (what `app create --environment` takes) |
 | `maxxing dokploy deploy APP --yes` / `redeploy APP --yes` | start a deployment (APP = id, name or app name; a name used in two projects needs the id) |
 | `maxxing dokploy deployments APP [--json]` / `logs APP [--deployment ID] [--lines N]` | deployments newest first / the log of the last one (read on this server) |
 | `maxxing dokploy domain add APP HOST [--port N] [--path P] [--no-https] --yes` / `domain list APP` | serve an app on a domain through Dokploy's Traefik (Let's Encrypt unless `--no-https`) |

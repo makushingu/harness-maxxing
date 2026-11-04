@@ -3,6 +3,7 @@
     printf %s "$KEY" | maxxing dokploy connect [--url URL]   check the key, then keep it in the vault (not exposed)
     maxxing dokploy status | disconnect
     maxxing dokploy list [--json]                              projects, apps, compose stacks, databases, domains
+    maxxing dokploy environments [--json]                      where `app create` can put an app (their ids)
     maxxing dokploy deploy|redeploy APP --yes [--title T]      APP = id, name or app name
     maxxing dokploy deployments APP [--json]
     maxxing dokploy logs APP [--deployment ID] [--lines N]
@@ -28,6 +29,8 @@ def _configure(p) -> None:
     sub.add_parser("disconnect", help="forget the address and delete the key")
     ls = sub.add_parser("list", help="projects, apps, compose stacks, databases and their domains")
     ls.add_argument("--json", action="store_true")
+    en = sub.add_parser("environments", help="projects and environments, with the ids app create needs")
+    en.add_argument("--json", action="store_true")
     for name in ("deploy", "redeploy"):
         d = sub.add_parser(name, help=f"{name} an application or compose stack")
         d.add_argument("app")
@@ -54,7 +57,7 @@ def _configure(p) -> None:
 
     app = sub.add_parser("app", help="create an application from a git repository").add_subparsers(dest="sub", required=True)
     ac = app.add_parser("create")
-    ac.add_argument("--environment", required=True, help="environment id (maxxing dokploy list --json)")
+    ac.add_argument("--environment", required=True, help="environment id (maxxing dokploy environments)")
     ac.add_argument("--name", required=True)
     ac.add_argument("--repo", required=True, help="git URL (https or ssh)")
     ac.add_argument("--branch", default="main")
@@ -99,6 +102,15 @@ def _handler(a) -> int:
             _stale()
             return 0
         with dokploy.client() as c:
+            if a.action == "environments":
+                envs = dokploy.environments(c.get("project.all"))
+                if a.json:
+                    print(json.dumps(envs, indent=2))
+                for e in [] if a.json else envs:
+                    print(f"{(e['project'] or '')[:28]:<28} {(e['name'] or '')[:20]:<20} {e['id']}")
+                if not envs and not a.json:
+                    print("No environment: create a project in Dokploy first.")
+                return 0
             svcs = dokploy.inventory(c)
             if a.action == "list":
                 if a.json:

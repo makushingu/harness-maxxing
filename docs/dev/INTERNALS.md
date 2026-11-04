@@ -424,6 +424,7 @@ overrides the URL (tests).
   (`{connected, url, error?}`, cheap: no call when no key), `client()`.
 - `services(projects) -> [Service]` flattens `project.all`: `{kind: application|compose|postgres|mysql|mariadb|mongo|
   redis, id, name, app_name, project, environment, status, domains:[{host, https, port, path}], repo, build}`;
+  `environments(projects)` -> `[{id, name, project, project_id}]` (where `app create` goes);
   `find(services, ref)` by id, name or app name (`not_found`, `ambiguous` with the candidates).
 - Writes (the CLI asks `--yes`): `deploy(svc)` (`application.deploy` / `compose.deploy`), `redeploy(svc)`,
   `domain_add(svc, host, port, https)` (`domain.create`, `certificateType` letsencrypt when https),
@@ -645,7 +646,7 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 - `MAXXING_SPAWN=direct` run turns as detached subprocesses instead of systemd-run units
 - `MAXXING_CRONTAB_FILE` write the managed crontab block into this file instead of `crontab -`
 - `MAXXING_SYSTEM_TZ=0` never switch the system time zone when the time zone setting changes (also skipped when `MAXXING_CRONTAB_FILE` is set)
-- `MAXXING_DOKPLOY_API` Dokploy URL instead of config.json `dokploy.url` · `MAXXING_DOKPLOY_LOGS` folder of the Dokploy deployment logs (default `/etc/dokploy/logs`)
+- `MAXXING_DOKPLOY_API` Dokploy URL instead of config.json `dokploy.url` · `MAXXING_DOKPLOY_LOGS` folder of the Dokploy deployment logs (default `/etc/dokploy/logs`) · `MAXXING_DOKPLOY_ETC` Dokploy's folder (default `/etc/dokploy`) · `MAXXING_TRAEFIK_ROUTE` our Traefik route file · `MAXXING_CADDY_DOCKER_DROPIN` Caddy's wait-for-Docker drop-in
 - `MAXXING_TELEGRAM_API` Telegram API base URL (tests: local mock) · `MAXXING_GITHUB_API` GitHub API base URL
 - `MAXXING_LICENSE_API` license server (default `https://api.harness-maxxing.com`) · `MAXXING_GIT_URL` repository an install still on archives moves to (tests) · `MAXXING_LICENSE_PING=0` no hourly loop: no registration heartbeat, no call to the cloud (tests)
 - `MAXXING_AUTH_CHECK=0` no background Claude sign-in verification (tests) · `MAXXING_AUTH_CHECK_DELAY` seconds

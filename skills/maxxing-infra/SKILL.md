@@ -56,6 +56,7 @@ and its log, and rolls back. Do not hand-write a systemd unit or `site add --por
 Dokploy; `maxxing infra site add` stays for static pages and what is not in Dokploy.
 ```bash
 maxxing dokploy list [--json]            # projects/environments, apps, compose stacks, databases, state, ids, domains
+maxxing dokploy environments            # projects/environments and their ids (for app create)
 maxxing dokploy deployments APP          # newest first;  maxxing dokploy logs APP [--deployment ID] [--lines N]
 maxxing dokploy app create --environment ENV_ID --name N --repo URL [--branch main] [--build nixpacks|dockerfile|railpack] --yes
 maxxing dokploy deploy APP --yes | redeploy APP --yes

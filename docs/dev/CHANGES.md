@@ -28,9 +28,13 @@ Dokploy integration (opt-in, nothing changes without Dokploy):
 - Doctor: `check_dokploy` (API with the key, WARN while port 3000 is public), `check_security` INFO instead of WARN
   when ufw is off because Docker runs.
 - Tests: `test_dokploy.py` (fake Dokploy API), install.sh library-mode tests in `test_install_security.py`.
-- To check on a real server before release: the Traefik entry point / resolver / middleware names of the current
-  Dokploy (`web`, `websecure`, `letsencrypt`, `redirect-to-https`), the dashboard URLs, Traefik reaching the bridge
-  gateway, and the API procedure names against Dokploy's OpenAPI.
+- Checked on Ubuntu 24.04 (WSL2 + systemd) with Dokploy v0.30.10: `DOKPLOY=1` install and a re-run, the Traefik
+  names (`web`, `websecure`, `letsencrypt`, `redirect-to-https`), HTTPS and the http -> https redirect through
+  Traefik -> Caddy -> Harness, a container reaching Harness only through Caddy, a reboot (Caddy drop-in
+  `20-harness-docker.conf`: `After=docker.service` + `Restart=on-failure`, the bridge address appears with Docker),
+  `connect`, `environments`, `app create`, `deploy`, `redeploy`, `deployments`, `logs`, `domain add|list` and the
+  Infra reader. `project.all` (v0.30) gives apps / compose stacks only `{id, name, status}`: `inventory()` reads
+  `<kind>.one` for the rest. Not checked: Let's Encrypt with a real domain, compose stacks, the dashboard URLs.
 
 Release of `beta` to `main`: a103 (Team friends, edits, presence) and a104 (session list rewrite) were on `beta` only
 while a105-a107 went straight to `main`. No code change in this commit: version bump and notes only. The public
