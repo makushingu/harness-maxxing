@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
+import { forgetDraft } from '../drafts'
 import type {
   CreateSessionBody,
   Ok,
@@ -117,7 +118,13 @@ export function usePatchSession() {
 }
 export function useDeleteSession() {
   const qc = useQueryClient()
-  return useMut((id: string) => api.del<Ok>(`/api/sessions/${seg(id)}`), { onSuccess: (_r, id) => dropSession(qc, id), invalidate: inv })
+  return useMut((id: string) => api.del<Ok>(`/api/sessions/${seg(id)}`), {
+    onSuccess: (_r, id) => {
+      dropSession(qc, id)
+      forgetDraft(id)
+    },
+    invalidate: inv,
+  })
 }
 export function useSendMessage() {
   const set = useSetSessionCache()
