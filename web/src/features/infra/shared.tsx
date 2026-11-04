@@ -14,7 +14,7 @@ export const KIND_ICON: Record<InfraKind, LucideIcon> = {
   bucket: Boxes,
   domain: Globe,
 }
-export const PLATFORMS = ['vercel', 'netlify', 'supabase', 'github'] as const
+export const PLATFORMS = ['vercel', 'netlify', 'supabase', 'github', 'dokploy'] as const
 export const LOCATION_ICON = (loc: string): LucideIcon =>
   loc === 'cloudflare' || (PLATFORMS as readonly string[]).includes(loc) ? Cloud : loc === 'hostinger' ? HardDrive : Server
 
@@ -25,7 +25,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   o2switch: 'o2switch', infomaniak: 'Infomaniak', digitalocean: 'DigitalOcean', hetzner: 'Hetzner', 'name.com': 'Name.com',
   dnsimple: 'DNSimple', azure: 'Azure', vultr: 'Vultr', linode: 'Akamai (Linode)', squarespace: 'Squarespace',
   github: 'GitHub Pages', shopify: 'Shopify', webflow: 'Webflow', supabase: 'Supabase', render: 'Render', railway: 'Railway',
-  fly: 'Fly.io', firebase: 'Firebase', heroku: 'Heroku', ghost: 'Ghost',
+  fly: 'Fly.io', firebase: 'Firebase', heroku: 'Heroku', ghost: 'Ghost', dokploy: 'Dokploy',
 }
 export function providerName(id: string | null | undefined, t: TFn): string {
   if (!id) return ''

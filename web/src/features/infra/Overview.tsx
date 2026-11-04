@@ -8,6 +8,7 @@ import { tDyn, useT } from '@/i18n'
 import { Badge, Button, StatusDot } from '@/components/ui'
 import { cn, store } from '@/lib/utils'
 import { KIND_ICON, PLATFORMS, locationLabel } from './shared'
+import { DokployConnect, DokployDisconnect } from './DokployConnect'
 
 function DocLink({ className }: { className?: string }) {
   const t = useT()
@@ -130,6 +131,8 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
         <SourceRow key={id} tone="idle" title={title} what={t(`infra.src.${id}`)} muted>
           {id === 'github' ? (
             <span className="text-muted-foreground">{t('infra.src.githubHow')}</span>
+          ) : id === 'dokploy' ? (
+            <DokployConnect url={s.url} />
           ) : (
             <>
               {s.token_url && (
@@ -150,6 +153,7 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
       <SourceRow key={id} tone={s.error ? 'error' : missing.length ? 'warn' : 'ok'} title={title} what={t(`infra.src.${id}`)}>
         {s.error && <span className="max-w-80 truncate text-destructive" title={s.error}>{s.error}</span>}
         {missing.length > 0 && <span className="text-warning">{t('infra.src.missing', { list: missing.join(', ') })}</span>}
+        {id === 'dokploy' && <DokployDisconnect url={s.url} />}
       </SourceRow>
     )
   }

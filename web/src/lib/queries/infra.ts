@@ -42,3 +42,11 @@ export function useInfraDomainAdd() {
 export function useInfraDomainRemove() {
   return useMut((b: { name: string }) => api.post('/api/infra/domains/remove', b), { invalidate: [infraKeys.all] })
 }
+export function useInfraDokployConnect() {
+  return useMut((b: { url: string; key: string }) => api.post<{ connected: boolean; url: string; projects: number }>('/api/infra/dokploy/connect', b), {
+    invalidate: [infraKeys.all],
+  })
+}
+export function useInfraDokployDisconnect() {
+  return useMut(() => api.post<{ removed: boolean }>('/api/infra/dokploy/disconnect', {}), { invalidate: [infraKeys.all] })
+}

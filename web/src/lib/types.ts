@@ -759,7 +759,7 @@ export type InfraResource = {
   id: string
   kind: InfraKind
   name: string
-  /** "local" (this server), a registered server name, "cloudflare", "hostinger", a platform (vercel, netlify, supabase, github), "other" */
+  /** "local" (this server), a registered server name, "cloudflare", "hostinger", a platform (vercel, netlify, supabase, github, dokploy), "other" */
   location: string
   provider: string
   urls: string[]
@@ -784,6 +784,8 @@ export type InfraSource = {
   beta?: boolean
   token_url?: string
   keys?: string[]
+  /** dokploy only: the address of its API */
+  url?: string
 }
 export type InfraView = {
   enabled: boolean
@@ -793,7 +795,7 @@ export type InfraView = {
   took_ms: number | null
   harness_host: string | null
   sources: { servers?: Record<string, { ok: boolean; error: string | null; took_ms: number | null }>; cloudflare?: InfraSource; hostinger?: InfraSource } & Partial<
-    Record<'vercel' | 'netlify' | 'supabase' | 'github', InfraSource>
+    Record<'vercel' | 'netlify' | 'supabase' | 'github' | 'dokploy', InfraSource>
   >
   resources: InfraResource[]
   servers: { name: string; label?: string; host: string; user: string; port: number; note: string }[]
