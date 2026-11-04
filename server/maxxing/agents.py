@@ -330,7 +330,9 @@ def continue_in_sessions(path: str, sid: str) -> dict:
     if src.get("state") == "running" or src.get("queue"):
         raise AgentError(409, "busy", "Wait for the run to finish")
     a = load(path)
-    title = f"{a['name'] or parse(path)[2]}: {src.get('title') or 'run'}"[:120]
+    name = a["name"] or parse(path)[2]
+    title = src.get("title") or ""                  # runs are titled "<agent> - <date>" (fire)
+    title = (title if title.startswith(name) else f"{name}: {title or 'run'}")[:120]
     meta = store.new_meta(topic_of(path), title, model=src.get("model") or "", source="web")
     csid = src.get("csid") or sid
     meta.update(csid=csid, fresh=bool(src.get("fresh", True)), from_agent={"path": path, "session": sid},
