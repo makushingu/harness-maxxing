@@ -15,6 +15,7 @@ subject}], "truncated": bool}; commits come newest first, children before parent
 from __future__ import annotations
 
 import calendar
+import hashlib
 import logging
 import os
 import re
@@ -51,6 +52,7 @@ FMT_SEP = "%x00"
 SUBJECT_MAX = 500           # a subject or author name longer than this is cut (a 1 MB subject would weigh on every graph)
 MESSAGE_MAX = 50_000        # same for the message of the commit detail
 MAX_BRANCHES = 20
+RENAMES_MAX_FILES = 2000    # commit detail: a commit touching more files is listed without rename detection (7 s at 100k)
 
 
 def _clip(text: str, n: int) -> str:
@@ -103,6 +105,7 @@ def _cached(key: str, fn, refresh: bool = False):
 def clear_cache() -> None:
     with _lock:
         _cache.clear()
+        _graphs.clear()
         _access.clear()
 
 
@@ -338,6 +341,10 @@ def _refs(deco: str) -> list[dict]:
     return refs
 
 
+GRAPH_CACHE_MAX = 32
+_graphs: dict[tuple, list[dict]] = {}      # (repo, limit, selection, refs fingerprint) -> commits (newest used last)
+
+
 def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = None) -> dict:
     repo = resolve(path)
     limit = max(1, min(MAX_LIMIT, int(limit or DEFAULT_LIMIT)))
@@ -358,13 +365,41 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
         sel = refs
     else:
         sel = ["--branches", "--remotes", "--tags"]
-        try:  # an unborn HEAD (empty repository, `checkout --orphan`) is not a revision git log accepts
-            _git(repo, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+    head = ""
+    try:  # an unborn HEAD (empty repository, `checkout --orphan`) is not a revision git log accepts
+        head = _git(repo, "rev-parse", "--verify", "--quiet", "HEAD^{commit}").strip()
+        if not branches:
             sel.append("HEAD")
-        except GitError:
-            pass
+    except GitError:
+        pass
+    # Same refs (and HEAD) as last time: same graph. The refs list is one cheap call; the log is the walk.
     try:
-        raw = _git(repo, "log", "--no-show-signature", *sel, "--topo-order", "--decorate=full", f"-n{limit + 1}",
+        prints = _git(repo, "for-each-ref", "--format=%(HEAD)%(objectname) %(refname)")
+    except GitError:
+        prints = None
+    key = (str(repo), limit, tuple(sel), head, hashlib.sha1(prints.encode()).hexdigest()) if prints is not None else None
+    with _lock:
+        commits = _graphs.pop(key, None) if key else None
+        if commits is not None:
+            _graphs[key] = commits
+    if commits is None:
+        commits = _log_graph(repo, sel, limit)
+        if key:
+            with _lock:
+                _graphs[key] = commits
+                while len(_graphs) > GRAPH_CACHE_MAX:
+                    del _graphs[next(iter(_graphs))]
+    truncated = len(commits) > limit
+    s = summary(repo)
+    return {"repo": {**s, "kind": "local", "id": str(repo)}, "commits": commits[:limit], "truncated": truncated}
+
+
+def _log_graph(repo: Path, sel: list[str], limit: int) -> list[dict]:
+    """The limit + 1 newest commits, a child always before its parents. Not `--topo-order`: it loads the whole
+    history before printing the first line (4 s on 600k commits without a commit-graph file); _topo on what the
+    plain walk returns gives the same rule."""
+    try:
+        raw = _git(repo, "log", "--no-show-signature", *sel, "--decorate=full", f"-n{limit + 1}",
                    f"--format=%H{FMT_SEP}%P{FMT_SEP}%D{FMT_SEP}%an{FMT_SEP}%ct{FMT_SEP}%s", "--decorate-refs-exclude=refs/stash",
                    "--")  # refs only: a file named like a branch must not make them ambiguous
     except GitError as e:
@@ -380,9 +415,7 @@ def graph(path: str, limit: int = DEFAULT_LIMIT, branches: list[str] | None = No
         sha, parents, deco, author, ts, subject = parts[0], parts[1], parts[2], parts[3], parts[4], SEP.join(parts[5:])
         commits.append({"sha": sha, "parents": parents.split(), "refs": _refs(deco), "author": _clip(author, SUBJECT_MAX),
                         "date": int(ts) if ts.isdecimal() and ts.isascii() else 0, "subject": _clip(subject, SUBJECT_MAX)})
-    truncated = len(commits) > limit
-    s = summary(repo)
-    return {"repo": {**s, "kind": "local", "id": str(repo)}, "commits": commits[:limit], "truncated": truncated}
+    return _topo(commits)
 
 
 def _object_commit(repo: Path, prefix: str) -> str:
@@ -412,7 +445,11 @@ def commit(path: str, sha: str) -> dict:
     head = _git(repo, "show", "-s", "--no-show-signature", f"--format=%H{FMT_SEP}%P{FMT_SEP}%an{FMT_SEP}%ae{FMT_SEP}%ct{FMT_SEP}%B", sha)
     h, parents, an, ae, ct, body = (head.split(SEP, 5) + [""] * 6)[:6]
     files = []
-    stat = _git(repo, "show", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--format=", "--numstat", "-M", "--diff-merges=first-parent", sha)
+    show = ("show", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--format=", "--numstat",
+            "--diff-merges=first-parent")
+    stat = _git(repo, *show, "--no-renames", sha)
+    if stat.count("\n") <= RENAMES_MAX_FILES:      # rename detection pairs every file: only on a commit of normal size
+        stat = _git(repo, *show, "-M", sha)
     for ln in stat.splitlines():
         cols = ln.split("\t")
         if len(cols) == 3:
@@ -674,14 +711,15 @@ def github_graph(full_name: str, limit: int = DEFAULT_LIMIT, branches: list[str]
 
 
 def _topo(commits: list[dict]) -> list[dict]:
-    """Newest first, a commit always before its parents (dates alone can disagree)."""
+    """Newest first, a commit always before its parents (dates alone can disagree); equal dates keep the given order."""
     by = {c["sha"]: c for c in commits}
+    pos = {c["sha"]: -i for i, c in enumerate(commits)}
     children: dict[str, int] = {c["sha"]: 0 for c in commits}
     for c in commits:
         for p in c["parents"]:
             if p in children:
                 children[p] += 1
-    ready = sorted((c for c in commits if children[c["sha"]] == 0), key=lambda c: c["date"])
+    ready = sorted((c for c in commits if children[c["sha"]] == 0), key=lambda c: (c["date"], pos[c["sha"]]))
     out = []
     while ready:
         c = ready.pop()                                   # newest available
@@ -691,7 +729,7 @@ def _topo(commits: list[dict]) -> list[dict]:
                 children[p] -= 1
                 if children[p] == 0:
                     ready.append(by[p])
-                    ready.sort(key=lambda x: x["date"])
+                    ready.sort(key=lambda x: (x["date"], pos[x["sha"]]))
     return out
 
 
