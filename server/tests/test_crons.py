@@ -65,6 +65,27 @@ def test_dst_is_monotonic():
     assert runs == sorted(set(runs))
 
 
+
+def test_dst_repeated_hour_is_never_in_the_past():
+    after = ts(2026, 10, 25, 1, 30)                                   # 02:30 CET, the second 02:30 in Paris
+    assert crons.next_runs("45 2 * * *", 1, after, PARIS) == [ts(2026, 10, 26, 1, 45)]   # 02:45 CEST is past
+    # an "every 10 minutes" job runs in both passes of the repeated hour, a fixed time once
+    runs = crons.next_runs("*/10 * * * *", 12, ts(2026, 10, 25, 0, 30), PARIS)
+    assert runs == [ts(2026, 10, 25, 0, 40) + 600 * i for i in range(12)]
+    assert crons.next_runs("30 2 * * *", 2, ts(2026, 10, 24, 22), PARIS) == [ts(2026, 10, 25, 0, 30),
+                                                                             ts(2026, 10, 26, 1, 30)]
+
+
+def test_kept_clock_is_due_once_on_dst_days(org, monkeypatch):
+    """system_clock = keep: the hourly guarded line runs a 02:30 job once in autumn and still runs it in spring."""
+    config.update_config(timezone="Europe/Paris", system_clock="keep")
+    autumn = [m for m in range(int(ts(2026, 10, 24, 22)), int(ts(2026, 10, 25, 4)), 60) if crons.is_due("30 2 * * *", m)]
+    assert autumn == [ts(2026, 10, 25, 0, 30)]
+    spring = [m for m in range(int(ts(2026, 3, 28, 23)), int(ts(2026, 3, 29, 4)), 60) if crons.is_due("30 2 * * *", m)]
+    assert spring == [ts(2026, 3, 29, 1, 30)]                         # 03:30 CEST, the time the UI shows
+    assert crons.is_due("*/10 * * * *", ts(2026, 10, 25, 1, 10) + 59)   # any second of the minute
+
+
 @pytest.mark.parametrize("expr,text", [
     ("* * * * *", "every minute"),
     ("*/5 * * * *", "every 5 minutes"),

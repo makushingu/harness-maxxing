@@ -83,6 +83,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `compact_log`: a read-only pass (`_log_shrinks`, stops at the first line it would change) first; a log that would
   not shrink is never copied to `.compact.tmp` and no longer needs `before + 256 MB` free (no more nightly `no_space`).
 
+## Unreleased
+
+- Crons DST: `iter_runs` compares instants (`ts >= first`), not aware datetimes (same tzinfo = wall-time compare,
+  so 02:45 fold=0 passed after 02:30 fold=1), and yields the fold=1 instants when the hour field is full.
+  `is_due` (guarded lines, `system_clock = keep`) is now `next(iter_runs(minute - 1)) == minute`: one run in the
+  repeated hour, the skipped spring time runs after the gap. `widgets.day()` ends at the next local midnight.
+
 ## 2.0.0-alpha.109 - 2026-11-04
 
 - Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events
