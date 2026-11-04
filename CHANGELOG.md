@@ -23,6 +23,8 @@ Changes:
   topic's agents show under it in the Sessions list. The Agents page lists them by project with a state filter, and its
   **Office** has two views: Classic (cards) and Space (a pixel office on a space station, one bay per project, a desk per agent), plus your own: **Create my custom view** asks Claude to build one; drag projects and agents to order them, and pick each project's color. **Off by default**: turn it on in Settings -> Features -> Agents.
   [Show me](#show:agents)
+- **Agents: answer a request where you see it.** When an agent waits for your OK, Allow and Deny are on the request
+  in its thread and in the bubble over its desk in the Office; the thread then says how it ended.
 
 ## 2.0.0-alpha.112 - 2026-11-04
 

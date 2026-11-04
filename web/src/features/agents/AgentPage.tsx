@@ -369,7 +369,7 @@ function ThreadMessage({
             <Sensitive length={8}>{a.display_name}</Sensitive>
           </span>
           {m.kind === 'approval' ? (
-            <Badge variant={live ? 'warning' : 'secondary'}>{live ? t('agents.thread.approval') : t('agents.approval.asked')}</Badge>
+            !live && <Badge variant="secondary">{t('agents.approval.asked')}</Badge>
           ) : failed ? (
             <span className="inline-flex items-center gap-1 text-destructive">
               <XCircle className="size-3" /> {t('agents.thread.failed')}
