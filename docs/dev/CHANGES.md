@@ -16,11 +16,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Edit refused by permissions, `sed -i` EBUSY, `>>` read-only, `.claude/` read-only, CLI refused.
 - UI: no dialog to create or change an agent with Claude. `EditWithClaude.tsx`: `draftUrl()` =
   `/sessions?new=1&path=<topic>&prompt=<text>` (a new-session draft of the topic, pre-filled, not sent);
-  "Edit with Claude" (agent page) uses the agent's topic + `agents.edit.prompt`; `useCreateWithClaude()` ("New agent",
-  QuickCreate's "Create with Claude" + topic select) uses the topic in context + `agents.create.prompt`, else
-  `general/inbox` (or the first topic) + `agents.create.promptAnywhere`. The composer takes the focus with the cursor at
-  the end on a pre-filled draft (mount or `DRAFT_EVENT`; `prefillDraft` always fires it). The CreateAgent sheet keeps the
-  gallery, the manual form and the import.
+  "Edit with Claude" (agent page) uses the agent's topic + `agents.edit.prompt`. "New agent" opens the CreateAgent sheet
+  on `QuickCreate`: project then topic first (prefilled from the list's `?topic=`), then two choices, "With Claude"
+  (`useCreateWithClaude(topic)` = `draftUrl(topic, agents.create.prompt)`) or "By hand" (the form on that topic); the
+  gallery and the import use the same topic (`CreateStart.topic` from the empty page). The composer takes the focus with the cursor at
+  the end on a pre-filled draft (mount or `DRAFT_EVENT`; `prefillDraft` always fires it).
 
 - `agents._git_exclude()`: creating an agent in a topic that is (or sits in) a git clone adds `/<rel>/agents/` to
   that clone's `.git/info/exclude` (worktrees/submodules through `gitdir:` + `commondir`), never a tracked `.gitignore`:

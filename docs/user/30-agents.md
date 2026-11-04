@@ -46,13 +46,17 @@ its commits (the clone's local `.git/info/exclude`).
 
 ## Create an agent
 
-**Agents -> New agent** opens a new session in **Sessions** with the request already started in its box (not sent):
-finish the sentence with what it should do and when ("every Monday morning, sum up the players' feedback and suggest 3
-improvements") and send. The session is in the topic shown in the list (when it is narrowed to one topic), otherwise in
-`general / inbox` and Claude first agrees with you on the right project and topic. Claude writes the role, picks the
-trigger, asks only what is missing (a few questions at most), shows you a summary, creates the agent, gives you its
-webhook address if it has one and offers a test run. With no agent yet, the Agents page shows **Create with Claude**
-with a topic to pick, and the same choices as below. You can ask the same thing in any session.
+**Agents -> New agent** first asks where it lives: the project, then the topic (already filled in when the list is
+narrowed to one topic). Then pick how to set it up:
+
+- **With Claude**: a new session of that topic opens in **Sessions** with the request already started in its box (not
+  sent). Finish the sentence with what it should do and when ("every Monday morning, sum up the players' feedback and
+  suggest 3 improvements") and send. Claude writes the role, picks the trigger, asks only what is missing (a few
+  questions at most), shows you a summary, creates the agent, gives you its webhook address if it has one and offers a
+  test run. You can ask the same thing in any session.
+- **By hand**: the form, on that topic (see below).
+
+With no agent yet, the Agents page shows the same choice.
 
 Or start from a **ready-made agent** (in the creation sheet, or on the empty Agents page):
 
@@ -73,7 +77,7 @@ before anything else, and the keys it suggests are checked only if your Keys vau
 top says what is left to connect (a webhook address in Shopify, a key, the list of sites). From the command line:
 `maxxing agents templates`, then `maxxing agents create acme/shop/sales --template sales`.
 
-**Set it up by hand instead** gives the three steps:
+**By hand** gives the three steps (the first one already filled in):
 
 1. **Where**: the project and the topic it works in.
 2. **Who**: its name, its pixel character (it wears the project's color, so its agents are easy to spot; **Change**

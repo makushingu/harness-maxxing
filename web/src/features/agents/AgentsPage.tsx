@@ -193,7 +193,7 @@ function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
 }
 
 /** No agent yet: one character waiting at its desk, what an agent is in a sentence, then the same ways in as the
- *  creation sheet - Create with Claude (a session in Sessions prepares it), a ready-made agent, by hand or from a file. */
+ *  creation sheet - where, then With Claude (a session in Sessions prepares it), by hand, a ready-made agent or a file. */
 export function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) {
   const t = useT()
   return (
@@ -206,9 +206,9 @@ export function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) 
         </div>
       </div>
       <QuickCreate
-        onManual={() => onStart({ manual: true })}
-        onImport={() => onStart({ importing: true })}
-        onTemplate={(template) => onStart({ template })}
+        onManual={(topic) => onStart({ manual: true, topic })}
+        onImport={(topic) => onStart({ importing: true, topic })}
+        onTemplate={(template, topic) => onStart({ template, topic })}
         onDone={() => {}}
       />
     </div>
