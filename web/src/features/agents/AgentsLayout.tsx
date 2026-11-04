@@ -3,11 +3,10 @@
 //   /agents                                  -> the overview on the right (agents at their desks, by project)
 //   /agents/<project>/<topic>/<name>         -> the agent: its conversation + its profile (AgentPage)
 //   /agents/<project>/<topic>/<name>/runs/<sid> -> one run, the full session in place (RunView)
-//   /agents/<project>/<topic>/<name>/setup/<sid> -> "Edit with Claude": a session of its topic configuring it (SetupView)
-//   /agents/setup/<sid>                      -> "Create in one sentence": the session creating the agent (SetupView)
 //   ?new=1 opens the creation sheet, ?topic=<project>/<topic> narrows the list.
+// "New agent" and "Edit with Claude" open a new-session draft in Sessions (EditWithClaude.tsx), not a page here.
 // Touch layout: /agents is the list (like the contacts of a chat app: search, grouping, unread counts - easier to
-// scan on a phone than the cards); an agent, a run or a configuration session opens full screen with a back button.
+// scan on a phone than the cards); an agent or a run opens full screen with a back button.
 // Agents and their runs never show in Sessions (sessions = where the user works, agents = automatic work).
 import * as React from 'react'
 import { Link, Route, Routes, useLocation, useSearchParams } from 'react-router'
@@ -21,7 +20,7 @@ import { AgentsList } from './AgentsList'
 import { AgentsEmpty, AgentsOverview } from './AgentsPage'
 import AgentPage from './AgentPage'
 import { RunView } from './RunView'
-import { SetupView } from './SetupView'
+import { useCreateWithClaude } from './EditWithClaude'
 import { CreateAgent, type CreateStart } from './CreateAgent'
 import { AgentsOff, useAgentsOn } from './parts'
 
@@ -44,7 +43,7 @@ export default function AgentsLayout() {
       ),
     [setParams],
   )
-  // The empty page offers the one-sentence box, the gallery and the manual / import links: the sheet opens there.
+  // The empty page offers Create with Claude, the gallery and the manual / import links: the last three open the sheet.
   const [start, setStart] = React.useState<CreateStart | null>(null)
   const openWith = React.useCallback(
     (s: CreateStart) => {
@@ -53,11 +52,11 @@ export default function AgentsLayout() {
     },
     [setCreating],
   )
-  const newAgent = React.useCallback(() => {
-    setStart(null)
-    setCreating(true)
-  }, [setCreating])
   const topic = params.get('topic') || ''
+  const topicPath = topic ? `projects/${topic.replace('/', '/topics/')}` : undefined
+  // "New agent": a new session (of the listed topic, if the list is narrowed to one) with the request started.
+  const createWithClaude = useCreateWithClaude()
+  const newAgent = React.useCallback(() => createWithClaude(topicPath), [createWithClaude, topicPath])
   const home = /^\/agents\/?$/.test(location.pathname)
 
   if (on === false) return <AgentsOff />
@@ -68,12 +67,10 @@ export default function AgentsLayout() {
         <Route index element={<AgentsOverview onNew={newAgent} onStart={openWith} />} />
         <Route path=":project/:topic/:name" element={<AgentPage />} />
         <Route path=":project/:topic/:name/runs/:sid" element={<RunView />} />
-        <Route path=":project/:topic/:name/setup/:sid" element={<SetupView />} />
-        <Route path="setup/:sid" element={<SetupView />} />
       </Routes>
     </PreviewProvider>
   )
-  const create = <CreateAgent open={creating} onOpenChange={setCreating} start={start} topicPath={topic ? `projects/${topic.replace('/', '/topics/')}` : undefined} />
+  const create = <CreateAgent open={creating} onOpenChange={setCreating} start={start} topicPath={topicPath} />
 
   // Touch: one pane at a time (the list, or the agent / run full screen).
   if (touch)

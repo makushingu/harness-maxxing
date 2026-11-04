@@ -131,7 +131,7 @@ agent's Activity with its reason; nothing is retried. A turn is stopped after `t
 stops it when it reaches what is left of the daily budget (`--max-budget-usd`).
 
 ## Change an agent (the owner's session, never the agent's own run)
-You are in a normal session (the user's rights; "Edit with Claude" on the agent page opens one with the request): read
+You are in a normal session (the user's rights; "Edit with Claude" on the agent page opens one with the request started): read
 the agent's `CLAUDE.md` and `agent.json` first, change only what is asked - triggers with `maxxing agents cron|webhook|
 watch`, on/off with `maxxing agents on|off`, the role in `CLAUDE.md` (keep the heading and `@memory.md`), other
 settings in `agent.json` (or the agent page) - then sum up what changed. Inside an agent's own run (env
