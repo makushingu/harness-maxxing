@@ -1,6 +1,6 @@
 // The overview of the Agents page, the Office (/agents with no agent selected, the right pane of AgentsLayout on a
 // computer; /agents/office on a phone). Its views, picked in the menu at the top right (ViewMenu) and kept per
-// browser: Classic (below), Gamified (a pixel-art office, OfficeGame.tsx), Futuristic (a pixel space station,
+// browser: Classic (below), Futuristic (a pixel-art office on a space station,
 // OfficeFuture.tsx), then the views extensions bring (OfficeCustom.tsx) and "Create my custom view" (a new session of
 // general/inbox that builds one with the skill maxxing-extension). Classic:
 // one section per project (dot in the project colour, name, count, "..." menu, like the lanes of Tasks; order, colours
@@ -11,7 +11,7 @@
 // The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, ChevronDown, Gamepad2, LayoutGrid, Play, Plus, Rocket, ShieldCheck, WandSparkles } from 'lucide-react'
+import { ArrowLeft, ChevronDown, LayoutGrid, Play, Plus, Rocket, ShieldCheck, WandSparkles } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentRoute, useAgents, useExtensions, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
@@ -40,7 +40,6 @@ import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
 import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
 import { QuickCreate, type CreateStart } from './CreateAgent'
-import { OfficeGame } from './OfficeGame'
 import { OfficeFuture } from './OfficeFuture'
 import { OfficeCustom } from './OfficeCustom'
 import { draftUrl } from './EditWithClaude'
@@ -49,11 +48,10 @@ import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
 /** A built-in view, or `x:<extension id>` (a view an extension brings). */
-export type OfficeView = 'classic' | 'game' | 'future' | `x:${string}`
+export type OfficeView = 'classic' | 'future' | `x:${string}`
 const VIEW_KEY = 'mx-agents-office-view'
 const BUILTIN_VIEWS = [
   { id: 'classic', icon: LayoutGrid, label: 'agents.office.classic' },
-  { id: 'game', icon: Gamepad2, label: 'agents.office.game' },
   { id: 'future', icon: Rocket, label: 'agents.office.future' },
 ] as const
 
@@ -61,7 +59,9 @@ const BUILTIN_VIEWS = [
 function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
   const [v, setV] = React.useState<OfficeView>(() => {
     const x = store.get(VIEW_KEY) || ''
-    return x === 'game' || x === 'future' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
+    // `game` = the former Gamified view, replaced by Futuristic.
+    if (x === 'game') return 'future'
+    return x === 'future' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
   })
   const set = React.useCallback((x: OfficeView) => {
     store.set(VIEW_KEY, x)
@@ -144,8 +144,6 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
         />
       ) : agents.length === 0 ? (
         <AgentsEmpty onStart={onStart} />
-      ) : view === 'game' ? (
-        <OfficeGame groups={groups} layout={layout} onStart={onStart} />
       ) : view === 'future' ? (
         <OfficeFuture groups={groups} layout={layout} onStart={onStart} />
       ) : view.startsWith('x:') ? (
