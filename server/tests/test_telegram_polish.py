@@ -231,6 +231,11 @@ async def test_bot_texts_follow_the_language(api, tg, svc):
     await wait_for(lambda: any(p["text"] == "Rien n'est en cours." for p in tg.sent()), what="fr text")
     tg.message("/help", thread=thread)
     await wait_for(lambda: any("Chaque session ouverte" in p["text"] for p in tg.sent()), what="fr help")
+    assert any(p["text"].startswith("<b>Relié à Harness Maxxing") for p in tg.sent())
+    tg.message("vas-y", thread=thread)
+    await wait_for(lambda: svc.sent, what="sent")
+    svc.finish(svc.sent[-1]["sid"], "")                        # a turn with no text: said in French too
+    await wait_for(lambda: any(p["text"] == "✅ Terminé (pas de réponse écrite)." for p in tg.sent()), what="fr done")
     menus = {p.get("language_code"): p["commands"] for p in tg.sent("setMyCommands")}
     assert {None, "en", "fr"} <= set(menus)
     assert menus["en"][0]["description"].startswith("Start a new session")
