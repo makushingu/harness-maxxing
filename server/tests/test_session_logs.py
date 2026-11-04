@@ -157,6 +157,24 @@ def test_compact_log_needs_free_space(client, topic, monkeypatch):
     assert store.log_path(sid).read_bytes() == before
 
 
+def test_compact_log_writes_nothing_for_a_log_that_would_not_shrink(client, topic, monkeypatch):
+    """An already compact log (the runner clips when it writes) is only read: no temporary copy, no free space asked."""
+    import shutil
+    from collections import namedtuple
+    sid = _session_with_log(topic, _turn_lines(0))
+    opened: list[str] = []
+    real_open = open
+
+    def spy(f, mode="r", *a, **k):
+        if "w" in mode or "a" in mode:
+            opened.append(str(f))
+        return real_open(f, mode, *a, **k)
+    monkeypatch.setattr("builtins.open", spy)
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: namedtuple("u", "total used free")(10, 10, 0))
+    assert service.compact_log(sid)["status"] == "unchanged"
+    assert not any("compact" in f for f in opened) and not store.compacting_path(sid).exists()
+
+
 def test_tail_ignores_partial_last_line(client, topic):
     sid = _session_with_log(topic, _turn_lines(0) + '{"type": "assistant", "mess')
     r = client.get(f"/api/sessions/{sid}/events", params={"tail": 50}).json()
