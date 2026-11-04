@@ -348,10 +348,30 @@ def _config_cached() -> tuple[bytes | None, dict]:
     return blob, cfg
 
 
+def _chosen(cfg: dict, defaults: dict, raw: Any) -> dict:
+    """What config.json must hold: what it held already (with its new value) and what differs from the defaults.
+    `cfg` is usually load_config() + a change: writing it whole froze every default, so a default changed by a
+    later release never reached an install that had saved any setting."""
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for k, v in cfg.items():
+        d = defaults.get(k, _MISSING)
+        if isinstance(v, dict) and isinstance(d, dict):
+            sub = _chosen(v, d, raw.get(k))
+            if sub or k in raw:
+                out[k] = sub
+        elif k in raw or v != d:
+            out[k] = v
+    return out
+
+
+_MISSING = object()
+
+
 def save_config(cfg: dict) -> None:
     with _lock:
         _keep_damaged(config_path())
-        _atomic_write(config_path(), cfg)
+        _atomic_write(config_path(), _chosen(cfg, DEFAULT_CONFIG, _document(config_path())))
 
 
 def update_config(**changes: Any) -> dict:
