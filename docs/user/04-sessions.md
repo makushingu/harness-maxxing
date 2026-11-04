@@ -359,7 +359,7 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 - **memory** (`memory.md`, `CLAUDE.md`), **tasks** (title, notes, labels) and the **content** of the
   text files of the workspace (markdown, code, config…), plus file and folder **names**. Every `memory.md` /
   `CLAUDE.md` is always found; in a very big workspace each topic gets its fair share of the other files, and
-  data files (`.json`, `.csv`, `.xml`, `.svg`) are left out. New files show up within 10 minutes, memory at once;
+  data files (`.json`, `.csv`, `.xml`, `.svg`) are left out, as are links to files outside the workspace. New files show up within 10 minutes, memory at once;
 - pages, settings, topics and actions.
 
 Type a few words in any order: each word may be the start of a word ("fact" finds "facture"),

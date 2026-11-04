@@ -14,6 +14,7 @@ Item sizes are cached per item, keyed by the (inode, mtime) of the item and of i
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -45,12 +46,20 @@ def trash_dir() -> Path:
 
 
 def _size(p: Path) -> int:
+    """Bytes the item takes in the trash: a link counts for itself, never for what it points to."""
     try:
-        if p.is_file():
-            return p.stat().st_size
-        return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+        if p.is_symlink() or not p.is_dir():
+            return p.lstat().st_size
     except OSError:
         return 0
+    n = 0
+    for cur, _dirs, files in os.walk(p):
+        for name in files:
+            try:
+                n += os.lstat(os.path.join(cur, name)).st_size
+            except OSError:
+                pass
+    return n
 
 
 def _sig(p: Path) -> tuple:
@@ -112,7 +121,18 @@ def _side(item: Path) -> dict:
         d = json.loads(item.with_name(item.name + ".json").read_text())
     except (OSError, ValueError):
         return {}
-    return d if isinstance(d, dict) else {}
+    if not isinstance(d, dict):
+        return {}
+    # A damaged sidecar loses its bad fields, not the whole listing: texts are strings without NUL, the
+    # date a finite number.
+    side = {k: v for k, v in d.items() if not isinstance(v, str) or "\0" not in v}
+    for k in ("original", "path", "title"):
+        if k in side and not isinstance(side[k], str):
+            del side[k]
+    at = side.get("at")
+    if at is not None and (isinstance(at, bool) or not isinstance(at, (int, float)) or not math.isfinite(at)):
+        del side["at"]
+    return side
 
 
 def _is_extra(p: Path) -> bool:
@@ -267,7 +287,10 @@ def restore(item_id: str) -> dict[str, Any]:
     kind = _kind(p, side)
     from . import workspace
     if kind == "session":
-        path = side.get("path") or ""
+        try:
+            path = workspace.normalize_path(side.get("path"))
+        except ValueError:                                  # not a topic path ("/etc", "../x"): workspace root
+            path = ""
         if not (workspace.root() / path).is_dir():          # its topic was deleted since: workspace root
             path = ""
         for mp in p.glob("*.json"):
@@ -282,6 +305,9 @@ def restore(item_id: str) -> dict[str, Any]:
         bus.invalidate("sessions", "workspace", "trash")
         return {"ok": True, "kind": kind, "restored_to": path, "sessions": n}
     original = Path(side["original"])
+    parents = original.resolve().parents                    # a sidecar never sends a file out of the roots
+    if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):
+        raise TrashError(409, "not_restorable", "This item cannot be restored from here")
     dest = _free_dir_name(original) if kind in ("project", "topic") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
@@ -312,7 +338,7 @@ def delete(item_id: str) -> None:
 
 
 def _remove(p: Path) -> None:
-    if p.is_dir():
+    if p.is_dir() and not p.is_symlink():               # a link to a folder: the link goes, never its target
         shutil.rmtree(p, ignore_errors=True)
     else:
         p.unlink(missing_ok=True)
