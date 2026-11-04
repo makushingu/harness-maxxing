@@ -82,6 +82,19 @@ async def test_turn_end_during_a_typing_call_is_still_answered(api, tg, svc, mon
     await wait_for(lambda: any("QUICK ANSWER" in t for t in _texts(tg, tid)), timeout=5, what="answer")
 
 
+async def test_answer_of_a_turn_cut_by_a_restart_still_reaches_the_thread(api, tg, svc):
+    await _link(api, tg)
+    sid, tid = await _open(api, svc)
+    tg.message("long job", thread=tid)
+    await wait_for(lambda: svc.sent, what="sent")
+    await gateway.restart()                                           # the turn's process lives on in its unit
+    await wait_for(lambda: gateway.gateway() and gateway.gateway().running, what="restarted")
+    assert gateway.gateway()._pending == {}
+    svc.finish(sid, "LONG JOB RESULT")
+    await wait_for(lambda: any("LONG JOB RESULT" in t for t in _texts(tg, tid)), what="answer after restart")
+    await wait_for(lambda: json.loads(gateway._replies_path().read_text()) == {}, what="nothing owed")
+
+
 async def test_steer_merges_and_typing_ends(api, tg, svc):
     await _link(api, tg)
     sid, tid = await _open(api, svc)

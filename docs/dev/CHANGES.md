@@ -98,6 +98,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   saved any setting (the `*_chosen` flags of telegram/gateway.py were patches for this). Existing files keep the
   defaults they already froze.
 
+## Unreleased
+
+- Telegram: `<state>/telegram/replies.json` (sid -> chat, thread, refs, at; written on every change of `_pending`,
+  never while stopping, dropped after 24 h) lets the next process answer a turn sent before a restart
+  (`Gateway._left`, matched on `last_turn.refs` in `on_turn_end`, merged into `_pending` when the session gets a
+  new message). "Ask Harness" turns are tracked (`_track` + `ref`). `on_turn_end` also sets `p["ending"]` before
+  cancelling the typing loop: a cancel landing inside an httpx call was sometimes swallowed, and the loop then
+  dropped the ended turn's ref as not live (answer never sent). New WORDS keys; `_sender_lang(msg)` for texts sent
+  before the chat is linked.
+
 ## 2.0.0-alpha.109 - 2026-11-04
 
 - Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events
