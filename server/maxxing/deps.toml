@@ -155,3 +155,19 @@ remove = ["/usr/local/bin/garage"]
 update = "manual"
 owner = "root"
 source = "garagehq.deuxfleurs.fr static musl build; no checksum is published, the pin is the sha256 checked by the maintainer"
+
+[dokploy]
+title = "Dokploy (deployments: Docker Swarm + Traefik, optional - DOKPLOY=1 at install)"
+kind = "binary"
+# the official installer script at a fixed commit of Dokploy's website repository (the file dokploy.com/install.sh
+# serves), run from a file - never piped - with DOKPLOY_VERSION = version (the image tag). It installs Docker itself.
+version = "v0.30.10"
+arch = { x86_64 = "x86_64", aarch64 = "aarch64" }
+url = "https://raw.githubusercontent.com/Dokploy/website/e81115db352f3812997ff1536aef4410743ff4f1/apps/website/public/install.sh"
+sha256 = { x86_64 = "d0132d675253770ede147ce636ad7b0e40c69d8698d7ebc8e9f3f196621b8eaa", aarch64 = "d0132d675253770ede147ce636ad7b0e40c69d8698d7ebc8e9f3f196621b8eaa" }
+path = "/etc/dokploy"
+# Dokploy keeps the user's apps: never removed by `maxxing deps remove` nor `maxxing uninstall --purge`
+remove = ["/etc/dokploy"]
+update = "manual"
+owner = "root"
+source = "github.com/Dokploy/website apps/website/public/install.sh; image dokploy/dokploy:<version>; updates from Dokploy's own UI"

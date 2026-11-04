@@ -36,6 +36,9 @@
 #    SWAP (auto - a 2 GB /swapfile when the server has under 4 GB of memory and no swap, on a fresh server only |
 #          1 - the same on a server already in use | 0 never)
 #    SOURCE_DIR (a local copy of the code to install instead of a git download)
+#    DOKPLOY (0 - 1: also install Dokploy (deployments: Docker Swarm + Traefik), its pinned installer run from a file;
+#      refused when ports 80/443/3000 are taken, a Docker swarm already runs or the server has under 2 GB of memory.
+#      A Dokploy already here is always detected: with a domain the UI goes through its Traefik)
 #    CACHE_DIR (/var/cache/harness-maxxing - downloads kept until the install succeeds: a re-run does not download again)
 #    FIREWALL (auto - enabled only on a server with nothing else exposed | 1 always | 0 never)
 #    SSH_HARDEN (auto - SSH password logins are turned off only when this very session is proven to use a key
@@ -87,6 +90,7 @@ ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 VOICE_GIVEN="${VOICE:+1}"   # set by the caller (not the default): a small server asks before taking it
 VOICE="${VOICE:-local}"
 SOURCE_DIR="${SOURCE_DIR:-}"
+DOKPLOY="${DOKPLOY:-0}"
 TOOLS="${TOOLS:-background}"
 SWAP="${SWAP:-auto}"
 MEMINFO=/proc/meminfo
@@ -111,7 +115,7 @@ SSHD_CONFIG=/etc/ssh/sshd_config
 SSH_DROPIN=/etc/ssh/sshd_config.d/01-harness-maxxing.conf
 BIN=/usr/local/bin/maxxing
 DEFAULT_STATE=/var/lib/claude-maxxing
-TOTAL=11
+TOTAL=12
 LOCAL=0             # 1 = code copied from SOURCE_DIR (no license, no git remote)
 STEP=0
 IN_STEP=0
@@ -132,6 +136,7 @@ FW_ACTIVE=""        # ufw | nftables | "" (no firewall rules)
 HAS_DOCKER=0
 DOKPLOY_FOUND=0     # 1 = Dokploy runs here (its Traefik holds 80/443, its UI 3000)
 DOKPLOY_ETC=/etc/dokploy
+DOCKERENV=/.dockerenv   # present inside a Docker container
 TRAEFIK_ROUTE_NAME=harness-maxxing.yml   # in $DOKPLOY_ETC/traefik/dynamic: Dokploy's Traefik -> our Caddy
 TRAEFIK_UPSTREAM_PORT="${TRAEFIK_UPSTREAM_PORT:-8790}"   # our Caddy behind Traefik, on the Docker bridge gateway only
 OTHER_CRON=0        # root crontab lines that are not ours
@@ -513,6 +518,7 @@ Harness Maxxing installer
 Variables: LICENSE LICENSE_API REPO BRANCH GH_TOKEN INSTALL_DIR WORKSPACE STATE_DIR PORT ACCESS(domain|tailscale|local)
            FIREWALL(auto|1|0) SSH_HARDEN(auto|1|0) SYSTEM_CLOCK(auto|follow|keep) DOMAIN TIMEZONE ASSUME_YES=1 RESTORE_FROM RESTORE_TOKEN
            CLAUDE_TOKEN ANTHROPIC_API_KEY CLAUDE_DIR (own Claude Code folder, default ~/.claude) VOICE TOOLS SWAP SOURCE_DIR CACHE_DIR
+           DOKPLOY=1 (also install Dokploy, for deployments)
 USAGE
 }
 
@@ -563,6 +569,35 @@ udp_listeners() { # "addr port process" for every UDP socket bound for listening
     a=$4; p=a; sub(/.*:/, "", p); sub(/:[0-9]+$/, "", a); sub(/%.*/, "", a); gsub(/[\[\]]/, "", a)
     n="?"; if (match($0, /users:\(\("[^"]+"/)) { n=substr($0, RSTART+9, RLENGTH-10) }
     print a, p, n }'
+}
+
+# dokploy_refusal - why DOKPLOY=1 cannot install Dokploy here (empty: it can). Its own script would stop half-way on
+# a taken port, and its `docker swarm leave --force` would take down the services of a swarm already running.
+dokploy_refusal() {
+  local mem_mb busy="" p
+  [ -f "$DOCKERENV" ] && { echo "this is a container: Dokploy needs a real server or VM"; return; }
+  mem_mb=$(awk '/MemTotal/{printf "%d", $2/1024}' "$MEMINFO" 2>/dev/null)
+  [ "${mem_mb:-0}" -ge 1900 ] || { echo "Dokploy needs 2 GB of memory (${mem_mb:-?} MB here)"; return; }
+  for p in 80 443 3000; do
+    ss -tulnH 2>/dev/null | awk -v p="$p" '{n=split($5, a, ":"); if (a[n] == p) f=1} END {exit !f}' && busy="$busy $p"
+  done
+  [ -z "$busy" ] || { echo "port(s)$busy already taken (Dokploy needs 80, 443 and 3000 free)"; return; }
+  if command -v docker >/dev/null 2>&1 \
+     && [ "$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null)" = active ]; then
+    echo "a Docker swarm already runs here: Dokploy's installer would leave it (its services would stop)"
+  fi
+}
+
+# install_dokploy - the official script pinned in deps.toml (commit + sha256), run from a file with the pinned version
+install_dokploy() {
+  local f="$WORK/dokploy-install.sh" why
+  why=$(dokploy_refusal)
+  [ -z "$why" ] || die "Dokploy not installed: $why (DOKPLOY=0 to go on without it)"
+  dep_fetch dokploy "$f" || die "the Dokploy installer could not be downloaded or does not match its sha256 (deps.toml)"
+  DOKPLOY_VERSION=$(dep dokploy version) bash "$f" || die "the Dokploy installer failed - see the log above"
+  manifest "dokploy installed"
+  DOKPLOY_FOUND=1; HAS_DOCKER=1; WEB_BUSY="Dokploy (Traefik)"
+  ok "Dokploy $(dep dokploy version) installed - open http://<this server>:3000 to create its admin account"
 }
 
 # Dokploy: its folder, or its swarm service (an install whose folder moved)
@@ -655,7 +690,7 @@ detect_server() {
   fi
   if [ "$FIREWALL" = auto ]; then
     if [ -n "$FW_ACTIVE" ]; then FIREWALL=add                 # keep theirs, only add our rules
-    elif [ -n "$PUBLIC_OTHER" ] || [ "$HAS_DOCKER" = 1 ]; then FIREWALL=0
+    elif [ -n "$PUBLIC_OTHER" ] || [ "$HAS_DOCKER" = 1 ] || [ "$DOKPLOY" = 1 ]; then FIREWALL=0
     else FIREWALL=1; fi
   fi
 }
@@ -688,6 +723,12 @@ preflight() {
     0:*)     warn "firewall: not enabled, it could cut these services off (to force it: FIREWALL=1 install.sh --secure)" ;;
   esac
   [ "$HAS_DOCKER" = 1 ] && info "Docker found: its published ports bypass ufw - the firewall is left alone"
+  if [ "$DOKPLOY" = 1 ] && [ "$DOKPLOY_FOUND" = 0 ]; then
+    local why
+    why=$(dokploy_refusal)
+    if [ -n "$why" ]; then warn "DOKPLOY=1: refused - $why"
+    else ok "DOKPLOY=1: Dokploy $(dep dokploy version 2>/dev/null || echo '?') will be installed (Docker Swarm + Traefik on 80/443, its UI on 3000)"; fi
+  fi
   if [ "$DOKPLOY_FOUND" = 1 ]; then
     ok "Dokploy found: Harness Maxxing works with it - connect it afterwards in Infra (maxxing dokploy connect)"
     case " $PUBLIC_OTHER " in *" 3000/"*|*" 3000 "*)
@@ -1659,6 +1700,8 @@ docker_gateway() {
 traefik_route() {
   local dir="$DOKPLOY_ETC/traefik/dynamic" f
   f="$dir/$TRAEFIK_ROUTE_NAME"
+  local i=0
+  while [ ! -d "$dir" ] && [ "$i" -lt 60 ]; do sleep 2; i=$((i + 2)); done   # a fresh Dokploy writes it on first boot
   [ -d "$dir" ] || die "Dokploy's Traefik folder $dir is missing - is Dokploy running? (or pick tailscale / local)"
   DOCKER_GW=$(docker_gateway)
   while listeners | awk -v p="$TRAEFIK_UPSTREAM_PORT" '$2==p {f=1} END {exit !f}'; do
@@ -2018,7 +2061,14 @@ main() {
   if [ "$EXISTING" = 1 ] && has_tty && ! ask_yn "Continue the installation?" y; then
     echo "      Stopped - nothing was changed."; exit 0
   fi
+  case "$DOKPLOY" in 0|1) ;; *) die "DOKPLOY must be 0 or 1" ;; esac
+  if [ "$DOKPLOY" = 1 ] && [ "$DOKPLOY_FOUND" = 0 ]; then
+    DOKPLOY_WHY=$(dokploy_refusal)
+    [ -z "$DOKPLOY_WHY" ] || die "DOKPLOY=1 refused before any change: $DOKPLOY_WHY"
+    DOKPLOY_FOUND=1; WEB_BUSY="Dokploy (Traefik)"; DOKPLOY_NOW=1   # the access step routes through its Traefik
+  fi
   choose_access
+  [ "${DOKPLOY_NOW:-0}" = 1 ] || TOTAL=$((TOTAL - 1))
   [ -n "$RESTORE_FROM" ] || TOTAL=$((TOTAL - 1))
   [ "$TOOLS" = foreground ] || TOTAL=$((TOTAL - 1))
   section "Installing"
@@ -2034,6 +2084,7 @@ main() {
   run_step "Python environment" setup_python
   run_step "Workspace, skills and jobs" init_state
   [ -z "$RESTORE_FROM" ] || { run_step "Memory restore" restore_backup; restore_review; }
+  [ "${DOKPLOY_NOW:-0}" = 1 ] && run_step "Dokploy (Docker Swarm + Traefik)" install_dokploy
   case "$ACCESS" in
     domain) run_step "HTTPS with Caddy" setup_access ;;
     *) run_step "Access ($ACCESS)" setup_access ;;

@@ -445,6 +445,13 @@ def installed(name: str) -> dict:
         models = sorted(p.name for p in d.iterdir() if (p / "model.bin").is_file()) if d.is_dir() else []
         if models:
             out.update(version=", ".join(models), where=str(d))
+    elif name == "dokploy":
+        code, txt = _run(["docker", "service", "inspect", "dokploy", "--format",
+                          "{{.Spec.TaskTemplate.ContainerSpec.Image}}"], timeout=20) if shutil.which("docker") else (1, "")
+        if code == 0 and txt.strip():
+            tag = txt.strip().split("@")[0].rpartition(":")[2]
+            out.update(version=tag or None, where="docker service dokploy", managed=False,
+                       detail="updates from Dokploy itself (Settings -> Web server -> Update)")
     elif name == "garage":
         p = expand(c["path"])
         if p.exists():
@@ -565,6 +572,8 @@ def owned_paths(name: str) -> list[Path]:
         paths = [expand(c["path"]), root_home() / ".local" / "share" / "claude"]
     elif name in ("caddy",):
         paths = [Path(c["keyring"]), Path(c["apt_list"])]
+    elif name == "dokploy":
+        paths = []                                      # Dokploy's own files (its /etc/dokploy is 777 by design)
     else:
         paths = [expand(c["path"])]
     return [p for p in paths if os.path.lexists(p)]
@@ -635,7 +644,7 @@ def keyring_fingerprint(path: Path) -> str | None:
 
 # ---- update ----------------------------------------------------------------------------------------------------
 PYTHON_FLOOR = (3, 11)       # requires-python of server/pyproject.toml
-UPDATE_ORDER = ("uv", "python", "node", "claude", "scrapling", "chromium", "remotion", "whisper", "garage")
+UPDATE_ORDER = ("uv", "python", "node", "claude", "scrapling", "chromium", "remotion", "whisper", "garage", "dokploy")
 
 
 def update(names: list[str] | None = None, log=print, explicit: bool | None = None) -> list[dict]:
@@ -1010,9 +1019,13 @@ def _up_noop(c: dict, explicit: bool = False) -> tuple[str, str]:
     return "skipped", "system package (security updates: unattended-upgrades)"
 
 
+def _up_dokploy(c: dict, explicit: bool = False) -> tuple[str, str]:
+    return "skipped", "Dokploy updates itself (Dokploy -> Settings -> Web server -> Update)"
+
+
 _UPDATERS = {"uv": _up_uv, "python": _up_python, "node": _up_node, "claude": _up_claude, "caddy": _up_noop,
              "scrapling": _up_scrapling, "chromium": _up_chromium, "remotion": _up_remotion, "whisper": _up_whisper,
-             "garage": _up_garage}
+             "garage": _up_garage, "dokploy": _up_dokploy}
 
 
 # ---- remove ----------------------------------------------------------------------------------------------------
@@ -1024,6 +1037,8 @@ def remove(name: str, force: bool = False) -> list[str]:
     c = get(name)
     if name in ESSENTIAL and not force:
         raise DepError(f"{name} is needed by Harness Maxxing itself (only `maxxing uninstall --purge` removes it)")
+    if name == "dokploy":
+        raise DepError("Dokploy keeps your apps and databases: remove it with Dokploy's own uninstall steps")
     if name == "caddy" and not force:
         raise DepError("Caddy serves the domain: remove it with apt (`apt-get purge caddy`) after `maxxing uninstall`")
     gone = []

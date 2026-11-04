@@ -266,3 +266,27 @@ def test_without_dokploy_the_caddy_site_is_unchanged(tmp_path):
            'DOKPLOY_FOUND=0; WEB_BUSY=""; ACCESS=domain; setup_access 2>&1')
     site = (tmp_path / "site.caddy").read_text()
     assert r.returncode == 0 and "\nui.example.com {\n" in site and "bind" not in site and "trusted_proxies" not in site
+
+
+@pytest.mark.parametrize("listen, swarm, mem_kb, why", [
+    ("", "inactive", 4_000_000, ""),
+    ("tcp LISTEN 0 4096 0.0.0.0:443 0.0.0.0:*", "inactive", 4_000_000, "port(s) 443 already taken"),
+    ("tcp LISTEN 0 4096 127.0.0.1:3000 0.0.0.0:*", "inactive", 4_000_000, "port(s) 3000 already taken"),
+    ("", "active", 4_000_000, "a Docker swarm already runs here"),
+    ("", "inactive", 1_000_000, "Dokploy needs 2 GB of memory"),
+])
+def test_dokploy_install_is_refused_before_it_could_break_something(tmp_path, listen, swarm, mem_kb, why):
+    (tmp_path / "meminfo").write_text(f"MemTotal: {mem_kb} kB\n")
+    r = sh(f'ss() {{ printf "%s\\n" "{listen}"; }}; docker() {{ echo {swarm}; }}; MEMINFO="{tmp_path}/meminfo"; '
+           f'DOCKERENV="{tmp_path}/none"; echo "[$(dokploy_refusal)]"')
+    assert (f"[{why}" if why else "[]") in r.stdout, r.stdout + r.stderr
+
+
+def test_dokploy_installer_is_the_pinned_file_run_with_the_pinned_version(tmp_path):
+    (tmp_path / "meminfo").write_text("MemTotal: 4000000 kB\n")
+    stubs = ('ss() { :; }; docker() { echo inactive; }; manifest() { echo "MANIFEST $*"; }; '
+             r'dep_fetch() { echo "FETCH $1"; printf "echo RUN version=\$DOKPLOY_VERSION\n" > "$2"; }; '
+             'dep() { echo v0.30.10; }; ')
+    r = sh(stubs + f'MEMINFO="{tmp_path}/meminfo"; DOCKERENV="{tmp_path}/none"; WORK="{tmp_path}"; install_dokploy 2>&1; echo "[$DOKPLOY_FOUND|$WEB_BUSY]"')
+    assert "FETCH dokploy" in r.stdout and "RUN version=v0.30.10" in r.stdout, r.stdout + r.stderr
+    assert "MANIFEST dokploy installed" in r.stdout and "[1|Dokploy (Traefik)]" in r.stdout

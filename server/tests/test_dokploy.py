@@ -210,3 +210,13 @@ def test_host_sites_are_refused_when_traefik_owns_80_443(org, tmp_path, monkeypa
     with pytest.raises(caddy.CaddyError) as e:
         caddy.add_site("shop", port=3100, host="shop.example.com")
     assert e.value.code == "behind_traefik"
+
+
+def test_deps_pin_dokploy_and_never_remove_it():
+    from maxxing import deps
+    c = deps.get("dokploy")
+    assert c["update"] == "manual" and c["url"].startswith("https://raw.githubusercontent.com/Dokploy/website/")
+    assert "{" not in c["url"] and len(deps.sha_of(c, "x86_64")) == 64
+    with pytest.raises(deps.DepError):
+        deps.remove("dokploy", force=True)
+    assert deps.owned_paths("dokploy") == []                       # its 777 /etc/dokploy is not ours to judge
