@@ -385,6 +385,10 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 | GET | `/api/agents/{p}/{t}/{a}/thread?limit=100&before=<at>` | – | `{messages: [AgentMessage]}` oldest first (the Activity tab) |
 | POST | `/api/agents/{p}/{t}/{a}/run` | `{text?}` | `{started: true, session: Session}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed) |
 | POST | `/api/agents/{p}/{t}/{a}/webhook` | `{kind: "generic"\|"stripe"\|"shopify"\|"github", prompt?, levels?, match?}` | `{agent, hook: FeedHook}`: a feed hook named `<topic>-<agent>` + a feed trigger on its source |
+| GET | `/api/agents/sandbox` | – | `{ok, missing: ["bwrap"\|"socat"\|"apparmor"\|"linux"]}`: what Claude Code's sandbox needs on this server (`agent_guard.available`) |
+| POST | `/api/agents/import` | `{topic_path, markdown, name?}` | `Agent & Status & {ignored: [string]}`: a Claude Code agent file (`agent_format.parse_md`) made an agent (sandbox on, no trigger) · `400 bad_file` + the create errors |
+| GET | `/api/agents/{p}/{t}/{a}/export` | – | `text/markdown` attachment `<a>.md`: the agent as a Claude Code agent file |
+| POST | `/api/agents/{p}/{t}/{a}/runs/{sid}/continue` | – | `{session: Session}`: a copy of run `sid` as a normal session of the topic (`from_agent: {path, session}`), its log copied and its Claude transcript copied to the topic's project folder (same `csid`, resumed from there) · `404 not_found` (not a run of this agent) · `409 busy` |
 | POST | `/api/agents/{p}/{t}/{a}/crons` | `{name?, schedule?, prompt?, enabled?}` | `CronJob` (`kind: "claude"`, `topic_path` = the agent path, `notify: "never"`) |
 
 ```
@@ -397,7 +401,9 @@ AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?
                keys: the only vault entries its runs get as env vars (none by default, exposed or not).
 Agent  = {path, project, topic, name (folder slug), display_name, description, avatar: Avatar, enabled, model,
           permission_mode, allowed_tools, disallowed_tools, telegram, approvals, trust_outside, keys, limits: Limits,
-          triggers: [Trigger],
+          triggers: [Trigger], sandbox: bool (false when missing: agents made before the sandbox; true for new ones),
+          domains: [host] (sandbox network allow list, "*.x" ok), writable: [folder of the topic, "." = all],
+          rules: [{tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match, reason}], subagent: bool,
           created, session_count, archived_count, running, unread}
 Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
           (last result or skip), running_now: int}
@@ -411,7 +417,24 @@ AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
                 session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note)}
 ```
 Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:
-`maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent>`.
+`maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent> | export <agent> |
+import <file> --topic <p>/<t> | sandbox-setup`.
+
+## Sandbox, rules, subagents (agent_guard.py, agent_format.py)
+
+A turn in an agent folder gets one `--settings` (spawn.settings_args merges the server deny rules with
+`agent_guard.settings`): with `sandbox`, `sandbox: {enabled, allowUnsandboxedCommands: false, failIfUnavailable: true,
+autoAllowBashIfSandboxed: true, excludedCommands: ["maxxing:*"], filesystem: {denyRead: secret_paths(), allowWrite:
+[agent folder, writable...]}, network: {allowedDomains: domains}}` + `permissions.deny` Read/Edit on the same secret
+paths (the sandbox covers shell commands only) + `permissions.allow` `Bash(maxxing:*)` (an excluded command still needs a
+permission, else it runs inside) and `WebFetch(domain:<d>)`; `--add-dir` per writable folder; the mode is never
+bypass (`agent_guard.mode`: Claude Code lets every domain through in bypass -> acceptEdits). Sandbox unavailable
+(`available()`: bwrap, socat, AppArmor profile when kernel.apparmor_restrict_unprivileged_userns=1) -> the turn
+fails before Claude starts. With `rules`: `hooks.PreToolUse` = `<python> -m maxxing.agent_guard hook <agent path>`
+(deny + reason). The `maxxing` CLI refuses everything but `CLI_ALLOWED` when its process belongs to the systemd unit
+`maxxing-<sid8>` of a session in a sandboxed agent folder (`/proc/self/cgroup`, not an env var the turn could
+change). A session in a topic gets `--agents <json>` with the topic's agents that have `subagent` on
+(`agent_format.subagents`). Tests: `MAXXING_SANDBOX_CHECK=0` skips the availability check.
 
 ## Approvals
 
