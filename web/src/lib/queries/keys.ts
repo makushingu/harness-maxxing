@@ -70,7 +70,7 @@ export const qk = {
   feed: {
     all: ['feed'] as const,
     list: (source: string | null, unread: boolean, limit: number) => ['feed', 'list', source, unread, limit] as const,
-    pages: (source: string | null, unread: boolean) => ['feed', 'pages', source, unread] as const,
+    pages: (source: string | null, unread: boolean, pending = false) => ['feed', 'pages', source, unread, pending] as const,
     settings: ['feed', 'settings'] as const,
   },
 }

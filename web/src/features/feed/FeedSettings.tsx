@@ -51,6 +51,9 @@ export function FeedSettingsCards() {
         <SettingRow label={t('feed.telegram')} description={t('feed.telegramDesc')} htmlFor="mx-feed-tg">
           <Switch id="mx-feed-tg" checked={data?.telegram ?? true} disabled={!data} onCheckedChange={(v) => save.mutate({ telegram: v })} />
         </SettingRow>
+        <SettingRow label={t('feed.health')} description={t('feed.healthDesc')} htmlFor="mx-feed-health">
+          <Switch id="mx-feed-health" checked={data?.health ?? false} disabled={!data} onCheckedChange={(v) => save.mutate({ health: v })} />
+        </SettingRow>
       </SettingsCard>
       <SettingsCard
         title={t('feed.sources')}

@@ -322,6 +322,46 @@ def mark_seen(iid: str, seen: bool = True) -> bool:
     return True
 
 
+# ---- issues in the Notifications feed (config `health_feed`: on for new installs, off for older ones) ----------
+FEED_SOURCE = "health"
+FEED_SKIP = {"cron_failed"}             # already in the feed, from the cron run itself
+SEEN_ACTION = [{"id": "seen", "label": "Seen", "style": "default"}]
+
+
+def feed_action(iid: str, action: str, by: str, ev: dict) -> None:
+    """"Seen" on the issue's feed event (web or Telegram) = "Seen" in the health card."""
+    if action == "seen":
+        mark_seen(iid)
+
+
+def sync_feed() -> int:
+    """A pass (server): a new issue -> one event with Seen; seen in the health card -> read; gone -> "Fixed".
+    Returns the events posted."""
+    if not config.load_config().get("health_feed"):
+        return 0
+    from . import feed
+    issues = [i for i in collect()["issues"] if i["code"] not in FEED_SKIP]
+    live = set()
+    n = 0
+    for i in issues:
+        ref = f"health:{i['id']}"
+        live.add(ref)
+        ev = feed.find(ref)
+        if ev is None:
+            if not i["seen"]:
+                feed.post(i["text"], "", "error" if i["level"] == "error" else "warning", FEED_SOURCE,
+                          "/settings/system", ref=ref, actions=SEEN_ACTION)
+                n += 1
+        elif i["seen"] and not ev["read"]:
+            feed.update(ev["id"], read=True)
+        elif ev["title"] != i["text"]:
+            feed.update(ev["id"], title=i["text"], notify=False)
+    for ev in feed.open_events(FEED_SOURCE):
+        if ev.get("ref") and ev["ref"] not in live:
+            feed.update(ev["id"], resolve=True, resolution="Fixed")
+    return n
+
+
 def _collect() -> dict:
     issues: list[dict] = []
     mem = meminfo()

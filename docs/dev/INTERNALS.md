@@ -183,6 +183,15 @@ Python modules call each other only through these functions. Keep signatures sta
   list authorizes nobody; `_try_link` always records the linking account and refuses a message without `from`).
 - Telegram: `gateway.feed_notify(ev, loud)` / `feed_message(ev)` (body cut at 700 characters BEFORE HTML escaping); thread key `#feed` (`NOTIFY_ONLY` = Crons, Alerts,
   Notifications: never treated as topic threads by the legacy migration); callback `f:<id>` = Ask Claude.
+- Alerts (events with `actions` / `ref`): `feed.post(..., actions, ref, agent)`, `feed.find(ref)`, `feed.update(id, ...,
+  resolve=True, resolution=...)`, `feed.resolve(ref, ...)`, `feed.act(id, action, by)` -> the module of the ref kind
+  (`HANDLERS`: `approval` -> `approvals.feed_action`, `health` -> `health.feed_action`), idempotent on a resolved event.
+  Telegram contract: a new alert -> `gateway.post_alert(ev)`, a change -> `gateway.update_alert(ev)` when the bridge has
+  them (`getattr`; a thread in the server, inline in a CLI process), `ev["telegram"]` = "off"|"silent"|"loud" (requests
+  always loud); its buttons call `feed.act(id, action, by="telegram")`. Without `post_alert`: `feed_notify` as before,
+  and requests keep `notify_approval` / `approval_done`. Writers: `approvals.scan` / `decide` / `prime`,
+  `agents.fire` (budget, rate), `agents.on_turn_end` (failed, sandbox), `agents.check_alerts` and `health.sync_feed`
+  (every 30 s in `api/feed._watch`).
 
 ## maxxing.agents  (owner: organisation)
 An agent = a lasting role inside a topic. Off by default (`agents_page`); the module works anyway (crons and the CLI
