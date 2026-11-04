@@ -3083,7 +3083,6 @@ export const en = {
   'agents.side.all': 'All',
   'agents.office.view': 'View of the office',
   'agents.office.classic': 'Classic',
-  'agents.office.game': 'Gamified',
   'agents.office.future': 'Futuristic',
   'agents.office.custom': 'Create my custom view',
   'agents.office.customPrompt': "Create a new view of the Office of the Agents page with the skill maxxing-extension: an extension that declares \"agents_view\" in its manifest and draws its agents-view.html. It gets the agents in maxxing.data / maxxing.onData (projects in my order with their colour, each agent with its status, its new results, its pixel character as SVG and its route; maxxing.navigate(route) opens it) and can read /api/agents and /api/agents/layout with maxxing.app(). First ask me what style I want, then make it work in light and dark and on a phone, and tell me how to pick it in the view menu.\n\nWhat I want: ",
