@@ -130,6 +130,8 @@ PUBLIC_OTHER=""     # other services listening on public interfaces ("port/proce
 WEB_BUSY=""         # process holding port 80/443 that is not Caddy (nginx, apache2, docker-proxy...)
 FW_ACTIVE=""        # ufw | nftables | "" (no firewall rules)
 HAS_DOCKER=0
+DOKPLOY_FOUND=0     # 1 = Dokploy runs here (its Traefik holds 80/443, its UI 3000)
+DOKPLOY_ETC=/etc/dokploy
 OTHER_CRON=0        # root crontab lines that are not ours
 NODE_OLD=""         # an older Node.js already installed (path) -> ours stays in <state>/tools/nodejs
 BRIDGES=""          # other Telegram bridges / agents found (process or unit names)
@@ -561,6 +563,12 @@ udp_listeners() { # "addr port process" for every UDP socket bound for listening
     print a, p, n }'
 }
 
+# Dokploy: its folder, or its swarm service (an install whose folder moved)
+dokploy_present() {
+  [ -d "$DOKPLOY_ETC/traefik" ] && return 0
+  command -v docker >/dev/null 2>&1 && docker service ls --format '{{.Name}}' 2>/dev/null | grep -qx dokploy
+}
+
 detect_server() {
   local addr port name ssh_p seen=" "
   ssh_p=" $(ssh_ports | tr '\n' ' ') "
@@ -597,6 +605,7 @@ detect_server() {
     FW_ACTIVE=nftables
   fi
   if command -v docker >/dev/null 2>&1 || systemctl is-active -q docker 2>/dev/null; then HAS_DOCKER=1; fi
+  if dokploy_present; then DOKPLOY_FOUND=1; HAS_DOCKER=1; fi
 
   if crontab -l 2>/dev/null | sed "/^# >>> claude-maxxing/,/^# <<< claude-maxxing/d" \
        | grep -vE '^[[:space:]]*(#|$|[A-Za-z_]+=)' | grep . >/dev/null; then OTHER_CRON=1; fi
@@ -626,6 +635,7 @@ detect_server() {
   [ -f "$STATE_DIR/config.json" ] && CLAUDE_SETUP=""   # a re-run: that setup is Harness Maxxing's own (its skills)
   [ -f "$STATE_DIR/config.json" ] && PRIOR=1
 
+  [ "$DOKPLOY_FOUND" = 1 ] && [ -n "$WEB_BUSY" ] && WEB_BUSY="Dokploy (Traefik)"
   if [ -n "$PUBLIC_OTHER$WEB_BUSY$BRIDGES" ] || [ "$HAS_DOCKER" = 1 ] || [ "$OTHER_CRON" = 1 ] \
      || [ -n "$FW_ACTIVE" ] || [ -n "$CLAUDE_SETUP" ]; then EXISTING=1; fi
 
@@ -676,6 +686,12 @@ preflight() {
     0:*)     warn "firewall: not enabled, it could cut these services off (to force it: FIREWALL=1 install.sh --secure)" ;;
   esac
   [ "$HAS_DOCKER" = 1 ] && info "Docker found: its published ports bypass ufw - the firewall is left alone"
+  if [ "$DOKPLOY_FOUND" = 1 ]; then
+    ok "Dokploy found: Harness Maxxing works with it - connect it afterwards in Infra (maxxing dokploy connect)"
+    case " $PUBLIC_OTHER " in *" 3000/"*|*" 3000 "*)
+      warn "Dokploy's own page (port 3000) is reachable from the internet: give it a domain in Dokploy, then close 3000" ;;
+    esac
+  fi
   if [ -n "$WEB_BUSY" ]; then
     warn "$WEB_BUSY already serves ports 80/443: Caddy is not installed; with a domain you get a ready-made"
     warn "reverse-proxy block to paste into $WEB_BUSY (or pick tailscale / local)"

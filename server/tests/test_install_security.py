@@ -217,3 +217,24 @@ def test_a_failed_protection_stops_the_install(tmp_path):
         assert "rc=0" in r.stdout and "NOT protected: fail2ban" in r.stdout and "already in use" in r.stdout
     r = sh(stubs + base + 'ALLOW_UNPROTECTED=1; secure_server; echo "rc=$?"')
     assert "rc=0" in r.stdout and "continuing without it" in r.stdout
+
+
+def _dokploy_ss() -> str:
+    rows = " ".join(f"'LISTEN 0 4096 0.0.0.0:{p} 0.0.0.0:* users:((\"docker-proxy\",pid=9,fd=4))'" for p in (80, 443, 3000))
+    return (f'ss() {{ case "$1" in -ltnpH) printf "%s\n" {rows} ;; *) : ;; esac; }}; '
+            'ssh_ports() { echo 22; }; our_unit_active() { return 1; }; docker() { :; }; ')
+
+
+def test_dokploy_is_detected_and_named_as_the_web_server(tmp_path):
+    (tmp_path / "dokploy" / "traefik").mkdir(parents=True)
+    r = sh(_dokploy_ss() + f'DOKPLOY_ETC="{tmp_path}/dokploy"; detect_server >/dev/null 2>&1; '
+           'echo "[$DOKPLOY_FOUND|$WEB_BUSY|$HAS_DOCKER|$FIREWALL|$EXISTING]"; preflight 2>&1', HOME=str(tmp_path),
+           STATE_DIR=str(tmp_path / "state"))
+    assert "[1|Dokploy (Traefik)|1|0|1]" in r.stdout, r.stdout + r.stderr
+    assert "Dokploy found" in r.stdout and "port 3000) is reachable from the internet" in r.stdout
+
+
+def test_docker_alone_is_not_dokploy(tmp_path):
+    r = sh(_dokploy_ss() + f'DOKPLOY_ETC="{tmp_path}/none"; detect_server >/dev/null 2>&1; '
+           'echo "[$DOKPLOY_FOUND|$WEB_BUSY]"', HOME=str(tmp_path))
+    assert "[0|docker-proxy]" in r.stdout, r.stdout + r.stderr
