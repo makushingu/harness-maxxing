@@ -19,7 +19,7 @@ Only a **whitelist**, relative to the workspace:
   scheduled jobs, in a `_maxxing/` folder.
 
 Never saved, even if a pattern matches: `secrets.json`, keys, `.env` files, private keys,
-credentials, logs, `attachments/`, `.git`, `node_modules`, virtual environments, and files over 5 MB.
+credentials, logs, `attachments/`, `.git`, `node_modules`, virtual environments, and files over 5 MB. A git worktree or submodule (a folder with a `.git` file) is saved as plain files.
 
 ## Safety checks
 
