@@ -32,7 +32,7 @@ import {
 } from '@/lib/queries'
 import { prefetchPageChunk } from './prefetch'
 
-type Q = { queryKey: readonly unknown[]; queryFn: (...a: never[]) => Promise<unknown>; staleTime?: number }
+type Q = { queryKey: readonly unknown[]; queryFn: (...a: never[]) => Promise<unknown>; staleTime?: number | ((q: never) => number) }
 
 const SETTINGS: Record<string, () => Q[]> = {
   stats: () => [tokenStatsQuery()],
