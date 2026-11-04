@@ -137,6 +137,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `components/ui/markdown.tsx`: remote images (`https?:` / `//host`) render as `RemoteImage`, a click-to-load button
   (then `referrerPolicy="no-referrer"`); same-site and relative pictures still load at once. `//host` links count as
   external (new tab, rel noopener). Key `md.loadImage` (core).
+- `Markdown` is `React.memo`: a dictionary group arriving (re-renders every `useT` user) no longer re-parses and
+  re-highlights every message on screen. Tasks List/Calendar group with push (was a copy per task, quadratic) and the
+  List renders 200 rows per step (sentinel + IntersectionObserver, like the Files listing).
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
