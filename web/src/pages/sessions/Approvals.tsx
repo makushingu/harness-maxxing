@@ -7,6 +7,7 @@ import { useDecideApproval, useSessionApprovals } from '@/lib/queries'
 import type { Approval, Session } from '@/lib/types'
 import { fmtDuration } from '@/lib/format'
 import { useT } from '@/i18n'
+import { cn } from '@/lib/utils'
 import { Button, Input, Sensitive } from '@/components/ui'
 import { ToolInput, toolDiff } from './Items'
 import { toolIcon } from './util'
@@ -27,7 +28,9 @@ export function ApprovalCards({ session }: { session: Session | undefined }) {
   )
 }
 
-function ApprovalCard({ approval: a }: { approval: Approval }) {
+/** One waiting request: the tool and its input, Allow / Deny with an optional message (also in an agent's thread and
+ *  in the bubble of the Office). */
+export function ApprovalCard({ approval: a, className }: { approval: Approval; className?: string }) {
   const t = useT()
   const decide = useDecideApproval()
   const [message, setMessage] = React.useState('')
@@ -41,7 +44,7 @@ function ApprovalCard({ approval: a }: { approval: Approval }) {
     decide.mutate({ id: a.id, decision, message: message.trim() || undefined }, { onSettled: () => setChoice(null) })
   }
   return (
-    <div role="group" aria-label={t('approval.title')} className="mx-rise min-w-0 overflow-hidden rounded-lg border border-primary/40 bg-card text-[13px] shadow-xs">
+    <div role="group" aria-label={t('approval.title')} className={cn('mx-rise min-w-0 overflow-hidden rounded-lg border border-primary/40 bg-card text-[13px] shadow-xs', className)}>
       <div className="flex min-w-0 items-center gap-2 border-b bg-primary/6 px-2.5 py-1.5">
         <ShieldQuestion className="size-3.5 shrink-0 text-primary" />
         <span className="shrink-0 font-medium text-foreground">{t('approval.title')}</span>
