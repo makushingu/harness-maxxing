@@ -187,8 +187,18 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     secrets_found: list[dict] = []
     renamed: list[dict] = []
 
+    def unique(raw: str, taken: dict[str, dict]) -> str:
+        """Each source folder gets its own name: "Блог" and "Продажи" (or "My Blog" and "my-blog") both slug
+        to one name, and the second CLAUDE.md would overwrite the first."""
+        base = name = slug(raw)
+        n = 2
+        while name in taken and taken[name]["source"] != raw:
+            name = f"{base[:44].rstrip('-')}-{n}"
+            n += 1
+        return name
+
     def proj(raw: str) -> dict:
-        name = slug(raw)
+        name = unique(raw, projects)
         if name not in projects:
             projects[name] = {"name": name, "source": raw, "exists": (root / "projects" / name).is_dir(), "topics": {}}
             if name != raw:
@@ -201,7 +211,7 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
         if parts[0] == "projects" and len(parts) >= 3:
             pr = proj(parts[1])
             if parts[2] == "topics" and len(parts) >= 5:
-                tname = slug(parts[3])
+                tname = unique(parts[3], pr["topics"])
                 if tname not in pr["topics"]:
                     pr["topics"][tname] = {"name": tname, "source": parts[3], "files": 0,
                                            "exists": (root / "projects" / pr["name"] / "topics" / tname).is_dir()}
