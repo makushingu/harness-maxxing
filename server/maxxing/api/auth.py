@@ -96,7 +96,8 @@ async def _verify(password: str) -> bool:
 @router.post("/login")
 async def login(body: LoginIn, request: Request, response: Response):
     key = security.client_key(request)
-    refusal, n = security.begin_attempt(key)          # before scrypt: a blocked client is never checked
+    trusted = twofactor.device_trusted(request.cookies.get(twofactor.DEVICE_COOKIE))
+    refusal, n = security.begin_attempt(key, trusted)  # before scrypt: a blocked client is never checked
     if refusal == "client":
         raise HTTPException(429, detail={"error": "throttled", "message": "Too many attempts - try again in 15 min"})
     if refusal == "global":
@@ -105,7 +106,7 @@ async def login(body: LoginIn, request: Request, response: Response):
     ok = await _verify(body.password)
     delay = security.end_attempt(key, ok)
     if ok:
-        if twofactor.enabled() and not twofactor.device_trusted(request.cookies.get(twofactor.DEVICE_COOKIE)):
+        if twofactor.enabled() and not trusted:
             return {"ok": False, "two_factor": await _challenge("login", request)}
         security.set_cookie(response, request)
         _alert(request, "Signed in", loud=False)
