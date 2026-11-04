@@ -121,6 +121,16 @@ def secret_paths() -> list[str]:
     return out
 
 
+def locked_paths(path: str) -> list[str]:
+    """What a sandboxed agent never writes even in its own folder: its settings (agent.json: triggers, budget, keys,
+    sandbox...), its role (CLAUDE.md), and the Claude Code project files that could widen its rights (.claude/,
+    .mcp.json) in its folder and its topic. The owner changes them from the agent page, the CLI or a session."""
+    folder = config.workspace() / path
+    topic = folder.parent.parent
+    return [str(folder / "agent.json"), str(folder / "CLAUDE.md"), str(folder / ".claude"), str(folder / ".mcp.json"),
+            str(topic / ".claude"), str(topic / ".mcp.json")]
+
+
 def mode(requested: str) -> str:
     """Permission mode of a sandboxed turn: never bypass (Claude Code lets every domain through in bypass)."""
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"
@@ -134,14 +144,17 @@ def settings(path: str, a: dict) -> dict:
         topic = folder.parent.parent
         write = [str(folder)] + [str((topic / w).resolve()) for w in a.get("writable") or []]
         secrets = secret_paths()
+        locked = locked_paths(path)
         out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
                           "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing:*"],
-                          "filesystem": {"denyRead": secrets, "allowWrite": write},
+                          "filesystem": {"denyRead": secrets, "allowWrite": write, "denyWrite": locked},
                           "network": {"allowedDomains": list(a.get("domains") or [])}}
         deny = []
         for p in secrets:
             g = p + "/**" if not Path(p).is_file() and not p.endswith(".json") else p
             deny += [f"Read(/{g})", f"Edit(/{g})"]
+        for p in locked:                                # its settings and role: the owner's, never the agent's
+            deny.append(f"Edit(/{p + '/**' if p.endswith('/.claude') else p})")
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does
         out["permissions"] = {"deny": deny,
@@ -234,11 +247,19 @@ def sandboxed_session(sid8: str) -> str | None:
     return None
 
 
+# changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
+AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "import", "sandbox-setup"}
+
+
 def check_cli(argv: list[str]) -> str | None:
-    """Why `maxxing <argv>` is refused in a sandboxed agent turn, else None."""
+    """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
     if not words:
         return None
+    if os.environ.get("MAXXING_AGENT") and words[0] == "agents" and len(words) > 1 and words[1] in AGENT_OWNER_ONLY:
+        return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
+                "triggers, settings or role included). Say what should change in your answer; the owner applies it "
+                "from the agent page or a session.")
     path = sandboxed_turn()
     if not path:
         return None

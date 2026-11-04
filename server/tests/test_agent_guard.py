@@ -195,3 +195,35 @@ def test_templates_bring_their_domains():
     t = agent_templates.get("pr-review", "en")
     assert agent_templates.fields(t)["domains"] == ["api.github.com", "github.com"]
     assert agent_templates.fields(agent_templates.get("writer", "en"))["domains"] == []
+
+
+def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch):
+    from maxxing import agent_guard, agents
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    s = _settings(_calls()[-1]["argv"])
+    root = client.get("/api/workspace/tree").json()["root"]
+    locked = s["sandbox"]["filesystem"]["denyWrite"]
+    for p in (f"{root}/{A}/agent.json", f"{root}/{A}/CLAUDE.md", f"{root}/{A}/.claude",
+              f"{root}/projects/acme/topics/blog/.claude", f"{root}/projects/acme/topics/blog/.mcp.json"):
+        assert p in locked
+    deny = s["permissions"]["deny"]
+    assert f"Edit(/{root}/{A}/agent.json)" in deny and f"Edit(/{root}/{A}/.claude/**)" in deny
+    # the CLI: no agent turn (sandboxed or not) changes an agent; sending work stays allowed
+    monkeypatch.setenv("MAXXING_AGENT", A)
+    for argv in (["agents", "cron", "acme/blog/writer", "--schedule", "* * * * *"], ["agents", "off", "x"],
+                 ["agents", "create", "acme/blog/other"], ["agents", "webhook", "x"]):
+        assert "never changes agents" in agent_guard.check_cli(argv), argv
+    assert agent_guard.check_cli(["agents", "send", "other", "hi"]) is None
+    monkeypatch.delenv("MAXXING_AGENT")
+    assert agent_guard.check_cli(["agents", "off", "x"]) is None            # the owner, in a session
+    # a run that changes them anyway (no sandbox) is reported in the thread; the owner's own changes are not
+    agents._snapshot(A, "sid-1")
+    (agents.folder(A) / "CLAUDE.md").write_text("# Agent Writer\n\nI do what I want now.\n")
+    assert agents._changed_during(A, "sid-1") == ["CLAUDE.md"]
+    agents._snapshot(A, "sid-2")
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 9}})
+    assert agents._changed_during(A, "sid-2") == []
+    assert agents._changed_during(A, "unknown") == []
