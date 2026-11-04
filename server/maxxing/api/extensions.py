@@ -88,7 +88,7 @@ async def forward(eid: str, path: str, request: Request):
         if raw:
             try:
                 body = json.loads(raw)
-            except ValueError:
+            except (ValueError, RecursionError):           # not JSON, or nested too deeply: handle() gets the text
                 body = raw.decode("utf-8", "replace")
     try:
         fn = extensions.handler(ext)
@@ -117,8 +117,8 @@ async def forward(eid: str, path: str, request: Request):
         result = {"ok": True}
     try:
         return JSONResponse(result, status_code=status)
-    except (TypeError, ValueError) as e:
-        raise _err(500, "extension_error", f"handle() returned a non-JSON value ({e})") from None
+    except (TypeError, ValueError, RecursionError) as e:
+        raise _err(500, "extension_error", f"handle() returned a non-JSON value ({type(e).__name__}: {e})") from None
 
 
 @router.api_route("/api/ext/{eid}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])

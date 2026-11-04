@@ -352,3 +352,13 @@ def test_a_lone_surrogate_in_a_manifest_marks_only_that_extension(client, org):
     assert r.status_code == 200
     d = {x["id"]: x for x in r.json()}
     assert d["good"]["error"] is None and "invalid text" in d["bad"]["error"]
+
+
+def test_too_deeply_nested_json_in_or_out_of_handle_is_handled(client, org):
+    _ext(org, "h", {"type": "page"}, "def handle(ctx, m, p, q, b):\n    return {'b': type(b).__name__}\n", page="x")
+    r = client.post("/api/ext/h/p", content=b"[" * 200000, headers={"content-type": "application/json"})
+    assert r.status_code == 200 and r.json() == {"b": "str"}
+    _ext(org, "d", {"type": "page"}, "def handle(ctx, m, p, q, b):\n    x = []\n    for _ in range(100000):\n"
+         "        x = [x]\n    return x\n", page="x")
+    r = client.get("/api/ext/d/p")
+    assert r.status_code == 500 and r.json()["error"] == "extension_error"
