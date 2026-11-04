@@ -8,7 +8,9 @@
 // scan on a phone than the cards); an agent or a run opens full screen with a back button.
 // Agents and their runs never show in Sessions (sessions = where the user works, agents = automatic work).
 import * as React from 'react'
-import { Route, Routes, useLocation, useSearchParams } from 'react-router'
+import { Link, Route, Routes, useLocation, useSearchParams } from 'react-router'
+import { Building2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useCompact } from '@/stores/media'
 import { PageHeader } from '@/components/shell/Page'
@@ -89,6 +91,21 @@ export default function AgentsLayout() {
       <aside className="flex w-72 shrink-0 flex-col border-r bg-sidebar/40 xl:w-80" aria-label={t('agents.title')}>
         <div className="flex min-h-[var(--header-h)] shrink-0 items-center border-b px-4">
           <h1 className="text-base font-semibold tracking-tight">{t('agents.title')}</h1>
+        </div>
+        {/* Back to the overview (every agent at its desk), whichever agent or run is open. */}
+        <div className="shrink-0 px-2 pt-2">
+          <Link
+            to="/agents"
+            aria-current={home ? 'page' : undefined}
+            className={cn(
+              'flex h-9 items-center gap-2 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+              home && 'bg-accent text-foreground',
+            )}
+            data-testid="agents-office"
+          >
+            <Building2 className="size-4" />
+            {t('agents.side.office')}
+          </Link>
         </div>
         <AgentsList onNew={newAgent} className="flex-1" />
       </aside>

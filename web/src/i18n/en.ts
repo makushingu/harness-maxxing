@@ -3083,6 +3083,7 @@ export const en = {
   'sessions.agent.off': 'Off',
   'agents.side.overview': 'Overview',
   'agents.side.search': 'Search agents',
+  'agents.side.office': 'Office',
   'agents.side.new': 'New agent',
   'agents.side.grouping': 'Group the agents',
   'agents.side.byState': 'By state',
