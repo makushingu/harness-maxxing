@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.113 - 2026-11-04
 
+- Approvals on the Agents page (web only): `usePendingApprovals()` (`GET /api/approvals` without `session`, key
+  `['approvals','pending']`); `features/agents/approvals.tsx`: `useThreadApprovals()` folds the `note` of a request
+  (same `approval` id) into its `approval` message (`ThreadApprovalBody`: live `ApprovalCard`, then the outcome),
+  `WaitingBubble` = the waiting bubble of a desk (Classic `Bubble`, Space `StatusChip`) as a popover of the agent's
+  `ApprovalCard`s; `ApprovalCard` exported (`className`); `useDecideApproval` also invalidates `['agents']`.
 - Owner-only agent settings: `agent_guard.locked_paths()` (agent `agent.json`, `CLAUDE.md`, `.claude/`, an existing `.mcp.json`,
   topic `.claude/` and existing `.mcp.json`; a missing one would get a placeholder mount that breaks `git add -A`) go to `sandbox.filesystem.denyWrite` + `Edit(...)` deny rules; `check_cli` refuses
   `agents create|cron|webhook|watch|on|off|import|sandbox-setup` whenever `MAXXING_AGENT` is set (sandboxed or not);
