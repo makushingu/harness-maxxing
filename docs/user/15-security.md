@@ -103,7 +103,8 @@ public is what your containers publish. With Dokploy:
 - **Port 3000** (Dokploy's own page) is open to the internet after its installation. Give Dokploy a domain
   (Dokploy -> Settings -> Web server), check it opens over HTTPS, then turn off port 3000 there. `maxxing doctor`
   warns while it is open.
-- **The Dokploy API key** is kept in Keys as `DOKPLOY_API_KEY`, **never exposed** to sessions: Claude deploys with
+- **The Dokploy API key** is kept in Keys as `DOKPLOY_API_KEY`, **not exposed** (not in the environment of sessions,
+  and only ever sent to the Dokploy address it was checked against). Claude deploys with
   `maxxing dokploy`, which reads it itself, and asks you before every change. Disconnect it in Infra -> Sources
   (or `maxxing dokploy disconnect`) and revoke it in Dokploy when you no longer need it.
 - **Its installer** (`DOKPLOY=1`) is the official script at a pinned commit, checked against its sha256 and run from

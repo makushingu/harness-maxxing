@@ -104,13 +104,21 @@ def test_connect_checks_the_key_then_saves_it_unexposed(fake):
         dokploy.connect(fake.url, "wrong")
     assert e.value.code == "missing_permission" and vault.get(dokploy.KEY) is None
     assert dokploy.connect(fake.url, KEY) == {"connected": True, "url": fake.url, "projects": 2}
-    assert config.load_config()["dokploy"] == {"url": fake.url}
+    assert config.get_secret(dokploy.URL_SECRET) == fake.url and "dokploy" not in config.load_config()
     assert dokploy.KEY not in vault.exposed_env()                  # sessions never see it
     assert dokploy.status() == {"connected": True, "url": fake.url}
-    assert dokploy.disconnect() and vault.get(dokploy.KEY) is None and "dokploy" not in config.load_config()
+    assert dokploy.disconnect() and vault.get(dokploy.KEY) is None and not config.get_secret(dokploy.URL_SECRET)
     with pytest.raises(ProviderError) as e:
         dokploy.client()
     assert e.value.code == "not_connected"
+
+
+def test_the_key_only_goes_to_the_url_it_was_checked_against(fake, monkeypatch):
+    """A session setting an env variable or editing config.json cannot send the key to another host."""
+    dokploy.connect(fake.url, KEY)
+    monkeypatch.setenv("MAXXING_DOKPLOY_API", "https://attacker.example")
+    config.update_config(dokploy={"url": "https://attacker.example"})
+    assert dokploy.url() == fake.url and dokploy.client().base == fake.url + "/api/"
 
 
 def test_services_flatten_environments_and_old_projects(fake):

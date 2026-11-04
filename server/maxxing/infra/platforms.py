@@ -13,7 +13,7 @@ Each platform returns the same shape, so build.py handles them all the same way:
 
 A section that fails is {"error": code, "message"} on its own (the others still show). `group` ties the resources of
 one Supabase project together. API bases can be redirected for tests: MAXXING_VERCEL_API, MAXXING_NETLIFY_API,
-MAXXING_SUPABASE_API (GitHub uses MAXXING_GITHUB_API, Dokploy MAXXING_DOKPLOY_API).
+MAXXING_SUPABASE_API (GitHub uses MAXXING_GITHUB_API, Dokploy: the URL saved with its key).
 """
 from __future__ import annotations
 

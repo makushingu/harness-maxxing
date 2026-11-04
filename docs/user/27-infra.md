@@ -100,7 +100,8 @@ Harness Maxxing works **with** it instead of next to it:
   See [Installation](installation).
 - **Connect**: in Dokploy, Profile -> API keys -> Generate. Then Infra -> Sources -> **Connect Dokploy** with its
   address (`http://127.0.0.1:3000` when it runs on this server) and the key. The key is checked, then kept in
-  Keys as `DOKPLOY_API_KEY`, **not exposed**: sessions never see it.
+  Keys as `DOKPLOY_API_KEY`, **not exposed**: it is not in the environment of sessions, and only goes to the address
+  you connected.
 - **See**: projects, apps, compose stacks, databases and domains show on the Infra page with their state (a failed
   deployment is down), linked to their domains and repositories.
 - **Deploy with Claude**: "deploy the shop", "why did the last deployment fail?", "put the blog on

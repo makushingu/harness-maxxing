@@ -414,9 +414,10 @@ unless public (no DNS rebinding to a local address). `team_insecure` / MAXXING_T
 
 ## maxxing.dokploy  (owner: organisation)
 Client of a Dokploy (self-hosted PaaS, Docker Swarm + Traefik) API, header `x-api-key`, tRPC-style procedures
-`GET|POST <url>/api/<router>.<proc>`. URL: config.json `dokploy.url` (default `http://127.0.0.1:3000`); key: vault
-`DOKPLOY_API_KEY`, never exposed (sessions go through `maxxing dokploy`, never the key). `MAXXING_DOKPLOY_API`
-overrides the URL (tests).
+`GET|POST <url>/api/<router>.<proc>`. Key: vault `DOKPLOY_API_KEY`, not exposed (sessions go through `maxxing
+dokploy`); URL: secrets.json `dokploy_url` (default `http://127.0.0.1:3000`), saved by `connect` next to the key, so
+neither the environment nor config.json can send the key elsewhere. Sessions run as root: this keeps the key out of
+their environment and prompts, it is not a barrier against a session that reads the vault on purpose.
 - `Client(url, key)`: `get(proc, params)`, `post(proc, body)`; `ProviderError` codes `not_connected`,
   `missing_permission` (401/403), `not_found`, `api_error`, `bad_response`, `unreachable`. `check_url(url)` refuses
   anything but http(s) and plain http to a host that is not loopback / private / `*.localhost` (`invalid_url`).
@@ -646,7 +647,7 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 - `MAXXING_SPAWN=direct` run turns as detached subprocesses instead of systemd-run units
 - `MAXXING_CRONTAB_FILE` write the managed crontab block into this file instead of `crontab -`
 - `MAXXING_SYSTEM_TZ=0` never switch the system time zone when the time zone setting changes (also skipped when `MAXXING_CRONTAB_FILE` is set)
-- `MAXXING_DOKPLOY_API` Dokploy URL instead of config.json `dokploy.url` · `MAXXING_DOKPLOY_LOGS` folder of the Dokploy deployment logs (default `/etc/dokploy/logs`) · `MAXXING_DOKPLOY_ETC` Dokploy's folder (default `/etc/dokploy`) · `MAXXING_TRAEFIK_ROUTE` our Traefik route file · `MAXXING_CADDY_DOCKER_DROPIN` Caddy's wait-for-Docker drop-in
+- `MAXXING_DOKPLOY_LOGS` folder of the Dokploy deployment logs (default `/etc/dokploy/logs`) · `MAXXING_DOKPLOY_ETC` Dokploy's folder (default `/etc/dokploy`) · `MAXXING_TRAEFIK_ROUTE` our Traefik route file · `MAXXING_CADDY_DOCKER_DROPIN` Caddy's wait-for-Docker drop-in
 - `MAXXING_TELEGRAM_API` Telegram API base URL (tests: local mock) · `MAXXING_GITHUB_API` GitHub API base URL
 - `MAXXING_LICENSE_API` license server (default `https://api.harness-maxxing.com`) · `MAXXING_GIT_URL` repository an install still on archives moves to (tests) · `MAXXING_LICENSE_PING=0` no hourly loop: no registration heartbeat, no call to the cloud (tests)
 - `MAXXING_AUTH_CHECK=0` no background Claude sign-in verification (tests) · `MAXXING_AUTH_CHECK_DELAY` seconds

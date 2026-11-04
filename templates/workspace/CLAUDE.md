@@ -100,7 +100,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing keys list\|get\|set\|delete` | the Keys vault from a script: `printf %s "$V" \| maxxing keys set NAME` (value on stdin); scripts read keys as env vars (`$NAME`) |
 | `maxxing packs list\|add <id>` | starter packs: ready-made projects (only missing files are added) |
 | `maxxing infra status\|list\|site\|db\|bucket\|server` | where every site / database / bucket / domain / server is; create them on this server the standard way |
-| `maxxing dokploy list\|deploy\|logs\|domain\|app` | when Dokploy is connected: deploy apps through it (ask before every `--yes`; its key is never exposed) |
+| `maxxing dokploy list\|deploy\|logs\|domain\|app` | when Dokploy is connected: deploy apps through it (ask before every `--yes`; never read its key) |
 | `maxxing mcp list\|add\|remove` | MCP servers of Claude Code (every session or one topic), as in Settings -> MCP |
 | `maxxing video new DIR` / `video status` | Remotion video project linked to the shared install / tools check |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |

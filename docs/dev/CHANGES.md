@@ -9,7 +9,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 ## 2.0.0-alpha.108 - 2026-11-03
 
 Dokploy integration (opt-in, nothing changes without Dokploy):
-- `maxxing.dokploy` (API client, `x-api-key`, URL in config.json `dokploy.url`, vault `DOKPLOY_API_KEY` never exposed),
+- `maxxing.dokploy` (API client, `x-api-key`, vault `DOKPLOY_API_KEY` not exposed, the URL it was checked against in secrets.json `dokploy_url`),
   `cmd_dokploy.py` (`maxxing dokploy ...`, writes need `--yes`), `platforms.dokploy()` reader (beta, `project.all`
   with environments or the older flat shape), `POST /api/infra/dokploy/connect|disconnect`, web
   `features/infra/DokployConnect.tsx`, i18n `infra.dokploy.*` / `infra.src.dokploy`.

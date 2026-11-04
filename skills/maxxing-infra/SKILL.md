@@ -69,7 +69,7 @@ maxxing dokploy domain add APP HOST [--port N] [--path P] [--no-https] --yes | d
   relevant lines and fix the cause (Dockerfile, build command, missing env) - do not loop on redeploys.
 - A new domain: its DNS A record must point to this server (`--dns` of `site add` does not apply; tell the user the
   record, or create it on Cloudflare if the token allows), then the domain gets its certificate on the next deploy.
-- The API key is in the vault as `DOKPLOY_API_KEY` and **never exposed**: never look for it, never `keys get` it,
+- The API key is in the vault as `DOKPLOY_API_KEY`, **not exposed**: never look for it, never `keys get` it,
   never call the Dokploy API with curl. What `maxxing dokploy` cannot do (env variables, volumes, databases,
   backups, rollbacks) is done by the user in the Dokploy UI: give the steps.
 - Not connected yet but Dokploy runs here (`docker service ls` shows `dokploy`)? Tell the user to create a key in
@@ -125,7 +125,7 @@ provider and host come from RDAP and the public DNS. Use it for every domain the
   Workers Routes, Pages, R2, D1, Registrar (Account settings: Read). `--dns` needs DNS Edit. A missing right
   only hides that part (`maxxing infra status` says which).
 - **Hostinger**: `HOSTINGER_API_TOKEN` (hPanel -> API): domains with their expiry, VPS, DNS zones.
-- **Dokploy** `DOKPLOY_API_KEY` (beta, connected with `maxxing dokploy connect`, never exposed): projects,
+- **Dokploy** `DOKPLOY_API_KEY` (beta, connected with `maxxing dokploy connect`, not exposed): projects,
   apps, compose stacks, databases and domains; see "Dokploy" above.
 - **Vercel** `VERCEL_TOKEN`, **Netlify** `NETLIFY_AUTH_TOKEN`, **Supabase** `SUPABASE_ACCESS_TOKEN` (beta): sites and
   deployments, domains, Supabase databases/buckets/functions. **GitHub Pages**: the GitHub tokens of the vault.

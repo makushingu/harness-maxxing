@@ -392,7 +392,7 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 | POST | `/api/infra/servers/remove` | `{name}` | `{removed}`; `404` |
 | POST | `/api/infra/domains` | `{name}` | `{name}` (normalised: lower case, IDNA, no scheme/path); `400 invalid_domain`. A domain from any registrar, read through RDAP + public DNS |
 | POST | `/api/infra/domains/remove` | `{name}` | `{removed}`; `404` when it was not added by hand |
-| POST | `/api/infra/dokploy/connect` | `{url, key}` | `{connected:true, url, projects}` (key checked with `GET project.all` first, then saved as vault `DOKPLOY_API_KEY`, never exposed to sessions; `url` in config.json `dokploy.url`); `422 <code>` (`invalid_url`: not http(s), or plain http to a public host; `missing_permission`; `unreachable`; `bad_response`) |
+| POST | `/api/infra/dokploy/connect` | `{url, key}` | `{connected:true, url, projects}` (key checked with `GET project.all` first, then saved as vault `DOKPLOY_API_KEY`, not exposed, with `url` next to it in secrets.json `dokploy_url`: the key is only sent there); `422 <code>` (`invalid_url`: not http(s), or plain http to a public host; `missing_permission`; `unreachable`; `bad_response`) |
 | POST | `/api/infra/dokploy/disconnect` | – | `{removed}` (forgets the URL and deletes the vault key) |
 
 Resource: `{id, kind: server|site|worker|pages|database|bucket|domain, name, location: local|<server>|cloudflare|hostinger|other,

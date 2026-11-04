@@ -49,7 +49,7 @@ Servers, domains and deploys for all apps: "deploy app-1 to app.example.com", "w
 
 ## Connect
 
-- Dokploy: `DOKPLOY_API_KEY`, connected in Infra -> Sources (never exposed to sessions).
+- Dokploy: `DOKPLOY_API_KEY`, connected in Infra -> Sources (not exposed to sessions).
 - `CLOUDFLARE_API_TOKEN` (scoped to DNS edit on the zones), `VERCEL_TOKEN`, a git host token, SSH keys
   for other servers (in `~/.ssh`, never in memory), object storage keys for backups (e.g. S3-compatible
   `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY`).

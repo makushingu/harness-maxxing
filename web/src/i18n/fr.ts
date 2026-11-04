@@ -1461,7 +1461,7 @@ export const fr: Record<keyof typeof en, string> = {
   'infra.src.dokploy': 'Projets, applications et stacks compose avec leur état et leurs domaines, bases de données (déploiement avec maxxing dokploy)',
   'infra.dokploy.connect': 'Connecter Dokploy',
   'infra.dokploy.title': 'Connecter Dokploy',
-  'infra.dokploy.desc': 'Harness lit vos projets Dokploy, et les sessions déploient avec maxxing dokploy. La clé reste dans vos clés : les sessions ne la voient jamais.',
+  'infra.dokploy.desc': 'Harness lit vos projets Dokploy, et les sessions déploient avec maxxing dokploy. La clé reste dans vos clés, hors de l’environnement des sessions.',
   'infra.dokploy.url': 'Adresse de Dokploy',
   'infra.dokploy.key': 'Clé d’API',
   'infra.dokploy.keyHint': 'Dans Dokploy : Profil -> API keys -> Generate',

@@ -11,7 +11,7 @@ This version brings to every install the Team and session list changes of 2.0.0-
 New (Dokploy):
 - **Deploy through Dokploy.** On a server with Dokploy, connect it in Infra -> Sources: its apps, databases and
   domains show on the Infra page, and Claude deploys, reads the deployment logs and adds domains with
-  `maxxing dokploy`, asking you first. The key stays in your keys: sessions never see it.
+  `maxxing dokploy`, asking you first. The key stays in your keys, out of the environment of sessions.
 - **Harness Maxxing installs next to Dokploy.** The installer finds it and, with a domain, serves the web UI through
   Dokploy's HTTPS instead of fighting for ports 80/443. `DOKPLOY=1` also installs Dokploy on a new server.
 

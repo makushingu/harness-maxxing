@@ -1,8 +1,9 @@
 """Dokploy (self-hosted PaaS: Docker Swarm + Traefik) through its API. See docs/dev/INTERNALS.md (maxxing.dokploy).
 
-The URL lives in config.json `dokploy.url`, the key in the vault (`DOKPLOY_API_KEY`), never exposed to sessions:
-they go through `maxxing dokploy`, which reads it here. Procedures are tRPC style: GET|POST <url>/api/<router>.<proc>,
-header `x-api-key`. MAXXING_DOKPLOY_API replaces the URL (tests), MAXXING_DOKPLOY_LOGS the deployment log folder.
+The key is in the vault (`DOKPLOY_API_KEY`, not in the environment of sessions: they go through `maxxing dokploy`),
+and the URL it was checked against sits next to it in secrets.json (`dokploy_url`): the key is only ever sent there,
+whatever the environment or config.json say. Procedures are tRPC style: GET|POST <url>/api/<router>.<proc>, header
+`x-api-key`. MAXXING_DOKPLOY_LOGS replaces the deployment log folder (tests).
 """
 from __future__ import annotations
 
@@ -53,9 +54,11 @@ def _private(host: str) -> bool:
     return ip.is_loopback or ip.is_private
 
 
+URL_SECRET = "dokploy_url"
+
+
 def url() -> str:
-    return (os.environ.get("MAXXING_DOKPLOY_API") or (config.load_config().get("dokploy") or {}).get("url")
-            or DEFAULT_URL).rstrip("/")
+    return (config.get_secret(URL_SECRET) or DEFAULT_URL).rstrip("/")
 
 
 def _saved_key() -> str | None:
@@ -134,17 +137,14 @@ def connect(base: str, key: str) -> dict:
     if not isinstance(projects, list):
         raise ProviderError("bad_response", "project.all did not answer a list")
     vault.put(KEY, key, note="Dokploy API (read by maxxing dokploy)", expose=False)
-    config.update_config(dokploy={"url": base})
+    config.set_secret(URL_SECRET, base)
     return {"connected": True, "url": base, "projects": len(projects)}
 
 
 def disconnect() -> bool:
     from . import vault
-    cfg = config.load_config()
-    had = bool(cfg.get("dokploy"))
-    if had:
-        cfg.pop("dokploy", None)
-        config.save_config(cfg)
+    had = bool(config.get_secret(URL_SECRET))
+    config.set_secret(URL_SECRET, None)
     return vault.delete(KEY) or had
 
 

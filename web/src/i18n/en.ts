@@ -1476,7 +1476,7 @@ export const en = {
   'infra.src.dokploy': 'Projects, applications and compose stacks with their state and domains, databases (deploy with maxxing dokploy)',
   'infra.dokploy.connect': 'Connect Dokploy',
   'infra.dokploy.title': 'Connect Dokploy',
-  'infra.dokploy.desc': 'Harness reads your Dokploy projects, and sessions deploy through it with maxxing dokploy. The key stays in your keys: sessions never see it.',
+  'infra.dokploy.desc': 'Harness reads your Dokploy projects, and sessions deploy through it with maxxing dokploy. The key stays in your keys, out of the environment of sessions.',
   'infra.dokploy.url': 'Dokploy address',
   'infra.dokploy.key': 'API key',
   'infra.dokploy.keyHint': 'In Dokploy: Profile -> API keys -> Generate',

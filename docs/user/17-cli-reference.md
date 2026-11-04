@@ -183,7 +183,7 @@ Scripts read keys from the environment (`os.environ["NAME"]`, `$NAME`); a script
 
 | Command | Purpose |
 |---|---|
-| `printf %s "$KEY" \| maxxing dokploy connect [--url URL]` | check a Dokploy API key, then keep it in the vault as `DOKPLOY_API_KEY`, never exposed to sessions (default address `http://127.0.0.1:3000`; plain http only to this machine or a private network) |
+| `printf %s "$KEY" \| maxxing dokploy connect [--url URL]` | check a Dokploy API key, then keep it in the vault as `DOKPLOY_API_KEY`, not exposed to sessions and sent only to this address (default address `http://127.0.0.1:3000`; plain http only to this machine or a private network) |
 | `maxxing dokploy status` / `disconnect` | connected or not / forget the address and the key |
 | `maxxing dokploy list [--json]` | every project, application, compose stack and database, with its state, id and domains |
 | `maxxing dokploy environments [--json]` | every project and environment with its id (what `app create --environment` takes) |
