@@ -42,6 +42,20 @@ def test_shopify_topics_of_one_order_each_post_once(mx):
     assert made_up == [False, True, True, True]
 
 
+def test_replayed_shopify_delivery_cannot_link_outside_shopify(mx):
+    """X-Shopify-Shop-Domain is not signed: a replay with another domain gets no link and stays a duplicate."""
+    tok = _token(feedhooks.create("shop", "shopify", "shpss"))
+    evil = {**_shopify(ORDER, "w1", "orders/cancelled"), "X-Shopify-Shop-Domain": "evil.example"}
+    assert feedhooks.deliver(tok, evil, ORDER)[1]["duplicate"] is False
+    assert feed.list_events(source="shop")["events"][0]["url"] in ("", None)
+    good = {**_shopify(ORDER, "w2"), "X-Shopify-Shop-Domain": "Acme.myshopify.com"}
+    assert feedhooks.deliver(tok, good, ORDER)[1]["duplicate"] is False
+    urls = {e["url"] for e in feed.list_events(source="shop")["events"]}
+    assert "https://acme.myshopify.com/admin/orders/42" in urls and not any("evil" in (u or "") for u in urls)
+    again = {**_shopify(ORDER, "w3"), "X-Shopify-Shop-Domain": "other.myshopify.com"}
+    assert feedhooks.deliver(tok, again, ORDER)[1]["duplicate"] is True
+
+
 def test_replayed_github_delivery_with_a_new_id_is_a_duplicate(mx):
     tok = _token(feedhooks.create("gh", "github", "ghs"))
     body = json.dumps({"action": "published", "release": {"tag_name": "v1"}, "repository": {"full_name": "a/b"}}).encode()

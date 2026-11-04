@@ -46,13 +46,13 @@ export function FeedItem({ ev, compact }: { ev: FeedEvent; compact?: boolean }) 
       <L.icon className={cn('mt-0.5 size-4 shrink-0', L.cls)} />
       <button type="button" onClick={open} className="grid min-w-0 flex-1 gap-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className={cn('flex min-w-0 items-center gap-1.5 text-[13px] leading-snug', !ev.read && 'font-medium')}>
-          <span className={cn(compact ? 'line-clamp-1' : 'line-clamp-2')}>
+          <span className={cn('[overflow-wrap:anywhere]', compact ? 'line-clamp-1' : 'line-clamp-2')}>
             <Sensitive length={12}>{ev.title}</Sensitive>
           </span>
           {ev.count > 1 && <span className="shrink-0 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground tabular-nums">×{ev.count}</span>}
         </span>
         {ev.body && (
-          <span className={cn('text-xs break-words whitespace-pre-line text-muted-foreground', compact ? 'line-clamp-2' : 'line-clamp-4')}>
+          <span className={cn('text-xs [overflow-wrap:anywhere] whitespace-pre-line text-muted-foreground', compact ? 'line-clamp-2' : 'line-clamp-4')}>
             <Sensitive length={16}>{ev.body}</Sensitive>
           </span>
         )}

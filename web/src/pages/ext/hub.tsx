@@ -18,7 +18,7 @@ export default function ExtensionsHub() {
       actions={
         <Button variant="outline" size="sm" asChild>
           <Link to="/settings/extensions">
-            <Settings2 /> {t('ext.manage')}
+            <Settings2 /> <span className="max-[429px]:sr-only">{t('ext.manage')}</span>
           </Link>
         </Button>
       }
@@ -46,7 +46,7 @@ export default function ExtensionsHub() {
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted/50">
                 <NamedIcon name={x.icon} className="size-5 text-primary" />
               </span>
-              <Link to={`/x/${x.id}`} className="min-w-0 flex-1 outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-ring">
+              <Link to={`/x/${x.id}`} className="min-w-0 flex-1 outline-none pointer-coarse:min-h-10 after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-ring">
                 <span className="block truncate text-sm font-medium">{x.name}</span>
                 <span className="block truncate font-mono text-xs text-muted-foreground">v{x.version}</span>
               </Link>
