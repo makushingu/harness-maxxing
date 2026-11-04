@@ -231,6 +231,21 @@ def list_events(source: str | None = None, unread: bool = False, before: int | N
             "unread": sum(s["unread"] for s in sources), "sources": sources}
 
 
+def max_id() -> int:
+    """Id of the newest event (0 when none)."""
+    with _conn() as c:
+        r = c.execute("SELECT MAX(id) FROM events").fetchone()
+    return int(r[0] or 0)
+
+
+def events_after(after_id: int, limit: int = 200) -> list[dict]:
+    """Events newer than `after_id`, oldest first (agents.scan_feed). A folded event keeps its id: not seen again."""
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM events WHERE id>? ORDER BY id LIMIT ?",
+                         (min(max(int(after_id), 0), _ID_MAX), max(1, min(int(limit), 1000)))).fetchall()
+    return [_row(r) for r in rows]
+
+
 _counts: dict = {}
 
 
@@ -247,9 +262,9 @@ def _db_stamp(path: Path) -> tuple:
 
 
 def _aggregate(c: sqlite3.Connection, cutoff: float) -> list[dict]:
-    srcs = c.execute("SELECT source, COUNT(*) total, SUM(read=0) unread FROM events WHERE at>? "
+    srcs = c.execute("SELECT source, COUNT(*) total, SUM(read=0) unread, MAX(at) last FROM events WHERE at>? "
                      "GROUP BY source ORDER BY MAX(at) DESC", (cutoff,)).fetchall()
-    return [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0} for r in srcs]
+    return [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0, "last": r["last"]} for r in srcs]
 
 
 def source_counts() -> list[dict]:

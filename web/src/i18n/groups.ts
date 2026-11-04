@@ -12,6 +12,7 @@ export const GROUPS = {
   infra: ['infra'],
   git: ['git'],
   team: ['team'],
+  agents: ['agents'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],
   // the media player: on the first player shown (a conversation shows one only for an audio file or in the viewer)

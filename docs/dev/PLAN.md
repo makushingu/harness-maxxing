@@ -37,6 +37,7 @@ terminal.
 | Docs | markdown in repo | in-app docs (EN), searchable, including "write an extension" guides |
 | Install | install.sh (v1.5) | one-liner + `maxxing` CLI (`doctor`, `update`, `backup`, `password`, `setup-link`…) + guided web onboarding + Claude skills |
 | Tools & skills | - | installed with the product: zip, jq, ripgrep, ImageMagick, poppler, Node.js 22 + Remotion (shared, `maxxing video new`), HTML -> PDF (`maxxing pdf`); skills video-motion-design, pdf-document, image-edit, seo-audit |
+| Agents | - | lasting roles inside a topic (`topics/<t>/agents/<a>/`: role, memory, agent.json), started by hand, a schedule, a webhook / feed event, their Telegram thread or another agent (`maxxing agents send`), each run a new session within guards (on/off, daily budget, runs per hour, hops), optional approvals; off by default (Settings -> Features) |
 | Import & trash | - | import from another agent (prompt -> zip -> preview -> merge without overwriting -> Claude finishes); trash with restore for files, topics, projects and sessions |
 
 ### 1.2 Non-goals for 2.0

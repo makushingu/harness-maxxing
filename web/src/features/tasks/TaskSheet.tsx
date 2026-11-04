@@ -348,7 +348,7 @@ function TaskEditor({
             <Combobox
               value={task.topic_path || '__none'}
               onChange={(v) => void save({ topic_path: v === '__none' ? null : v })}
-              options={topicKnown ? topicOptions : [...topicOptions, { value: task.topic_path!, label: mask(task.topic_path, 8) }]}
+              options={topicKnown ? topicOptions : [...topicOptions, { value: task.topic_path!, label: mask(task.topic_path!.replace(/^projects\//, '').replace('/topics/', ' / ').replace('/agents/', ' · '), 8) }]}
               placeholder={t('tasks.noTopic')}
               searchPlaceholder={t('tasks.searchTopic')}
               aria-label={t('tasks.field.topic')}

@@ -134,7 +134,13 @@ def public(meta: dict) -> dict:
             "unread": bool(finished) and finished > seen and m.get("state") != "running",
             "last_text": m.get("last_text") or "", "error": m.get("error") or None,
             "plan_mode": bool(m.get("plan_mode")), "plan_ready": bool(m.get("plan_ready")),
-            "permission_mode": m.get("permission_mode") or ""}
+            "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"])}
+
+
+def _approvals_waiting(sid: str) -> int:
+    """Tool calls of the session waiting for the user's Allow / Deny (agents with approvals; in memory)."""
+    from .. import approvals
+    return approvals.waiting(sid)
 
 
 _no_window: set[str] = set()      # sessions whose log has no contextWindow (do not rescan on every list)
@@ -1096,8 +1102,10 @@ _known: dict[str, tuple[int, int, str, bool]] = {}      # sid -> (mtime_ns, turn
 
 def on_turn_end(cb: Callable[[dict, dict | None], Any]) -> None:
     """Register `cb(session, result)` (sync or async), called on the event loop when a turn of
-    any session ends (the turn counter grows, or running -> error)."""
-    _turn_cbs.append(cb)
+    any session ends (the turn counter grows, or running -> error). Registering the same callback again
+    (a second app start in one process) does nothing."""
+    if cb not in _turn_cbs:
+        _turn_cbs.append(cb)
 
 
 # A meta change wakes the watcher at once (wake.py: inotify); it also passes every WATCH_WAKE_RUNNING_S while a session

@@ -81,7 +81,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   sessions: [qk.sessions.all],
   workspace: [qk.workspace, qk.onboarding, qk.memory],
   tasks: [qk.tasks],
-  crons: [qk.crons.all],
+  // an agent's page lists its cron jobs
+  crons: [qk.crons.all, ['agents', 'one']],
   telegram: [qk.telegram.all, qk.onboarding],
   backup: [qk.backup.all, qk.onboarding],
   health: [qk.health, qk.system.services],
@@ -93,9 +94,11 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   license: [qk.license, ['system']],
   infra: [['infra']],
   team: [['team']],
+  agents: [['agents']],
   /** someone started / stopped writing, came online: the list and the faces only */
   team_live: [['team', 'state']],
   mcp: [['mcp']],
+  approvals: [['approvals']],
 }
 
 /** Data the bus keeps fresh on its own (file watchers + every write path): no refetch when the tab is shown

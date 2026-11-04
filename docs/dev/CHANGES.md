@@ -5,6 +5,156 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.113 - 2026-11-04
+
+- Owner-only agent settings: `agent_guard.locked_paths()` (agent `agent.json`, `CLAUDE.md`, `.claude/`, an existing `.mcp.json`,
+  topic `.claude/` and existing `.mcp.json`; a missing one would get a placeholder mount that breaks `git add -A`) go to `sandbox.filesystem.denyWrite` + `Edit(...)` deny rules; `check_cli` refuses
+  `agents create|cron|webhook|watch|on|off|import|sandbox-setup` whenever `MAXXING_AGENT` is set (sandboxed or not);
+  every agent turn gets `--append-system-prompt agents.OWNER_NOTE`; `agents._snapshot()` at `fire()` +
+  `_changed_during()` at `on_turn_end` post a `note` (`status: changed`, `files`) when a run changed `agent.json` /
+  `CLAUDE.md` (owner `update()` meanwhile sets `owner_at` and is not reported). Verified with a real sandboxed run:
+  Edit refused by permissions, `sed -i` EBUSY, `>>` read-only, `.claude/` read-only, CLI refused.
+- UI: no dialog to create or change an agent with Claude. `EditWithClaude.tsx`: `draftUrl()` =
+  `/sessions?new=1&path=<topic>&prompt=<text>` (a new-session draft of the topic, pre-filled, not sent);
+  "Edit with Claude" (agent page) uses the agent's topic + `agents.edit.prompt`. "New agent" opens the CreateAgent sheet
+  on `QuickCreate`: project then topic first (prefilled from the list's `?topic=`), then two choices, "With Claude"
+  (`useCreateWithClaude(topic)` = `draftUrl(topic, agents.create.prompt)`) or "By hand" (the form on that topic); the
+  gallery and the import use the same topic (`CreateStart.topic` from the empty page). The composer takes the focus with the cursor at
+  the end on a pre-filled draft (mount or `DRAFT_EVENT`; `prefillDraft` always fires it).
+
+- `agents._git_exclude()`: creating an agent in a topic that is (or sits in) a git clone adds `/<rel>/agents/` to
+  that clone's `.git/info/exclude` (worktrees/submodules through `gitdir:` + `commondir`), never a tracked `.gitignore`:
+  an agent's turn that commits the blog no longer commits `agent.json`.
+
+Agents (`agents_page`, off by default for new and existing installs; the module works anyway for crons and the CLI): a lasting role in a topic folder
+`projects/<p>/topics/<t>/agents/<a>/` (CLAUDE.md role + memory.md + agent.json), see INTERNALS.md#maxxingagents and
+API.md#agents. Server core: `maxxing/agents.py` (agent.json validation, `fire()` = the only way in with guards
+`enabled` / `usd_per_day` / `runs_per_hour` / hops, a NEW session per start with `source: "agent"`, `cron: true`; thread
+`<state>/agents/<p>__<t>__<a>.jsonl`; feed triggers polled from feed.db every 10 s + in-memory debounce; webhook
+trigger = a feed hook + a feed trigger on its source; cron trigger = a `kind: claude` job whose `topic_path` is the
+agent path, `crons._run_claude` goes through `fire`), `api/agents.py` (`/api/agents...`, 404 `feature_off`). Session
+paths gain an optional 3rd level (`workspace._PATH_RE`); rename / delete of a topic carry its agents (state files, cron
+jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills `memory` / `memory-compaction`),
+`agent.json` in `backup.ALWAYS`.
+- Telegram: `config.telegram.agent_threads = {path: {tid, name}}` (new default key); `gateway.notify_agent(path, text,
+  ok)` (any process: blocking `call_sync`, in a daemon thread from an event loop) creates / renames the thread
+  `🤖 <name> · <p>/<t>`, main chat with `🤖 <name>` in front when threads are off; `Gateway._agent_message` turns a
+  message there into `fire(trigger="telegram", prompt=text)` (files saved in the agent folder, voice transcribed,
+  commands answered with a hint) and answers "⏳ <name> is on it." / the refusal reason (new WORDS keys `agent_*`,
+  `AGENT_REASONS`). `_send_sync(..., target=(chat, tid))`; `_forget_thread` also drops agent threads; link to another
+  chat / new bot / forget reset them; `_sync_sessions` never deletes them. `topic_label` / `topic_name` know agent
+  paths.
+- CLI `maxxing agents list|run|send|on|off` (`cmd_agents.py`, registered in `commands.py`): `send` frames the text as
+  data, trigger `agent:<sender path>`, depth `MAXXING_AGENT_DEPTH + 1`; `run --data` frames, plain `run` = a task.
+- 3rd level elsewhere: `mcp.where_of` adds `agent`, `_project_files` reads `agents/*/.mcp.json`; search indexes agent
+  CLAUDE.md / memory.md as memory titled `memory.md · agent <a> (<p>/<t>)`, one file budget per agent (the topic bucket
+  skips `agents/`); the importer skips `projects/*/topics/*/agents/**` (an import never plants an agent); stats topic
+  rows carry `label` and `agent`; `workspace.describe` returns `topic` / `agent`.
+- Product skill `maxxing-agents`; workspace template CLAUDE.md (skill + CLI rows) and help index row (applied to
+  existing workspaces by `docs/upgrade/2.0.0a113.md`). User docs `docs/user/30-agents.md`, CLI reference section,
+  welcome bullet, README bullet, showcase `agents` (route `/settings/features`).
+- Working directory of an agent turn = the agent folder (`create_session(path=<agent path>)`): Claude Code loads the
+  CLAUDE.md / memory.md chain from there, and relative paths of the topic need `../..` or a `cd` to the topic. The
+  templates' `Edit(./memory.md)` relies on it.
+- `agents.create` writes the CLAUDE.md heading with the display name (`# Agent <name>`, was the folder slug).
+- Conversation (`fire(..., reply_to=<thread message id>)`, `POST .../run {text, reply_to}`, a Telegram reply to an
+  agent result via `remember_telegram` / `telegram_reply_to`): the run's session gets the message
+  (`service.send_message`, `run` message with `reply_to`, `continued: true`); a new `manual` / `telegram` / `agent:`
+  start gets `context()` = the last `CONTEXT_RESULTS` (3) results, `CONTEXT_CHARS` (500) each, between `THREAD-<hex>`
+  markers; cron / feed runs get nothing. `POST .../seen` (`mark_seen`), `POST .../triggers/{tid}/test` (a sample feed
+  event on the trigger's source), `agents.trigger_stats` (received count + last per webhook trigger).
+- Loop guard: from an agent turn (`MAXXING_AGENT`), `maxxing feed post` refuses (exit 2) a source one of its own feed
+  triggers watches (`cmd_feed._self_trigger`).
+- `agents.tidy(path)`: archives the agent's finished sessions that were read (session `seen_at` or thread `seen_at` >=
+  `finished_at`) and the unread ones beyond `KEEP_UNREAD` (5), never running or unread failed ones; run on `seen` and
+  before each `fire`, not when a session is opened. A new message unarchives as usual.
+- Outside runs and keys: `fire(text=...)` sets `MAXXING_AGENT_OUTSIDE=1`; `run_settings(path, outside)` forces
+  approvals then unless `trust_outside` (`approvals_forced`). `keys` (vault names, max 50) = the only vault entries a
+  turn of the agent gets (none by default, exposed or not); `maxxing keys get` inside such a turn answers only for
+  them, `set` / `delete` are refused (a speed bump, not a wall: a bypass turn as root could read `secrets.json`).
+- Approvals on Telegram: `gateway.notify_approval(d)` posts a pending request in the agent's thread (option
+  `telegram`) else in Alerts, buttons `p:<id>:allow|deny` (`_on_approval`); `approval_done(id, status)` edits the
+  message wherever the answer came from (message ids in memory: after a restart an old button answers "already" and
+  is removed).
+- Gallery: `maxxing/agent_templates.py` (support, sales, orders, watch, pr-review, writer, uptime, feedback; en + fr,
+  other languages get en), every template `permission_mode: default` + a short `allowed_tools` list (`READ` =
+  `Read, Grep, Glob, Edit(./memory.md)` + what the role needs); `GET /api/agents/templates`, `maxxing agents
+  templates`, `create --template` (`fields(t, keys_present)`: keys kept only when the vault has them).
+- Per-run budget: `run_settings` adds `--max-budget-usd <usd_per_day - day_cost, min 0.01>` when the agent has a
+  daily budget, so Claude Code stops a turn that reaches it.
+- Sandbox (`maxxing/agent_guard.py`, `sandbox: true` for agents created from this version, missing = false for older
+  agent.json): one `--settings` merged by `spawn.settings_args` (`sandbox.enabled`, `failIfUnavailable`,
+  `allowUnsandboxedCommands: false`, `filesystem.denyRead` + `permissions.deny` Read/Edit on `secret_paths()`,
+  `allowWrite` agent folder + `writable`, `network.allowedDomains` = `domains`, `excludedCommands: ["maxxing:*"]` +
+  `permissions.allow Bash(maxxing:*)` - a bare `"maxxing"` does not match); `--add-dir` per writable folder; mode never
+  bypass (`agent_guard.mode`: bypass -> acceptEdits, Claude Code ignores the domain list in bypass). The `maxxing` CLI
+  run from a sandboxed turn (found by its cgroup `maxxing-<sid8>.service`, `sandboxed_turn()`) accepts only
+  `CLI_ALLOWED` (feed post|list, agents send|show|list|templates, keys get|list, status). `available()` = bwrap +
+  socat + the AppArmor profile `/etc/apparmor.d/bwrap-maxxing` when `kernel.apparmor_restrict_unprivileged_userns=1`;
+  unavailable -> the runner fails the turn before Claude starts (`SANDBOX_ERROR`). `maxxing agents sandbox-setup`
+  (`setup()`, root, apt), `GET /api/agents/sandbox`, doctor check `agent-sandbox` (only when an enabled sandboxed
+  agent exists), installer: `bubblewrap socat` in `TOOL_PKGS` + `agent_sandbox_profile`. Tests:
+  `MAXXING_SANDBOX_CHECK=0`.
+- Rules (`rules: [{tool: Bash|Write|Edit|WebFetch|*, match, reason}]`, max 20): `hooks.PreToolUse` = `<python> -m
+  maxxing.agent_guard hook <agent path>` (`check_rules`, deny + reason), every mode.
+- Claude Code format (`maxxing/agent_format.py`): `export_md` / `parse_md` / `import_md` (`GET .../export`, `POST
+  /api/agents/import`, `maxxing agents export|import`; unknown fields listed in `ignored`, an import is sandboxed and
+  has no trigger); `subagent: true` -> `subagents_args(topic_path)` adds `--agents <json>` to the topic's own sessions
+  (prompt = role + "read <folder>/memory.md first, write there only what changes your next work, never a task log").
+- Continue in Sessions (`agents.continue_in_sessions`, `POST .../runs/{sid}/continue`): a new session of the topic
+  (`from_agent: {path, session}`, title kept, `source: "web"`) with the run's log copied and its Claude transcript
+  copied to the topic's project folder under the same `csid` (resumed from there; no transcript -> fresh); `409
+  busy` while the run is running.
+- UI: Agents page apart from Sessions (`features/agents/`, `AgentsLayout` with its own list,
+  `/agents/:p/:t/:a`, runs opened in place at `/agents/:p/:t/:a/runs/:sid`, links to an agent session redirected
+  there); agents and their runs no longer show in the Sessions lists. Overview = one section per project, one card
+  per agent (`pixels.ts`, 16x16 character from 6 parts: `color` = a UI accent, `skin`, `hair`, `hair_color`, `face`,
+  `accessory`; old values mapped by `agents._OLD_AVATAR`, unknown ones = a stable pick from the name; outfit default
+  = `agents.project_color` = web `projectColor`, FNV-1a % 6). Sessions sidebar: `Tree.tsx` `TopicAgents` = up to 2
+  chips (face, name, state dot) under a topic row, `+N` -> `/agents?topic=<p>/<t>`, only with `agents_page` on.
+- UI: Agents list (`AgentsList.tsx`) always grouped by project (workspace order); the state grouping became filter
+  chips (All / waiting / to read / running / active / off with counts, empty ones hidden, not persisted); the
+  `mx-agents-grouping` localStorage key is no longer read. Aside order: search, New agent, Office entry (`nav` prop,
+  also on touch -> new route `/agents/office`), filter, list. Office = `AgentsOverview` with a view switch
+  (`mx-agents-office-view`, `classic` by default, see Office views below). `statusOf` / `Status` moved to `parts.tsx`. i18n: removed
+  `agents.side.{overview,grouping,byState,byProject}`, added `agents.side.{filter,all}`, `agents.office.*`.
+- Office views: the Segmented became a menu (`ViewMenu` in `AgentsPage.tsx`: current view icon + name; radio items,
+  separator, "Create my custom view" -> `draftUrl(projects/general/topics/inbox | first non-system topic,
+  agents.office.customPrompt)`). `mx-agents-office-view` = `classic` | `future` | `x:<extension id>` (an old
+  `game` reads as `future`); an `x:` view whose extension is gone / off / in error renders Classic without rewriting
+  the key. Space (id `future`) = `OfficeFuture.tsx` (one bay per project sized by its agents, 2-5 columns, SVG pixel
+  hover consoles at 4 px per pixel, 3 on phones, holo screens that never move, free console -> creation sheet on the
+  bay's main topic; `mx-game-*` / `mx-future-*` keyframes in `globals.css`); what a pixel view needs is in `office.tsx` (`useRoom`, `useDesk`, `Cursor`, `hash`, `colsFor`); `pixels.avatarSvg()`.
+- Extension Office views: manifest `"agents_view": true | {"name"?: str | {lang: str}, "icon"?}` + `agents-view.html`
+  (`extensions._agents_view`, errors on the extension: missing file, bad value; new type `"view"` = only that,
+  requires `agents_view`; `agents-view.html` in the hot-reload signature). `/api/extensions` items get
+  `agents_view: {name, icon} | null`. Routes `/ext/{id}/agents-view-frame` (same document, CSP sandbox and UI kit
+  as `widget-frame`, `api.extensions._frame`) and `/ext/{id}/agents-view.html` (GET/HEAD, raw). `WIDGET_BRIDGE`
+  gains `maxxing.data`, `onData(fn)`, `app(path, {query})` and `navigate(route)`; web `HtmlWidget` takes `frame`,
+  `maxHeight`, `className` and `host: {reads, routes, data}`: `app` answers only exact paths of `reads` (GET), else
+  an error reply; `navigate` only routes whose resolved pathname is under `routes` (same origin, no `.`/`..` segment,
+  no `%2e`/`%2f`/`%5c`, backslash or spaces); `data` posted on load and
+  on change. The dashboard passes no host (app refused, navigate ignored). `OfficeCustom.tsx` = host with reads
+  `/api/agents/layout` only (the raw `/api/agents` holds trigger prompts and key names), routes `/agents`, data = `{lang, new_agent_route, projects: [{name, emoji,
+  color, agents: [{path, project, topic, name, display_name, description, enabled, model, status, status_text,
+  running, waiting, unread, cost_today, last_run (text <= 300 chars), avatar, avatar_svg, route}]}]}` (pushed again
+  only when its JSON changes). Docs: `13-page-extensions.md` "Office views", skill `maxxing-extension`. Tests
+  `test_agents_view`, `test_editing_agents_view_html_is_seen_by_the_hot_reload`.
+- Layout of the Agents page, shared by every device: `<state>/agents/layout.json` = `{projects: [name], colors:
+  {project: color}, agents: {project: [agent path]}}` (`agents.load_layout` tolerant, `save_layout` strict ->
+  `400 bad_layout`; colours = `AVATAR["color"]`, 500 projects / 500 agents per project max; unknown fields of the
+  file kept, of the request dropped; a project / topic rename rewrites it in `agents.remap`). `GET/PUT
+  /api/agents/layout`, bus `agents`. `agents.project_color` honours the picked colour (outfit of new agents, CLI
+  included). Order: listed projects first then workspace order; listed agents first then topic, name. Web:
+  `features/agents/layout.tsx` = `useAgentsLayout()` (sort, `colorOf`, moves; used by `AgentsList`, Classic and
+  Space), `useProjectColorOf()` (creation form, `AvatarEditor`; `randomAvatar(color)` now takes a colour),
+  `useReorder` (HTML5 drag and drop, off on touch; an agent drops only in its project; `DropBar` indicator),
+  `ProjectMenu` (Move up / down + 6 swatches); queries `useAgentsLayoutData` / `useSaveAgentsLayout` (optimistic).
+  i18n `agents.layout.*`. Fix: the creation sheet's first step now starts on the topic it was opened with (the free
+  desk of a room).
+- `web/src/pages/pageData.ts`: `staleTime` accepts a function (the type broke `tsc -b` after the file kind query
+  change of a111).
+
 ## 2.0.0-alpha.112 - 2026-11-04
 
 - `download.ts`: the Blob shortcut for images up to 20 MB (`fromCache`, `BLOB_MAX`) is gone: the viewer shows

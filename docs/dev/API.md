@@ -75,8 +75,10 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 
 ```
 Project = {name, path, description, topics:[Topic], session_count}
-Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null}
+Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null, agents:[Agent]}
 ```
+`Topic.agents` = the agents of the topic (`[]` when none, see [Agents](#agents)); a session `path` may be an agent path
+`projects/<p>/topics/<t>/agents/<a>` (3rd level: same rules as a topic path).
 Names: `^[a-z0-9][a-z0-9-]{0,47}$` (slug); the UI slugifies the label. Description goes into the CLAUDE.md header.
 
 ## Sessions
@@ -99,7 +101,8 @@ Session = {
   error: string|null,
   plan_mode: bool,                    // turns run read-only (`--permission-mode plan`) and end with a plan
   permission_mode: string,            // set by its cron ("" = the topic's, else the global mode)
-  plan_ready: bool                    // a plan-mode turn finished OK: its plan waits for POST /plan/approve
+  plan_ready: bool,                   // a plan-mode turn finished OK: its plan waits for POST /plan/approve
+  approvals: int                      // tool calls waiting for the user's Allow / Deny (agent with `approvals`)
 }
 ```
 | GET | `/api/sessions?path=&archived=0\|1` | – | `[Session]` sorted by `updated` desc (no path = all) |
@@ -242,6 +245,12 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | POST | `/api/telegram/test` | – | sends a test message and checks the receiving side → `{ok, sent, poller:{running, last_poll_ok, last_poll_age, error, error_code}, webhook:{url, pending_updates, last_error}\|null, problems:[string]}` (`ok` = sent and no problem: poller stopped or in error, no getUpdates for 5 min, webhook set) · `409 not_linked` · `502 telegram_error` (not sent; same fields) |
 | DELETE | `/api/telegram` | – | unlink + forget token, threads and the Telegram sessions map |
 
+Agent threads (agent.json `telegram: true`): `config.telegram.agent_threads = {agent path: {tid, name}}`, one permanent
+thread per agent named `🤖 <display name> · <project>/<topic>`, created on its first result, renamed when the name
+changes, never deleted by the session sync, deleted with the agent. A message there = `agents.fire(trigger:
+"telegram")` (the bot answers "⏳ <name> is on it." or why it did not start); threads off: results go to the main
+chat with `🤖 <name>` in front.
+
 ## Backup
 | GET | `/api/backup` | – | `{configured, repo, private:bool\|null, schedule, include:[glob], always:[glob], last:{at, ok, commit, files, error}\|null}` (`always` = CLAUDE.md/memory.md globs, always included) |
 | POST | `/api/backup/config` | `{repo:"owner/name", token, create?:bool}` | verifies access/private/push (creates the private repo if asked; token may be omitted to keep the stored one) → `{ok, private, created?, warning?, error?}`; on success creates/updates the "Memory backup" cron job; `ok:false` while a backup or restore runs |
@@ -267,7 +276,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 Claude Code's MCP servers (maxxing/mcp.py), shown in Settings -> MCP. Bus topic `mcp`.
 ```
 McpServer = {id:"<scope>|<folder>|<name>", name, scope:"user"|"local"|"project",
-  where:{rel:"projects/acme/topics/ads"|null, project, topic, exists, path:"/abs/folder"|null},
+  where:{rel:"projects/acme/topics/ads"|null, project, topic, agent (an agent folder: projects/*/topics/*/agents/*), exists, path:"/abs/folder"|null},
   type:"http"|"sse"|"stdio", url?, command?, args?, headers?, env?,   (secrets shown as "•••": every header / env
     value that is not only ${KEY} references (an auth scheme word aside; Content-Type, Accept... stay), the
     user:password and query values of url)
@@ -357,6 +366,106 @@ Zip layout and merge rules: `server/maxxing/importer.py` and docs/user/21-import
 | POST | `/api/import/upload` | multipart `file` (≤ 600 MB) | preview, writes nothing → `{id, name, projects:[{name, exists, topics:[{name, source, files, exists}]}], skills, aside, root_memory, files, size, skipped:[{file, reason}], secrets:[{file, kinds}], renamed:[{from, to}]}` · `400 bad_zip\|empty` · `413 too_big\|too_many_files` |
 | POST | `/api/import/{id}/apply` | – | imports (never overwrites: memory/CLAUDE.md get an "## Imported" section, other files `<name> (imported)`, skills `<name>-imported`; files with secrets refused; Claude Code settings and Harness folder settings `.maxxing.json` / `.order.json` refused; a file whose place is taken by a folder, sits behind a file, or would be written through a link leading out of the workspace is added to `skipped` and the import goes on) → `{ok, projects, topics, files, merged, renamed, skills, aside, secrets, skipped, folder, report, finish_prompt}` · `400 bad_zip` · `404 not_found` (expired, 24 h) · `409 busy` (another import is being applied) `\|conflict` |
 | DELETE | `/api/import/{id}` | – | forgets an upload → `{ok}` |
+
+## Agents
+
+Settings -> Features -> Agents (`agents_page`, off by default): every route below answers `404 feature_off` while it
+is off. An agent = a folder `projects/<p>/topics/<t>/agents/<a>/` (CLAUDE.md role + memory.md + agent.json, see
+INTERNALS.md#agents); its path is a session path. Every trigger goes through `agents.fire()` (guards: `enabled`,
+`limits.usd_per_day`, `limits.runs_per_hour`, hops) and starts a NEW session (`source: "agent"`, `cron: true`).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], skin: [..], hair: [..], hair_color: [..], face: [..], accessory: [..]}}` (the pixel-art character's parts; `color` = an accent colour of the UI, unknown or missing values = a stable pick from the agent's name) |
+| GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
+| POST | `/api/agents` | `{topic_path, name, display_name?, description?, ...AgentFields}` | `Agent & Status` · `400 bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
+| GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob], webhooks: [{id, name, kind, url, has_secret}], trigger_stats: {<trigger id>: {events, last_event_at}}}` (cron jobs whose `topic_path` is the agent path; the feed hooks behind its webhook triggers, never their secret; events of each feed trigger's source over the feed retention) · `404` |
+| PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
+| DELETE | `/api/agents/{p}/{t}/{a}` | – | `{ok}`: folder + sessions to the Trash, its cron jobs deleted, its thread, state and Telegram thread dropped · `409 has_running_sessions` |
+| GET | `/api/agents/{p}/{t}/{a}/thread?limit=100&before=<at>` | – | `{messages: [AgentMessage]}` oldest first (the Activity tab) |
+| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?, reply_to?}` | `{started: true, session: Session, continued?: true}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed). `reply_to` = a thread message id: its session goes on with the text (`continued`, no new session; a gone session -> a new one). A new session gets the last 3 results of the thread as framed context |
+| POST | `/api/agents/{p}/{t}/{a}/seen` | – | `{ok}`: the thread is read (`thread_unread` 0) and the finished, read runs are archived (`agents.tidy`) |
+| POST | `/api/agents/{p}/{t}/{a}/triggers/{tid}/test` | – | `{event: FeedEvent}`: a sample feed event on the trigger's source (its first level, its `match` words), so the agent starts as for a real one · `404 not_found` |
+| POST | `/api/agents/{p}/{t}/{a}/webhook` | `{kind: "generic"\|"stripe"\|"shopify"\|"github", prompt?, levels?, match?}` | `{agent, hook: FeedHook}`: a feed hook named `<topic>-<agent>` + a feed trigger on its source |
+| GET | `/api/agents/layout` | – | `AgentsLayout = {projects: [name], colors: {project: color}, agents: {project: [agent path]}}`: the order and project colours picked by hand on the Agents page (`<state>/agents/layout.json`, the same on every device; missing = default order: projects in workspace order, agents by topic then name, colour = a stable pick from the name). Names that no longer exist are kept; the UI sorts listed ones first, then the rest in the default order |
+| PUT | `/api/agents/layout` | `AgentsLayout` (each key optional, the whole layout is replaced) | `AgentsLayout` · `400 bad_layout` (not a project name, a colour outside `avatar.color`, an agent path of another project, more than 500 projects or 500 agents per project). Bus `agents`; the colour of a project is also the outfit of its new agents (`agents.project_color`) |
+| GET | `/api/agents/sandbox` | – | `{ok, missing: ["bwrap"\|"socat"\|"apparmor"\|"linux"]}`: what Claude Code's sandbox needs on this server (`agent_guard.available`) |
+| POST | `/api/agents/import` | `{topic_path, markdown, name?}` | `Agent & Status & {ignored: [string]}`: a Claude Code agent file (`agent_format.parse_md`) made an agent (sandbox on, no trigger) · `400 bad_file` + the create errors |
+| GET | `/api/agents/{p}/{t}/{a}/export` | – | `text/markdown` attachment `<a>.md`: the agent as a Claude Code agent file |
+| POST | `/api/agents/{p}/{t}/{a}/runs/{sid}/continue` | – | `{session: Session}`: a copy of run `sid` as a normal session of the topic (`from_agent: {path, session}`), its log copied and its Claude transcript copied to the topic's project folder (same `csid`, resumed from there) · `404 not_found` (not a run of this agent) · `409 busy` |
+| POST | `/api/agents/{p}/{t}/{a}/crons` | `{name?, schedule?, prompt?, enabled?}` | `CronJob` (`kind: "claude"`, `topic_path` = the agent path, `notify: "never"`) |
+
+```
+AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?: ""|"bypass"|"acceptEdits"|"default",
+               allowed_tools?: [string], disallowed_tools?: [string], telegram?: bool, approvals?: bool,
+               trust_outside?: bool, keys?: [string] (vault names, max 50; 400 bad_key), limits?: Limits,
+               triggers?: [Trigger], sandbox?: bool, domains?: [host] (max 50), writable?: [folder] (max 20),
+               rules?: [Rule] (max 20), subagent?: bool}
+               approvals: every run asks before risky tools; a run started by outside text (feed / webhook event,
+               another agent, `run --data`: session env MAXXING_AGENT_OUTSIDE=1) asks unless trust_outside.
+               keys: the only vault entries its runs get as env vars (none by default, exposed or not).
+Agent  = {path, project, topic, name (folder slug), display_name, description, avatar: Avatar, enabled, model,
+          permission_mode, allowed_tools, disallowed_tools, telegram, approvals, trust_outside, keys, limits: Limits,
+          triggers: [Trigger], sandbox: bool (false when missing: agents made before the sandbox; true for new ones),
+          domains: [host] (sandbox network allow list, "*.x" ok), writable: [folder of the topic, "." = all],
+          rules: [{tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match, reason}], subagent: bool,
+          created, session_count, archived_count, running, unread}
+Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
+          (last result or skip), running_now: int, running_sessions: [{id, title, started}],
+          thread_unread: int (results after the last `seen`), waiting: int (approval requests pending)}
+Rule   = {tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match: string, reason: string}
+Avatar = {color (outfit), skin, hair, hair_color, face, accessory}   each one of the names listed by GET /api/agents (unknown -> default)
+Limits = {usd_per_day: 2.0 (0 = none), runs_per_hour: 6 (0 = none), timeout_s: 1800, debounce_s: 60,
+          approval_timeout_s: 1800}
+Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [info|success|warning|error] ([] = all),
+           match (substring of title / body, "" = any), prompt, hook_id? (the feed hook made for it)}
+AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
+                trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
+                session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note),
+                reply_to?: message id (run that continued a session)}
+```
+Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:
+`maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent> | templates |
+create <p>/<t>/<a> | show | cron | webhook | watch | export <agent> | import <file> --topic <p>/<t> | sandbox-setup`
+(docs/user/17-cli-reference.md). The working directory of an agent turn is the agent folder.
+
+## Sandbox, rules, subagents (agent_guard.py, agent_format.py)
+
+A turn in an agent folder gets one `--settings` (spawn.settings_args merges the server deny rules with
+`agent_guard.settings`): with `sandbox`, `sandbox: {enabled, allowUnsandboxedCommands: false, failIfUnavailable: true,
+autoAllowBashIfSandboxed: true, excludedCommands: ["maxxing:*"], filesystem: {denyRead: secret_paths(), allowWrite:
+[agent folder, writable...]}, network: {allowedDomains: domains}}` + `permissions.deny` Read/Edit on the same secret
+paths (the sandbox covers shell commands only) + `permissions.allow` `Bash(maxxing:*)` (an excluded command still needs a
+permission, else it runs inside) and `WebFetch(domain:<d>)`; `--add-dir` per writable folder; the mode is never
+bypass (`agent_guard.mode`: Claude Code lets every domain through in bypass -> acceptEdits). Sandbox unavailable
+(`available()`: bwrap, socat, AppArmor profile when kernel.apparmor_restrict_unprivileged_userns=1) -> the turn
+fails before Claude starts. With `rules`: `hooks.PreToolUse` = `<python> -m maxxing.agent_guard hook <agent path>`
+(deny + reason). The `maxxing` CLI refuses everything but `CLI_ALLOWED` when its process belongs to the systemd unit
+`maxxing-<sid8>` of a session in a sandboxed agent folder (`/proc/self/cgroup`, not an env var the turn could
+change). A session in a topic gets `--agents <json>` with the topic's agents that have `subagent` on
+(`agent_format.subagents`). Tests: `MAXXING_SANDBOX_CHECK=0` skips the availability check.
+
+## Approvals
+
+A turn of an agent with `approvals: true` runs in permission mode `default` with
+`--permission-prompt-tool mcp__maxxing-approval__approve` (`maxxing/approval_mcp.py`, a stdio MCP server started by
+Claude Code): every tool call that is not pre-allowed (`allowed_tools`) waits for the user. Bus topics `approvals` +
+`sessions` on every new / decided request. A request nobody answers is denied after the agent's
+`limits.approval_timeout_s` (default 1800 s); a stopped turn marks its requests `expired`. A run started by outside text
+(`MAXXING_AGENT_OUTSIDE=1`) asks too unless `trust_outside`. With Telegram linked, each pending request is also posted
+(agent thread when its `telegram` option is on, else Alerts) with Allow / Deny buttons (callback `p:<id>:allow|deny`,
+decided with `by: "telegram"`); the message is edited when the request ends, wherever it was answered.
+
+```
+Approval { id: string (16 hex), session: string, agent_path: string, tool: string, input: object (clipped, secrets
+           redacted), summary: string ("Bash: git push"), at: number, expires: number,
+           status: "pending"|"allow"|"deny"|"timeout"|"expired", message: string, decided_at: number|null }
+```
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/approvals?session=<sid>` | – | `{approvals: [Approval]}` waiting ones, oldest first |
+| POST | `/api/approvals/{id}` | `{decision: "allow"\|"deny", message?}` | `Approval` (`404 not_found`, `409 not_pending` when answered, timed out or expired) |
 
 ## Docs
 | GET | `/api/docs` | – | `[{slug, title, section, order}]`; `?full=1` adds `markdown` to every page (full-text search, one request) |
@@ -463,20 +572,22 @@ Block =
 | GET | `/api/dashboard` | – | `{widgets:[{id, title, icon, span:1\|2\|3, source:"builtin"\|"extension", card:Card\|null, error:string\|null, hidden:bool, pending?:true}]}` — hidden widgets are listed with `card:null` so the UI can show them again; a widget still computing after 1.5 s comes as `pending:true` (fetch it with the route below, which joins that computation); the `crons` and `day` cards are reused while jobs.json, runs.jsonl, the job locks and config.json are unchanged (10 s at most); `?force=1` recomputes everything |
 | GET | `/api/dashboard/widgets/{id}?force=1` | – | one widget (refresh) |
 | PUT | `/api/dashboard/layout` | `{order:[id], hidden:[id]}` | `{ok}` |
-| GET | `/api/extensions` | – | `[{id, name, type:"widget"\|"page", icon, version, enabled, error, has_api, pinned, page_v}]` (pinned: page shown in the sidebar; page_v: page.js mtime in ms, the UI imports `page.js?v=<page_v>` so the module is reused until the file changes) |
+| GET | `/api/extensions` | – | `[{id, name, type:"widget"\|"page"\|"view", icon, version, enabled, error, has_api, pinned, page_v, agents_view}]` (pinned: page shown in the sidebar; page_v: page.js mtime in ms, the UI imports `page.js?v=<page_v>` so the module is reused until the file changes; agents_view: `{name, icon}` in the UI language when the extension brings an Office view of the Agents page and is not in error, else null) |
 | PATCH | `/api/extensions/{id}` | `{enabled?, pinned?}` | `{ok}` (`pinned` on a widget -> 400 `not_a_page`) |
 | POST | `/api/extensions/reload` | – | rescans `<workspace>/extensions` |
 | ANY | `/api/ext/{id}/{path}` | – | forwarded to the extension's `api.py` `handle()`: return value → JSON, `(status, body)` tuple sets the status, `ValueError` → 400, `LookupError` → 404, other → 500 `extension_error`, 30 s timeout (504 `extension_timeout`), 503 `extension_busy` at once while an earlier timed-out `handle()` of the same extension has not returned, or when the 4 extension threads are all still running earlier calls. A `.` / `..` segment in `path` → `400 bad_path` |
 | GET | `/ext/{id}/page.js` | – | page module (ES module) |
 | GET | `/ext/ui-kit.css` | – | the UI kit of extensions (`server/maxxing/assets/ui-kit.css`): `ui-*` classes scoped to `.mx-ext` (page host) and `[data-mx-kit]` (widget frame), built on the theme variables; the app adds it once when a page extension opens; `ETag` (content hash), `If-None-Match` -> `304` |
 | GET | `/ext/{id}/widget-frame` | – | HTML widget document: the bridge (`maxxing.api / resize / theme`, theme from the URL fragment) + the UI kit inlined (`<html data-mx-kit>`) + `widget.html`, `Content-Security-Policy: sandbox allow-scripts allow-pointer-lock` (the UI frames it with the same sandbox; an srcdoc frame would inherit the app's script policy). `/ext/{id}/widget.html` stays the raw file (text/plain) |
+| GET | `/ext/{id}/agents-view-frame` | – | an Office view of the Agents page: the same document as `widget-frame` (bridge, UI kit, CSP sandbox) with `agents-view.html`; 404 when the extension declares no `agents_view`, is off or in error. `/ext/{id}/agents-view.html` (GET, HEAD) = the raw file. The bridge also has `maxxing.data / onData / app / navigate`, answered only by the page that frames a view (web `HtmlWidget` `host`): pushed Office data, GET of `/api/agents/layout` only, routes under `/agents` only (checked on the resolved pathname) |
 
 The app page (`index.html`) is served with `script-src 'self'` plus the hashes of its inline boot scripts
 (`app._app_csp`): a page extension's `page.js` runs in the app, so it may not inject inline `<script>` nor use
 `eval` / `new Function` (load code as modules from its own folder).
 
 Extension folder: `<workspace>/extensions/<id>/manifest.json`
-`{"id", "name", "type":"widget"|"page", "icon":"<lucide name>", "version", "span"?, "ttl"?: seconds}` +
+`{"id", "name", "type":"widget"|"page"|"view", "icon":"<lucide name>", "version", "span"?, "ttl"?: seconds, "agents_view"?: true | {"name"?: str | {lang: str}, "icon"?}}` +
+`agents-view.html` (with `agents_view`; `type: "view"` = only that) +
 `api.py` (widget: `def card(ctx) -> dict` returning a Card; page/API: `def handle(ctx, method, path, query, body) -> dict`) +
 `page.js` (page: `export function mount(el, ctx) { …; return () => cleanup }`, `ctx = {api(path, opts), navigate, theme, lang, t, icon(name, {size?, className?}) -> <svg>}`).
 
@@ -499,7 +610,7 @@ Built-in card links are SPA routes: `/sessions/<id>`, `/sessions`, `/tasks?task=
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/stats/tokens?force=1` | – | `{totals, projects:[{name, …}], topics:[{path, …}], sessions:[{id, title, path, archived, updated, …}] (top 100), days:[{date, tokens, cost_usd}] (90 days), latency:{start_s, first_answer_s, turns}, at}` (latency: medians over the last 20 turns of every session: seconds from starting `claude` to its first event / first answer); each group has `input, output, cache_read, cache_write, total, cost_usd, turns, sessions` (sorted by `total`; project `""` = workspace root). Cached 20 s |
+| GET | `/api/stats/tokens?force=1` | – | `{totals, projects:[{name, …}], topics:[{path, label ("acme / blog", "acme / blog / Writer" for an agent folder), agent (display name or null), …}], sessions:[{id, title, path, archived, updated, …}] (top 100), days:[{date, tokens, cost_usd}] (90 days), latency:{start_s, first_answer_s, turns}, at}` (latency: medians over the last 20 turns of every session: seconds from starting `claude` to its first event / first answer); each group has `input, output, cache_read, cache_write, total, cost_usd, turns, sessions` (sorted by `total`; project `""` = workspace root). Cached 20 s |
 
 ## Feed (notifications)
 `FeedEvent = {id, at, source, level: "info"|"success"|"warning"|"error", title, body, url, count, read}` (`count` > 1 =

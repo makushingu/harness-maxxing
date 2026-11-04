@@ -1,6 +1,6 @@
 ---
 name: maxxing-extension
-description: Build a Harness Maxxing extension - a dashboard widget (a Card with stats, lists, charts, or a free-form HTML widget such as a game or canvas) or a full page with its own API - in <workspace>/extensions/<id>/. Use when the user asks for a new widget, a dashboard card, a mini-game, a custom page, an integration shown in the UI, or to fix an existing extension. Always the first choice before touching the product code.
+description: Build a Harness Maxxing extension - a dashboard widget (a Card with stats, lists, charts, or a free-form HTML widget such as a game or canvas), a full page with its own API, or a custom view of the Office of the Agents page - in <workspace>/extensions/<id>/. Use when the user asks for a new widget, a dashboard card, a mini-game, a custom page, an integration shown in the UI, or to fix an existing extension. Always the first choice before touching the product code.
 ---
 
 # Extensions (widgets & pages)
@@ -16,6 +16,8 @@ Extensions live in `<workspace>/extensions/<id>/` (workspace from `maxxing statu
 - **page**: `manifest.json` + `page.js` (ES module, `mount(el, ctx)`) + optional `api.py` with
   `handle(ctx, method, path, query, body)` served at `/api/ext/<id>/<path>`. Listed under
   "Extensions" in the sidebar; the user can pin it to get its own entry.
+- **Office view** (Agents page): `manifest.json` (`"type": "view"`, `"agents_view": {...}`) + `agents-view.html`. Listed
+  in the view menu of the Office; draws the agents its own way. See "Office view" below.
 
 ## Built-in Shopify widget
 "Connect my Shopify store" needs no extension: guide the user to create a custom app in Shopify admin
@@ -30,6 +32,7 @@ build extra widgets: they sit next to it on the dashboard.
 | numbers, lists, charts, status from some data source | widget with `card(ctx)` |
 | a mini-game, a canvas, an interactive or custom-drawn card | HTML widget |
 | a whole screen (form, board, editor, report) | page |
+| another look for the Office of the Agents page ("Create my custom view") | Office view |
 | to change how the product itself behaves (a server rule, a CLI command…) and no extension can do it | a **core customization**: skill `maxxing-customize` - never edit the code directory without it |
 
 Extensions survive every update untouched. Say so to the user: they never need to wait for the
@@ -211,6 +214,35 @@ Copy `<code dir>/examples/extensions/snake-widget/` (a working game) and adapt i
   served: inline CSS/JS, or load a library from a CDN with an absolute https URL.
 - Keyboard games: make the canvas focusable (`tabindex="0"`) and start on click; add touch/swipe
   for phones.
+
+## Office view - `extensions/mission-control/`
+A view of the Office (the overview of the Agents page), listed in its view menu after Classic and Space.
+`manifest.json`
+```json
+{"id": "mission-control", "name": "Mission control", "type": "view", "icon": "radar", "version": "1.0.0", "api": 1,
+ "agents_view": {"name": {"en": "Mission control", "fr": "Contrôle de mission"}, "icon": "radar"}}
+```
+(`"agents_view": true` = the extension's name and icon; a widget or a page may also declare one.) `agents-view.html` =
+one self-contained file in the same sandboxed frame as an HTML widget (same `maxxing.api / resize / theme / onTheme`,
+UI kit and theme variables, no cookies or storage), plus:
+- `maxxing.onData(fn)` (called at once, then at every change; also `maxxing.data`) with
+  `{lang, new_agent_route, projects: [{name, emoji, color, agents: [Agent]}]}` - projects and agents already in the
+  user's order, `color` = the project colour (hex). Agent = `{path, project, topic, name, display_name, description,
+  enabled, model, status: "running"|"waiting"|"unread"|"failed"|"off"|"idle", status_text (UI language), running,
+  waiting, unread, cost_today, last_run: {at, kind, ok, text}|null, avatar, avatar_svg, route}`. `avatar_svg` = the
+  agent's 16x16 pixel character as SVG markup: `img.src = "data:image/svg+xml," + encodeURIComponent(a.avatar_svg)`
+  with `image-rendering: pixelated`, sizes in multiples of 16.
+- `maxxing.navigate(a.route)` opens an agent; `maxxing.navigate(data.new_agent_route)` = New agent (only routes of the
+  Agents page).
+- `maxxing.app("/api/agents/layout")`: read-only GET of the raw order and colors (every other path is refused); use
+  `onData` first, it is live and has everything a view needs.
+Rules: render from `onData` every time (it is called again on each change, rebuild or diff, never append), use
+`textContent` for names and texts, show every state (`waiting` = needs the user, `unread` = new results, `failed`,
+`off`), make every agent clickable (also with the keyboard: a `<button>`), `maxxing.resize(document.body.scrollHeight)`
+after each render, light and dark (`maxxing.theme` + theme variables), a phone width (~360 px), and
+`@media (prefers-reduced-motion: reduce)` stops animations. Ask the user the style they want (a mission control, a
+farm, a train station, a plain table…) before building it. Then: **Settings -> Extensions -> Reload**, Agents ->
+Office -> the view menu -> its name.
 
 ## Steps
 1. Ask what to show, where the data comes from, refresh rate, which secrets are needed.
