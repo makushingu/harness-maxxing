@@ -506,8 +506,8 @@ def status() -> list[dict]:
         have = inst["version"]
         if have is None:
             state = "missing" if wanted(name) else "not installed"
-        elif c.get("update") == "self":
-            state = "ok"                                # Claude Code updates itself: any version is fine
+        elif c.get("update") == "self" or name == "dokploy":
+            state = "ok"                                # Claude Code, Dokploy update themselves: any version is fine
         elif name == "chromium" and want:
             revs = set(want.split(", "))
             ok = all((browsers_dir() / f"chromium-{r}").is_dir() for r in revs)

@@ -244,3 +244,12 @@ def test_public_ports_ignore_loopback(monkeypatch):
            "LISTEN 0 4096 [::1]:2019 [::]:*\nLISTEN 0 4096 [::]:443 [::]:*\n")
     monkeypatch.setattr(cmd_core, "_run_ok", lambda cmd: (True, out))
     assert cmd_core._public_tcp_ports() == {3000, 443}
+
+
+def test_deps_status_trusts_the_dokploy_version_it_runs(monkeypatch):
+    from maxxing import deps
+    real = deps.installed
+    monkeypatch.setattr(deps, "installed", lambda n: {"version": "v0.31.0", "where": "docker service dokploy",
+                                                      "managed": False, "detail": ""} if n == "dokploy" else real(n))
+    row = next(r for r in deps.status() if r["name"] == "dokploy")
+    assert row["state"] == "ok"                                    # updated from Dokploy's UI: not "outdated"

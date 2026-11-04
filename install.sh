@@ -709,6 +709,12 @@ preflight() {
     apply) ok "SSH: this session uses a key - password logins will be turned off (open sessions stay connected; SSH_HARDEN=0 keeps them)" ;;
     *)     info "SSH: ${sp#skip:}" ;;
   esac
+  if [ "$DOKPLOY" = 1 ] && [ "$DOKPLOY_FOUND" = 0 ]; then
+    local why
+    why=$(dokploy_refusal)
+    if [ -n "$why" ]; then warn "DOKPLOY=1: refused - $why"
+    else ok "DOKPLOY=1: Dokploy$(v=$(dep dokploy version 2>/dev/null) && printf ' %s' "$v") will be installed (Docker Swarm + Traefik on 80/443, its UI on 3000)"; fi
+  fi
   if [ "$EXISTING" = 0 ]; then
     ok "fresh server: nothing else runs here"
     return 0
@@ -723,12 +729,6 @@ preflight() {
     0:*)     warn "firewall: not enabled, it could cut these services off (to force it: FIREWALL=1 install.sh --secure)" ;;
   esac
   [ "$HAS_DOCKER" = 1 ] && info "Docker found: its published ports bypass ufw - the firewall is left alone"
-  if [ "$DOKPLOY" = 1 ] && [ "$DOKPLOY_FOUND" = 0 ]; then
-    local why
-    why=$(dokploy_refusal)
-    if [ -n "$why" ]; then warn "DOKPLOY=1: refused - $why"
-    else ok "DOKPLOY=1: Dokploy $(dep dokploy version 2>/dev/null || echo '?') will be installed (Docker Swarm + Traefik on 80/443, its UI on 3000)"; fi
-  fi
   if [ "$DOKPLOY_FOUND" = 1 ]; then
     ok "Dokploy found: Harness Maxxing works with it - connect it afterwards in Infra (maxxing dokploy connect)"
     case " $PUBLIC_OTHER " in *" 3000/"*|*" 3000 "*)
