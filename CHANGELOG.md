@@ -3,6 +3,12 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.114 - 2026-11-04
+
+Changes:
+- **Agents: answer a request where you see it.** When an agent waits for your OK, Allow and Deny are on the request
+  in its thread, and a yellow "!" over its desk in the Office opens it in a window; the thread then says how it ended.
+
 ## 2.0.0-alpha.113 - 2026-11-04
 
 Changes:

@@ -250,8 +250,10 @@ or not (a Claude Code hook).
 ### Approvals
 
 With **Ask before risky actions** on, **every** run asks, not only the outside ones: when it wants to run a command,
-edit a file or use a tool you did not allow in advance, it waits and the request shows in its session with **Allow**
-and **Deny**. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread
+edit a file or use a tool you did not allow in advance, it waits and the request shows with **Allow** and **Deny**:
+in the agent's thread (the card then says how it ended: allowed, denied, no answer in time), in its run, and in the
+**Office**, where the yellow **!** over its desk opens the request (the **Waiting for you** chip of the list keeps only the
+agents that wait). Office views made by an extension only show that it waits; they never answer for you. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread
 when its Telegram option is on, otherwise in **Alerts**): one tap answers it from your phone, and the message then
 says how it ended, wherever you answered. Nobody answers within 30 minutes: the action is denied. Tools you trust
 (for example `Read`) can be allowed in advance in its settings.
