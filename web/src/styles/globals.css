@@ -386,6 +386,20 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .mx-px-dots > i:nth-child(2) { animation-delay: 0.2s; }
 .mx-px-dots > i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes mx-px-dot { 0%, 100% { opacity: 0.35; } 25%, 60% { opacity: 1; } }
+/* The Gamified office (features/agents/OfficeGame.tsx): a working agent bobs, its screen glows and its lines scroll,
+   "!" hops, "z z" floats, a waiting screen blinks. Stepped too; ended at rest by the reduced-motion rule below. */
+.mx-game-bob { animation: mx-game-bob 0.9s steps(1, end) infinite; }
+@keyframes mx-game-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(var(--s, 4px) * -1)); } }
+.mx-game-glow { filter: blur(3px); opacity: 0.8; animation: mx-game-glow 1.6s ease-in-out infinite; }
+@keyframes mx-game-glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.95; } }
+.mx-game-type { animation: mx-game-type 1.2s steps(1, end) infinite; }
+@keyframes mx-game-type { 0%, 100% { transform: translateY(0); } 33% { transform: translateY(-2px); } 66% { transform: translateY(-4px); opacity: 0.8; } }
+.mx-game-hop { animation: mx-game-hop 1s steps(1, end) infinite; }
+@keyframes mx-game-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.mx-game-blink { animation: mx-game-blink 1s steps(1, end) infinite; }
+@keyframes mx-game-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.mx-game-zzz { animation: mx-game-zzz 2.4s steps(2, end) infinite; }
+@keyframes mx-game-zzz { 0%, 100% { opacity: 1; transform: translateY(0); } 50% { opacity: 0.45; transform: translateY(-3px); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

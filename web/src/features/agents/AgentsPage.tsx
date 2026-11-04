@@ -1,24 +1,41 @@
-// The overview of the Agents page (/agents with no agent selected, the right pane of AgentsLayout on a computer):
+// The overview of the Agents page, the Office (/agents with no agent selected, the right pane of AgentsLayout on a
+// computer; /agents/office on a phone). Two views, picked at the top right and kept per browser: Gamified (a
+// pixel-art office, OfficeGame.tsx) and Classic, below:
 // one section per project (dot in the project colour, name, count, like the lanes of Tasks), each agent a card with
 // its character sitting behind a small desk, its name and one status line in words. A small bubble above the head
 // only when something matters (working, new results, waiting for an OK, failed). The whole card opens the agent;
 // Run and the on/off switch show on hover or focus (always on touch screens).
 // The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
 import * as React from 'react'
-import { useNavigate } from 'react-router'
-import { Play, Plus, ShieldCheck } from 'lucide-react'
-import { useLang, useT, type TFn } from '@/i18n'
+import { Link, useNavigate } from 'react-router'
+import { ArrowLeft, Gamepad2, LayoutGrid, Play, Plus, ShieldCheck } from 'lucide-react'
+import { useLang, useT } from '@/i18n'
 import { agentRoute, useAgents, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
-import { cn } from '@/lib/utils'
-import { Button, EmptyState, Sensitive, Skeleton, StatusDot, Switch, Tooltip, type DotTone } from '@/components/ui'
+import { cn, store } from '@/lib/utils'
+import { useCompact } from '@/stores/media'
+import { Button, EmptyState, Segmented, Sensitive, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT, projectColor } from './Avatar'
-import { agoText, useAgentsOn, useRunNow } from './parts'
+import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
 import { QuickCreate, type CreateStart } from './CreateAgent'
+import { OfficeGame } from './OfficeGame'
 
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
+
+export type OfficeView = 'classic' | 'game'
+const VIEW_KEY = 'mx-agents-office-view'
+
+/** The view of the Office, kept per browser (Classic by default). */
+function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
+  const [v, setV] = React.useState<OfficeView>(() => (store.get(VIEW_KEY) === 'game' ? 'game' : 'classic'))
+  const set = React.useCallback((x: OfficeView) => {
+    store.set(VIEW_KEY, x)
+    setV(x)
+  }, [])
+  return [v, set]
+}
 
 export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart: (s: CreateStart) => void }) {
   const t = useT()
@@ -26,6 +43,8 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
   const { data, isLoading, error, refetch } = useAgents(on !== false)
   const { data: ws } = useWorkspace()
   const agents = React.useMemo(() => data?.agents || [], [data])
+  const [view, setView] = useOfficeView()
+  const touch = useCompact()
   // Projects in the order of the workspace (the Sessions tree order), agents by topic then name.
   const groups = React.useMemo(() => {
     const g = new Map<string, Agent[]>()
@@ -36,12 +55,36 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
 
   return (
     <Page
-      title={t('agents.side.overview')}
+      title={t('agents.side.office')}
       description={t('agents.desc')}
+      width={view === 'game' ? 'wide' : 'default'}
+      leading={
+        touch ? (
+          <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
+            <Link to="/agents">
+              <ArrowLeft />
+            </Link>
+          </Button>
+        ) : undefined
+      }
       actions={
-        <Button size="sm" onClick={onNew} data-testid="agent-new">
-          <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
-        </Button>
+        <>
+          {agents.length > 0 && (
+            <Segmented
+              size="sm"
+              value={view}
+              onChange={setView}
+              aria-label={t('agents.office.view')}
+              options={[
+                { value: 'classic', icon: <LayoutGrid />, label: <span className="max-sm:sr-only">{t('agents.office.classic')}</span> },
+                { value: 'game', icon: <Gamepad2 />, label: <span className="max-sm:sr-only">{t('agents.office.game')}</span> },
+              ]}
+            />
+          )}
+          <Button size="sm" onClick={onNew} data-testid="agent-new">
+            <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
+          </Button>
+        </>
       }
     >
       {isLoading || on === undefined ? (
@@ -63,6 +106,8 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
         />
       ) : agents.length === 0 ? (
         <AgentsEmpty onStart={onStart} />
+      ) : view === 'game' ? (
+        <OfficeGame groups={groups} onStart={onStart} />
       ) : (
         <div className="grid gap-8" data-testid="agents-overview">
           {groups.map(([p, list]) => (
@@ -85,20 +130,6 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
       )}
     </Page>
   )
-}
-
-type Status = { id: 'waiting' | 'running' | 'unread' | 'failed' | 'off' | 'idle'; tone: DotTone; pulse?: boolean; text: string }
-
-/** One status per agent in words, the most pressing first (working beats new results: it is live). */
-function statusOf(a: Agent, t: TFn, lang: string): Status {
-  const last = a.last_run
-  if ((a.waiting || 0) > 0) return { id: 'waiting', tone: 'warn', pulse: true, text: t('agents.list.waiting') }
-  if ((a.running_now || 0) > 0) return { id: 'running', tone: 'running', pulse: true, text: t('agents.list.working') }
-  if ((a.thread_unread || 0) > 0) return { id: 'unread', tone: 'unread', text: t('agents.list.unread', { count: a.thread_unread || 0 }) }
-  if (!a.enabled) return { id: 'off', tone: 'idle', text: t('agents.side.state.off') }
-  if (last?.kind === 'result' && last.ok === false) return { id: 'failed', tone: 'error', text: t('agents.lastFailed', { when: agoText(last.at, lang, t) }) }
-  if (!last) return { id: 'idle', tone: 'idle', text: t('agents.neverRun') }
-  return { id: 'idle', tone: 'ok', text: t('agents.overview.ran', { when: agoText(last.at, lang, t) }) }
 }
 
 /** An agent: its character behind its desk, its name, its status; Run and the switch on hover. */
