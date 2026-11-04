@@ -127,3 +127,10 @@ def test_project_emoji(client, mx):
     assert client.patch("/api/workspace/projects/store", json={"emoji": ""}).json()["emoji"] == ""
     assert not (workspace.project_dir("store") / ".maxxing.json").exists()
     assert gateway.session_label({"path": "projects/store/topics/blog", "title": "Launch plan"}) == "store/blog · Launch plan"
+
+
+def test_a_name_or_path_ending_with_a_newline_is_refused(client, mx, topic):
+    assert client.post("/api/workspace/projects", json={"name": "abc\n"}).status_code == 400
+    assert client.post("/api/workspace/projects/acme/topics", json={"name": "new\n"}).status_code == 400
+    assert not (mx["ws"] / "projects" / "abc\n").exists()
+    assert workspace._PATH_RE.match("projects/acme\n") is None  # noqa: SLF001

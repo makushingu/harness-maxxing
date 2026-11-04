@@ -31,6 +31,7 @@ import logging
 import os
 import re
 import sqlite3
+import stat
 import threading
 import time
 import zlib
@@ -252,6 +253,23 @@ def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, 
     con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, sig))
 
 
+def _file_stat(fp: str, base: str) -> os.stat_result | None:
+    """stat of a file worth reading, else None: only regular files (reading a FIFO named notes.md would block
+    the whole index), and a link only when it points inside the workspace (else any file the service can
+    read - a key, a config - would land in the index and the search results)."""
+    try:
+        st = os.stat(fp)
+        if not stat.S_ISREG(st.st_mode):
+            return None
+        if os.path.islink(fp):
+            root = os.path.realpath(base)
+            if os.path.commonpath([os.path.realpath(fp), root]) != root:
+                return None
+    except (OSError, ValueError):
+        return None
+    return st
+
+
 def _subdirs(d: str) -> list[str]:
     try:
         return sorted(e.path for e in os.scandir(d) if e.is_dir(follow_symlinks=True)
@@ -285,11 +303,8 @@ def _index_memory(con: sqlite3.Connection, base: str, mem_dirs: list[str], known
         except OSError:
             continue
         for e in entries:
-            try:
-                st = e.stat()
-            except OSError:
-                continue
-            if st.st_size > MAX_FILE_BYTES:
+            st = _file_stat(e.path, base)
+            if st is None or st.st_size > MAX_FILE_BYTES:
                 continue
             alive.add(f"f:{e.path}")
             _index_one(con, base, e.path, st, known)
@@ -312,21 +327,15 @@ def _walk_bucket(con: sqlite3.Connection, base: str, root: str, skip: set[str], 
             fp = os.path.join(cur, name)
             if low in MEMORY_NAMES:
                 if f"f:{fp}" not in alive:
-                    try:
-                        st = os.stat(fp)
-                    except OSError:
-                        continue
-                    if st.st_size <= MAX_FILE_BYTES:
+                    st = _file_stat(fp, base)
+                    if st is not None and st.st_size <= MAX_FILE_BYTES:
                         alive.add(f"f:{fp}")
                         _index_one(con, base, fp, st, known)
                 continue
             if not _text_file(name):
                 continue
-            try:
-                st = os.stat(fp)
-            except OSError:
-                continue
-            if st.st_size > MAX_FILE_BYTES:
+            st = _file_stat(fp, base)
+            if st is None or st.st_size > MAX_FILE_BYTES:
                 continue
             count += 1
             alive.add(f"f:{fp}")
