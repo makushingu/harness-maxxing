@@ -153,7 +153,8 @@ also send the quotes alone. Quotes are kept with the draft and shown as quote bl
 files stay saved in the browser: they are still there after a page reload, an update of Harness Maxxing or a
 server restart. A message being sent at the moment the page reloads comes back in the box (a notice says so)
 unless the server had received it. Messages waiting in the queue are kept by the server. After an update the
-page switches to the new version only once nothing is being sent or uploaded.
+page switches to the new version only once nothing is being sent or uploaded. Signing out clears them from the browser
+(on a shared computer nothing unsent stays behind), and deleting a session clears its own.
 
 **Drag from one session into another.** With several sessions side by side (mouse), drag content of one session
 onto another session's column: it lands in that session's **Quote** card, the message box gets the focus, and

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import { forgetAllDrafts } from '../drafts'
 import type { AuthState, ChangePasswordBody, LoginBody, LoginResult, Ok, SetupBody, TwoFactorPoll } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
@@ -59,6 +60,7 @@ export function useLogout() {
   return useMut(() => api.post<Ok>('/api/auth/logout', undefined, { noAuthRedirect: true }), {
     onSuccess: () => {
       qc.clear()
+      forgetAllDrafts()
       window.location.assign('/login')
     },
   })
