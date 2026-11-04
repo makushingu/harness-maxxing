@@ -157,7 +157,7 @@ def test_runner_flags_for_an_agent_with_approvals(client, topic, mx):
     assert spec["env"]["MAXXING_APPROVAL_TIMEOUT"] == "120" and spec["args"][-1].endswith("approval_mcp.py")
     assert f.stat().st_mode & 0o777 == 0o600
     # without approvals: the agent's own mode, no prompt tool
-    client.patch("/api/agents/acme/blog/writer", json={"approvals": False})
+    client.patch("/api/agents/acme/blog/writer", json={"approvals": False, "sandbox": False})
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
