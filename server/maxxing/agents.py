@@ -465,9 +465,37 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     folder(path).mkdir(parents=True)
     workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
     _save(path, data)
+    _git_exclude(tdir)
     post(path, "note", "Agent created", status="created")
     _invalidate()
     return get(path)
+
+
+def _git_exclude(tdir: Path) -> None:
+    """A topic that is (or sits in) a git clone - a blog, an app - must not commit its agents: their folder goes to
+    the clone's local `.git/info/exclude` (never to a tracked .gitignore). Best effort."""
+    try:
+        root = _ws().resolve()
+        d = tdir.resolve()
+        while d != root and root in d.parents:
+            g = d / ".git"
+            if g.is_file():                                 # a worktree or submodule: "gitdir: <path>"
+                line = g.read_text(errors="replace").strip()
+                g = (d / line[len("gitdir:"):].strip()) if line.startswith("gitdir:") else None
+                if g and (g / "commondir").is_file():
+                    g = (g / (g / "commondir").read_text().strip()).resolve()
+            if g and g.is_dir():
+                rel = tdir.resolve().relative_to(d).as_posix()
+                pattern = "/agents/" if rel == "." else f"/{rel}/agents/"
+                ex = g / "info" / "exclude"
+                text = ex.read_text(errors="replace") if ex.is_file() else ""
+                if pattern not in text.splitlines():
+                    ex.parent.mkdir(parents=True, exist_ok=True)
+                    ex.write_text(text + ("" if not text or text.endswith("\n") else "\n") + pattern + "\n")
+                return
+            d = d.parent
+    except OSError:
+        log.warning("could not exclude the agents folder of %s from its git clone", tdir, exc_info=True)
 
 
 def update(path: str, fields: dict) -> dict:
