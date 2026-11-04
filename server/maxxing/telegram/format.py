@@ -62,12 +62,13 @@ def inline(text: str) -> str:
 
     # links [label](url) and autolinks <https://…>
     def _link(m: re.Match) -> str:
-        url = _safe_url(m.group(2))
+        # a code slot inside the url would put <code> into href: not a link then
+        url = _safe_url(m.group(2)) if "\x00" not in m.group(2) else None
         label = _label(m.group(1)) if m.group(1) else escape(m.group(2))
         return keep(f'<a href="{url}">{label}</a>') if url else keep(escape(m.group(0)))
 
     text = re.sub(r"!?\[([^\]\n]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", _link, text)
-    text = re.sub(r"<((?:https?|mailto):[^>\s]+)>",
+    text = re.sub(r"<((?:https?|mailto):[^>\s\x00]+)>",
                   lambda m: keep(f'<a href="{_safe_url(m.group(1))}">{escape(m.group(1))}</a>'), text)
 
     text = escape(text)
