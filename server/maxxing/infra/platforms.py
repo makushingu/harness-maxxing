@@ -319,6 +319,7 @@ def dokploy() -> dict:
         return {"connected": False, "key": None}
     out: dict[str, Any] = {"connected": True, "key": name}
     base = dk.url()
+    local = (_host(base) or "").split(":")[0] in ("127.0.0.1", "localhost", "[::1]")
     try:
         with dk.Client(base, token) as c:
             svcs = dk.inventory(c)
@@ -326,7 +327,8 @@ def dokploy() -> dict:
         return {**out, "sites": e.as_dict(), "databases": e.as_dict()}
     sites, dbs = [], []
     for x in svcs[:MAX_ITEMS]:
-        dash = f"{base}/dashboard/project/{x['project_id']}" if x["project_id"] else f"{base}/dashboard/projects"
+        dash = None if local else (f"{base}/dashboard/project/{x['project_id']}" if x["project_id"]
+                                   else f"{base}/dashboard/projects")
         state = DOKPLOY_STATE.get(x["status"] or "", "unknown")
         if x["kind"] in dk.DB_KINDS:
             dbs.append({"id": f"{x['kind']}:{x['id']}", "name": x["name"], "engine": x["kind"], "state": state,

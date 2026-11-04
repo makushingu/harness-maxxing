@@ -1342,10 +1342,12 @@ def check_dokploy(fetch: bool = True) -> Check | None:
     from .infra import caddy
     from .infra.providers import ProviderError
     st = dokploy.status()
-    here = (Path(os.environ.get("MAXXING_DOKPLOY_ETC") or "/etc/dokploy") / "traefik").is_dir()         or caddy.traefik_route().exists()
+    here = (Path(os.environ.get("MAXXING_DOKPLOY_ETC") or "/etc/dokploy") / "traefik").is_dir() \
+        or caddy.traefik_route().exists()
     if not st["connected"] and not here:
         return None
-    if 3000 in _public_tcp_ports():
+    open_ui = here and 3000 in _public_tcp_ports()     # a remote Dokploy: port 3000 here is another program
+    if open_ui and (not st["connected"] or not fetch):
         return _c("dokploy", WARN, "Dokploy's page is open to the internet on port 3000",
                   "anyone can reach its sign-in page; Docker publishes the port around the firewall",
                   "Dokploy -> Settings -> Web server: give it a domain, then turn off its port 3000 (docs: Security)")
@@ -1362,6 +1364,10 @@ def check_dokploy(fetch: bool = True) -> Check | None:
     except ProviderError as e:
         return _c("dokploy", WARN, f"Dokploy does not answer ({e.code})", e.message,
                   "check that Dokploy runs (docker service ls), or connect a new key (maxxing dokploy connect)")
+    if open_ui:
+        return _c("dokploy", WARN, "Dokploy's page is open to the internet on port 3000",
+                  f"connected ({st['url']}, {n} projects); anyone can reach its sign-in page",
+                  "Dokploy -> Settings -> Web server: give it a domain, then turn off its port 3000 (docs: Security)")
     return _c("dokploy", OK, f"Dokploy connected ({st['url']}, {n} project{'s' if n != 1 else ''})")
 
 
@@ -2509,6 +2515,8 @@ def cmd_uninstall(a) -> int:
                        "rm /etc/ssh/sshd_config.d/01-harness-maxxing.conf && systemctl reload ssh")
         elif c.startswith("timezone "):
             line(INFO, f"the system time zone was {c[9:]} before - timedatectl set-timezone {c[9:]}")
+        elif c == "dokploy installed":
+            line(INFO, "Dokploy, its apps and databases are left in place (remove them with Dokploy's own docs)")
     return 0
 
 

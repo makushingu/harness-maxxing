@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,11 @@ DB_KINDS = ("postgres", "mysql", "mariadb", "mongo", "redis")
 KINDS = ("application", "compose") + DB_KINDS
 BUILD_TYPES = ("dockerfile", "nixpacks", "railpack", "heroku_buildpacks", "paketo_buildpacks", "static")
 LOG_MAX_LINES = 2000
+TAILNET = ipaddress.ip_network("100.64.0.0/10")      # Tailscale addresses: already encrypted end to end
+HOST_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")
+BRANCH_RE = re.compile(r"^(?!-)[A-Za-z0-9._/-]{1,200}$")
+NAME_RE = re.compile(r"^(?!-)[A-Za-z0-9 ._-]{1,63}$")
+GIT_URL_RE = re.compile(r"^(https://|ssh://)[^\s'\"\\]+$|^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s'\"\\-][^\s'\"\\]*$")
 
 
 def logs_dir() -> Path:
@@ -36,6 +42,10 @@ def check_url(url: str) -> str:
     """The URL without trailing slash; plain http only to this machine or a private network (the key goes in clear)."""
     u = (url or "").strip().rstrip("/")
     p = urlsplit(u)
+    try:
+        p.port                                         # a port out of range raises here, not later in httpx
+    except ValueError:
+        raise ProviderError("invalid_url", "the Dokploy URL has an invalid port") from None
     if p.scheme not in ("http", "https") or not p.hostname or p.username or p.password or p.query or p.fragment:
         raise ProviderError("invalid_url", "the Dokploy URL must be http(s)://host[:port]")
     if p.scheme == "http" and not _private(p.hostname):
@@ -51,7 +61,9 @@ def _private(host: str) -> bool:
         ip = ipaddress.ip_address(h)
     except ValueError:
         return False
-    return ip.is_loopback or ip.is_private
+    if ip.is_link_local:                               # 169.254.x (cloud metadata) is never a Dokploy
+        return False
+    return ip.is_loopback or ip.is_private or ip in TAILNET
 
 
 URL_SECRET = "dokploy_url"
@@ -259,16 +271,33 @@ def redeploy(c: Client, svc: dict, title: str | None = None) -> None:
     c.post(f"{svc['kind']}.redeploy", body)
 
 
+def _check(value: str, rx: re.Pattern, what: str) -> str:
+    """Values a (possibly prompt-injected) session passes on to Dokploy: git clone, Traefik rules, container names."""
+    v = (value or "").strip()
+    if not rx.match(v):
+        raise ProviderError("invalid_value", f"invalid {what}: {v[:80]!r}")
+    return v
+
+
 def domain_add(c: Client, svc: dict, host: str, port: int | None = None, https: bool = True,
-               path: str | None = None) -> Any:
+               path: str | None = None, service: str | None = None) -> Any:
     _deployable(svc)
-    body: dict[str, Any] = {"host": host.strip().lower(), "https": https,
+    host = _check(host.lower(), HOST_RE, "host name")
+    if port is not None and not 1 <= int(port) <= 65535:
+        raise ProviderError("invalid_value", "the port must be 1-65535")
+    if path is not None and not re.match(r"^/[A-Za-z0-9._~/-]*$", path):
+        raise ProviderError("invalid_value", "the path must start with / and use letters, digits, . _ ~ - /")
+    if svc["kind"] == "compose" and not service:
+        raise ProviderError("service_needed", "a compose stack needs --service: the container of the stack to serve")
+    body: dict[str, Any] = {"host": host, "https": https,
                             "certificateType": "letsencrypt" if https else "none", "domainType": svc["kind"],
                             _ID[svc["kind"]]: svc["id"]}
     if port:
         body["port"] = int(port)
     if path:
         body["path"] = path
+    if service:
+        body["serviceName"] = _check(service, NAME_RE, "service name")
     return c.post("domain.create", body)
 
 
@@ -277,6 +306,10 @@ def app_create(c: Client, environment_id: str, name: str, repo: str, branch: str
     """application.create, then its git source and build type; returns the new application id."""
     if build not in BUILD_TYPES:
         raise ProviderError("invalid_build", f"build must be one of {', '.join(BUILD_TYPES)}")
+    name, repo = _check(name, NAME_RE, "app name"), _check(repo, GIT_URL_RE, "git URL (https://, ssh:// or git@host:path)")
+    branch = _check(branch, BRANCH_RE, "branch")
+    if not re.match(r"^/[A-Za-z0-9._/-]*$", build_path or "") or ".." in build_path:
+        raise ProviderError("invalid_value", "the build path must start with / and stay inside the repository")
     app = c.post("application.create", {"name": name, "environmentId": environment_id})
     app_id = app.get("applicationId") if isinstance(app, dict) else None
     if not app_id:

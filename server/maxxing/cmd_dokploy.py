@@ -7,7 +7,7 @@
     maxxing dokploy deploy|redeploy APP --yes [--title T]      APP = id, name or app name
     maxxing dokploy deployments APP [--json]
     maxxing dokploy logs APP [--deployment ID] [--lines N]
-    maxxing dokploy domain add APP HOST [--port N] [--no-https] --yes
+    maxxing dokploy domain add APP HOST [--port N] [--path P] [--service S] [--no-https] --yes
     maxxing dokploy domain list APP
     maxxing dokploy app create --environment ID --name N --repo URL [--branch B] [--build T] --yes
 
@@ -50,6 +50,7 @@ def _configure(p) -> None:
     a.add_argument("host")
     a.add_argument("--port", type=int, help="port the app listens on inside its container")
     a.add_argument("--path")
+    a.add_argument("--service", help="compose stack: the service (container) of the stack to serve")
     a.add_argument("--no-https", action="store_true")
     a.add_argument("--yes", action="store_true")
     dl = dom.add_parser("list")
@@ -111,19 +112,19 @@ def _handler(a) -> int:
                 if not envs and not a.json:
                     print("No environment: create a project in Dokploy first.")
                 return 0
-            svcs = dokploy.inventory(c)
-            if a.action == "list":
-                if a.json:
-                    print(json.dumps(svcs, indent=2))
-                else:
-                    _list(svcs)
-                return 0
             if a.action == "app":
                 if not _confirm(a, f"create {a.name} from {a.repo}"):
                     return 3
                 app_id = dokploy.app_create(c, a.environment, a.name, a.repo, a.branch, a.build, a.build_path)
                 print(f"created {a.name} ({app_id}); deploy it with: maxxing dokploy deploy {app_id} --yes")
                 _stale()
+                return 0
+            svcs = dokploy.inventory(c)
+            if a.action == "list":
+                if a.json:
+                    print(json.dumps(svcs, indent=2))
+                else:
+                    _list(svcs)
                 return 0
             svc = dokploy.find(svcs, a.app)
             if a.action in ("deploy", "redeploy"):
@@ -157,7 +158,7 @@ def _handler(a) -> int:
                     return 0
                 if not _confirm(a, f"add {a.host} to {svc['name']}"):
                     return 3
-                dokploy.domain_add(c, svc, a.host, a.port, not a.no_https, a.path)
+                dokploy.domain_add(c, svc, a.host, a.port, not a.no_https, a.path, a.service)
                 print(f"{a.host} -> {svc['name']} added; point its DNS to this server, then redeploy")
                 _stale()
                 return 0
