@@ -124,11 +124,23 @@ def pg_create(name: str, project: str | None = None) -> dict:
         _psql(f'drop role if exists "{name}";')        # else the next try stops on "a role named … exists"
         raise ActionError("cannot create the database: " + _err(out, err), "psql_failed")
     key = f"DB_{name.upper()}_URL"
-    vault.put(key, f"postgresql://{name}:{pw}@127.0.0.1:5432/{name}", note=f"PostgreSQL database {name} (maxxing infra)",
-              expose=False)
     rid = f"db:local:postgres:native:{name}"
-    registry.declare(rid, kind="database", name=name, server="local", project=project, vault_keys=[key],
-                     recipe={"engine": "postgres"})
+    stored = False
+    try:
+        vault.put(key, f"postgresql://{name}:{pw}@127.0.0.1:5432/{name}",
+                  note=f"PostgreSQL database {name} (maxxing infra)", expose=False)
+        stored = True
+        registry.declare(rid, kind="database", name=name, server="local", project=project, vault_keys=[key],
+                         recipe={"engine": "postgres"})
+    except Exception as e:                              # the password would be lost: undo, the next try starts clean
+        _psql(f'drop database if exists "{name}";')
+        _psql(f'drop role if exists "{name}";')
+        if stored:
+            try:
+                vault.delete(key)
+            except Exception:
+                pass
+        raise ActionError(f"cannot record the database: {e}", "record_failed") from e
     ensure_backup_job()
     return {"id": rid, "name": name, "vault_key": key, "url_hint": f"postgresql://{name}:…@127.0.0.1:5432/{name}"}
 
