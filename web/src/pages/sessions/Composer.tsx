@@ -47,7 +47,8 @@ export const Composer = React.forwardRef<ComposerHandle, {
   onAsk?: () => void
   asking?: boolean
   clearingQueue?: boolean
-  onSend: (text: string, attachments: string[]) => Promise<boolean>
+  /** `clientId`: the outbox id, sent with the message so that a reload mid-send can tell whether it arrived. */
+  onSend: (text: string, attachments: string[], clientId?: string) => Promise<boolean>
   /** Messages a previous page load was sending when it went away: resolves to those the server never got. */
   checkSent?: (left: OutboxEntry[]) => Promise<OutboxEntry[] | null>
   /** Voice message sent directly (setting on by default): the recording is sent as it is, the server transcribes it. */
@@ -315,7 +316,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const outId = outboxAdd(k0, { text: sent, body, quotes: kept, attachments: paths })
     busyStart()
     chain.current = chain.current.then(async () => {
-      const ok = await onSend(sent, paths).catch(() => false)
+      const ok = await onSend(sent, paths, outId).catch(() => false)
       if (--inflight.current === 0 && mounted.current) setSending(false)
       // Refused: it comes back in the box below. A failure can also be the page going away (its request is cut):
       // the entry is removed only if the page is still here a moment later, else the next load brings it back.

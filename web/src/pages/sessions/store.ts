@@ -547,7 +547,8 @@ export function saveAtts(k: string, atts: DraftAtt[]) {
  * Written before a send, removed once the server answered: what is left when the page loads was being sent when
  * the page went away (reload, update, closed tab). The column checks whether the server got it, else it comes
  * back into the composer. */
-export type OutboxEntry = { id: string; at: number; text: string; body: string; quotes: string[]; attachments: string[] }
+/** `tagged`: its id was sent with it (`client_id`), the server keeps it; older entries are checked on their text. */
+export type OutboxEntry = { id: string; at: number; text: string; body: string; quotes: string[]; attachments: string[]; tagged?: boolean }
 const outboxKey = (k: string) => `${draftKey(k)}:out`
 function readOutbox(k: string): OutboxEntry[] {
   try {
@@ -566,10 +567,10 @@ function writeOutbox(k: string, list: OutboxEntry[]) {
   }
 }
 const mine = new Set<string>() // sent by this page load: still in flight, not left over
-export function outboxAdd(k: string, e: Omit<OutboxEntry, 'id' | 'at'>): string {
+export function outboxAdd(k: string, e: Omit<OutboxEntry, 'id' | 'at' | 'tagged'>): string {
   const id = uid()
   mine.add(id)
-  writeOutbox(k, [...readOutbox(k), { ...e, id, at: Date.now() }])
+  writeOutbox(k, [...readOutbox(k), { ...e, id, at: Date.now(), tagged: true }])
   return id
 }
 // While the page goes away its sends are cut short (they fail): they stay stored for the next load to check.

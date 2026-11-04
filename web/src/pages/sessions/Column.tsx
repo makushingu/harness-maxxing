@@ -465,14 +465,14 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
     if (session) trimQueued(sid, session.queue)
   }, [session?.queue, sid, trimQueued]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSend = async (text: string, attachments: string[]) => {
+  const onSend = async (text: string, attachments: string[], clientId?: string) => {
     const add = usePending.getState().add
     const remove = usePending.getState().remove
     const lid = add(sid, { text, attachments, queued: running })
     thread.current?.scrollToBottom()
     notifySent(sid)
     try {
-      const r = await send.mutateAsync({ id: sid, text, attachments })
+      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId })
       if (r.queued !== running) {
         remove(sid, lid)
         add(sid, { text, attachments, queued: r.queued })
@@ -485,8 +485,8 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
     }
   }
 
-  // Sent by a previous page load that went away before the answer: did the server get it? (a user event
-  // since it was sent, or still waiting in the queue).
+  // Sent by a previous page load that went away before the answer: did the server get it? (a user event or a
+  // queued message carrying its id; an entry stored before ids were sent: the same text since it was sent).
   const sessionNow = React.useRef(session)
   sessionNow.current = session
   const checkSent = React.useCallback(
@@ -495,8 +495,11 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
       for (let i = 0; i < 40 && !sessionNow.current; i++) await new Promise((r) => setTimeout(r, 250))
       const st = getLog(sid)
       if (st.status !== 'ready' || !sessionNow.current) return null // unknown: kept for the next load
-      const queue = (sessionNow.current.queue_items || []).map((q) => q.text)
+      const queued = sessionNow.current.queue_items || []
+      const queue = queued.map((q) => q.text)
       return left.filter((e) => {
+        if (e.tagged)
+          return !st.items.some((it) => it.kind === 'user' && it.ev.client_ids?.includes(e.id)) && !queued.some((q) => q.client_ids?.includes(e.id))
         const text = e.text.trim()
         if (st.items.some((it) => it.kind === 'user' && (it.ev.at ?? Infinity) >= e.at / 1000 - 60 && it.ev.text.trim() === text)) return false
         // the server cuts a queued text at QUEUE_PREVIEW_CHARS: only a cut one is compared on its start
@@ -1197,9 +1200,9 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const options = topics.map((tp) => ({ value: tp.path, label: mask(`${tp.project} / ${tp.name}`, 10) }))
   const valid = topics.some((tp) => tp.path === col.path)
 
-  const onSend = async (text: string, attachments: string[]) => {
+  const onSend = async (text: string, attachments: string[], clientId?: string) => {
     try {
-      const s = await create.mutateAsync({ path: col.path, message: text, title: title.trim() || undefined, model: model || undefined, attachments, plan_mode: planMode || undefined })
+      const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, attachments, plan_mode: planMode || undefined })
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text, attachments, queued: false })
       saveDraft(`new:${col.path}`, '')

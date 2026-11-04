@@ -65,6 +65,8 @@ def normalize(ev: dict) -> list[dict]:
                "at": at, "source": ev.get("source") or "web"}
         if ev.get("voice"):                   # a voice message sent directly: its transcript follows (mx_voice)
             out["voice"] = [str(v) for v in ev["voice"] if v]
+        if isinstance(ev.get("client_ids"), list):  # the web page's ids for this message (a reload checks them)
+            out["client_ids"] = [str(c) for c in ev["client_ids"]]
         return [out]
     if t == "mx_voice":
         return [{"type": "voice_text", "text": ev.get("text") or "", "error": ev.get("error") or None,
