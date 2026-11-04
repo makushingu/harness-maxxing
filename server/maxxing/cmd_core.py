@@ -2157,12 +2157,33 @@ def _update_rollback(a) -> int:
     if dirty:                                          # a reset --hard would destroy them
         line(FAIL, f"{len(dirty)} uncommitted change(s) in {config.CODE} - nothing changed",
              f"put them aside (git -C {config.CODE} stash push -u -m \"before rollback\"), run the rollback again, "
-             "then put them back (git stash pop) - a customization saved now would be undone by the rollback: "
-             + ", ".join(dirty[:5]))
+             "then put them back (git stash pop): " + ", ".join(dirty[:5]))
         return 1
     start = _recorded_start(old)                       # after `--branch X`: back on the branch that ran, X untouched
+    here, here_branch = _rev("HEAD"), _start_branch()
+    running = customs.list_customs()                   # saved since the update (or auto-saved by it): kept
     _goto_start(start, old)
     customs.git("reset", "-q", "--hard", old)
+    have = {c["id"] for c in customs.list_customs()}
+    later = [c for c in running if c["id"] not in have]
+    if later:
+        customs.ensure_identity()
+    for c in later:
+        status, out = customs.pick(c["commit"])
+        if status == "conflict":                       # back to what runs: nothing changed
+            if here_branch and here_branch != _current_branch():
+                customs.git("checkout", "-q", "-f", here_branch)
+            elif not here_branch:
+                customs.git("checkout", "-q", "-f", "--detach", here)
+            customs.git("reset", "-q", "--hard", here)
+            line(FAIL, f"customization \"{c['title']}\" was saved after the update and does not apply to the "
+                       f"previous version - nothing changed", out.strip()[-300:])
+            print(f"\nFor Claude (topic {update_topic()}, skill maxxing-customize): drop it first if the rollback "
+                  f"is still wanted (maxxing custom drop {c['id']}), or keep the current version")
+            return 1
+        line(OK if status == "ok" else INFO, f"customization \"{c['title']}\" "
+             + ("kept" if status == "ok" else "already in the previous version"))
+    customs.export()
     ok, err = _sync_deps()
     line(OK if ok else FAIL, f"code back to {old[:8]}" + (f" (branch {start})" if start else ""), "" if ok else err)
     customs.clear_pending()
