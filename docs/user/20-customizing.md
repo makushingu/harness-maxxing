@@ -77,6 +77,10 @@ update: `maxxing custom save "..." --why "..." --check "<command>"`, or later `m
 directory has unsaved changes (nothing is changed): put them aside first (`git stash`), run the rollback, then put
 them back (`git stash pop`). A customization saved just before would be undone by the rollback.
 
+Switching branch (`--branch beta`, then back) carries the customizations that run now, never an older copy left on
+the other branch: one dropped or changed meanwhile does not come back, one already included in the new branch is
+simply dropped.
+
 ## Automatic updates
 
 Off by default. Settings -> System -> **Update by itself when nobody is here**: when a new version is out, nobody

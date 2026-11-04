@@ -1,7 +1,6 @@
 """`maxxing update` never loses what ran before: the branch, uncommitted edits, the web/ edits set aside."""
 from __future__ import annotations
 
-import os
 import subprocess
 
 from maxxing import cmd_core, customs
@@ -155,32 +154,53 @@ def test_rollback_after_a_branch_switch_goes_back_to_the_branch_that_ran(code, c
     assert _rev(clone, "dev") == _rev(clone, "origin/dev")        # dev is not rewritten to main's commit
 
 
-def test_conflict_after_a_branch_switch_resumes_on_that_branch(code, monkeypatch, capsys):
+def test_a_customization_left_on_an_old_local_branch_is_not_brought_back(code, capsys):
+    """The target branch is rebuilt from upstream + what runs: a commit found only on the old local copy is named
+    (with the way to bring it back) and kept under a backup ref, never replayed silently."""
     clone, work = code["clone"], code["work"]
-    before = _head(clone)
     _push_dev(work, "1.9.0")
     _git("fetch", "-q", "origin", "dev", cwd=clone)
     _git("checkout", "-q", "-b", "dev", "--track", "origin/dev", cwd=clone)
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     customs.save("Raise the limit")
+    stale = _head(clone)
     _git("checkout", "-q", "main", cwd=clone)
-    _push_dev(work, "1.9.1", rules="LIMIT = 20\nNAME = 'product'\n")         # conflicts with the customization
-    assert run_cli("update", "--branch", "dev") == 3
+    _push_dev(work, "1.9.1")
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 0
     out = capsys.readouterr().out
-    assert "git checkout dev && git rebase origin/dev" in out
-    assert _branch(clone) == "main" and _head(clone) == before
-    # Claude follows the instructions, then the resumed version does not start
-    _git("checkout", "-q", "dev", cwd=clone)
-    subprocess.run(["git", "-C", str(clone), "rebase", "-q", "origin/dev"], capture_output=True)
+    assert 'customization "Raise the limit" of the old local branch dev is not carried' in out
+    assert _branch(clone) == "dev" and _head(clone) == _rev(clone, "origin/dev")
+    assert "LIMIT = 10" in (clone / "server/maxxing/rules.py").read_text()
+    assert _rev(clone, "refs/maxxing/before-switch/dev") == stale
+
+
+def test_switching_back_does_not_bring_back_a_dropped_customization(code, capsys):
+    clone, work = code["clone"], code["work"]
+    (clone / "server" / "maxxing" / "extra.py").write_text("X = 1\n")
+    it = customs.save("Add extra")
+    _push_dev(work, "1.9.0")
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 0
+    assert run_cli("update", "--branch", "main", "--no-restart") == 0
+    assert [c["id"] for c in customs.list_customs()] == [it["id"]]
+    assert run_cli("custom", "drop", it["id"]) == 0
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 0
+    assert _branch(clone) == "dev" and customs.list_customs() == []
+    assert not (clone / "server/maxxing/extra.py").exists()
+
+
+def test_branch_switch_with_a_customization_already_in_the_target_branch(code, capsys):
+    """The customization was merged upstream into dev (another commit): the switch drops it, no false conflict."""
+    clone, work = code["clone"], code["work"]
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
-    _git("add", "-A", cwd=clone)
-    subprocess.run(["git", "-C", str(clone), "rebase", "--continue"], capture_output=True,
-                   env={**os.environ, "GIT_EDITOR": "true"})
-    rebased = _head(clone)
-    _broken_release(monkeypatch)
-    assert run_cli("update", "--resume") == 4
-    assert _branch(clone) == "main" and _head(clone) == before
-    assert _rev(clone, "dev") == rebased                          # the adapted customization is kept on dev
+    customs.save("Raise the limit")
+    _git("checkout", "-q", "-b", "dev", cwd=work)
+    (work / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    _git("commit", "-q", "-am", "Raise the limit (merged)", cwd=work)
+    _push_dev(work, "1.9.0")
+    assert run_cli("update", "--branch", "dev", "--no-restart") == 0
+    assert 'customization "Raise the limit" is now included in branch dev' in capsys.readouterr().out
+    assert _branch(clone) == "dev" and _head(clone) == _rev(clone, "origin/dev")
+    assert customs.list_customs() == [] and "LIMIT = 50" in (clone / "server/maxxing/rules.py").read_text()
 
 
 def test_conflict_with_web_edits_prints_instructions_that_work(code, capsys):
