@@ -143,7 +143,7 @@ export type SessionEvent =
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number }
   | { type: 'thinking'; text: string; at: number }
-  | { type: 'tool_use'; id: string; name: string; input: unknown; summary: string; at: number }
+  | { type: 'tool_use'; id: string; name: string; input: unknown; input_lines?: Record<string, number>; summary: string; at: number }
   | { type: 'tool_result'; tool_use_id: string; text: string; is_error: boolean; at: number }
   | { type: 'init'; model: string; cwd: string; at: number }
   | { type: 'result'; ok: boolean; cost_usd: number; duration_ms: number; model: string; usage: Usage; at: number }

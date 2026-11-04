@@ -142,7 +142,8 @@ previous night — open streams then receive `reset`. **Event** (normalised):
 {type:"voice_text", text, error:str|null, stopped?:true, at}   // transcript of the voice message just above (error: not transcribed, nothing sent to Claude)
 {type:"assistant", text, at}                       // markdown
 {type:"thinking", text, at}
-{type:"tool_use", id, name, input, summary, at}     // summary = one-line human string ("Read src/app.py", "Bash: ls -la")
+{type:"tool_use", id, name, input, input_lines?, summary, at}     // summary = one-line human string ("Read src/app.py", "Bash: ls -la")
+                                                    // input text fields over 20,000 chars are clipped; input_lines = {field: real line count} of the clipped top-level ones
 {type:"tool_result", tool_use_id, text, is_error, at}   // text truncated to 20 kB
 {type:"init", model, cwd, at}
 {type:"result", ok, cost_usd, duration_ms, model, usage:{input,output,cache_read,cache_write}, at}   // cost_usd = this turn only (the raw total_cost_usd is the thread's running total)
