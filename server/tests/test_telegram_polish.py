@@ -3,6 +3,7 @@ captions that look like commands, /model validation, translated bot texts, threa
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 import httpx
@@ -199,6 +200,20 @@ async def test_album_then_text_keeps_the_order_and_waits_for_slow_items(api, tg,
     await wait_for(lambda: len(svc.sent) == 2, timeout=15, what="album then text")
     assert svc.sent[0]["text"] == "three photos" and len(svc.sent[0]["attachments"]) == 3
     assert svc.sent[1]["text"] == "and what do you think?"
+
+
+async def test_album_with_a_file_that_cannot_be_saved_keeps_the_others(api, tg, svc, monkeypatch):
+    monkeypatch.setattr(gateway, "MEDIA_GROUP_WAIT", 0.3)
+    await _link(api, tg)
+    _, thread = await _open(api, svc)
+    for i in (0, 2):
+        tg.add_file(f"V{i}", b"mp4", f"videos/file_{i}.mp4")
+    for i in range(3):                                          # V1 is refused by getFile (too big for bots)
+        tg.message("", thread=thread, media_group_id="G2",
+                   video={"file_id": f"V{i}", "file_name": f"clip{i}.mp4", "file_size": 3})
+    await wait_for(lambda: svc.sent, what="album turn")
+    assert [os.path.basename(a) for a in svc.sent[0]["attachments"]] == ["clip0.mp4", "clip2.mp4"]
+    assert any(p["text"].startswith("⚠️ Could not save clip1.mp4") for p in tg.sent())
 
 
 async def test_command_caption_keeps_the_photo(api, tg, svc):

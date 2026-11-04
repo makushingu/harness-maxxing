@@ -78,7 +78,8 @@ messages) it deletes.
 - Send photos and files: they are saved in `<topic>/attachments/telegram/YYYY-MM/` and passed to
   Claude with your caption. An album is one message to Claude, and what you send right after it comes after
   it. Audio files (music, recordings sent as files) are files too; only voice notes and round video notes are
-  transcribed. A caption is never a command: a photo captioned `/new` is a photo.
+  transcribed. A caption is never a command: a photo captioned `/new` is a photo. A file the bot cannot save
+  (over 20 MB) is named in a reply, and the other files of the album still go to Claude.
 - Replies, quotes and forwards keep their context: replying to a message (or quoting part of it) sends
   Claude the quoted part in front of your text, a forwarded message says where it comes from, and links
   hidden behind a word are passed as "word (link)".

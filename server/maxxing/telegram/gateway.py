@@ -230,7 +230,7 @@ WORDS["en"].update({
     "notify_only_topic": "This thread only receives notifications - write in a topic thread.",
     "edited": "Edits are not sent to Harness - send a new message.",
     "no_sessions": "⚠️ Sessions are not available on this server yet.",
-    "save_failed": "⚠️ Could not save the file: {error}",
+    "save_failed_some": "⚠️ Could not save {names}: {error}",
     "voice_off": "🎤 Voice messages are off. Turn them on in the web UI: Settings → Voice.",
     "voice_not_ready": "🎤 Voice messages are not ready ({reason}). Open Settings → Voice in the web UI.",
     "voice_download": "⚠️ Could not download the audio: {error}",
@@ -303,7 +303,7 @@ WORDS["fr"].update({
     "notify_only_topic": "Ce fil ne reçoit que des notifications - écrivez dans le fil d'un topic.",
     "edited": "Les modifications ne sont pas transmises à Harness - envoyez un nouveau message.",
     "no_sessions": "⚠️ Les sessions ne sont pas encore disponibles sur ce serveur.",
-    "save_failed": "⚠️ Impossible d'enregistrer le fichier : {error}",
+    "save_failed_some": "⚠️ Impossible d'enregistrer {names} : {error}",
     "voice_off": "🎤 Les messages vocaux sont désactivés. Activez-les dans l'interface web : Réglages → Voix.",
     "voice_not_ready": "🎤 Les messages vocaux ne sont pas prêts ({reason}). Ouvrez Réglages → Voix dans l'interface web.",
     "voice_download": "⚠️ Impossible de télécharger l'audio : {error}",
@@ -540,6 +540,14 @@ def _lang() -> str:
 def _w(key: str, lang: str | None = None, **kw: Any) -> str:
     words = WORDS.get(lang or _lang()) or WORDS["en"]
     return (words.get(key) or WORDS["en"][key]).format(**kw)
+
+
+def _file_label(msg: dict) -> str:
+    """How a message's file is named in a reply: its file name, else its kind (photo, video...)."""
+    for kind in ("document", "video", "audio", "voice", "video_note"):
+        if isinstance(msg.get(kind), dict):
+            return str(msg[kind].get("file_name") or kind.replace("_", " "))
+    return "photo"
 
 
 def _sender_lang(msg: dict) -> str:
@@ -1791,12 +1799,16 @@ class Gateway:
             await self._reply(first, _w("no_sessions"))
             return
         attachments: list[str] = list(saved or [])
-        try:
-            for m in ([] if saved is not None else msgs):
+        failed: list[str] = []                            # one file that cannot be saved never drops the others
+        for m in ([] if saved is not None else msgs):
+            try:
                 attachments += await self._download(m, path)
-        except (TelegramError, OSError, ValueError) as e:
-            await self._reply(first, _w("save_failed", error=getattr(e, "description", e)))
-            if not text:
+            except (TelegramError, OSError, ValueError) as e:
+                failed.append(_file_label(m))
+                error = getattr(e, "description", e)
+        if failed:
+            await self._reply(first, _w("save_failed_some", names=", ".join(failed), error=error))
+            if not text and not attachments:
                 return
         if not text:
             names = ", ".join(os.path.basename(a) for a in attachments)
