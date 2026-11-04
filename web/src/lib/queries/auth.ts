@@ -46,8 +46,10 @@ export const pollTwoFactor = (challenge: string, code?: string, trust = true) =>
   api.post<TwoFactorPoll>('/api/auth/two-factor', { challenge, code: code || undefined, trust }, { noAuthRedirect: true })
 
 export function useSetTwoFactor() {
-  return useMut((enabled: boolean) => api.put<LoginResult>('/api/auth/two-factor', { enabled }), {
+  // turning it off needs the current password
+  return useMut((b: { enabled: boolean; password?: string }) => api.put<LoginResult>('/api/auth/two-factor', b), {
     invalidate: [qk.telegram.all, qk.authState],
+    errorToast: false,
   })
 }
 
