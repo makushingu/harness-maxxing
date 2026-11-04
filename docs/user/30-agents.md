@@ -13,9 +13,12 @@ Agents are **off by default**: turn them on in **Settings -> Features -> Agents*
 sidebar, with the number of results to read.
 
 **Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
-itself lives. Agents and their runs never show in Sessions: the Agents page has its own list of every agent (its
-face, `project · topic`, a dot for running / waiting for you / to read / failed / off), grouped **by state** or **by
-project**, with a search and **New agent**. In Sessions, a topic's menu offers **Agents of this topic**.
+itself lives. Agents' runs never show in Sessions: the Agents page has its own list of every agent (its face,
+`project · topic`, a dot for running / waiting for you / to read / failed / off), grouped **by state** or **by
+project**, with a search and **New agent**. In the Sessions list, a topic's agents show **under its row**: their
+face, their name and a dot when one works, waits for you, has something to read or failed (the ones that need you
+first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
+**Agents of this topic** in the topic's menu.
 
 With no agent open, the page shows every agent **at its desk**, one section per project (the dot is the project's
 color). Under each one, its name and one line that says where it is: *Working…*, *2 new results*, *Waiting for your
@@ -35,12 +38,14 @@ An agent is a folder of its topic: `projects/acme/topics/blog/agents/writer/`.
 | `agent.json` | its name, character, settings, triggers and limits - never a secret |
 
 A session of the agent runs in that folder, so Claude also knows the topic, the project and the global memory above
-it: the writer knows the blog's tone without repeating it. The three files are in the daily
-[memory backup](backup).
+it: the writer knows the blog's tone without repeating it. Its commands start in the agent's folder: a file it
+writes without a path lands there (`drafts/` = `agents/writer/drafts/`). To make it work in the topic's own folders,
+say so in its role and, with the sandbox, list them under **Other folders it can write in**. The three files are in
+the daily [memory backup](backup).
 
 ## Create an agent
 
-**Agents -> New agent**: say in a sentence what it should do and when ("every Monday morning, sum up the players'
+**Agents -> New agent** (with no agent yet, the same choices are right on the Agents page): say in a sentence what it should do and when ("every Monday morning, sum up the players'
 feedback and suggest 3 improvements"). **Prepare with Claude** opens a session with your request: Claude guesses the topic, writes the role, picks
 the trigger, asks only what is missing (a few questions at most), shows you a summary, creates the agent, gives you
 its webhook address if it has one and offers a test run. You can ask the same thing in any session.

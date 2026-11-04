@@ -2207,6 +2207,8 @@ export const fr: Record<keyof typeof en, string> = {
   'show.look.body': 'Le thème, la couleur et le fond choisis ici colorent aussi la page de connexion et tout nouveau navigateur (téléphone, fenêtre privée).',
   'show.team.title': 'Team : discute avec les gens avec qui tu travailles',
   'show.team.body': 'Active Team ici : messages privés et groupes avec d’autres utilisateurs de Harness, de serveur à serveur grâce à une invitation à usage unique, avec fichiers et sondages. Résumer demande à Claude un résumé des messages que tu choisis, et n’importe quel message peut partir vers une de tes sessions. Ne te connecte qu’avec des gens de confiance ; il faut une adresse publique (mode domaine, pas Tailscale).',
+  'show.agents.title': 'Agents : des assistants qui travaillent seuls dans un topic',
+  'show.agents.body': 'Active les agents ici : une entrée Agents apparaît dans la barre latérale. Un agent est un rôle durable dans un topic, avec sa propre mémoire et un petit personnage. Il démarre à la main, à heure fixe, sur un webhook, sur une notification, depuis son fil Telegram ou à la demande d’un autre agent, dans un budget par jour. Dis en une phrase ce qu’il doit faire et quand, et Claude le prépare avec toi, ou pars d’un agent tout prêt. Ce qui vient de l’extérieur est une donnée, jamais un ordre, et les nouveaux agents tournent dans un bac à sable.',
   'show.infra.title': 'Infra : tout ce que tu héberges, sur une page',
   'show.infra.body': 'Active ici la page Infra : chaque site, base, bucket, domaine et serveur - ce serveur, tes autres serveurs, Cloudflare, Hostinger - avec son état et ses liens. Ensuite, demande simplement à Claude « mets ce dossier en ligne » ou « crée une base pour mon appli » : c’est fait de façon standard et ça apparaît là.',
   'show.infraServers.title': 'Tes autres serveurs, en un clic',
@@ -2735,7 +2737,7 @@ export const fr: Record<keyof typeof en, string> = {
   // ---- Agents (Réglages -> Fonctionnalités -> agents_page)
   'nav.agents': 'Agents',
   'features.agents': 'Agents',
-  'features.agentsDesc': 'Une entrée « Agents » dans la barre latérale : des assistants durables qui vivent dans un topic, chacun avec son rôle, sa mémoire et ses propres sessions. Ils se lancent à la main, à heure fixe, sur un webhook, sur une notification ou depuis Telegram, dans un budget par jour. Dans la liste des sessions, chaque agent a sa ligne sous son topic.',
+  'features.agentsDesc': 'Une entrée « Agents » dans la barre latérale : des assistants durables qui vivent dans un topic, chacun avec son rôle, sa mémoire et ses propres sessions. Ils se lancent à la main, à heure fixe, sur un webhook, sur une notification ou depuis Telegram, dans un budget par jour. Dans la liste des sessions, les agents d’un topic apparaissent sous sa ligne.',
   'crons.agentHint': 'agent',
   'where.agent': 'Agent',
   'where.agentHelp': "Cette session tourne dans le dossier d'un agent : Claude y travaille avec le rôle et la mémoire de l'agent, plus ceux du topic, du projet et du niveau global.",
