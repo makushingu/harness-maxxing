@@ -334,6 +334,17 @@ def test_overlap_lock(org):
     assert not crons.is_running(j["id"])
 
 
+def test_a_status_probe_never_makes_a_run_refuse(org):
+    """is_running() holds the job lock for an instant: a run starting at that moment waits for it."""
+    import fcntl
+    import threading
+    j = crons.create_job({"name": "x", "command": "true"})
+    f = open(crons._lock_path(j["id"]), "a+")
+    fcntl.flock(f, fcntl.LOCK_EX)                                     # a probe from another process
+    threading.Timer(0.2, lambda: (fcntl.flock(f, fcntl.LOCK_UN), f.close())).start()
+    assert crons.run_job(j["id"])["ok"]
+
+
 # ---- API ------------------------------------------------------------------------------------
 def test_api_crud(client, org, monkeypatch):
     org.crontab.write_text(EXTERNAL)
