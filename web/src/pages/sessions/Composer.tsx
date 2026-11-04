@@ -86,7 +86,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
   // A link typed a request in this draft (prefillDraft) while the composer was already open: show it.
   React.useEffect(() => {
     const onDraft = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === draftKey) setText(loadDraft(draftKey))
+      if ((e as CustomEvent<string>).detail !== draftKey) return
+      setText(loadDraft(draftKey))
+      // a link started a request here: ready to finish the sentence (computer only, as autoFocus below)
+      if (window.matchMedia('(pointer: fine)').matches) requestAnimationFrame(() => focusAtEnd(ta.current))
     }
     window.addEventListener(DRAFT_EVENT, onDraft)
     return () => window.removeEventListener(DRAFT_EVENT, onDraft)
@@ -448,7 +451,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     [colKey],
   )
   React.useEffect(() => {
-    if (autoFocus && window.matchMedia('(pointer: fine)').matches) ta.current?.focus({ preventScroll: true })
+    if (autoFocus && window.matchMedia('(pointer: fine)').matches) focusAtEnd(ta.current) // after a pre-filled draft
   }, [autoFocus])
 
   // The queue stack rises from behind the composer and sinks back when it empties: the last content stays
@@ -748,4 +751,11 @@ function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
       </button>
     </div>
   )
+}
+
+/** Focus with the cursor after the text (a draft pre-filled by a link ends where the user goes on typing). */
+function focusAtEnd(el: HTMLTextAreaElement | null) {
+  if (!el) return
+  el.focus({ preventScroll: true })
+  el.setSelectionRange(el.value.length, el.value.length)
 }

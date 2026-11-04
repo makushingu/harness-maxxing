@@ -46,12 +46,15 @@ its commits (the clone's local `.git/info/exclude`).
 
 ## Create an agent
 
-**Agents -> New agent** (with no agent yet, the same choices are right on the Agents page): say in a sentence what it should do and when ("every Monday morning, sum up the players'
-feedback and suggest 3 improvements"). **Prepare with Claude** opens a session with your request: Claude guesses the topic, writes the role, picks
-the trigger, asks only what is missing (a few questions at most), shows you a summary, creates the agent, gives you
-its webhook address if it has one and offers a test run. You can ask the same thing in any session.
+**Agents -> New agent** opens a new session in **Sessions** with the request already started in its box (not sent):
+finish the sentence with what it should do and when ("every Monday morning, sum up the players' feedback and suggest 3
+improvements") and send. The session is in the topic shown in the list (when it is narrowed to one topic), otherwise in
+`general / inbox` and Claude first agrees with you on the right project and topic. Claude writes the role, picks the
+trigger, asks only what is missing (a few questions at most), shows you a summary, creates the agent, gives you its
+webhook address if it has one and offers a test run. With no agent yet, the Agents page shows **Create with Claude**
+with a topic to pick, and the same choices as below. You can ask the same thing in any session.
 
-Or start from a **ready-made agent**, under the box:
+Or start from a **ready-made agent** (in the creation sheet, or on the empty Agents page):
 
 | Agent | When | What it does |
 |---|---|---|
@@ -208,10 +211,10 @@ Only you. In every run, sandboxed or not, the agent is told that its role, setti
 answer. Without the sandbox nothing can stop it from editing its files, so a run that changes its `agent.json` or
 `CLAUDE.md` is reported in its conversation ("This run changed ...").
 
-To change an agent, use its page, or **Edit with Claude** (agent page, top right or in its profile): say what should
-change ("run it every morning at 8", "let it write in drafts/"), and a session of the topic - with your rights, not
-the agent's - opens in the Agents page and applies it with the `maxxing-agents` skill. **Create in a sentence** opens
-the same kind of session.
+To change an agent, use its page, or **Edit with Claude** (agent page, top right or in its profile): a new session of
+the agent's topic - with your rights, not the agent's - opens in **Sessions** with the request already started; finish
+the sentence with what should change ("run it every morning at 8", "let it write in drafts/") and send. Claude applies
+it with the `maxxing-agents` skill and sums up what changed. **New agent** opens the same kind of session.
 
 ### Rules
 

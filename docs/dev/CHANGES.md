@@ -14,9 +14,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `_changed_during()` at `on_turn_end` post a `note` (`status: changed`, `files`) when a run changed `agent.json` /
   `CLAUDE.md` (owner `update()` meanwhile sets `owner_at` and is not reported). Verified with a real sandboxed run:
   Edit refused by permissions, `sed -i` EBUSY, `>>` read-only, `.claude/` read-only, CLI refused.
-- UI: `EditWithClaude.tsx` (agent page: a normal session in the agent's topic with `agents.edit.prompt`) and
-  `SetupView.tsx` (routes `/agents/:p/:t/:a/setup/:sid` and `/agents/setup/:sid`, the session in place); QuickCreate
-  now lands on `/agents/setup/<sid>`.
+- UI: no dialog to create or change an agent with Claude. `EditWithClaude.tsx`: `draftUrl()` =
+  `/sessions?new=1&path=<topic>&prompt=<text>` (a new-session draft of the topic, pre-filled, not sent);
+  "Edit with Claude" (agent page) uses the agent's topic + `agents.edit.prompt`; `useCreateWithClaude()` ("New agent",
+  QuickCreate's "Create with Claude" + topic select) uses the topic in context + `agents.create.prompt`, else
+  `general/inbox` (or the first topic) + `agents.create.promptAnywhere`. The composer takes the focus with the cursor at
+  the end on a pre-filled draft (mount or `DRAFT_EVENT`; `prefillDraft` always fires it). The CreateAgent sheet keeps the
+  gallery, the manual form and the import.
 
 - `agents._git_exclude()`: creating an agent in a topic that is (or sits in) a git clone adds `/<rel>/agents/` to
   that clone's `.git/info/exclude` (worktrees/submodules through `gitdir:` + `commondir`), never a tracked `.gitignore`:

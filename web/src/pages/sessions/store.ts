@@ -506,8 +506,8 @@ export function prefillDraft(k: string, prompt: string) {
   } catch {
     /* private mode */
   }
-  if (cur === prompt.trim()) return
-  saveDraft(k, !cur || cur === prev.trim() ? prompt : `${cur}\n\n${prompt}`)
+  // already there (the same link again): only tell the open composer, which takes the focus
+  if (cur !== prompt.trim()) saveDraft(k, !cur || cur === prev.trim() ? prompt : `${cur}\n\n${prompt}`)
   try {
     localStorage.setItem(PREFILL + k, prompt)
   } catch {
