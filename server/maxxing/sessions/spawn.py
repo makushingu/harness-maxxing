@@ -118,7 +118,7 @@ def permission_args(mode: str) -> tuple[list[str], dict[str, str]]:
 
 def compact_window(cfg: dict) -> int | None:
     """CLAUDE_CODE_AUTO_COMPACT_WINDOW for `auto_compact_tokens` (None: automatic compaction is off)."""
-    limit = int(cfg.get("auto_compact_tokens") or 0)
+    limit = config.int_setting(cfg, "auto_compact_tokens")
     if limit <= 0:
         return None
     return max(COMPACT_WINDOW_MIN, min(COMPACT_WINDOW_MAX, max(limit, 100000) + COMPACT_WINDOW_MARGIN))
