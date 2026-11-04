@@ -104,6 +104,7 @@ counters; on a touch screen **+** stays visible and a long press opens the menu.
 
 Pick a topic, click **New session**, write your message. The session runs in the topic folder, so
 Claude automatically loads the workspace, project and topic memory (see [Memory](memory)).
+A topic has one new-session draft: picking, in a new session, a topic that already has one open takes you to it.
 
 **Its title** is short: the start of the message shows at once, then a shortened title replaces it (greetings and
 "can you…" removed, cut on a word): "Tu vas me créer une session d'automatisation de E-ink" becomes *Créer une

@@ -243,7 +243,16 @@ export const useSessionsUI = create<State>()(
           const cols = normalizeCols(s.cols.filter((c) => c !== dup).map((c) => (c.key === key ? ({ key, kind: 'session', id, ...(c.below && { below: true }), ...(c.wide && { wide: true }), ...(c.half && { half: true }) } as Col) : c)))
           return { cols }
         }),
-      setNewPath: (key, path) => set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) })),
+      setNewPath: (key, path) => {
+        // that topic already has a new column (the draft is per topic): this one goes, that one takes the focus
+        const other = get().cols.find((c) => c.kind === 'new' && c.path === path && c.key !== key)
+        if (other) {
+          get().close(key)
+          set({ focused: other.key })
+          return
+        }
+        set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) }))
+      },
       focus: (key) => {
         if (get().focused !== key) set({ focused: key })
       },
