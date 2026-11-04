@@ -292,6 +292,9 @@ def test_claude_job_validation(org):
     with pytest.raises(crons.CronError):
         crons.create_job({"name": "", "command": "true"})
     with pytest.raises(crons.CronError) as e:
+        crons.create_job({"name": "a\x00b", "command": "true"})      # would break every run (Popen env)
+    assert e.value.code == "invalid_name"
+    with pytest.raises(crons.CronError) as e:
         crons.create_job({"name": "x", "command": "true", "permission_mode": "yolo"})
     assert e.value.code == "invalid_permission_mode"
 
