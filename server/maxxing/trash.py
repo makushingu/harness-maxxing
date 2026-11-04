@@ -312,7 +312,7 @@ def delete(item_id: str) -> None:
 
 
 def _remove(p: Path) -> None:
-    if p.is_dir():
+    if p.is_dir() and not p.is_symlink():               # a link to a folder: the link goes, never its target
         shutil.rmtree(p, ignore_errors=True)
     else:
         p.unlink(missing_ok=True)
