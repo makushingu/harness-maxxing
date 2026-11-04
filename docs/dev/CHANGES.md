@@ -34,6 +34,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   in the window, `_last_fresh` for clients with none), and `trusted` (valid `mx_device`) or a client key in `_good`
   (successful sign-in within `GOOD_KEEP_S`, memory only, `GOOD_MAX` keys) skips the cap. ~25 rotating /64s used to
   hold the single slot and lock the owner out.
+- `PUT /api/auth/two-factor {"enabled": false}` now needs `password` (same "pw:" throttle as `/api/auth/password`,
+  shared `_check_current`) when 2FA is on, then `twofactor.notify("off_ui")` + a feed warning. `DELETE
+  /api/telegram` with 2FA on sends `notify("unlinked", wait=True)` (blocking `_send_sync`: the gateway is stopped
+  right after) and a feed warning. Unlinking itself still needs no password.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
