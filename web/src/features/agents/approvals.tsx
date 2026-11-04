@@ -9,7 +9,8 @@ import { useT, type TKey } from '@/i18n'
 import { agentRunRoute, usePendingApprovals } from '@/lib/queries'
 import type { Agent, AgentMessage, Approval } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Popover, PopoverContent, PopoverTrigger, Sensitive } from '@/components/ui'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Sensitive } from '@/components/ui'
+import { AgentAvatarIcon } from './Avatar'
 import { ApprovalCard } from '@/pages/sessions/Approvals'
 
 /** The requests waiting now for one agent (oldest first). */
@@ -65,50 +66,71 @@ export function ThreadApprovalBody({ m, live, decided }: { m: AgentMessage; live
   )
 }
 
-/** The "waiting for your OK" bubble of a desk as a button: it opens the waiting requests with Allow / Deny, without
- *  leaving the Office (the desk itself still opens the agent). */
+/** The "waiting for your OK" bubble of a desk as a button: it opens a centered window (a bottom sheet on a phone) with
+ *  the waiting requests, Allow / Deny, without leaving the Office (the desk itself still opens the agent). The window
+ *  closes once nothing waits any more. */
 export function WaitingBubble({ agent: a, className, style, children }: { agent: Agent; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
   const pending = useAgentApprovals(a.path, true)
   const sid = pending[0]?.session || a.running_sessions?.[0]?.id
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+  // No focus in the message box on open (no phone keyboard over the request); the desk's tooltip closes on the tap
+  // (pointerdown reaches it). Answered (here, on Telegram or in the run): nothing left to show, the window closes.
+  const had = React.useRef(false)
+  React.useEffect(() => {
+    if (!open) had.current = false
+    else if (pending.length) had.current = true
+    else if (had.current) setOpen(false)
+  }, [open, pending.length])
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn('cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
-          style={style}
-          onClick={stop}
-          onKeyDown={stop}
-          onPointerDown={stop}
-          draggable={false}
-          aria-label={t('agents.approval.open', { name: a.display_name })}
-          data-testid="office-approvals"
-        >
-          {children}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="grid w-[26rem] gap-2 p-3" onClick={stop} onKeyDown={stop} data-testid="office-approvals-pop">
-        <p className="flex items-center gap-1.5 text-sm font-medium">
-          <ShieldCheck className="size-4 text-warning" /> {t('agents.conv.waiting', { name: a.display_name })}
-        </p>
-        {pending.length ? (
-          <div className="grid max-h-[60vh] gap-2 overflow-y-auto">
-            {pending.map((x) => (
-              <ApprovalCard key={x.id} approval={x} className="shadow-none" />
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">{t('agents.approval.none')}</p>
-        )}
-        {sid && (
-          <Link to={agentRunRoute(a.path, sid)} onClick={() => setOpen(false)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10">
-            <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
-          </Link>
-        )}
-      </PopoverContent>
-    </Popover>
+    <>
+      <button
+        type="button"
+        className={cn('cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
+        style={style}
+        onClick={(e) => (stop(e), e.currentTarget.blur(), setOpen(true))}
+        onKeyDown={stop}
+        draggable={false}
+        aria-label={t('agents.approval.open', { name: a.display_name })}
+        data-testid="office-approvals"
+      >
+        {children}
+      </button>
+      {/* The window lives in a portal, but its React events still bubble up to the desk (which opens the agent).
+          Not pointerdown: stopping it would hide the outside tap from the window (it would not close). */}
+      <span className="contents" onClick={stop} onKeyDown={stop} onDragStart={stop}>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="md:max-w-xl" onOpenAutoFocus={(e) => e.preventDefault()} data-testid="office-approvals-pop">
+            <DialogHeader className="flex-row items-center gap-3">
+              <AgentAvatarIcon avatar={a.avatar} size={40} />
+              <div className="grid min-w-0 gap-0.5">
+                <DialogTitle className="flex items-center gap-1.5">
+                  <ShieldCheck className="size-4 shrink-0 text-warning" />
+                  <span className="truncate">{t('agents.conv.waiting', { name: a.display_name })}</span>
+                </DialogTitle>
+                <DialogDescription className="truncate">
+                  {a.project} / {a.topic}
+                </DialogDescription>
+              </div>
+            </DialogHeader>
+            {pending.length ? (
+              <div className="grid gap-4">
+                {pending.map((x, i) => (
+                  <ApprovalCard key={x.id} approval={x} plain className={cn(i > 0 && 'border-t pt-4')} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('agents.approval.none')}</p>
+            )}
+            {sid && (
+              <Link to={agentRunRoute(a.path, sid)} onClick={() => setOpen(false)} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10">
+                <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
+              </Link>
+            )}
+          </DialogContent>
+        </Dialog>
+      </span>
+    </>
   )
 }
