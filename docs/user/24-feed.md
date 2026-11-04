@@ -46,7 +46,10 @@ signing secret if you have it, **Create**: copy the URL into the service. The di
   works without a secret, but then anyone who learns the URL could send fake events. The source's **…** menu: *Send a test event*, *Set the signing secret*, *New URL* (the old one
   stops working), *Delete*.
 - A delivery sent twice (services retry) appears once, even when both copies arrive at the same moment. For Shopify
-  and GitHub, a signed event replayed by someone who captured it also appears only once. Up to 120 deliveries per minute per source.
+  and GitHub, a signed event replayed by someone who captured it also appears only once (even one that was ignored
+  or that you deleted, for 30 days). A signed *Generic JSON* body identical to one received in the last 24 hours is
+  a duplicate too: to send the same alert again within the day, put a time or an `id` in it. Up to 120 deliveries
+  per minute per source.
 
 ## From any script
 
