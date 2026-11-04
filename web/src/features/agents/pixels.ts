@@ -194,6 +194,14 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   return out
 }
 
+/** The character as SVG markup (16x16 viewBox, no tile), for what cannot render React: the Office views of
+ *  extensions get it with each agent (`avatar_svg`, an <img src="data:image/svg+xml,..."> or innerHTML). */
+export function avatarSvg(a: AgentAvatar, sleep = false): string {
+  const px = pixelsOf(a, sleep)
+  const rects = [...px.body, ...px.eyes].map((r) => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="1" fill="${r.fill}"/>`).join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${GRID} ${GRID}" shape-rendering="crispEdges">${rects}</svg>`
+}
+
 export const pick = (part: AvatarPart, v: string | undefined): string =>
   (AVATAR_OPTIONS[part] as readonly string[]).includes(v || '') ? v! : DEFAULT_AVATAR[part]
 

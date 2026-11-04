@@ -21,8 +21,8 @@ face, their name and a dot when one works, waits for you, has something to read 
 first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
 **Agents of this topic** in the topic's menu.
 
-With no agent open, the page shows the **Office**: every agent **at its desk**. Two views, picked at the top right
-(your browser remembers the choice):
+With no agent open, the page shows the **Office**: every agent **at its desk**. Pick its view in the menu at the top
+right (your browser remembers the choice):
 
 - **Classic**: one section per project (the dot is the project's color), one card per agent. Under each one, its name and one line that says where it is: *Working…*, *2 new results*, *Waiting for your
 OK*, *Last run failed*, *Off*, *Ran 7 min ago*, *Never run*. A small bubble above the head points out what needs you
@@ -33,10 +33,21 @@ Click a card to open the agent; point at it for its on/off switch and **Run** (a
   its screen lights up; **!** means it waits for your OK, a green bubble counts its new results, a red screen means
   its last run failed, and an agent that is off sleeps (**z Z**). Click a desk to open the agent; the **free desk**
   (**+**) of a room creates a new agent in that project.
+- **Futuristic**: the same office on a space station, still in pixel art. Each project is a **bay** with edges glowing
+  in its color and a window on space; each agent sits in a pod chair at a hover console, its holographic screen
+  floating above it. Same signs as Gamified: a working agent bobs and its screen flickers, **!** waits for your OK, a
+  green chip counts new results, a red glitching screen means its last run failed, **z Z** and no screen when it is
+  off; the **free console** (**+**) creates a new agent in that project.
+- **Your own views**: views made as extensions (below) are listed after these.
+- **Create my custom view** (last in the menu) opens a new session in `general/inbox` (or your first topic) with the
+  request already typed: say what you would like (a mission control, a farm, a train station, a plain table…), Claude
+  asks about the style and builds it as an extension. Once it is done, pick it in the same menu; if it is turned off
+  or deleted, the Office shows Classic. How it works: [Page extensions](page-extensions), "Office views".
 
-**Your order, your colors.** Drag a project (its name in the list or in Classic, the wall of its room in Gamified)
+**Your order, your colors.** Drag a project (its name in the list or in Classic, the wall of its room in Gamified or
+Futuristic)
 to move it, and drag an agent onto another of the same project to take its place; an agent never leaves its project.
-The **...** next to a project's name (on its sign in Gamified) moves it up or down and sets its **color**, also the
+The **...** next to a project's name (on its sign in Gamified and Futuristic) moves it up or down and sets its **color**, also the
 outfit of its new agents; use it on a touch screen, where dragging is not available. The order and colors are saved
 on the server: every browser and phone shows the same.
 

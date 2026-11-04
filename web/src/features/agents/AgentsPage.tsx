@@ -1,6 +1,8 @@
 // The overview of the Agents page, the Office (/agents with no agent selected, the right pane of AgentsLayout on a
-// computer; /agents/office on a phone). Two views, picked at the top right and kept per browser: Gamified (a
-// pixel-art office, OfficeGame.tsx) and Classic, below:
+// computer; /agents/office on a phone). Its views, picked in the menu at the top right (ViewMenu) and kept per
+// browser: Classic (below), Gamified (a pixel-art office, OfficeGame.tsx), Futuristic (a pixel space station,
+// OfficeFuture.tsx), then the views extensions bring (OfficeCustom.tsx) and "Create my custom view" (a new session of
+// general/inbox that builds one with the skill maxxing-extension). Classic:
 // one section per project (dot in the project colour, name, count, "..." menu, like the lanes of Tasks; order, colours
 // and drag and drop of projects and agents: layout.tsx), each agent a card with
 // its character sitting behind a small desk, its name and one status line in words. A small bubble above the head
@@ -9,29 +11,58 @@
 // The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, Gamepad2, LayoutGrid, Play, Plus, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Gamepad2, LayoutGrid, Play, Plus, Rocket, ShieldCheck, WandSparkles } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { agentRoute, useAgents, usePatchAgent } from '@/lib/queries'
+import { agentRoute, useAgents, useExtensions, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn, store } from '@/lib/utils'
 import { useCompact } from '@/stores/media'
-import { Button, EmptyState, Segmented, Sensitive, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  EmptyState,
+  NamedIcon,
+  Sensitive,
+  Skeleton,
+  StatusDot,
+  Switch,
+  Tooltip,
+} from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
 import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
 import { QuickCreate, type CreateStart } from './CreateAgent'
 import { OfficeGame } from './OfficeGame'
+import { OfficeFuture } from './OfficeFuture'
+import { OfficeCustom } from './OfficeCustom'
+import { draftUrl } from './EditWithClaude'
 import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi } from './layout'
 
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
-export type OfficeView = 'classic' | 'game'
+/** A built-in view, or `x:<extension id>` (a view an extension brings). */
+export type OfficeView = 'classic' | 'game' | 'future' | `x:${string}`
 const VIEW_KEY = 'mx-agents-office-view'
+const BUILTIN_VIEWS = [
+  { id: 'classic', icon: LayoutGrid, label: 'agents.office.classic' },
+  { id: 'game', icon: Gamepad2, label: 'agents.office.game' },
+  { id: 'future', icon: Rocket, label: 'agents.office.future' },
+] as const
 
 /** The view of the Office, kept per browser (Classic by default). */
 function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
-  const [v, setV] = React.useState<OfficeView>(() => (store.get(VIEW_KEY) === 'game' ? 'game' : 'classic'))
+  const [v, setV] = React.useState<OfficeView>(() => {
+    const x = store.get(VIEW_KEY) || ''
+    return x === 'game' || x === 'future' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
+  })
   const set = React.useCallback((x: OfficeView) => {
     store.set(VIEW_KEY, x)
     setV(x)
@@ -39,12 +70,33 @@ function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
   return [v, set]
 }
 
+/** The Office views extensions bring (manifest "agents_view"), the ones that work now. */
+function useCustomViews() {
+  const { data, isLoading } = useExtensions()
+  const views = React.useMemo(
+    () => (data || []).filter((e) => e.enabled && !e.error && e.agents_view).map((e) => ({ id: e.id, name: e.agents_view!.name, icon: e.agents_view!.icon })),
+    [data],
+  )
+  return { views, loading: isLoading }
+}
+
+/** Where "Create my custom view" opens its session: general/inbox when it exists, else the first topic out of system. */
+function useCustomViewTopic(): string {
+  const { data: ws } = useWorkspace()
+  const topics = (ws?.projects || []).flatMap((p) => p.topics.map((tp) => ({ project: p.name, path: tp.path })))
+  return (topics.find((x) => x.path === 'projects/general/topics/inbox') || topics.find((x) => x.project !== 'system') || topics[0])?.path || 'projects/general/topics/inbox'
+}
+
 export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart: (s: CreateStart) => void }) {
   const t = useT()
   const on = useAgentsOn()
   const { data, isLoading, error, refetch } = useAgents(on !== false)
   const agents = React.useMemo(() => data?.agents || [], [data])
-  const [view, setView] = useOfficeView()
+  const [picked, setView] = useOfficeView()
+  const custom = useCustomViews()
+  // A view of an extension that is gone (deleted, off, in error) shows Classic; the choice is kept for when it is back.
+  const ext = picked.startsWith('x:') ? custom.views.find((v) => `x:${v.id}` === picked) : undefined
+  const view: OfficeView = picked.startsWith('x:') && !ext && !custom.loading ? 'classic' : picked
   const touch = useCompact()
   // Projects and agents in the order of the layout (picked by hand, else workspace order / topic then name).
   const layout = useAgentsLayout()
@@ -54,7 +106,7 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
     <Page
       title={t('agents.side.office')}
       description={t('agents.desc')}
-      width={view === 'game' ? 'wide' : 'default'}
+      width={view === 'classic' ? 'default' : 'wide'}
       leading={
         touch ? (
           <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
@@ -66,18 +118,7 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
       }
       actions={
         <>
-          {agents.length > 0 && (
-            <Segmented
-              size="sm"
-              value={view}
-              onChange={setView}
-              aria-label={t('agents.office.view')}
-              options={[
-                { value: 'classic', icon: <LayoutGrid />, label: <span className="max-sm:sr-only">{t('agents.office.classic')}</span> },
-                { value: 'game', icon: <Gamepad2 />, label: <span className="max-sm:sr-only">{t('agents.office.game')}</span> },
-              ]}
-            />
-          )}
+          {agents.length > 0 && <ViewMenu view={view} custom={custom.views} onChange={setView} />}
           <Button size="sm" onClick={onNew} data-testid="agent-new">
             <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
           </Button>
@@ -105,6 +146,10 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
         <AgentsEmpty onStart={onStart} />
       ) : view === 'game' ? (
         <OfficeGame groups={groups} layout={layout} onStart={onStart} />
+      ) : view === 'future' ? (
+        <OfficeFuture groups={groups} layout={layout} onStart={onStart} />
+      ) : view.startsWith('x:') ? (
+        ext ? <OfficeCustom ext={ext} groups={groups} layout={layout} /> : <Skeleton className="h-[40rem] rounded-xl" />
       ) : (
         <div className="grid gap-8" data-testid="agents-overview">
           {groups.map(({ project: p, agents: list }, i) => (
@@ -121,6 +166,48 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
         </div>
       )}
     </Page>
+  )
+}
+
+/** The view picker: the current view's icon and name; the built-in views, the ones of extensions, then "Create my
+ *  custom view" (a new session that builds one as an extension, its request already typed). */
+function ViewMenu({ view, custom, onChange }: { view: OfficeView; custom: { id: string; name: string; icon: string }[]; onChange: (v: OfficeView) => void }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const topic = useCustomViewTopic()
+  const builtin = BUILTIN_VIEWS.find((v) => v.id === view)
+  const ext = custom.find((v) => `x:${v.id}` === view)
+  const icon = builtin ? <builtin.icon /> : <NamedIcon name={ext?.icon} />
+  const name = builtin ? t(builtin.label) : ext?.name || t('agents.office.classic')
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" aria-label={`${t('agents.office.view')}: ${name}`} data-testid="agents-office-view" data-view={view}>
+          {icon}
+          <span className="max-w-40 truncate max-sm:sr-only">{name}</span>
+          <ChevronDown className="text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel>{t('agents.office.view')}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={view} onValueChange={(v) => onChange(v as OfficeView)}>
+          {BUILTIN_VIEWS.map((v) => (
+            <DropdownMenuRadioItem key={v.id} value={v.id} data-testid={`agents-view-${v.id}`}>
+              <v.icon /> {t(v.label)}
+            </DropdownMenuRadioItem>
+          ))}
+          {custom.map((v) => (
+            <DropdownMenuRadioItem key={v.id} value={`x:${v.id}`} data-testid={`agents-view-x-${v.id}`}>
+              <NamedIcon name={v.icon} /> <span className="truncate">{v.name}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate(draftUrl(topic, t('agents.office.customPrompt')))} data-testid="agents-view-create">
+          <WandSparkles /> {t('agents.office.custom')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

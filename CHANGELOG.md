@@ -21,7 +21,7 @@ Changes:
   requests can be answered from Telegram with Allow / Deny. An agent never changes its own role, settings or
   triggers: you do, from its page or with **Edit with Claude**, a session that applies what you ask. Agents also read and write Claude Code agent files, and a
   topic's agents show under it in the Sessions list. The Agents page lists them by project with a state filter, and its
-  **Office** has two views: Classic (cards) and Gamified (a pixel office, one room per project, a desk per agent); drag projects and agents to order them, and pick each project's color. **Off by default**: turn it on in Settings -> Features -> Agents.
+  **Office** has three views: Classic (cards), Gamified (a pixel office, one room per project, a desk per agent) and Futuristic (the same on a space station), plus your own: **Create my custom view** asks Claude to build one; drag projects and agents to order them, and pick each project's color. **Off by default**: turn it on in Settings -> Features -> Agents.
   [Show me](#show:agents)
 
 ## 2.0.0-alpha.112 - 2026-11-04
