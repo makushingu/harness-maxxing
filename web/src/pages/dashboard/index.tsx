@@ -68,7 +68,7 @@ const WidgetCard = React.memo(function WidgetCard({ w, index, panel }: { w: Widg
         </Tooltip>
       </div>
       <div className={cn('flex-1 px-[var(--pad-card)] pt-2 pb-[var(--pad-card)] transition-opacity', refresh.isPending && 'opacity-60')}>
-        {w.pending ? (
+        {w.pending && !card ? (
           <SkeletonText lines={3} className="py-1" />
         ) : w.error && !card ? (
           <div className="flex min-h-24 flex-col items-center justify-center gap-2 text-center">
