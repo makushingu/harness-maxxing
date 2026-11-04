@@ -233,7 +233,8 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 
 | Command | Purpose |
 |---|---|
-| `maxxing telegram status [--json]` | bot, chat, threads, settings, last error |
+| `maxxing telegram status [--json]` | bot, chat, mode, threads, settings, last error |
+| `maxxing telegram mode [simple\|threads\|mirror]` | show or change the mode (to `simple`: the session threads and Crons / Alerts / Notifications are deleted from Telegram) |
 | `maxxing telegram test` | send a test message |
 | `maxxing voice status [--json]` | voice messages: engine, model, readiness |
 | `maxxing voice set [--engine] [--model] [--language]` | change the voice settings |

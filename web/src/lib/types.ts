@@ -511,7 +511,9 @@ export type TelegramBot = { id: number; username: string; name: string }
 export type TelegramChat = { id: number; title: string; type: string }
 /** Special threads have a path ('#crons', '#alerts'); session threads a session_id. */
 export type TelegramThread = { path: string; thread_id: number; name: string; session_id?: string }
-export type TelegramSettings = { notify_crons: boolean; login_alerts: boolean; two_factor?: boolean; reply_mode: 'final' | 'progress'; thread_days: number; mirror_web: boolean }
+/** simple = one chat (alerts + sessions as replies); threads = one thread per open session; mirror = threads + web turns copied. */
+export type TelegramMode = 'simple' | 'threads' | 'mirror'
+export type TelegramSettings = { mode: TelegramMode; notify_crons: boolean; notify_system: boolean; login_alerts: boolean; two_factor?: boolean; reply_mode: 'final' | 'progress'; thread_days: number; mirror_web: boolean }
 export type PcBrowser = 'brave' | 'chrome' | 'edge' | 'vivaldi' | 'opera' | 'chromium'
 export type PcOs = 'windows' | 'darwin' | 'linux'
 export type PcStatus = {
@@ -539,7 +541,10 @@ export type TelegramStatus = {
   bot: TelegramBot | null
   chat: TelegramChat | null
   topics_enabled: boolean
+  mode: TelegramMode
   threads: TelegramThread[]
+  /** Agents with the Telegram option: their own thread, in every mode. */
+  agent_threads?: { path: string; thread_id: number; name: string }[]
   settings: TelegramSettings
   /** A link code is pending (/start <code>). */
   linking: boolean

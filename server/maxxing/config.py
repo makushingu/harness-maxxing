@@ -90,10 +90,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "session_threads": {},             # session id -> {tid, name}: one thread per open session
         "agent_threads": {},               # agent path -> {tid, name}: the thread of an agent with the telegram option
         "thread_days": 30,                 # open sessions idle longer than this lose their thread
-        "sessions": {},                    # topic path -> session id (main chat when threads are off)
         "notify_crons": True, "login_alerts": True, "reply_mode": "progress",
         "notify_system": True,             # update / rollback / vulnerability problems into the "Alerts" thread
-        "mirror_web": False,               # web turns are copied into the session's thread (opt-in)
+        "mirror_web": False,               # older installs: mode "mirror" (read once by gateway.mode())
+        # "mode" (simple | threads | mirror) has no default here: gateway.mode() tells a new install ("simple")
+        # from one that already has threads, and the gateway writes the result down
     },
     "backup": {"repo": "", "schedule": "40 4 * * *",
                "include": ["**/CLAUDE.md", "**/memory.md", "**/NOTES.md", "tasks.json",

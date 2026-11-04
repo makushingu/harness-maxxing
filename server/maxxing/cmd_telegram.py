@@ -1,4 +1,4 @@
-"""`maxxing telegram status|test` - inspect and test the Telegram bridge from a shell."""
+"""`maxxing telegram status|test|mode` - inspect, test and set up the Telegram bridge from a shell."""
 from __future__ import annotations
 
 import json
@@ -11,6 +11,9 @@ def _configure(p) -> None:
     s = sub.add_parser("status", help="show the Telegram configuration")
     s.add_argument("--json", action="store_true", help="machine-readable output")
     sub.add_parser("test", help="send a test message to the linked chat")
+    m = sub.add_parser("mode", help="show or choose the mode: simple (one chat), threads (one thread per session), "
+                                    "mirror (threads + web conversations copied)")
+    m.add_argument("mode", nargs="?", choices=("simple", "threads", "mirror"))
 
 
 def _age(sec: float | None) -> str:
@@ -24,6 +27,16 @@ def _handler(a) -> int:
     # This process is not the server: status() reads the state file the server's poller writes
     # (heartbeat last_poll_ok + poller_pid, poll_error, sync_error, pending link).
     from .telegram import gateway
+    if a.tg_cmd == "mode":
+        if not a.mode:
+            print(gateway.mode())
+            return 0
+        res = gateway.set_mode(a.mode, wait=True)
+        print(f"Mode: {res['mode']}" + (f" - {res['deleting']} thread(s) deleted in Telegram (agents' threads kept)"
+                                        if res["deleting"] else ""))
+        if a.mode != "simple":
+            print("The threads are created within a few minutes (or press Retry in Settings > Telegram).")
+        return 0
     st = gateway.status()
     if a.tg_cmd == "status":
         if getattr(a, "json", False):
@@ -41,13 +54,17 @@ def _handler(a) -> int:
         if link:
             left = "expired" if link["expired"] else f"pending ({link['expires_in'] // 60} min left)"
             print(f"link       : {left}")
+        print(f"mode       : {st['mode']}" + ("" if st["topics_enabled"] or st["mode"] == "simple"
+                                                 else " (threads refused by Telegram: works as simple)"))
         print(f"threads    : {len(st['threads'])} (topics {'on' if st['topics_enabled'] else 'off'})")
         for th in st["threads"]:
             kind = f"session {th['session_id'][:8]}" if th.get("session_id") else th["path"]
             print(f"  - {th['name'] or '?'}  [{kind}]")
+        for th in st.get("agent_threads") or []:
+            print(f"  - {th['name'] or '?'}  [agent {th['path']}]")
         s = st["settings"]
-        print(f"settings   : crons={s['notify_crons']} alerts={s['login_alerts']} replies={s['reply_mode']} "
-              f"thread_days={s.get('thread_days')}")
+        print(f"settings   : crons={s['notify_crons']} sign-ins={s['login_alerts']} system={s['notify_system']} "
+              f"replies={s['reply_mode']}" + (f" thread_days={s.get('thread_days')}" if s["mode"] != "simple" else ""))
         if st.get("poll_error"):
             print(f"poll error : {st['poll_error']}")
         if st.get("sync_error"):
@@ -71,4 +88,4 @@ def _handler(a) -> int:
     return 0 if res["ok"] else 1
 
 
-cli.register("telegram", "Telegram bridge (status, test)", _configure, _handler)
+cli.register("telegram", "Telegram bridge (status, test, mode)", _configure, _handler)

@@ -428,7 +428,8 @@ def mx_state(tmp_path, monkeypatch):
     monkeypatch.setenv("MAXXING_GITHUB_API", "http://127.0.0.1:9")
     monkeypatch.setenv("MAXXING_GITHUB_GIT", f"file://{tmp_path / 'nowhere'}")
     monkeypatch.setenv("MAXXING_TELEGRAM_POLL", "1")
-    config.update_config(workspace=str(ws))
+    # the Telegram tests were written for one thread per session; the simple mode has its own tests
+    config.update_config(workspace=str(ws), telegram={"mode": "threads"})
     return tmp_path
 
 

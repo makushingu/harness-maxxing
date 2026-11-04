@@ -366,7 +366,7 @@ export function TelegramSetup() {
   const stage = telegramStage(s)
   return (
     <div className="grid gap-6">
-      <SubSteps stage={stage} threadsOk={s.topics_enabled && s.threads.length > 0} />
+      <SubSteps stage={stage} threadsOk={s.mode === 'simple' || (s.topics_enabled && s.threads.length > 0)} />
       {tokenRejected(s) ? (
         <TokenRejected />
       ) : (
@@ -378,9 +378,15 @@ export function TelegramSetup() {
               <Callout tone="success" title={t('telegram.chatLinked')}>
                 <Sensitive>{s.chat?.title}</Sensitive>
               </Callout>
-              <p className="text-sm text-muted-foreground">{t('telegram.threadsIntro')}</p>
-              <TopicsNotice status={s} />
-              <ThreadList status={s} />
+              {s.mode === 'simple' ? (
+                <p className="text-sm text-muted-foreground">{t('telegram.simpleIntro')}</p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">{t('telegram.threadsIntro')}</p>
+                  <TopicsNotice status={s} />
+                  <ThreadList status={s} />
+                </>
+              )}
             </div>
           )}
         </>
