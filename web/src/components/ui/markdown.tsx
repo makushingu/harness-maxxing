@@ -107,7 +107,9 @@ export type MarkdownProps = {
  * open in a new tab with rel="noopener noreferrer nofollow", code blocks are highlighted with a copy button,
  * ```mermaid blocks are drawn as diagrams, ```git blocks as the live graph of a repository.
  */
-export function Markdown({ children, className, onLink, components }: MarkdownProps) {
+// Memoized: a parent that re-renders for something else (a dictionary group arriving re-renders every `useT` user)
+// reuses the parsed tree instead of parsing and highlighting the whole text again.
+export const Markdown = React.memo(function Markdown({ children, className, onLink, components }: MarkdownProps) {
   // Re-render once the grammars are there - only the messages that have something to highlight (the others would
   // parse their whole text again for the same output).
   React.useSyncExternalStore(subscribeLowlight, FENCE_LANG.test(children) ? lowlightReady : noHighlight)
@@ -189,7 +191,7 @@ export function Markdown({ children, className, onLink, components }: MarkdownPr
       </ReactMarkdown>
     </div>
   )
-}
+})
 
 /** Above this size (characters) a text is shown as plain text instead of formatted. */
 const MAX_MARKDOWN = 300_000

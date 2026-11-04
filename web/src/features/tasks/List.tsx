@@ -19,6 +19,16 @@ export function topicName(path: string | null): string | null {
   return m ? m[1] : ''
 }
 
+/** Rows rendered per step on a big board (see `shown`). */
+const RENDER_STEP = 200
+
+/** Appends to the list of a key (a copy per task made grouping quadratic). */
+function push<K>(m: Map<K, Task[]>, k: K, x: Task) {
+  const a = m.get(k)
+  if (a) a.push(x)
+  else m.set(k, [x])
+}
+
 type Group = { key: string; title: React.ReactNode; tone?: 'danger' | 'warn'; tasks: Task[] }
 
 const DUE_GROUPS: { key: string; label: TKey; tone?: Group['tone'] }[] = [
@@ -58,7 +68,7 @@ export function TaskList({
       const m = new Map<string, Task[]>()
       for (const x of tasks) {
         const k = x.status === 'done' ? 'done' : dueState(x, today)
-        m.set(k, [...(m.get(k) || []), x])
+        push(m, k, x)
       }
       return DUE_GROUPS.filter((g) => m.has(g.key)).map((g) => ({
         key: g.key,
@@ -72,7 +82,7 @@ export function TaskList({
       for (const x of tasks) {
         const name = topicName(x.topic_path)
         const k = name === null ? '\u0000none' : name === '' ? '\u0000project' : name
-        m.set(k, [...(m.get(k) || []), x])
+        push(m, k, x)
       }
       const keys = [...m.keys()].sort((a, b) => Number(a.startsWith('\u0000')) - Number(b.startsWith('\u0000')) || (a === '\u0000none' ? 1 : 0) - (b === '\u0000none' ? 1 : 0) || a.localeCompare(b))
       const out = keys.map<Group>((k) => ({
@@ -96,7 +106,7 @@ export function TaskList({
     const m = new Map<string, Task[]>()
     for (const x of tasks) {
       const k = x.project_id && projById.has(x.project_id) ? x.project_id : ''
-      m.set(k, [...(m.get(k) || []), x])
+      push(m, k, x)
     }
     const out: Group[] = projects
       .filter((p) => m.has(p.id))
@@ -116,9 +126,37 @@ export function TaskList({
     return out
   }, [tasks, today, groupBy, sort, projects, projById, t])
 
+  // A big board renders progressively, like a big folder in Files: the first rows at once, the next ones as the
+  // end of the list comes near.
+  const [shown, setShown] = React.useState(RENDER_STEP)
+  const [shownFor, setShownFor] = React.useState({ groupBy, sort })
+  if (shownFor.groupBy !== groupBy || shownFor.sort !== sort) {
+    setShownFor({ groupBy, sort })
+    setShown(RENDER_STEP)
+  }
+  const visible = React.useMemo(() => {
+    let left = shown
+    const out: Group[] = []
+    for (const g of groups) {
+      if (left <= 0) break
+      out.push(g.tasks.length > left ? { ...g, tasks: g.tasks.slice(0, left) } : g)
+      left -= g.tasks.length
+    }
+    return out
+  }, [groups, shown])
+  const more = groups.reduce((n, g) => n + g.tasks.length, 0) > shown
+  const sentinel = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    const el = sentinel.current
+    if (!more || !el) return
+    const io = new IntersectionObserver((xs) => xs.some((x) => x.isIntersecting) && setShown((n) => n + RENDER_STEP), { rootMargin: '800px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [more, shown])
+
   return (
     <div className="grid gap-5" data-testid="task-list">
-      {groups.map((g) => (
+      {visible.map((g, i) => (
         <section key={g.key} className="grid gap-2">
           <h2
             className={cn(
@@ -128,13 +166,13 @@ export function TaskList({
             )}
           >
             {g.title}
-            <span className="text-xs font-normal text-muted-foreground tabular-nums">{g.tasks.length}</span>
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">{groups[i].tasks.length}</span>
             <span className="ml-auto flex">
               <SelectDot
-                checked={g.tasks.every((x) => selected.has(x.id))}
+                checked={groups[i].tasks.every((x) => selected.has(x.id))}
                 visible={selected.size > 0}
                 label={t('tasks.bulk.selectGroup')}
-                onToggle={(on) => (on ? useTaskSelection.getState().add(g.tasks.map((x) => x.id)) : useTaskSelection.getState().remove(g.tasks.map((x) => x.id)))}
+                onToggle={(on) => (on ? useTaskSelection.getState().add(groups[i].tasks.map((x) => x.id)) : useTaskSelection.getState().remove(groups[i].tasks.map((x) => x.id)))}
               />
             </span>
           </h2>
@@ -155,6 +193,7 @@ export function TaskList({
           </ul>
         </section>
       ))}
+      {more && <div ref={sentinel} aria-hidden className="h-px" />}
     </div>
   )
 }
