@@ -16,7 +16,7 @@ import {
 import { Callout } from '@/features/common'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
-import { FeedTriggerFields, WebhookKindSelect, WebhookMade, triggerSummary } from './parts'
+import { FeedTriggerFields, WebhookKindSelect, WebhookMade, agoText, triggerSummary } from './parts'
 
 /** A dashed "add" row of the panel. */
 function AddRow({ icon: Icon, label, onClick, testId }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void; testId?: string }) {
@@ -118,7 +118,7 @@ export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
               <span className={cn('size-1.5 rounded-full', st?.events ? 'bg-success' : 'bg-muted-foreground/40')} aria-hidden />
               <span className="min-w-0 flex-1">
                 {st?.events && st.last_event_at
-                  ? t('agents.when.received', { count: st.events, when: fmtRelative(st.last_event_at, lang) })
+                  ? t('agents.when.received', { count: st.events, when: agoText(st.last_event_at, lang, t) })
                   : t('agents.when.noneReceived')}
               </span>
               <Button

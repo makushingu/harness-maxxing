@@ -49,7 +49,9 @@ const STATE_GROUPS: { id: string; label: (t: TFn) => string; has: (s: AgentState
 /** Most recent activity first (its last result or skip), then by name. */
 const byActivity = (a: Agent, b: Agent) => (b.last_run?.at || b.created || 0) - (a.last_run?.at || a.created || 0) || a.display_name.localeCompare(b.display_name)
 
-export function AgentsList({ onNew, className }: { onNew: () => void; className?: string }) {
+/** `empty`: shown instead of the short "No agent yet" when there is no agent at all (the touch layout, where the list
+ *  is the whole page). */
+export function AgentsList({ onNew, empty, className }: { onNew: () => void; empty?: React.ReactNode; className?: string }) {
   const t = useT()
   const mask = useMask()
   const { data, isLoading, error, refetch } = useAgents()
@@ -139,6 +141,8 @@ export function AgentsList({ onNew, className }: { onNew: () => void; className?
               </Button>
             }
           />
+        ) : !groups.length && empty && !data?.agents.length ? (
+          empty
         ) : !groups.length ? (
           <EmptyState compact icon={Bot} title={ql || topic ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
         ) : (

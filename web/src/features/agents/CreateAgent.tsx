@@ -125,7 +125,11 @@ const fromTemplate = (tp: AgentTemplate, topicPath?: string): Form => ({
   hookPrompt: tp.webhook?.prompt || '',
 })
 
-export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; onOpenChange: (o: boolean) => void; topicPath?: string }) {
+/** How the sheet opens: the one-sentence way (default), straight on the steps, on the import, or on a template
+ *  (chosen from the empty Agents page, which shows the same one-sentence box and gallery). */
+export type CreateStart = { manual?: boolean; importing?: boolean; template?: AgentTemplate | null }
+
+export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: boolean; onOpenChange: (o: boolean) => void; topicPath?: string; start?: CreateStart | null }) {
   const t = useT()
   const mask = useMask()
   const navigate = useNavigate()
@@ -145,15 +149,17 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
 
   React.useEffect(() => {
     if (open) {
-      setF(fresh(topicPath))
-      setStep(0)
-      setManual(false)
-      setImporting(false)
-      setTpl(null)
+      const tp = start?.template || null
+      const next = tp ? fromTemplate(tp, topicPath) : fresh(topicPath)
+      setF(next)
+      setStep(tp && next.project && next.topic ? 1 : 0)
+      setManual(!!tp || !!start?.manual)
+      setImporting(!tp && !!start?.importing)
+      setTpl(tp)
       setErrors({})
       setMade(null)
     }
-  }, [open, topicPath])
+  }, [open, topicPath, start])
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }))
 
   const projects = ws?.projects || []
@@ -305,7 +311,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
           ) : step === 1 ? (
             <>
               {tpl && <Callout tone="info">{t('agents.gallery.from', { name: tpl.name, needs: tpl.needs })}</Callout>}
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid items-start gap-3 sm:grid-cols-2">
                 <FormField label={t('agents.create.name')} error={errors.name}>
                   <Input value={f.display} autoFocus maxLength={60} onChange={(e) => set('display', e.target.value)} placeholder={t('agents.create.namePlaceholder')} data-testid="agent-name" />
                 </FormField>
@@ -323,7 +329,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
               <FormField label={t('agents.create.role')} hint={t('agents.create.roleHint')}>
                 <Textarea minRows={4} maxRows={14} value={f.role} onChange={(e) => set('role', e.target.value)} placeholder={t('agents.create.rolePlaceholder')} data-testid="agent-role" />
               </FormField>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid items-start gap-3 sm:grid-cols-2">
                 <FormField label={t('agents.field.model')}>
                   <ModelSelect value={f.model} onChange={(v) => set('model', v)} />
                 </FormField>
@@ -444,7 +450,7 @@ function TriggerToggle({
 /** "What should it do, and when?" in a sentence: a new session in the chosen topic gets the request, and Claude
  * (skill maxxing-agents) infers the rest, asks what is missing and creates the agent. Below, the gallery of
  * ready-made agents: one fills the steps of the form. */
-function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone }: { topicPath?: string; onManual: () => void; onImport: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void }) {
+export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone, autoFocus = true }: { topicPath?: string; onManual: () => void; onImport: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void; autoFocus?: boolean }) {
   const t = useT()
   const lang = useLang()
   const { data: templates } = useAgentTemplates(lang)
@@ -470,7 +476,7 @@ function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone }: { to
     <div className="grid gap-4" data-testid="agent-quick">
       <div className="grid gap-2 rounded-xl border bg-card p-3 focus-within:border-primary/50">
         <Textarea
-          autoFocus
+          autoFocus={autoFocus}
           minRows={3}
           maxRows={10}
           value={text}
@@ -613,7 +619,7 @@ function ImportAgentFile({ topicPath, onBack, onOpen }: { topicPath?: string; on
           data-testid="agent-import-text"
         />
       </FormField>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid items-start gap-3 sm:grid-cols-2">
         <FormField label={t('agents.import.topic')}>
           <Select value={where || undefined} onValueChange={setWhere} placeholder={t('agents.create.pickTopic')} options={topics.map((x) => ({ value: x.value, label: mask(x.label, 8) }))} />
         </FormField>
