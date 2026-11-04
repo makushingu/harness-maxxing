@@ -255,12 +255,17 @@ def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, 
 
 def _file_stat(fp: str, base: str) -> os.stat_result | None:
     """stat of a file worth reading, else None: only regular files (reading a FIFO named notes.md would block
-    the whole index)."""
+    the whole index), and a link only when it points inside the workspace (else any file the service can
+    read - a key, a config - would land in the index and the search results)."""
     try:
         st = os.stat(fp)
         if not stat.S_ISREG(st.st_mode):
             return None
-    except OSError:
+        if os.path.islink(fp):
+            root = os.path.realpath(base)
+            if os.path.commonpath([os.path.realpath(fp), root]) != root:
+                return None
+    except (OSError, ValueError):
         return None
     return st
 

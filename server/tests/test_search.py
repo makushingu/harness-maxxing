@@ -268,3 +268,16 @@ def test_a_fifo_named_like_a_text_file_does_not_block_the_index(client, mx):
     assert not blocked, "the index blocked reading a FIFO"
     assert [r["title"] for r in _q(client, "fromage")] == ["notes.md"]
 
+
+def test_a_link_to_a_file_outside_the_workspace_is_not_indexed(client, mx, tmp_path):
+    secret = tmp_path / "outside" / "app.conf"
+    secret.parent.mkdir()
+    secret.write_text("password=zqxsecretvalue123\n")
+    d = config.workspace() / "projects" / "acme" / "topics" / "blog"
+    d.mkdir(parents=True)
+    (d / "notes.md").write_text("zqxsecretvalue123 dans une vraie note\n")
+    os.symlink(secret, d / "link.txt")
+    os.symlink(secret, d / "memory.md")
+    os.symlink(d / "notes.md", d / "inside.md")              # a link inside the workspace is still read
+    search.refresh()
+    assert sorted(r["title"] for r in _q(client, "zqxsecretvalue123")) == ["inside.md", "notes.md"]
