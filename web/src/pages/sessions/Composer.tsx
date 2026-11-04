@@ -713,7 +713,7 @@ function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
   const t = useT()
   const done = !!att.path
   return (
-    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1', att.error && 'border-destructive/50')}>
+    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1 pointer-coarse:pr-10', att.error && 'border-destructive/50')}>
       {att.preview && isImage(att.name) ? (
         <img src={att.preview} alt="" className="size-10 shrink-0 rounded-md object-cover" />
       ) : (
@@ -734,7 +734,7 @@ function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
         type="button"
         onClick={onRemove}
         aria-label={t('common.remove')}
-        className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-muted-foreground before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-muted-foreground pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:h-full pointer-coarse:w-10 pointer-coarse:rounded-none before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <X className="size-3.5" />
       </button>
