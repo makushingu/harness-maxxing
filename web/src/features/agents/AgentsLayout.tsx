@@ -1,7 +1,7 @@
 // The Agents page (/agents/*, Settings -> Features -> agents_page), laid out like a messaging app: the list of
 // agents on the left (AgentsList), the selected agent on the right.
 //   /agents                                  -> the overview on the right: the Office (agents at their desks, by
-//                                               project; Classic or Gamified view, chosen at the top right)
+//                                               project; Classic or Space view, chosen at the top right)
 //   /agents/office                           -> the same Office (the way to it on a phone, where /agents is the list)
 //   /agents/<project>/<topic>/<name>         -> the agent: its conversation + its profile (AgentPage)
 //   /agents/<project>/<topic>/<name>/runs/<sid> -> one run, the full session in place (RunView)

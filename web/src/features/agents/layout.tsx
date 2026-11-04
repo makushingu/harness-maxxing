@@ -1,4 +1,4 @@
-// The layout of the Agents page, shared by the list (AgentsList) and both views of the Office (Classic, Gamified):
+// The layout of the Agents page, shared by the list (AgentsList) and both views of the Office (Classic, Space):
 // the order of the projects, the order of the agents inside each project and the colour of each project, picked by
 // hand and kept on the server (GET/PUT /api/agents/layout, the same on every device). What was never moved keeps the
 // default order: projects in the workspace order, agents by topic then name; a project's colour defaults to
@@ -91,7 +91,8 @@ export function useAgentsLayout(): AgentsLayoutApi {
   const put = (next: Partial<AgentsLayout>) => save.mutate({ ...EMPTY, ...lay, ...next })
   const moveProject = (p: string, target: string) => {
     const next = moveTo(projects, p, target)
-    if (next !== projects) put({ projects: next })
+    // Names kept on purpose (a project with no agent for now, a renamed one coming back) stay after the moved ones.
+    if (next !== projects) put({ projects: [...next, ...(lay?.projects || []).filter((x) => !next.includes(x))] })
   }
   const stepProject = (p: string, dir: -1 | 1, among = projects) => {
     const target = among[among.indexOf(p) + dir]

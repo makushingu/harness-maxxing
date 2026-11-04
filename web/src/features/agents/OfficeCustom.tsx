@@ -15,7 +15,8 @@ import { avatarSvg, normalize } from './pixels'
 import { statusOf } from './parts'
 import type { AgentsLayoutApi, ProjectGroup } from './layout'
 
-const READS = ['/api/agents', '/api/agents/layout']
+// The raw /api/agents is not offered: it holds trigger prompts and key names, the pushed data is enough.
+const READS = ['/api/agents/layout']
 const ROUTES = ['/agents']
 
 /** What the frame gets in maxxing.data (documented for extension authors in docs/user/13-page-extensions.md). */

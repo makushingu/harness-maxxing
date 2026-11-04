@@ -116,18 +116,15 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   chips (All / waiting / to read / running / active / off with counts, empty ones hidden, not persisted); the
   `mx-agents-grouping` localStorage key is no longer read. Aside order: search, New agent, Office entry (`nav` prop,
   also on touch -> new route `/agents/office`), filter, list. Office = `AgentsOverview` with a view switch
-  (`mx-agents-office-view`: `classic` default | `game`); Gamified = `OfficeGame.tsx` (one room per project sized by
-  its agents, 2-5 columns, SVG pixel desks at 4 px per pixel, 3 on phones, free desk -> creation sheet on the room's
-  main topic; `mx-game-*` keyframes in `globals.css`). `statusOf` / `Status` moved to `parts.tsx`. i18n: removed
+  (`mx-agents-office-view`, `classic` by default, see Office views below). `statusOf` / `Status` moved to `parts.tsx`. i18n: removed
   `agents.side.{overview,grouping,byState,byProject}`, added `agents.side.{filter,all}`, `agents.office.*`.
 - Office views: the Segmented became a menu (`ViewMenu` in `AgentsPage.tsx`: current view icon + name; radio items,
   separator, "Create my custom view" -> `draftUrl(projects/general/topics/inbox | first non-system topic,
-  agents.office.customPrompt)`). `mx-agents-office-view` = `classic` | `game` | `future` | `x:<extension id>`; an
-  `x:` view whose extension is gone / off / in error renders Classic without rewriting the key. Futuristic =
-  `OfficeFuture.tsx` (bays, hover consoles, holo screens, `mx-future-*` keyframes in `globals.css`); what both pixel
-  views share moved to `office.tsx` (`useRoom`, `useDesk`, `Cursor`, `hash`, `colsFor`); `pixels.avatarSvg()`.
-- Agents Office: Futuristic replaces Gamified (`OfficeGame.tsx` removed; a stored `game` view reads as `future`); its
-  holographic screens stay still (no float, glitch, scan or scrolling lines; only the glow pulses while it works). The view is labelled **Space** (id `future` kept).
+  agents.office.customPrompt)`). `mx-agents-office-view` = `classic` | `future` | `x:<extension id>` (an old
+  `game` reads as `future`); an `x:` view whose extension is gone / off / in error renders Classic without rewriting
+  the key. Space (id `future`) = `OfficeFuture.tsx` (one bay per project sized by its agents, 2-5 columns, SVG pixel
+  hover consoles at 4 px per pixel, 3 on phones, holo screens that never move, free console -> creation sheet on the
+  bay's main topic; `mx-game-*` / `mx-future-*` keyframes in `globals.css`); what a pixel view needs is in `office.tsx` (`useRoom`, `useDesk`, `Cursor`, `hash`, `colsFor`); `pixels.avatarSvg()`.
 - Extension Office views: manifest `"agents_view": true | {"name"?: str | {lang: str}, "icon"?}` + `agents-view.html`
   (`extensions._agents_view`, errors on the extension: missing file, bad value; new type `"view"` = only that,
   requires `agents_view`; `agents-view.html` in the hot-reload signature). `/api/extensions` items get
@@ -135,9 +132,10 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   as `widget-frame`, `api.extensions._frame`) and `/ext/{id}/agents-view.html` (GET/HEAD, raw). `WIDGET_BRIDGE`
   gains `maxxing.data`, `onData(fn)`, `app(path, {query})` and `navigate(route)`; web `HtmlWidget` takes `frame`,
   `maxHeight`, `className` and `host: {reads, routes, data}`: `app` answers only exact paths of `reads` (GET), else
-  an error reply; `navigate` only routes under `routes` (no `//`, `/.`, backslash, spaces); `data` posted on load and
+  an error reply; `navigate` only routes whose resolved pathname is under `routes` (same origin, no `.`/`..` segment,
+  no `%2e`/`%2f`/`%5c`, backslash or spaces); `data` posted on load and
   on change. The dashboard passes no host (app refused, navigate ignored). `OfficeCustom.tsx` = host with reads
-  `/api/agents`, `/api/agents/layout`, routes `/agents`, data = `{lang, new_agent_route, projects: [{name, emoji,
+  `/api/agents/layout` only (the raw `/api/agents` holds trigger prompts and key names), routes `/agents`, data = `{lang, new_agent_route, projects: [{name, emoji,
   color, agents: [{path, project, topic, name, display_name, description, enabled, model, status, status_text,
   running, waiting, unread, cost_today, last_run (text <= 300 chars), avatar, avatar_svg, route}]}]}` (pushed again
   only when its JSON changes). Docs: `13-page-extensions.md` "Office views", skill `maxxing-extension`. Tests
@@ -149,7 +147,7 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   /api/agents/layout`, bus `agents`. `agents.project_color` honours the picked colour (outfit of new agents, CLI
   included). Order: listed projects first then workspace order; listed agents first then topic, name. Web:
   `features/agents/layout.tsx` = `useAgentsLayout()` (sort, `colorOf`, moves; used by `AgentsList`, Classic and
-  `OfficeGame`), `useProjectColorOf()` (creation form, `AvatarEditor`; `randomAvatar(color)` now takes a colour),
+  Space), `useProjectColorOf()` (creation form, `AvatarEditor`; `randomAvatar(color)` now takes a colour),
   `useReorder` (HTML5 drag and drop, off on touch; an agent drops only in its project; `DropBar` indicator),
   `ProjectMenu` (Move up / down + 6 swatches); queries `useAgentsLayoutData` / `useSaveAgentsLayout` (optimistic).
   i18n `agents.layout.*`. Fix: the creation sheet's first step now starts on the topic it was opened with (the free

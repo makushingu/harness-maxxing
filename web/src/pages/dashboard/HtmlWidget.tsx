@@ -70,8 +70,17 @@ export type FrameHost = {
 
 /** `route` is an app route under one of `prefixes` (never another site, `//host`, nor a `..` that climbs out). */
 function allowedRoute(route: unknown, prefixes: string[]): route is string {
-  if (typeof route !== 'string' || !route.startsWith('/') || route.startsWith('//') || route.includes('/.') || /[\\\s]/.test(route)) return false
-  return prefixes.some((p) => route === p || route.startsWith(`${p}/`) || route.startsWith(`${p}?`))
+  if (typeof route !== 'string' || !route.startsWith('/') || route.startsWith('//') || /[\\\s]/.test(route)) return false
+  // Checked on what the browser will make of it: `/agents/%2e%2e/settings` is `/settings`.
+  let url: URL
+  try {
+    url = new URL(route, window.location.origin)
+  } catch {
+    return false
+  }
+  const path = url.pathname
+  if (url.origin !== window.location.origin || /%2e|%2f|%5c/i.test(path) || path.split('/').some((s) => s === '.' || s === '..')) return false
+  return prefixes.some((p) => path === p || path.startsWith(`${p}/`))
 }
 
 export function HtmlWidget({
