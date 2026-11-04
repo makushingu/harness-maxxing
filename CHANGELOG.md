@@ -8,6 +8,11 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 Changes:
 - **Agents: answer a request where you see it.** When an agent waits for your OK, Allow and Deny are on the request
   in its thread, and a yellow "!" over its desk in the Office opens it in a window; the thread then says how it ended.
+- **Notifications you can act on.** What needs you now lands in the Notifications with its buttons: an agent waiting
+  for your OK (Allow / Deny in one click), a failed run, an agent at its daily budget or its runs per hour. Once
+  handled, the notification says how it ended. New **To handle** filter, and a red badge on the agent in the Agents list.
+- **Server problems in the Notifications** (disk, services, Claude sign-in, backup), with **Seen**. On for new
+  installs; for yours: Settings -> Notifications -> *Server problems in the notifications*.
 
 ## 2.0.0-alpha.113 - 2026-11-04
 

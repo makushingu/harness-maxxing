@@ -6,7 +6,7 @@
 // On a phone it is the whole page at /agents; an agent then opens full screen.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
-import { Bot, Plus, Search, X } from 'lucide-react'
+import { Bot, Plus, Search, TriangleAlert, X } from 'lucide-react'
 import { useT, type TFn } from '@/i18n'
 import { agentRoute, useAgents, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
@@ -272,7 +272,18 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
           <Sensitive length={10}>{a.topic}</Sensitive>
         </span>
       </span>
-      <span className="shrink-0 empty:hidden">
+      <span className="flex shrink-0 items-center gap-1 empty:hidden">
+        {!!a.alerts && (
+          <span
+            className="inline-flex h-5 items-center gap-0.5 rounded-full bg-destructive/12 px-1.5 text-[11px] font-semibold text-destructive tabular-nums"
+            title={t('agents.list.alerts', { count: a.alerts })}
+            aria-label={t('agents.list.alerts', { count: a.alerts })}
+            data-testid="agents-row-alerts"
+          >
+            <TriangleAlert className="size-3" strokeWidth={2.5} />
+            {a.alerts}
+          </span>
+        )}
         <CountBadge count={unread} title={t('agents.list.unread', { count: unread })} />
       </span>
     </Link>

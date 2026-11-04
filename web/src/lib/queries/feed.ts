@@ -16,16 +16,16 @@ export function useFeed(source: string | null = null, unread = false, limit = 30
   return useQuery({ ...feedQuery(source, unread, limit), refetchInterval: 5 * 60_000 })
 }
 
-export const feedPagesQuery = (source: string | null = null, unread = false) => ({
-  queryKey: qk.feed.pages(source, unread),
+export const feedPagesQuery = (source: string | null = null, unread = false, pending = false) => ({
+  queryKey: qk.feed.pages(source, unread, pending),
   initialPageParam: 0,
   queryFn: ({ pageParam }: { pageParam: number }) =>
-    api.get<FeedList>(withQuery('/api/feed', { source: source || undefined, unread: unread || undefined, limit: 50, before: pageParam || undefined })),
+    api.get<FeedList>(withQuery('/api/feed', { source: source || undefined, unread: unread || undefined, pending: pending || undefined, limit: 50, before: pageParam || undefined })),
   getNextPageParam: (last: FeedList) => (last.more && last.events.length ? last.events[last.events.length - 1].id : undefined),
 })
-/** Every event, page by page (the "See all" page). */
-export function useFeedPages(source: string | null = null, unread = false) {
-  return useInfiniteQuery(feedPagesQuery(source, unread))
+/** Every event, page by page (the "See all" page). `pending`: only the alerts waiting for a click. */
+export function useFeedPages(source: string | null = null, unread = false, pending = false) {
+  return useInfiniteQuery(feedPagesQuery(source, unread, pending))
 }
 
 export function useMarkFeedRead() {
@@ -51,6 +51,13 @@ export function useMarkFeedRead() {
     errorToast: false,
   })
 }
+/** A button of an alert (Allow / Deny of an agent's request, Seen...). Idempotent on the server: a late second click
+ *  gets the decided event back. Refreshes what the answer changes too (the agent's thread, the waiting requests). */
+export function useFeedAct() {
+  return useMut(({ id, action }: { id: number; action: string }) => api.post<{ event: FeedEvent }>(`/api/feed/${id}/act/${encodeURIComponent(action)}`), {
+    invalidate: [qk.feed.all, ['approvals'], ['agents']],
+  })
+}
 export function useDeleteFeedEvent() {
   return useMut((id: number) => api.del<{ ok: boolean }>(`/api/feed/${id}`), { invalidate: inv })
 }
@@ -58,13 +65,14 @@ export function useFeedSettings() {
   return useQuery({ queryKey: qk.feed.settings, queryFn: () => api.get<FeedSettings>('/api/feed/settings') })
 }
 export function useSaveFeedSettings() {
-  return useMut((b: { telegram?: boolean; rules?: Record<string, FeedRule> }) => api.put<FeedSettings>('/api/feed/settings', b), {
+  return useMut((b: { telegram?: boolean; health?: boolean; rules?: Record<string, FeedRule> }) => api.put<FeedSettings>('/api/feed/settings', b), {
     optimistic: (b) => [
       {
         key: qk.feed.settings,
         update: (f: FeedSettings) => ({
           ...f,
           telegram: b.telegram ?? f.telegram,
+          health: b.health ?? f.health,
           sources: f.sources.map((x) => (b.rules?.[x.source] ? { ...x, rule: b.rules[x.source] } : x)),
         }),
       },
