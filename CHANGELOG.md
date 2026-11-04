@@ -3,6 +3,25 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.113 - 2026-11-04
+
+Changes:
+- **Agents: lasting helpers that work by themselves inside a topic.** A blog writer in `acme / blog`, an order
+  handler in `acme / shop`, a feedback analyst: each agent has its role (what it does, how, what it must never do),
+  its own memory and a little pixel character. It starts by hand, on a schedule, when a webhook arrives (Stripe,
+  Shopify, GitHub or any tool), on a notification, from its own Telegram thread, or when another agent hands it work,
+  and every start is a new session. Its page is a conversation: its results one after the other, **Reply** goes on
+  with that result's session, **Continue in Sessions** takes a run over by hand. To create one, say in a sentence
+  what it should do and when, and Claude prepares it with you, or start from a ready-made agent (customer support,
+  sales of the day, orders, watch, pull request review, blog writer, site monitor, feedback). Safe by default: a daily
+  budget (2 USD) that also stops a run midway, a number of runs per hour, text from outside treated as data and never
+  as orders, runs started from outside that ask before acting, only the keys you give it, and for new agents
+  Claude Code's sandbox (its commands write only in its folder and reach only the sites you list; on a server
+  installed before this version, the agent's page tells you if `maxxing agents sandbox-setup` is needed). Approval
+  requests can be answered from Telegram with Allow / Deny. Agents also read and write Claude Code agent files, and a
+  topic's agents show under it in the Sessions list. **Off by default**: turn it on in Settings -> Features -> Agents.
+  [Show me](#show:agents)
+
 ## 2.0.0-alpha.112 - 2026-11-04
 
 Fixes:
