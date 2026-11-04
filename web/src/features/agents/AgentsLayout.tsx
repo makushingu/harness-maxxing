@@ -14,10 +14,10 @@ import { useCompact } from '@/stores/media'
 import { PageHeader } from '@/components/shell/Page'
 import { PreviewProvider } from '@/pages/sessions/FilePreview'
 import { AgentsList } from './AgentsList'
-import { AgentsOverview } from './AgentsPage'
+import { AgentsEmpty, AgentsOverview } from './AgentsPage'
 import AgentPage from './AgentPage'
 import { RunView } from './RunView'
-import { CreateAgent } from './CreateAgent'
+import { CreateAgent, type CreateStart } from './CreateAgent'
 import { AgentsOff, useAgentsOn } from './parts'
 
 export default function AgentsLayout() {
@@ -39,6 +39,19 @@ export default function AgentsLayout() {
       ),
     [setParams],
   )
+  // The empty page offers the one-sentence box, the gallery and the manual / import links: the sheet opens there.
+  const [start, setStart] = React.useState<CreateStart | null>(null)
+  const openWith = React.useCallback(
+    (s: CreateStart) => {
+      setStart(s)
+      setCreating(true)
+    },
+    [setCreating],
+  )
+  const newAgent = React.useCallback(() => {
+    setStart(null)
+    setCreating(true)
+  }, [setCreating])
   const topic = params.get('topic') || ''
   const home = /^\/agents\/?$/.test(location.pathname)
 
@@ -47,13 +60,13 @@ export default function AgentsLayout() {
   const detail = (
     <PreviewProvider>
       <Routes>
-        <Route index element={<AgentsOverview onNew={() => setCreating(true)} />} />
+        <Route index element={<AgentsOverview onNew={newAgent} onStart={openWith} />} />
         <Route path=":project/:topic/:name" element={<AgentPage />} />
         <Route path=":project/:topic/:name/runs/:sid" element={<RunView />} />
       </Routes>
     </PreviewProvider>
   )
-  const create = <CreateAgent open={creating} onOpenChange={setCreating} topicPath={topic ? `projects/${topic.replace('/', '/topics/')}` : undefined} />
+  const create = <CreateAgent open={creating} onOpenChange={setCreating} start={start} topicPath={topic ? `projects/${topic.replace('/', '/topics/')}` : undefined} />
 
   // Touch: one pane at a time (the list, or the agent / run full screen).
   if (touch)
@@ -62,7 +75,7 @@ export default function AgentsLayout() {
         {home ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <PageHeader title={t('agents.title')} />
-            <AgentsList onNew={() => setCreating(true)} className="flex-1" />
+            <AgentsList onNew={newAgent} empty={<AgentsEmpty onStart={openWith} />} className="flex-1" />
           </div>
         ) : (
           detail
@@ -77,7 +90,7 @@ export default function AgentsLayout() {
         <div className="flex min-h-[var(--header-h)] shrink-0 items-center border-b px-4">
           <h1 className="text-base font-semibold tracking-tight">{t('agents.title')}</h1>
         </div>
-        <AgentsList onNew={() => setCreating(true)} className="flex-1" />
+        <AgentsList onNew={newAgent} className="flex-1" />
       </aside>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{detail}</div>
       {create}

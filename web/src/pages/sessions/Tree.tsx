@@ -5,7 +5,7 @@
 // on a phone: filter field, All / Running / Unread chips, one view menu holding every display choice.
 import * as React from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import {
   Archive,
   ArrowDownAZ,
@@ -48,6 +48,8 @@ import { fmtRelative } from '@/lib/format'
 import { isApiError, errorMessage } from '@/lib/api'
 import { slugify, SLUG_RE } from '@/lib/utils'
 import {
+  agentRoute,
+  useAgents,
   useClaudeStatus,
   useCreateProject,
   useCreateTopic,
@@ -63,7 +65,9 @@ import {
   useSettings,
   useWorkspace,
 } from '@/lib/queries'
-import type { PermissionMode, Project, Session, Topic } from '@/lib/types'
+import type { Agent, PermissionMode, Project, Session, Topic } from '@/lib/types'
+import { AgentAvatarIcon } from '@/features/agents/Avatar'
+import { agentState, type AgentState } from '@/features/agents/AgentsList'
 import { OptionCard } from '@/features/common'
 import {
   Button,
@@ -729,6 +733,66 @@ function Badges({ running, unread, count = 0 }: { running: number; unread: numbe
   )
 }
 
+/** The order of a topic's agents under its row: what needs the user first, then by name. */
+const AGENT_RANK: Record<AgentState, number> = { waiting: 0, unread: 1, running: 2, failed: 3, active: 4, off: 5 }
+const TOPIC_AGENTS_SHOWN = 2
+const AGENT_DOT: Partial<Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error'; pulse?: boolean }>> = {
+  waiting: { tone: 'warn', pulse: true },
+  unread: { tone: 'unread' },
+  running: { tone: 'running', pulse: true },
+  failed: { tone: 'error' },
+}
+
+/** The agents of a topic, right under its row (Settings -> Features -> agents_page): a small face and the name, each
+ *  opening the agent's page, at most 2, then "+N" opens the Agents page narrowed to the topic. Status fields come
+ *  from the agents list (GET /api/agents, also behind the nav badge); the tree only tells which agents exist.
+ *  Their runs never show in this tree. */
+function TopicAgents({ topic, className }: { topic: Topic; className?: string }) {
+  const t = useT()
+  const { data: settings } = useSettings()
+  const on = !!settings?.agents_page && !!topic.agents?.length
+  const { data } = useAgents(on)
+  const list = React.useMemo(() => {
+    if (!on) return []
+    const own: Agent[] = data ? data.agents.filter((a) => a.project === topic.project && a.topic === topic.name) : topic.agents || []
+    return [...own].sort((x, y) => AGENT_RANK[agentState(x)] - AGENT_RANK[agentState(y)] || x.display_name.localeCompare(y.display_name))
+  }, [on, data, topic])
+  if (!list.length) return null
+  const more = list.length - TOPIC_AGENTS_SHOWN
+  const stateText = (a: Agent) => {
+    const s = agentState(a)
+    return s === 'unread' ? t('sessions.agent.unread', { count: a.thread_unread || 0 }) : t(`sessions.agent.${s}` as 'sessions.agent.active')
+  }
+  const chip = 'flex h-6 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:h-10 max-md:text-[13px]'
+  return (
+    <div className={cn('flex min-w-0 items-center gap-0.5 pr-1', className)} data-testid="topic-agents-row">
+      {list.slice(0, TOPIC_AGENTS_SHOWN).map((a) => {
+        const s = agentState(a)
+        const dot = AGENT_DOT[s]
+        return (
+          <Link key={a.path} to={agentRoute(a)} title={`${a.display_name} - ${stateText(a)}`} className={cn(chip, 'max-w-[45%]')} data-testid="topic-agent" data-state={s}>
+            <AgentAvatarIcon avatar={a.avatar} size={16} mood={s === 'off' ? 'sleep' : 'idle'} className={cn(s === 'off' && 'opacity-60')} />
+            <span className={cn('truncate', (s === 'waiting' || s === 'unread') && 'font-medium text-foreground')}>
+              <Sensitive length={6}>{a.display_name}</Sensitive>
+            </span>
+            {dot && <StatusDot tone={dot.tone} pulse={dot.pulse} className="size-1.5" />}
+          </Link>
+        )
+      })}
+      {more > 0 && (
+        <Link
+          to={`/agents?topic=${encodeURIComponent(`${topic.project}/${topic.name}`)}`}
+          title={t('sessions.topicAgents', { count: list.length })}
+          className={cn(chip, 'shrink-0 tabular-nums max-md:min-w-10 max-md:justify-center')}
+          data-testid="topic-agents-more"
+        >
+          +{more}
+        </Link>
+      )}
+    </div>
+  )
+}
+
 function TopicNode({
   topic,
   sessions,
@@ -815,6 +879,7 @@ function TopicNode({
         </RowMenu>
         <DropLine pos={dnd.pos} />
       </div>
+      <TopicAgents topic={topic} className="pl-[30px] max-md:pl-8" />
       {open && (
         <div role="group" className={cn(!intro && 'mx-unfold')}>
           {sessions.length === 0 && nArchived === 0 && (
@@ -1293,6 +1358,7 @@ function DrillView({
             onOpen={() => setDrill({ project: project!.name, topic: tp.path })}
             onNew={() => onNewSession(tp.path)}
             menu={<TopicMenuItems topic={tp} rootDir={rootDirOf(tp.path)} onNewSession={onNewSession} onDialog={onDialog} />}
+            below={<TopicAgents topic={tp} className="pl-6" />}
           />
         ))}
         {project!.topics.length === 0 && (
@@ -1315,6 +1381,7 @@ function DrillView({
         hash
         onNew={() => onNewSession(topic!.path)}
         menu={<TopicMenuItems topic={topic!} rootDir={rootDirOf(topic!.path)} onNewSession={onNewSession} onDialog={onDialog} />}
+        below={<TopicAgents topic={topic!} className="pl-1" />}
       />
       {sessions.length === 0 && nArchived === 0 && (
         <button type="button" onClick={() => onNewSession(topic!.path)} className="ml-2 flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-10">
@@ -1340,7 +1407,7 @@ function DrillView({
   )
 }
 
-function DrillHeader({ back, onBack, title, hash, onNew, menu }: { back: string; onBack: () => void; title: string; hash?: boolean; onNew?: () => void; menu: React.ReactNode }) {
+function DrillHeader({ back, onBack, title, hash, onNew, menu, below }: { back: string; onBack: () => void; title: string; hash?: boolean; onNew?: () => void; menu: React.ReactNode; below?: React.ReactNode }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
   return (
@@ -1367,6 +1434,7 @@ function DrillHeader({ back, onBack, title, hash, onNew, menu }: { back: string;
           {menu}
         </RowMenu>
       </div>
+      {below}
     </div>
   )
 }
@@ -1382,6 +1450,7 @@ function DrillRow({
   onNew,
   menu,
   stagger,
+  below,
 }: {
   icon: React.ReactNode
   name: string
@@ -1393,13 +1462,15 @@ function DrillRow({
   onNew?: () => void
   menu: React.ReactNode
   stagger: number
+  /** under the row (the topic's agents) */
+  below?: React.ReactNode
 }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
-  return (
+  const row = (
     <div
-      className="group/row mx-rise flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-accent/60 max-md:h-12"
-      style={{ '--i': stagger } as React.CSSProperties}
+      className={cn('group/row flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-accent/60 max-md:h-12', !below && 'mx-rise')}
+      style={below ? undefined : ({ '--i': stagger } as React.CSSProperties)}
       onContextMenu={(e) => {
         e.preventDefault()
         setOpen(true)
@@ -1423,6 +1494,13 @@ function DrillRow({
       <RowMenu open={open} onOpenChange={setOpen} label={t('common.more')}>
         {menu}
       </RowMenu>
+    </div>
+  )
+  if (!below) return row
+  return (
+    <div className="mx-rise" style={{ '--i': stagger } as React.CSSProperties}>
+      {row}
+      {below}
     </div>
   )
 }
