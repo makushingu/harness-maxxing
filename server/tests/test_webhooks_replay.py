@@ -42,6 +42,20 @@ def test_shopify_topics_of_one_order_each_post_once(mx):
     assert made_up == [False, True, True, True]
 
 
+def test_replayed_shopify_delivery_cannot_link_outside_shopify(mx):
+    """X-Shopify-Shop-Domain is not signed: a replay with another domain gets no link and stays a duplicate."""
+    tok = _token(feedhooks.create("shop", "shopify", "shpss"))
+    evil = {**_shopify(ORDER, "w1", "orders/cancelled"), "X-Shopify-Shop-Domain": "evil.example"}
+    assert feedhooks.deliver(tok, evil, ORDER)[1]["duplicate"] is False
+    assert feed.list_events(source="shop")["events"][0]["url"] in ("", None)
+    good = {**_shopify(ORDER, "w2"), "X-Shopify-Shop-Domain": "Acme.myshopify.com"}
+    assert feedhooks.deliver(tok, good, ORDER)[1]["duplicate"] is False
+    urls = {e["url"] for e in feed.list_events(source="shop")["events"]}
+    assert "https://acme.myshopify.com/admin/orders/42" in urls and not any("evil" in (u or "") for u in urls)
+    again = {**_shopify(ORDER, "w3"), "X-Shopify-Shop-Domain": "other.myshopify.com"}
+    assert feedhooks.deliver(tok, again, ORDER)[1]["duplicate"] is True
+
+
 def test_replayed_github_delivery_with_a_new_id_is_a_duplicate(mx):
     tok = _token(feedhooks.create("gh", "github", "ghs"))
     body = json.dumps({"action": "published", "release": {"tag_name": "v1"}, "repository": {"full_name": "a/b"}}).encode()
@@ -79,3 +93,56 @@ def test_simultaneous_duplicate_delivery_is_not_a_500(mx, monkeypatch):
     body = json.dumps({"title": "Deploy", "id": "evt-1"}).encode()
     st, out = feedhooks.deliver(tok, {}, body)
     assert st == 200 and out["duplicate"] is True
+
+
+def _github(body: bytes, event: str, delivery: str) -> dict:
+    sig = "sha256=" + hmac.new(b"ghs", body, hashlib.sha256).hexdigest()
+    return {"X-Hub-Signature-256": sig, "X-GitHub-Event": event, "X-GitHub-Delivery": delivery}
+
+
+def test_an_ignored_github_body_replayed_as_another_event_is_a_duplicate(mx):
+    """GitHub signs the body, not X-GitHub-Event: a pull_request "synchronize" (ignored) sent again as "star" must
+    not post; nor a posted body whose event was deleted since."""
+    tok = _token(feedhooks.create("gh", "github", "ghs"))
+    body = json.dumps({"action": "synchronize", "pull_request": {"title": "x"}, "repository": {"full_name": "o/r"}}).encode()
+    assert feedhooks.deliver(tok, _github(body, "pull_request", "d1"), body)[1].get("ignored") is True
+    for ev in ("star", "fork", "deployment"):
+        st, out = feedhooks.deliver(tok, _github(body, ev, f"d-{ev}"), body)
+        assert st == 200 and out["duplicate"] is True
+    rel = json.dumps({"action": "published", "release": {"tag_name": "v1"}, "repository": {"full_name": "o/r"}}).encode()
+    first = feedhooks.deliver(tok, _github(rel, "release", "d2"), rel)[1]
+    feed.delete(first["id"])
+    assert feedhooks.deliver(tok, _github(rel, "release", "d3"), rel)[1]["duplicate"] is True
+    assert feed.list_events(source="gh")["events"] == []
+
+
+def _generic(body: bytes) -> dict:
+    return {"X-Signature": "sha256=" + hmac.new(b"k", body, hashlib.sha256).hexdigest()}
+
+
+def test_a_signed_generic_body_replayed_posts_once_within_a_day(mx, monkeypatch):
+    tok = _token(feedhooks.create("mon", "generic", "k"))
+    body = json.dumps({"title": "Server down", "level": "error"}).encode()
+    assert feedhooks.deliver(tok, _generic(body), body)[1]["duplicate"] is False
+    for rid in ("r2", "r3"):
+        assert feedhooks.deliver(tok, {**_generic(body), "X-Request-Id": rid}, body)[1]["duplicate"] is True
+    assert len(feed.list_events(source="mon")["events"]) == 1
+    later = time.time() + feedhooks.GENERIC_REPLAY_S + 1                # the same alert the next day: shown again
+    monkeypatch.setattr(feed.time, "time", lambda: later)
+    assert feedhooks.deliver(tok, _generic(body), body)[1]["duplicate"] is False
+    # without a secret nothing changes: the token is the only permission, every POST counts
+    open_tok = _token(feedhooks.create("open", "generic"))
+    assert [feedhooks.deliver(open_tok, {}, body)[1]["duplicate"] for _ in range(2)] == [False, False]
+
+
+def test_a_failed_signed_delivery_can_be_retried(mx, monkeypatch):
+    tok = _token(feedhooks.create("mon", "generic", "k"))
+    body = json.dumps({"title": "Deploy done"}).encode()
+    real = feed.post
+
+    def down(*a, **k):
+        raise feed.FeedError(503, "busy", "busy")
+    monkeypatch.setattr(feed, "post", down)
+    assert feedhooks.deliver(tok, _generic(body), body)[0] == 503
+    monkeypatch.setattr(feed, "post", real)
+    assert feedhooks.deliver(tok, _generic(body), body)[1]["duplicate"] is False

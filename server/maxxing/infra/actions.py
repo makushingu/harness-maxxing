@@ -124,11 +124,23 @@ def pg_create(name: str, project: str | None = None) -> dict:
         _psql(f'drop role if exists "{name}";')        # else the next try stops on "a role named … exists"
         raise ActionError("cannot create the database: " + _err(out, err), "psql_failed")
     key = f"DB_{name.upper()}_URL"
-    vault.put(key, f"postgresql://{name}:{pw}@127.0.0.1:5432/{name}", note=f"PostgreSQL database {name} (maxxing infra)",
-              expose=False)
     rid = f"db:local:postgres:native:{name}"
-    registry.declare(rid, kind="database", name=name, server="local", project=project, vault_keys=[key],
-                     recipe={"engine": "postgres"})
+    stored = False
+    try:
+        vault.put(key, f"postgresql://{name}:{pw}@127.0.0.1:5432/{name}",
+                  note=f"PostgreSQL database {name} (maxxing infra)", expose=False)
+        stored = True
+        registry.declare(rid, kind="database", name=name, server="local", project=project, vault_keys=[key],
+                         recipe={"engine": "postgres"})
+    except Exception as e:                              # the password would be lost: undo, the next try starts clean
+        _psql(f'drop database if exists "{name}";')
+        _psql(f'drop role if exists "{name}";')
+        if stored:
+            try:
+                vault.delete(key)
+            except Exception:
+                pass
+        raise ActionError(f"cannot record the database: {e}", "record_failed") from e
     ensure_backup_job()
     return {"id": rid, "name": name, "vault_key": key, "url_hint": f"postgresql://{name}:…@127.0.0.1:5432/{name}"}
 
@@ -162,11 +174,16 @@ def backup_all() -> list[dict]:
     if pg_installed():
         for db in [x for x in pg_databases() if x != "postgres"]:
             rid = f"db:local:postgres:native:{db}"
-            target = d / f"pg-{db}-{stamp}.dump"
+            # any role with CREATEDB names a database: "-f/x" must not become an option, "host=..." not a connection
+            # string, "../x" not a path. Quoted conninfo value; an odd name gets a cleaned file name + a short hash
+            safe = db if re.fullmatch(r"[A-Za-z0-9_.-]+", db) and not db.startswith(("-", ".")) else \
+                re.sub(r"[^A-Za-z0-9_-]", "_", db)[:40] + "-" + hashlib.sha1(db.encode()).hexdigest()[:8]
+            conninfo = "dbname='" + db.replace("\\", "\\\\").replace("'", "\\'") + "'"
+            target = d / f"pg-{safe}-{stamp}.dump"
             with open(target, "wb") as fh:
                 try:
-                    r = subprocess.run(["runuser", "-u", "postgres", "--", "pg_dump", "-Fc", db], stdout=fh,
-                                       stderr=subprocess.PIPE, timeout=3000)
+                    r = subprocess.run(["runuser", "-u", "postgres", "--", "pg_dump", "-Fc", f"--dbname={conninfo}"],
+                                       stdout=fh, stderr=subprocess.PIPE, timeout=3000)
                     ok, err = r.returncode == 0, r.stderr.decode(errors="replace").strip()[-300:]
                 except subprocess.TimeoutExpired:
                     ok, err = False, "pg_dump took too long"
@@ -174,7 +191,7 @@ def backup_all() -> list[dict]:
             if not ok:
                 target.unlink(missing_ok=True)
             else:
-                _rotate(f"pg-{db}")
+                _rotate(f"pg-{safe}")
             results.append({"id": rid, "name": db, "ok": ok, "file": str(target) if ok else None,
                             "size": target.stat().st_size if ok else None, "error": None if ok else err, "at": int(time.time())})
     for rid, r in registry.resources().items():

@@ -47,7 +47,8 @@ export const Composer = React.forwardRef<ComposerHandle, {
   onAsk?: () => void
   asking?: boolean
   clearingQueue?: boolean
-  onSend: (text: string, attachments: string[]) => Promise<boolean>
+  /** `clientId`: the outbox id, sent with the message so that a reload mid-send can tell whether it arrived. */
+  onSend: (text: string, attachments: string[], clientId?: string) => Promise<boolean>
   /** Messages a previous page load was sending when it went away: resolves to those the server never got. */
   checkSent?: (left: OutboxEntry[]) => Promise<OutboxEntry[] | null>
   /** Voice message sent directly (setting on by default): the recording is sent as it is, the server transcribes it. */
@@ -103,7 +104,13 @@ export const Composer = React.forwardRef<ComposerHandle, {
     }
   }, [draftKey])
   const unsaved = React.useRef(false)
+  const loaded = React.useRef<string | null>(draftKey) // the text was just read from this draft: nothing to store yet
   React.useEffect(() => {
+    if (loaded.current === draftKey) {
+      loaded.current = null
+      return
+    }
+    loaded.current = null
     unsaved.current = true
     const id = setTimeout(() => {
       saveDraft(draftKey, text)
@@ -134,9 +141,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
     mounted.current = true
     return () => {
       mounted.current = false
-      saveDraft(live.current.draftKey, live.current.text)
-      saveQuotes(live.current.draftKey, live.current.quotes)
-      saveAtts(live.current.draftKey, toDraftAtts(live.current.atts))
+      // Only what this box has not stored yet (quotes and files are stored at once): another tab on the same
+      // session may have written the draft since.
+      if (unsaved.current) saveDraft(live.current.draftKey, live.current.text)
       ctrls.current.forEach((c) => c.abort())
       previews.current.forEach((p) => URL.revokeObjectURL(p))
       previews.current.clear()
@@ -213,17 +220,25 @@ export const Composer = React.forwardRef<ComposerHandle, {
   // Messages that were being sent when the page went away: back in the box unless the server got them.
   const checkSent = props.checkSent
   React.useEffect(() => {
-    const left = leftOutbox(draftKey)
-    if (!left.length) return
     let off = false
-    void (checkSent ? checkSent(left) : Promise.resolve(left)).then((lost) => {
-      if (off || !lost) return // null: could not tell, they stay stored
-      // already back in the draft (refused, then the page went away before its entry was removed)
-      const back = lost.filter((e) => !(e.body && live.current.text.includes(e.body)))
-      for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
-      left.forEach((e) => outboxDone(draftKey, e.id))
-      if (back.length) toast.info(t('sessions.composer.sendInterrupted', { count: back.length }))
-    })
+    let left: OutboxEntry[] = []
+    void leftOutbox(draftKey)
+      .then((l) => {
+        left = l
+        if (off || !l.length) return null
+        return checkSent ? checkSent(l) : l
+      })
+      .then((lost) => {
+        if (off || !lost) return // null: could not tell, they stay stored
+        // already back in the draft (refused, then the page went away before its entry was removed)
+        const back = lost.filter((e) => !(e.body && live.current.text.includes(e.body)))
+        try {
+          for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
+        } finally {
+          left.forEach((e) => outboxDone(draftKey, e.id)) // removed even if bringing one back failed: never again each load
+        }
+        if (back.length) toast.info(t('sessions.composer.sendInterrupted', { count: back.length }))
+      })
     return () => {
       off = true
     }
@@ -315,7 +330,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const outId = outboxAdd(k0, { text: sent, body, quotes: kept, attachments: paths })
     busyStart()
     chain.current = chain.current.then(async () => {
-      const ok = await onSend(sent, paths).catch(() => false)
+      const ok = await onSend(sent, paths, outId).catch(() => false)
       if (--inflight.current === 0 && mounted.current) setSending(false)
       // Refused: it comes back in the box below. A failure can also be the page going away (its request is cut):
       // the entry is removed only if the page is still here a moment later, else the next load brings it back.
@@ -336,8 +351,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
           setAtts((cur) => [...keep, ...cur])
           setQuotes(back)
         } else {
+          const files = toDraftAtts(keep)
           saveDraft(draftKey, restore(loadDraft(draftKey)))
           saveQuotes(draftKey, back(loadQuotes(draftKey)))
+          saveAtts(draftKey, [...files, ...loadAtts(draftKey).filter((a) => !files.some((f) => f.path === a.path))])
         }
       } else keep.forEach((a) => releasePreview(a.preview))
     })
@@ -704,7 +721,7 @@ function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
   const t = useT()
   const done = !!att.path
   return (
-    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1', att.error && 'border-destructive/50')}>
+    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1 pointer-coarse:pr-10', att.error && 'border-destructive/50')}>
       {att.preview && isImage(att.name) ? (
         <img src={att.preview} alt="" className="size-10 shrink-0 rounded-md object-cover" />
       ) : (
@@ -725,7 +742,7 @@ function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
         type="button"
         onClick={onRemove}
         aria-label={t('common.remove')}
-        className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-muted-foreground before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-muted-foreground pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:h-full pointer-coarse:w-10 pointer-coarse:rounded-none before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <X className="size-3.5" />
       </button>

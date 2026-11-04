@@ -311,6 +311,35 @@ def test_turn_end_watcher_is_woken_by_inotify(mx, monkeypatch):
     assert took is not None and took < 0.5, took
 
 
+def test_idle_watcher_with_inotify_does_not_rescan_every_second(mx, monkeypatch):
+    """Nothing runs and inotify works: the watcher waits for a change (or the long safety timeout), it does not
+    stat every session once per `interval`; a change still wakes it at once."""
+    monkeypatch.setattr(service, "WATCH_IDLE_WAKE_S", 30.0)
+    meta = store.new_meta("", "idle")
+    store.create(meta)
+    passes: list[float] = []
+    real = service._scan
+    monkeypatch.setattr(service, "_scan", lambda primed: (passes.append(time.monotonic()), real(primed))[1])
+
+    async def run():
+        service.start_watcher(interval=0.05)
+        for _ in range(100):
+            if wake.active() and meta["id"] in service._known:
+                break
+            await asyncio.sleep(0.02)
+        await asyncio.sleep(0.2)
+        quiet = len(passes)
+        await asyncio.sleep(0.6)                                       # 12 passes at the old 0.05 s interval
+        idle = len(passes) - quiet
+        await asyncio.to_thread(store.update, meta["id"], title="renamed")
+        await asyncio.sleep(0.4)
+        woken = len(passes) - quiet - idle
+        await service.stop_watcher()
+        return idle, woken
+    idle, woken = asyncio.run(run())
+    assert idle == 0 and woken >= 1, (idle, woken)
+
+
 # ---- session-watcher.json -------------------------------------------------------------------------
 def test_watcher_stamp_is_written_only_when_something_changed(mx, monkeypatch):
     monkeypatch.setattr(service, "PASS_STAMP_S", 0.0)

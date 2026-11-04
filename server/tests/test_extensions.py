@@ -170,6 +170,8 @@ def test_html_widget(client, org):
     r = client.get("/ext/snake/widget.html")
     assert r.status_code == 200 and "<canvas" in r.text
     assert r.headers["content-type"].startswith("text/plain")        # never runs with the app's origin
+    h = client.head("/ext/snake/widget.html")                        # the dashboard's existence check: no body
+    assert h.status_code == 200 and h.content == b""
     f = client.get("/ext/snake/widget-frame")                     # the frame: bridge + widget, its own sandbox
     assert f.status_code == 200 and f.headers["content-type"].startswith("text/html")
     assert f.text.index("window.maxxing=") < f.text.index("<canvas")
@@ -183,6 +185,7 @@ def test_html_widget(client, org):
     assert k.status_code == 200 and k.headers["content-type"].startswith("text/css") and ".ui-btn" in k.text
     client.patch("/api/extensions/snake", json={"enabled": False})
     assert client.get("/ext/snake/widget.html").status_code == 404
+    assert client.head("/ext/snake/widget.html").status_code == 404
     assert client.get("/ext/snake/widget-frame").status_code == 404
     # a widget with neither card nor html is an error
     (org.ws / "extensions" / "empty").mkdir()
@@ -343,3 +346,32 @@ def test_a_folder_name_ending_with_a_newline_is_refused(client, org):
     _ext(org, "abc\n", {"type": "widget"}, "def card(ctx):\n    return {}\n")
     ext = next(e for e in extensions.all_extensions() if e.id == "abc\n")
     assert "lowercase slug" in (ext.error or "")
+
+
+def test_a_lone_surrogate_in_a_manifest_marks_only_that_extension(client, org):
+    _ext(org, "good", {"type": "widget"}, "def card(ctx): return {'blocks': []}\n")
+    _ext(org, "bad", '{"type":"widget","name":"x\\ud800y","version":"\\ud800"}', "def card(ctx): return {'blocks': []}\n")
+    r = client.get("/api/extensions")
+    assert r.status_code == 200
+    d = {x["id"]: x for x in r.json()}
+    assert d["good"]["error"] is None and "invalid text" in d["bad"]["error"]
+
+
+def test_too_deeply_nested_json_in_or_out_of_handle_is_handled(client, org):
+    _ext(org, "h", {"type": "page"}, "def handle(ctx, m, p, q, b):\n    return {'b': type(b).__name__}\n", page="x")
+    r = client.post("/api/ext/h/p", content=b"[" * 200000, headers={"content-type": "application/json"})
+    assert r.status_code == 200 and r.json() == {"b": "str"}
+    _ext(org, "d", {"type": "page"}, "def handle(ctx, m, p, q, b):\n    x = []\n    for _ in range(100000):\n"
+         "        x = [x]\n    return x\n", page="x")
+    r = client.get("/api/ext/d/p")
+    assert r.status_code == 500 and r.json()["error"] == "extension_error"
+
+
+def test_adding_or_removing_widget_html_is_seen_by_the_hot_reload(client, org):
+    d = _ext(org, "w", {"type": "widget"})
+    assert {x["id"]: x for x in client.get("/api/extensions").json()}["w"]["error"]
+    (d / "widget.html").write_text("<p>hi</p>")
+    e = {x["id"]: x for x in client.get("/api/extensions").json()}["w"]
+    assert e["error"] is None and e["has_html"]
+    (d / "widget.html").unlink()
+    assert {x["id"]: x for x in client.get("/api/extensions").json()}["w"]["error"]

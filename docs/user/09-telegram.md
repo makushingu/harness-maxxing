@@ -74,11 +74,13 @@ messages) it deletes.
 - Write in a session's thread: Claude answers in that thread. While it works you see "typing…" and,
   for longer tasks, the live status message. A message sent while the session is busy waits its turn and
   gets its own answer (a turn started from the web UI or an automatic summary is never sent as the answer);
-  "typing…" stops as soon as the queue is stopped or cleared.
+  "typing…" stops as soon as the queue is stopped or cleared. A server restart (an update) while Claude works
+  does not lose the answer: it still comes in the thread when the turn ends.
 - Send photos and files: they are saved in `<topic>/attachments/telegram/YYYY-MM/` and passed to
   Claude with your caption. An album is one message to Claude, and what you send right after it comes after
   it. Audio files (music, recordings sent as files) are files too; only voice notes and round video notes are
-  transcribed. A caption is never a command: a photo captioned `/new` is a photo.
+  transcribed. A caption is never a command: a photo captioned `/new` is a photo. A file the bot cannot save
+  (over 20 MB) is named in a reply, and the other files of the album still go to Claude.
 - Replies, quotes and forwards keep their context: replying to a message (or quoting part of it) sends
   Claude the quoted part in front of your text, a forwarded message says where it comes from, and links
   hidden behind a word are passed as "word (link)".
@@ -86,7 +88,7 @@ messages) it deletes.
   and sent as one message.
 - Editing a message you already sent does nothing: the bot says so once - send a new message instead.
 - The bot answers in the language of the web UI (English or French), and the command menu is
-  translated.
+  translated. While linking, it uses the language of your Telegram app.
 - Commands:
 
 | Command | Effect |
@@ -122,7 +124,8 @@ by default) skips the second step on that browser; **Forget trusted browsers** m
 also cancels every request still waiting, even one you allowed by mistake.
 
 Turning it on sends a first request: it is only switched on once you approved it, so a bot that does not
-answer cannot lock you out. Unlinking Telegram turns it off.
+answer cannot lock you out. Turning it off from the web UI asks for the current password and posts a notice in
+the *Alerts* thread and the notifications feed; unlinking Telegram turns it off too, with the same notice.
 
 **Telegram does not answer** (bot deleted, Telegram down, phone lost): on the server, over SSH,
 

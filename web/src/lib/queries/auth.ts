@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import { forgetAllDrafts } from '../drafts'
 import type { AuthState, ChangePasswordBody, LoginBody, LoginResult, Ok, SetupBody, TwoFactorPoll } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
@@ -45,8 +46,10 @@ export const pollTwoFactor = (challenge: string, code?: string, trust = true) =>
   api.post<TwoFactorPoll>('/api/auth/two-factor', { challenge, code: code || undefined, trust }, { noAuthRedirect: true })
 
 export function useSetTwoFactor() {
-  return useMut((enabled: boolean) => api.put<LoginResult>('/api/auth/two-factor', { enabled }), {
+  // turning it off needs the current password
+  return useMut((b: { enabled: boolean; password?: string }) => api.put<LoginResult>('/api/auth/two-factor', b), {
     invalidate: [qk.telegram.all, qk.authState],
+    errorToast: false,
   })
 }
 
@@ -59,6 +62,7 @@ export function useLogout() {
   return useMut(() => api.post<Ok>('/api/auth/logout', undefined, { noAuthRedirect: true }), {
     onSuccess: () => {
       qc.clear()
+      forgetAllDrafts()
       window.location.assign('/login')
     },
   })

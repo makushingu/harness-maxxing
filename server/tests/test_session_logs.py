@@ -57,7 +57,25 @@ def test_runner_clips_tool_outputs(client, topic):
     assert any(r["text"] == "[image]" for r in results)
     write = next(e for e in evs if e["type"] == "tool_use" and e["name"] == "Write")
     assert len(write["input"]["content"]) < clip.INPUT_MAX + 200 and "100,000" in write["input"]["content"]
+    assert write["input_lines"] == {"content": 1}                  # the real line count of the file written
     assert evs[-1]["type"] == "result" and evs[-1]["ok"]
+
+
+def test_a_huge_tool_input_of_an_old_log_is_clipped_when_read():
+    """A log written before the runner clipped inputs: a 400 kB Write / Edit no longer goes whole to the browser,
+    and the Write card still gets the real line count."""
+    from maxxing.sessions.normalize import normalize_lines
+    content = "line of text\n" * 30_000
+    blocks = [{"type": "tool_use", "id": "w", "name": "Write", "input": {"file_path": "/x", "content": content}},
+              {"type": "tool_use", "id": "e", "name": "MultiEdit", "input": {"file_path": "/x", "edits": [
+                  {"old_string": "a", "new_string": "b" * 50_000}]}},
+              {"type": "tool_use", "id": "s", "name": "Write", "input": {"file_path": "/y", "content": "small"}}]
+    w, e, small = normalize_lines([json.dumps({"type": "assistant", "message": {"content": blocks}})])
+    assert len(w["input"]["content"]) < clip.INPUT_MAX + 200 and w["input_lines"] == {"content": 30_001}
+    assert w["summary"].endswith("/x")
+    assert len(e["input"]["edits"][0]["new_string"]) < clip.INPUT_MAX + 200 and "input_lines" not in e
+    assert small["input"] == {"file_path": "/y", "content": "small"} and "input_lines" not in small
+    assert len(blocks[0]["input"]["content"]) == len(content)       # the parsed line itself is not changed
 
 
 def test_tail_and_before_paging(client, topic):
@@ -155,6 +173,24 @@ def test_compact_log_needs_free_space(client, topic, monkeypatch):
     monkeypatch.setattr(shutil, "disk_usage", lambda p: namedtuple("u", "total used free")(10, 10, 0))
     assert service.compact_log(sid)["status"] == "no_space"
     assert store.log_path(sid).read_bytes() == before
+
+
+def test_compact_log_writes_nothing_for_a_log_that_would_not_shrink(client, topic, monkeypatch):
+    """An already compact log (the runner clips when it writes) is only read: no temporary copy, no free space asked."""
+    import shutil
+    from collections import namedtuple
+    sid = _session_with_log(topic, _turn_lines(0))
+    opened: list[str] = []
+    real_open = open
+
+    def spy(f, mode="r", *a, **k):
+        if "w" in mode or "a" in mode:
+            opened.append(str(f))
+        return real_open(f, mode, *a, **k)
+    monkeypatch.setattr("builtins.open", spy)
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: namedtuple("u", "total used free")(10, 10, 0))
+    assert service.compact_log(sid)["status"] == "unchanged"
+    assert not any("compact" in f for f in opened) and not store.compacting_path(sid).exists()
 
 
 def test_tail_ignores_partial_last_line(client, topic):
@@ -264,6 +300,43 @@ def test_non_finite_times_and_costs_render_as_json():
     json.dumps(out, allow_nan=False)
     assert [e["at"] for e in out] == [None, None, 5.0, None]
     assert [e["cost_usd"] for e in out[2:]] == [0.0, 0.0]
+
+
+def test_sub_agent_lines_are_dropped_without_changing_what_is_shown():
+    """Sub-agent lines are recognised on the text (no parse of their big results); the result is exactly what the
+    full parse gives, including the odd cases that must still be parsed (nested key, null, duplicate, mx_*)."""
+    from maxxing.sessions import normalize as nz
+    big = {"type": "tool_result", "tool_use_id": "t", "content": "x" * 50_000}
+    text = {"type": "text", "text": 'quoted "parent_tool_use_id": "nope" inside'}
+    lines = [
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": "toolu_1", "session_id": "s"}),
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": "toolu_1"},
+                   separators=(",", ":")),
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": None}),
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": ""}),
+        json.dumps({"type": "assistant", "message": {"content": [text]}, "parent_tool_use_id": None}),
+        json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "u", "name": "M",
+                                                                  "input": {"parent_tool_use_id": "x"}}]}}),
+        '{"type":"assistant","message":{"content":[]},"parent_tool_use_id":"a","parent_tool_use_id":null}',
+        json.dumps({"type": "mx_note", "text": "kept", "parent_tool_use_id": "toolu_1"}),
+        '{"type":"user","parent_tool_use_id":"toolu_1", broken',
+    ]
+    slow = []
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        slow.extend(nz.normalize(ev))
+    assert nz.normalize_lines(lines) == slow
+    assert [nz._sub_agent_line(x) for x in lines[:5]] == [True, True, False, False, False]
+    assert not any(nz._sub_agent_line(x) for x in lines[5:8])
+
+
+def test_a_lone_surrogate_is_still_replaced():
+    from maxxing.sessions.normalize import normalize_lines
+    out = normalize_lines(['{"type":"mx_user","text":"a\\ud83d b \\ud83d\\ude00"}'])
+    assert out[0]["text"] == "a\ufffd b \U0001f600"
 
 
 def _task_lines() -> str:

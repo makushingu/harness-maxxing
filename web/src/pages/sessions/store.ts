@@ -243,7 +243,16 @@ export const useSessionsUI = create<State>()(
           const cols = normalizeCols(s.cols.filter((c) => c !== dup).map((c) => (c.key === key ? ({ key, kind: 'session', id, ...(c.below && { below: true }), ...(c.wide && { wide: true }), ...(c.half && { half: true }) } as Col) : c)))
           return { cols }
         }),
-      setNewPath: (key, path) => set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) })),
+      setNewPath: (key, path) => {
+        // that topic already has a new column (the draft is per topic): this one goes, that one takes the focus
+        const other = get().cols.find((c) => c.kind === 'new' && c.path === path && c.key !== key)
+        if (other) {
+          get().close(key)
+          set({ focused: other.key })
+          return
+        }
+        set((s) => ({ cols: s.cols.map((c) => (c.key === key && c.kind === 'new' ? { ...c, path } : c)) }))
+      },
       focus: (key) => {
         if (get().focused !== key) set({ focused: key })
       },
@@ -342,10 +351,20 @@ export const useSessionsUI = create<State>()(
         set((s) => {
           const ids = new Set(saved.cols.flatMap((c) => (c.kind === 'session' ? [c.id] : [])))
           const keys = new Set(saved.cols.map((c) => c.key))
-          const extra = s.cols.filter((c) => !keys.has(c.key) && !(c.kind === 'session' && ids.has(c.id))).map(({ below: _b, wide: _w, half: _h, ...r }) => r as Col)
+          // sessions by id (solo reuses the key of the column on screen for another session), new columns by key;
+          // one whose key is taken by the saved layout gets a fresh one
+          const renamed: Record<string, string> = {}
+          const extra = s.cols
+            .filter((c) => (c.kind === 'session' ? !ids.has(c.id) : !keys.has(c.key)))
+            .map(({ below: _b, wide: _w, half: _h, ...r }) => {
+              if (!keys.has(r.key)) return r as Col
+              renamed[r.key] = uid()
+              return { ...r, key: renamed[r.key] } as Col
+            })
           const cols = normalizeCols([...saved.cols, ...extra])
           const cur = s.cols.find((c) => c.key === s.focused)
-          const focused = cols.find((c) => c.key === s.focused || (cur?.kind === 'session' && c.kind === 'session' && c.id === cur.id))?.key ?? cols[0]?.key ?? null
+          const focused =
+            (cur?.kind === 'session' ? cols.find((c) => c.kind === 'session' && c.id === cur.id) : cols.find((c) => c.key === (renamed[s.focused ?? ''] ?? s.focused)))?.key ?? cols[0]?.key ?? null
           return { cols, widths: saved.widths, focused }
         }),
       setWidth: (key, w) =>
@@ -547,12 +566,28 @@ export function saveAtts(k: string, atts: DraftAtt[]) {
  * Written before a send, removed once the server answered: what is left when the page loads was being sent when
  * the page went away (reload, update, closed tab). The column checks whether the server got it, else it comes
  * back into the composer. */
-export type OutboxEntry = { id: string; at: number; text: string; body: string; quotes: string[]; attachments: string[] }
+/** `tagged`: its id was sent with it (`client_id`), the server keeps it; older entries are checked on their text. */
+/** `page`: the page load that sent it (an open tab's sends are not left over, see `leftOutbox`). */
+export type OutboxEntry = { id: string; at: number; text: string; body: string; quotes: string[]; attachments: string[]; tagged?: boolean; page?: string }
 const outboxKey = (k: string) => `${draftKey(k)}:out`
 function readOutbox(k: string): OutboxEntry[] {
   try {
     const v = JSON.parse(localStorage.getItem(outboxKey(k)) || '[]')
-    return Array.isArray(v) ? v.filter((e) => e && typeof e.id === 'string' && typeof e.text === 'string') : []
+    if (!Array.isArray(v)) return []
+    // stored by another version or edited by hand: every field gets its type (a missing `quotes` crashed each load)
+    const strings = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : [])
+    return v
+      .filter((e) => e && typeof e.id === 'string' && typeof e.text === 'string')
+      .map((e) => ({
+        id: e.id,
+        at: Number.isFinite(e.at) ? e.at : 0,
+        text: e.text,
+        body: typeof e.body === 'string' ? e.body : e.text,
+        quotes: strings(e.quotes),
+        attachments: strings(e.attachments),
+        ...(e.tagged === true ? { tagged: true } : {}),
+        ...(typeof e.page === 'string' ? { page: e.page } : {}),
+      }))
   } catch {
     return []
   }
@@ -566,10 +601,17 @@ function writeOutbox(k: string, list: OutboxEntry[]) {
   }
 }
 const mine = new Set<string>() // sent by this page load: still in flight, not left over
-export function outboxAdd(k: string, e: Omit<OutboxEntry, 'id' | 'at'>): string {
+// This page load holds a Web Lock named after it until it goes away: another open tab of the same session sees
+// that its sends are still in flight, not left over by a reload.
+const PAGE = uid()
+const pageLock = (page: string) => `mx-page-${page}`
+if (typeof navigator !== 'undefined' && navigator.locks) {
+  navigator.locks.request(pageLock(PAGE), () => new Promise<void>(() => {})).catch(() => {})
+}
+export function outboxAdd(k: string, e: Omit<OutboxEntry, 'id' | 'at' | 'tagged' | 'page'>): string {
   const id = uid()
   mine.add(id)
-  writeOutbox(k, [...readOutbox(k), { ...e, id, at: Date.now() }])
+  writeOutbox(k, [...readOutbox(k), { ...e, id, at: Date.now(), tagged: true, page: PAGE }])
   return id
 }
 // While the page goes away its sends are cut short (they fail): they stay stored for the next load to check.
@@ -589,9 +631,17 @@ export function outboxMove(from: string, to: string) {
   writeOutbox(from, [])
   writeOutbox(to, [...readOutbox(to), ...a])
 }
-/** What a previous page load left (sent when the page went away); stays stored until `outboxDone`. */
-export function leftOutbox(k: string): OutboxEntry[] {
-  return readOutbox(k).filter((e) => !mine.has(e.id))
+/** What a previous page load left (sent when the page went away); stays stored until `outboxDone`. The sends of
+ * a page still open (another tab) are not left over. */
+export async function leftOutbox(k: string): Promise<OutboxEntry[]> {
+  const left = readOutbox(k).filter((e) => !mine.has(e.id))
+  if (!left.some((e) => e.page) || typeof navigator === 'undefined' || !navigator.locks) return left
+  try {
+    const held = new Set(((await navigator.locks.query()).held || []).map((l) => l.name))
+    return left.filter((e) => !e.page || !held.has(pageLock(e.page)))
+  } catch {
+    return left
+  }
 }
 
 /* ---------------------------------------------------------------- Seeds (a message brought back into a composer) */

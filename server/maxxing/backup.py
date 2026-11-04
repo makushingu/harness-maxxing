@@ -429,7 +429,8 @@ _PRUNE = {d.lower() for d in PRUNE_DIRS}
 def denied(rel: str) -> bool:
     """Hard deny-list (applies to whitelisted files too)."""
     parts = rel.split("/")
-    return bool(_DENY.match(parts[-1])) or any(p.lower() in _PRUNE for p in parts[:-1])
+    return (bool(_DENY.match(parts[-1])) or any(p.lower() in _PRUNE for p in parts[:-1])
+            or parts[-1].lower() == ".git")   # the `gitdir:` file of a worktree / submodule: git would store a gitlink
 
 
 def _patterns(include: Any) -> list[str]:

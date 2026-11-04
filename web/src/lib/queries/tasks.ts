@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Ok, Task, TaskBulkBody, TaskBulkResult, TaskInput, TaskProject, TaskProjectInput, TasksPayload } from '../types'
+import type { Ok, Task, TaskBulkBody, TaskBulkResult, TaskInput, TaskPlace, TaskProject, TaskProjectInput, TasksPayload } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -16,9 +16,9 @@ export function useCreateTask() {
 /** Optimistic: the card moves immediately; rolled back on error. */
 export function usePatchTask(scopeId?: string) {
   const qc = useQueryClient()
-  return useMut(({ id, ...b }: TaskInput & { id: string }) => api.patch<Task>(`/api/tasks/${seg(id)}`, b), {
+  return useMut(({ id, ...b }: TaskInput & TaskPlace & { id: string }) => api.patch<Task>(`/api/tasks/${seg(id)}`, b), {
     ...(scopeId ? { scope: { id: `task:${scopeId}` } } : {}),
-    onMutate: async ({ id, ...b }) => {
+    onMutate: async ({ id, prev_id: _p, next_id: _n, ...b }) => {
       await qc.cancelQueries({ queryKey: qk.tasks })
       const prev = qc.getQueryData<TasksPayload>(qk.tasks)
       if (prev) qc.setQueryData<TasksPayload>(qk.tasks, { ...prev, tasks: prev.tasks.map((t) => (t.id === id ? ({ ...t, ...b } as Task) : t)) })

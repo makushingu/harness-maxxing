@@ -36,6 +36,7 @@ BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-
 OWN_THREAD = {"crons", "system", "security"}
 
 _lock = threading.Lock()
+_aside_lock = config.ProcessLock("feed-aside")   # setting an unreadable feed.db aside
 _ready: set[str] = set()
 
 
@@ -56,18 +57,26 @@ def _conn() -> sqlite3.Connection:
     try:
         return _open(path, key)
     except sqlite3.DatabaseError as e:
-        if key in _ready or not _damaged(e):
+        if not _damaged(e):
             raise                                      # busy, disk full, too many files...: never set a good base aside
     # Unreadable feed.db (not a database, corrupted): set it aside and start a fresh one, or the feed and every
-    # system notification (crons, updates, sign-ins) would fail from now on.
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    for suffix in ("", "-wal", "-shm"):
+    # system notification (crons, updates, sign-ins) would fail from now on. Under a lock shared with the other
+    # processes, and only if it is still unreadable: another writer may already have replaced it with a fresh
+    # base holding new events, which must not be set aside in turn.
+    with _aside_lock:
         try:
-            os.replace(f"{path}{suffix}", f"{path}.damaged-{stamp}{suffix}")
-        except OSError:
-            pass
-    log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
-    return _open(path, key)
+            return _open(path, key)
+        except sqlite3.DatabaseError as e:
+            if key in _ready or not _damaged(e):
+                raise
+        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.monotonic_ns()}"   # never overwrites an older copy
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.replace(f"{path}{suffix}", f"{path}.damaged-{stamp}{suffix}")
+            except OSError:
+                pass
+        log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
+        return _open(path, key)
 
 
 def _damaged(e: sqlite3.DatabaseError) -> bool:
@@ -97,6 +106,9 @@ def _open(path: Path, key: str) -> sqlite3.Connection:
                 CREATE UNIQUE INDEX IF NOT EXISTS events_dedupe ON events(source, dedupe) WHERE dedupe IS NOT NULL;
                 CREATE INDEX IF NOT EXISTS events_at ON events(at);
                 CREATE INDEX IF NOT EXISTS events_src ON events(source, read);
+                CREATE TABLE IF NOT EXISTS hook_seen (hook TEXT NOT NULL, key TEXT NOT NULL, at REAL NOT NULL,
+                                                      PRIMARY KEY (hook, key));
+                CREATE INDEX IF NOT EXISTS hook_seen_at ON hook_seen(at);
             """)
             _ready.add(key)
     return c
@@ -176,6 +188,26 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     if notify and not grouped:
         _to_telegram(ev)
     return ev
+
+
+def claim_delivery(hook: str, key: str, keep_s: float) -> bool:
+    """A signed webhook body seen for the first time within keep_s -> True (recorded), else False. Kept apart from
+    the events: a body the parser ignored, or whose event was deleted, must not post when replayed."""
+    now = time.time()
+    with _conn() as c:
+        c.execute("DELETE FROM hook_seen WHERE at<? OR (hook=? AND key=? AND at<?)",
+                  (now - RETENTION_DAYS * 86400, hook, key, now - keep_s))
+        try:
+            c.execute("INSERT INTO hook_seen(hook, key, at) VALUES (?,?,?)", (hook, key, now))
+        except sqlite3.IntegrityError:
+            return False
+    return True
+
+
+def release_delivery(hook: str, key: str) -> None:
+    """The delivery failed (bad body, feed error): the sender's retry must not be taken for a replay."""
+    with _conn() as c:
+        c.execute("DELETE FROM hook_seen WHERE hook=? AND key=?", (hook, key))
 
 
 # ---- read ----------------------------------------------------------------------------------

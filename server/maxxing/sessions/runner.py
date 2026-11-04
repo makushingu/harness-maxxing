@@ -249,6 +249,7 @@ class Runner:
                                     "attachments": item.get("attachments") or [],
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
+                                    **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
                                     "at": time.time()})
         if voices:
             heard, err = self._voice(item, voices)
@@ -402,7 +403,7 @@ class Runner:
     def _auto_compact(self, item: dict, a: Attempt, err: str | None, cfg: dict) -> None:
         """After a turn that ended with a big context: a summary turn runs next (before any waiting message) and
         the session continues in a fresh thread seeded with it - every later call stops re-sending the history."""
-        limit = int(cfg.get("auto_compact_tokens") or 0)
+        limit = config.int_setting(cfg, "auto_compact_tokens")
         if limit <= 0 or err is not None or a.stopped or not a.context_tokens:
             return
         limit = max(limit, AUTO_COMPACT_MIN)

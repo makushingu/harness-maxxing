@@ -106,7 +106,8 @@ def _queue_preview(m: dict) -> list[dict]:
         out.append({"text": str(q.get("text") or "")[:QUEUE_PREVIEW_CHARS],
                     "attachments": len(att) if isinstance(att, list) else 0,
                     "source": str(q.get("source") or "web"), "kind": str(q.get("kind") or "user"),
-                    **({"voice": True} if q.get("voice") else {})})
+                    **({"voice": True} if q.get("voice") else {}),
+                    **({"client_ids": [str(c) for c in q["client_ids"]]} if isinstance(q.get("client_ids"), list) else {})})
     return out
 
 
@@ -210,6 +211,10 @@ def _item(text: str, attachments: list[str] | None, source: str, kind: str = "us
             "at": time.time(), **extra}
 
 
+def _client_ids(client_id: str | None) -> dict:
+    return {"client_ids": [client_id]} if client_id else {}
+
+
 def _check_attachments(paths: list[str] | None) -> list[str]:
     out = []
     for p in paths or []:
@@ -272,7 +277,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    model: str | None = None, attachments: list[str] | None = None,
                    source: str = "web", notify: bool = False, cron: bool = False,
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
-                   permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None) -> dict:
+                   permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
+                   client_id: str | None = None) -> dict:
     """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title."""
     try:
         p = workspace.normalize_path(path)
@@ -290,10 +296,11 @@ def create_session(path: str, message: str | None = None, title: str | None = No
     if automatic and not has_text:
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
     store.create(meta)
+    first = _item((message or "").strip(), files, source, **_client_ids(client_id))
     if audio:
-        _enqueue_voice(meta["id"], _item((message or "").strip(), files, source), audio)
+        _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:
-        _enqueue(meta["id"], _item((message or "").strip(), files, source))
+        _enqueue(meta["id"], first)
     if automatic and has_text:
         titles.schedule(meta["id"], meta["title"], message or "")   # short title in the background
     bus.invalidate("sessions", "workspace")
@@ -348,9 +355,11 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 
 
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
-                 hud: bool = False, voice_path: str | None = None, ref: str | None = None) -> dict:
+                 hud: bool = False, voice_path: str | None = None, ref: str | None = None,
+                 client_id: str | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
-    (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs)."""
+    (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
+    for it, kept in its queue item and its log line (`client_ids`)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
@@ -359,6 +368,7 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
     extra: dict[str, Any] = {"hud": True} if hud else {}
     if ref:
         extra["refs"] = [str(ref)]
+    extra.update(_client_ids(client_id))
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)
@@ -499,6 +509,7 @@ def steer(sid: str) -> dict:
                        **({"voice": [v for x in mine for v in x.get("voice") or []]}
                           if any(x.get("voice") for x in mine) else {}),
                        **({"hud": True} if all(x.get("hud") for x in mine) else {}),
+                       **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
                        **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
                        **({"refs": refs} if (refs := [r for x in mine for r in x.get("refs") or []]) else {}))
         m["queue"] = [merged] + [x for i, x in enumerate(q) if i not in set(idx)]
@@ -809,6 +820,22 @@ def _add_task_starts(f, before: int, events: list[dict]) -> None:
 COMPACT_FREE_MARGIN = 256 * 1024 * 1024               # free space kept beyond the copy of a log
 
 
+def _log_shrinks(path: Path, size: int) -> bool:
+    """Whether compact_log would drop or shorten a line among the first `size` bytes (stops at the first one)."""
+    consumed = 0
+    with open(path, "rb") as src:
+        for raw in src:
+            consumed += len(raw)
+            line = raw[:-1] if raw.endswith(b"\n") else raw
+            if clip.drop_line(line):
+                return True
+            if clip.worth_clipping(line) and len(clip.clip_line(line.decode("utf-8", "replace"))) < len(line):
+                return True
+            if consumed >= size:
+                break
+    return False
+
+
 def compact_log(sid: str, dry_run: bool = False) -> dict:
     """Rewrite a raw log with clipped tool outputs and slimmed system lines (clip.py), atomically,
     streaming line by line.
@@ -827,6 +854,8 @@ def compact_log(sid: str, dry_run: bool = False) -> dict:
     tmp = path.with_name(f"{path.name}.compact.tmp")
     marker = store.compacting_path(sid)
     try:
+        if not dry_run and not _log_shrinks(path, before):   # most logs (clipped when written): no copy at all
+            return {"id": sid, "status": "unchanged", "before": before, "after": before}
         if not dry_run and shutil.disk_usage(path.parent).free < before + COMPACT_FREE_MARGIN:
             return {"id": sid, "status": "no_space", "before": before, "after": before}
         if not dry_run:
@@ -1073,10 +1102,12 @@ def on_turn_end(cb: Callable[[dict, dict | None], Any]) -> None:
 
 # A meta change wakes the watcher at once (wake.py: inotify); it also passes every WATCH_WAKE_RUNNING_S while a session
 # runs (dead runner check: an unchanged running session is re-read at most every RUNNING_RECHECK_S) and every
-# `interval` otherwise. Without inotify it polls: every WATCH_RUNNING_S while a session runs (its turn end - Telegram
+# `interval` otherwise - every WATCH_IDLE_WAKE_S when nothing runs (inotify already wakes it on every change; only a
+# hand-off hold expiry is due by time, and it shortens the wait). Without inotify it polls: every WATCH_RUNNING_S while a session runs (its turn end - Telegram
 # reply, notification, cron result - is seen within 0.25 s instead of 1 s), every `interval` otherwise.
 WATCH_RUNNING_S = 0.25
 WATCH_WAKE_RUNNING_S = 2.0
+WATCH_IDLE_WAKE_S = 30.0
 RUNNING_RECHECK_S = 1.0
 _checked: dict[str, float] = {}
 
@@ -1245,7 +1276,13 @@ async def _watch(interval: float) -> None:
             log.exception("session watcher pass failed")
         running = any(v[2] == "running" for v in _known.values())
         if ev is not None:
-            await wake.wait(ev, WATCH_WAKE_RUNNING_S if running else interval)
+            if running:
+                timeout = WATCH_WAKE_RUNNING_S
+            else:
+                timeout = max(interval, WATCH_IDLE_WAKE_S)
+                if _held:
+                    timeout = min(timeout, max(interval, min(_held.values()) - time.time() + 0.05))
+            await wake.wait(ev, timeout)
         else:
             await asyncio.sleep(min(interval, WATCH_RUNNING_S) if running else interval)
 

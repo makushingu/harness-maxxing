@@ -371,7 +371,8 @@ def test_github_name_needs_github_com_itself():
                          ("https://www.GitHub.com/acme/site/", "acme/site"),
                          ("https://notgithub.com/own/repo.git", None), ("https://gitlab.com/x/github.com/own/repo", None),
                          ("git@gitlab.com:github.com/own/repo.git", None), ("git@evilgithub.com:own/repo", None),
-                         ("https://github.com.evil.io/own/repo", None), ("/srv/github.com/own/repo", None)):
+                         ("https://github.com.evil.io/own/repo", None), ("/srv/github.com/own/repo", None),
+                         ("http://[foo/x", None), ("https://[::1/acme/site", None)):
         assert gitview.github_name(remote) == name, remote
 
 
@@ -416,3 +417,52 @@ def test_huge_subjects_and_messages_are_cut(repo):
     assert len(json.dumps(graph)) < 50_000
     message = gitview.commit(str(repo), top["sha"])["message"]
     assert len(message) == gitview.MESSAGE_MAX + 1 and message.endswith("…")
+
+
+def test_a_malformed_remote_url_does_not_break_the_repo_summary(repo):
+    _git(repo, "config", "remote.origin.url", "http://[foo/x")
+    gitview.clear_cache()
+    assert gitview.summary(repo)["github"] is None
+
+
+def test_a_nul_byte_in_a_branch_or_argument_is_not_a_500(repo):
+    gitview.clear_cache()
+    assert gitview.graph(str(repo), branches=["main", "main\x00x"])["commits"]
+    with pytest.raises(gitview.GitError) as e:
+        gitview._git(repo, "log", "a\x00b")
+    assert e.value.status == 400
+
+
+def test_graph_puts_children_first_without_topo_order_and_is_cached_until_refs_move(repo, monkeypatch):
+    """No `--topo-order` (it walks the whole history first): a child still comes before its parents even when its
+    date is older (clock skew); the same refs and HEAD answer from the cache, a new commit or branch does not."""
+    env = {"GIT_COMMITTER_DATE": "1000000000 +0000", "GIT_AUTHOR_DATE": "1000000000 +0000"}
+    subprocess.run(["git", "-C", str(repo), "commit", "-qam", "skewed child"], check=True, capture_output=True,
+                   env={"GIT_AUTHOR_NAME": "Ann", "GIT_AUTHOR_EMAIL": "a@example.com", "GIT_COMMITTER_NAME": "Ann",
+                        "GIT_COMMITTER_EMAIL": "a@example.com", "HOME": str(repo), "PATH": "/usr/bin:/bin", **env})
+    logs = []
+    real = gitview._git
+    monkeypatch.setattr(gitview, "_git", lambda r, *a, **k: (logs.append(a), real(r, *a, **k))[1])
+    walks = lambda: sum("--decorate=full" in a for a in logs)                  # noqa: E731
+    g = gitview.graph(str(repo))
+    order = [c["subject"] for c in g["commits"]]
+    assert order[0] == "skewed child" and order.index("merge login") < order.index("add login")
+    assert "--topo-order" not in str(logs)
+    assert walks() == 1
+    assert gitview.graph(str(repo))["commits"] == g["commits"] and walks() == 1               # cached
+    _git(repo, "branch", "other")
+    g2 = gitview.graph(str(repo))
+    assert walks() == 2 and any(r["name"] == "other" for r in g2["commits"][0]["refs"])
+    assert len(gitview.graph(str(repo), limit=2)["commits"]) == 2
+
+
+def test_commit_detail_of_a_huge_commit_skips_rename_detection(repo, monkeypatch):
+    monkeypatch.setattr(gitview, "RENAMES_MAX_FILES", 1)
+    _git(repo, "mv", "f1.txt", "moved.txt")
+    _git(repo, "commit", "-qm", "move")
+    sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    big = gitview.commit(str(repo), sha)
+    assert sorted(f["path"] for f in big["files"]) == ["f1.txt", "moved.txt"] and big["files_total"] == 2
+    monkeypatch.setattr(gitview, "RENAMES_MAX_FILES", 2000)
+    small = gitview.commit(str(repo), sha)
+    assert [f["path"] for f in small["files"]] == ["f1.txt => moved.txt"]

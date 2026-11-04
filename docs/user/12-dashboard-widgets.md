@@ -26,7 +26,7 @@ that shows ...". Hide the card with **Edit layout** once you have yours.
 |---|---|
 | Activity | recent sessions, running turns, unread answers (before the first session: where to start) |
 | Tasks | in progress, due today, overdue |
-| Today's schedule | the day of your scheduled jobs on a 00:00 - 24:00 line: one row per job, runs done (green, red if failed), runs still to come (hollow), the one running now (pulsing) and a "now" line; hover a dot for its time and duration |
+| Today's schedule | the day of your scheduled jobs on a 00:00 - 24:00 line: one row per job, runs done (green, red if failed), runs still to come (hollow), the one running now (pulsing) and a "now" line; a job that runs too often for round dots gets thin bars, one per run at its exact time, and a job that runs every minute or so a band (done up to now, planned after); hover a dot or a bar for its time and duration |
 | Scheduled jobs | next runs and recent failures |
 | Server | CPU, memory, disk, uptime, health issues |
 | Memory backup | last run, age, repository |
@@ -83,7 +83,7 @@ The id (folder name) is a lowercase slug: letters, digits, dashes. Reserved ids:
 | `api` | version of the extension contract it is written for (default 1); a release that stops supporting it is announced by the update preflight before you update |
 | `icon` | an icon name in kebab-case (`gauge`, `chart-line`, `shopping-cart`, `users`, `receipt`...) from the app's set of [lucide](https://lucide.dev/icons) icons; a name the app does not ship shows a puzzle piece |
 | `span` | width in grid columns: 1, 2 or 3 |
-| `ttl` | seconds the result is cached (default 300). The refresh button bypasses it. |
+| `ttl` | seconds the result is cached (default 300). The refresh button bypasses it. Past it, a slow card keeps showing its last result while the new one is computed. |
 
 ### 3. api.py
 

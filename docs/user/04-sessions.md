@@ -104,6 +104,7 @@ counters; on a touch screen **+** stays visible and a long press opens the menu.
 
 Pick a topic, click **New session**, write your message. The session runs in the topic folder, so
 Claude automatically loads the workspace, project and topic memory (see [Memory](memory)).
+A topic has one new-session draft: picking, in a new session, a topic that already has one open takes you to it.
 
 **Its title** is short: the start of the message shows at once, then a shortened title replaces it (greetings and
 "can you…" removed, cut on a word): "Tu vas me créer une session d'automatisation de E-ink" becomes *Créer une
@@ -153,7 +154,8 @@ also send the quotes alone. Quotes are kept with the draft and shown as quote bl
 files stay saved in the browser: they are still there after a page reload, an update of Harness Maxxing or a
 server restart. A message being sent at the moment the page reloads comes back in the box (a notice says so)
 unless the server had received it. Messages waiting in the queue are kept by the server. After an update the
-page switches to the new version only once nothing is being sent or uploaded.
+page switches to the new version only once nothing is being sent or uploaded. Signing out clears them from the browser
+(on a shared computer nothing unsent stays behind), and deleting a session clears its own.
 
 **Drag from one session into another.** With several sessions side by side (mouse), drag content of one session
 onto another session's column: it lands in that session's **Quote** card, the message box gets the focus, and
@@ -169,7 +171,9 @@ into another app, the content arrives as plain text (a file as its path).
 
 ## What you see
 
-- Answers stream live (markdown, code, images).
+- Answers stream live (markdown, code, images). A picture from another website shows as a **Load image from …**
+  button and loads only when you click it (a page Claude read cannot make the answer send data to its server);
+  links to other websites open in a new tab.
 - **Tool calls** (reading files, running commands, editing) appear as compact cards; expand them
   to see input and output. Edits are shown as diffs.
 - **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
@@ -358,12 +362,14 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 - **memory** (`memory.md`, `CLAUDE.md`), **tasks** (title, notes, labels) and the **content** of the
   text files of the workspace (markdown, code, config…), plus file and folder **names**. Every `memory.md` /
   `CLAUDE.md` is always found; in a very big workspace each topic gets its fair share of the other files, and
-  data files (`.json`, `.csv`, `.xml`, `.svg`) are left out. New files show up within 10 minutes, memory at once;
+  data files (`.json`, `.csv`, `.xml`, `.svg`) are left out, as are links to files outside the workspace. New files show up within 10 minutes, memory at once;
 - pages, settings, topics and actions.
 
-Type a few words in any order: each word may be the start of a word ("fact" finds "facture"),
-accents do not matter, and the best matches come first with the matched words highlighted. A
-message is searchable a second after it is written; edited files within half a minute.
+Type a few words in any order: a word of 3 letters or more may be the start of a word ("fac" finds
+"facture"; 2 letters find that word only), accents do not matter, and the best matches come first with the
+matched words highlighted, one line per session. A session whose title matches no longer hides the other
+sessions that match. A very common word ranks its newest matches. A message is searchable a second after it is
+written; edited files within half a minute.
 
 ## Sessions from Telegram and crons
 

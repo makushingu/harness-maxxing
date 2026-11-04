@@ -88,7 +88,7 @@ async def forward(eid: str, path: str, request: Request):
         if raw:
             try:
                 body = json.loads(raw)
-            except ValueError:
+            except (ValueError, RecursionError):           # not JSON, or nested too deeply: handle() gets the text
                 body = raw.decode("utf-8", "replace")
     try:
         fn = extensions.handler(ext)
@@ -117,8 +117,8 @@ async def forward(eid: str, path: str, request: Request):
         result = {"ok": True}
     try:
         return JSONResponse(result, status_code=status)
-    except (TypeError, ValueError) as e:
-        raise _err(500, "extension_error", f"handle() returned a non-JSON value ({e})") from None
+    except (TypeError, ValueError, RecursionError) as e:
+        raise _err(500, "extension_error", f"handle() returned a non-JSON value ({type(e).__name__}: {e})") from None
 
 
 @router.api_route("/api/ext/{eid}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -213,9 +213,10 @@ async def widget_frame(eid: str):
         "Cache-Control": "no-store", "Content-Security-Policy": WIDGET_FRAME_CSP, "Referrer-Policy": "no-referrer"})
 
 
-@router.get("/ext/{eid}/widget.html", include_in_schema=False)
+@router.api_route("/ext/{eid}/widget.html", methods=["GET", "HEAD"], include_in_schema=False)
 async def widget_html(eid: str):
-    """Raw widget.html; the UI loads it into a sandboxed iframe (srcdoc, no access to the app)."""
+    """Raw widget.html; the UI loads it into a sandboxed iframe (srcdoc, no access to the app). HEAD: the dashboard
+    only checks that the widget exists (the frame loads /widget-frame)."""
     ext = await asyncio.to_thread(extensions.get, eid)
     if ext is None or not ext.enabled or ext.error or not ext.has_html:
         raise _err(404, "not_found", f"no HTML widget for extension {eid}")

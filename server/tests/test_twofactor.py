@@ -206,3 +206,58 @@ def test_a_call_without_session_does_not_consume_an_approved_enable_request(tg):
         c.cookies.update(cookies)                                  # signed in again: the approval is still there
         assert c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H).json()["status"] == "approved"
         assert twofactor.is_on()
+
+
+def test_a_failed_telegram_send_does_not_use_up_the_request_quota(tg):
+    """Telegram refusing the message keeps answering 503 with the `2fa off` hint, never 429 "try again in 15 min"."""
+    _on()
+    tg.close()
+    with TestClient(_app()) as c:
+        codes = [c.post("/api/auth/login", json={"password": PW}, headers=H).status_code for _ in range(7)]
+    assert codes == [503] * 7
+
+
+def test_a_failed_send_keeps_the_older_pending_requests(tg, monkeypatch):
+    """A reload while Telegram flakes must not close the older request that can still be answered."""
+    _on()
+    with TestClient(_app()) as c:
+        ids = [_login(c)["two_factor"]["challenge"] for _ in range(3)]
+        monkeypatch.setattr(twofactor, "_send", lambda ch: False)
+        assert c.post("/api/auth/login", json={"password": PW}, headers=H).status_code == 503
+        assert [twofactor.purpose(i) for i in ids] == ["login"] * 3
+
+
+def _notices(fake) -> list[str]:
+    return [p.get("text", "") for m, p in fake.calls if m == "sendMessage"]
+
+
+def test_turning_off_from_the_ui_needs_the_password_and_says_so(tg):
+    from maxxing import feed
+    _on()
+    with TestClient(_app()) as c:
+        cid = _login(c)["two_factor"]["challenge"]
+        twofactor.decide(cid, True)
+        c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H)
+        r = c.put("/api/auth/two-factor", json={"enabled": False}, headers=H)
+        assert r.status_code == 401 and twofactor.is_on()           # a session cookie alone is not enough
+        r = c.put("/api/auth/two-factor", json={"enabled": False, "password": "wrong one"}, headers=H)
+        assert r.status_code == 401 and twofactor.is_on()
+        r = c.put("/api/auth/two-factor", json={"enabled": False, "password": PW}, headers=H)
+        assert r.status_code == 200 and not twofactor.is_on()
+        assert any("web UI" in t for t in _notices(tg))
+        assert any("Two-step sign-in turned off" in e["title"] for e in feed.list_events()["events"])
+        # already off: nothing to confirm
+        assert c.put("/api/auth/two-factor", json={"enabled": False}, headers=H).status_code == 200
+
+
+def test_unlinking_telegram_with_two_step_on_sends_a_notice(tg):
+    from maxxing import feed
+    _on()
+    with TestClient(_app()) as c:
+        cid = _login(c)["two_factor"]["challenge"]
+        twofactor.decide(cid, True)
+        c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H)
+        assert c.delete("/api/telegram", headers=H).status_code == 200
+        assert not twofactor.is_on()
+        assert any("unlinked" in t for t in _notices(tg)), tg.calls
+        assert any("Telegram unlinked" in e["title"] for e in feed.list_events()["events"])

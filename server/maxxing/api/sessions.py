@@ -47,6 +47,9 @@ class _Text(BaseModel):
         return v
 
 
+CLIENT_ID_RE = r"^[A-Za-z0-9_-]{1,64}$"
+
+
 class CreateIn(_Text):
     path: str = ""
     message: str | None = None
@@ -55,6 +58,7 @@ class CreateIn(_Text):
     attachments: list[str] = Field(default_factory=list)
     plan_mode: bool = False
     voice: str | None = None          # absolute path of a voice message sent directly (transcribed afterwards)
+    client_id: str | None = Field(None, pattern=CLIENT_ID_RE)   # the sender's id for the first message (see MessageIn)
 
 
 class PatchIn(_Text):
@@ -85,6 +89,9 @@ class MessageIn(_Text):
     attachments: list[str] = Field(default_factory=list)
     hud: bool = False  # sent from the HUD: Claude is told to answer short and may annotate the screen capture
     voice: str | None = None  # absolute path of a voice message sent directly: transcribed on the server, then sent
+    # The sender's own id for this message, found again in its queue item and its log line (`client_ids`): a page
+    # reloaded mid-send tells whether the server got it.
+    client_id: str | None = Field(None, pattern=CLIENT_ID_RE)
 
 
 async def _call(fn: Callable[..., Any], *args: Any, **kw: Any) -> Any:
@@ -123,7 +130,7 @@ async def list_sessions(path: str | None = None, archived: int | None = Query(No
 async def create_session(body: CreateIn):
     return await _call(service.create_session, body.path, message=body.message, title=body.title,
                        model=body.model, attachments=body.attachments, source="web",
-                       plan_mode=body.plan_mode, voice_path=body.voice)
+                       plan_mode=body.plan_mode, voice_path=body.voice, client_id=body.client_id)
 
 
 @router.get("/sessions/search")
@@ -165,7 +172,7 @@ async def delete_session(sid: str):
 @router.post("/sessions/{sid}/messages")
 async def send_message(sid: str, body: MessageIn):
     return await _call(service.send_message, sid, body.text, body.attachments, "web", hud=body.hud,
-                       voice_path=body.voice)
+                       voice_path=body.voice, client_id=body.client_id)
 
 
 @router.post("/sessions/{sid}/queue/take")
@@ -391,8 +398,21 @@ def save_upload(up: UploadFile, folder: Path) -> dict:
             "mime": up.content_type or mimetypes.guess_type(dest.name)[0] or "application/octet-stream"}
 
 
+def save_uploads(files: list[UploadFile], folder: Path) -> list[dict]:
+    """All the files of one request, or none: a 413/507 on one removes those saved before it
+    (a client retrying the request would otherwise get `f0-1.bin` next to the kept `f0.bin`)."""
+    saved: list[dict] = []
+    try:
+        for up in files:
+            saved.append(save_upload(up, folder))
+    except BaseException:
+        for done in saved:
+            Path(done["path"]).unlink(missing_ok=True)
+        raise
+    return saved
+
+
 @router.post("/uploads")
 async def uploads(path: str = "", file: list[UploadFile] = File(...)):
     folder = await _call(service.uploads_dir, path.strip("/"))
-    saved = [await asyncio.to_thread(save_upload, f, folder) for f in file]
-    return {"files": saved}
+    return {"files": await asyncio.to_thread(save_uploads, file, folder)}

@@ -554,6 +554,17 @@ def test_a_git_folder_in_any_case_is_never_collected(ws):
     assert backup.denied("projects/acme/.Git/config")
 
 
+def test_a_worktree_or_submodule_is_backed_up_as_plain_files(ws):
+    """A `.git` FILE (git worktree / submodule) made git store the folder as an empty gitlink."""
+    wt = ws / "extensions/radar2"
+    wt.mkdir(parents=True)
+    (wt / ".git").write_text("gitdir: /root/src/x/.git/worktrees/radar2\n")
+    (wt / "widget.js").write_text("export default {}\n")
+    files = backup.collect()
+    assert "extensions/radar2/widget.js" in files and "extensions/radar2/.git" not in files
+    assert backup.denied("extensions/radar2/.GIT")
+
+
 def test_a_secret_in_a_file_name_that_is_not_utf8_is_recorded(gh, ws):
     """leaks[].file kept os.walk's surrogate: writing the history raised out of run() (a 500, no entry)."""
     import os

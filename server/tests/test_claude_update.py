@@ -178,3 +178,11 @@ def test_registry_read_at_most_every_period(fake, monkeypatch):
     assert n["latest"] == 1
     cu.tick(now=time.time() + cu.CHECK_EVERY_S + 1)
     assert n["latest"] == 2
+
+
+def test_odd_stable_tag_is_never_installed(fake):
+    _session(finished_ago=3600)
+    for bad in ("--registry=http://x 9.9.9", "https://h/1.2.3.tgz", "1" * 5000 + ".1.1"):
+        fake["latest"] = bad
+        assert cu.tick(force_check=True) == "unknown" and fake["calls"] == 0
+        assert cu.load().get("latest") is None

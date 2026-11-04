@@ -16,7 +16,7 @@ import re
 
 LIMIT = 4096
 
-_FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]*)\s*$")
+_FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]{0,30})\s*$")
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
 _BULLET = re.compile(r"^(\s*)[-*+]\s+(.*)$")
 _NUMBERED = re.compile(r"^(\s*)(\d{1,3})[.)]\s+(.*)$")
@@ -62,12 +62,13 @@ def inline(text: str) -> str:
 
     # links [label](url) and autolinks <https://…>
     def _link(m: re.Match) -> str:
-        url = _safe_url(m.group(2))
+        # a code slot inside the url would put <code> into href: not a link then
+        url = _safe_url(m.group(2)) if "\x00" not in m.group(2) else None
         label = _label(m.group(1)) if m.group(1) else escape(m.group(2))
         return keep(f'<a href="{url}">{label}</a>') if url else keep(escape(m.group(0)))
 
     text = re.sub(r"!?\[([^\]\n]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", _link, text)
-    text = re.sub(r"<((?:https?|mailto):[^>\s]+)>",
+    text = re.sub(r"<((?:https?|mailto):[^>\s\x00]+)>",
                   lambda m: keep(f'<a href="{_safe_url(m.group(1))}">{escape(m.group(1))}</a>'), text)
 
     text = escape(text)
@@ -289,7 +290,7 @@ def _split_big(b: Block, limit: int) -> list[str]:
                 cut = max(1, (limit - overhead) // 5)          # worst case: every char -> &amp;
                 chunks = [cur[k:k + cut] for k in range(0, len(cur), cut)]
                 pieces.extend(chunks[:-1])
-                cur = chunks[-1]
+                cur = chunks[-1] if chunks else ""
         if cur:
             pieces.append(cur)
         return [_code_block(p, lang) for p in pieces]

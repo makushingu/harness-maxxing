@@ -65,6 +65,18 @@ def test_rename_remaps_sessions_and_telegram(client, topic, mx):
     assert wait_idle(client, s["id"])["state"] == "idle"
 
 
+def test_rename_keeps_the_scheduled_jobs_of_the_topic(client, topic, mx):
+    from maxxing import crons
+    j = crons.create_job({"name": "Digest", "kind": "claude", "topic_path": topic, "prompt": "hi"})
+    other = crons.create_job({"name": "Shell", "command": "true"})
+    client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"})
+    assert crons.get_job(j["id"])["topic_path"] == "projects/acme/topics/news"
+    client.patch("/api/workspace/projects/acme", json={"name": "acme2"})
+    assert crons.get_job(j["id"])["topic_path"] == "projects/acme2/topics/news"
+    assert crons.update_job(j["id"], {"name": "Digest 2"})["name"] == "Digest 2"   # still valid: editable
+    assert crons.get_job(other["id"])["topic_path"] == ""
+
+
 def test_rename_running_topic_is_not_reported_as_existing(client, topic, mx):
     s = client.post("/api/sessions", json={"path": topic, "message": "SLOW"}).json()
     r = client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"})
@@ -127,3 +139,10 @@ def test_project_emoji(client, mx):
     assert client.patch("/api/workspace/projects/store", json={"emoji": ""}).json()["emoji"] == ""
     assert not (workspace.project_dir("store") / ".maxxing.json").exists()
     assert gateway.session_label({"path": "projects/store/topics/blog", "title": "Launch plan"}) == "store/blog · Launch plan"
+
+
+def test_a_name_or_path_ending_with_a_newline_is_refused(client, mx, topic):
+    assert client.post("/api/workspace/projects", json={"name": "abc\n"}).status_code == 400
+    assert client.post("/api/workspace/projects/acme/topics", json={"name": "new\n"}).status_code == 400
+    assert not (mx["ws"] / "projects" / "abc\n").exists()
+    assert workspace._PATH_RE.match("projects/acme\n") is None  # noqa: SLF001

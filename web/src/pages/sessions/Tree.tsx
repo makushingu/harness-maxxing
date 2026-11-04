@@ -822,7 +822,7 @@ function TopicNode({
           )}
           <SessionRows sessions={shown} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} still={forceOpen} />
           {!all && sessions.length > cap && (
-            <button type="button" onClick={() => setAll(true)} className="ml-9 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => setAll(true)} className="ml-9 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground max-md:h-10 pointer-coarse:h-10">
               {t('sessions.tree.showMore', { count: sessions.length - cap })}
             </button>
           )}
@@ -1197,7 +1197,7 @@ function FlatView({ sessions, searching, openIds, focusedId, onOpen, labelOf }: 
     <div data-testid="flat-view">
       <SessionRows sessions={sorted.slice(0, shown)} openIds={openIds} focusedId={focusedId} onOpen={onOpen} depth={0} still={searching} labelOf={labelOf} compact rise={intro && !searching} />
       {sorted.length > shown && (
-        <button type="button" onClick={() => setShown((n) => n + FLAT_SHOWN)} className="ml-2 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={() => setShown((n) => n + FLAT_SHOWN)} className="ml-2 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground max-md:h-10 pointer-coarse:h-10">
           {t('sessions.tree.showMore', { count: sorted.length - shown })}
         </button>
       )}

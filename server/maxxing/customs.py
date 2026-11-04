@@ -115,11 +115,11 @@ def _trailers(body: str) -> dict[str, str]:
     return out
 
 
-def _local_range(branch: str | None = None) -> list[str]:
-    """git arguments selecting the commits HEAD has and upstream has not, compared by content (patch id), merges
+def _local_range(branch: str | None = None, head: str = "HEAD") -> list[str]:
+    """git arguments selecting the commits `head` has and upstream has not, compared by content (patch id), merges
     left out: when the history of the repository was rewritten upstream (same code, new commits), the old commits
     are not taken for customizations, even without a common ancestor."""
-    return ["--right-only", "--cherry-pick", "--no-merges", f"{upstream(branch)}...HEAD"]
+    return ["--right-only", "--cherry-pick", "--no-merges", f"{upstream(branch)}...{head}"]
 
 
 def same_code_upstream(branch: str | None = None) -> bool:
@@ -132,11 +132,12 @@ def same_code_upstream(branch: str | None = None) -> bool:
     return code == 0 and tree.strip() in out.split()
 
 
-def list_customs(branch: str | None = None) -> list[dict[str, Any]]:
-    """Local commits on top of upstream, oldest first -> [{id, title, why, saved, commit, files}]."""
+def list_customs(branch: str | None = None, head: str = "HEAD") -> list[dict[str, Any]]:
+    """Local commits on top of upstream, oldest first -> [{id, title, why, saved, commit, files}] (those of `head`,
+    another local branch for instance)."""
     if not is_git() or git("rev-parse", "-q", "--verify", upstream(branch))[0] != 0:
         return []
-    code, out = git("log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", *_local_range(branch))
+    code, out = git("log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", *_local_range(branch, head))
     if code != 0:
         return []
     overrides = check_overrides()
@@ -262,6 +263,21 @@ def save(title: str, why: str = "", files: list[str] | None = None, check: str =
           (f"Check: {' '.join(check.split())}\n" if (check or "").strip() else "")
     git("commit", "-q", "-m", msg, check=True)
     return {"id": cid, **export()}
+
+
+def pick(sha: str) -> tuple[str, str]:
+    """Replay one customization on HEAD (cherry-pick) -> ("ok" | "included" | "conflict", git's output).
+    "included": HEAD already has its change (merged upstream as another commit), nothing is committed. A conflict
+    is aborted: HEAD stays as it was."""
+    code, out = git("cherry-pick", "--allow-empty", sha)
+    if code == 0:
+        return "ok", out
+    if (git("rev-parse", "-q", "--verify", "CHERRY_PICK_HEAD")[0] == 0 and not conflicts()
+            and git("diff", "--cached", "--quiet")[0] == 0):
+        git("cherry-pick", "--skip")                  # "now empty" (git < 2.45 has no --empty=drop)
+        return "included", out
+    git("cherry-pick", "--abort")
+    return "conflict", out
 
 
 def _find(cid: str) -> dict[str, Any]:

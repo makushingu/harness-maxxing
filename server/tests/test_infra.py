@@ -2,8 +2,11 @@
 psql and garage), API and CLI. Never touches the real web server, databases or provider accounts."""
 import json
 import os
+import re
 import stat
+import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -302,6 +305,27 @@ def test_pg_create(org, monkeypatch):
         actions.pg_create("Bad-Name")
     assert e.value.code == "invalid_name"
 
+
+
+def test_pg_create_undoes_the_database_when_it_cannot_be_recorded(org, monkeypatch):
+    # the password lives only in the vault: a failed record left a role and a base nobody could use or re-create
+    sql = []
+
+    def fake_run(args, input=None, timeout=60):
+        sql.append(input or "")
+        if args[:2] == ["systemctl", "is-active"]:
+            return 0, "active\n", ""
+        return 0, "", ""
+    monkeypatch.setattr(actions, "_run", fake_run)
+    monkeypatch.setattr(actions.shutil, "which", lambda b: "/usr/bin/" + b)
+    monkeypatch.setattr(registry, "declare", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(actions.ActionError) as e:
+        actions.pg_create("shop")
+    assert e.value.code == "record_failed"
+    after = sql[next(n for n, q in enumerate(sql) if q.startswith("create database")) + 1:]
+    assert any('drop database if exists "shop"' in q for q in after)
+    assert any('drop role if exists "shop"' in q for q in after)
+    assert vault.get("DB_SHOP_URL") is None
 
 def test_sqlite_declare_and_backup(org, monkeypatch, tmp_path):
     import sqlite3
@@ -693,7 +717,13 @@ def test_infra_json_cannot_run_commands_through_ssh(org, tmp_path):
 def test_path_sites_never_see_the_session(fake_caddy, tmp_path):
     caddy.add_site("app2", port=3101)
     text = (fake_caddy / "maxxing-paths" / "app2.caddy").read_text()
-    assert 'header_up Cookie "mx_[A-Za-z0-9_]+=[^;]*;?\\s*" ""' in text and 'header_down Set-Cookie "^mx_' in text
+    assert 'header_up Cookie "mx_[A-Za-z0-9_]+=[^;]*;?\\s*" ""' in text
+    assert 'header_down Set-Cookie "^[ \\t]*mx_[A-Za-z0-9_]+[ \\t]*=.*$" ""' in text
+    # browsers trim spaces and tabs around a cookie name: "mx_session =x" would replace the Harness session
+    rx = re.compile(caddy.HARNESS_SET_COOKIE_RE)              # same meaning in Go's RE2 (Caddy)
+    for forged in ("mx_session=a; Path=/", "mx_session =a; Path=/", " mx_device=b", "mx_session\t=c"):
+        assert rx.match(forged), forged
+    assert not rx.match("app=1; Path=/") and not rx.match("my_mx_session=1")
     assert "-Authorization" not in text                  # the app's own logins keep working
     www = tmp_path / "www2"
     www.mkdir()
@@ -1013,6 +1043,31 @@ def test_names_with_a_trailing_newline_are_refused():
         registry.check_server("srv\n", "1.2.3.4", key_must_exist=False)
     with pytest.raises(registry.RegistryError):
         registry.check_server("srv", "1.2.3.4\n", key_must_exist=False)
+
+
+def test_pg_backup_never_reads_a_database_name_as_an_option(monkeypatch, tmp_path):
+    """A role with CREATEDB names a database "-f/x", "host=evil" or "../x": a value of --dbname, a file of ours."""
+    bk = tmp_path / "bk"
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(bk))
+    monkeypatch.setattr(actions, "pg_installed", lambda: True)
+    names = ["app", "-f/var/lib/postgresql/x", "host=1.2.3.4 dbname=x", "../../evil", "o'k"]
+    monkeypatch.setattr(actions, "pg_databases", lambda: names)
+    seen: list[list[str]] = []
+
+    def run(cmd, stdout=None, **kw):
+        seen.append(cmd)
+        stdout.write(b"PGDMP")
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+    monkeypatch.setattr(actions.subprocess, "run", run)
+    res = actions.backup_all()
+    assert [r["ok"] for r in res] == [True] * len(names)
+    args = [c[c.index("pg_dump") + 1:] for c in seen]
+    assert args[0] == ["-Fc", "--dbname=dbname='app'"]
+    assert args[1] == ["-Fc", "--dbname=dbname='-f/var/lib/postgresql/x'"]
+    assert args[2] == ["-Fc", "--dbname=dbname='host=1.2.3.4 dbname=x'"]
+    assert args[4] == ["-Fc", "--dbname=dbname='o\\'k'"]
+    assert all(Path(r["file"]).parent == bk for r in res)             # every dump in the backup folder
+    assert Path(res[0]["file"]).name.startswith("pg-app-")
 
 
 def test_rotation_keeps_the_backups_of_a_database_sharing_the_prefix(monkeypatch, tmp_path):
