@@ -177,7 +177,7 @@ get the same kit. Inputs of the kit are 16 px on phones (no zoom on iPhone).
 ## Office views of the Agents page
 
 An extension can also bring a **view of the Office** (the overview of the Agents page): it is listed in the Office's
-view menu after Classic and Futuristic. **Create my custom view**, at the end of that menu, opens a session
+view menu after Classic and Space. **Create my custom view**, at the end of that menu, opens a session
 that builds one with you.
 
 ```
