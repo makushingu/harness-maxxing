@@ -6,7 +6,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
-## Unreleased
+## 2.0.0-alpha.109 - 2026-11-04
 
 - Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events
   (track width followed by a ResizeObserver): dots from 16 px, 2-3 px bars on the exact times from 5 px, else a band
