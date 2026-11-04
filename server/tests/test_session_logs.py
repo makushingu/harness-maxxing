@@ -266,6 +266,43 @@ def test_non_finite_times_and_costs_render_as_json():
     assert [e["cost_usd"] for e in out[2:]] == [0.0, 0.0]
 
 
+def test_sub_agent_lines_are_dropped_without_changing_what_is_shown():
+    """Sub-agent lines are recognised on the text (no parse of their big results); the result is exactly what the
+    full parse gives, including the odd cases that must still be parsed (nested key, null, duplicate, mx_*)."""
+    from maxxing.sessions import normalize as nz
+    big = {"type": "tool_result", "tool_use_id": "t", "content": "x" * 50_000}
+    text = {"type": "text", "text": 'quoted "parent_tool_use_id": "nope" inside'}
+    lines = [
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": "toolu_1", "session_id": "s"}),
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": "toolu_1"},
+                   separators=(",", ":")),
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": None}),
+        json.dumps({"type": "user", "message": {"content": [big]}, "parent_tool_use_id": ""}),
+        json.dumps({"type": "assistant", "message": {"content": [text]}, "parent_tool_use_id": None}),
+        json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "u", "name": "M",
+                                                                  "input": {"parent_tool_use_id": "x"}}]}}),
+        '{"type":"assistant","message":{"content":[]},"parent_tool_use_id":"a","parent_tool_use_id":null}',
+        json.dumps({"type": "mx_note", "text": "kept", "parent_tool_use_id": "toolu_1"}),
+        '{"type":"user","parent_tool_use_id":"toolu_1", broken',
+    ]
+    slow = []
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        slow.extend(nz.normalize(ev))
+    assert nz.normalize_lines(lines) == slow
+    assert [nz._sub_agent_line(x) for x in lines[:5]] == [True, True, False, False, False]
+    assert not any(nz._sub_agent_line(x) for x in lines[5:8])
+
+
+def test_a_lone_surrogate_is_still_replaced():
+    from maxxing.sessions.normalize import normalize_lines
+    out = normalize_lines(['{"type":"mx_user","text":"a\\ud83d b \\ud83d\\ude00"}'])
+    assert out[0]["text"] == "a\ufffd b \U0001f600"
+
+
 def _task_lines() -> str:
     """A background sub-agent as Claude Code logs it: Agent call, "launched" result, progress, notification."""
     t = "toolu_agent0001"
