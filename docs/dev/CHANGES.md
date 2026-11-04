@@ -24,6 +24,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   refused, `scan_feed` skips that source. Agent status `alerts` (list badge); feed/agent changes invalidate `agents`.
 - Web: `FeedItem` buttons (`FeedActions`, `useFeedAct`) and resolution line; `/feed` **To handle** chip
   (`?pending=1`), dashboard panel "N to handle"; Settings -> Notifications health switch; Agents list alert badge.
+- Docs: agents and alerts linked from Settings, Telegram, Crons, Security, Troubleshooting, the help index and the
+  `maxxing-feed` skill (built-in sources `agents` / `health`).
 
 ## 2.0.0-alpha.114 - 2026-11-04
 

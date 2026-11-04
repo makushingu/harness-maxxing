@@ -19,6 +19,10 @@ forwarded message, a webhook) can make it act on the whole server; so can a mist
 or your Telegram chat gets the same power. Nothing on the server (deny rules, "Protect the secrets") stops
 code that runs as root on purpose.
 
+For work that reads outside text by itself (webhooks, e-mails, orders), prefer an [agent](agents#safety): outside
+text is given as data, it sees only the keys you list, can ask for your OK, and new agents run in Claude Code's
+sandbox.
+
 **What limits it:**
 - **Permission modes, per topic and per job** (the real limit): `bypass` (default, no questions), `acceptEdits`
   (edits files, asks before commands), `default` (asks before edits and commands), `plan` (reads only, proposes a
