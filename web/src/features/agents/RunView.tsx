@@ -6,14 +6,13 @@ import { Link, Navigate, useParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentRoute, useAgent, useAgentSeen, useSessionSeeded } from '@/lib/queries'
-import { fmtRelative } from '@/lib/format'
 import { Button, Sensitive, Skeleton, Tooltip } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
 import { SessionColumn } from '@/pages/sessions/Column'
 import type { Col } from '@/pages/sessions/store'
 import { sessionsUrl } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
-import { ContinueButton } from './parts'
+import { ContinueButton, agoText } from './parts'
 
 export function RunView() {
   const t = useT()
@@ -62,7 +61,7 @@ export function RunView() {
           )
         }
         sensitiveTitle={t('agents.runView.run')}
-        description={session ? t('agents.runView.started', { when: fmtRelative(session.created, lang) }) : undefined}
+        description={session ? t('agents.runView.started', { when: agoText(session.created, lang, t) }) : undefined}
         actions={<ContinueButton agent={{ path, running_sessions: running ? [{ id: sid, title: '' }] : [] }} sid={sid} />}
       />
       {/* the page header above already leaves room for the notch */}

@@ -11,16 +11,16 @@ import { useLang, useT, type TFn } from '@/i18n'
 import { agentRoute, useAgents, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
-import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Button, EmptyState, Sensitive, Skeleton, StatusDot, Switch, Tooltip, type DotTone } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT, projectColor } from './Avatar'
-import { useAgentsOn, useRunNow } from './parts'
+import { agoText, useAgentsOn, useRunNow } from './parts'
+import { QuickCreate, type CreateStart } from './CreateAgent'
 
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
-export function AgentsOverview({ onNew }: { onNew: () => void }) {
+export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart: (s: CreateStart) => void }) {
   const t = useT()
   const on = useAgentsOn()
   const { data, isLoading, error, refetch } = useAgents(on !== false)
@@ -62,7 +62,7 @@ export function AgentsOverview({ onNew }: { onNew: () => void }) {
           }
         />
       ) : agents.length === 0 ? (
-        <EmptyOverview onNew={onNew} />
+        <AgentsEmpty onStart={onStart} />
       ) : (
         <div className="grid gap-8" data-testid="agents-overview">
           {groups.map(([p, list]) => (
@@ -96,9 +96,9 @@ function statusOf(a: Agent, t: TFn, lang: string): Status {
   if ((a.running_now || 0) > 0) return { id: 'running', tone: 'running', pulse: true, text: t('agents.list.working') }
   if ((a.thread_unread || 0) > 0) return { id: 'unread', tone: 'unread', text: t('agents.list.unread', { count: a.thread_unread || 0 }) }
   if (!a.enabled) return { id: 'off', tone: 'idle', text: t('agents.side.state.off') }
-  if (last?.kind === 'result' && last.ok === false) return { id: 'failed', tone: 'error', text: t('agents.lastFailed', { when: fmtRelative(last.at, lang) }) }
+  if (last?.kind === 'result' && last.ok === false) return { id: 'failed', tone: 'error', text: t('agents.lastFailed', { when: agoText(last.at, lang, t) }) }
   if (!last) return { id: 'idle', tone: 'idle', text: t('agents.neverRun') }
-  return { id: 'idle', tone: 'ok', text: t('agents.overview.ran', { when: fmtRelative(last.at, lang) }) }
+  return { id: 'idle', tone: 'ok', text: t('agents.overview.ran', { when: agoText(last.at, lang, t) }) }
 }
 
 /** An agent: its character behind its desk, its name, its status; Run and the switch on hover. */
@@ -192,20 +192,26 @@ function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
   return null
 }
 
-/** No agent yet: one character waiting at its desk, what an agent is, and the way to create the first one. */
-function EmptyOverview({ onNew }: { onNew: () => void }) {
+/** No agent yet: one character waiting at its desk, what an agent is in a sentence, then the same ways in as the
+ *  creation sheet - say it in a sentence (a session prepares it), a ready-made agent, by hand or from a file. */
+export function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) {
   const t = useT()
   return (
-    <div className="grid justify-items-center gap-5 py-12 text-center" data-testid="agents-empty">
-      <AtDesk />
-      <div className="grid max-w-lg gap-2">
-        <h2 className="text-base font-semibold">{t('agents.emptyTitle')}</h2>
-        <p className="text-sm text-muted-foreground">{t('agents.emptyDesc')}</p>
-        <p className="text-sm text-muted-foreground">{t('agents.emptyDesc2')}</p>
+    <div className="mx-auto grid w-full max-w-2xl gap-6 px-3 py-10 max-md:py-6" data-testid="agents-empty">
+      <div className="grid justify-items-center gap-4 text-center">
+        <AtDesk />
+        <div className="grid max-w-lg gap-1.5">
+          <h2 className="text-base font-semibold tracking-tight">{t('agents.emptyTitle')}</h2>
+          <p className="text-sm text-muted-foreground">{t('agents.emptyDesc')}</p>
+        </div>
       </div>
-      <Button onClick={onNew}>
-        <Plus /> {t('agents.create')}
-      </Button>
+      <QuickCreate
+        autoFocus={false}
+        onManual={() => onStart({ manual: true })}
+        onImport={() => onStart({ importing: true })}
+        onTemplate={(template) => onStart({ template })}
+        onDone={() => {}}
+      />
     </div>
   )
 }
