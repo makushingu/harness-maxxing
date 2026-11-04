@@ -249,8 +249,19 @@ def test_a_password_with_a_lone_surrogate_is_a_400(mx):
         h = {"X-Maxxing": "1", "Content-Type": "application/json"}
         body = '{"token": "%s", "password": "longenough-\\ud800-pass"}' % tok
         r = c.post("/api/auth/setup", content=body.encode(), headers=h)
-        assert r.status_code == 400 and r.json()["error"] == "bad_password"
+        assert r.status_code == 400 and r.json()["error"] == "invalid_password"
         assert security.password_is_set() is False
+
+
+def test_a_new_password_that_cannot_be_stored_is_not_a_wrong_current_one(mx):
+    security.set_password("rightpassword")
+    security._fails.clear()
+    h = {"X-Maxxing": "1", "Content-Type": "application/json"}
+    with TestClient(_app(), raise_server_exceptions=False) as c:
+        assert c.post("/api/auth/login", json={"password": "rightpassword"}, headers=h).status_code == 200
+        body = '{"current": "rightpassword", "new": "longenough-\\ud800-pass"}'
+        r = c.post("/api/auth/password", content=body.encode(), headers=h)
+        assert r.status_code == 400 and r.json()["error"] == "invalid_password"
 
 
 def test_setup_links_made_at_once_share_one_token(mx, monkeypatch):
