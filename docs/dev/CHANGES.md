@@ -72,6 +72,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `--topo-order`, which walked the whole history first (4 s at 600k commits); commits cached (`_graphs`, 32 entries)
   on repo + limit + selection + HEAD + a hash of `for-each-ref`. Commit detail: `--no-renames` first, `-M` only
   when the commit touches at most `RENAMES_MAX_FILES` (2000) files.
+- Crons watcher (`api/crons.py:_watch`): no pass (glob + flock of every lock file each 2 s) while
+  `bus.browser_count() == 0`; nothing server-side listens to `crons` / `health`.
 - Turn watcher: with inotify and nothing running it waits up to `WATCH_IDLE_WAKE_S` (30 s, shorter when a hand-off
   hold expires sooner) instead of a full `_scan` every second.
 - `compact_log`: a read-only pass (`_log_shrinks`, stops at the first line it would change) first; a log that would
