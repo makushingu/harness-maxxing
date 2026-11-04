@@ -557,6 +557,25 @@ def create_job(fields: dict) -> dict:
     return get_job(j["id"])  # type: ignore[return-value]
 
 
+def on_workspace_change(change: dict) -> None:
+    """A renamed project / topic keeps its Claude jobs: their topic_path follows (else every run fails)."""
+    old, new = change.get("old_path") or "", change.get("path") or ""
+    if change.get("action") != "renamed" or not old or not new:
+        return
+    with _lock:
+        jobs = _read_raw()
+        if jobs is None:
+            return
+        moved = False
+        for j in jobs:
+            tp = str(j.get("topic_path") or "")
+            if tp == old or tp.startswith(old + "/"):
+                j["topic_path"] = new + tp[len(old):]
+                moved = True
+        if moved:
+            _save_raw(jobs)                    # the crontab lines do not change (they name the job id)
+
+
 def update_job(cid: str, fields: dict) -> dict | None:
     with _lock:
         jobs = _load_for_write()
