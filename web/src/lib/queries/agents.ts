@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Agent, AgentDetail, AgentInput, AgentMessage, AgentRunResult, AgentsPayload, AgentTemplate, AgentWebhookKind, AgentWebhookResult, Cron, FeedLevel, Ok } from '../types'
+import type {
+  Agent, AgentDetail, AgentImportResult, AgentInput, AgentMessage, AgentRunResult, AgentSandboxStatus, AgentsPayload, AgentTemplate, AgentWebhookKind,
+  AgentWebhookResult, Cron, FeedLevel, Ok, Session,
+} from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -12,6 +15,7 @@ export const agentKeys = {
   one: (path: string) => ['agents', 'one', path] as const,
   thread: (path: string) => ['agents', 'thread', path] as const,
   templates: (lang: string) => ['agents', 'templates', lang] as const,
+  sandbox: ['agents', 'sandbox'] as const,
 }
 
 /** "projects/acme/topics/blog/agents/writer" -> "/api/agents/acme/blog/writer" */
@@ -22,6 +26,16 @@ export function agentUrl(path: string, sub = ''): string {
 }
 /** Route of an agent's page. */
 export const agentRoute = (a: Pick<Agent, 'project' | 'topic' | 'name'>) => `/agents/${a.project}/${a.topic}/${a.name}`
+
+/** An agent folder (projects/<p>/topics/<t>/agents/<name>): its sessions are the agent's runs. */
+export const AGENT_PATH_RE = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/
+/** A run of an agent: shown on the Agents page, never in Sessions. */
+export const isAgentSession = (s: Pick<Session, 'path' | 'source'>) => s.source === 'agent' || AGENT_PATH_RE.test(s.path || '')
+/** Route of one run of an agent (its session, opened in the Agents page). `path` = the agent path. */
+export function agentRunRoute(path: string, sid: string): string {
+  const m = AGENT_PATH_RE.exec(path)
+  return m ? `/agents/${m[1]}/${m[2]}/${m[3]}/runs/${sid}` : `/agents`
+}
 
 export function useAgents(enabled = true) {
   return useQuery({ queryKey: agentKeys.list, queryFn: () => api.get<AgentsPayload>('/api/agents'), enabled })
@@ -34,6 +48,15 @@ export function useAgentTemplates(lang: string, enabled = true) {
     enabled,
     staleTime: 60_000,
   })
+}
+/** Everything to look at on the Agents page: new results plus approvals waiting (the nav badge). */
+export function useAgentsAttention(enabled = true): number {
+  const { data } = useAgents(enabled)
+  return (data?.agents || []).reduce((n, a) => n + (a.thread_unread || 0) + (a.waiting || 0), 0)
+}
+/** What the sandbox of agents needs on this server (GET /api/agents/sandbox). */
+export function useAgentSandbox(enabled = true) {
+  return useQuery({ queryKey: agentKeys.sandbox, queryFn: () => api.get<AgentSandboxStatus>('/api/agents/sandbox'), enabled, staleTime: 60_000 })
 }
 export function useAgent(path: string | null) {
   return useQuery({ queryKey: agentKeys.one(path || ''), queryFn: () => api.get<AgentDetail>(agentUrl(path!)), enabled: !!path })
@@ -51,8 +74,10 @@ const inv = [agentKeys.all, qk.workspace] as const
 export function useCreateAgent() {
   return useMut((b: AgentInput) => api.post<Agent>('/api/agents', b), { invalidate: inv, errorToast: false })
 }
-export function usePatchAgent() {
+/** `errorToast: false` = the caller shows the refusal under its field (bad_domain, bad_path, bad_rule). */
+export function usePatchAgent({ errorToast = true }: { errorToast?: boolean } = {}) {
   return useMut(({ path, ...b }: AgentInput & { path: string }) => api.patch<Agent>(agentUrl(path), b), {
+    errorToast,
     // Switches and small edits show at once (list, detail); the bus / invalidation reconciles.
     optimistic: ({ path, ...b }) => {
       const patch = <T extends Agent>(a: T): T => {
@@ -108,3 +133,15 @@ export function useAddAgentCron() {
     { invalidate: [agentKeys.all, qk.crons.all], errorToast: false },
   )
 }
+/** "Continue in Sessions": a normal session of the topic with the run's history and Claude thread (409 while it runs). */
+export function useContinueRun() {
+  return useMut(({ path, sid }: { path: string; sid: string }) => api.post<{ session: Session }>(agentUrl(path, `/runs/${seg(sid)}/continue`), {}), {
+    invalidate: [qk.sessions.all, qk.workspace],
+  })
+}
+/** Create an agent from a Claude Code agent file (.claude/agents/<name>.md). */
+export function useImportAgent() {
+  return useMut((b: { topic_path: string; markdown: string; name?: string }) => api.post<AgentImportResult>('/api/agents/import', b), { invalidate: inv, errorToast: false })
+}
+/** The agent as a Claude Code agent file (a download). */
+export const agentExportUrl = (path: string) => agentUrl(path, '/export')

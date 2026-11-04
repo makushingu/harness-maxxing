@@ -17,6 +17,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import type { Agent, ClaudeModel, Session, Topic, WorkspaceTree } from '@/lib/types'
+import { AGENT_PATH_RE, agentRunRoute } from '@/lib/queries/agents'
 
 /** Fallback context window when the server does not know it yet (no turn reported it). */
 export const CONTEXT_MAX = 200_000
@@ -67,7 +68,6 @@ export function toolIcon(name: string): LucideIcon {
 }
 
 /** An agent path (projects/<p>/topics/<t>/agents/<a>) -> [project, topic, agent], else null. */
-export const AGENT_PATH_RE = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/
 export function parseAgentPath(path: string | null | undefined): [string, string, string] | null {
   const m = path ? AGENT_PATH_RE.exec(path) : null
   return m ? [m[1], m[2], m[3]] : null
@@ -150,7 +150,9 @@ export function relPaths(text: string, { topicDir, wsRoot }: PathBases): string 
   return out
 }
 
-export const sessionsUrl = (s: Pick<Session, 'id' | 'path'>) => `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`
+/** Where a session opens: the Sessions page, or the Agents page for a run of an agent. */
+export const sessionsUrl = (s: Pick<Session, 'id' | 'path'>) =>
+  AGENT_PATH_RE.test(s.path) ? agentRunRoute(s.path, s.id) : `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`
 
 /* ---------------------------------------------------------------- File kinds */
 const IMG = /\.(png|jpe?g|gif|webp|avif|bmp|svg|ico|heic|heif|tiff?)$/i

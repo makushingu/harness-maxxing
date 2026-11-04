@@ -6,7 +6,7 @@ import { Page, Section } from '@/components/shell/Page'
 import { useLang, useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
-import { useCron, useCrons, useDeleteCron, usePatchCronOptimistic, useRunCronNow, useSettings, useWorkspace } from '@/lib/queries'
+import { AGENT_PATH_RE, useCron, useCrons, useDeleteCron, usePatchCronOptimistic, useRunCronNow, useSettings, useWorkspace } from '@/lib/queries'
 import type { Cron } from '@/lib/types'
 import { useRegisterCommands } from '@/commands/registry'
 import {
@@ -35,6 +35,12 @@ import {
 } from '@/components/ui'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
 import { KindBadge, LastRun, RunsHistory, cap, useNow } from '@/features/crons/parts'
+
+/** An agent's cron runs in the agent's folder: its link opens the agent, not Sessions. */
+const agentPage = (path: string) => {
+  const m = AGENT_PATH_RE.exec(path)
+  return m ? `/agents/${m[1]}/${m[2]}/${m[3]}` : null
+}
 
 export default function CronsPage() {
   const t = useT()
@@ -368,7 +374,7 @@ function JobSheet({
                   <>
                     <dt className="text-muted-foreground">{t('crons.field.topic')}</dt>
                     <dd className="min-w-0">
-                      <Link to={`/sessions?path=${encodeURIComponent(job.topic_path)}`} className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline">
+                      <Link to={agentPage(job.topic_path) || `/sessions?path=${encodeURIComponent(job.topic_path)}`} className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline">
                         <span className="truncate">{mask(topicLabel, 8)}</span>
                         <ArrowUpRight className="size-3.5 shrink-0" />
                       </Link>

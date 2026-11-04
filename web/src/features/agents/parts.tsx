@@ -1,12 +1,12 @@
 // Building blocks shared by the Agents page, the creation sheet and an agent's page.
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Bot, Clock, Rss, Send, Settings2, Webhook } from 'lucide-react'
+import { Bot, Clock, MessagesSquare, Rss, Send, Settings2, Webhook } from 'lucide-react'
 import { useT, type TFn, type TKey } from '@/i18n'
-import { useClaudeStatus, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
+import { useClaudeStatus, useContinueRun, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
 import type { Agent, AgentLimits, AgentWebhookResult, AgentTrigger, AgentTriggerInput, AgentWebhookKind, Cron, FeedLevel, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Checkbox, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, useMask } from '@/components/ui'
+import { Badge, Button, Checkbox, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { Page } from '@/components/shell/Page'
 import { fmtCost, sessionsUrl } from '@/pages/sessions/util'
@@ -287,5 +287,39 @@ export function KeyChecks({ value, onChange }: { value: string[]; onChange: (key
       ))}
       </div>
     </div>
+  )
+}
+
+/** "Continue in Sessions": the run becomes a normal session of the topic (same history, same Claude thread), opened
+ *  in Sessions; the run itself stays in the agent's thread. Not while it runs (the server answers 409). */
+export function ContinueButton({ agent: a, sid, variant = 'button' }: { agent: Pick<Agent, 'path' | 'running_sessions'>; sid: string; variant?: 'button' | 'link' }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const cont = useContinueRun()
+  const running = (a.running_sessions || []).some((s) => s.id === sid)
+  const go = () => cont.mutate({ path: a.path, sid }, { onSuccess: ({ session: s }) => navigate(`/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`) })
+  const tip = running ? t('agents.continue.busy') : t('agents.continue.tip')
+  if (variant === 'link')
+    return (
+      <Tooltip content={tip}>
+        <button
+          type="button"
+          onClick={go}
+          disabled={running || cont.isPending}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary disabled:opacity-50 disabled:hover:text-muted-foreground pointer-coarse:min-h-10"
+          data-testid="agent-continue"
+        >
+          <MessagesSquare className="size-3" /> {t('agents.continue.button')}
+        </button>
+      </Tooltip>
+    )
+  return (
+    <Tooltip content={tip}>
+      <span>
+        <Button size="sm" variant="outline" onClick={go} disabled={running} loading={cont.isPending} data-testid="agent-continue">
+          <MessagesSquare /> <span className="max-sm:sr-only">{t('agents.continue.button')}</span>
+        </Button>
+      </span>
+    </Tooltip>
   )
 }
