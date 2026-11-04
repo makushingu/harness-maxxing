@@ -911,15 +911,27 @@ def _lock_path(cid: str) -> Path:
     return config.state_dir("crons", "locks") / f"{cid}.lock"
 
 
-def is_running(cid: str) -> bool:
+def _flock_within(f, wait: float) -> bool:
+    """Take the job lock, retrying for `wait` s: another process's is_running() holds it for an instant."""
+    end = time.monotonic() + wait
+    while True:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            if time.monotonic() >= end:
+                return False
+            time.sleep(0.02)
+
+
+def is_running(cid: str, wait: float = 0.0) -> bool:
+    """The probe takes the lock for an instant: callers that refuse to start on True pass `wait`."""
     p = _lock_path(cid)
     if not p.exists():
         return False
     try:
         with open(p) as f:
-            try:
-                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
+            if not _flock_within(f, wait):
                 return True
             fcntl.flock(f, fcntl.LOCK_UN)
     except OSError:
@@ -1181,9 +1193,7 @@ def run_job(cid: str) -> dict | None:
     lockf = open(_lock_path(cid), "a+")                 # not "w": the mark of a killed run is read first
     lost = run = None
     try:
-        try:
-            fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+        if not _flock_within(lockf, 1.0):
             return None
         lost = _interrupted(cid, job, lockf)
         if lost:
@@ -1311,7 +1321,7 @@ def spawn_run(cid: str) -> None:
     """Start `maxxing cron run <id>` detached: in a transient systemd unit (`maxxing-cron-<id>`), or a plain
     subprocess when units are not available (MAXXING_SPAWN=direct, no systemd). Used by "Run now" and by the
     crontab lines (MAXXING_CRON_DETACH / `--detach`). Raises CronError('already_running') if the job is running."""
-    if is_running(cid):
+    if is_running(cid, wait=1.0):
         raise CronError("this job is already running", "already_running")
     cmd = [sys.executable, "-m", "maxxing", "cron", "run", cid]
     if not units_available():
