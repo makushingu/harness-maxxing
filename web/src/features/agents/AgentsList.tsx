@@ -1,7 +1,7 @@
 // The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name, its
 // topic, a status dot and its unread count, always grouped by project (order and colour of layout.tsx: drag a project
 // header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: the search field,
-// "New agent", then `nav` (the Office entry of AgentsLayout), then the state filter (All / waiting for you / to read
+// a small "+" (New agent) beside it, then `nav` (the Office entry of AgentsLayout), then the state filter (All / waiting for you / to read
 // / running / active / off, with counts; empty states hidden) and the ?topic= chip.
 // On a phone it is the whole page at /agents; an agent then opens full screen.
 import * as React from 'react'
@@ -84,7 +84,8 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
   return (
     <div className={cn('flex min-h-0 flex-col', className)} data-testid="agents-list">
       <div className={cn('grid shrink-0 gap-2 px-3 pt-3', touch ? 'pb-1' : 'pb-2')}>
-        <div className="relative min-w-0">
+        <div className="flex items-center gap-1.5">
+        <div className="relative min-w-0 flex-1">
           <Search className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground', touch ? 'left-3 size-[18px]' : 'left-2.5 size-3.5')} />
           <Input
             value={q}
@@ -96,9 +97,19 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
             data-testid="agents-search"
           />
         </div>
-        <Button size="sm" onClick={onNew} className={cn('w-full', touch ? 'h-11 rounded-xl' : 'h-8')} data-testid="agent-new-side">
-          <Plus /> {t('agents.side.new')}
+        {/* A small "+" next to the search: the Office has the big New agent button at the top right. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onNew}
+          aria-label={t('agents.side.new')}
+          title={t('agents.side.new')}
+          className={cn('shrink-0 text-muted-foreground hover:text-foreground', touch ? 'size-11 rounded-xl' : 'size-8')}
+          data-testid="agent-new-side"
+        >
+          <Plus className={touch ? 'size-5' : undefined} />
         </Button>
+        </div>
       </div>
       {nav}
       <div className="grid shrink-0 gap-2 px-3 pt-2 pb-1.5">

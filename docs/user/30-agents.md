@@ -15,7 +15,7 @@ sidebar, with the number of results to read.
 **Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
 itself lives. Agents' runs never show in Sessions: the Agents page has its own column of every agent (its face, its
 topic, a dot for running / waiting for you / to read / failed / off), grouped by project. From top to bottom: a
-search, **New agent**, the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
+search with a small **+** (New agent) beside it, the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
 *Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). In the Sessions list, a topic's agents show **under its row**: their
 face, their name and a dot when one works, waits for you, has something to read or failed (the ones that need you
 first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
