@@ -152,6 +152,8 @@ async def _watch(interval: float = 2.0) -> None:
 
 async def startup() -> None:
     global _task
+    from .. import workspace
+    workspace.on_change(crons.on_workspace_change)
     _task = asyncio.create_task(_watch())
 
 
