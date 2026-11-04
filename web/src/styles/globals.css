@@ -386,14 +386,12 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .mx-px-dots > i:nth-child(2) { animation-delay: 0.2s; }
 .mx-px-dots > i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes mx-px-dot { 0%, 100% { opacity: 0.35; } 25%, 60% { opacity: 1; } }
-/* The Gamified office (features/agents/OfficeGame.tsx): a working agent bobs, its screen glows and its lines scroll,
-   "!" hops, "z z" floats, a waiting screen blinks. Stepped too; ended at rest by the reduced-motion rule below. */
+/* Pixel office of the Agents page (features/agents/OfficeFuture.tsx): a working agent bobs and the glow behind its
+   screen pulses, "!" hops, "z z" floats, a waiting screen blinks. Stepped too; ended at rest by the reduced-motion rule below. */
 .mx-game-bob { animation: mx-game-bob 0.9s steps(1, end) infinite; }
 @keyframes mx-game-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(var(--s, 4px) * -1)); } }
 .mx-game-glow { filter: blur(3px); opacity: 0.8; animation: mx-game-glow 1.6s ease-in-out infinite; }
 @keyframes mx-game-glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.95; } }
-.mx-game-type { animation: mx-game-type 1.2s steps(1, end) infinite; }
-@keyframes mx-game-type { 0%, 100% { transform: translateY(0); } 33% { transform: translateY(-2px); } 66% { transform: translateY(-4px); opacity: 0.8; } }
 .mx-game-hop { animation: mx-game-hop 1s steps(1, end) infinite; }
 @keyframes mx-game-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 .mx-game-blink { animation: mx-game-blink 1s steps(1, end) infinite; }
@@ -401,7 +399,7 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .mx-game-zzz { animation: mx-game-zzz 2.4s steps(2, end) infinite; }
 @keyframes mx-game-zzz { 0%, 100% { opacity: 1; transform: translateY(0); } 50% { opacity: 0.45; transform: translateY(-3px); } }
 /* The Futuristic office (features/agents/OfficeFuture.tsx): stars drift in the windows (two layers, two speeds), LEDs
-   blink, holograms flicker, a scan line runs down a working screen, a failed one glitches, drones float, bubbles rise.
+   blink, holograms flicker (never the agents' screens: they stay still), drones float, bubbles rise.
    Every animation ends at rest (its last frame) under the reduced-motion rule below. */
 .mx-future-stars { animation: mx-future-stars 90s linear infinite; }
 @keyframes mx-future-stars { from { background-position: 0 0, 0 0; } to { background-position: calc(var(--sw-near, 256px) * -4) 0, calc(var(--sw-far, 192px) * -2) 0; } }
@@ -411,12 +409,8 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 @keyframes mx-future-holo { 0%, 100% { opacity: 1; } 46% { opacity: 0.55; } 48% { opacity: 1; } 80% { opacity: 0.8; } 82% { opacity: 1; } }
 .mx-future-pulse { animation: mx-future-pulse 2.4s ease-in-out infinite; }
 @keyframes mx-future-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-.mx-future-scan { animation: mx-future-scan 1.8s steps(8, end) infinite; }
-@keyframes mx-future-scan { 0% { transform: translateY(0); opacity: 1; } 99% { transform: translateY(8px); opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
 .mx-future-scan-x { animation: mx-future-scan-x 2.6s steps(1, end) infinite; }
 @keyframes mx-future-scan-x { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(2px); } 50% { transform: translateX(4px); } 75% { transform: translateX(2px); } }
-.mx-future-glitch { animation: mx-future-glitch 2.2s steps(1, end) infinite; }
-@keyframes mx-future-glitch { 0%, 100% { transform: translateX(0); opacity: 1; } 88% { transform: translateX(1px); opacity: 0.6; } 91% { transform: translateX(-1px); opacity: 1; } 94% { transform: translateX(0); } }
 .mx-future-float { animation: mx-future-float 1.6s steps(1, end) infinite; }
 @keyframes mx-future-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
 .mx-future-bubble { animation: mx-future-bubble 2.2s steps(11, end) infinite; }

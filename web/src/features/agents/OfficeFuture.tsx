@@ -1,12 +1,11 @@
-// The Futuristic view of the Office (AgentsOverview, picked in its view menu): the Gamified office (OfficeGame.tsx)
-// moved to a space station, still in pixel art. One bay per project, its edges glowing in the project colour; its wall
+// The Futuristic view of the Office (AgentsOverview, picked in its view menu): a pixel-art office on a space station. One bay per project, its edges glowing in the project colour; its wall
 // is a long window on space (drifting stars, a planet of the project colour) with a holographic sign (emoji, name,
 // count, the "..." menu); the floor is dark metal plates with a grid. One hover-console per agent: a pod chair, the
 // character, a floating holographic screen projected from the desk (its colour and drawing tell the state) and LEDs
 // on the front; a free console ("+", a new agent in that project); the last row completed by a server rack, a little
-// robot or a bio-pod. Status: a working agent bobs and its screen flickers with a scan line, "!" when it waits for your
+// robot or a bio-pod. Status: a working agent bobs and its screen glows (screens never move), "!" when it waits for your
 // OK, a green chip with the number of new results, a red glitching screen when the last run failed, "z Z" and no
-// screen when it is off. Mostly dark in both themes, like a game scene. Same behaviour as Gamified (office.tsx:
+// screen when it is off. Mostly dark in both themes, like a game scene. Shared with the views to come (office.tsx:
 // click / Enter opens, drag and drop and the project menu through layout.tsx). Animations stop under
 // prefers-reduced-motion (globals.css), at rest.
 import * as React from 'react'
@@ -340,10 +339,10 @@ function ConsoleFront({ s, color, screen, decor }: { s: number; color: string; s
 /** The floating screen (x 17-28, y 3-12): translucent, edged with light, scanlines; what it shows tells the state. */
 function HoloScreen({ id, ink }: { id: keyof typeof HOLO; ink: string }) {
   const running = id === 'running'
-  // It floats a little over its beam (all screens on the same beat: each on its own would be noise).
+  // The screen stays still (the owner's call): only the glow behind it pulses while the agent works.
   return (
-    <g className="mx-future-float">
-      <g className={cn(running && 'mx-future-holo', id === 'failed' && 'mx-future-glitch')}>
+    <g>
+      <g>
         {running && <rect x={16} y={2} width={14} height={12} fill={ink} className="mx-game-glow" opacity={0.3} />}
         {px(17, 3, 12, 10, ink, 'fill', 0.16)}
         {/* edges, brighter at the corners */}
@@ -355,7 +354,6 @@ function HoloScreen({ id, ink }: { id: keyof typeof HOLO; ink: string }) {
         {px(27, 12, 2, 1, '#ffffff', 'c2', 0.5)}
         {/* scanlines */}
         {[5, 7, 9, 11].map((y) => px(18, y, 10, 1, '#000000', `sl${y}`, 0.18))}
-        {running && <rect x={18} y={4} width={10} height={1} fill="#ffffff" fillOpacity={0.45} className="mx-future-scan" />}
         <ScreenArt id={id} ink={ink} />
       </g>
     </g>
@@ -390,7 +388,7 @@ function ScreenArt({ id, ink }: { id: keyof typeof HOLO; ink: string }) {
       <rect x={19} y={9} width={1} height={2} />
       <rect x={20} y={7} width={1} height={4} />
       <rect x={21} y={8} width={1} height={3} />
-      <g className={id === 'running' ? 'mx-game-type' : undefined}>
+      <g>
         <rect x={23} y={6} width={4} height={1} />
         <rect x={23} y={8} width={3} height={1} />
         <rect x={23} y={10} width={4} height={1} />
