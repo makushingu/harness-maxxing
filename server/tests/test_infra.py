@@ -1024,6 +1024,31 @@ def test_names_with_a_trailing_newline_are_refused():
         registry.check_server("srv", "1.2.3.4\n", key_must_exist=False)
 
 
+def test_pg_backup_never_reads_a_database_name_as_an_option(monkeypatch, tmp_path):
+    """A role with CREATEDB names a database "-f/x", "host=evil" or "../x": a value of --dbname, a file of ours."""
+    bk = tmp_path / "bk"
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(bk))
+    monkeypatch.setattr(actions, "pg_installed", lambda: True)
+    names = ["app", "-f/var/lib/postgresql/x", "host=1.2.3.4 dbname=x", "../../evil", "o'k"]
+    monkeypatch.setattr(actions, "pg_databases", lambda: names)
+    seen: list[list[str]] = []
+
+    def run(cmd, stdout=None, **kw):
+        seen.append(cmd)
+        stdout.write(b"PGDMP")
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+    monkeypatch.setattr(actions.subprocess, "run", run)
+    res = actions.backup_all()
+    assert [r["ok"] for r in res] == [True] * len(names)
+    args = [c[c.index("pg_dump") + 1:] for c in seen]
+    assert args[0] == ["-Fc", "--dbname=dbname='app'"]
+    assert args[1] == ["-Fc", "--dbname=dbname='-f/var/lib/postgresql/x'"]
+    assert args[2] == ["-Fc", "--dbname=dbname='host=1.2.3.4 dbname=x'"]
+    assert args[4] == ["-Fc", "--dbname=dbname='o\\'k'"]
+    assert all(Path(r["file"]).parent == bk for r in res)             # every dump in the backup folder
+    assert Path(res[0]["file"]).name.startswith("pg-app-")
+
+
 def test_rotation_keeps_the_backups_of_a_database_sharing_the_prefix(monkeypatch, tmp_path):
     bk = tmp_path / "bk"
     bk.mkdir()
