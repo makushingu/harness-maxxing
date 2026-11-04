@@ -8,6 +8,7 @@ import sqlite3
 import time
 
 import pytest
+from pathlib import Path
 
 from maxxing import feed, feedhooks
 
@@ -290,6 +291,39 @@ def test_a_passing_database_error_never_sets_a_good_feed_aside(mx, monkeypatch):
     monkeypatch.setattr(feed, "_open", real)
     assert not list(path.parent.glob("feed.db.damaged-*"))
     assert [e["title"] for e in feed.list_events()["events"]] == ["kept"]
+
+
+def test_a_writer_that_failed_on_the_old_damaged_feed_does_not_set_the_new_one_aside(mx, monkeypatch):
+    """Two writers hit a damaged feed.db: the first replaced it with a fresh base and posted; the second, which
+    had failed on the old file, must open the new one instead of setting it (and its events) aside too."""
+    assert feed.post("accepted")["title"] == "accepted"
+    path = feed.db_path()
+    feed._ready.discard(str(path))
+    real, calls = feed._open, []
+
+    def stale(*a):
+        calls.append(1)
+        if len(calls) == 1:
+            raise sqlite3.DatabaseError("file is not a database")
+        return real(*a)
+    monkeypatch.setattr(feed, "_open", stale)
+    feed._conn().close()
+    monkeypatch.setattr(feed, "_open", real)
+    assert not list(path.parent.glob("feed.db.damaged-*"))
+    assert [e["title"] for e in feed.list_events()["events"]] == ["accepted"]
+
+
+def test_damaged_copies_set_aside_in_the_same_second_are_all_kept(mx):
+    path = feed.db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for n in range(2):
+        path.write_bytes(b"broken %d " % n * 100)
+        for suffix in ("-wal", "-shm"):
+            Path(f"{path}{suffix}").unlink(missing_ok=True)
+        feed._ready.discard(str(path))
+        feed._conn().close()
+    kept = sorted(p.read_bytes()[:8] for p in path.parent.glob("feed.db.damaged-*") if not p.name.endswith(("-wal", "-shm")))
+    assert kept == [b"broken 0", b"broken 1"]
 
 
 def test_event_ids_too_big_for_sqlite_are_not_a_500(client, mx):
