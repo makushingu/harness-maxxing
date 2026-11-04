@@ -65,6 +65,18 @@ def test_rename_remaps_sessions_and_telegram(client, topic, mx):
     assert wait_idle(client, s["id"])["state"] == "idle"
 
 
+def test_rename_keeps_the_scheduled_jobs_of_the_topic(client, topic, mx):
+    from maxxing import crons
+    j = crons.create_job({"name": "Digest", "kind": "claude", "topic_path": topic, "prompt": "hi"})
+    other = crons.create_job({"name": "Shell", "command": "true"})
+    client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"})
+    assert crons.get_job(j["id"])["topic_path"] == "projects/acme/topics/news"
+    client.patch("/api/workspace/projects/acme", json={"name": "acme2"})
+    assert crons.get_job(j["id"])["topic_path"] == "projects/acme2/topics/news"
+    assert crons.update_job(j["id"], {"name": "Digest 2"})["name"] == "Digest 2"   # still valid: editable
+    assert crons.get_job(other["id"])["topic_path"] == ""
+
+
 def test_rename_running_topic_is_not_reported_as_existing(client, topic, mx):
     s = client.post("/api/sessions", json={"path": topic, "message": "SLOW"}).json()
     r = client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"})
