@@ -412,7 +412,8 @@ Agent  = {path, project, topic, name (folder slug), display_name, description, a
           created, session_count, archived_count, running, unread}
 Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
           (last result or skip), running_now: int, running_sessions: [{id, title, started}],
-          thread_unread: int (results after the last `seen`), waiting: int (approval requests pending)}
+          thread_unread: int (results after the last `seen`), waiting: int (approval requests pending),
+          alerts: int (its open, unread feed alerts other than requests: failed run, budget, runs/h, broken trigger)}
 Rule   = {tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match: string, reason: string}
 Avatar = {color (outfit), skin, hair, hair_color, face, accessory}   each one of the names listed by GET /api/agents (unknown -> default)
 Limits = {usd_per_day: 2.0 (0 = none), runs_per_hour: 6 (0 = none), timeout_s: 1800, debounce_s: 60,
@@ -613,16 +614,22 @@ Built-in card links are SPA routes: `/sessions/<id>`, `/sessions`, `/tasks?task=
 | GET | `/api/stats/tokens?force=1` | – | `{totals, projects:[{name, …}], topics:[{path, label ("acme / blog", "acme / blog / Writer" for an agent folder), agent (display name or null), …}], sessions:[{id, title, path, archived, updated, …}] (top 100), days:[{date, tokens, cost_usd}] (90 days), latency:{start_s, first_answer_s, turns}, at}` (latency: medians over the last 20 turns of every session: seconds from starting `claude` to its first event / first answer); each group has `input, output, cache_read, cache_write, total, cost_usd, turns, sessions` (sorted by `total`; project `""` = workspace root). Cached 20 s |
 
 ## Feed (notifications)
-`FeedEvent = {id, at, source, level: "info"|"success"|"warning"|"error", title, body, url, count, read}` (`count` > 1 =
-folded repeats). Kept 30 days in `<state>/feed.db`.
+`FeedEvent = {id, at, source, level: "info"|"success"|"warning"|"error", title, body, url, count, read, actions:
+[{id, label, style: "primary"|"danger"|"default"|"link"}], ref, agent, resolved, resolution}` (`count` > 1 =
+folded repeats). Kept 30 days in `<state>/feed.db`. **Alerts** = events with `actions` / `ref` (what they follow:
+`approval:<request id>`, `health:<issue id>`, `agent:<path>#failed|budget|rate|trigger:<id>`, `agent:*#sandbox`) and
+`agent` (the agent path, or null): `resolved` (time, null while open) + `resolution` ("Allowed", "Fixed"...) once their
+cause is handled; their `actions` are then `[]`. `open` is a link button (the UI follows `url`); the others go to
+`POST /api/feed/{id}/act/{action}`. Sources `agents` and `health` are built in.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/feed?source=&unread=1&before=<id>&limit=50` | – | `{events: FeedEvent[], more, unread, sources: [{source, total, unread}]}` newest first (`limit` <= 200) |
+| GET | `/api/feed?source=&unread=1&pending=1&before=<id>&limit=50` | – | `{events: FeedEvent[], more, unread, pending, sources: [{source, total, unread}]}` newest first (`limit` <= 200); `pending=1` = only the alerts still waiting (a request until decided, any other alert until read); `pending` = how many wait |
+| POST | `/api/feed/{id}/act/{action}` | – | `{event}` after the action: `allow` / `deny` (an agent's request, as `POST /api/approvals/{id}`), `seen` (read; a health issue is marked seen), `open` (read). **Idempotent**: on a resolved event any action returns it unchanged (the same answer for a second click, web or Telegram) · `400 bad_action`, `404 not_found` |
 | POST | `/api/feed` | `{title, body?, level?, source?, url?, dedupe?, group?}` | `{event, duplicate}` (`dedupe` = idempotent per source; `group` folds into the latest unread row of that group, 24 h) · `400 empty\|bad_level\|bad_source` |
 | POST | `/api/feed/read` | `{ids?: number[], source?, all?: bool}` | `{unread}` |
 | DELETE | `/api/feed/{id}` | – | `{ok}` |
-| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged) | `{telegram, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}` |
+| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, health?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged) | `{telegram, health, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}`; `health` = config `health_feed` (server health problems as alerts; `maxxing init`: on for a new install, off for an older one) |
 | POST | `/api/feed/hooks` | `{name, kind: "stripe"\|"shopify"\|"github"\|"generic", secret?}` | `FeedHook = {id, name, kind, created, url, has_secret}` · `409 exists\|reserved`, `400 bad_kind` |
 | PATCH | `/api/feed/hooks/{id}` | `{secret?, regenerate?: bool}` | `FeedHook` (regenerate = new token, the old URL dies) |
 | DELETE | `/api/feed/hooks/{id}` | – | `{ok}` |

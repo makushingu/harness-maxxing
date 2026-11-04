@@ -177,6 +177,21 @@ notification triggers watch. Longer loops (A starts B which starts A) stop at it
 A run that was refused is never retried: it is written in Activity with its reason. Agents handing work to each other
 stop after 3 hops, so two agents can never ping-pong forever.
 
+## When an agent needs you
+
+What needs you lands in the **Notifications** (dashboard panel, `/feed`, and Telegram by the rules of the source
+*Agents*), and the agent gets a red badge in the list until you read it:
+
+- it waits for your OK: **Allow** / **Deny** right in the notification (see [Approvals](#approvals));
+- a run failed (repeats fold into one notification, *×3*; the next good run ends it);
+- its daily budget or its runs per hour are reached (its triggers are skipped; raise the limit on its page, or it
+  starts again tomorrow / next hour);
+- its sandbox cannot run on the server, or a trigger lost its webhook.
+
+An agent can also ask for a human itself: in its role, tell it to run
+`maxxing feed post "Need your eyes on order 1042" --source orders --level warning` when something needs you.
+Agents never start on notifications of the source *Agents*.
+
 ## Telegram
 
 Turn on **Telegram** in the agent's settings: it gets its **own thread** in your Telegram chat, named after it
@@ -251,8 +266,8 @@ or not (a Claude Code hook).
 
 With **Ask before risky actions** on, **every** run asks, not only the outside ones: when it wants to run a command,
 edit a file or use a tool you did not allow in advance, it waits and the request shows with **Allow** and **Deny**:
-in the agent's thread (the card then says how it ended: allowed, denied, no answer in time), in its run, and in the
-**Office**, where the yellow **!** over its desk opens the request (the **Waiting for you** chip of the list keeps only the
+in the agent's thread (the card then says how it ended: allowed, denied, no answer in time), in its run, in the
+**Notifications**, and in the **Office**, where the yellow **!** over its desk opens the request (the **Waiting for you** chip of the list keeps only the
 agents that wait). Office views made by an extension only show that it waits; they never answer for you. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread
 when its Telegram option is on, otherwise in **Alerts**): one tap answers it from your phone, and the message then
 says how it ended, wherever you answered. Nobody answers within 30 minutes: the action is denied. Tools you trust
