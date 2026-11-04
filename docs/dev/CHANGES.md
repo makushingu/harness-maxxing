@@ -53,6 +53,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   claims `_replay_key` in the new `hook_seen` table of feed.db (`feed.claim_delivery`, released when the delivery
   fails) before parsing: an ignored GitHub body replayed with another `X-GitHub-Event`, or a deleted event, no
   longer posts. Kept 30 days (`feed.RETENTION_DAYS`), generic 24 h (`GENERIC_REPLAY_S`: same alert again later).
+- File site (preview) responses: `Cache-Control: private, no-cache` (was `max-age=300`: a page stayed viewable
+  from the browser cache for 5 min after a sign-out).
 
 ## 2.0.0-alpha.109 - 2026-11-04
 

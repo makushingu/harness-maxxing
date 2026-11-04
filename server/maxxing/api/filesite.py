@@ -157,4 +157,5 @@ async def site(token: str, rel: str):
         raise _err(404, "not_found", "File not found")
     return FileResponse(p, media_type=_mime(p), headers={
         "Content-Security-Policy": SANDBOX, "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "private, max-age=300", "Referrer-Policy": "no-referrer"})
+        # no-cache: every view asks again (ETag keeps it cheap), so a sign-out or a revoked link takes effect at once
+        "Cache-Control": "private, no-cache", "Referrer-Policy": "no-referrer"})
