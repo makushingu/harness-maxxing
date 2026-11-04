@@ -187,3 +187,9 @@ def test_inline_code_inside_a_link_url_never_lands_in_href():
             assert "<" not in href and "\x00" not in href
         assert "<code>c</code>" in out
 
+
+
+def test_code_fence_with_a_giant_language_name_is_still_delivered():
+    for md in ("```" + "a" * 4100 + "\n\nx\n```", "```" + "a" * 4100 + "\nx\n```"):
+        parts = fmt.render(md)
+        assert parts and all(len(p) <= fmt.LIMIT for p in parts)
