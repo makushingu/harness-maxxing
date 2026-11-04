@@ -60,16 +60,21 @@ def status() -> dict:
 def new_project(dest: Path) -> Path:
     if not (tools_dir() / "node_modules").is_dir():
         raise SystemExit("Remotion is not prepared on this server: " + HINT.format(code=config.CODE))
+    if dest.exists() and not dest.is_dir():
+        raise SystemExit(f"{dest} already exists and is a file, not a folder")
     if dest.exists() and any(dest.iterdir()):
         raise SystemExit(f"{dest} already exists and is not empty")
-    dest.mkdir(parents=True, exist_ok=True)
-    for item in template_dir().iterdir():
-        if item.name in ("node_modules", "package-lock.json", "out"):
-            continue
-        (shutil.copytree if item.is_dir() else shutil.copy2)(item, dest / item.name)
-    (dest / "public").mkdir(exist_ok=True)
-    (dest / "node_modules").symlink_to(tools_dir() / "node_modules", target_is_directory=True)
-    (dest / ".gitignore").write_text("node_modules\nout\n")
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+        for item in template_dir().iterdir():
+            if item.name in ("node_modules", "package-lock.json", "out"):
+                continue
+            (shutil.copytree if item.is_dir() else shutil.copy2)(item, dest / item.name)
+        (dest / "public").mkdir(exist_ok=True)
+        (dest / "node_modules").symlink_to(tools_dir() / "node_modules", target_is_directory=True)
+        (dest / ".gitignore").write_text("node_modules\nout\n")
+    except OSError as e:
+        raise SystemExit(f"Cannot create the project in {dest}: {e.strerror or e}") from None
     return dest
 
 
