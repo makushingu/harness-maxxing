@@ -736,16 +736,18 @@ def write_crontab(text: str) -> None:
 
 def align_system_timezone(tz: str) -> bool:
     """cron fires in the SYSTEM zone: switch it to `tz` (timedatectl) and restart cron.
-    Skipped with an isolated crontab (tests, dev) or MAXXING_SYSTEM_TZ=0. -> True if changed."""
+    Skipped with an isolated crontab (tests, dev) or MAXXING_SYSTEM_TZ=0. -> False only when the system zone
+    could not be switched (no systemd-timedated, polkit...): cron then still fires in the old zone."""
     if _crontab_file() is not None or os.environ.get("MAXXING_SYSTEM_TZ") == "0":
-        return False
+        return True
     try:
         cur = subprocess.run(["timedatectl", "show", "-p", "Timezone", "--value"],
                              capture_output=True, text=True, timeout=10).stdout.strip()
         if cur == tz:
-            return False
+            return True
         r = subprocess.run(["timedatectl", "set-timezone", tz], capture_output=True, text=True, timeout=20)
         if r.returncode != 0:
+            log.warning("timedatectl set-timezone %s failed: %s", tz, r.stderr.strip()[:200])
             return False
         subprocess.run(["systemctl", "restart", "cron"], capture_output=True, timeout=30)
         return True
