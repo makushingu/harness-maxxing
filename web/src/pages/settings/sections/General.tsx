@@ -188,7 +188,7 @@ function ResultLinePicker() {
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-2" data-testid="result-line-picker">
       {RESULT_FIELDS.map((f) => (
-        <label key={f.id} className="flex cursor-pointer items-center gap-2 text-sm">
+        <label key={f.id} className="flex cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-10">
           <Checkbox checked={!hidden.includes(f.id)} onCheckedChange={(c) => toggle(f.id, !!c)} />
           {t(f.label)}
         </label>
