@@ -42,7 +42,9 @@ Five fields: `minute hour day-of-month month day-of-week`.
 The cron daemon fires jobs in the **server's system time zone**, while the UI (schedule preview,
 next runs, history) uses the time zone of Settings -> General. Both must be the same, otherwise a
 job shown "at 07:00" runs at another hour. On a fresh server, the zone you pick in the onboarding
-(or Settings -> General) also becomes the system zone; `maxxing doctor` warns if they differ.
+(or Settings -> General) also becomes the system zone; `maxxing doctor` warns if they differ. If the system
+zone cannot be switched (a container without `timedatectl`, for example), Harness Maxxing keeps the server clock
+(see below) so jobs still run at the times shown.
 
 On a server already in use (other scheduled jobs, other services), the installer **keeps the server
 clock** (`system_clock = keep` in the configuration): Harness Maxxing then writes each job's crontab
