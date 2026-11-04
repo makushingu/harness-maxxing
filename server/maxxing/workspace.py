@@ -30,8 +30,8 @@ from typing import Any, Callable, Iterator
 from . import bus, config
 
 log = logging.getLogger("maxxing.workspace")
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
-_PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})(?:/topics/([a-z0-9][a-z0-9-]{0,47}))?$")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")
+_PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})(?:/topics/([a-z0-9][a-z0-9-]{0,47}))?\Z")
 _callbacks: list[Callable[..., Any]] = []
 
 

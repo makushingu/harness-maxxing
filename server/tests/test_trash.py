@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 
 from maxxing import trash
@@ -178,3 +179,68 @@ def test_deleted_json_file_is_listed_restored_and_emptied(client, mx):
     assert sorted(i["name"] for i in _items(client)) == ["export.json", "old.sessions"]
     assert client.delete("/api/trash").json() == {"ok": True, "deleted": 2}
     assert list(trash.trash_dir().iterdir()) == []
+
+
+def test_a_link_to_a_folder_is_emptied_from_the_trash_and_its_target_kept(client, topic, mx):
+    from maxxing import workspace
+    outside = mx["tmp"] / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("x")
+    os.symlink(outside, mx["ws"] / topic / "lnk")
+    workspace.move_to_trash(mx["ws"] / topic / "lnk")
+    assert len(client.get("/api/trash").json()["items"]) == 1
+    assert client.delete("/api/trash").status_code == 200
+    assert client.get("/api/trash").json()["items"] == []
+    assert (outside / "keep.txt").exists()
+
+
+def test_the_size_of_a_link_is_the_link_not_its_target(client, topic, mx):
+    from maxxing import workspace
+    outside = mx["tmp"] / "outside"
+    outside.mkdir()
+    (outside / "big.bin").write_bytes(b"x" * 5000)
+    os.symlink(outside, mx["ws"] / topic / "lnk")
+    d = mx["ws"] / topic / "folder"
+    d.mkdir()
+    (d / "small.txt").write_text("abc")
+    os.symlink(outside / "big.bin", d / "big-link")
+    workspace.move_to_trash(mx["ws"] / topic / "lnk")
+    workspace.move_to_trash(d)
+    sizes = {i["name"]: i["size"] for i in client.get("/api/trash").json()["items"]}
+    assert sizes["lnk"] < 1000 and 3 <= sizes["folder"] < 1000, sizes
+
+
+def test_a_damaged_sidecar_does_not_break_the_trash(client, topic, mx):
+    from maxxing import workspace
+    for name, side in (("a.txt", {"original": 12, "at": "soon"}), ("b.txt", {"original": "x\u0000y", "at": 1e400}),
+                       ("c.txt", {"title": ["x"], "at": True})):
+        (mx["ws"] / topic / name).write_text("a")
+        workspace.move_to_trash(mx["ws"] / topic / name)
+        sc = next(j for j in trash.trash_dir().glob("*.json") if j.name.endswith(f"-{name}.json"))
+        sc.write_text(json.dumps(side).replace("Infinity", "1e400"))
+    r = client.get("/api/trash")
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert len(items) == 3 and not any(i["restorable"] for i in items)
+    assert trash.purge_old() == 0
+
+
+def test_restore_never_writes_outside_the_workspace(client, topic, mx):
+    from maxxing import workspace
+    target = mx["tmp"] / "elsewhere" / "pwn.txt"
+    climb = str(mx["ws"] / topic / "../../../../../pwn.txt")             # the folder above the workspace
+    for name, original in (("a.txt", str(target)), ("b.txt", climb)):
+        (mx["ws"] / topic / name).write_text("a")
+        workspace.move_to_trash(mx["ws"] / topic / name)
+        sc = next(j for j in trash.trash_dir().glob("*.json") if j.name.endswith(f"-{name}.json"))
+        sc.write_text(json.dumps({"original": original, "at": 1}))
+        r = client.post(f"/api/trash/{sc.name[:-5]}/restore")
+        assert r.status_code == 409, r.text
+    assert not target.exists() and not (mx["ws"].parent / "pwn.txt").exists()
+    sid = client.post("/api/sessions", json={"path": topic}).json()["id"]
+    assert client.delete(f"/api/sessions/{sid}").status_code == 200
+    item = next(i for i in client.get("/api/trash").json()["items"] if i["kind"] == "session")
+    sc = trash.trash_dir() / (item["id"] + ".json")
+    sc.write_text(json.dumps({**json.loads(sc.read_text()), "path": "../../outside"}))
+    r = client.post(f"/api/trash/{item['id']}/restore")
+    assert r.status_code == 200 and r.json()["restored_to"] == "", r.text
