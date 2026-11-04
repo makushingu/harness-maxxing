@@ -1,5 +1,5 @@
-// Create an agent, in a side sheet (bottom sheet on touch screens). First "in a sentence": a new session gets the
-// request and Claude prepares the agent (skill maxxing-agents); or a ready-made agent of the gallery
+// Create an agent, in a side sheet (bottom sheet on touch screens). First "Create with Claude": a new session opens
+// in Sessions with the request started and Claude prepares the agent (skill maxxing-agents); or a ready-made agent of the gallery
 // (GET /api/agents/templates) fills the steps below, to check and create. "Set it up by hand" = 3 steps:
 // Where (project, then topic) -> Who (name, face, role, model, permission mode) -> When (first triggers, guards).
 // The agent is created at the end; its cron and webhook triggers are added right after (webhook: its URL shown).
@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router'
 import { ArrowLeft, ArrowRight, Check, Clock, Dices, FileUp, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useCreateSession, useImportAgent, useWorkspace } from '@/lib/queries'
+import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useImportAgent, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentAvatar, AgentImportResult, AgentLimits, AgentTemplate, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
 import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
@@ -17,6 +17,7 @@ import { Callout } from '@/features/common'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { AgentAvatarIcon, projectColor, randomAvatar } from './Avatar'
 import { AvatarEditor } from './AvatarEditor'
+import { useCreateWithClaude } from './EditWithClaude'
 import { DEFAULT_LIMITS, FeedTriggerFields, KeyChecks, LimitsFields, ModelSelect, PermissionSelect, WebhookKindSelect, WebhookMade } from './parts'
 
 type Step = 0 | 1 | 2
@@ -124,8 +125,8 @@ const fromTemplate = (tp: AgentTemplate, topicPath?: string): Form => ({
   hookPrompt: tp.webhook?.prompt || '',
 })
 
-/** How the sheet opens: the one-sentence way (default), straight on the steps, on the import, or on a template
- *  (chosen from the empty Agents page, which shows the same one-sentence box and gallery). */
+/** How the sheet opens: on "Create with Claude" and the gallery (default), straight on the steps, on the import, or
+ *  on a template (chosen from the empty Agents page, which shows the same button and gallery). */
 export type CreateStart = { manual?: boolean; importing?: boolean; template?: AgentTemplate | null }
 
 export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: boolean; onOpenChange: (o: boolean) => void; topicPath?: string; start?: CreateStart | null }) {
@@ -137,7 +138,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
   const addCron = useAddAgentCron()
   const addHook = useAddAgentWebhook()
   const [step, setStep] = React.useState<Step>(0)
-  // First the one-sentence way (Claude prepares the agent in a session); "Set it up by hand" = the steps below.
+  // First "Create with Claude" (a session in Sessions prepares the agent); "Set it up by hand" = the steps below.
   const [manual, setManual] = React.useState(false)
   const [importing, setImporting] = React.useState(false)
   const [tpl, setTpl] = React.useState<AgentTemplate | null>(null)
@@ -446,63 +447,41 @@ function TriggerToggle({
   )
 }
 
-/** "What should it do, and when?" in a sentence: a new session in the chosen topic gets the request, and Claude
- * (skill maxxing-agents) infers the rest, asks what is missing and creates the agent. Below, the gallery of
- * ready-made agents: one fills the steps of the form. */
-export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone, autoFocus = true }: { topicPath?: string; onManual: () => void; onImport: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void; autoFocus?: boolean }) {
+/** "Create with Claude": a new session of the chosen topic opens in Sessions with the request started (the owner
+ * says what it should do and when, and sends); Claude (skill maxxing-agents) infers the rest, asks what is missing
+ * and creates the agent. Below, the gallery of ready-made agents: one fills the steps of the form. */
+export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone }: { topicPath?: string; onManual: () => void; onImport: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void }) {
   const t = useT()
   const lang = useLang()
   const { data: templates } = useAgentTemplates(lang)
   const mask = useMask()
-  const navigate = useNavigate()
   const { data: ws } = useWorkspace()
-  const start = useCreateSession()
-  const [text, setText] = React.useState('')
+  const createWithClaude = useCreateWithClaude()
   const topics = React.useMemo(
     () => (ws?.projects || []).filter((p) => p.name !== 'system').flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` }))),
     [ws],
   )
   const [where, setWhere] = React.useState(topicPath || '')
-  const go = () => {
-    const v = text.trim()
-    if (!v) return
-    const path = where || (topics.some((x) => x.value === 'projects/general/topics/inbox') ? 'projects/general/topics/inbox' : topics[0]?.value)
-    if (!path) return
-    const message = where ? t('agents.quick.promptHere', { text: v }) : t('agents.quick.prompt', { text: v })
-    // the session opens in place on the Agents page (SetupView), "Open in Sessions" from there
-    start.mutate({ path, message }, { onSuccess: (s) => (onDone(), navigate(`/agents/setup/${s.id}`)) })
-  }
   return (
     <div className="grid gap-4" data-testid="agent-quick">
-      <div className="grid gap-2 rounded-xl border bg-card p-3 focus-within:border-primary/50">
-        <Textarea
-          autoFocus={autoFocus}
-          minRows={3}
-          maxRows={10}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              go()
-            }
-          }}
-          placeholder={t('agents.quick.placeholder')}
-          className="resize-none border-0 bg-transparent p-1 text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
-          data-testid="agent-quick-text"
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+        <Select
+          value={where || '_auto'}
+          onValueChange={(v) => setWhere(v === '_auto' ? '' : v)}
+          className="w-56 max-sm:w-full"
+          aria-label={t('agents.quick.where')}
+          options={[{ value: '_auto', label: t('agents.quick.auto') }, ...topics.map((x) => ({ value: x.value, label: mask(x.label, 8) }))]}
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={where || '_auto'}
-            onValueChange={(v) => setWhere(v === '_auto' ? '' : v)}
-            className="w-56 max-sm:w-full"
-            aria-label={t('agents.quick.where')}
-            options={[{ value: '_auto', label: t('agents.quick.auto') }, ...topics.map((x) => ({ value: x.value, label: mask(x.label, 8) }))]}
-          />
-          <Button className="ml-auto" onClick={go} disabled={!text.trim()} loading={start.isPending} data-testid="agent-quick-go">
-            <Sparkles /> {t('agents.quick.go')}
-          </Button>
-        </div>
+        <Button
+          className="ml-auto max-sm:w-full"
+          onClick={() => {
+            onDone()
+            createWithClaude(where || undefined)
+          }}
+          data-testid="agent-quick-go"
+        >
+          <Sparkles /> {t('agents.quick.go')}
+        </Button>
       </div>
       <p className="text-xs text-muted-foreground">{t('agents.quick.how')}</p>
       {!!templates?.length && (
