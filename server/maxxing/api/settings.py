@@ -226,6 +226,8 @@ def get_settings():
 @router.put("")
 def put_settings(body: SettingsIn):
     changes = body.model_dump(exclude_none=True)
+    cfg = config.load_config()      # the UI sends back every setting: the unchanged ones are neither checked nor applied
+    changes = {k: v for k, v in changes.items() if k not in cfg or cfg[k] != v}
     if "timezone" in changes:
         try:
             ZoneInfo(changes["timezone"])
