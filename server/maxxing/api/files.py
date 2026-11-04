@@ -427,8 +427,11 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool:
         for seek in (["-ss", "1"] if video else []), []:
             # file protocol and media demuxers only: a playlist-like input (m3u8, ffconcat...) whatever its name cannot
             # make ffmpeg fetch URLs or pipes, nor open another file (a link out of the files root) and draw it
+            # a "%" in the path: image2 would read it as a sequence pattern (a%d.png -> a1.png, maybe a link out of
+            # the root); force image2 with no pattern (its private option: refused by the other demuxers)
+            single = ["-f", "image2", "-pattern_type", "none"] if not video and "%" in str(src) else []
             cmd = [ffmpeg, "-v", "error", "-y", "-protocol_whitelist", "file",
-                   "-format_whitelist", videos.VIDEO_FORMATS if video else IMAGE_FORMATS, *seek, "-i", str(src),
+                   "-format_whitelist", videos.VIDEO_FORMATS if video else IMAGE_FORMATS, *seek, *single, "-i", str(src),
                    "-frames:v", "1", "-vf", scale, "-c:v", "libwebp", "-quality", "78", "-f", "webp", str(tmp)]
             try:
                 r = subprocess.run(cmd, capture_output=True, timeout=THUMB_TIMEOUT_S)
