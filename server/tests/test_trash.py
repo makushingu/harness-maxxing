@@ -46,6 +46,28 @@ def test_restore_next_to_a_new_topic_with_the_same_name(client, topic, mx):
     assert "projects/acme/topics/blog-restored" in paths and topic in paths
 
 
+def test_topic_of_a_project_in_the_trash_waits_for_the_project(client, topic, mx):
+    """Restoring the topic first made a bare project folder, then the project came back as "acme-restored"."""
+    client.delete("/api/workspace/projects/acme/topics/blog")
+    client.delete("/api/workspace/projects/acme")
+    by_kind = {i["kind"]: i for i in _items(client)}
+    r = client.post(f"/api/trash/{by_kind['topic']['id']}/restore")
+    assert r.status_code == 409 and r.json()["error"] == "project_in_trash"
+    assert not (mx["ws"] / "projects/acme").exists()
+    assert client.post(f"/api/trash/{by_kind['project']['id']}/restore").json()["restored_to"] == "projects/acme"
+    assert client.post(f"/api/trash/{by_kind['topic']['id']}/restore").json()["restored_to"] == topic
+
+
+def test_a_file_named_like_a_project_is_a_file_in_the_trash(client, mx):
+    f = mx["files"] / "project-plan.md"
+    f.write_text("v1")
+    client.post("/api/files/delete", json={"path": str(f)})
+    it = _items(client)[0]
+    assert it["kind"] == "file"
+    f.write_text("v2")
+    assert client.post(f"/api/trash/{it['id']}/restore").json()["restored_to"].endswith("project-plan (restored).md")
+
+
 def test_deleted_session_goes_to_the_trash(client, topic):
     s = client.post("/api/sessions", json={"path": topic, "message": "zebra NOTOOL"}).json()
     wait_idle(client, s["id"])
