@@ -383,7 +383,7 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/infra` | – | `{enabled, refreshing, error, refresh_min, generated_at, took_ms, harness_host, sources:{servers:{<name>:{ok, error, took_ms}}, cloudflare:{connected, key, error, sections:{zones, workers, worker_domains, pages, r2, d1, registrar, dns: "ok"\|"missing_permission"\|…}}, hostinger:{connected, key, sections:{domains, vps}}, vercel|netlify|supabase|github:{connected, key, error, label, beta, token_url, keys, sections:{sites, databases, buckets, functions, domains}}}, resources:[Resource], servers:[{name, label, host, user, port, note}]}` |
+| GET | `/api/infra` | – | `{enabled, refreshing, error, refresh_min, generated_at, took_ms, harness_host, sources:{servers:{<name>:{ok, error, took_ms}}, cloudflare:{connected, key, error, sections:{zones, workers, worker_domains, pages, r2, d1, registrar, dns: "ok"\|"missing_permission"\|…}}, hostinger:{connected, key, sections:{domains, vps}}, vercel|netlify|supabase|github|dokploy:{connected, key, error, label, beta, token_url, keys, sections:{sites, databases, buckets, functions, domains}, url? (dokploy only)}}, resources:[Resource], servers:[{name, label, host, user, port, note}]}` |
 | POST | `/api/infra/refresh` | – | `{started, refreshing}` (`started:false` when one is already running) |
 | POST | `/api/infra/annotate` | `{id, project?, note?, hidden?}` | the registry entry (`project:""` clears it) |
 | GET | `/api/infra/reserved` | – | `{names}`: names a path site cannot take |
@@ -392,6 +392,8 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 | POST | `/api/infra/servers/remove` | `{name}` | `{removed}`; `404` |
 | POST | `/api/infra/domains` | `{name}` | `{name}` (normalised: lower case, IDNA, no scheme/path); `400 invalid_domain`. A domain from any registrar, read through RDAP + public DNS |
 | POST | `/api/infra/domains/remove` | `{name}` | `{removed}`; `404` when it was not added by hand |
+| POST | `/api/infra/dokploy/connect` | `{url, key}` | `{connected:true, url, projects}` (key checked with `GET project.all` first, then saved as vault `DOKPLOY_API_KEY`, never exposed to sessions; `url` in config.json `dokploy.url`); `422 <code>` (`invalid_url`: not http(s), or plain http to a public host; `missing_permission`; `unreachable`; `bad_response`) |
+| POST | `/api/infra/dokploy/disconnect` | – | `{removed}` (forgets the URL and deletes the vault key) |
 
 Resource: `{id, kind: server|site|worker|pages|database|bucket|domain, name, location: local|<server>|cloudflare|hostinger|other,
 provider, urls, status: ok|warn|down|unknown, status_detail (http_<code>, unreachable, timeout, tls_invalid, cert_expiring,
@@ -399,7 +401,7 @@ cert_expired, dns_elsewhere, domain_expiring, domain_expired, missing, disk_low,
 list_failed, file_missing), details, links:[id], project, note, hidden, declared, missing}`. Ids: `server:<name>`,
 `site:<server>:<host><path>`, `db:<server>:<engine>:<container|native>:<db>`, `db:<server>:sqlite:<path>`,
 `db:cloudflare:d1:<name>`, `bucket:<server>:garage:<name>`, `bucket:cloudflare:r2:<name>`, `worker:cloudflare:<name>`,
-`pages:cloudflare:<name>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).
+`pages:cloudflare:<name>`, `pages:dokploy:<id>`, `db:dokploy:<engine>:<id>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).
 
 ## Team
 

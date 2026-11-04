@@ -380,6 +380,10 @@ unless public (no DNS rebinding to a local address). `team_insecure` / MAXXING_T
   has_pages + `/repos/x/pages`, every token of `gitview.tokens()`). Same normalised shape for all
   (`sites|databases|buckets|functions|domains`), sections fail alone; `VERIFIED` (empty) = seen on a real account,
   the others are `beta` in `source_state()`. Written from the official OpenAPI documents; tests use their shapes.
+- `platforms.py` `dokploy()`: Dokploy on this server or another (`maxxing.dokploy`), `GET project.all` read as
+  projects -> environments (or the services directly on a project, older Dokploy) -> applications / compose -> `sites`
+  (state from `applicationStatus`/`composeStatus`: done ok, error failed, running building, idle paused), postgres /
+  mysql / mariadb / mongo / redis -> `databases`, their `domains` -> `urls`. Beta.
 - `dnsinfo.py`: public DNS over DoH JSON (`MAXXING_DOH_API`, default Cloudflare), cache `<state>/infra/dns.json` 6 h,
   80 names a refresh (`build.hosts_to_resolve`: domains + www + custom site hosts); `dns_provider` from NS suffixes,
   `hosted_by` from CNAME suffixes then IP ranges (Cloudflare proxy last). build.py: public A records fill `records`
@@ -407,6 +411,29 @@ unless public (no DNS rebinding to a local address). `team_insecure` / MAXXING_T
 - API `api/infra.py` (loop: first run 60 s after start, then every minute checks period / stale), CLI `cmd_infra.py`,
   skill `maxxing-infra`. Web: `features/infra/` (InfraPage = route `/infra`, nav `useNav()` when `infra_page`;
   InfraBlock = ```infra in `components/ui/markdown.tsx`, lazy; bus topic `infra`).
+
+## maxxing.dokploy  (owner: organisation)
+Client of a Dokploy (self-hosted PaaS, Docker Swarm + Traefik) API, header `x-api-key`, tRPC-style procedures
+`GET|POST <url>/api/<router>.<proc>`. URL: config.json `dokploy.url` (default `http://127.0.0.1:3000`); key: vault
+`DOKPLOY_API_KEY`, never exposed (sessions go through `maxxing dokploy`, never the key). `MAXXING_DOKPLOY_API`
+overrides the URL (tests).
+- `Client(url, key)`: `get(proc, params)`, `post(proc, body)`; `ProviderError` codes `not_connected`,
+  `missing_permission` (401/403), `not_found`, `api_error`, `bad_response`, `unreachable`. `check_url(url)` refuses
+  anything but http(s) and plain http to a host that is not loopback / private / `*.localhost` (`invalid_url`).
+- `connect(url, key) -> {connected, url, projects}` (`project.all` first, then saves), `disconnect()`, `status()`
+  (`{connected, url, error?}`, cheap: no call when no key), `client()`.
+- `services(projects) -> [Service]` flattens `project.all`: `{kind: application|compose|postgres|mysql|mariadb|mongo|
+  redis, id, name, app_name, project, environment, status, domains:[{host, https, port, path}], repo, build}`;
+  `find(services, ref)` by id, name or app name (`not_found`, `ambiguous` with the candidates).
+- Writes (the CLI asks `--yes`): `deploy(svc)` (`application.deploy` / `compose.deploy`), `redeploy(svc)`,
+  `domain_add(svc, host, port, https)` (`domain.create`, `certificateType` letsencrypt when https),
+  `app_create(environment_id, name, repo, branch, build)` (`application.create` then `application.saveGitProvider`
+  and `application.saveBuildType`).
+- Reads: `deployments(svc)` (`deployment.all` / `deployment.allByCompose`, newest first), `log(dep, lines)` = tail of
+  the deployment's `logPath` when it is a local file under `/etc/dokploy/logs` (`MAXXING_DOKPLOY_LOGS`), else
+  `remote_log`.
+- CLI `cmd_dokploy.py` (`maxxing dokploy status|connect|disconnect|list|deploy|redeploy|deployments|logs|domain|app`),
+  skill section in `maxxing-infra`.
 
 ## maxxing.mcp  (owner: organisation)
 Claude Code owns the data: user scope = `mcpServers` of `.claude.json` (in `CLAUDE_CONFIG_DIR` when Harness has its
@@ -505,7 +532,7 @@ is gone (2.0.0a93): the old code that still runs on those servers does it.
 `maxxing/cmd_core.py` (init, doctor, update, status, harden, uninstall), `cmd_cron.py` (cron run/sync/list),
 `cmd_backup.py` (backup run/restore/status), `cmd_telegram.py` (telegram status/test),
 `cmd_sessions.py` (sessions compact-logs), `cmd_memory.py` (memory), `cmd_import.py` (import), `cmd_video.py` (video new/status), `cmd_voice.py` (voice status/set/download/transcribe),
-`cmd_custom.py` (custom status/save/drop/export/restore), `cmd_license.py` (license activate/status/remove/release).
+`cmd_custom.py` (custom status/save/drop/export/restore), `cmd_license.py` (license activate/status/remove/release), `cmd_dokploy.py` (dokploy status/connect/disconnect/list/deploy/redeploy/deployments/logs/domain/app).
 Startup speed: `configure(parser)` runs only for the command being run (the first non-option argument),
 and the `cmd_*` modules import their domain module (crons, feed, license, urllib...) inside the handler,
 never FastAPI (`maxxing.security` / `maxxing.app`): `maxxing --help` ~85 ms. Keep new commands that way.
@@ -618,6 +645,7 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 - `MAXXING_SPAWN=direct` run turns as detached subprocesses instead of systemd-run units
 - `MAXXING_CRONTAB_FILE` write the managed crontab block into this file instead of `crontab -`
 - `MAXXING_SYSTEM_TZ=0` never switch the system time zone when the time zone setting changes (also skipped when `MAXXING_CRONTAB_FILE` is set)
+- `MAXXING_DOKPLOY_API` Dokploy URL instead of config.json `dokploy.url` · `MAXXING_DOKPLOY_LOGS` folder of the Dokploy deployment logs (default `/etc/dokploy/logs`)
 - `MAXXING_TELEGRAM_API` Telegram API base URL (tests: local mock) · `MAXXING_GITHUB_API` GitHub API base URL
 - `MAXXING_LICENSE_API` license server (default `https://api.harness-maxxing.com`) · `MAXXING_GIT_URL` repository an install still on archives moves to (tests) · `MAXXING_LICENSE_PING=0` no hourly loop: no registration heartbeat, no call to the cloud (tests)
 - `MAXXING_AUTH_CHECK=0` no background Claude sign-in verification (tests) · `MAXXING_AUTH_CHECK_DELAY` seconds
