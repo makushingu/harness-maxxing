@@ -221,8 +221,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
       if (off || !lost) return // null: could not tell, they stay stored
       // already back in the draft (refused, then the page went away before its entry was removed)
       const back = lost.filter((e) => !(e.body && live.current.text.includes(e.body)))
-      for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
-      left.forEach((e) => outboxDone(draftKey, e.id))
+      try {
+        for (const e of [...back].reverse()) bringBack({ text: e.body, quotes: e.quotes, attachments: e.attachments })
+      } finally {
+        left.forEach((e) => outboxDone(draftKey, e.id)) // removed even if bringing one back failed: never again each load
+      }
       if (back.length) toast.info(t('sessions.composer.sendInterrupted', { count: back.length }))
     })
     return () => {

@@ -553,7 +553,20 @@ const outboxKey = (k: string) => `${draftKey(k)}:out`
 function readOutbox(k: string): OutboxEntry[] {
   try {
     const v = JSON.parse(localStorage.getItem(outboxKey(k)) || '[]')
-    return Array.isArray(v) ? v.filter((e) => e && typeof e.id === 'string' && typeof e.text === 'string') : []
+    if (!Array.isArray(v)) return []
+    // stored by another version or edited by hand: every field gets its type (a missing `quotes` crashed each load)
+    const strings = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : [])
+    return v
+      .filter((e) => e && typeof e.id === 'string' && typeof e.text === 'string')
+      .map((e) => ({
+        id: e.id,
+        at: Number.isFinite(e.at) ? e.at : 0,
+        text: e.text,
+        body: typeof e.body === 'string' ? e.body : e.text,
+        quotes: strings(e.quotes),
+        attachments: strings(e.attachments),
+        ...(e.tagged === true ? { tagged: true } : {}),
+      }))
   } catch {
     return []
   }
