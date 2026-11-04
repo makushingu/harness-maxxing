@@ -3,6 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.112 - 2026-11-04
+
+Fixes:
+- **Downloads**: the Download button starts the download at once, with the browser's progress, for every file.
+  A picture used to be read whole first, with nothing on screen (up to a minute on a home connection). In the
+  iPhone app, a file that takes more than a moment opens in the app at once instead of waiting for the share sheet.
+- **Settings**, **Infra**, **sign-in** and `maxxing video new`: small fixes.
+
 ## 2.0.0-alpha.111 - 2026-11-04
 
 Fixes:
