@@ -337,3 +337,16 @@ def test_avatar_old_values_and_project_color():
     assert a == agents._clean_avatar(old, "Writer")                     # stable for the same name
     assert agents._clean_avatar({"accessory": "cap", "skin": "nope"}, "")["skin"] == "light"
     assert agents.project_color("acme") == agents.project_color("acme") in agents.AVATAR["color"]
+
+
+def test_a_topic_in_a_git_clone_does_not_commit_its_agents(client, topic):
+    _on(client)
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    tdir = root / "projects/acme/topics/blog"
+    (tdir / ".git" / "info").mkdir(parents=True)                       # the topic is a clone (a blog repository)
+    (tdir / ".git" / "info" / "exclude").write_text("# git ls-files --others --exclude-from=.git/info/exclude")
+    _create(client)
+    assert (tdir / ".git" / "info" / "exclude").read_text().splitlines()[-1] == "/agents/"
+    client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "second"})
+    assert (tdir / ".git" / "info" / "exclude").read_text().count("/agents/") == 1
+    assert not (tdir / ".gitignore").exists()                          # never a tracked file
