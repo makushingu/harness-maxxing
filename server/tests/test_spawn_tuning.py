@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from maxxing import config
 from maxxing.sessions import spawn
 
 
@@ -112,6 +113,9 @@ def test_compact_window_follows_the_session_threshold():
     assert spawn.compact_window({"auto_compact_tokens": 400000}) == 400000 + m
     assert spawn.compact_window({"auto_compact_tokens": 50000}) == 100000 + m          # raised like the runner does
     assert spawn.compact_window({"auto_compact_tokens": 2000000}) == spawn.COMPACT_WINDOW_MAX
+    default = spawn.compact_window({"auto_compact_tokens": config.DEFAULT_CONFIG["auto_compact_tokens"]})
+    for bad in ("300k", float("inf"), [1]):                                            # hand-edited config.json
+        assert spawn.compact_window({"auto_compact_tokens": bad}) == default           # the default, not a crash
 
 
 def test_user_tuning_wins_over_our_defaults(monkeypatch):
