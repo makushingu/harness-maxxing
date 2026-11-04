@@ -188,6 +188,21 @@ def test_a_card_dropped_between_two_equal_orders_lands_there(client, mx):
     assert 1.0 < r["order"] < 2.0
 
 
+def test_a_card_dropped_next_to_a_huge_order_lands_there(client, mx):
+    """1e300 - 1.0 == 1e300: the card got its neighbour's order and stayed where it was."""
+    (mx["ws"] / "tasks.json").write_text(json.dumps({"version": 1, "projects": [], "tasks": [
+        {"id": "t_1", "title": "a", "status": "todo", "order": 1e300, "created": 1},
+        {"id": "t_2", "title": "b", "status": "todo", "order": 1e300, "created": 2},
+        {"id": "t_3", "title": "c", "status": "todo", "order": 5, "created": 3}]}))
+    r = client.patch("/api/tasks/t_3", json={"prev_id": None, "next_id": "t_1"})
+    assert r.status_code == 200, r.text
+    tasks = sorted(client.get("/api/tasks").json()["tasks"], key=lambda t: (t["order"], t["created"]))
+    assert "".join(t["title"] for t in tasks) == "cab"
+    assert client.patch("/api/tasks/t_1", json={"prev_id": "t_2", "next_id": None}).status_code == 200
+    tasks = sorted(client.get("/api/tasks").json()["tasks"], key=lambda t: (t["order"], t["created"]))
+    assert "".join(t["title"] for t in tasks) == "cba"
+
+
 def test_a_status_change_without_order_puts_the_task_on_top_of_done(client, mx):
     """The task sheet changes only the status: the task kept its old order and could sink past Done's first page."""
     ids = [client.post("/api/tasks", json={"title": f"d{i}", "status": "done"}).json()["id"] for i in range(3)]

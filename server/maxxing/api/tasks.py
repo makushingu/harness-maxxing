@@ -764,13 +764,16 @@ def _place(task: dict, data: dict, prev_id: str | None, next_id: str | None) -> 
         return                                          # neighbours gone meanwhile: keep the order sent
     prev = col[i - 1]["order"] if i > 0 else None
     nxt = col[i]["order"] if i < len(col) else None
-    if prev is not None and nxt is not None and nxt - prev > 1e-6:
-        task["order"] = (prev + nxt) / 2
-    elif prev is None and nxt is not None:
-        task["order"] = nxt - 1.0
-    elif nxt is None and prev is not None:
-        task["order"] = prev + 1.0
-    elif prev is not None:                              # no room between them: renumber the column
+    if prev is None and nxt is None:
+        return
+    if prev is not None and nxt is not None:
+        order = (prev + nxt) / 2 if nxt - prev > 1e-6 else None
+    else:
+        order = nxt - 1.0 if prev is None else prev + 1.0
+    # strictly between its neighbours, else no room (1e300 - 1.0 == 1e300): renumber the column
+    if order is not None and (prev is None or prev < order) and (nxt is None or order < nxt):
+        task["order"] = order
+    else:
         col.insert(i, task)
         for n, t in enumerate(col):
             t["order"] = float(n + 1)
