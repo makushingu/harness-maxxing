@@ -75,7 +75,8 @@ update: `maxxing custom save "..." --why "..." --check "<command>"`, or later `m
 
 `maxxing update --rollback` returns to the version (and the branch) that ran before the last update. It refuses to run while the code
 directory has unsaved changes (nothing is changed): put them aside first (`git stash`), run the rollback, then put
-them back (`git stash pop`). A customization saved just before would be undone by the rollback.
+them back (`git stash pop`). Customizations saved since the update are kept (replayed on the previous version); if
+one does not fit the previous version, nothing changes and the rollback says which.
 
 Switching branch (`--branch beta`, then back) carries the customizations that run now, never an older copy left on
 the other branch: one dropped or changed meanwhile does not come back, one already included in the new branch is
