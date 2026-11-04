@@ -3,6 +3,17 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.111 - 2026-11-04
+
+Fixes:
+- **Sessions**: a picture or a video that lands after its message (a render still running, a job that writes it
+  after the answer) now shows up by itself, with no reload. A thumbnail that fails to load is tried again, and the
+  viewer shows a file it could not find once the file is there.
+- **Telegram**: inline code no longer leaks into link addresses, and odd code block languages stay short.
+- **Files**: a copy of `backup.tar.gz` is named `backup (copy).tar.gz`; the sort buttons of a CSV table are easier
+  to tap.
+- Smaller fixes for uploads, downloads, tasks, Infra databases, session titles and Claude Code updates.
+
 ## 2.0.0-alpha.110 - 2026-11-04
 
 Security:

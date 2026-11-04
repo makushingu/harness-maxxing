@@ -5,6 +5,18 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.111 - 2026-11-04
+
+- `useFileStamp`: a null stamp (missing file or failed `/api/files/stat`) is asked again by `refetchInterval`
+  (2 s for 30 s, 5 s up to 2 min, 15 s up to 15 min from when the path was first seen missing, `missingSince`).
+  Before, a file named in a message before it existed was only re-checked on a tool result, the end of a turn or a
+  focus: one written after the last event stayed a broken image until a reload. `Thumb` shows the placeholder while
+  the stamp is null (no unversioned 404 request any more) and retries a failed image 8 times (1 s to 30 s, re-asking
+  the stamp; same version = `&try=N` in the URL). `fileKindQuery`: a `missing` result is stale at once and polled
+  every 4 s while the viewer shows it.
+- `api/files._render`: the shared render key includes the file's `st_mtime_ns`, so a file rewritten during a render
+  (a video still being written) gets its own render instead of the old one's result.
+
 ## 2.0.0-alpha.110 - 2026-11-04
 
 - `maxxing update` writes `<state>/update/in-progress.json` (rollback commit, starting branch, version, auto-save
