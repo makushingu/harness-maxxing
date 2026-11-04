@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `smartupdate.preflight`: `behind` = `rev-list --count HEAD..origin/<branch>` even without a merge-base (as
+  `check_update`); before, a rewritten upstream history gave `up_to_date` forever (no auto update, conflicts and
+  upgrade notes hidden). Without a base, upstream's changed files are diffed from `HEAD~<number of customizations>`.
 - `maxxing update --rollback`: customizations of the running code missing at `refs/maxxing/pre-update` (saved after
   the update, or auto-saved on the new branch by `--branch`) are cherry-picked back onto it, then `customs.export()`
   rewrites the registry (before, the reset dropped them and the next export deleted their patch). One that does not
