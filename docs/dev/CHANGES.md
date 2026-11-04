@@ -5,6 +5,14 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.114 - 2026-11-04
+
+- Approvals on the Agents page (web only): `usePendingApprovals()` (`GET /api/approvals` without `session`, key
+  `['approvals','pending']`); `features/agents/approvals.tsx`: `useThreadApprovals()` folds the `note` of a request
+  (same `approval` id) into its `approval` message (`ThreadApprovalBody`: live `ApprovalCard`, then the outcome),
+  `WaitingBubble` = the waiting marker of a desk (Classic `Bubble`: a yellow quest "!"; Space `StatusChip`) opening the
+  agent's `ApprovalCard`s in a centered `Dialog` (bottom sheet on a phone), closed once nothing is pending; `ApprovalCard` exported (`className`); `useDecideApproval` also invalidates `['agents']`.
+
 ## 2.0.0-alpha.113 - 2026-11-04
 
 - Owner-only agent settings: `agent_guard.locked_paths()` (agent `agent.json`, `CLAUDE.md`, `.claude/`, an existing `.mcp.json`,
