@@ -539,12 +539,12 @@ def _rename(old: str, new: str) -> None:
 
 
 def _remap_telegram(old: str, new: str) -> None:
-    """Keep telegram.threads / telegram.sessions keyed by the new topic paths."""
+    """Keep telegram.threads / telegram.agent_threads keyed by the new topic paths."""
     with config._lock:
         cfg = config.load_config()
         tg = cfg.get("telegram") or {}
         changed = False
-        for key in ("threads", "sessions", "agent_threads"):
+        for key in ("threads", "agent_threads"):
             m = tg.get(key) or {}
             for k in [k for k in m if _under(k, old)]:
                 m[new + k[len(old):]] = m.pop(k)

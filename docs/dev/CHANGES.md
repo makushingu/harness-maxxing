@@ -5,6 +5,40 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.115 - 2026-11-04
+
+- Telegram modes: `config.telegram.mode` = `simple` | `threads` | `mirror` (`gateway.mode()`; no default in
+  `DEFAULT_CONFIG`: a config without it is `threads` - `mirror` when `mirror_web` + `mirror_web_chosen` - if the chat
+  has session or special threads, else `simple`; `_settle_mode()` writes it at gateway start and at link).
+  `uses_threads()` = threads modes and `threaded()`; `mirror_web()` = mode `mirror`. Simple: `sync_threads_with` does
+  nothing, `reopen_thread` returns None, `new_session(flat=True)` creates no thread, `_start_new` binds the "where?"
+  message, `w:<key>:s` = "↩ Continue" the last Telegram session (`state.last = {sid, at}`, < `LAST_WAIT` 2 h).
+  `set_mode(new, wait=False)` -> `{mode, deleting}` (to simple: `purge_with(call)` deletes session + special threads,
+  agents' kept); `PUT /api/telegram/settings {mode}` -> `{ok, mode, deleting}`; `maxxing telegram mode [m]`.
+- Reply routing (every mode): `messages.json` (`bind_messages(chat, ids, {sid}|{agent})`, `bound(chat, mid)`;
+  `send_html(..., reply_to, bind)`, `send_parts` returns the sent messages, `_send_sync(..., bind)`); `handle_update`
+  routes a reply to its session / agent before the new-session flow; `/stop /close /model /status` without a
+  reply in simple = the last session (`_last_session`); `/sessions` in simple = `_cmd_recent` (`o:<sid>` posts a card
+  bound to the session). `_track(..., reply_to)` (also kept in `replies.json`): status and answer are replies to the
+  user's message when the session has no thread of its own; `_with_context` drops the quote of a reply to the bot's
+  own message of the same session (`msg["_mx_bound"]`).
+- Bell: `rings(session)` (notify, human session, `last_turn.kind == "user"` and `last_turn.source` not telegram /
+  cron / system) replaces the test on the session's creation source; posted in the session's thread or the main
+  chat, bound; the no-gateway fallback sends to the session's thread too.
+- Alerts: `_watch_health` / `_health_pass` (every `HEALTH_EVERY` 60 s, not `HEALTH_SKIP` = `cron_failed`,
+  `login_failures`; `state.health = {id: {chat, mid, html, seen}}`; callback `h:<id>` -> `health.mark_seen`), skipped
+  when a `maxxing.alerts` module exists; `post_alert(alert)` / `update_alert(alert)` (callback `al:<id>:<action>` ->
+  `alerts.act(id, action, by="telegram")`, `notes.json` "al:<id>"); approval messages also kept in `notes.json`
+  ("p:<id>") so `approval_done` edits them after a restart; approvals and alerts of an agent without a thread are
+  bound to the agent.
+- Clean-up: texts in `telegram/texts.py` (French duplicates removed, missing `save_failed` added); removed the
+  threads-off fallback (`tg["sessions"]`, `_session_for`, `_path_for`, `/topic`, callbacks `s:` / `t:`,
+  `state.fallback_path`), the 2.0.0a4 migration (`_migrate_topic_threads`), `notify_topic`, `notify_cron`, the ROOT
+  fallback of `_target`, `_set_error`; `twofactor._send` uses `gateway._send_sync`; `_hear()` shared by voice notes of
+  sessions and agents; agent messages run in a lane (`_agent_lane`); `_ask_about_event` answers the tap at once
+  (`_about_event` in the background, `source=` keyword); `_reply` answers as a reply in the main chat.
+  Tests: `mx_state` sets `telegram.mode = "threads"` (older tests), `test_telegram_simple.py`.
+
 ## 2.0.0-alpha.114 - 2026-11-04
 
 - Approvals on the Agents page (web only): `usePendingApprovals()` (`GET /api/approvals` without `session`, key
