@@ -185,20 +185,26 @@ def iter_runs(expr: str | CronExpr, after: float | None = None, zone: ZoneInfo |
     if c.reboot:
         return
     zone = zone or tz()
-    start = dt.datetime.fromtimestamp(after if after is not None else time.time(), zone)
-    start = start.replace(second=0, microsecond=0) + dt.timedelta(minutes=1)
-    hours, minutes = sorted(c.hours), sorted(c.minutes)
-    day = start.date()
+    at = after if after is not None else time.time()
+    first = (at // 60 + 1) * 60                   # the next whole minute: compared as instants, never as wall
+    hours, minutes = sorted(c.hours), sorted(c.minutes)   # times (02:45 of a repeated hour is two instants)
+    every_hour = len(hours) == 24                 # "*/10 * * * *" also runs in the repeated autumn hour;
+    day = dt.datetime.fromtimestamp(at, zone).date()      # a fixed time ("45 2 * * *") runs once
     last = -1.0
     for _ in range(366 * 5):                      # at most 5 years ahead (e.g. Feb 29 on a Monday)
         if c.day_matches(day):
             for h in hours:
+                folds: list[float] = []
                 for m in minutes:
                     local = dt.datetime(day.year, day.month, day.day, h, m, tzinfo=zone)
-                    if local < start:
-                        continue
-                    ts = local.timestamp()
-                    if ts > last:                 # DST: never yield the same/earlier instant twice
+                    ts = local.timestamp()        # a time skipped in spring lands just after the gap
+                    if every_hour and (ts1 := local.replace(fold=1).timestamp()) > ts:
+                        folds.append(ts1)         # the second pass of a repeated hour
+                    if ts >= first and ts > last:  # DST: never yield the same/earlier instant twice
+                        last = ts
+                        yield ts
+                for ts in folds:
+                    if ts >= first and ts > last:
                         last = ts
                         yield ts
         day += dt.timedelta(days=1)
@@ -814,8 +820,10 @@ def is_due(expr: str, at: float | None = None) -> bool:
     c = parse(expr)
     if c.reboot:
         return True
-    t = dt.datetime.fromtimestamp(at if at is not None else time.time(), tz())
-    return t.minute in c.minutes and t.hour in c.hours and c.day_matches(t.date())
+    minute = (at if at is not None else time.time()) // 60 * 60
+    # the same runs as iter_runs (next run, preview): one run in the repeated autumn hour, and a time
+    # skipped in spring runs just after the gap instead of never
+    return next(iter_runs(c, minute - 1, tz()), None) == minute
 
 
 DETACH_ENV = "MAXXING_CRON_DETACH"   # set by the crontab lines = `--detach` (a flag would break a rolled-back version)

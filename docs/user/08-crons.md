@@ -50,6 +50,10 @@ line to fire every hour at its minutes, and `maxxing cron run <id> --if-due` che
 your zone before running - so jobs still run at the times you see, daylight saving included, and
 the other programs keep their clock. Switch with `maxxing init --system-clock keep|follow`.
 
+On daylight saving days, a job at a fixed time (`30 2 * * *`) runs once when the clock goes back, a job
+that runs every hour or every few minutes also runs in the repeated hour, and a time skipped in spring
+runs just after the change. The schedule preview and Today's schedule show the same runs.
+
 To change the system zone by hand (mode `follow`):
 
 ```bash

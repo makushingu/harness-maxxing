@@ -207,6 +207,23 @@ def test_day_timeline(client, org, fakes):
     assert len(lanes["Every minute"]["events"]) <= widgets.MAX_PLANNED
 
 
+def test_day_timeline_on_a_dst_day(client, org, fakes, monkeypatch):
+    """25 October 2026 lasts 25 h in Paris: the axis ends at the next local midnight, not 86400 s later."""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from maxxing import widgets
+    config.update_config(timezone="Europe/Paris")
+    paris = ZoneInfo("Europe/Paris")
+    noon = dt.datetime(2026, 10, 25, 12, 0, tzinfo=paris).timestamp()
+    monkeypatch.setattr(widgets, "time", types.SimpleNamespace(time=lambda: noon))
+    crons.create_job({"name": "Late", "command": "true", "schedule": "30 23 * * *"})
+    tl = widgets.day()["blocks"][1]
+    assert tl["start"] == dt.datetime(2026, 10, 25, tzinfo=paris).timestamp()
+    assert tl["end"] == dt.datetime(2026, 10, 26, tzinfo=paris).timestamp() and tl["end"] - tl["start"] == 25 * 3600
+    late = {l["name"]: l for l in tl["lanes"]}["Late"]
+    assert [e["label"] for e in late["events"]] == ["23:30"]          # was cut off at 23:00
+
+
 def test_day_timeline_empty(client, org, fakes):
     from maxxing import widgets
     card = widgets.day()
