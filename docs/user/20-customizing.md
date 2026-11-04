@@ -80,7 +80,8 @@ one does not fit the previous version, nothing changes and the rollback says whi
 
 Switching branch (`--branch beta`, then back) carries the customizations that run now, never an older copy left on
 the other branch: one dropped or changed meanwhile does not come back, one already included in the new branch is
-simply dropped.
+simply dropped. An update cut off midway (reboot, out of memory) is finished by the next `maxxing update`, which
+keeps the version to roll back to and the upgrade notes of the release.
 
 ## Automatic updates
 

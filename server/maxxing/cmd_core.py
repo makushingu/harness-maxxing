@@ -1715,6 +1715,33 @@ def _recorded_start(old: str) -> str | None:
     return d["branch"]
 
 
+IN_PROGRESS = "update/in-progress.json"   # written before the code moves, removed when the update ends
+
+
+def _mark_in_progress(old: str) -> None:
+    """What ran before this update (commit, branch, version, the auto-save carried back): an update killed after
+    the code moved (OOM, reboot) is resumed from it, so its rollback point and upgrade notes are not lost."""
+    saved = _UPDATE_CTX.get("saved")
+    config.write_json(config.STATE / IN_PROGRESS, {
+        "commit": old, "branch": _UPDATE_CTX.get("branch", ""), "at": time.time(),
+        "version": _UPDATE_CTX.get("from_version") or __version__, "saved": list(saved) if saved else None})
+
+
+def _interrupted() -> dict | None:
+    """The update killed before its end, if any (its rollback point still exists): this run takes over its rollback
+    point, starting branch, version and auto-save."""
+    try:
+        d = json.loads((config.STATE / IN_PROGRESS).read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(d, dict) or not isinstance(d.get("commit"), str) or not _rev(d["commit"]):
+        return None
+    _UPDATE_CTX.update(branch=d.get("branch") or "", from_version=str(d.get("version") or ""))
+    if isinstance(d.get("saved"), list) and len(d["saved"]) == 2:
+        _UPDATE_CTX["saved"] = tuple(d["saved"])
+    return d
+
+
 def _goto_start(start: str | None, old: str) -> None:
     """Check out what ran before (`start` branch, or `old` detached) WITHOUT moving another branch: a reset --hard
     on the branch an update switched to would rewrite it (and a detached start would rewrite main)."""
@@ -1784,7 +1811,6 @@ def cmd_update(a) -> int:
     """Careful update: customizations (local commits) are rebased onto the new version; on a
     conflict nothing changes and Claude adapts them (topic system/harness); a release that does not
     start is rolled back."""
-    from . import customs
     if a.check:
         return cmd_update_check(a)
     if a.preflight:
@@ -1800,6 +1826,14 @@ def cmd_update(a) -> int:
         return 1
     if a.rollback:
         return _update_rollback(a)
+    rc = _update_code(a)
+    if rc != 1:                                        # done, or back on the old code: nothing left to resume
+        (config.STATE / IN_PROGRESS).unlink(missing_ok=True)
+    return rc
+
+
+def _update_code(a) -> int:
+    from . import customs
     if a.resume:
         if customs.rebase_in_progress() or customs.conflicts():
             line(FAIL, "the rebase is not finished", f"git -C {config.CODE} status  (then: git add <files> && "
@@ -1810,6 +1844,9 @@ def cmd_update(a) -> int:
         start = _recorded_start(old)
         if start is not None:                          # a failed resume goes back to the branch that ran
             _UPDATE_CTX["branch"] = start
+        if not _interrupted():                         # (a resume killed itself: taken over as is)
+            _UPDATE_CTX["from_version"] = str((customs.pending() or {}).get("from_version") or "")
+            _mark_in_progress(old)
         line(OK, f"resuming the update from {old[:8]} ({len(customs.list_customs())} customization(s))")
         return _update_finish(a, old)
     if customs.rebase_in_progress():
@@ -1842,6 +1879,10 @@ def cmd_update(a) -> int:
     old = _rev("HEAD")                                 # what runs now: a rollback goes back here, on this branch
     _UPDATE_CTX.clear()
     _UPDATE_CTX["branch"] = _start_branch()
+    resumed = _interrupted()                           # killed after the code moved: same rollback point and notes
+    if resumed:
+        old = resumed["commit"]
+        line(WARN, f"the last update was interrupted - resumed from {old[:8]} ({_UPDATE_CTX['from_version'] or '?'})")
     switched = branch != _current_branch()
     ok, err = _fetch(branch)
     if not ok:
@@ -1860,6 +1901,8 @@ def cmd_update(a) -> int:
                     "key (update_verify_signature). Nothing changed.")
             return 1
         line(OK, detail)
+    if not resumed:
+        _mark_in_progress(old)
     if branch != _current_branch():
         carried = customs.list_customs() if switched else []     # the customizations live on the branch left
         # The target branch is rebuilt from upstream + the customizations that run now: a local copy left by an
@@ -1918,10 +1961,11 @@ def cmd_update(a) -> int:
             line(FAIL, "uncommitted changes in the code directory cannot be kept", str(e))
             _unstash_web()
             return 1
-        if not switched:                               # (after a branch switch the save sits on the new branch)
+        if not switched and not resumed:               # (after a branch switch the save sits on the new branch)
             old = _rev("HEAD")
         else:
             _UPDATE_CTX["saved"] = (branch, _rev("HEAD"))
+        _mark_in_progress(old)
     _git("update-ref", customs.PRE_UPDATE_REF, old)
     _record_start(old, _UPDATE_CTX["branch"])
     mine = customs.list_customs(branch)
@@ -1956,8 +2000,8 @@ def cmd_update(a) -> int:
             web_back = bool(_UPDATE_CTX.get("stashed"))
             old = _back_to(old)
             _, remote_src = _git("show", f"origin/{branch}:server/maxxing/__init__.py")
-            info = customs.set_pending(reason="conflict", **{"from": old}, target=target,
-                                       target_version=_version_in(remote_src) or "",
+            info = customs.set_pending(reason="conflict", **{"from": old}, from_version=_from_version(),
+                                       target=target, target_version=_version_in(remote_src) or "",
                                        customs=[c["title"] for c in mine], conflicts=files)
             line(FAIL, f"your customizations conflict with the new version {info['target_version'] or target[:8]}"
                  f" - nothing changed, {__version__} keeps running",
@@ -2018,9 +2062,9 @@ def _update_finish(a, old: str) -> int:
             print("\nWhat's new:")
             for n in notes:
                 print("  " + n)
-        ups = upgrade_notes(__version__, new_version)
+        ups = upgrade_notes(_from_version(), new_version)
         if ups:
-            print(f"\nWorkspace upgrade notes {__version__} -> {new_version} (for Claude, topic {update_topic()}):")
+            print(f"\nWorkspace upgrade notes {_from_version()} -> {new_version} (for Claude, topic {update_topic()}):")
             for f in ups:
                 print(f"  {f}")
     if customs.list_customs():
@@ -2077,12 +2121,17 @@ def _deps_background_update() -> None:
          else "could not start the background update of the components", f"log: {log}" if code == 0 else out[-200:])
 
 
+def _from_version() -> str:
+    """The version that ran before this update (this process may already be the new code: interrupted update)."""
+    return _UPDATE_CTX.get("from_version") or __version__
+
+
 def _mark_updated(new_version: str, a) -> None:
     """The restarted server verifies extensions and customizations (and, for the Update button, opens the
     upgrade-notes session) - see smartupdate.after_update."""
     from . import smartupdate
     try:
-        smartupdate.mark_updated(__version__, new_version, smart=bool(getattr(a, "smart", False)))
+        smartupdate.mark_updated(_from_version(), new_version, smart=bool(getattr(a, "smart", False)))
     except Exception:  # noqa: BLE001 - never fail an update for this
         pass
 
@@ -2184,6 +2233,7 @@ def _update_rollback(a) -> int:
         line(OK if status == "ok" else INFO, f"customization \"{c['title']}\" "
              + ("kept" if status == "ok" else "already in the previous version"))
     customs.export()
+    (config.STATE / IN_PROGRESS).unlink(missing_ok=True)
     ok, err = _sync_deps()
     line(OK if ok else FAIL, f"code back to {old[:8]}" + (f" (branch {start})" if start else ""), "" if ok else err)
     customs.clear_pending()
