@@ -1,9 +1,13 @@
 """User extensions: `<workspace>/extensions/<id>/`.
 
-    manifest.json  {"id", "name", "type": "widget"|"page", "icon", "version", "span"?, "ttl"?, "api"?}
+    manifest.json  {"id", "name", "type": "widget"|"page"|"view", "icon", "version", "span"?, "ttl"?, "api"?,
+                    "agents_view"?: {"name"?, "icon"?} | true}
                    ("name" may be {"en": ..., "fr": ...}: shown in the UI language)
     api.py         widget: def card(ctx) -> Card   ·   page / API: def handle(ctx, method, path, query, body)
     page.js        page: ES module exporting mount(el, ctx)
+    agents-view.html  with "agents_view": a view of the Office of the Agents page, listed in its view menu and drawn in
+                   the same sandboxed frame as HTML widgets (the frame also gets the agents, see HtmlWidget.tsx).
+                   Any type may declare one; type "view" = an extension that only brings views.
 
 Extensions live outside the code directory so updates never touch them. Each one is isolated:
 a broken manifest or an api.py that fails to import only sets that extension's `error`.
@@ -37,7 +41,7 @@ from typing import Any, Callable
 from . import config
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")              # \Z: "$" also matches before a final "\n"
-TYPES = ("widget", "page")
+TYPES = ("widget", "page", "view")
 DEFAULT_TTL = 300
 # The extension contract (Card schema, ctx, page ctx, maxxing.api bridge, CSS variables). An extension declares
 # the version it was written for in its manifest ("api", default 1). EXT_API goes up when something is ADDED;
@@ -66,6 +70,8 @@ class Extension:
     has_html: bool = False                 # widget drawn by widget.html in a sandboxed frame
     page_v: int | None = None              # page.js mtime (ms): the UI imports page.js?v=<it> (cached until it changes)
     height: int = 260
+    # Office view of the Agents page (manifest "agents_view" + agents-view.html): {"name", "names", "icon"}
+    agents_view: dict | None = None
     error: str | None = None
     module: ModuleType | None = field(default=None, repr=False)
 
@@ -74,6 +80,15 @@ class Extension:
             lang = str(config.load_config().get("language") or "en")
             return self.names.get(lang) or self.names.get("en") or self.name or self.id
         return self.name or self.id
+
+    def view_info(self) -> dict | None:
+        """The Office view it brings ({name, icon} in the UI language), None without one or while in error."""
+        v = self.agents_view
+        if not v or self.error:
+            return None
+        names = v.get("names") or {}
+        lang = str(config.load_config().get("language") or "en") if names else "en"
+        return {"name": names.get(lang) or names.get("en") or v.get("name") or self.label(), "icon": v.get("icon") or self.icon}
 
     @property
     def enabled(self) -> bool:
@@ -84,7 +99,7 @@ class Extension:
                 "version": self.version, "enabled": self.enabled, "error": self.error,
                 "api": self.api, "has_api": self.has_api, "has_page": self.has_page, "span": self.span,
                 "has_html": self.has_html, "height": self.height, "page_v": self.page_v,
-                "pinned": self.type == "page" and self.id in pinned_ids()}
+                "pinned": self.type == "page" and self.id in pinned_ids(), "agents_view": self.view_info()}
 
 
 _lock = threading.RLock()
@@ -264,6 +279,9 @@ def _load_one(d: Path) -> Extension:
             ext.page_v = (d / "page.js").stat().st_mtime_ns // 1_000_000
         ext.has_html = ext.type == "widget" and (d / "widget.html").is_file()
         ext.height = min(800, max(120, int(m.get("height") or 260)))
+        ext.agents_view = _agents_view(m.get("agents_view"), d)
+        if ext.type == "view" and not ext.agents_view:
+            raise ValueError("a view extension declares \"agents_view\" (with agents-view.html)")
         if ext.type == "page" and not ext.has_page:
             raise ValueError("a page extension needs page.js")
         if ext.type == "widget" and not ext.has_api and not ext.has_html:
@@ -276,6 +294,23 @@ def _load_one(d: Path) -> Extension:
         ext.error = f"{type(e).__name__}: {e}" if not isinstance(e, ValueError) else str(e)
         ext.module = None
     return ext
+
+
+def _agents_view(raw: Any, d: Path) -> dict | None:
+    """The manifest's "agents_view": true or {"name"?: str | {"en", "fr"...}, "icon"?: str}; needs agents-view.html."""
+    if raw is None or raw is False:
+        return None
+    if raw is True:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("manifest \"agents_view\" must be true or an object {\"name\", \"icon\"}")
+    if not (d / "agents-view.html").is_file():
+        raise ValueError("\"agents_view\" needs agents-view.html in the extension folder")
+    name, names = raw.get("name"), {}
+    if isinstance(name, dict):
+        names = {str(k): str(v)[:40] for k, v in name.items() if isinstance(v, str) and v.strip()}
+        name = names.get("en") or next(iter(names.values()), "")
+    return {"name": str(name or "")[:40], "names": names, "icon": str(raw.get("icon") or "")[:40]}
 
 
 def _import(ext: Extension) -> ModuleType:
@@ -309,7 +344,7 @@ def _import(ext: Extension) -> ModuleType:
 
 
 def _signature() -> tuple:
-    """Folder names + mtimes of manifest/api/page/widget.html: a change triggers a rescan (hot reload)."""
+    """Folder names + mtimes of manifest/api/page/widget.html/agents-view.html: a change triggers a rescan (hot reload)."""
     r = root()
     if not r.is_dir():
         return ()
@@ -318,7 +353,7 @@ def _signature() -> tuple:
         if not d.is_dir() or d.name.startswith((".", "_")):
             continue
         stamps = []
-        for f in ("manifest.json", "api.py", "page.js", "widget.html"):
+        for f in ("manifest.json", "api.py", "page.js", "widget.html", "agents-view.html"):
             try:
                 stamps.append((d / f).stat().st_mtime_ns)
             except OSError:

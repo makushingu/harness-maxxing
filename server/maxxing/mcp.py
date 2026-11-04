@@ -106,19 +106,19 @@ def _ws() -> Path:
 
 
 def where_of(folder: str | None) -> dict:
-    """{label, rel, project, topic, exists} of the folder a server belongs to (None = every session)."""
+    """{rel, project, topic, agent, exists, path} of the folder a server belongs to (None = every session)."""
     if folder is None:
-        return {"rel": None, "project": None, "topic": None, "exists": True, "path": None}
+        return {"rel": None, "project": None, "topic": None, "agent": None, "exists": True, "path": None}
     p = Path(folder)
-    out = {"rel": None, "project": None, "topic": None, "exists": p.is_dir(), "path": folder}
+    out = {"rel": None, "project": None, "topic": None, "agent": None, "exists": p.is_dir(), "path": folder}
     try:
         rel = p.relative_to(_ws()).as_posix()
     except ValueError:
         return out
     out["rel"] = rel
-    m = re.match(r"^projects/([^/]+)(?:/topics/([^/]+))?$", rel)
+    m = re.match(r"^projects/([^/]+)(?:/topics/([^/]+)(?:/agents/([^/]+))?)?$", rel)
     if m:
-        out["project"], out["topic"] = m.group(1), m.group(2)
+        out["project"], out["topic"], out["agent"] = m.group(1), m.group(2), m.group(3)
     return out
 
 
@@ -289,7 +289,8 @@ def _project_files() -> list[Path]:
     root = _ws() / "projects"
     if not root.is_dir():
         return []
-    return sorted([*root.glob("*/.mcp.json"), *root.glob("*/topics/*/.mcp.json")])
+    return sorted([*root.glob("*/.mcp.json"), *root.glob("*/topics/*/.mcp.json"),
+                   *root.glob("*/topics/*/agents/*/.mcp.json")])
 
 
 MCP_JSON_MAX = 1 << 20

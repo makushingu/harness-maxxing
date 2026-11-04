@@ -374,6 +374,48 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 }
 @keyframes mx-liquid-wave { from { background-position: 0 0; } to { background-position: 100% 0; } }
 
+/* Agents' pixel characters (features/agents/Avatar.tsx, AgentsPage.tsx): a blink now and then (--mx-blink-delay
+   keeps a page out of sync) and the dots of the "working" bubble. Stepped like pixel art; the reduced-motion rule
+   below ends them at rest (eyes open). */
+.mx-px-blink { opacity: 0; }
+.mx-px-blinker .mx-px-eyes { animation: mx-px-open 5.2s steps(1, end) var(--mx-blink-delay, 0s) infinite; }
+.mx-px-blinker .mx-px-blink { animation: mx-px-shut 5.2s steps(1, end) var(--mx-blink-delay, 0s) infinite; }
+@keyframes mx-px-open { 0%, 100% { opacity: 1; } 94% { opacity: 0; } 97% { opacity: 1; } }
+@keyframes mx-px-shut { 0%, 100% { opacity: 0; } 94% { opacity: 1; } 97% { opacity: 0; } }
+.mx-px-dots > i { animation: mx-px-dot 1.2s steps(1, end) infinite; }
+.mx-px-dots > i:nth-child(2) { animation-delay: 0.2s; }
+.mx-px-dots > i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes mx-px-dot { 0%, 100% { opacity: 0.35; } 25%, 60% { opacity: 1; } }
+/* Pixel office of the Agents page (features/agents/OfficeFuture.tsx): a working agent bobs and the glow behind its
+   screen pulses, "!" hops, "z z" floats, a waiting screen blinks. Stepped too; ended at rest by the reduced-motion rule below. */
+.mx-game-bob { animation: mx-game-bob 0.9s steps(1, end) infinite; }
+@keyframes mx-game-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(var(--s, 4px) * -1)); } }
+.mx-game-glow { filter: blur(3px); opacity: 0.8; animation: mx-game-glow 1.6s ease-in-out infinite; }
+@keyframes mx-game-glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.95; } }
+.mx-game-hop { animation: mx-game-hop 1s steps(1, end) infinite; }
+@keyframes mx-game-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.mx-game-blink { animation: mx-game-blink 1s steps(1, end) infinite; }
+@keyframes mx-game-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.mx-game-zzz { animation: mx-game-zzz 2.4s steps(2, end) infinite; }
+@keyframes mx-game-zzz { 0%, 100% { opacity: 1; transform: translateY(0); } 50% { opacity: 0.45; transform: translateY(-3px); } }
+/* The Space office (features/agents/OfficeFuture.tsx): stars drift in the windows (two layers, two speeds), LEDs
+   blink, holograms flicker (never the agents' screens: they stay still), drones float, bubbles rise.
+   Every animation ends at rest (its last frame) under the reduced-motion rule below. */
+.mx-future-stars { animation: mx-future-stars 90s linear infinite; }
+@keyframes mx-future-stars { from { background-position: 0 0, 0 0; } to { background-position: calc(var(--sw-near, 256px) * -4) 0, calc(var(--sw-far, 192px) * -2) 0; } }
+.mx-future-led { animation: mx-future-led 1.6s steps(1, end) infinite; }
+@keyframes mx-future-led { 0%, 100% { opacity: 1; } 55% { opacity: 0.25; } }
+.mx-future-holo { animation: mx-future-holo 3.4s steps(1, end) infinite; }
+@keyframes mx-future-holo { 0%, 100% { opacity: 1; } 46% { opacity: 0.55; } 48% { opacity: 1; } 80% { opacity: 0.8; } 82% { opacity: 1; } }
+.mx-future-pulse { animation: mx-future-pulse 2.4s ease-in-out infinite; }
+@keyframes mx-future-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.mx-future-scan-x { animation: mx-future-scan-x 2.6s steps(1, end) infinite; }
+@keyframes mx-future-scan-x { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(2px); } 50% { transform: translateX(4px); } 75% { transform: translateX(2px); } }
+.mx-future-float { animation: mx-future-float 1.6s steps(1, end) infinite; }
+@keyframes mx-future-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+.mx-future-bubble { animation: mx-future-bubble 2.2s steps(11, end) infinite; }
+@keyframes mx-future-bubble { 0% { transform: translateY(0); opacity: 1; } 99% { transform: translateY(-14px); opacity: 0.6; } 100% { transform: translateY(0); opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

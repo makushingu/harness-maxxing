@@ -630,7 +630,7 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   )
 }
 
-function toolDiff(name: string, input: Record<string, unknown>, writeLines = 0): DiffLine[] | null {
+export function toolDiff(name: string, input: Record<string, unknown>, writeLines = 0): DiffLine[] | null {
   const s = (v: unknown) => (typeof v === 'string' ? v : '')
   if (name === 'Edit') return lineDiff(s(input.old_string), s(input.new_string))
   if (name === 'MultiEdit' && Array.isArray(input.edits)) {
@@ -651,7 +651,7 @@ function toolDiff(name: string, input: Record<string, unknown>, writeLines = 0):
   return null
 }
 
-function ToolInput({ name, input, diff, display }: { name: string; input: Record<string, unknown>; diff: DiffLine[] | null; display: string | null }) {
+export function ToolInput({ name, input, diff, display }: { name: string; input: Record<string, unknown>; diff: DiffLine[] | null; display: string | null }) {
   const open = useOpenPreview()
   const file = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : null
   return (

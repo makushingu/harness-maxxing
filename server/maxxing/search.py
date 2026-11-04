@@ -17,9 +17,9 @@ See docs/dev/API.md#search.
   (cheap: one stat per log, only the new bytes are read). The loop re-reads the memory files (CLAUDE.md /
   memory.md at their known places: a few stats) every pass, and walks the other files only every
   FILES_EVERY_S (a direct `refresh()` always does both).
-- Files: every CLAUDE.md / memory.md of the workspace root, the projects and the topics is indexed,
-  outside any cap. The other text files are spread fairly: one budget per topic (or per project / the
-  workspace root for files outside topics), a cap on the entries a walk visits, and a global MAX_FILES -
+- Files: every CLAUDE.md / memory.md of the workspace root, the projects, the topics and the agents is indexed,
+  outside any cap (an agent's are titled "memory.md · agent <a> (<p>/<t>)"). The other text files are spread
+  fairly: one budget per topic and per agent (or per project / the workspace root for files outside topics), a cap on the entries a walk visits, and a global MAX_FILES -
   the walk stops as soon as a cap is reached. Data files (.json, .csv, .xml, .svg...) are not indexed.
   Rows that no longer follow these rules are dropped by the next full pass (FILE_RULES in meta: when it
   changes, the database is VACUUMed once so it shrinks on disk).
@@ -283,6 +283,9 @@ def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, 
     name = os.path.basename(fp)
     kind = "memory" if name.lower() in MEMORY_NAMES else "file"
     rel = os.path.relpath(fp, base)
+    m = _AGENT_MEM_RE.match(rel) if kind == "memory" else None
+    if m:                                                    # an agent's role / memory: its name in the title
+        name = f"{name} · agent {m.group(3)} ({m.group(1)}/{m.group(2)})"
     # The relative path heads the body: "acme blog" finds projects/acme/topics/blog/notes.md.
     con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
                 (key, kind, fp, fp, name, f"{rel}\n{raw.decode('utf-8', 'replace')}", st.st_mtime))
@@ -314,10 +317,13 @@ def _subdirs(d: str) -> list[str]:
         return []
 
 
+_AGENT_MEM_RE = re.compile(r"^projects/([^/]+)/topics/([^/]+)/agents/([^/]+)/[^/]+$")
+
+
 def _layout(base: str) -> tuple[list[str], list[tuple[str, set[str]]]]:
     """(folders holding the memory files, buckets = (folder, sub-folders it must not walk)).
-    Memory folders: the root, every project, every topic. Buckets: every topic, every project without its
-    topics/ folder, the root without projects/."""
+    Memory folders: the root, every project, every topic, every agent. Buckets: every agent, every topic without
+    its agents/ folder, every project without its topics/ folder, the root without projects/."""
     mem, buckets = [base], []
     projects = os.path.join(base, "projects")
     for pdir in _subdirs(projects):
@@ -325,7 +331,12 @@ def _layout(base: str) -> tuple[list[str], list[tuple[str, set[str]]]]:
         tdir = os.path.join(pdir, "topics")
         topics = _subdirs(tdir)
         mem += topics
-        buckets += [(t, set()) for t in topics]
+        for t in topics:
+            adir = os.path.join(t, "agents")
+            agents = _subdirs(adir)
+            mem += agents
+            buckets += [(a, set()) for a in agents]
+            buckets.append((t, {adir} if agents else set()))
         buckets.append((pdir, {tdir}))
     buckets.append((base, {projects}))
     return mem, buckets

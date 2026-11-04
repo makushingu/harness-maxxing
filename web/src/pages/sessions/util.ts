@@ -16,7 +16,8 @@ import {
   SquareTerminal,
   Wrench,
 } from 'lucide-react'
-import type { ClaudeModel, Session, Topic, WorkspaceTree } from '@/lib/types'
+import type { Agent, ClaudeModel, Session, Topic, WorkspaceTree } from '@/lib/types'
+import { AGENT_PATH_RE, agentRunRoute } from '@/lib/queries/agents'
 
 /** Fallback context window when the server does not know it yet (no turn reported it). */
 export const CONTEXT_MAX = 200_000
@@ -66,17 +67,48 @@ export function toolIcon(name: string): LucideIcon {
   return Wrench
 }
 
-/** Display name of a topic path: "acme / blog" ("" = workspace root). */
-export function topicLabel(path: string, rootLabel: string, sep = ' / '): string {
+/** An agent path (projects/<p>/topics/<t>/agents/<a>) -> [project, topic, agent], else null. */
+export function parseAgentPath(path: string | null | undefined): [string, string, string] | null {
+  const m = path ? AGENT_PATH_RE.exec(path) : null
+  return m ? [m[1], m[2], m[3]] : null
+}
+/** The topic path of a topic or agent path ("projects/acme/topics/blog/agents/writer" -> "projects/acme/topics/blog"). */
+export const topicPathOf = (path: string) => path.replace(/\/agents\/[^/]+$/, '')
+
+/** Display name of a topic path: "acme / blog" ("" = workspace root); an agent path: "acme / blog · Writer"
+ *  (the agent's display name when `ws` knows it, else its folder name). */
+export function topicLabel(path: string, rootLabel: string, sep = ' / ', ws?: WorkspaceTree): string {
   if (!path) return rootLabel
+  const a = parseAgentPath(path)
+  if (a) return `${a[0]}${sep}${a[1]} · ${findAgent(ws, path)?.display_name || a[2]}`
   const m = /^projects\/([^/]+)(?:\/topics\/([^/]+))?$/.exec(path)
   if (m) return m[2] ? `${m[1]}${sep}${m[2]}` : m[1]
   return path
 }
 
+/** The topic of a path; for an agent path, the topic the agent lives in. */
 export function findTopic(ws: WorkspaceTree | undefined, path: string): Topic | undefined {
-  for (const p of ws?.projects || []) for (const t of p.topics) if (t.path === path) return t
+  const tp = topicPathOf(path)
+  for (const p of ws?.projects || []) for (const t of p.topics) if (t.path === tp) return t
   return undefined
+}
+
+/** The agent of an agent path, from the workspace tree (Settings -> Features -> agents_page). */
+export function findAgent(ws: WorkspaceTree | undefined, path: string): Agent | undefined {
+  if (!parseAgentPath(path)) return undefined
+  return findTopic(ws, path)?.agents?.find((a) => a.path === path)
+}
+
+/** Every topic (and, `agents` on, every agent under its topic) as picker options: "acme / blog", "acme / blog · Writer". */
+export function placeOptions(ws: WorkspaceTree | undefined, agents: boolean, fmt: (label: string) => string = (x) => x): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = []
+  for (const p of ws?.projects || [])
+    for (const tp of p.topics) {
+      const base = `${p.emoji ? p.emoji + ' ' : ''}${p.name} / ${tp.name}`
+      out.push({ value: tp.path, label: fmt(base) })
+      if (agents) for (const a of tp.agents || []) out.push({ value: a.path, label: fmt(`${base} · ${a.display_name}`) })
+    }
+  return out
 }
 
 export function absTopicDir(ws: WorkspaceTree | undefined, path: string): string | null {
@@ -118,7 +150,9 @@ export function relPaths(text: string, { topicDir, wsRoot }: PathBases): string 
   return out
 }
 
-export const sessionsUrl = (s: Pick<Session, 'id' | 'path'>) => `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`
+/** Where a session opens: the Sessions page, or the Agents page for a run of an agent. */
+export const sessionsUrl = (s: Pick<Session, 'id' | 'path'>) =>
+  AGENT_PATH_RE.test(s.path) ? agentRunRoute(s.path, s.id) : `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`
 
 /* ---------------------------------------------------------------- File kinds */
 const IMG = /\.(png|jpe?g|gif|webp|avif|bmp|svg|ico|heic|heif|tiff?)$/i

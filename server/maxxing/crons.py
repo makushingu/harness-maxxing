@@ -1110,6 +1110,7 @@ def store_mode(sid: str, mode: str) -> None:
 def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
     """Run the prompt as a Claude session turn. -> (ok, code, output_tail, session_id)."""
     from .sessions import service                       # lazy: sessions are owned by core
+    from . import agents
     when = dt.datetime.now(tz()).strftime("%Y-%m-%d %H:%M")
     title = f"{job['name']} - {when}"
     timeout = _timeout(job)
@@ -1122,6 +1123,13 @@ def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
             store_mode(prev, job.get("permission_mode") or "")
             service.send_message(prev, job["prompt"], source="cron")
             sid = prev
+    if sid is None and agents.is_agent_path(job["topic_path"]):
+        # an agent's cron trigger: its budget / rate / on-off decide, the run is written in the agent's thread
+        r = agents.fire(job["topic_path"], trigger=f"cron:{job['id']}", prompt=job["prompt"], source="cron",
+                        cron_env=env, timeout_s=timeout)
+        if not r["started"]:
+            return True, 0, f"skipped: {agents.SKIP_TEXT.get(r['reason'], r['reason'])}", None
+        sid = r["session"]["id"]
     if sid is None:
         s = service.create_session(job["topic_path"], message=job["prompt"], title=title,
                                    model=job.get("model") or None, source="cron", notify=False,

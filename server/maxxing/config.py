@@ -74,6 +74,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "profile": {"name": "", "color": "", "emoji": ""},   # the user's pseudo: messages, notifications
     "usage_widget": False,
     "maxxing_mode": False,             # Settings -> Features (beta): a finished session comes to the front (Sessions page)
+    "agents_page": False,              # Settings -> Features: the Agents page (lasting roles of a topic, with triggers)
     "team_page": False,                # Settings -> Features: the Team page (chats between people) and its sidebar entry
     "git_page": False,                 # Settings -> Features: the Git & GitHub page and its sidebar entry
     "infra_page": False,               # Settings -> Features: the Infra page (sites, databases, buckets, domains, servers)
@@ -86,6 +87,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "chat_id": None, "chat_title": "", "user_ids": [], "bot_username": "",
         "threads": {},                     # "#crons" / "#alerts" -> thread id
         "session_threads": {},             # session id -> {tid, name}: one thread per open session
+        "agent_threads": {},               # agent path -> {tid, name}: the thread of an agent with the telegram option
         "thread_days": 30,                 # open sessions idle longer than this lose their thread
         "sessions": {},                    # topic path -> session id (main chat when threads are off)
         "notify_crons": True, "login_alerts": True, "reply_mode": "progress",

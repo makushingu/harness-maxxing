@@ -87,6 +87,20 @@ def _project_of(path: str) -> str:
     return parts[1] if len(parts) >= 2 and parts[0] == "projects" else ""
 
 
+def _where_label(path: str) -> dict:
+    """{label, agent} of a "topics" row: "acme / blog", or "acme / blog / Writer" + agent "Writer" for an agent folder."""
+    from . import agents
+    p = agents.parse(path)
+    if p:
+        try:
+            name = (agents.load(path)["name"] if agents.exists(path) else "") or p[2]
+        except Exception:  # noqa: BLE001 - a broken agent.json never breaks the stats
+            name = p[2]
+        return {"label": f"{p[0]} / {p[1]} / {name}", "agent": name}
+    rel = (path or "").removeprefix("projects/").replace("/topics/", " / ")
+    return {"label": rel, "agent": None}
+
+
 def _add(acc: dict, tk: dict, cost: float, turns: int) -> None:
     for k in tk:
         acc[k] = acc.get(k, 0) + tk[k]
@@ -138,6 +152,8 @@ def compute() -> dict:
         sessions.append({"id": sid, "title": title or "Untitled", "path": path,
                          "archived": bool(m.get("archived")), "updated": _when(m.get("updated")) or _when(m.get("created")),
                          **tk, "total": sum(tk.values()), "cost_usd": round(cost, 6), "turns": turns})
+    for row in topics.values():
+        row.update(_where_label(row["path"]))
     by_total = lambda x: (x.get("total", 0), x.get("cost_usd", 0))  # noqa: E731
     sessions.sort(key=by_total, reverse=True)
     return {

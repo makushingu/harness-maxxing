@@ -11,6 +11,7 @@ by default: every later Claude turn and shell job gets it as an environment vari
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 from . import cli
@@ -39,6 +40,15 @@ def _handler(a) -> int:
         for r in [] if a.json else rows:
             print(f"{r['name']:<40} {'env' if r['expose'] else '   '}  {r['note']}")
         return 0
+    agent = os.environ.get("MAXXING_AGENT") or ""
+    if agent and a.action in ("get", "set", "delete"):
+        # a turn of an agent: only its own keys, read-only. A speed bump against injected orders (the real limit is
+        # its permission mode and approvals), so a message saying "run maxxing keys get" gets nothing.
+        from . import agents
+        mine = agents.load(agent)["keys"] if agents.exists(agent) else []
+        if a.action != "get" or a.name not in mine:
+            print(f"{a.name}: not available to this agent (its Keys setting)", file=sys.stderr)
+            return 1
     if a.action == "get":
         v = vault.get(a.name)
         if v is None:

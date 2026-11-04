@@ -84,15 +84,137 @@ export type Topic = {
   telegram_thread: number | null
   /** The topic's own permission mode for Claude turns; '' = the global setting. */
   permission_mode?: '' | PermissionMode
+  /** Agents of the topic (Settings -> Features -> agents_page), without their status fields. */
+  agents?: Agent[]
 }
 export type Project = { name: string; path: string; description: string; /** "" when none. */ emoji: string; topics: Topic[]; session_count: number }
 export type WorkspaceTree = { root: string; projects: Project[] }
+
+/* ---------------------------------------------------------------- Agents (Settings -> Features -> agents_page) */
+/** The pixel character of an agent: `color` = outfit (one of the accent colours, tells projects apart). */
+export type AgentAvatar = { color: string; skin: string; hair: string; hair_color: string; face: string; accessory: string }
+export type AgentAvatarOptions = Record<keyof AgentAvatar, string[]>
+export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_s: number; debounce_s: number }
+export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source: string; levels: FeedLevel[]; match: string; prompt: string; hook_id?: string }
+export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
+export type AgentThreadKind = 'note' | 'run' | 'result' | 'skip' | 'approval'
+export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string }
+export type AgentRuleTool = 'Bash' | 'Write' | 'Edit' | 'WebFetch' | '*'
+/** "Refuse <tool> when it contains <match>", `reason` shown to Claude. */
+export type AgentRule = { tool: AgentRuleTool; match: string; reason: string }
+/** GET /api/agents/sandbox: what the sandbox needs on this server (missing among bwrap, socat, apparmor, linux). */
+export type AgentSandboxStatus = { ok: boolean; missing: string[] }
+/** POST /api/agents/import: the agent made from a Claude Code agent file; `ignored` = its fields with no equivalent. */
+export type AgentImportResult = Agent & { ignored: string[] }
+/** An agent = a folder projects/<p>/topics/<t>/agents/<name>/ (CLAUDE.md = its role, memory.md, agent.json). */
+export type Agent = {
+  /** projects/<p>/topics/<t>/agents/<name>: also a session path */
+  path: string
+  project: string
+  topic: string
+  /** folder slug */
+  name: string
+  display_name: string
+  /** the role (first paragraph of its CLAUDE.md) */
+  description: string
+  avatar: AgentAvatar
+  enabled: boolean
+  model: string
+  permission_mode: '' | PermissionMode
+  allowed_tools: string[]
+  disallowed_tools: string[]
+  telegram: boolean
+  approvals: boolean
+  /** runs started by outside text (webhooks, feed, other agents) act per its mode instead of always asking first */
+  trust_outside: boolean
+  /** the Keys vault entries its turns see (none by default) */
+  keys: string[]
+  /** its commands write only in its folder (+ `writable`), cannot read the server's secrets, reach only `domains`;
+   *  its runs never use bypass (bypass becomes acceptEdits). New agents: on. */
+  sandbox: boolean
+  /** hosts its shell commands may reach (sandbox), e.g. api.github.com, *.example.com */
+  domains: string[]
+  /** folders of the topic it may write in besides its own (`.` = the whole topic) */
+  writable: string[]
+  /** tool calls refused when they contain a text (max 20) */
+  rules: AgentRule[]
+  /** callable by Claude as a subagent from the normal sessions of its topic */
+  subagent: boolean
+  limits: AgentLimits
+  triggers: AgentTrigger[]
+  created: number
+  session_count: number
+  archived_count: number
+  running: number
+  unread: number
+  /** Status fields: GET /api/agents and GET /api/agents/{path} only (not in the workspace tree). */
+  cost_today?: number
+  runs_last_hour?: number
+  last_run?: AgentMessage | null
+  running_now?: number
+  running_sessions?: { id: string; title: string; started?: number }[]
+  /** results posted after the user last opened the agent */
+  thread_unread?: number
+  /** approval requests of its running sessions */
+  waiting?: number
+}
+/** A ready-made agent of the gallery (GET /api/agents/templates): fills the creation form. */
+export type AgentTemplate = {
+  id: string
+  name: string
+  summary: string
+  /** its role (CLAUDE.md) */
+  role: string
+  /** what the user still has to connect */
+  needs: string
+  avatar: AgentAvatar
+  permission_mode: PermissionMode
+  approvals: boolean
+  allowed_tools: string[]
+  /** keys worth giving it; keys_present = the ones the vault holds */
+  keys: string[]
+  keys_present: string[]
+  limits: Partial<AgentLimits>
+  cron?: { schedule: string; prompt: string }
+  webhook?: { kind: AgentWebhookKind; prompt: string }
+}
+export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
+export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
+export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }
+/** The order and colours picked by hand on the Agents page (GET/PUT /api/agents/layout), the same on every device. */
+export type AgentsLayout = { projects: string[]; colors: Record<string, string>; agents: Record<string, string[]> }
+export type AgentInput = {
+  topic_path?: string
+  name?: string
+  display_name?: string
+  description?: string
+  avatar?: Partial<AgentAvatar>
+  enabled?: boolean
+  model?: string
+  permission_mode?: '' | PermissionMode
+  allowed_tools?: string[]
+  disallowed_tools?: string[]
+  telegram?: boolean
+  approvals?: boolean
+  trust_outside?: boolean
+  keys?: string[]
+  sandbox?: boolean
+  domains?: string[]
+  writable?: string[]
+  rules?: AgentRule[]
+  subagent?: boolean
+  limits?: Partial<AgentLimits>
+  triggers?: AgentTriggerInput[]
+}
+export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
+export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
+export type AgentWebhookResult = { agent: AgentDetail; hook: { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean } }
 export type NameBody = { name: string; description?: string }
 export type PatchNameBody = { name?: string; description?: string; /** Projects only; "" removes it. */ emoji?: string; /** Topics only; "" = the global setting. */ permission_mode?: '' | PermissionMode }
 
 /* ---------------------------------------------------------------- Sessions */
 export type SessionState = 'idle' | 'running' | 'error'
-export type SessionSource = 'web' | 'telegram' | 'cron'
+export type SessionSource = 'web' | 'telegram' | 'cron' | 'agent'
 export type QueueItem = { text: string; attachments: number; source: 'web' | 'telegram' | 'cron' | 'system' | string; kind: string; /** A voice message sent directly (transcribed before its turn). */ voice?: boolean; client_ids?: string[] }
 export type Session = {
   id: string
@@ -123,6 +245,24 @@ export type Session = {
   plan_mode: boolean
   /** A plan-mode turn finished: its plan waits for the user's validation. */
   plan_ready: boolean
+  /** Tool calls waiting for the user's Allow / Deny (an agent with approvals; GET /api/approvals?session=). */
+  approvals?: number
+}
+/** A tool call an agent waits on (agents with `approvals`): Allow / Deny in the session. */
+export type Approval = {
+  id: string
+  session: string
+  agent_path: string
+  tool: string
+  /** The tool's input, long strings clipped, secrets redacted. */
+  input: Record<string, unknown>
+  /** One line: "Bash: git push". */
+  summary: string
+  at: number
+  expires: number | null
+  status: 'pending' | 'allow' | 'deny' | 'timeout' | 'expired'
+  message: string
+  decided_at: number | null
 }
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string }
 export type PatchSessionBody = { title?: string; model?: string; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
@@ -187,7 +327,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live'
+export type BusTopic = 'agents' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -458,6 +598,8 @@ export type Settings = {
   infra_page: boolean
   /** Settings -> Features: the Team page (/team, chats between people) and its sidebar entry */
   team_page?: boolean
+  /** Settings -> Features: the Agents page (/agents, lasting roles of a topic with triggers) and the agent rows of the tree */
+  agents_page?: boolean
   /** Settings -> Features (beta): Maxxing mode on the Sessions page (its switch, meter and Alt+M) */
   maxxing_mode?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
@@ -642,12 +784,15 @@ export type DashboardLayout = { order: string[]; hidden: string[] }
 export type Extension = {
   id: string
   name: string
-  type: 'widget' | 'page'
+  /** view = an extension that only brings views (agents_view) */
+  type: 'widget' | 'page' | 'view'
   icon: string
   version: string
   enabled: boolean
   error: string | null
   has_api: boolean
+  /** An Office view of the Agents page (manifest "agents_view" + agents-view.html), in the UI language; null without. */
+  agents_view?: { name: string; icon: string } | null
   /** Page extensions: own entry in the sidebar (otherwise listed under "Extensions"). */
   pinned?: boolean
   /** page.js mtime (ms): version of the module URL (the browser reuses it until the file changes). */

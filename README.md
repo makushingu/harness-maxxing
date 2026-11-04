@@ -40,6 +40,10 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
   standard recipes to put a site online, create a PostgreSQL database or an S3 bucket (`maxxing infra`).
 - **Team** (optional) - chats with other Harness users (direct messages, groups, files, polls), server to server
   through a one-time invitation; Claude summarizes the messages you pick; any message can go to a session.
+- **Agents** (optional) - lasting roles inside a topic (a writer, an order handler, a monitor) with their own role,
+  memory and character, started by hand, a schedule, a webhook, a notification, their Telegram thread or another
+  agent; a daily budget, outside text kept as data, approvals (also on Telegram), Claude Code's sandbox; ready-made
+  agents and Claude Code agent files (`maxxing agents`).
 - **Tasks** - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos
