@@ -89,6 +89,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   so 02:45 fold=0 passed after 02:30 fold=1), and yields the fold=1 instants when the hour field is full.
   `is_due` (guarded lines, `system_clock = keep`) is now `next(iter_runs(minute - 1)) == minute`: one run in the
   repeated hour, the skipped spring time runs after the gap. `widgets.day()` ends at the next local midnight.
+- Crontab block shared by state dirs: `sync_crontab` replaces only the managed lines of the current state
+  (`crons._ours`: the line's `MAXXING_STATE=` prefix, none = `/var/lib/claude-maxxing`) and keeps the others, so a
+  dev copy, preview server or script run with another `MAXXING_STATE` no longer wipes the live install's lines.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 

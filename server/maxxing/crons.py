@@ -29,6 +29,7 @@ import math
 import os
 import re
 import secrets as _secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -778,6 +779,24 @@ def _env_prefix() -> str:
     return ""
 
 
+_LINE_STATE = re.compile(r"(?:^|\s)MAXXING_STATE=('(?:[^']|'\\'')*'|\S+)")
+
+
+def _ours(line: str) -> bool:
+    """Is this managed line one of this install's? Another state dir on the same user (a dev copy, a preview
+    server, a script run against a copy) writes its own lines, prefixed with its MAXXING_STATE: kept as they are."""
+    m = _LINE_STATE.search(line)
+    st = ""
+    if m:
+        try:
+            st = shlex.split(m.group(1))[0]
+        except (ValueError, IndexError):
+            st = m.group(1)
+    mine = os.environ.get("MAXXING_STATE") or ""
+    norm = lambda x: "" if not x or Path(x) == Path("/var/lib/claude-maxxing") else str(Path(x))  # noqa: E731
+    return norm(st) == norm(mine)
+
+
 def _shq(s: str) -> str:
     return s if re.fullmatch(r"[A-Za-z0-9_./=:-]+", s) else "'" + s.replace("'", "'\\''") + "'"
 
@@ -886,10 +905,10 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
                 log.warning("jobs.json cannot be read: crontab left as it is")
                 return read_crontab()
             _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
-        outside, _ = split_crontab(read_crontab())
+        outside, inside = split_crontab(read_crontab())
         while outside and not outside[-1].strip():
             outside.pop()
-        lines = managed_lines(jobs)
+        lines = [ln for ln in inside if not _ours(ln)] + managed_lines(jobs)
         new = list(outside)
         if lines:
             if new:
