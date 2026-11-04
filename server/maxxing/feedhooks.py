@@ -21,6 +21,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets as _secrets
 import threading
 import time
@@ -278,9 +279,13 @@ def _stripe(p: dict, h: dict) -> Event | None:
     return f"Stripe: {typ}", "", "info", dash + "events", eid
 
 
+_SHOP_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com")
+
+
 def _shopify(p: dict, h: dict) -> Event | None:
     topic = h.get("x-shopify-topic", "")
-    shop = h.get("x-shopify-shop-domain", "")
+    shop = str(h.get("x-shopify-shop-domain", "")).lower()
+    shop = shop if _SHOP_RE.fullmatch(shop) else ""    # this header is not signed: a link only to a Shopify admin
     did = h.get("x-shopify-webhook-id") or h.get("x-shopify-event-id")
     admin = f"https://{shop}/admin" if shop else ""
     name = p.get("name") or (f"#{p['order_number']}" if p.get("order_number") else "")
