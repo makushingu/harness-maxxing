@@ -1366,7 +1366,7 @@ def check_dokploy(fetch: bool = True) -> Check | None:
                   "check that Dokploy runs (docker service ls), or connect a new key (maxxing dokploy connect)")
     if open_ui:
         return _c("dokploy", WARN, "Dokploy's page is open to the internet on port 3000",
-                  f"connected ({st['url']}, {n} projects); anyone can reach its sign-in page",
+                  f"connected ({st['url']}, {n} project{'s' if n != 1 else ''}); anyone can reach its sign-in page",
                   "Dokploy -> Settings -> Web server: give it a domain, then turn off its port 3000 (docs: Security)")
     return _c("dokploy", OK, f"Dokploy connected ({st['url']}, {n} project{'s' if n != 1 else ''})")
 
