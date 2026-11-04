@@ -1302,19 +1302,67 @@ def check_security() -> Check:
     """Firewall (ufw), fail2ban, automatic security updates: set by the installer; warning only."""
     missing = []
     in_container = _run_ok(["systemd-detect-virt", "-cq"])[0]
+    docker_fw = False
     if not in_container:
         ok, out = _run_ok(["ufw", "status"])
         if not ok or "Status: active" not in out:
-            missing.append("firewall")
+            docker_fw = bool(shutil.which("docker"))    # left off on purpose: Docker's published ports bypass ufw
+            if not docker_fw:
+                missing.append("firewall")
     if not _run_ok(["systemctl", "is-active", "--quiet", "fail2ban"])[0]:
         missing.append("fail2ban")
     if not _run_ok(["systemctl", "is-enabled", "--quiet", "unattended-upgrades"])[0]:
         missing.append("security updates")
+    if not missing and docker_fw:
+        return _c("security", INFO, "fail2ban and security updates active; no ufw firewall (Docker runs here)",
+                  "Docker publishes container ports around ufw, so the installer leaves it off: expose only what "
+                  "must be public (docs: Security -> Docker and Dokploy)")
     if not missing:
         return _c("security", OK, "firewall, fail2ban and security updates active" if not in_container
                   else "fail2ban and security updates active (firewall: the container's host)")
     return _c("security", WARN, f"server hardening incomplete ({', '.join(missing)})", "",
               f"bash {config.CODE}/install.sh --secure")
+
+
+def _public_tcp_ports() -> set[int]:
+    ok, out = _run_ok(["ss", "-ltnH"])
+    ports = set()
+    for ln in out.splitlines() if ok else []:
+        f = ln.split()
+        if len(f) >= 4:
+            addr, _, port = f[3].rpartition(":")
+            if port.isdigit() and not addr.startswith(("127.", "[::1]", "::1")) and "%lo" not in addr:
+                ports.add(int(port))
+    return ports
+
+
+def check_dokploy(fetch: bool = True) -> Check | None:
+    """Dokploy here or connected: its API answers with the saved key, its UI is not left open on port 3000."""
+    from . import dokploy
+    from .infra import caddy
+    from .infra.providers import ProviderError
+    st = dokploy.status()
+    here = Path("/etc/dokploy/traefik").is_dir() or caddy.traefik_route().exists()
+    if not st["connected"] and not here:
+        return None
+    if 3000 in _public_tcp_ports():
+        return _c("dokploy", WARN, "Dokploy's page is open to the internet on port 3000",
+                  "anyone can reach its sign-in page; Docker publishes the port around the firewall",
+                  "Dokploy -> Settings -> Web server: give it a domain, then turn off its port 3000 (docs: Security)")
+    if not st["connected"]:
+        return _c("dokploy", INFO, "Dokploy runs here but is not connected",
+                  "sessions cannot deploy through it yet",
+                  'Dokploy -> Profile -> API keys, then Infra -> Sources -> Connect Dokploy '
+                  '(or printf %s "$KEY" | maxxing dokploy connect)')
+    if not fetch:
+        return _c("dokploy", OK, f"Dokploy connected ({st['url']})", "not checked (--offline)")
+    try:
+        with dokploy.client() as c:
+            n = len(c.get("project.all") or [])
+    except ProviderError as e:
+        return _c("dokploy", WARN, f"Dokploy does not answer ({e.code})", e.message,
+                  "check that Dokploy runs (docker service ls), or connect a new key (maxxing dokploy connect)")
+    return _c("dokploy", OK, f"Dokploy connected ({st['url']}, {n} project{'s' if n != 1 else ''})")
 
 
 def check_state_files() -> Check | None:
@@ -1451,7 +1499,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_managed_deps, check_security, lambda: check_dokploy(fetch), check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])

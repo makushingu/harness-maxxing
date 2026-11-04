@@ -220,3 +220,27 @@ def test_deps_pin_dokploy_and_never_remove_it():
     with pytest.raises(deps.DepError):
         deps.remove("dokploy", force=True)
     assert deps.owned_paths("dokploy") == []                       # its 777 /etc/dokploy is not ours to judge
+
+
+def test_doctor_checks_dokploy(fake, monkeypatch, tmp_path):
+    from maxxing import cmd_core
+    monkeypatch.setenv("MAXXING_TRAEFIK_ROUTE", str(tmp_path / "none.yml"))
+    monkeypatch.setattr(cmd_core, "_public_tcp_ports", lambda: set())
+    assert cmd_core.check_dokploy() is None                        # no Dokploy here, none connected
+    dokploy.connect(fake.url, KEY)
+    c = cmd_core.check_dokploy()
+    assert c["level"] == "ok" and "2 projects" in c["title"]
+    monkeypatch.setattr(cmd_core, "_public_tcp_ports", lambda: {22, 80, 443, 3000})
+    assert cmd_core.check_dokploy()["level"] == "warn"
+    monkeypatch.setattr(cmd_core, "_public_tcp_ports", lambda: set())
+    vault.put(dokploy.KEY, "revoked", expose=False)
+    c = cmd_core.check_dokploy()
+    assert c["level"] == "warn" and "missing_permission" in c["title"]
+
+
+def test_public_ports_ignore_loopback(monkeypatch):
+    from maxxing import cmd_core
+    out = ("LISTEN 0 4096 0.0.0.0:3000 0.0.0.0:*\nLISTEN 0 4096 127.0.0.1:8787 0.0.0.0:*\n"
+           "LISTEN 0 4096 [::1]:2019 [::]:*\nLISTEN 0 4096 [::]:443 [::]:*\n")
+    monkeypatch.setattr(cmd_core, "_run_ok", lambda cmd: (True, out))
+    assert cmd_core._public_tcp_ports() == {3000, 443}

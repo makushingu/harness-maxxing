@@ -46,6 +46,10 @@ file still can.
   `nosniff` and a strict referrer policy (the server sends the same headers itself, whatever the mode).
 - **Tailscale mode**: only devices of your tailnet can connect.
 - **Local mode**: only through an SSH tunnel.
+- **Behind Dokploy** (domain mode on a server where Dokploy owns 80/443): Dokploy's Traefik handles HTTPS and hands
+  the requests to Harness Maxxing's Caddy, which listens only on the Docker bridge (`172.17.0.1:8790` by default),
+  never on a public address. Caddy always adds `X-Forwarded-For`, so a container reaching that address is never
+  taken for a program of this machine; it still meets the sign-in page like anyone else.
 
 ## The server itself
 
@@ -89,6 +93,22 @@ The installer hardens the server (step "Server security"; `bash /opt/claude-maxx
   it with `maxxing harden` (restarts the service; if it does not come back, the change is undone);
   `maxxing harden --undo` removes it. The service still runs as root: Claude sessions run in their own
   units and are not limited by it (they get the lighter protections described at the top of this page).
+
+### Docker and Dokploy
+
+Docker publishes container ports through its own firewall rules, around ufw: on a server with Docker the installer
+leaves ufw off (it would give a false sense of safety) and `maxxing doctor` says so instead of warning. What is
+public is what your containers publish. With Dokploy:
+
+- **Port 3000** (Dokploy's own page) is open to the internet after its installation. Give Dokploy a domain
+  (Dokploy -> Settings -> Web server), check it opens over HTTPS, then turn off port 3000 there. `maxxing doctor`
+  warns while it is open.
+- **The Dokploy API key** is kept in Keys as `DOKPLOY_API_KEY`, **never exposed** to sessions: Claude deploys with
+  `maxxing dokploy`, which reads it itself, and asks you before every change. Disconnect it in Infra -> Sources
+  (or `maxxing dokploy disconnect`) and revoke it in Dokploy when you no longer need it.
+- **Its installer** (`DOKPLOY=1`) is the official script at a pinned commit, checked against its sha256 and run from
+  a file; it installs Docker with Docker's own script. It is refused when a Docker swarm already runs (it would
+  leave it) or ports 80/443/3000 are taken.
 
 Recommended on top: SSH keys instead of passwords (`PasswordAuthentication no` once your key works).
 `maxxing doctor` warns if any of the three is missing.
