@@ -398,7 +398,7 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 @keyframes mx-game-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .mx-game-zzz { animation: mx-game-zzz 2.4s steps(2, end) infinite; }
 @keyframes mx-game-zzz { 0%, 100% { opacity: 1; transform: translateY(0); } 50% { opacity: 0.45; transform: translateY(-3px); } }
-/* The Futuristic office (features/agents/OfficeFuture.tsx): stars drift in the windows (two layers, two speeds), LEDs
+/* The Space office (features/agents/OfficeFuture.tsx): stars drift in the windows (two layers, two speeds), LEDs
    blink, holograms flicker (never the agents' screens: they stay still), drones float, bubbles rise.
    Every animation ends at rest (its last frame) under the reduced-motion rule below. */
 .mx-future-stars { animation: mx-future-stars 90s linear infinite; }

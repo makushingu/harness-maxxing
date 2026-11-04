@@ -1,6 +1,6 @@
 // The overview of the Agents page, the Office (/agents with no agent selected, the right pane of AgentsLayout on a
 // computer; /agents/office on a phone). Its views, picked in the menu at the top right (ViewMenu) and kept per
-// browser: Classic (below), Futuristic (a pixel-art office on a space station,
+// browser: Classic (below), Space (a pixel-art office on a space station,
 // OfficeFuture.tsx), then the views extensions bring (OfficeCustom.tsx) and "Create my custom view" (a new session of
 // general/inbox that builds one with the skill maxxing-extension). Classic:
 // one section per project (dot in the project colour, name, count, "..." menu, like the lanes of Tasks; order, colours
@@ -59,7 +59,7 @@ const BUILTIN_VIEWS = [
 function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
   const [v, setV] = React.useState<OfficeView>(() => {
     const x = store.get(VIEW_KEY) || ''
-    // `game` = the former Gamified view, replaced by Futuristic.
+    // `game` = the former Gamified view, replaced by Space.
     if (x === 'game') return 'future'
     return x === 'future' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
   })

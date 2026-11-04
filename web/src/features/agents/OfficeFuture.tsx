@@ -1,4 +1,4 @@
-// The Futuristic view of the Office (AgentsOverview, picked in its view menu): a pixel-art office on a space station. One bay per project, its edges glowing in the project colour; its wall
+// The Space view of the Office (AgentsOverview, picked in its view menu): a pixel-art office on a space station. One bay per project, its edges glowing in the project colour; its wall
 // is a long window on space (drifting stars, a planet of the project colour) with a holographic sign (emoji, name,
 // count, the "..." menu); the floor is dark metal plates with a grid. One hover-console per agent: a pod chair, the
 // character, a floating holographic screen projected from the desk (its colour and drawing tell the state) and LEDs

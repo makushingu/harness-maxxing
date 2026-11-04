@@ -1,4 +1,4 @@
-// What a pixel view of the Office needs (Futuristic OfficeFuture.tsx, and any other one later): the room of a
+// What a pixel view of the Office needs (Space OfficeFuture.tsx, and any other one later): the room of a
 // project (its colour, emoji, grid of cells, where the free desk creates), an agent's desk (its status, open on click /
 // Enter, drag and drop through layout.tsx) and the selection cursor. Each view only draws.
 import * as React from 'react'

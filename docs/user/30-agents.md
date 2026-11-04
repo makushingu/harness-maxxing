@@ -28,7 +28,7 @@ right (your browser remembers the choice):
 OK*, *Last run failed*, *Off*, *Ran 7 min ago*, *Never run*. A small bubble above the head points out what needs you
 (dots while it works, the number of new results, a shield for an OK, **!** for a failure); an agent that is off sleeps.
 Click a card to open the agent; point at it for its on/off switch and **Run** (always shown on a touch screen).
-- **Futuristic**: a pixel-art office on a space station, like a small video game; a bay grows as you add agents. Each project is a **bay** with edges glowing
+- **Space**: a pixel-art office on a space station, like a small video game; a bay grows as you add agents. Each project is a **bay** with edges glowing
   in its color and a window on space; each agent sits in a pod chair at a hover console, its holographic screen
   floating above it. A working agent bobs and its screen glows, **!** waits for your OK, a
   green chip counts new results, a red glitching screen means its last run failed, **z Z** and no screen when it is
@@ -40,9 +40,9 @@ Click a card to open the agent; point at it for its on/off switch and **Run** (a
   or deleted, the Office shows Classic. How it works: [Page extensions](page-extensions), "Office views".
 
 **Your order, your colors.** Drag a project (its name in the list or in Classic, the wall of its bay in
-Futuristic)
+Space)
 to move it, and drag an agent onto another of the same project to take its place; an agent never leaves its project.
-The **...** next to a project's name (on its sign in Futuristic) moves it up or down and sets its **color**, also the
+The **...** next to a project's name (on its sign in Space) moves it up or down and sets its **color**, also the
 outfit of its new agents; use it on a touch screen, where dragging is not available. The order and colors are saved
 on the server: every browser and phone shows the same.
 
