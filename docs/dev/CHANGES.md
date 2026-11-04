@@ -5,6 +5,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- `maxxing update --branch X`: the local branch X is rebuilt from `origin/X` (`checkout -B`) + the customizations of
+  the branch left, instead of reusing a stale local X (it resurrected customizations dropped or changed meanwhile);
+  commits only on the old local X are listed and kept under `refs/maxxing/before-switch/X`. Customizations are
+  replayed with `customs.pick()`: a cherry-pick that becomes empty (already merged in X) is skipped as "now included"
+  instead of failing with exit 3 (`--allow-empty` only accepts originally empty commits; git < 2.45 has no
+  `--empty=drop`). `customs.list_customs(head=)` lists another ref's customizations.
+
 
 ## 2.0.0-alpha.109 - 2026-11-04
 

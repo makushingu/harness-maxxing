@@ -1862,20 +1862,31 @@ def cmd_update(a) -> int:
         line(OK, detail)
     if branch != _current_branch():
         carried = customs.list_customs() if switched else []     # the customizations live on the branch left
-        code, out = _git("checkout", "-q", branch)
-        if code != 0:
-            code, out = _git("checkout", "-q", "-b", branch, "--track", f"origin/{branch}")
+        # The target branch is rebuilt from upstream + the customizations that run now: a local copy left by an
+        # earlier switch would bring back what was dropped or changed since (it is kept under a backup ref).
+        stale = _rev(f"refs/heads/{branch}")
+        left = []
+        if stale and stale != target:
+            ran = {c["id"] for c in carried}
+            left = [c for c in customs.list_customs(branch, head=stale) if c["id"] not in ran]
+            _git("update-ref", f"refs/maxxing/before-switch/{branch}", stale)
+        code, out = _git("checkout", "-q", "-B", branch, "--track", f"origin/{branch}")
         if code != 0:
             line(FAIL, f"cannot switch to branch {branch}", out.strip()[-300:])
             return 1
-        have = {c["id"] for c in customs.list_customs(branch)}
-        todo = [c for c in carried if c["id"] not in have]
+        for c in left:
+            line(WARN, f"customization \"{c['title']}\" of the old local branch {branch} is not carried (it no longer"
+                       " runs)", f"to bring it back: git -C {config.CODE} cherry-pick {c['commit'][:12]}")
+        todo = carried
         if todo:                                       # replayed here, then rebased like any customization below
             customs.ensure_identity()
+            included = 0
             for c in todo:
-                code, out = customs.git("cherry-pick", "--allow-empty", c["commit"])
-                if code != 0:
-                    customs.git("cherry-pick", "--abort")
+                status, out = customs.pick(c["commit"])
+                if status == "included":
+                    included += 1
+                    line(INFO, f"customization \"{c['title']}\" is now included in branch {branch}")
+                elif status != "ok":
                     _back_to(old)
                     line(FAIL, f"customization \"{c['title']}\" cannot be carried to branch {branch}"
                          f" - nothing changed, {__version__} keeps running", out.strip()[-300:])
@@ -1883,7 +1894,8 @@ def cmd_update(a) -> int:
                           f"\n  cd {config.CODE} && git checkout {branch} && git cherry-pick {c['commit'][:12]}"
                           "\n  # resolve, git add, GIT_EDITOR=true git cherry-pick --continue, then: maxxing update")
                     return 3
-            line(OK, f"{len(todo)} customization(s) carried to branch {branch}")
+            if len(todo) > included:
+                line(OK, f"{len(todo) - included} customization(s) carried to branch {branch}")
     web = [f for f in customs.dirty_files() if f.startswith("web/")]
     if web:                                            # the pre-built UI cannot be a customization: kept aside
         code, out = customs.git("stash", "push", "-u", "-q", "-m",
