@@ -69,19 +69,39 @@ def _clip_result_content(c: Any) -> tuple[Any, int]:
     return c, 0
 
 
-def _clip_input(inp: dict) -> bool:
+def _clip_input(inp: dict, lines: dict | None = None) -> bool:
+    """Clip the large text fields of a tool input in place; `lines` gets the real line count of each top-level field
+    clipped (the Write card counts the lines of the file)."""
     changed = False
     for k in INPUT_FIELDS:
         v = inp.get(k)
         if isinstance(v, str) and len(v) > INPUT_MAX:
             inp[k] = _cut(v, INPUT_MAX)
             changed = True
+            if lines is not None:
+                lines[k] = v.count("\n") + 1
     edits = inp.get("edits")
     if isinstance(edits, list):
         for e in edits:
             if isinstance(e, dict) and _clip_input(e):
                 changed = True
     return changed
+
+
+def clipped_input(inp: dict) -> tuple[dict, dict]:
+    """(a clipped copy of a tool input, real line counts of its clipped fields); `inp` itself when nothing is too long
+    (a log written before the runner clipped inputs: its events must not carry whole files to the browser)."""
+    edits = inp.get("edits")
+    if not any(isinstance(inp.get(k), str) and len(inp[k]) > INPUT_MAX for k in INPUT_FIELDS) and not (
+            isinstance(edits, list) and any(isinstance(e, dict) and any(
+                isinstance(e.get(k), str) and len(e[k]) > INPUT_MAX for k in INPUT_FIELDS) for e in edits)):
+        return inp, {}
+    out = dict(inp)
+    if isinstance(edits, list):
+        out["edits"] = [dict(e) if isinstance(e, dict) else e for e in edits]
+    lines: dict = {}
+    _clip_input(out, lines)
+    return out, lines
 
 
 def clip_event(ev: dict) -> bool:
@@ -109,8 +129,11 @@ def clip_event(ev: dict) -> bool:
             if not isinstance(b, dict):
                 continue
             if b.get("type") == "tool_use" and isinstance(b.get("input"), dict) and not b.get("mx_clipped"):
-                if _clip_input(b["input"]):
+                lines: dict = {}
+                if _clip_input(b["input"], lines):
                     b["mx_clipped"] = True
+                    if lines:
+                        b["mx_lines"] = lines
                     changed = True
             elif b.get("type") in OPAQUE and OPAQUE[b["type"]] in b:
                 del b[OPAQUE[b["type"]]]
