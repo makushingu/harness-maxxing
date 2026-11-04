@@ -187,7 +187,7 @@ def crons(force: bool = False) -> dict:
 
 
 LANE_COLORS = ["#3b82f6", "#22d3ee", "#34d399", "#fbbf24", "#a78bfa", "#f472b6", "#fb923c", "#60a5fa"]
-MAX_LANES, MAX_PLANNED = 8, 48
+MAX_LANES, MAX_PLANNED = 8, 144  # 144 = every 10 min: still one bar per run; denser = a band
 
 
 def day(force: bool = False) -> dict:
