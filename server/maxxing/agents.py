@@ -25,6 +25,7 @@ shown as the agent's Activity. Imports stay light: the session runner reads agen
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -43,15 +44,24 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 PATH_RE = re.compile(r"^projects/([a-z0-9][a-z0-9-]{0,47})/topics/([a-z0-9][a-z0-9-]{0,47})/agents/([a-z0-9][a-z0-9-]{0,47})$")
 MAX_PER_TOPIC = 20
 
-# The small character drawn by the UI (web/src/features/agents/Avatar.tsx): every option is one of these names.
+# The pixel-art character drawn by the UI (web/src/features/agents/Avatar.tsx): every option is one of these names.
+# `color` = outfit (the colour that tells projects apart), `bg` = background tile.
 AVATAR = {
     "color": ("violet", "blue", "teal", "green", "amber", "orange", "rose", "slate"),
-    "eyes": ("dots", "happy", "wide", "sleepy", "wink", "visor"),
-    "mouth": ("smile", "grin", "flat", "open", "smirk"),
-    "hat": ("none", "antenna", "cap", "beanie", "crown", "headphones", "wizard"),
+    "eyes": ("dots", "happy", "wide", "sleepy", "wink", "visor", "glasses", "angry"),
+    "mouth": ("smile", "grin", "flat", "open", "smirk", "tongue", "mustache"),
+    "hat": ("none", "antenna", "cap", "beanie", "crown", "headphones", "wizard", "bow"),
     "bg": ("violet", "blue", "teal", "green", "amber", "orange", "rose", "slate"),
+    "skin": ("light", "fair", "tan", "brown", "dark", "green", "blue", "metal"),
+    "head": ("round", "square", "long", "wide"),
+    "hair": ("none", "short", "spiky", "long", "bob", "mohawk", "curly", "bun", "side"),
+    "hair_color": ("black", "brown", "blond", "red", "white", "pink", "blue", "green"),
 }
-DEFAULT_AVATAR = {"color": "violet", "eyes": "dots", "mouth": "smile", "hat": "antenna", "bg": "slate"}
+DEFAULT_AVATAR = {"color": "violet", "eyes": "dots", "mouth": "smile", "hat": "antenna", "bg": "slate",
+                  "skin": "light", "head": "round", "hair": "short", "hair_color": "brown"}
+# Parts added after the first characters (04/11): an agent.json without them gets a stable pick from its
+# name, so older agents do not all wear the same haircut.
+LATER_PARTS = ("skin", "head", "hair", "hair_color")
 PERMISSION_MODES = ("bypass", "acceptEdits", "default")
 FEED_LEVELS = ("info", "success", "warning", "error")   # feed.LEVELS
 LIMITS = {  # name: (default, min, max)
@@ -131,9 +141,25 @@ def _num(v: Any, default: float, lo: float, hi: float, integer: bool) -> float |
     return int(n) if integer else round(n, 4)
 
 
-def _clean_avatar(a: Any) -> dict:
+def project_color(project: str) -> str:
+    """The outfit colour a new agent of `project` starts with (FNV-1a, same as projectColor() in Avatar.tsx)."""
+    h = 0x811C9DC5
+    for ch in project:
+        h = ((h ^ ord(ch)) * 0x01000193) & 0xFFFFFFFF
+    return AVATAR["color"][h % len(AVATAR["color"])]
+
+
+def _clean_avatar(a: Any, seed: str = "") -> dict:
     a = a if isinstance(a, dict) else {}
-    return {k: (a.get(k) if a.get(k) in opts else DEFAULT_AVATAR[k]) for k, opts in AVATAR.items()}
+    out = {}
+    for k, opts in AVATAR.items():
+        if a.get(k) in opts:
+            out[k] = a[k]
+        elif k in LATER_PARTS and k not in a and seed:
+            out[k] = opts[int(hashlib.sha1(f"{seed}:{k}".encode()).hexdigest(), 16) % len(opts)]
+        else:
+            out[k] = DEFAULT_AVATAR[k]
+    return out
 
 
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")   # = vault.NAME_RE
@@ -247,7 +273,7 @@ def clean(data: Any, strict: bool = False) -> dict:
         if strict:
             raise AgentError(400, "bad_model", "Unknown model name")
         model = ""
-    return {"version": 1, "name": name, "avatar": _clean_avatar(d.get("avatar")),
+    return {"version": 1, "name": name, "avatar": _clean_avatar(d.get("avatar"), name or "agent"),
             "enabled": d.get("enabled") is not False, "model": model, "permission_mode": mode,
             "allowed_tools": _clean_tools(d.get("allowed_tools")), "disallowed_tools": _clean_tools(d.get("disallowed_tools")),
             "telegram": bool(d.get("telegram")), "approvals": bool(d.get("approvals")),

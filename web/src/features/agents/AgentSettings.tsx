@@ -104,7 +104,7 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
           <FormField label={t('agents.create.name')} hint={t('agents.settings.folder', { name: a.name })}>
             <Input value={d.display} maxLength={60} onChange={(e) => set('display', e.target.value)} />
           </FormField>
-          <AvatarEditor value={d.avatar} onChange={(v) => set('avatar', v)} />
+          <AvatarEditor value={d.avatar} onChange={(v) => set('avatar', v)} project={a.project} />
         </div>
       </SettingsCard>
 

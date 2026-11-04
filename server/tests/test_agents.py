@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from conftest import wait_for, wait_idle
+from maxxing import agents
 
 A = "projects/acme/topics/blog/agents/writer"
 
@@ -326,3 +327,13 @@ def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
     client.post(f"/api/sessions/{c}/messages", json={"text": "NOTOOL more"})
     assert not archived(c)
     wait_idle(client, c)
+
+
+def test_avatar_later_parts_and_project_color():
+    old = {"color": "teal", "eyes": "wink", "mouth": "grin", "hat": "cap", "bg": "rose"}
+    a = agents._clean_avatar(old, "Writer")
+    assert {k: a[k] for k in old} == old and set(a) == set(agents.AVATAR)
+    assert a == agents._clean_avatar(old, "Writer")                     # stable for the same name
+    assert agents._clean_avatar({**old, "hair": "mohawk", "skin": "nope"}, "Writer")["hair"] == "mohawk"
+    assert agents._clean_avatar({**old, "skin": "nope"}, "Writer")["skin"] == "light"   # invalid -> default
+    assert agents.project_color("acme") == agents.project_color("acme") in agents.AVATAR["color"]

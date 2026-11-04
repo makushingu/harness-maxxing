@@ -376,7 +376,7 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], eyes: [..], mouth: [..], hat: [..], bg: [..]}}` |
+| GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], eyes: [..], mouth: [..], hat: [..], bg: [..], skin: [..], head: [..], hair: [..], hair_color: [..]}}` (the pixel-art character's options; an agent.json without the parts added later - `skin`, `head`, `hair`, `hair_color` - gets a stable pick from its name) |
 | GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
 | POST | `/api/agents` | `{topic_path, name, display_name?, description?, ...AgentFields}` | `Agent & Status` · `400 bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
 | GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob]}` (the cron jobs whose `topic_path` is the agent path) · `404` |
@@ -407,7 +407,7 @@ Agent  = {path, project, topic, name (folder slug), display_name, description, a
           created, session_count, archived_count, running, unread}
 Status = {cost_today: number (USD, sessions of the agent today), runs_last_hour: int, last_run: AgentMessage|null
           (last result or skip), running_now: int}
-Avatar = {color, eyes, mouth, hat, bg}   each one of the names listed by GET /api/agents (unknown -> default)
+Avatar = {color (outfit), eyes, mouth, hat, bg, skin, head, hair, hair_color}   each one of the names listed by GET /api/agents (unknown -> default)
 Limits = {usd_per_day: 2.0 (0 = none), runs_per_hour: 6 (0 = none), timeout_s: 1800, debounce_s: 60,
           approval_timeout_s: 1800}
 Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [info|success|warning|error] ([] = all),
