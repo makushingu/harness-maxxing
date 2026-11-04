@@ -17,7 +17,7 @@ import { errorMessage } from '@/lib/api'
 import {
   agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
 } from '@/lib/queries'
-import type { AgentDetail, AgentMessage, Cron } from '@/lib/types'
+import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
 import { fmtDate, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCompact, useMediaQuery } from '@/stores/media'
@@ -32,6 +32,7 @@ import { AgentSettings } from './AgentSettings'
 import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
+import { ThreadApprovalBody, useThreadApprovals } from './approvals'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -195,6 +196,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
   const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
   const msgs = React.useMemo(() => data?.messages || [], [data])
   const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
+  const asks = useThreadApprovals(a.path, msgs)
   const last = msgs[msgs.length - 1]?.id
   // Newest at the bottom: follow it when a message arrives (unless the user scrolled up to read).
   const stick = React.useRef(true)
@@ -229,9 +231,21 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
           ) : !msgs.length ? (
             <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
           ) : (
-            msgs.map((m) => (
-              <ThreadMessage key={m.id} m={m} agent={a} crons={crons?.jobs || []} root={ws?.root} answers={m.reply_to ? byId.get(m.reply_to) : undefined} onReply={setReplyTo} />
-            ))
+            msgs
+              .filter((m) => !asks.merged(m))
+              .map((m) => (
+                <ThreadMessage
+                  key={m.id}
+                  m={m}
+                  agent={a}
+                  crons={crons?.jobs || []}
+                  root={ws?.root}
+                  answers={m.reply_to ? byId.get(m.reply_to) : undefined}
+                  onReply={setReplyTo}
+                  live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
+                  decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
+                />
+              ))
           )}
           {(a.running_sessions || []).map((s) => (
             <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
@@ -263,7 +277,7 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
 }
 
 function ThreadMessage({
-  m, agent: a, crons, root, answers, onReply,
+  m, agent: a, crons, root, answers, onReply, live, decided,
 }: {
   m: AgentMessage
   agent: AgentDetail
@@ -271,6 +285,9 @@ function ThreadMessage({
   root?: string
   answers?: AgentMessage
   onReply: (m: AgentMessage) => void
+  /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
+  live?: Approval
+  decided?: AgentMessage
 }) {
   const t = useT()
   const lang = useLang()
@@ -346,13 +363,13 @@ function ThreadMessage({
   return (
     <div className="flex items-start gap-2" data-kind={m.kind}>
       <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && 'border-warning/40 bg-warning/5')}>
+      <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="font-medium">
             <Sensitive length={8}>{a.display_name}</Sensitive>
           </span>
           {m.kind === 'approval' ? (
-            <Badge variant="warning">{t('agents.thread.approval')}</Badge>
+            <Badge variant={live ? 'warning' : 'secondary'}>{live ? t('agents.thread.approval') : t('agents.approval.asked')}</Badge>
           ) : failed ? (
             <span className="inline-flex items-center gap-1 text-destructive">
               <XCircle className="size-3" /> {t('agents.thread.failed')}
@@ -365,7 +382,9 @@ function ThreadMessage({
           {when}
           {m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
         </div>
-        {m.text ? (
+        {m.kind === 'approval' ? (
+          <ThreadApprovalBody m={m} live={live} decided={decided} />
+        ) : m.text ? (
           <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
             <Sensitive block>
               <React.Suspense fallback={<p className="whitespace-pre-wrap break-words">{m.text}</p>}>
