@@ -13,6 +13,8 @@ already have their own Telegram thread (crons, security, system) default to "off
 """
 from __future__ import annotations
 
+import importlib
+import json
 import logging
 import os
 import re
@@ -20,6 +22,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from . import bus, config
 
@@ -32,9 +35,16 @@ GROUP_WINDOW_S = 24 * 3600
 TITLE_MAX, BODY_MAX = 200, 4000
 SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,39}$")
 # Built-in sources: they already report in their own Telegram thread (Crons; Alerts: gateway.alert / system_alert).
-BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins"}
+BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins", "health": "Server health",
+           "agents": "Agents"}
 OWN_THREAD = {"crons", "system", "security"}
 
+# Alerts: an event can carry buttons (`actions`), follow something (`ref`: "approval:<id>", "health:<id>",
+# "agent:<path>") and end (`resolved` = when, `resolution` = how). `act()` runs a button through the module of its
+# ref kind (HANDLERS) and is idempotent: a second click on a decided request gets the same event back.
+_ALERT_COLS = (("actions", "TEXT"), ("ref", "TEXT"), ("agent", "TEXT"), ("resolved", "REAL"), ("resolution", "TEXT"))
+HANDLERS = {"approval": "approvals", "health": "health"}       # ref kind -> module with feed_action(value, action, by)
+ACTION_STYLES = ("primary", "danger", "default", "link")
 _lock = threading.Lock()
 _aside_lock = config.ProcessLock("feed-aside")   # setting an unreadable feed.db aside
 _ready: set[str] = set()
@@ -110,6 +120,11 @@ def _open(path: Path, key: str) -> sqlite3.Connection:
                                                       PRIMARY KEY (hook, key));
                 CREATE INDEX IF NOT EXISTS hook_seen_at ON hook_seen(at);
             """)
+            have = {r[1] for r in c.execute("PRAGMA table_info(events)")}
+            for col, kind in _ALERT_COLS:                 # events you can act on (an agent's request...): added later
+                if col not in have:
+                    c.execute(f"ALTER TABLE events ADD COLUMN {col} {kind}")
+            c.execute("CREATE INDEX IF NOT EXISTS events_ref ON events(ref) WHERE ref IS NOT NULL")
             _ready.add(key)
     return c
 
@@ -123,9 +138,19 @@ def _id(v) -> int | None:
     return v if -_ID_MAX <= v <= _ID_MAX else None
 
 
+def _actions(v: Any) -> list[dict]:
+    try:
+        a = json.loads(v) if isinstance(v, str) and v else v
+    except ValueError:
+        return []
+    return [x for x in a if isinstance(x, dict) and x.get("id")] if isinstance(a, list) else []
+
+
 def _row(r: sqlite3.Row) -> dict:
     return {"id": r["id"], "at": r["at"], "source": r["source"], "level": r["level"], "title": r["title"],
-            "body": r["body"], "url": r["url"], "count": r["count"], "read": bool(r["read"])}
+            "body": r["body"], "url": r["url"], "count": r["count"], "read": bool(r["read"]),
+            "actions": _actions(r["actions"]), "ref": r["ref"], "agent": r["agent"], "resolved": r["resolved"],
+            "resolution": r["resolution"] or ""}
 
 
 def clean_source(source: str | None) -> str:
@@ -141,10 +166,31 @@ def _utf8(s: str | None) -> str | None:
     return s.encode("utf-8", "replace").decode("utf-8") if isinstance(s, str) else s
 
 
+def _clean_actions(actions: Any) -> str | None:
+    out = []
+    for a in (actions or [])[:4]:
+        if not isinstance(a, dict) or not re.match(r"^[a-z][a-z0-9_-]{0,19}$", str(a.get("id") or "")):
+            raise FeedError(400, "bad_action", "An action needs an id (a-z, 0-9, - _)")
+        out.append({"id": a["id"], "label": " ".join(str(a.get("label") or a["id"]).split())[:40],
+                    "style": a.get("style") if a.get("style") in ACTION_STYLES else "default"})
+    return json.dumps(out) if out else None
+
+
+def _clean_url(url: str | None) -> str:
+    url = (url or "").strip()[:1000]
+    # an app path ("/sessions?...") or a web address; "//host" and "/\\host" are other sites dressed as app paths
+    return url if url and (re.match(r"^/(?![/\\])", url) or re.match(r"^https?://", url)) else ""
+
+
 def post(title: str, body: str = "", level: str = "info", source: str = "custom", url: str = "",
-         dedupe: str | None = None, group: str | None = None, notify: bool = True) -> dict | None:
-    """Add an event. Returns it, or None when `dedupe` says it was already posted."""
+         dedupe: str | None = None, group: str | None = None, notify: bool = True, *,
+         actions: list[dict] | None = None, ref: str | None = None, agent: str | None = None) -> dict | None:
+    """Add an event. Returns it, or None when `dedupe` says it was already posted. `actions` (buttons), `ref` (what it
+    follows) and `agent` (the agent it is about) make it an alert: see act() and update()."""
     title, body, url = _utf8(title), _utf8(body), _utf8(url)
+    acts = _clean_actions(actions)
+    ref = (_utf8(str(ref)) or "")[:300] or None if ref else None
+    agent = (_utf8(str(agent)) or "")[:300] or None if agent else None
     dedupe, group = (_utf8(str(v)) if v else v for v in (dedupe, group))
     title = " ".join((title or "").split())[:TITLE_MAX]
     if not title:
@@ -153,10 +199,7 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
         raise FeedError(400, "bad_level", f"Level: {', '.join(LEVELS)}")
     source = clean_source(source)
     body = (body or "").strip()[:BODY_MAX]
-    url = (url or "").strip()[:1000]
-    # an app path ("/sessions?...") or a web address; "//host" and "/\\host" are other sites dressed as app paths
-    if url and not (re.match(r"^/(?![/\\])", url) or re.match(r"^https?://", url)):
-        url = ""
+    url = _clean_url(url)
     now = time.time()
     with _conn() as c:
         if dedupe:
@@ -174,8 +217,9 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
             grouped = True
         else:
             try:
-                cur = c.execute("INSERT INTO events(at, source, level, title, body, url, dedupe, grp) "
-                                "VALUES (?,?,?,?,?,?,?,?)", (now, source, level, title, body, url, dedupe, group))
+                cur = c.execute("INSERT INTO events(at, source, level, title, body, url, dedupe, grp, actions, ref, "
+                                "agent) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                                (now, source, level, title, body, url, dedupe, group, acts, ref, agent))
             except sqlite3.IntegrityError:             # the same dedupe key inserted by a concurrent request
                 if dedupe:
                     return None
@@ -184,10 +228,146 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
             grouped = False
             if cur.lastrowid % 50 == 0:
                 c.execute("DELETE FROM events WHERE at<?", (now - RETENTION_DAYS * 86400,))
-    bus.invalidate("feed")
+    bus.invalidate("feed", *(("agents",) if agent else ()))
     if notify and not grouped:
         _to_telegram(ev)
+    elif grouped and ev.get("ref"):
+        _alert_out(ev, new=False)
     return ev
+
+
+def find(ref: str, open_only: bool = True) -> dict | None:
+    """The newest event following `ref` (not resolved yet when `open_only`)."""
+    with _conn() as c:
+        r = c.execute("SELECT * FROM events WHERE ref=?" + (" AND resolved IS NULL" if open_only else "") +
+                      " ORDER BY id DESC LIMIT 1", (str(ref),)).fetchone()
+    return _row(r) if r else None
+
+
+def agent_alerts(path: str) -> int:
+    """Open, unread alerts about this agent other than its requests (those are its `waiting` count)."""
+    with _conn() as c:
+        return c.execute("SELECT COUNT(*) FROM events WHERE agent=? AND resolved IS NULL AND read=0 "
+                         "AND (ref IS NULL OR ref NOT LIKE 'approval:%')", (path,)).fetchone()[0]
+
+
+def open_events(source: str) -> list[dict]:
+    """The events of `source` that follow something and are not resolved yet."""
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM events WHERE source=? AND ref IS NOT NULL AND resolved IS NULL "
+                         "ORDER BY id DESC LIMIT 500", (source,)).fetchall()
+    return [_row(r) for r in rows]
+
+
+# waiting for a click: a request until it is decided, any other alert until it is read (Seen, Open)
+_PENDING = "actions IS NOT NULL AND resolved IS NULL AND (read=0 OR ref LIKE 'approval:%')"
+_UNSET: Any = object()
+
+
+def update(event_id: int, *, title: str | None = None, body: str | None = None, level: str | None = None,
+           actions: Any = _UNSET, resolution: str | None = None, resolve: bool = False, read: bool | None = None,
+           notify: bool = True) -> dict | None:
+    """Change an event in place (its request was decided, its problem went away). `resolve` ends it: its buttons go,
+    `resolution` says how. Returns the event, None when it no longer exists."""
+    if _id(event_id) is None:
+        return None
+    sets, args = [], []
+    if title is not None:
+        sets.append("title=?")
+        args.append(" ".join((_utf8(title) or "").split())[:TITLE_MAX] or "-")
+    if body is not None:
+        sets.append("body=?")
+        args.append((_utf8(body) or "").strip()[:BODY_MAX])
+    if level is not None:
+        if level not in LEVELS:
+            raise FeedError(400, "bad_level", f"Level: {', '.join(LEVELS)}")
+        sets.append("level=?")
+        args.append(level)
+    if resolve:
+        sets += ["resolved=COALESCE(resolved, ?)", "actions=NULL"]
+        args.append(time.time())
+    elif actions is not _UNSET:
+        sets.append("actions=?")
+        args.append(_clean_actions(actions))
+    if resolution is not None:
+        sets.append("resolution=?")
+        args.append(" ".join((_utf8(resolution) or "").split())[:TITLE_MAX])
+    if read is not None:
+        sets.append("read=?")
+        args.append(1 if read else 0)
+    with _conn() as c:
+        if sets:
+            c.execute(f"UPDATE events SET {', '.join(sets)} WHERE id=?", (*args, int(event_id)))
+        r = c.execute("SELECT * FROM events WHERE id=?", (int(event_id),)).fetchone()
+    if r is None:
+        return None
+    ev = _row(r)
+    bus.invalidate("feed", *(("agents",) if ev.get("agent") else ()))
+    if notify and ev.get("ref"):
+        _alert_out(ev, new=False)
+    return ev
+
+
+def resolve(ref: str, resolution: str = "", **kw: Any) -> dict | None:
+    """End the open event following `ref`, if any (the cause went away). Returns it."""
+    ev = find(ref)
+    return update(ev["id"], resolve=True, resolution=resolution, **kw) if ev else None
+
+
+def act(event_id: int, action: str, by: str = "web") -> dict:
+    """A button of an event (web: POST /api/feed/{id}/act/{action}; Telegram: `al:<id>:<action>`).
+    `seen` marks it read (and tells its module); the others go to the module of its ref. Idempotent: an event
+    already resolved is returned as it is, whoever clicks again and wherever."""
+    ev = get(event_id)
+    if not ev:
+        raise FeedError(404, "not_found", "No such event")
+    if ev["resolved"] and action != "seen":
+        return ev
+    if action != "seen" and action not in {a["id"] for a in ev["actions"]}:
+        raise FeedError(400, "bad_action", f"This event has no action {action!r}")
+    kind, _, value = (ev.get("ref") or "").partition(":")
+    mod = HANDLERS.get(kind)
+    if mod and value:
+        fn = getattr(importlib.import_module(f".{mod}", __package__), "feed_action", None)
+        if fn:
+            fn(value, action, by, ev)
+    if action in ("seen", "open"):
+        with _conn() as c:
+            c.execute("UPDATE events SET read=1 WHERE id=?", (int(event_id),))
+        bus.invalidate("feed")
+    return get(event_id) or ev
+
+
+def _alert_out(ev: dict, new: bool) -> bool:
+    """Hand an alert to Telegram's `post_alert` / `update_alert` when that bridge has them (in a thread: never blocks
+    the caller). False when it does not: the caller keeps the older way."""
+    try:
+        from .telegram import gateway
+    except Exception:  # noqa: BLE001 - Telegram is optional
+        return False
+    fn = getattr(gateway, "post_alert" if new else "update_alert", None)
+    if fn is None:
+        return False
+    out = {**ev, "telegram": _alert_rule(ev)}
+
+    def run() -> None:
+        try:
+            fn(out)
+        except Exception:  # noqa: BLE001
+            log.exception("feed: telegram %s failed", "post_alert" if new else "update_alert")
+    if bus._loop is None:                   # a CLI process (a cron run): it may exit before a thread is done
+        run()
+    else:
+        threading.Thread(target=run, name="feed-alert", daemon=True).start()
+    return True
+
+
+def _alert_rule(ev: dict) -> str:
+    """How Telegram should post an alert: an agent waiting for an answer is always loud, the rest follows the rules."""
+    if (ev.get("ref") or "").startswith("approval:"):
+        return "loud"
+    s = settings()
+    return rule_for(ev["source"], ev["level"], s) if s["telegram"] else "off"
 
 
 def claim_delivery(hook: str, key: str, keep_s: float) -> bool:
@@ -212,7 +392,9 @@ def release_delivery(hook: str, key: str) -> None:
 
 # ---- read ----------------------------------------------------------------------------------
 def list_events(source: str | None = None, unread: bool = False, before: int | None = None,
-                limit: int = 50) -> dict:
+                limit: int = 50, pending: bool = False) -> dict:
+    """Newest first. `pending`: only the alerts waiting for a click (buttons, not resolved). The totals of every
+    source come along, with `pending` = how many alerts wait."""
     limit = max(1, min(int(limit or 50), 200))
     where, args = ["at>?"], [time.time() - RETENTION_DAYS * 86400]
     if source:
@@ -220,15 +402,18 @@ def list_events(source: str | None = None, unread: bool = False, before: int | N
         args.append(source)
     if unread:
         where.append("read=0")
+    if pending:
+        where.append(_PENDING)
     if before:
         where.append("id<?")
         args.append(min(max(int(before), -_ID_MAX), _ID_MAX))
     with _conn() as c:
         rows = c.execute(f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ?",
                          (*args, limit + 1)).fetchall()
+        waiting = c.execute(f"SELECT COUNT(*) FROM events WHERE at>? AND {_PENDING}", (args[0],)).fetchone()[0]
     sources = source_counts()
     return {"events": [_row(r) for r in rows[:limit]], "more": len(rows) > limit,
-            "unread": sum(s["unread"] for s in sources), "sources": sources}
+            "unread": sum(s["unread"] for s in sources), "pending": waiting, "sources": sources}
 
 
 def max_id() -> int:
@@ -361,12 +546,16 @@ def get(event_id: int) -> dict | None:
 def settings() -> dict:
     f = config.load_config().get("feed") or {}
     rules = {k: v for k, v in (f.get("rules") or {}).items() if v in RULES}
-    return {"telegram": f.get("telegram", True) is not False, "rules": rules, "hooks": list(f.get("hooks") or [])}
+    return {"telegram": f.get("telegram", True) is not False, "rules": rules, "hooks": list(f.get("hooks") or []),
+            "health": bool(config.load_config().get("health_feed"))}
 
 
-def save_settings(telegram: bool | None = None, rules: dict | None = None, hooks: list | None = None) -> dict:
+def save_settings(telegram: bool | None = None, rules: dict | None = None, hooks: list | None = None,
+                  health: bool | None = None) -> dict:
     with config._lock:
         cfg = config.load_config()
+        if health is not None:
+            cfg["health_feed"] = bool(health)
         f = dict(cfg.get("feed") or {})
         if telegram is not None:
             f["telegram"] = bool(telegram)
@@ -398,6 +587,11 @@ def rule_for(source: str, level: str, s: dict | None = None) -> str:
 
 
 def _to_telegram(ev: dict) -> None:
+    if ev.get("ref"):
+        # an alert: Telegram's post_alert when it exists; else the older way, except the requests of agents that
+        # approvals.py already posts with their own buttons
+        if _alert_out(ev, new=True) or ev["ref"].startswith("approval:"):
+            return
     try:
         s = settings()
         if not s["telegram"]:

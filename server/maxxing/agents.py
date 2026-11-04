@@ -367,6 +367,9 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     source = str(t.get("source") or "").strip()[:64]
     if strict and not source:
         raise AgentError(400, "bad_trigger", "A feed trigger needs the source of the events (a webhook name...)")
+    if strict and source == ALERT_SOURCE:
+        raise AgentError(400, "bad_trigger", f"The source {ALERT_SOURCE!r} is the agents' own alerts: an agent cannot "
+                                             "start on it (it would start itself again)")
     out = {"id": tid, "kind": "feed", "enabled": t.get("enabled") is not False, "source": source,
            "levels": levels, "match": str(t.get("match") or "").strip()[:200],
            "prompt": str(t.get("prompt") or "").strip()[:PROMPT_MAX]}
@@ -814,7 +817,7 @@ def _runs_last_hour(path: str) -> int:
 
 
 def status(path: str) -> dict:
-    """{cost_today, runs_last_hour, last_run, running_now, running_sessions, thread_unread, waiting}."""
+    """{cost_today, runs_last_hour, last_run, running_now, running_sessions, thread_unread, waiting, alerts}."""
     msgs = thread(path, 500)
     last = next((m for m in reversed(msgs) if m.get("kind") in ("result", "skip")), None)
     running = [m for m in _metas(path) if m.get("state") == "running"]
@@ -828,7 +831,16 @@ def status(path: str) -> dict:
             "running_sessions": [{"id": m.get("id"), "title": m.get("title") or "",
                                   "started": m.get("spawned_at") or m.get("updated")} for m in running],
             "thread_unread": sum(1 for m in msgs if m.get("kind") == "result" and (m.get("at") or 0) > seen),
-            "waiting": waiting}
+            "waiting": waiting, "alerts": _alert_count(path)}
+
+
+def _alert_count(path: str) -> int:
+    try:
+        from . import feed
+        return feed.agent_alerts(path)
+    except Exception:  # noqa: BLE001 - a broken feed.db never hides the agents
+        log.exception("agent %s: alerts count", path)
+        return 0
 
 
 TG_KEEP = 200
@@ -1011,9 +1023,12 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     if reason:
         if reason != "missing":
             post(path, "skip", SKIP_TEXT.get(reason, reason), trigger=trigger, reason=reason, source=source)
+        if reason in ("budget", "rate"):
+            _limit_alert(path, reason)
         return {"started": False, "reason": reason}
     from .sessions import service
     a = load(path)
+    _alerts_end(path, ("budget", "rate"), "Runs again")
     try:
         tidy(path)
     except Exception:  # noqa: BLE001 - a tidy-up never stops a run
@@ -1044,6 +1059,100 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     return {"started": True, "session": s}
 
 
+# ---- alerts: what needs the user lands in the Notifications feed (source `agents`, see feed.act) ---------------
+ALERT_SOURCE = "agents"
+SANDBOX_REF = "agent:*#sandbox"
+OPEN = [{"id": "open", "label": "Open", "style": "link"}]
+
+
+def _ref(path: str, what: str) -> str:
+    return f"agent:{path}#{what}"
+
+
+def _page(path: str, sub: str = "") -> str:
+    p = parse(path)
+    return f"/agents/{p[0]}/{p[1]}/{p[2]}{sub}" if p else "/agents"
+
+
+def _display(path: str) -> str:
+    try:
+        return load(path)["name"] or parse(path)[2]
+    except Exception:  # noqa: BLE001
+        return path.rsplit("/", 1)[-1]
+
+
+def _alert(path: str, what: str, title: str, body: str, level: str, url: str, group: str | None = None) -> None:
+    """One open event per agent and cause (a second one folds into it when `group`, else is skipped)."""
+    from . import feed
+    ref = _ref(path, what)
+    if not group and feed.find(ref):
+        return
+    feed.post(title, body, level, ALERT_SOURCE, url, group=group, ref=ref, agent=path, actions=OPEN)
+
+
+def _alerts_end(path: str, whats: tuple[str, ...], resolution: str) -> None:
+    try:
+        from . import feed
+        for w in whats:
+            feed.resolve(_ref(path, w), resolution)
+    except Exception:  # noqa: BLE001
+        log.exception("agent %s: feed alert", path)
+
+
+def _limit_alert(path: str, reason: str) -> None:
+    try:
+        a = load(path)
+        name = _display(path)
+        if reason == "budget":
+            _alert(path, "budget", f"{name} reached its daily budget",
+                   f"{a['limits']['usd_per_day']:g} $ spent today: its triggers are skipped until tomorrow, or raise "
+                   "the budget on its page.", "warning", _page(path))
+        else:
+            _alert(path, "rate", f"{name} reached its runs per hour",
+                   f"{a['limits']['runs_per_hour']} runs in the last hour: its triggers are skipped for now, or raise "
+                   "the limit on its page.", "warning", _page(path))
+    except Exception:  # noqa: BLE001
+        log.exception("agent %s: feed alert", path)
+
+
+def _turn_alert(path: str, session: dict, ok: bool, text: str) -> None:
+    """A failed run -> one open event per agent (repeats fold into it: "x3"); the next good run ends it."""
+    from . import feed
+    from .sessions.runner import SANDBOX_ERROR
+    if ok:
+        _alerts_end(path, ("failed",), "The next run worked")
+        if load(path)["sandbox"]:
+            feed.resolve(SANDBOX_REF, "Sandboxed runs work again")
+        return
+    if text.startswith(SANDBOX_ERROR[:40]):
+        if not feed.find(SANDBOX_REF):
+            feed.post("Agents cannot run in their sandbox", text[:600], "error", ALERT_SOURCE, "/docs/agents",
+                      ref=SANDBOX_REF, agent=path, actions=OPEN)
+        return
+    _alert(path, "failed", f"{_display(path)}: the run failed", text[:600], "error",
+           _page(path, f"/runs/{session['id']}"), group=f"failed:{path}")
+
+
+def check_alerts() -> int:
+    """A slow pass (server): feed triggers whose webhook was deleted. Returns the open alerts it posted."""
+    from . import feed, feedhooks
+    hooks = {h.get("id") for h in feedhooks.list_hooks()}
+    n = 0
+    for a in list_agents():
+        for t in a["triggers"]:
+            ref = _ref(a["path"], f"trigger:{t['id']}")
+            if t.get("hook_id") and t["hook_id"] not in hooks and a["enabled"] and t.get("enabled", True):
+                if not feed.find(ref):
+                    feed.post(f"{a['name'] or parse(a['path'])[2]}: a trigger lost its webhook",
+                              f"The webhook behind the trigger on {t.get('source')!r} was deleted: this trigger "
+                              "never fires. Remove it or create its webhook again on the agent page.", "warning",
+                              ALERT_SOURCE, _page(a["path"]), ref=ref, agent=a["path"], actions=OPEN)
+                    n += 1
+            else:
+                feed.resolve(ref, "Fixed")
+    return n
+
+
 # ---- turn end (server): the result goes to the agent's thread (+ Telegram) ----------------------------
 def on_turn_end(session: dict, result: dict | None) -> None:
     path = session.get("path") or ""
@@ -1064,6 +1173,10 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                 cost = round(float(result[k]), 4)
                 break
     msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost)
+    try:
+        _turn_alert(path, session, ok, text)
+    except Exception:  # noqa: BLE001 - the feed is a nicety here
+        log.exception("agent %s: feed alert", path)
     try:
         changed = _changed_during(path, session["id"])
         if changed:
@@ -1145,6 +1258,8 @@ def scan_feed() -> int:
     agents = [a for a in list_agents() if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
     n = 0
     for ev in events:
+        if ev.get("source") == ALERT_SOURCE:       # the agents' own alerts never start an agent (loops)
+            continue
         for a in agents:
             for t in a["triggers"]:
                 if t["kind"] == "feed" and _matches(t, ev):

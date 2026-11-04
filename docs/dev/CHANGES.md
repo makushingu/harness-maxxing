@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## 2.0.0-alpha.115 - 2026-11-04
+## 2.0.0-alpha.116 - 2026-11-04
 
 - Telegram modes: `config.telegram.mode` = `simple` | `threads` | `mirror` (`gateway.mode()`; no default in
   `DEFAULT_CONFIG`: a config without it is `threads` - `mirror` when `mirror_web` + `mirror_web_chosen` - if the chat
@@ -39,6 +39,28 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   sessions and agents; agent messages run in a lane (`_agent_lane`); `_ask_about_event` answers the tap at once
   (`_about_event` in the background, `source=` keyword); `_reply` answers as a reply in the main chat.
   Tests: `mx_state` sets `telegram.mode = "threads"` (older tests), `test_telegram_simple.py`.
+
+## 2.0.0-alpha.115 - 2026-11-04
+
+- Feed alerts: `feed.db` `events` gets `actions` (JSON), `ref`, `agent`, `resolved`, `resolution` (added on open,
+  `ALTER TABLE`; index `events_ref`); `feed.post(..., actions=, ref=, agent=)`, `find`, `open_events`, `update`,
+  `resolve`, `act` (+ `HANDLERS`: `approvals.feed_action`, `health.feed_action`), `agent_alerts`; `list_events(pending=)`
+  + `pending` count. API `POST /api/feed/{id}/act/{action}` (idempotent), `GET /api/feed?pending=1`, settings `health`.
+  Built-in sources `agents`, `health`. Telegram contract: `gateway.post_alert(ev)` / `update_alert(ev)` when present
+  (`ev["telegram"]` rule hint, requests always loud; buttons -> `feed.act(..., by="telegram")`); while absent,
+  `feed_notify` and the request's `notify_approval` / `approval_done` as before (`approvals._telegram` skips them once
+  `post_alert` exists).
+- Writers: `approvals.scan` (pending -> event `approval:<id>` with Allow / Deny, dedupe), `_note` / `prime` (resolve:
+  Allowed / Denied / No answer in time / Expired); `agents.fire` (budget / rate -> one open event each, resolved
+  "Runs again" at the next start), `on_turn_end` (failed run grouped per agent, resolved by the next good run;
+  sandbox error -> `agent:*#sandbox`), `agents.check_alerts()` (feed trigger whose `hook_id` is gone),
+  `health.sync_feed()` (config `health_feed`, `maxxing init`: true for a new install, false for an existing one;
+  `cron_failed` skipped). Both every 30 s in `api/feed._watch`. Loop guard: a feed trigger on source `agents` is
+  refused, `scan_feed` skips that source. Agent status `alerts` (list badge); feed/agent changes invalidate `agents`.
+- Web: `FeedItem` buttons (`FeedActions`, `useFeedAct`) and resolution line; `/feed` **To handle** chip
+  (`?pending=1`), dashboard panel "N to handle"; Settings -> Notifications health switch; Agents list alert badge.
+- Docs: agents and alerts linked from Settings, Telegram, Crons, Security, Troubleshooting, the help index and the
+  `maxxing-feed` skill (built-in sources `agents` / `health`).
 
 ## 2.0.0-alpha.114 - 2026-11-04
 
