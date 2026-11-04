@@ -92,6 +92,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Crontab block shared by state dirs: `sync_crontab` replaces only the managed lines of the current state
   (`crons._ours`: the line's `MAXXING_STATE=` prefix, none = `/var/lib/claude-maxxing`) and keeps the others, so a
   dev copy, preview server or script run with another `MAXXING_STATE` no longer wipes the live install's lines.
+- `config.save_config` (so `update_config` too) writes `_chosen(cfg, DEFAULT_CONFIG, raw)`: keys already in
+  config.json (new value, even if equal to the default) + values that differ from the defaults, recursively. Before,
+  every save froze all merged defaults into config.json, so a changed default never reached an install that had
+  saved any setting (the `*_chosen` flags of telegram/gateway.py were patches for this). Existing files keep the
+  defaults they already froze.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
