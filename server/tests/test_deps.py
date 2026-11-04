@@ -305,6 +305,19 @@ def test_one_chromium_for_pdfs_and_remotion(st, monkeypatch):
     assert "setBrowserExecutable" in cfg and "chrome-for-testing" in cfg
 
 
+def test_video_new_on_a_file_says_so(st, tmp_path):
+    from maxxing import cmd_video
+    (cmd_video.tools_dir() / "node_modules").mkdir(parents=True)
+    f = tmp_path / "notes.txt"
+    f.write_text("x")
+    with pytest.raises(SystemExit) as e:
+        cmd_video.new_project(f)
+    assert "is a file, not a folder" in str(e.value)
+    with pytest.raises(SystemExit) as e:
+        cmd_video.new_project(f / "sub")
+    assert "Cannot create the project" in str(e.value)
+
+
 def test_session_path_has_the_managed_node(st, monkeypatch, tmp_path):
     from maxxing.sessions import spawn
     (st / "tools/nodejs/current/bin").mkdir(parents=True)
