@@ -152,8 +152,9 @@ def subagents(topic_path: str) -> dict:
             continue
         role, folder = _role(path), config.workspace() / path
         d: dict = {"description": f"{a['name'] or n}: {_one_line(role, 400) or 'agent of this topic'}",
-                   "prompt": f"{role}\n\nYour folder: {folder}. Read {folder}/memory.md first; write what you "
-                             "learn that will matter next time there (short dated bullets)."}
+                   "prompt": f"{role}\n\nYour folder: {folder}. Read {folder}/memory.md first. Write there only "
+                             "what will change how you work next time (a rule from the user, a trap, a lasting "
+                             "fact), as a short dated bullet; never a log of the task: most tasks add nothing."}
         if a["allowed_tools"]:
             d["tools"] = a["allowed_tools"]
         if a["model"]:

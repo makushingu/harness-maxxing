@@ -41,7 +41,7 @@ def test_create_folder_tree_and_paths(client, topic, mx):
     assert a["path"] == A and a["display_name"] == "Writer" and a["description"] == "You write the blog posts."
     assert a["avatar"]["color"] == "clay" and a["avatar"]["accessory"] == "crown" and a["avatar"]["face"] in agents.AVATAR["face"]
     d = Path(client.get("/api/workspace/tree").json()["root"]) / A
-    assert (d / "CLAUDE.md").read_text().startswith("# Agent writer\n\nYou write the blog posts.\n\n@memory.md")
+    assert (d / "CLAUDE.md").read_text().startswith("# Agent Writer\n\nYou write the blog posts.\n\n@memory.md")
     assert (d / "memory.md").exists() and json.loads((d / "agent.json").read_text())["name"] == "Writer"
     tree = client.get("/api/workspace/tree").json()
     t = tree["projects"][0]["topics"][0]
