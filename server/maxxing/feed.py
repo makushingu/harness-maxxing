@@ -259,7 +259,8 @@ def open_events(source: str) -> list[dict]:
     return [_row(r) for r in rows]
 
 
-_PENDING = "actions IS NOT NULL AND resolved IS NULL"
+# waiting for a click: a request until it is decided, any other alert until it is read (Seen, Open)
+_PENDING = "actions IS NOT NULL AND resolved IS NULL AND (read=0 OR ref LIKE 'approval:%')"
 _UNSET: Any = object()
 
 

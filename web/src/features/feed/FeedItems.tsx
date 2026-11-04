@@ -3,7 +3,7 @@
 // its buttons (Allow / Deny, Seen...), then says how it ended.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { Bell, Check, CheckCheck, CheckCircle2, CircleAlert, Eye, Info, MoreHorizontal, Settings2, Trash2, TriangleAlert, X } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, CheckCheck, CheckCircle2, CircleAlert, Eye, Info, MoreHorizontal, Settings2, Trash2, TriangleAlert, X } from 'lucide-react'
 import { useDeleteFeedEvent, useFeed, useFeedAct, useMarkFeedRead } from '@/lib/queries'
 import type { FeedAction, FeedEvent, FeedLevel } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
@@ -42,10 +42,13 @@ function FeedActions({ ev, onOpen }: { ev: FeedEvent; onOpen: () => void }) {
       </span>
     ) : null
   }
-  if (!ev.actions?.length) return null
+  // Seen is done once the event is read; the rest stays (Open, an undecided request)
+  const actions = (ev.actions ?? []).filter((a) => !(a.id === 'seen' && ev.read))
+  if (!actions.length) return null
   const label = (a: FeedAction) =>
     a.id === 'allow' ? t('approval.allow') : a.id === 'deny' ? t('approval.deny') : a.id === 'seen' ? t('feed.action.seen') : a.id === 'open' ? t('feed.action.open') : a.label
-  const icon = (a: FeedAction) => (a.id === 'allow' ? <Check className="size-3.5" /> : a.id === 'deny' ? <X className="size-3.5" /> : a.id === 'seen' ? <Eye className="size-3.5" /> : null)
+  const icon = (a: FeedAction) =>
+    a.id === 'allow' ? <Check className="size-3.5" /> : a.id === 'deny' ? <X className="size-3.5" /> : a.id === 'seen' ? <Eye className="size-3.5" /> : a.id === 'open' ? <ArrowUpRight className="size-3.5" /> : null
   const run = (a: FeedAction) => {
     if (a.id === 'open') return onOpen()
     setBusy(a.id)
@@ -55,11 +58,11 @@ function FeedActions({ ev, onOpen }: { ev: FeedEvent; onOpen: () => void }) {
   const order = (a: FeedAction) => (a.style === 'link' ? 2 : a.style === 'primary' ? 1 : 0)
   return (
     <span className="flex flex-wrap items-center gap-1.5" data-testid="feed-actions">
-      {[...ev.actions].sort((a, b) => order(a) - order(b)).map((a) => (
+      {[...actions].sort((a, b) => order(a) - order(b)).map((a) => (
         <Button
           key={a.id}
           size="sm"
-          variant={a.style === 'primary' ? 'default' : a.style === 'link' ? 'ghost' : 'outline'}
+          variant={a.style === 'primary' ? 'default' : 'outline'}
           className={cn('md:h-7 md:px-2.5 md:text-xs', a.style === 'danger' && 'hover:border-destructive/50 hover:text-destructive')}
           loading={busy === a.id}
           disabled={!!busy}

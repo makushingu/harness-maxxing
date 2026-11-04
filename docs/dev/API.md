@@ -624,7 +624,7 @@ cause is handled; their `actions` are then `[]`. `open` is a link button (the UI
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/feed?source=&unread=1&pending=1&before=<id>&limit=50` | – | `{events: FeedEvent[], more, unread, pending, sources: [{source, total, unread}]}` newest first (`limit` <= 200); `pending=1` = only the alerts still waiting (actions, not resolved); `pending` = how many wait |
+| GET | `/api/feed?source=&unread=1&pending=1&before=<id>&limit=50` | – | `{events: FeedEvent[], more, unread, pending, sources: [{source, total, unread}]}` newest first (`limit` <= 200); `pending=1` = only the alerts still waiting (a request until decided, any other alert until read); `pending` = how many wait |
 | POST | `/api/feed/{id}/act/{action}` | – | `{event}` after the action: `allow` / `deny` (an agent's request, as `POST /api/approvals/{id}`), `seen` (read; a health issue is marked seen), `open` (read). **Idempotent**: on a resolved event any action returns it unchanged (the same answer for a second click, web or Telegram) · `400 bad_action`, `404 not_found` |
 | POST | `/api/feed` | `{title, body?, level?, source?, url?, dedupe?, group?}` | `{event, duplicate}` (`dedupe` = idempotent per source; `group` folds into the latest unread row of that group, 24 h) · `400 empty\|bad_level\|bad_source` |
 | POST | `/api/feed/read` | `{ids?: number[], source?, all?: bool}` | `{unread}` |
