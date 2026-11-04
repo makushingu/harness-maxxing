@@ -36,14 +36,11 @@ def _path(project: str, topic: str, name: str) -> str:
 
 class Avatar(BaseModel):
     color: Optional[str] = None
-    eyes: Optional[str] = None
-    mouth: Optional[str] = None
-    hat: Optional[str] = None
-    bg: Optional[str] = None
     skin: Optional[str] = None
-    head: Optional[str] = None
     hair: Optional[str] = None
     hair_color: Optional[str] = None
+    face: Optional[str] = None
+    accessory: Optional[str] = None
 
 
 class Limits(BaseModel):

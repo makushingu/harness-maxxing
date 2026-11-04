@@ -9,12 +9,12 @@
 import * as React from 'react'
 import { Link, useParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, Download, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentExportUrl, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
+  agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Cron } from '@/lib/types'
 import { fmtDate, fmtRelative } from '@/lib/format'
@@ -28,6 +28,7 @@ import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/session
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings } from './AgentSettings'
+import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
@@ -142,7 +143,7 @@ export default function AgentPage() {
         <Sheet open={profile} onOpenChange={setProfile}>
           <SheetContent side="right" data-testid="agent-profile">
             <SheetHeader>
-              <SheetTitle>{a.display_name}</SheetTitle>
+              <SheetTitle>{t('agents.panel.open')}</SheetTitle>
             </SheetHeader>
             <SheetBody className="p-0">
               <Profile agent={a} />
@@ -244,7 +245,7 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
   const t = useT()
   return (
     <div className="flex items-start gap-2" data-kind="working">
-      <AgentAvatarIcon avatar={a.avatar} size={28} className="mt-0.5" />
+      <AgentAvatarIcon avatar={a.avatar} size={32} />
       <div className={cn('grid gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
         <span className="flex items-center gap-2 text-muted-foreground">
           {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
@@ -341,7 +342,7 @@ function ThreadMessage({
   const long = (m.text || '').length > FOLD_CHARS
   return (
     <div className="flex items-start gap-2" data-kind={m.kind}>
-      <AgentAvatarIcon avatar={a.avatar} size={28} className="mt-0.5" />
+      <AgentAvatarIcon avatar={a.avatar} size={32} />
       <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && 'border-warning/40 bg-warning/5')}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="font-medium">
@@ -490,17 +491,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
   const mode = a.approvals ? 'approvals' : a.permission_mode || 'topic'
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4">
-      <div className="flex items-center gap-3">
-        <AgentAvatarIcon avatar={a.avatar} size={56} />
-        <div className="grid min-w-0 flex-1">
-          <span className="truncate font-semibold">
-            <Sensitive length={8}>{a.display_name}</Sensitive>
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
-          </span>
-        </div>
-      </div>
+      <ProfileHead agent={a} />
 
       <SandboxBanner agent={a} />
 
@@ -568,16 +559,8 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           <span className="truncate text-xs text-muted-foreground">{t('agents.panel.advancedDesc')}</span>
         </span>
       </button>
-      <Tooltip content={t('agents.export.tip')}>
-        <Button asChild variant="ghost" size="sm" className="-mt-4 justify-self-start text-muted-foreground">
-          <a href={agentExportUrl(a.path)} download={`${a.name}.md`} data-testid="agent-export">
-            <Download /> {t('agents.export.button')}
-          </a>
-        </Button>
-      </Tooltip>
-
       <Sheet open={advanced} onOpenChange={setAdvanced}>
-        <SheetContent side="right">
+        <SheetContent side="right" className="md:w-[520px]">
           <SheetHeader>
             <SheetTitle>{t('agents.panel.advanced')}</SheetTitle>
           </SheetHeader>

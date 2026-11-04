@@ -194,7 +194,7 @@ call it), only the API and the page are cut.
   the optional 3rd level, so `create_session(path=...)` runs Claude Code in the agent folder and it loads the
   CLAUDE.md / memory.md of the topic, the project and the workspace above. Deeper paths stay refused.
 - **agent.json** (`clean(data, strict)`, cached by `workspace._cached`, written by `config.write_json`):
-  `{version: 1, name (display), avatar: {color, eyes, mouth, hat, bg}, enabled, model, permission_mode
+  `{version: 1, name (display), avatar: {color, skin, hair, hair_color, face, accessory} (`AVATAR`; `color` = a UI accent, a new agent gets `project_color(project)`), enabled, model, permission_mode
   ("" = the topic's), allowed_tools, disallowed_tools, telegram, approvals, limits: {usd_per_day, runs_per_hour,
   timeout_s, debounce_s, approval_timeout_s}, triggers: [{id, kind: "feed", enabled, source, levels, match, prompt,
   hook_id?}], created}`. Unknown / bad values fall back to defaults on read; `strict` (API) refuses them.

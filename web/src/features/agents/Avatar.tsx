@@ -1,15 +1,15 @@
-// The face of an agent: a pixel-art character (pixels.ts) built from the 9 parts stored in its agent.json
-// (avatar: {color, eyes, mouth, hat, bg, skin, head, hair, hair_color}). One <rect> per run of pixels on a 20x20
-// grid with crisp edges, so it stays sharp from 14 px (session header) to 128 px. The colours are swatches the user
-// picks (like the accent picker): the only hard-coded colours of the feature.
+// The face of an agent: a pixel-art character (pixels.ts) built from the 6 parts stored in its agent.json
+// (avatar: {color, skin, hair, hair_color, face, accessory}). One <rect> per run of pixels on a 16x16 grid with crisp
+// edges: sharpest at multiples of 16 px (16 in a session header, 32 in lists, 64-96 on the Agents page). The tile
+// behind it is a soft tint of its outfit colour (an accent colour of the UI), so it sits on light and dark themes.
 import type * as React from 'react'
 import { cn } from '@/lib/utils'
 import type { AgentAvatar } from '@/lib/types'
-import { GRID, normalize, pixelsOf, tileRuns, type Run } from './pixels'
+import { GRID, normalize, pixelsOf, type Run } from './pixels'
 
-export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, INK, SKIN, HAIR, SWATCH, projectColor, randomAvatar, type AvatarPart } from './pixels'
+export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, HAIR, INK, OUTFIT, SKIN, projectColor, randomAvatar, type AvatarPart } from './pixels'
 
-/** `sleep` = eyes closed (agent off); `animate` = blinks now and then (off under prefers-reduced-motion). */
+/** `sleep` = eyes closed and greyed (agent off). */
 export type AvatarMood = 'idle' | 'sleep'
 
 type Props = {
@@ -17,9 +17,10 @@ type Props = {
   size?: number
   className?: string
   title?: string
-  /** false = the character alone, no background tile (standing in a scene) */
+  /** false = the character alone, no background tile (sitting at its desk) */
   tile?: boolean
   mood?: AvatarMood
+  /** blinks now and then (off under prefers-reduced-motion) */
   animate?: boolean
 }
 
@@ -31,11 +32,14 @@ const Rects = ({ runs }: { runs: Run[] }) => (
   </>
 )
 
-export function AgentAvatarIcon({ avatar, size = 24, className, title, tile = true, mood = 'idle', animate = false }: Props) {
+/** The tile: a rounded square (corners cut by one pixel). */
+const TILE = `M1 0h${GRID - 2}v1h1v${GRID - 2}h-1v1h-${GRID - 2}v-1h-1v-${GRID - 2}h1z`
+
+export function AgentAvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = false }: Props) {
   const a = normalize(avatar)
   const px = pixelsOf(a, mood === 'sleep')
   const blink = animate && px.blink.length > 0
-  // Each face blinks at its own moment (a stable delay from its parts), so a room never blinks at once.
+  // Each face blinks at its own moment (a stable delay from its parts), so a page never blinks at once.
   const delay = blink ? -([...Object.values(a).join('')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) % 52) / 10 : 0
   return (
     <svg
@@ -49,7 +53,7 @@ export function AgentAvatarIcon({ avatar, size = 24, className, title, tile = tr
       style={blink ? ({ '--mx-blink-delay': `${delay}s` } as React.CSSProperties) : undefined}
     >
       {title && <title>{title}</title>}
-      {tile && <Rects runs={tileRuns(a.bg)} />}
+      {tile && <path d={TILE} fill={px.tile} fillOpacity={0.22} />}
       <Rects runs={px.body} />
       <g className="mx-px-eyes">
         <Rects runs={px.eyes} />
