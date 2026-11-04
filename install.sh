@@ -132,6 +132,8 @@ FW_ACTIVE=""        # ufw | nftables | "" (no firewall rules)
 HAS_DOCKER=0
 DOKPLOY_FOUND=0     # 1 = Dokploy runs here (its Traefik holds 80/443, its UI 3000)
 DOKPLOY_ETC=/etc/dokploy
+TRAEFIK_ROUTE_NAME=harness-maxxing.yml   # in $DOKPLOY_ETC/traefik/dynamic: Dokploy's Traefik -> our Caddy
+TRAEFIK_UPSTREAM_PORT="${TRAEFIK_UPSTREAM_PORT:-8790}"   # our Caddy behind Traefik, on the Docker bridge gateway only
 OTHER_CRON=0        # root crontab lines that are not ours
 NODE_OLD=""         # an older Node.js already installed (path) -> ours stays in <state>/tools/nodejs
 BRIDGES=""          # other Telegram bridges / agents found (process or unit names)
@@ -692,7 +694,9 @@ preflight() {
       warn "Dokploy's own page (port 3000) is reachable from the internet: give it a domain in Dokploy, then close 3000" ;;
     esac
   fi
-  if [ -n "$WEB_BUSY" ]; then
+  if [ "$DOKPLOY_FOUND" = 1 ]; then
+    ok "with a domain: Dokploy's Traefik keeps 80/443 and gets a route to Harness Maxxing (HTTPS by Traefik)"
+  elif [ -n "$WEB_BUSY" ]; then
     warn "$WEB_BUSY already serves ports 80/443: Caddy is not installed; with a domain you get a ready-made"
     warn "reverse-proxy block to paste into $WEB_BUSY (or pick tailscale / local)"
   fi
@@ -779,7 +783,9 @@ choose_access() {
     esac
     if has_tty; then
       echo "      How will you reach the web UI?"
-      if [ -n "$WEB_BUSY" ]; then
+      if [ "$DOKPLOY_FOUND" = 1 ]; then
+        printf '        %s1%s  %sdomain%s     https://ui.example.com - through the Traefik of Dokploy, automatic HTTPS\n' "$C_A$C_B" "$C_0" "$C_B" "$C_0"
+      elif [ -n "$WEB_BUSY" ]; then
         printf '        %s1%s  %sdomain%s     https://ui.example.com - through your %s (block to paste)\n' "$C_A$C_B" "$C_0" "$C_B" "$C_0" "$WEB_BUSY"
       else
         printf '        %s1%s  %sdomain%s     https://ui.example.com - automatic HTTPS %s(recommended)%s\n' "$C_A$C_B" "$C_0" "$C_B" "$C_0" "$C_G" "$C_0"
@@ -1587,9 +1593,16 @@ setup_caddy() {
   (umask 022; mkdir -p /etc/caddy /etc/caddy/maxxing-paths)
   local before_cf=""
   [ -f "$CADDYFILE" ] && before_cf=$(cat "$CADDYFILE")
+  local site_addr="$DOMAIN" bind_line="" trust_line=""
+  if [ "${BEHIND_TRAEFIK:-0}" = 1 ]; then            # TLS ends at Dokploy's Traefik; we only listen on the Docker bridge
+    site_addr="http://$DOMAIN:$TRAEFIK_UPSTREAM_PORT"
+    bind_line=$'\tbind '"$DOCKER_GW"
+    trust_line=$'\t\ttrusted_proxies private_ranges'
+  fi
   (umask 022; cat > "$CADDY_SITE") <<EOF
 # Harness Maxxing (written by install.sh - re-run the installer to change it)
-$DOMAIN {
+$site_addr {
+$bind_line
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -1605,6 +1618,7 @@ $DOMAIN {
 	import /etc/caddy/maxxing-paths/*.caddy
 	reverse_proxy 127.0.0.1:$PORT {
 		flush_interval -1
+$trust_line
 	}
 }
 EOF
@@ -1629,7 +1643,53 @@ EOF
   else
     systemctl reload caddy >/dev/null 2>&1 || systemctl restart caddy >/dev/null 2>&1 || die "Caddy did not start: journalctl -u caddy -n 50"
   fi
-  ok "Caddy serves https://$DOMAIN -> 127.0.0.1:$PORT"
+  if [ "${BEHIND_TRAEFIK:-0}" = 1 ]; then ok "Caddy serves $DOCKER_GW:$TRAEFIK_UPSTREAM_PORT -> 127.0.0.1:$PORT (Docker bridge only)"
+  else ok "Caddy serves https://$DOMAIN -> 127.0.0.1:$PORT"; fi
+}
+
+# docker_gateway - address of the host on Docker's default bridge (what a container such as Traefik reaches)
+docker_gateway() {
+  local gw
+  gw=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null | head -n1 || true)
+  case "$gw" in *.*.*.*) printf '%s' "$gw" ;; *) printf '172.17.0.1' ;; esac
+}
+
+# traefik_route - Dokploy owns 80/443: its Traefik gets a file route for $DOMAIN (Let's Encrypt there) to our Caddy,
+# which listens on the Docker bridge only and always adds X-Forwarded-For (a container is never taken for a local client)
+traefik_route() {
+  local dir="$DOKPLOY_ETC/traefik/dynamic" f
+  f="$dir/$TRAEFIK_ROUTE_NAME"
+  [ -d "$dir" ] || die "Dokploy's Traefik folder $dir is missing - is Dokploy running? (or pick tailscale / local)"
+  DOCKER_GW=$(docker_gateway)
+  while listeners | awk -v p="$TRAEFIK_UPSTREAM_PORT" '$2==p {f=1} END {exit !f}'; do
+    TRAEFIK_UPSTREAM_PORT=$((TRAEFIK_UPSTREAM_PORT + 1))
+  done
+  BEHIND_TRAEFIK=1 setup_caddy
+  (umask 022; cat > "$f") <<ROUTE
+# Harness Maxxing (written by install.sh - re-run the installer to change it; maxxing uninstall removes it)
+http:
+  routers:
+    harness-maxxing:
+      rule: "Host(\`$DOMAIN\`)"
+      entryPoints: [websecure]
+      service: harness-maxxing
+      tls:
+        certResolver: letsencrypt
+    harness-maxxing-http:
+      rule: "Host(\`$DOMAIN\`)"
+      entryPoints: [web]
+      middlewares: [redirect-to-https@file]
+      service: harness-maxxing
+  services:
+    harness-maxxing:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://$DOCKER_GW:$TRAEFIK_UPSTREAM_PORT"
+ROUTE
+  chmod 644 "$f"
+  manifest "traefik route $f"
+  ok "Dokploy's Traefik serves https://$DOMAIN -> Caddy on $DOCKER_GW:$TRAEFIK_UPSTREAM_PORT -> 127.0.0.1:$PORT"
 }
 
 # caddy_repo - Caddy's apt repository: its signing key checked against the fingerprint of deps.toml, our own source line
@@ -1727,7 +1787,8 @@ OTHER
 
 setup_access() {
   case "$ACCESS" in
-    domain) if [ -n "$WEB_BUSY" ]; then proxy_snippet; else setup_caddy; fi ;;
+    domain) if [ "$DOKPLOY_FOUND" = 1 ]; then traefik_route
+            elif [ -n "$WEB_BUSY" ]; then proxy_snippet; else setup_caddy; fi ;;
     tailscale) ok "reachable at $PUBLIC_URL from your Tailscale devices" ;;
     local) ok "listening on 127.0.0.1:$PORT only (SSH tunnel)" ;;
   esac

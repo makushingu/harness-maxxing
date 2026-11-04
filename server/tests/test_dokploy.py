@@ -199,3 +199,14 @@ def test_infra_api_connects_dokploy(fake, client):
     r = client.post("/api/infra/dokploy/connect", json={"url": fake.url, "key": KEY})
     assert r.status_code == 200 and r.json()["projects"] == 2
     assert client.post("/api/infra/dokploy/disconnect").json() == {"removed": True}
+
+
+def test_host_sites_are_refused_when_traefik_owns_80_443(org, tmp_path, monkeypatch):
+    from maxxing.infra import caddy
+    route = tmp_path / "harness-maxxing.yml"
+    route.write_text("# Harness Maxxing\n")
+    monkeypatch.setenv("MAXXING_TRAEFIK_ROUTE", str(route))
+    monkeypatch.setenv("MAXXING_CADDY_DIR", str(tmp_path / "caddy"))
+    with pytest.raises(caddy.CaddyError) as e:
+        caddy.add_site("shop", port=3100, host="shop.example.com")
+    assert e.value.code == "behind_traefik"

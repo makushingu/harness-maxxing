@@ -238,3 +238,31 @@ def test_docker_alone_is_not_dokploy(tmp_path):
     r = sh(_dokploy_ss() + f'DOKPLOY_ETC="{tmp_path}/none"; detect_server >/dev/null 2>&1; '
            'echo "[$DOKPLOY_FOUND|$WEB_BUSY]"', HOME=str(tmp_path))
     assert "[0|docker-proxy]" in r.stdout, r.stdout + r.stderr
+
+
+def test_dokploy_domain_goes_through_traefik_to_a_caddy_on_the_docker_bridge(tmp_path):
+    """Traefik -> our Caddy (Docker bridge only, adds X-Forwarded-For) -> Harness: never a plain relay to 127.0.0.1,
+    which would make any container look like a local client."""
+    dyn = tmp_path / "dokploy" / "traefik" / "dynamic"
+    dyn.mkdir(parents=True)
+    stubs = ('caddy() { :; }; systemctl() { :; }; apt_wait() { :; }; manifest() { echo "MANIFEST $*"; }; '
+             'caddy_admin_dropin() { :; }; listeners() { :; }; '
+             'docker() { echo 172.18.0.1; }; ')
+    r = sh(stubs + f'DOKPLOY_ETC="{tmp_path}/dokploy"; CADDY_SITE="{tmp_path}/site.caddy"; CADDYFILE="{tmp_path}/Caddyfile"; '
+           'DOMAIN=ui.example.com; PORT=8787; DOKPLOY_FOUND=1; ACCESS=domain; setup_access 2>&1')
+    assert r.returncode == 0, r.stdout + r.stderr
+    site = (tmp_path / "site.caddy").read_text()
+    assert site.startswith("# Harness Maxxing") and "http://ui.example.com:8790 {" in site
+    assert "\tbind 172.18.0.1\n" in site and "trusted_proxies private_ranges" in site and "reverse_proxy 127.0.0.1:8787" in site
+    route = (dyn / "harness-maxxing.yml").read_text()
+    assert "Host(`ui.example.com`)" in route and "certResolver: letsencrypt" in route
+    assert 'url: "http://172.18.0.1:8790"' in route
+    assert f"MANIFEST traefik route {dyn}/harness-maxxing.yml" in r.stdout
+
+
+def test_without_dokploy_the_caddy_site_is_unchanged(tmp_path):
+    stubs = 'caddy() { :; }; systemctl() { :; }; apt_wait() { :; }; manifest() { :; }; caddy_admin_dropin() { :; }; '
+    r = sh(stubs + f'CADDY_SITE="{tmp_path}/site.caddy"; CADDYFILE="{tmp_path}/Caddyfile"; DOMAIN=ui.example.com; PORT=8787; '
+           'DOKPLOY_FOUND=0; WEB_BUSY=""; ACCESS=domain; setup_access 2>&1')
+    site = (tmp_path / "site.caddy").read_text()
+    assert r.returncode == 0 and "\nui.example.com {\n" in site and "bind" not in site and "trusted_proxies" not in site

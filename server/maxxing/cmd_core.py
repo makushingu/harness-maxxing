@@ -2275,6 +2275,10 @@ def remove_crontab_block() -> str:
 
 
 def remove_caddy_site() -> str:
+    from .infra import caddy
+    route = caddy.traefik_route()
+    if route.is_file() and "Harness Maxxing" in route.read_text(errors="replace"):
+        route.unlink()                                  # Dokploy's Traefik drops it by itself (file provider)
     if not CADDY_SITE.exists() and not (CADDYFILE.exists() and str(CADDY_SITE) in CADDYFILE.read_text()):
         return "no Caddy site"
     if CADDYFILE.exists():

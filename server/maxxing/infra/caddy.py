@@ -55,6 +55,11 @@ def sites_dir() -> Path:
     return caddy_dir() / "sites"
 
 
+def traefik_route() -> Path:
+    """Route of Dokploy's Traefik to our Caddy (install.sh traefik_route): Traefik owns 80/443 then."""
+    return Path(os.environ.get("MAXXING_TRAEFIK_ROUTE") or "/etc/dokploy/traefik/dynamic/harness-maxxing.yml")
+
+
 def reserved() -> list[str]:
     """Names a path site cannot take: the UI's routes and the files at the root of the web build."""
     names = set(UI_ROUTES)
@@ -228,6 +233,9 @@ def add_site(name: str, root: str | None = None, port: int | None = None, host: 
             raise CaddyError(f"{host} is not a valid host name", "invalid_host")
         if host == hh:
             raise CaddyError("that is the address of Harness itself: use a path site (no --host)", "taken")
+        if traefik_route().exists():
+            raise CaddyError("Dokploy's Traefik owns ports 80/443 here: put this app in Dokploy and give it the domain "
+                             "with `maxxing dokploy domain add`", "behind_traefik")
         if any(s.get("host") == host for s in _served()):
             raise CaddyError(f"{host} is already served by the Caddy configuration", "taken")
         f = sites_dir() / f"{name}.caddy"
