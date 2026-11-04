@@ -3065,6 +3065,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.agent.off': 'Éteint',
   'agents.side.overview': 'Vue d\'ensemble',
   'agents.side.search': 'Chercher un agent',
+  'agents.side.office': 'Bureau',
   'agents.side.new': 'Nouvel agent',
   'agents.side.grouping': 'Grouper les agents',
   'agents.side.byState': 'Par état',
