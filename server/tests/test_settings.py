@@ -81,6 +81,20 @@ def test_kept_server_clock_is_never_switched(client, monkeypatch):
     assert seen == [] and synced == [1]
 
 
+def test_unchanged_settings_sent_back_are_not_checked_again(client, org, monkeypatch, tmp_path):
+    """The UI sends the whole Settings on each toggle: a files_root gone since must not refuse an unrelated switch."""
+    from maxxing import crons
+    root = tmp_path / "root"
+    root.mkdir()
+    client.put("/api/settings", json={"files_root": str(root), "timezone": "Europe/Paris"})
+    synced = []
+    monkeypatch.setattr(crons, "align_system_timezone", lambda tz: synced.append(tz) or True)
+    monkeypatch.setattr(crons, "sync_crontab", lambda *a: synced.append(1) or "")
+    root.rmdir()
+    r = client.put("/api/settings", json={**client.get("/api/settings").json(), "git_page": True})
+    assert r.status_code == 200 and r.json()["git_page"] is True and synced == []
+
+
 def test_align_system_timezone_is_skipped_in_isolation(monkeypatch):
     from maxxing import crons
     monkeypatch.setattr(crons.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("ran")))
