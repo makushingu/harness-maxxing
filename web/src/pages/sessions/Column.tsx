@@ -356,6 +356,7 @@ const LiveThread = React.memo(
 
 /** A stacked session shorter than this keeps a one-line header (see ColumnHeader `slim`). */
 const SLIM_BELOW = 560
+const QUEUE_PREVIEW_CHARS = 280 // server/maxxing/sessions/service.py: a queued text is cut there in the session list
 
 /** True while the session holding `head` is stacked with others and short: its header drops what is rarely used. */
 function useSlimHeader(head: React.RefObject<HTMLElement | null>, stacked: boolean) {
@@ -498,7 +499,8 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
       return left.filter((e) => {
         const text = e.text.trim()
         if (st.items.some((it) => it.kind === 'user' && (it.ev.at ?? Infinity) >= e.at / 1000 - 60 && it.ev.text.trim() === text)) return false
-        return !queue.some((q) => q && text.startsWith(q.trim()))
+        // the server cuts a queued text at QUEUE_PREVIEW_CHARS: only a cut one is compared on its start
+        return !queue.some((q) => q && (q.length >= QUEUE_PREVIEW_CHARS ? text.startsWith(q.trim()) : text === q.trim()))
       })
     },
     [sid],
