@@ -1,12 +1,13 @@
-// Create an agent, in a side sheet (bottom sheet on touch screens). First "Create with Claude": a new session opens
-// in Sessions with the request started and Claude prepares the agent (skill maxxing-agents); or a ready-made agent of the gallery
-// (GET /api/agents/templates) fills the steps below, to check and create. "Set it up by hand" = 3 steps:
+// Create an agent, in a side sheet (bottom sheet on touch screens). First where (project, then topic), then "With
+// Claude": a new session of that topic opens in Sessions with the request started and Claude prepares the agent (skill
+// maxxing-agents); or a ready-made agent of the gallery (GET /api/agents/templates) fills the steps below, to check and
+// create. "By hand" = 3 steps:
 // Where (project, then topic) -> Who (name, face, role, model, permission mode) -> When (first triggers, guards).
 // The agent is created at the end; its cron and webhook triggers are added right after (webhook: its URL shown).
 // "Import a Claude Code agent file": a .claude/agents/<name>.md file (picked or pasted) becomes an agent of a topic.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, Clock, Dices, FileUp, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Clock, Dices, FileUp, Rss, Send, ShieldCheck, SlidersHorizontal, Sparkles, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
 import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useImportAgent, useWorkspace } from '@/lib/queries'
@@ -125,9 +126,9 @@ const fromTemplate = (tp: AgentTemplate, topicPath?: string): Form => ({
   hookPrompt: tp.webhook?.prompt || '',
 })
 
-/** How the sheet opens: on "Create with Claude" and the gallery (default), straight on the steps, on the import, or
- *  on a template (chosen from the empty Agents page, which shows the same button and gallery). */
-export type CreateStart = { manual?: boolean; importing?: boolean; template?: AgentTemplate | null }
+/** How the sheet opens: on "Where?" + the choice With Claude / By hand (default), straight on the steps, on the import,
+ *  or on a template (chosen from the empty Agents page, which shows the same choice), `topic` = the topic picked there. */
+export type CreateStart = { manual?: boolean; importing?: boolean; template?: AgentTemplate | null; topic?: string }
 
 export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: boolean; onOpenChange: (o: boolean) => void; topicPath?: string; start?: CreateStart | null }) {
   const t = useT()
@@ -138,10 +139,12 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
   const addCron = useAddAgentCron()
   const addHook = useAddAgentWebhook()
   const [step, setStep] = React.useState<Step>(0)
-  // First "Create with Claude" (a session in Sessions prepares the agent); "Set it up by hand" = the steps below.
+  // First where + the choice (QuickCreate: With Claude = a session in Sessions prepares the agent); "By hand" = the steps.
   const [manual, setManual] = React.useState(false)
   const [importing, setImporting] = React.useState(false)
   const [tpl, setTpl] = React.useState<AgentTemplate | null>(null)
+  // The topic picked in QuickCreate (or on the empty page) wins over the list's filter.
+  const [where, setWhere] = React.useState(topicPath)
   const [f, setF] = React.useState<Form>(() => fresh(topicPath))
   const [errors, setErrors] = React.useState<{ name?: string; form?: string; schedule?: string }>({})
   const [made, setMade] = React.useState<{ agent: Agent; hook?: AgentWebhookResult['hook']; warn?: string } | null>(null)
@@ -150,7 +153,9 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
   React.useEffect(() => {
     if (open) {
       const tp = start?.template || null
-      const next = tp ? fromTemplate(tp, topicPath) : fresh(topicPath)
+      const w = start?.topic || topicPath
+      const next = tp ? fromTemplate(tp, w) : fresh(w)
+      setWhere(w)
       setF(next)
       setStep(tp && next.project && next.topic ? 1 : 0)
       setManual(!!tp || !!start?.manual)
@@ -251,7 +256,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
         <SheetBody className="grid content-start gap-5">
           {!made && importing ? (
             <ImportAgentFile
-              topicPath={topicPath}
+              topicPath={where}
               onBack={() => setImporting(false)}
               onOpen={(a) => {
                 onOpenChange(false)
@@ -261,10 +266,20 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
           ) : !made && !manual ? (
             <QuickCreate
               topicPath={topicPath}
-              onManual={() => setManual(true)}
-              onImport={() => setImporting(true)}
-              onTemplate={(tp) => {
-                const next = fromTemplate(tp, topicPath)
+              onManual={(w) => {
+                const next = fresh(w)
+                setWhere(w)
+                setF(next)
+                setManual(true)
+                setStep(next.project && next.topic ? 1 : 0)
+              }}
+              onImport={(w) => {
+                setWhere(w)
+                setImporting(true)
+              }}
+              onTemplate={(tp, w) => {
+                const next = fromTemplate(tp, w)
+                setWhere(w)
                 setF(next)
                 setTpl(tp)
                 setManual(true)
@@ -447,43 +462,76 @@ function TriggerToggle({
   )
 }
 
-/** "Create with Claude": a new session of the chosen topic opens in Sessions with the request started (the owner
- * says what it should do and when, and sends); Claude (skill maxxing-agents) infers the rest, asks what is missing
- * and creates the agent. Below, the gallery of ready-made agents: one fills the steps of the form. */
-export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone }: { topicPath?: string; onManual: () => void; onImport: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void }) {
+/** First where the agent lives (project, then topic: prefilled from the list's filter), then how to set it up: "With
+ * Claude" opens a new session of that topic in Sessions with the request started (the owner says what it should do
+ * and when; Claude, skill maxxing-agents, infers the rest and creates it), "By hand" opens the form on that topic.
+ * Below, the gallery of ready-made agents (fills the form) and the import, on the same topic. */
+export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone }: { topicPath?: string; onManual: (topic: string) => void; onImport: (topic: string) => void; onTemplate: (t: AgentTemplate, topic: string) => void; onDone: () => void }) {
   const t = useT()
   const lang = useLang()
   const { data: templates } = useAgentTemplates(lang)
   const mask = useMask()
   const { data: ws } = useWorkspace()
   const createWithClaude = useCreateWithClaude()
-  const topics = React.useMemo(
-    () => (ws?.projects || []).filter((p) => p.name !== 'system').flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` }))),
-    [ws],
+  const projects = React.useMemo(() => (ws?.projects || []).filter((p) => p.name !== 'system'), [ws])
+  const m = topicPath ? /^projects\/([^/]+)\/topics\/([^/]+)$/.exec(topicPath) : null
+  const [project, setProject] = React.useState(m?.[1] || '')
+  const [topic, setTopic] = React.useState(m?.[2] || '')
+  const topics = projects.find((p) => p.name === project)?.topics || []
+  const where = project && topics.some((x) => x.name === topic) ? `projects/${project}/topics/${topic}` : ''
+  const Choice = ({ icon: Icon, title, desc, onClick, id }: { icon: typeof Sparkles; title: string; desc: string; onClick: () => void; id: string }) => (
+    <button
+      type="button"
+      disabled={!where}
+      onClick={onClick}
+      className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors enabled:hover:border-primary/40 enabled:hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+      data-testid={id}
+    >
+      <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
+      <span className="grid min-w-0 gap-0.5">
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-xs text-muted-foreground">{desc}</span>
+      </span>
+    </button>
   )
-  const [where, setWhere] = React.useState(topicPath || '')
   return (
-    <div className="grid gap-4" data-testid="agent-quick">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
-        <Select
-          value={where || '_auto'}
-          onValueChange={(v) => setWhere(v === '_auto' ? '' : v)}
-          className="w-56 max-sm:w-full"
-          aria-label={t('agents.quick.where')}
-          options={[{ value: '_auto', label: t('agents.quick.auto') }, ...topics.map((x) => ({ value: x.value, label: mask(x.label, 8) }))]}
-        />
-        <Button
-          className="ml-auto max-sm:w-full"
+    <div className="grid gap-5" data-testid="agent-quick">
+      <div className="grid items-start gap-3 sm:grid-cols-2">
+        <FormField label={t('agents.create.project')}>
+          <Select
+            value={project || undefined}
+            onValueChange={(v) => {
+              setProject(v)
+              setTopic(projects.find((p) => p.name === v)?.topics[0]?.name || '')
+            }}
+            placeholder={t('agents.create.pickProject')}
+            options={projects.map((p) => ({ value: p.name, label: mask(p.emoji ? `${p.emoji} ${p.name}` : p.name, 6) }))}
+          />
+        </FormField>
+        <FormField label={t('agents.create.topic')}>
+          <Select
+            value={topic || undefined}
+            onValueChange={setTopic}
+            disabled={!project}
+            placeholder={t('agents.create.pickTopic')}
+            options={topics.map((x) => ({ value: x.name, label: mask(x.name, 6) }))}
+          />
+        </FormField>
+      </div>
+      <p className="-mt-3 text-xs text-muted-foreground">{t('agents.create.topicHint')}</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Choice
+          id="agent-quick-go"
+          icon={Sparkles}
+          title={t('agents.quick.go')}
+          desc={t('agents.quick.how')}
           onClick={() => {
             onDone()
-            createWithClaude(where || undefined)
+            createWithClaude(where)
           }}
-          data-testid="agent-quick-go"
-        >
-          <Sparkles /> {t('agents.quick.go')}
-        </Button>
+        />
+        <Choice id="agent-manual" icon={SlidersHorizontal} title={t('agents.quick.manual')} desc={t('agents.quick.manualDesc')} onClick={() => onManual(where)} />
       </div>
-      <p className="text-xs text-muted-foreground">{t('agents.quick.how')}</p>
       {!!templates?.length && (
         <div className="grid gap-2" data-testid="agent-gallery">
           <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('agents.gallery.title')}</h3>
@@ -492,8 +540,9 @@ export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone 
               <button
                 key={tp.id}
                 type="button"
-                onClick={() => onTemplate(tp)}
-                className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+                disabled={!where}
+                onClick={() => onTemplate(tp, where)}
+                className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors enabled:hover:border-primary/40 enabled:hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid={`agent-tpl-${tp.id}`}
               >
                 <AgentAvatarIcon avatar={tp.avatar} size={32} />
@@ -511,11 +560,8 @@ export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone 
           </div>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <Button variant="link" className="h-auto p-0" onClick={onManual} data-testid="agent-manual">
-          {t('agents.quick.manual')}
-        </Button>
-        <Button variant="link" className="h-auto p-0" onClick={onImport} data-testid="agent-import">
+      <div>
+        <Button variant="link" className="h-auto p-0" disabled={!where} onClick={() => onImport(where)} data-testid="agent-import">
           <FileUp /> {t('agents.import.link')}
         </Button>
       </div>
