@@ -40,6 +40,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   right after) and a feed warning. Unlinking itself still needs no password.
 - `_ffmpeg_thumb`: an image path with a `%` gets `-f image2 -pattern_type none` (image2 expanded `a%d.png` to
   `a1.png`, possibly a link out of the files root). Only then: the other demuxers refuse that option (exit 8).
+- Path sites: `header_down Set-Cookie` uses `caddy.HARNESS_SET_COOKIE_RE` (spaces/tabs allowed around the name:
+  browsers trim them, `mx_session =x` replaced the session). Only new site files get it: a path site added before
+  keeps the old line until `maxxing infra site remove` + `add`.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
