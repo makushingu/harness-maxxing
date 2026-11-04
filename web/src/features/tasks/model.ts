@@ -77,6 +77,7 @@ export function fmtDue(due: string, today: string, lang: string, t: (k: TKey) =>
   if (d === 1) return t('tasks.due.tomorrow')
   if (d === -1) return t('tasks.due.yesterday')
   const date = new Date(`${due}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return due // "2026-13-01" written by hand: Intl would throw and take the page down
   if (d > 1 && d < 7) return new Intl.DateTimeFormat(lang, { weekday: 'long', timeZone: 'UTC' }).format(date)
   const sameYear = due.slice(0, 4) === today.slice(0, 4)
   return new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short', year: sameYear ? undefined : 'numeric', timeZone: 'UTC' }).format(date)
@@ -162,7 +163,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 function parseDue(word: string, today: string): string | undefined {
   const w = norm(word)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(w)) return w
+  if (/^\d{4}-\d{2}-\d{2}$/.test(w)) return !Number.isNaN(Date.parse(`${w}T00:00:00Z`)) && addDays(w, 0) === w ? w : undefined
   if (w === 'today' || w === 'aujourdhui' || w === 'auj') return today
   if (w === 'tomorrow' || w === 'tmr' || w === 'demain') return addDays(today, 1)
   if (w in WEEKDAYS) {

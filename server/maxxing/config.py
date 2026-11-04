@@ -24,7 +24,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 STATE = Path(os.environ.get("MAXXING_STATE", "/var/lib/claude-maxxing"))
 CODE = Path(__file__).resolve().parent.parent.parent      # repo root (…/server/maxxing -> repo)
@@ -181,9 +181,10 @@ _UMASK = os.umask(0o022)
 os.umask(_UMASK)
 
 
-def _atomic_write(path: Path, data: Any, mode: int | None = None) -> None:
+def _atomic_write(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None) -> None:
     """Exclusive temp file (mkstemp: no predictable name to hijack), right permissions before any byte
-    is written (`mode`, else the existing file's, else the umask default), then rename."""
+    is written (`mode`, else the existing file's, else the umask default), then rename. `before_replace` runs right
+    before the rename, once the bytes are on disk: raising there leaves the file as it was."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if mode is None and _in_state(path):
         mode = 0o600                                    # server state: only root reads it (Telegram ids, auth status...)
@@ -200,6 +201,8 @@ def _atomic_write(path: Path, data: Any, mode: int | None = None) -> None:
             json.dump(data, f, indent=2, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())                        # on disk before the rename: a power cut never leaves it empty
+        if before_replace is not None:
+            before_replace()
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
@@ -231,17 +234,17 @@ def tighten_state() -> int:
     return n
 
 
-def write_json(path: Path, data: Any, mode: int | None = None) -> None:
-    """Atomic JSON write usable by every module (sessions, crons, tasks…)."""
+def write_json(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None) -> None:
+    """Atomic JSON write usable by every module (sessions, crons, tasks…); `before_replace`: see _atomic_write."""
     if Path(path) in (config_path(), secrets_path()):
         with _lock:
             _keep_damaged(Path(path))
             try:
-                _atomic_write(Path(path), data, mode)
+                _atomic_write(Path(path), data, mode, before_replace)
             finally:
                 _forget_secrets()
         return
-    _atomic_write(Path(path), data, mode)    # unique temp file + rename: no lock (never the machine-wide one)
+    _atomic_write(Path(path), data, mode, before_replace)    # unique temp file + rename: no lock (never the machine-wide one)
 
 
 def read_json(path: Path, default: Any = None) -> Any:

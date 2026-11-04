@@ -292,6 +292,8 @@ export type Task = {
 export type TaskProject = { id: string; name: string; color: string; workspace?: string | null; hidden?: boolean }
 export type TasksPayload = { projects: TaskProject[]; tasks: Task[] }
 export type TaskInput = Partial<Omit<Task, 'id' | 'created' | 'updated'>> & { title?: string }
+/** PATCH extras: the cards a task was dropped between (the server places it there, renumbering when needed). */
+export type TaskPlace = { prev_id?: string; next_id?: string }
 export type TaskProjectInput = { name: string; color: string; hidden?: boolean }
 export type TaskBulkBody = {
   ids: string[]
