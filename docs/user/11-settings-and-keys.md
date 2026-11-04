@@ -122,6 +122,8 @@ Store API keys and tokens your projects need (for example `OPENAI_API_KEY`, `SHO
 
 - names are UPPER_CASE (`A-Z`, digits, `_`), values are hidden and shown only on **Reveal**;
 - add a note (what it is for, where it comes from);
+- **Add key** refuses a name already in the list (open that key with **Edit** to change it); a pasted
+  multi-line value (a PEM or SSH private key) keeps its line breaks;
 - **Expose** makes the secret available as an **environment variable** to every Claude session and
   every shell cron job – handy for scripts, and Claude never needs to see the value in a chat;
 - some names are reserved (system variables, variables that make shells, Node, Python or git load

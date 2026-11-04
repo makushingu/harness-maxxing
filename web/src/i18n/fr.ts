@@ -1207,6 +1207,7 @@ export const fr: Record<keyof typeof en, string> = {
   'keys.value': 'Valeur',
   'keys.valueKeep': 'Laissez vide pour garder la valeur actuelle.',
   'keys.valueRequired': 'Saisissez une valeur.',
+  'keys.exists': 'Une clé porte déjà ce nom : ouvrez-la avec Modifier pour la changer.',
   'keys.note': 'Note',
   'keys.notePlaceholder': 'À quoi elle sert, d’où elle vient',
   'keys.noNote': 'Sans note',

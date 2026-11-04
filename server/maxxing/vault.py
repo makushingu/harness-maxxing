@@ -66,12 +66,16 @@ def _is_text(v: str) -> bool:
     return True
 
 
-def put(name: str, value: str | None = None, note: str | None = None, expose: bool | None = None) -> None:
-    """Create or update. A new secret needs a value; omitted fields keep their current value."""
+def put(name: str, value: str | None = None, note: str | None = None, expose: bool | None = None,
+        create: bool = False) -> None:
+    """Create or update. A new secret needs a value; omitted fields keep their current value.
+    `create`: only a new name (the "Add key" dialog must not replace a key of the same name)."""
     check_name(name)
     with config._lock:                                   # read-modify-write of secrets.json
         s = config.load_secrets()
         vault = s.get("vault") if isinstance(s.get("vault"), dict) else {}
+        if create and name in vault:
+            raise VaultError(f"a key named {name} already exists", "exists")
         cur: dict[str, Any] = dict(vault.get(name) or {})
         if value is not None:
             if not value or len(value) > 16384:
