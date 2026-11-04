@@ -43,6 +43,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Path sites: `header_down Set-Cookie` uses `caddy.HARNESS_SET_COOKIE_RE` (spaces/tabs allowed around the name:
   browsers trim them, `mx_session =x` replaced the session). Only new site files get it: a path site added before
   keeps the old line until `maxxing infra site remove` + `add`.
+- `infra db backup`: `pg_dump -Fc --dbname=dbname='<quoted>'` (a database named `-f/x` was an option, `host=...` a
+  connection string); a name outside `[A-Za-z0-9_.-]` (or starting with `-`/`.`) gets a cleaned file name + sha1[:8].
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
