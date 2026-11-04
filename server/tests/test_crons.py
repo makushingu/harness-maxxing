@@ -100,6 +100,12 @@ def test_kept_clock_is_due_once_on_dst_days(org, monkeypatch):
     ("@reboot", "at boot"),
     ("@weekly", "every Sunday at 00:00"),
     ("0 6,18 * * *", "every day at 06:00 and 18:00"),
+    ("0 5 */2 * *", "at 05:00 every 2 days"),                       # "*/2" is still a restriction
+    ("0 5 * * */2", "at 05:00 on Sunday, Tuesday, Thursday and Saturday"),
+    ("0 5 */2 * 1", "at 05:00 every 2 days and only on Monday"),      # "*…" day field: both must match
+    ("0 5 1 * 1", "at 05:00 on the 1st of the month or on Monday"),
+    ("*/45 * * * *", "every hour at minute 0 and 45"),                # not every 45 minutes: :45 then :00
+    ("0 */5 * * *", "every day at 00:00, 05:00, 10:00, 15:00 and 20:00"),
     ("not valid", "not valid"),
 ])
 def test_humanize(expr, text):
