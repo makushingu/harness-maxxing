@@ -1,10 +1,10 @@
-// Download a file to the user's device. The browser's own download of `?download=1` is the rule: it streams to
-// disk and shows its progress, whatever the size (a 200 MB PDF read into a Blob froze or crashed the tab).
-// One shortcut: an image of at most 20 MB whose versioned URL is the one the viewer displayed is read back
-// from the browser cache and saved at once (the `?download=1` URL is another cache entry: a second transfer).
-// iPhone / iPad home-screen app: an `<a download>` on a Blob often does nothing there, and a link that leaves
-// the app opens Safari, which has no session (401). So the file goes to the share sheet ("Save to Files",
-// AirDrop...) up to 50 MB, else it opens inside the app, where the system offers to save or share it.
+// Download a file to the user's device: always the browser's own download of `?download=1`. It starts at once,
+// streams to disk and shows its progress, whatever the size (a file read into a Blob first made the click wait for
+// the whole transfer with nothing on screen: a minute for a 20 MB image, and a 200 MB PDF froze the tab).
+// iPhone / iPad home-screen app: an `<a download>` often does nothing there, and a link that leaves the app opens
+// Safari, which has no session (401). So a file that arrives within a moment (the tap is still fresh, as the
+// system asks) goes to the share sheet ("Save to Files", AirDrop...), else it opens inside the app at once, where
+// the system offers to save or share it.
 import type * as React from 'react'
 import { toast } from '@/components/ui'
 import { api, errorMessage, isApiError, withQuery } from '@/lib/api'
@@ -12,10 +12,11 @@ import { useT } from '@/i18n'
 import { fileRawUrl, fileZipUrl, knownFileStamp } from '@/lib/queries/files'
 import type { FileEntry } from '@/lib/types'
 import { isIOS, isStandalone } from '@/pwa'
-import { basename, kindOf } from './kinds'
+import { basename } from './kinds'
 
-const BLOB_MAX = 20 * 1024 * 1024
 const SHARE_MAX = 50 * 1024 * 1024
+/** iOS share sheet: the file must be read within this, else it opens in the app (no long silent wait). */
+const SHARE_WAIT_MS = 2500
 
 export type DownloadOpts = { version?: number | null; size?: number | null }
 
@@ -32,9 +33,25 @@ function save(href: string, name: string) {
   a.remove()
 }
 
-/** The body of `url` as a Blob, or null when it is larger than `max` (seen from Content-Length or while reading). */
-async function fetchUpTo(url: string, max: number): Promise<Blob | null> {
+/** The body of `url` as a Blob, or null when it is larger than `max` (seen from Content-Length or while reading)
+ * or not read within `waitMs`. */
+async function fetchUpTo(url: string, max: number, waitMs: number): Promise<Blob | null> {
   const ctrl = new AbortController()
+  let late = false
+  const timer = window.setTimeout(() => {
+    late = true
+    ctrl.abort()
+  }, waitMs)
+  try {
+    return await readUpTo(url, max, ctrl)
+  } catch (e) {
+    if (late) return null
+    throw e
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+async function readUpTo(url: string, max: number, ctrl: AbortController): Promise<Blob | null> {
   const res = await fetch(url, { credentials: 'same-origin', signal: ctrl.signal })
   const len = Number(res.headers.get('content-length') || 0)
   if (!res.ok || len > max) {
@@ -64,7 +81,7 @@ async function shareOrOpen(path: string, version: number | null | undefined, siz
   const share = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
   if (share.share && share.canShare && (size == null || size <= SHARE_MAX)) {
     try {
-      const blob = await fetchUpTo(url, SHARE_MAX)
+      const blob = await fetchUpTo(url, SHARE_MAX, SHARE_WAIT_MS)
       if (blob) {
         const file = new File([blob], basename(path), { type: blob.type || 'application/octet-stream' })
         if (share.canShare({ files: [file] })) {
@@ -80,39 +97,21 @@ async function shareOrOpen(path: string, version: number | null | undefined, siz
   window.location.assign(url)
 }
 
-/** The image shortcut applies: a versioned URL (the one the viewer shows) of an image small enough for a Blob. */
-const fromCache = (path: string, version: number | null | undefined, size: number | null | undefined) =>
-  kindOf(basename(path)) === 'image' && !!version && (size == null || size <= BLOB_MAX)
-
 export async function downloadFile(path: string, opts: DownloadOpts = {}): Promise<void> {
-  const name = basename(path)
   const version = opts.version ?? knownFileStamp(path)
   if (inIosApp()) return shareOrOpen(path, version, opts.size)
-  if (fromCache(path, version, opts.size)) {
-    try {
-      const blob = await fetchUpTo(fileRawUrl(path, false, version), BLOB_MAX)
-      if (blob) {
-        const url = URL.createObjectURL(blob)
-        save(url, name)
-        setTimeout(() => URL.revokeObjectURL(url), 60_000)
-        return
-      }
-    } catch {
-      /* the browser's own download below */
-    }
-  }
-  save(fileRawUrl(path, true, version), name)
+  save(fileRawUrl(path, true, version), basename(path))
 }
 
 /** Props of a download `<a>`: a real link (middle click, "save link as"); a plain click lets the browser download
- * it, unless downloadFile has something better to do (image shortcut, iOS app). */
+ * it, except in the iOS app (downloadFile: share sheet or open in the app). */
 export function downloadProps(path: string, opts: DownloadOpts = {}) {
   return {
     href: fileRawUrl(path, true, opts.version),
     download: basename(path),
     onClick: (e: React.MouseEvent) => {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-      if (!inIosApp() && !fromCache(path, opts.version ?? knownFileStamp(path), opts.size)) return
+      if (!inIosApp()) return
       // The native event only: a menu item (Radix) skips its own close when the React event is marked prevented.
       e.nativeEvent.preventDefault()
       void downloadFile(path, opts)
