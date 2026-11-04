@@ -189,7 +189,7 @@ def test_update_notices_use_system_alert(mx_state, monkeypatch):
     from maxxing import cmd_core, deps
     sent = []
     monkeypatch.setattr(gateway, "system_alert", lambda text, loud=True: sent.append((text, loud)) or True)
-    monkeypatch.setattr(gateway, "notify_cron", lambda text: sent.append(("CRONS", text)))
+    monkeypatch.setattr(gateway, "notify_cron_report", lambda *a, **k: sent.append(("CRONS", a)))
     cmd_core._notify("Harness Maxxing 9 did not start and was rolled back")
     assert sent[-1] == ("Harness Maxxing 9 did not start and was rolled back", True)
     assert cmd_core.notify_update({"latest": "9", "current": "8", "behind": 3}) is True

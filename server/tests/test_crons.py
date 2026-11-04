@@ -211,7 +211,8 @@ def test_crontab_without_file_uses_crontab_command(org, monkeypatch):
 def test_run_shell_success_failure_timeout(org, monkeypatch):
     sent = []
     gw = types.ModuleType("maxxing.telegram.gateway")
-    gw.notify_cron = sent.append
+    gw.notify_cron_report = lambda header, body="", markdown=True, loud=True: sent.append(
+        header + ("\n" + body if body else ""))
     monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
     import maxxing.telegram as tpkg
     monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
