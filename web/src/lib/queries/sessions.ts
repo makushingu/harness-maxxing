@@ -13,6 +13,7 @@ import type {
   UploadResult,
 } from '../types'
 import { qk, unlessBus } from './keys'
+import { isAgentSession } from './agents'
 import { useMut } from './util'
 
 export const sessionsQuery = (path?: string | null, archived = false) => ({
@@ -26,8 +27,11 @@ export function prefetchSessions(qc: QueryClient) {
   return qc.prefetchQuery(sessionsQuery(undefined, false))
 }
 
+/** The user's sessions: the runs of agents are left out (they live on the Agents page, see agents.ts). */
+const withoutAgentRuns = (list: Session[]) => (list.some(isAgentSession) ? list.filter((s) => !isAgentSession(s)) : list)
+
 export function useSessions(path?: string | null, archived = false, enabled = true) {
-  return useQuery({ ...sessionsQuery(path, archived), enabled })
+  return useQuery({ ...sessionsQuery(path, archived), enabled, select: withoutAgentRuns })
 }
 
 export function useSession(id: string | null | undefined) {

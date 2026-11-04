@@ -5,28 +5,30 @@
 //   context), "Reply" on a result goes on with that result's session (same context, same session);
 // - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
 //   webhook address, what came in, test), guards, memory, advanced settings (a sheet).
-// Opening the page marks its results as read (POST /seen).
+// Opening the page marks its results as read (POST /seen). Its runs open in place (RunView), never in Sessions.
 import * as React from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Pencil, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, Download, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
-import { useAgent, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile } from '@/lib/queries'
+import {
+  agentExportUrl, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
+} from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Cron } from '@/lib/types'
 import { fmtDate, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useMediaQuery } from '@/stores/media'
+import { useCompact, useMediaQuery } from '@/stores/media'
 import {
   Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { Page, PageHeader } from '@/components/shell/Page'
-import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown, sessionsUrl } from '@/pages/sessions/util'
+import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings } from './AgentSettings'
-import { AgentsOff, costLine, reasonText, useAgentsOn } from './parts'
+import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -41,15 +43,18 @@ export default function AgentPage() {
   const { project = '', topic = '', name = '' } = useParams()
   const path = `projects/${project}/topics/${topic}/agents/${name}`
   const { data: a, isLoading, error, refetch } = useAgent(on === false ? null : path)
-  const wide = useMediaQuery('(min-width: 1024px)')
+  // The profile sits on the right of the conversation when there is room next to the list of agents.
+  const wide = useMediaQuery('(min-width: 1280px)')
+  const touch = useCompact()
   const [profile, setProfile] = React.useState(false)
-  const back = (
+  // On a phone the agent is full screen: back to the list (on a computer the list stays on the left).
+  const back = touch ? (
     <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
       <Link to="/agents">
         <ArrowLeft />
       </Link>
     </Button>
-  )
+  ) : null
 
   if (on === false) return <AgentsOff />
   if (isLoading || on === undefined)
@@ -245,8 +250,8 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
           {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
           {waiting ? t('agents.conv.waiting', { name: a.display_name }) : t('agents.conv.working', { name: a.display_name })}
         </span>
-        <Link to={sessionsUrl({ id: sid, path: a.path })} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10">
-          <ExternalLink className="size-3" /> {waiting ? t('agents.conv.waitingOpen') : t('agents.conv.follow')}
+        <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
+          <PlayCircle className="size-3" /> {waiting ? t('agents.conv.waitingOpen') : t('agents.conv.follow')}
         </Link>
       </div>
     </div>
@@ -272,8 +277,8 @@ function ThreadMessage({
     </time>
   )
   const sessionLink = m.session && (
-    <Link to={sessionsUrl({ id: m.session, path: a.path })} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10">
-      <ExternalLink className="size-3" /> {t('agents.thread.openSession')}
+    <Link to={agentRunRoute(a.path, m.session)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
+      <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
     </Link>
   )
   const quote = answers && (
@@ -380,6 +385,7 @@ function ThreadMessage({
             </button>
           )}
           {sessionLink}
+          {m.kind === 'result' && m.session && <ContinueButton agent={a} sid={m.session} variant="link" />}
         </div>
       </div>
     </div>
@@ -390,7 +396,6 @@ const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')
 
 function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void }) {
   const t = useT()
-  const navigate = useNavigate()
   const run = useRunAgent()
   const [text, setText] = React.useState('')
   const input = React.useRef<HTMLTextAreaElement>(null)
@@ -453,11 +458,6 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <Tooltip content={t('agents.openSessionTip')}>
-              <Button size="icon-sm" variant="ghost" className="text-muted-foreground" onClick={() => navigate(`/sessions?path=${encodeURIComponent(a.path)}&new=1`)} aria-label={t('agents.openSession')} data-testid="agent-open-session">
-                <ExternalLink />
-              </Button>
-            </Tooltip>
             <Button size="icon-sm" onClick={submit} disabled={!text.trim()} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
@@ -502,6 +502,8 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
         </div>
       </div>
 
+      <SandboxBanner agent={a} />
+
       <PanelSection title={t('agents.panel.role')}>
         <RoleEditor agent={a} />
       </PanelSection>
@@ -538,6 +540,9 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
                 <ShieldCheck className="size-3.5 shrink-0" /> {t('agents.panel.outsideAsks')}
               </span>
             ))}
+          <span className={cn('flex items-center gap-1.5', a.sandbox ? 'text-muted-foreground' : 'text-warning')} data-testid="agent-sandbox-line">
+            <Lock className="size-3.5 shrink-0" /> {a.sandbox ? t('agents.panel.sandboxOn') : t('agents.panel.sandboxOff')}
+          </span>
           <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
             <KeyRound className="size-3.5 shrink-0" />
             <span className="truncate">{a.keys.length ? t('agents.panel.keys', { keys: a.keys.join(', ') }) : t('agents.panel.noKeys')}</span>
@@ -563,6 +568,13 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           <span className="truncate text-xs text-muted-foreground">{t('agents.panel.advancedDesc')}</span>
         </span>
       </button>
+      <Tooltip content={t('agents.export.tip')}>
+        <Button asChild variant="ghost" size="sm" className="-mt-4 justify-self-start text-muted-foreground">
+          <a href={agentExportUrl(a.path)} download={`${a.name}.md`} data-testid="agent-export">
+            <Download /> {t('agents.export.button')}
+          </a>
+        </Button>
+      </Tooltip>
 
       <Sheet open={advanced} onOpenChange={setAdvanced}>
         <SheetContent side="right">
@@ -584,6 +596,26 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           </SheetBody>
         </SheetContent>
       </Sheet>
+    </div>
+  )
+}
+
+/** Sandbox on but this server cannot run it (bwrap, socat, the AppArmor profile...): its runs stop - say so. */
+function SandboxBanner({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  const { data } = useAgentSandbox(a.sandbox)
+  if (!a.sandbox || !data || data.ok) return null
+  return (
+    <div role="alert" className="grid gap-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs" data-testid="agent-sandbox-missing">
+      <span className="flex items-center gap-1.5 font-medium text-destructive">
+        <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.sandbox.missingTitle')}
+      </span>
+      <span>
+        {t('agents.sandbox.missingDesc')
+          .split('`')
+          .map((x, i) => (i % 2 ? <code key={i} className="rounded bg-muted px-1 font-mono text-[11px]">{x}</code> : x))}
+      </span>
+      {data.missing.length > 0 && <span className="text-muted-foreground">{t('agents.sandbox.missingList', { list: data.missing.join(', ') })}</span>}
     </div>
   )
 }

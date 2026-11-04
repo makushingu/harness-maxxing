@@ -3,13 +3,14 @@
 // (GET /api/agents/templates) fills the steps below, to check and create. "Set it up by hand" = 3 steps:
 // Where (project, then topic) -> Who (name, face, role, model, permission mode) -> When (first triggers, guards).
 // The agent is created at the end; its cron and webhook triggers are added right after (webhook: its URL shown).
+// "Import a Claude Code agent file": a .claude/agents/<name>.md file (picked or pasted) becomes an agent of a topic.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, Clock, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Clock, FileUp, Rss, Send, ShieldCheck, Sparkles, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { isApiError } from '@/lib/api'
-import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useCreateSession, useWorkspace } from '@/lib/queries'
-import type { Agent, AgentAvatar, AgentLimits, AgentTemplate, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
+import { errorMessage, isApiError } from '@/lib/api'
+import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useCreateSession, useImportAgent, useWorkspace } from '@/lib/queries'
+import type { Agent, AgentAvatar, AgentImportResult, AgentLimits, AgentTemplate, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
 import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
@@ -103,6 +104,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
   const [step, setStep] = React.useState<Step>(0)
   // First the one-sentence way (Claude prepares the agent in a session); "Set it up by hand" = the steps below.
   const [manual, setManual] = React.useState(false)
+  const [importing, setImporting] = React.useState(false)
   const [tpl, setTpl] = React.useState<AgentTemplate | null>(null)
   const [f, setF] = React.useState<Form>(() => fresh(topicPath))
   const [errors, setErrors] = React.useState<{ name?: string; form?: string; schedule?: string }>({})
@@ -114,6 +116,7 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
       setF(fresh(topicPath))
       setStep(0)
       setManual(false)
+      setImporting(false)
       setTpl(null)
       setErrors({})
       setMade(null)
@@ -185,8 +188,8 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="md:w-[560px]" data-testid="agent-create">
         <SheetHeader>
-          <SheetTitle>{made ? t('agents.create.madeTitle', { name: made.agent.display_name }) : t('agents.create.title')}</SheetTitle>
-          <SheetDescription>{made ? t('agents.create.madeDesc') : manual ? t('agents.create.desc') : t('agents.quick.desc')}</SheetDescription>
+          <SheetTitle>{made ? t('agents.create.madeTitle', { name: made.agent.display_name }) : importing ? t('agents.import.title') : t('agents.create.title')}</SheetTitle>
+          <SheetDescription>{made ? t('agents.create.madeDesc') : importing ? t('agents.import.desc') : manual ? t('agents.create.desc') : t('agents.quick.desc')}</SheetDescription>
           {!made && manual && (
             <ol className="mt-2 flex items-center gap-1.5 text-xs" aria-label={t('agents.create.steps')}>
               {STEPS.map((label, i) => (
@@ -208,10 +211,20 @@ export function CreateAgent({ open, onOpenChange, topicPath }: { open: boolean; 
           )}
         </SheetHeader>
         <SheetBody className="grid content-start gap-5">
-          {!made && !manual ? (
+          {!made && importing ? (
+            <ImportAgentFile
+              topicPath={topicPath}
+              onBack={() => setImporting(false)}
+              onOpen={(a) => {
+                onOpenChange(false)
+                navigate(agentRoute(a))
+              }}
+            />
+          ) : !made && !manual ? (
             <QuickCreate
               topicPath={topicPath}
               onManual={() => setManual(true)}
+              onImport={() => setImporting(true)}
               onTemplate={(tp) => {
                 const next = fromTemplate(tp, topicPath)
                 setF(next)
@@ -402,7 +415,7 @@ function TriggerToggle({
 /** "What should it do, and when?" in a sentence: a new session in the chosen topic gets the request, and Claude
  * (skill maxxing-agents) infers the rest, asks what is missing and creates the agent. Below, the gallery of
  * ready-made agents: one fills the steps of the form. */
-function QuickCreate({ topicPath, onManual, onTemplate, onDone }: { topicPath?: string; onManual: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void }) {
+function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone }: { topicPath?: string; onManual: () => void; onImport: () => void; onTemplate: (t: AgentTemplate) => void; onDone: () => void }) {
   const t = useT()
   const lang = useLang()
   const { data: templates } = useAgentTemplates(lang)
@@ -484,9 +497,108 @@ function QuickCreate({ topicPath, onManual, onTemplate, onDone }: { topicPath?: 
           </div>
         </div>
       )}
-      <div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <Button variant="link" className="h-auto p-0" onClick={onManual} data-testid="agent-manual">
           {t('agents.quick.manual')}
+        </Button>
+        <Button variant="link" className="h-auto p-0" onClick={onImport} data-testid="agent-import">
+          <FileUp /> {t('agents.import.link')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/** The topics an agent can live in (the system project aside), as select options. */
+function useTopicOptions() {
+  const { data: ws } = useWorkspace()
+  return React.useMemo(
+    () => (ws?.projects || []).filter((p) => p.name !== 'system').flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` }))),
+    [ws],
+  )
+}
+
+/** A Claude Code agent file (.claude/agents/<name>.md: front matter + prompt), picked or pasted, becomes an agent of a
+ *  topic (POST /api/agents/import). Its fields with no equivalent (mcpServers, memory...) are listed after. */
+function ImportAgentFile({ topicPath, onBack, onOpen }: { topicPath?: string; onBack: () => void; onOpen: (a: Agent) => void }) {
+  const t = useT()
+  const mask = useMask()
+  const topics = useTopicOptions()
+  const imp = useImportAgent()
+  const [where, setWhere] = React.useState(topicPath || '')
+  const [text, setText] = React.useState('')
+  const [file, setFile] = React.useState('')
+  const [name, setName] = React.useState('')
+  const [done, setDone] = React.useState<AgentImportResult | null>(null)
+  const pick = async (f: File | undefined) => {
+    if (!f) return
+    setFile(f.name)
+    setText(await f.text())
+    // the file name is the agent's name in Claude Code: offered as the folder
+    if (!name) setName(slugify(f.name.replace(/\.md$/i, '')).slice(0, 48))
+  }
+  const err = imp.error ? (isApiError(imp.error) && imp.error.code === 'bad_file' ? t('agents.import.badFile', { why: errorMessage(imp.error) }) : errorMessage(imp.error)) : null
+  const go = () =>
+    imp.mutate(
+      { topic_path: where, markdown: text, name: name.trim() || undefined },
+      {
+        onSuccess: (a) => {
+          toast.success(t('agents.create.done', { name: a.display_name }))
+          if (a.ignored?.length) setDone(a)
+          else onOpen(a)
+        },
+      },
+    )
+  if (done)
+    return (
+      <div className="grid gap-4" data-testid="agent-import-done">
+        <Callout tone="info">{t('agents.import.ignored', { fields: done.ignored.join(', ') })}</Callout>
+        <div>
+          <Button onClick={() => onOpen(done)}>
+            {t('agents.create.openAgent')} <ArrowRight />
+          </Button>
+        </div>
+      </div>
+    )
+  return (
+    <div className="grid gap-4" data-testid="agent-import-form">
+      <FormField label={t('agents.import.file')} hint={t('agents.import.fileHint')}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <label className="cursor-pointer">
+              <FileUp /> {t('agents.import.pick')}
+              <input type="file" accept=".md,text/markdown,text/plain" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} data-testid="agent-import-input" />
+            </label>
+          </Button>
+          {file && <span className="truncate text-xs text-muted-foreground">{mask(file, 8)}</span>}
+        </div>
+      </FormField>
+      <FormField label={t('agents.import.paste')}>
+        <Textarea
+          minRows={6}
+          maxRows={16}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={'---\nname: reviewer\ndescription: Reviews the code after each change\ntools: Read, Grep, Glob\n---\nYou are a careful code reviewer...'}
+          className="font-mono text-[13px]"
+          data-testid="agent-import-text"
+        />
+      </FormField>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField label={t('agents.import.topic')}>
+          <Select value={where || undefined} onValueChange={setWhere} placeholder={t('agents.create.pickTopic')} options={topics.map((x) => ({ value: x.value, label: mask(x.label, 8) }))} />
+        </FormField>
+        <FormField label={t('agents.import.name')} hint={t('agents.import.nameHint')}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={48} className="font-mono" />
+        </FormField>
+      </div>
+      {err && <Callout tone="error">{err}</Callout>}
+      <div className="flex gap-2">
+        <Button variant="ghost" onClick={onBack}>
+          <ArrowLeft /> {t('common.back')}
+        </Button>
+        <Button className="ml-auto" onClick={go} disabled={!where || !text.trim()} loading={imp.isPending} data-testid="agent-import-go">
+          <FileUp /> {t('agents.import.go')}
         </Button>
       </div>
     </div>

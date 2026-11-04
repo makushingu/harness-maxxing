@@ -1,8 +1,7 @@
-// Feature page "Agents" (/agents, Settings -> Features -> agents_page): lasting roles living in a topic folder
-// (projects/<p>/topics/<t>/agents/<name>/), started by hand, by a cron, a webhook, a feed event or Telegram.
-// One card per agent, grouped by project; the agent's own page is /agents/<project>/<topic>/<name>.
+// The overview of the Agents page (/agents with no agent selected, the right pane of AgentsLayout): one card per
+// agent, "To read" first, then grouped by project; the agent's own page is /agents/<project>/<topic>/<name>.
 import * as React from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useNavigate } from 'react-router'
 import { Bot, Play, Plus, ShieldCheck } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentRoute, useAgents, useCrons, usePatchAgent, useWorkspace } from '@/lib/queries'
@@ -13,26 +12,14 @@ import { cn } from '@/lib/utils'
 import { Badge, Button, EmptyState, Select, Sensitive, Skeleton, StatusDot, Switch, Tooltip, useMask } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon } from './Avatar'
-import { CreateAgent } from './CreateAgent'
-import { AgentsOff, TriggerChips, costLine, firstLine, reasonText, useAgentsOn, useRunNow } from './parts'
+import { TriggerChips, costLine, firstLine, reasonText, useAgentsOn, useRunNow } from './parts'
 
-export default function AgentsPage() {
+export function AgentsOverview({ onNew }: { onNew: () => void }) {
   const t = useT()
   const on = useAgentsOn()
   const { data, isLoading, error, refetch } = useAgents(on !== false)
   const { data: crons } = useCrons()
   const { data: ws } = useWorkspace()
-  const [params, setParams] = useSearchParams()
-  const creating = params.get('new') === '1'
-  const setCreating = (v: boolean) =>
-    setParams(
-      (p) => {
-        if (v) p.set('new', '1')
-        else p.delete('new')
-        return p
-      },
-      { replace: true },
-    )
   const [project, setProject] = React.useState('_all')
   const mask = useMask()
 
@@ -54,11 +41,9 @@ export default function AgentsPage() {
   }, [shown])
   const emoji = (p: string) => ws?.projects.find((x) => x.name === p)?.emoji || ''
 
-  if (on === false) return <AgentsOff />
-
   return (
     <Page
-      title={t('agents.title')}
+      title={t('agents.side.overview')}
       description={t('agents.desc')}
       actions={
         <>
@@ -71,7 +56,7 @@ export default function AgentsPage() {
               options={[{ value: '_all', label: t('agents.allProjects') }, ...projects.map((p) => ({ value: p, label: mask(p, 6) }))]}
             />
           )}
-          <Button size="sm" onClick={() => setCreating(true)} data-testid="agent-new">
+          <Button size="sm" onClick={onNew} data-testid="agent-new">
             <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
           </Button>
         </>
@@ -105,7 +90,7 @@ export default function AgentsPage() {
             </span>
           }
           action={
-            <Button onClick={() => setCreating(true)}>
+            <Button onClick={onNew}>
               <Plus /> {t('agents.create')}
             </Button>
           }
@@ -139,7 +124,6 @@ export default function AgentsPage() {
           ))}
         </div>
       )}
-      <CreateAgent open={creating} onOpenChange={setCreating} />
     </Page>
   )
 }

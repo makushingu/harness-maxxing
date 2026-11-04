@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
-import { useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
+import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
 import type { Session } from '@/lib/types'
 import { PageHeader } from '@/components/shell/Page'
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, Kbd, MOD, Tooltip } from '@/components/ui'
@@ -24,7 +24,7 @@ import { LayoutDropBar, LayoutPicker } from './LayoutPicker'
 import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, WhereBadge, StripContext, type ColumnVariant, type Place } from './Column'
 import { PreviewProvider } from './FilePreview'
 import { HudBar } from './Hud'
-import { topicLabel, useIsMobile } from './util'
+import { parseAgentPath, topicLabel, useIsMobile } from './util'
 import { useTouchNav } from '@/components/shell/TouchNav'
 import { enter, MaxxingDriver, promoteColumn, useMaxxing, useMaxxingEnabled } from './maxxing'
 import { MaxxingControls } from './MaxxingMeter'
@@ -86,11 +86,24 @@ function Workspace() {
     prefillDraft(`new:${path}`, prompt)
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A run of an agent (a link from Telegram, a notification, the feed, search) opens on the Agents page, not here.
+  const askedSid = params.get('session')
+  const { data: askedSession } = useSessionSeeded(askedSid)
+  const agentRun = askedSid ? (parseAgentPath(paramPath) ? paramPath : askedSession && isAgentSession(askedSession) ? askedSession.path : null) : null
+  React.useEffect(() => {
+    if (!askedSid || !agentRun) return
+    const st = useSessionsUI.getState()
+    const col = st.cols.find((c) => c.kind === 'session' && c.id === askedSid)
+    if (col) st.close(col.key)
+    navigate(agentRunRoute(agentRun, askedSid), { replace: true })
+  }, [askedSid, agentRun]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // URL → state (intents). Idempotent: re-running on our own URL writes is a no-op.
   React.useEffect(() => {
     const st = useSessionsUI.getState()
     const sid = params.get('session')
     const path = params.get('path')
+    if (sid && parseAgentPath(path)) return // redirected above
     for (const id of (params.get('open') || '').split(',').filter(Boolean)) st.openSession(id, { focus: false })
     if (sid) st.openSession(sid)
     // A badge was clicked: the tree shows those sessions (and comes back if it was folded away).
@@ -114,7 +127,7 @@ function Workspace() {
 
   // State → URL (desktop): the focused column + the other open sessions, replace-only.
   React.useEffect(() => {
-    if (mobile) return
+    if (mobile || agentRun) return // leaving for the Agents page (above)
     const next = new URLSearchParams()
     if (focusedCol?.kind === 'session') {
       const p = focusedSession?.path ?? paramPath

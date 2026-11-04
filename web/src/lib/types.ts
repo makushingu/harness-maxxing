@@ -98,6 +98,13 @@ export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source:
 export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
 export type AgentThreadKind = 'note' | 'run' | 'result' | 'skip' | 'approval'
 export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string }
+export type AgentRuleTool = 'Bash' | 'Write' | 'Edit' | 'WebFetch' | '*'
+/** "Refuse <tool> when it contains <match>", `reason` shown to Claude. */
+export type AgentRule = { tool: AgentRuleTool; match: string; reason: string }
+/** GET /api/agents/sandbox: what the sandbox needs on this server (missing among bwrap, socat, apparmor, linux). */
+export type AgentSandboxStatus = { ok: boolean; missing: string[] }
+/** POST /api/agents/import: the agent made from a Claude Code agent file; `ignored` = its fields with no equivalent. */
+export type AgentImportResult = Agent & { ignored: string[] }
 /** An agent = a folder projects/<p>/topics/<t>/agents/<name>/ (CLAUDE.md = its role, memory.md, agent.json). */
 export type Agent = {
   /** projects/<p>/topics/<t>/agents/<name>: also a session path */
@@ -121,6 +128,17 @@ export type Agent = {
   trust_outside: boolean
   /** the Keys vault entries its turns see (none by default) */
   keys: string[]
+  /** its commands write only in its folder (+ `writable`), cannot read the server's secrets, reach only `domains`;
+   *  its runs never use bypass (bypass becomes acceptEdits). New agents: on. */
+  sandbox: boolean
+  /** hosts its shell commands may reach (sandbox), e.g. api.github.com, *.example.com */
+  domains: string[]
+  /** folders of the topic it may write in besides its own (`.` = the whole topic) */
+  writable: string[]
+  /** tool calls refused when they contain a text (max 20) */
+  rules: AgentRule[]
+  /** callable by Claude as a subagent from the normal sessions of its topic */
+  subagent: boolean
   limits: AgentLimits
   triggers: AgentTrigger[]
   created: number
@@ -177,6 +195,11 @@ export type AgentInput = {
   approvals?: boolean
   trust_outside?: boolean
   keys?: string[]
+  sandbox?: boolean
+  domains?: string[]
+  writable?: string[]
+  rules?: AgentRule[]
+  subagent?: boolean
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
 }
