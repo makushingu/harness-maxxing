@@ -152,6 +152,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `SecretInput onValueChange` switches to a masked textarea (`-webkit-text-security`) when a paste or the value
   has line breaks (an `<input>` strips them). `maxxing keys set` keeps the final newline of a multi-line value;
   `get` does not add a second one.
+- Files listing DnD: `fileDrag.paths` (the selection when the dragged entry is in it, `fileDrag.selection` kept by
+  Listing) + `droppedPaths()`; `EntryActions.moveTo(from[], dir)`. Drop-upload tells folders apart with
+  `webkitGetAsEntry().isDirectory` (was `type || size > 0`, which dropped empty files) and toasts the skipped ones.
 
 ## 2.0.0-alpha.109 - 2026-11-04
 
