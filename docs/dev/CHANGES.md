@@ -6,6 +6,14 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 
+## Unreleased
+
+- Today's schedule timeline: `blocks.tsx` `laneMode` picks per lane from the px gap between its two closest events
+  (track width followed by a ResizeObserver): dots from 16 px, 2-3 px bars on the exact times from 5 px, else a band
+  (success up to `now`, lane colour after; error/running still drawn as dots). The old dense band was a
+  `repeating-linear-gradient` unrelated to the real times. `widgets.MAX_PLANNED` 48 -> 144 so every-15-min jobs
+  (96 runs) send their events instead of `dense`.
+
 ## 2.0.0-alpha.108 - 2026-11-03
 
 Release of `beta` to `main`: a103 (Team friends, edits, presence) and a104 (session list rewrite) were on `beta` only

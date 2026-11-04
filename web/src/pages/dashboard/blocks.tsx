@@ -111,23 +111,121 @@ function axisLabel(at: number, span: number, lang: string) {
     : d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 }
 
+/** Width in px of a lane's track (the second grid column), followed on resize. */
+function useTrackWidth(ref: React.RefObject<HTMLDivElement | null>) {
+  const [w, setW] = React.useState(0)
+  React.useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const read = () => setW(el.querySelector<HTMLElement>('[data-track]')?.clientWidth || 0)
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+  return w
+}
+
+type Lane = TimelineBlock['lanes'][number]
+
+/** How a lane is drawn, from the room between its closest two events: round dots while they stay apart,
+ *  thin bars on their exact times when dots would touch, a band when even bars would merge. */
+function laneMode(lane: Lane, b: TimelineBlock, width: number): { mode: 'dots' | 'bars' | 'band'; px: number } {
+  if (lane.dense) return { mode: 'band', px: 0 }
+  const at = lane.events.map((e) => e.at).sort((x, y) => x - y)
+  let gap = Infinity
+  for (let k = 1; k < at.length; k++) if (at[k] - at[k - 1] > 0) gap = Math.min(gap, at[k] - at[k - 1])
+  if (gap === Infinity || !width) return { mode: 'dots', px: Infinity }
+  const px = (gap / (b.end - b.start)) * width
+  return { mode: px >= 16 ? 'dots' : px >= 5 ? 'bars' : 'band', px }
+}
+
+function LaneTrack({ lane, b, i, width }: { lane: Lane; b: TimelineBlock; i: number; width: number }) {
+  const lang = useLang()
+  const span = b.end - b.start
+  const color = lane.color || 'var(--color-primary)'
+  const { mode, px } = laneMode(lane, b, width)
+  const shown = mode === 'band' ? lane.events.filter((e) => e.state === 'error' || e.state === 'running') : lane.events
+  const now = b.now != null ? pct(b.now, b) : null
+  const toneOf = (st: string) => (st === 'error' ? 'var(--color-destructive)' : st === 'ok' ? 'var(--color-success)' : color)
+  const vars = (e: { at: number }) => ({ '--i': Math.min(i, 10), '--x': Math.round(pct(e.at, b)), left: `${pct(e.at, b)}%` })
+  return (
+    <div data-track className="relative h-7 rounded-md bg-muted/40">
+      {mode !== 'band' && (
+        <div
+          className="mx-sweep absolute inset-x-1 top-1/2 h-px -translate-y-1/2"
+          style={{ background: `color-mix(in oklab, ${color} 35%, transparent)`, '--i': Math.min(i, 10) } as React.CSSProperties}
+        />
+      )}
+      {mode === 'band' && (
+        <div
+          className="mx-sweep absolute inset-x-1 top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+          style={{
+            '--i': Math.min(i, 10),
+            background:
+              now == null
+                ? `color-mix(in oklab, ${color} 45%, transparent)`
+                : `linear-gradient(90deg, color-mix(in oklab, var(--color-success) 75%, transparent) ${now}%, color-mix(in oklab, ${color} 40%, transparent) ${now}%)`,
+          } as React.CSSProperties}
+        />
+      )}
+      {shown.map((e, j) => {
+        const st = e.state || 'ok'
+        const tone = toneOf(st)
+        const title = e.label || axisLabel(e.at, span, lang)
+        if (mode === 'bars' && st !== 'running')
+          return (
+            <span
+              key={j}
+              title={title}
+              className={cn('mx-dot-in absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full', px >= 8 ? 'w-[3px]' : 'w-0.5', st === 'error' ? 'h-4' : 'h-3')}
+              style={{
+                ...vars(e),
+                background: st === 'planned' ? `color-mix(in oklab, ${tone} 55%, transparent)` : tone,
+                boxShadow: st === 'planned' ? undefined : `0 0 6px color-mix(in oklab, ${tone} 50%, transparent)`,
+              } as React.CSSProperties}
+            />
+          )
+        return (
+          <span
+            key={j}
+            title={title}
+            className="mx-dot-in absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              ...vars(e),
+              background: st === 'planned' ? 'var(--color-card)' : tone,
+              border: `2px solid ${tone}`,
+              boxShadow: st === 'planned' ? undefined : `0 0 8px color-mix(in oklab, ${tone} 60%, transparent)`,
+            } as React.CSSProperties}
+          >
+            {st === 'running' && (
+              <span className="absolute inset-0 rounded-full" style={{ background: tone, animation: 'mx-ping 1.4s ease-out infinite' }} />
+            )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 const laneGrid = 'grid grid-cols-[minmax(0,7.5rem)_1fr] gap-3 sm:grid-cols-[minmax(0,10rem)_1fr]'
 
 /** One lane per row on a start..end axis (a 24 h span is labelled 00:00..24:00 from `start`, so the
  *  server's time zone wins over the browser's): filled dots = done (green ok / red failed), hollow = planned,
- *  pulsing = running, a glowing line = now. Dense lanes (too many runs to tell apart) draw a band. */
+ *  pulsing = running, a glowing line = now. Runs too close for dots draw thin bars at their times, and lanes
+ *  too dense even for bars (or `dense`) draw a band: done up to now, planned after. */
 function Timeline({ b }: { b: TimelineBlock }) {
   const lang = useLang()
+  const ref = React.useRef<HTMLDivElement>(null)
+  const width = useTrackWidth(ref)
   const span = b.end - b.start
   if (!(span > 0)) return null
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => b.start + f * span)
   const now = b.now != null && b.now >= b.start && b.now <= b.end ? pct(b.now, b) : null
   return (
     <div className="grid gap-1.5">
-      <div className="relative grid gap-1">
+      <div ref={ref} className="relative grid gap-1">
         {b.lanes.map((lane, i) => {
-          const color = lane.color || 'var(--color-primary)'
-          const shown = lane.dense ? lane.events.filter((e) => e.state === 'error' || e.state === 'running') : lane.events
           const name = (
             <span className="block truncate text-[13px] font-medium text-foreground/90">
               <Sensitive length={8}>{lane.name}</Sensitive>
@@ -145,44 +243,7 @@ function Timeline({ b }: { b: TimelineBlock }) {
                 )}
                 {lane.sub && <span className="block truncate text-[11px] text-muted-foreground">{lane.sub}</span>}
               </div>
-              <div className="relative h-7 rounded-md bg-muted/40">
-                <div
-                  className="mx-sweep absolute inset-x-1 top-1/2 h-px -translate-y-1/2"
-                  style={{ background: `color-mix(in oklab, ${color} 35%, transparent)`, '--i': Math.min(i, 10) } as React.CSSProperties}
-                />
-                {lane.dense && (
-                  <div
-                    className="mx-sweep absolute inset-x-0 inset-y-2.5 rounded-full"
-                    style={{
-                      '--i': Math.min(i, 10),
-                      background: `repeating-linear-gradient(90deg, color-mix(in oklab, ${color} 60%, transparent) 0 2px, transparent 2px 6px)`,
-                    } as React.CSSProperties}
-                  />
-                )}
-                {shown.map((e, j) => {
-                  const st = e.state || 'ok'
-                  const tone = st === 'error' ? 'var(--color-destructive)' : st === 'ok' ? 'var(--color-success)' : color
-                  return (
-                    <span
-                      key={j}
-                      title={e.label || axisLabel(e.at, span, lang)}
-                      className="mx-dot-in absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                      style={{
-                        '--i': Math.min(i, 10),
-                        '--x': Math.round(pct(e.at, b)),
-                        left: `${pct(e.at, b)}%`,
-                        background: st === 'planned' ? 'var(--color-card)' : tone,
-                        border: `2px solid ${tone}`,
-                        boxShadow: st === 'planned' ? undefined : `0 0 8px color-mix(in oklab, ${tone} 60%, transparent)`,
-                      } as React.CSSProperties}
-                    >
-                      {st === 'running' && (
-                        <span className="absolute inset-0 rounded-full" style={{ background: tone, animation: 'mx-ping 1.4s ease-out infinite' }} />
-                      )}
-                    </span>
-                  )
-                })}
-              </div>
+              <LaneTrack lane={lane} b={b} i={i} width={width} />
             </div>
           )
         })}
