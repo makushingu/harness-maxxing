@@ -8,9 +8,10 @@ from __future__ import annotations
 import asyncio
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from .. import feed, security, twofactor
 from ..security import require_auth
 from ..telegram import gateway
 
@@ -120,6 +121,13 @@ async def test():
 
 
 @router.delete("")
-async def forget():
+async def forget(request: Request):
+    was_on = twofactor.enabled()
+    if was_on:                      # unlinking turns two-step sign-in off: say so while the bridge still answers
+        await asyncio.to_thread(twofactor.notify, "unlinked", True)
     await gateway.forget()
+    if was_on:
+        feed.system("Telegram unlinked: two-step sign-in turned off",
+                    f"{security.client_key(request)} · {request.headers.get('user-agent', '?')[:90]}",
+                    "warning", "security")
     return {"ok": True}

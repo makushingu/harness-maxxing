@@ -30,6 +30,7 @@ class TwoFactorIn(BaseModel):
 
 class TwoFactorSet(BaseModel):
     enabled: bool
+    password: str | None = None         # the current password: needed to turn it off
 
 
 class PasswordIn(BaseModel):
@@ -165,9 +166,15 @@ async def two_factor(body: TwoFactorIn, request: Request, response: Response):
 
 @router.put("/two-factor", dependencies=[Depends(security.require_auth)])
 async def set_two_factor(body: TwoFactorSet, request: Request):
-    """On = a challenge first (approve it in Telegram, then poll POST /two-factor); off = at once."""
+    """On = a challenge first (approve it in Telegram, then poll POST /two-factor); off = the current password (a
+    stolen cookie alone cannot remove the second step), then a notice in Telegram and the feed."""
     if not body.enabled:
+        if not twofactor.is_on():
+            return {"ok": True, "enabled": False}
+        await _check_current(request, body.password or "")
+        await asyncio.to_thread(twofactor.notify, "off_ui")         # before: the bridge still answers
         await asyncio.to_thread(twofactor.set_on, False)
+        _alert(request, "Two-step sign-in turned off", loud=True)
         bus.invalidate("telegram")
         return {"ok": True, "enabled": False}
     if not twofactor.available():
@@ -193,18 +200,23 @@ async def logout(request: Request, response: Response):
     return {"ok": True}
 
 
-@router.post("/password", dependencies=[Depends(security.require_auth)])
-async def change_password(body: PasswordIn, request: Request, response: Response):
+async def _check_current(request: Request, password: str) -> None:
+    """The current password of a signed-in request, or 429 / 401."""
     # a stolen cookie must not become a way to guess the password: same throttle as the sign-in, own counter
     key = "pw:" + security.client_key(request)
     refusal, _ = security.begin_attempt(key)
     if refusal:
         raise HTTPException(429, detail={"error": "throttled", "message": "Too many attempts - try again in 15 min"})
-    ok = await _verify(body.current)
+    ok = await _verify(password)
     delay = security.end_attempt(key, ok)
     if not ok:
         await asyncio.sleep(delay)
         raise HTTPException(401, detail={"error": "bad_password", "message": "Current password is wrong"})
+
+
+@router.post("/password", dependencies=[Depends(security.require_auth)])
+async def change_password(body: PasswordIn, request: Request, response: Response):
+    await _check_current(request, body.current)
     _check_strength(body.new)
     trusted = twofactor.device_trusted(request.cookies.get(twofactor.DEVICE_COOKIE))
     await asyncio.to_thread(security.set_password, body.new)                 # forgets every trusted browser too
