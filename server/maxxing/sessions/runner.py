@@ -249,6 +249,7 @@ class Runner:
                                     "attachments": item.get("attachments") or [],
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
+                                    **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
                                     "at": time.time()})
         if voices:
             heard, err = self._voice(item, voices)
