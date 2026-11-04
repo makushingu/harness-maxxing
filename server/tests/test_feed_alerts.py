@@ -188,7 +188,9 @@ def test_health_issues_in_the_feed(client, mx, monkeypatch):
     ev = feed.find("health:d1")
     assert ev["source"] == "health" and ev["level"] == "error" and ev["actions"][0]["id"] == "seen"
     assert feed.find("health:c1") is None                   # failed jobs are already in the feed
+    assert client.get("/api/feed", params={"pending": True}).json()["pending"] == 1
     assert client.post(f"/api/feed/{ev['id']}/act/seen").json()["event"]["read"] is True and seen == ["d1"]
+    assert client.get("/api/feed", params={"pending": True}).json()["pending"] == 0     # seen: nothing to do
     issues[0]["text"] = "Disk 97 % full"
     health.sync_feed()
     assert feed.find("health:d1")["title"] == "Disk 97 % full"
