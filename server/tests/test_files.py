@@ -260,6 +260,28 @@ def test_thumb_and_preview_requests_for_the_same_image_share_one_render(client, 
     assert F._nice()[1:] == ["-n", "10"] or not shutil.which("nice")
 
 
+def test_a_file_rewritten_during_its_render_gets_its_own_render(client, mx, monkeypatch):
+    """A thumbnail asked while the file is still being written, then again once it is done: the second request
+    renders the new version instead of sharing the first render (a video still being written would fail it)."""
+    import threading
+    import time
+    runs = mx["tmp"] / "runs"
+    bindir = _fake_ffmpeg(mx["tmp"], f"echo run >> {runs}\nsleep 1\nprintf 'RIFFWEBP-image' > \"$out\"\n")
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    img = mx["files"] / "render.png"
+    img.write_bytes(b"\x89PNG-partial")
+    out = {}
+    t = threading.Thread(target=lambda: out.setdefault("a", client.get("/api/files/thumb", params={"path": str(img), "w": 320})))
+    t.start()
+    time.sleep(0.3)
+    img.write_bytes(b"\x89PNG-done")
+    os.utime(img, ns=(time.time_ns() + 10**9, time.time_ns() + 10**9))
+    out["b"] = client.get("/api/files/thumb", params={"path": str(img), "w": 320})
+    t.join()
+    assert out["a"].status_code == out["b"].status_code == 200
+    assert runs.read_text() == "run\nrun\n"
+
+
 def test_list_and_search_survive_a_non_utf8_name(client, mx):
     (mx["files"] / "ok.txt").write_text("x")
     open(os.fsencode(str(mx["files"])) + b"/caf\xe9.txt", "wb").close()      # Latin-1 name (zip, SMB copy)
