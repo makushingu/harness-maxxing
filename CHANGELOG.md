@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.109 - 2026-11-04
+
+Changed (dashboard):
+- **Today's schedule** draws a job's runs as round dots only when they stay well apart. A job that runs more often
+  (every 30 or 15 minutes) gets thin bars, one per run at its exact time, instead of dots that touch or a band that
+  did not match the real times. A job that runs about every minute gets a band: done up to now, planned after.
+
 ## 2.0.0-alpha.108 - 2026-11-03
 
 This version brings to every install the Team and session list changes of 2.0.0-alpha.103 and 2.0.0-alpha.104
