@@ -157,6 +157,8 @@ export type Agent = {
   thread_unread?: number
   /** approval requests of its running sessions */
   waiting?: number
+  /** its other open, unread alerts in the Notifications (failed run, budget, runs per hour, broken trigger) */
+  alerts?: number
 }
 /** A ready-made agent of the gallery (GET /api/agents/templates): fills the creation form. */
 export type AgentTemplate = {
@@ -355,13 +357,31 @@ export type McpAddBody = { name: string; where: string; type: 'http' | 'sse' | '
 
 /* ---------------------------------------------------------------- Notifications feed */
 export type FeedLevel = 'info' | 'success' | 'warning' | 'error'
-export type FeedEvent = { id: number; at: number; source: string; level: FeedLevel; title: string; body: string; url: string; count: number; read: boolean }
-export type FeedList = { events: FeedEvent[]; more: boolean; unread: number; sources: { source: string; total: number; unread: number }[] }
+/** A button of an event: `open` follows its link, the others go to POST /api/feed/{id}/act/{id} (`seen`, `allow`, `deny`). */
+export type FeedAction = { id: string; label: string; style: 'primary' | 'danger' | 'default' | 'link' }
+export type FeedEvent = {
+  id: number
+  at: number
+  source: string
+  level: FeedLevel
+  title: string
+  body: string
+  url: string
+  count: number
+  read: boolean
+  /** Alerts (an agent's request, a server problem...): buttons, what it follows, the agent it is about, how it ended. */
+  actions?: FeedAction[]
+  ref?: string | null
+  agent?: string | null
+  resolved?: number | null
+  resolution?: string
+}
+export type FeedList = { events: FeedEvent[]; more: boolean; unread: number; pending?: number; sources: { source: string; total: number; unread: number }[] }
 export type FeedRule = 'auto' | 'off' | 'silent' | 'loud'
 export type FeedHookKind = 'stripe' | 'shopify' | 'github' | 'generic'
 export type FeedHook = { id: string; name: string; kind: FeedHookKind; created: number; url: string; has_secret: boolean }
 export type FeedSource = { source: string; label: string; builtin: boolean; rule: FeedRule; own_thread: boolean }
-export type FeedSettings = { telegram: boolean; sources: FeedSource[]; hooks: FeedHook[]; kinds: FeedHookKind[]; rules: FeedRule[] }
+export type FeedSettings = { telegram: boolean; health: boolean; sources: FeedSource[]; hooks: FeedHook[]; kinds: FeedHookKind[]; rules: FeedRule[] }
 
 /* ---------------------------------------------------------------- Import */
 export type ImportAgent = 'hermes' | 'claude-code' | 'openclaw' | 'other'

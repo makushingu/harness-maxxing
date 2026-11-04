@@ -142,6 +142,10 @@ in a file (the message names the file). See [Backup](backup).
 server is back (if you are typing, as soon as you leave the field). Otherwise reload the page; the
 app's HTML is never cached, a reload is enough.
 
+**An agent did not run.** Its page (Activity) and the [notifications](feed) say why: switched off, daily budget
+or runs per hour reached, sandbox not available on the server, a trigger without its webhook. From a terminal:
+`maxxing agents show <agent>`. See [Agents](agents#limits).
+
 **Tailscale URL stops working after a reboot.** If the Tailscale IP changed, re-run the installer
 with `ACCESS=tailscale` (or `maxxing init --bind <ip> --public-url http://<ip>:8787` and restart).
 
