@@ -1,6 +1,7 @@
-// The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name,
-// "project · topic", a status dot and its unread count. On top: "New agent", a search field and the grouping
-// (by state: waiting for you / to read / running / active / off; by project: one group per project, persisted).
+// The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name, its
+// topic, a status dot and its unread count, always grouped by project (workspace order). On top: the search field,
+// "New agent", then `nav` (the Office entry of AgentsLayout), then the state filter (All / waiting for you / to read
+// / running / active / off, with counts; empty states hidden) and the ?topic= chip.
 // On a phone it is the whole page at /agents; an agent then opens full screen.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
@@ -9,22 +10,10 @@ import { useT, type TFn } from '@/i18n'
 import { agentRoute, useAgents, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
-import { cn, store } from '@/lib/utils'
-import { Button, CountBadge, EmptyState, Input, Segmented, Sensitive, Skeleton, StatusDot, useMask } from '@/components/ui'
+import { cn } from '@/lib/utils'
+import { Button, CountBadge, EmptyState, Input, Sensitive, Skeleton, StatusDot, useMask, type DotTone } from '@/components/ui'
+import { useCompact } from '@/stores/media'
 import { AgentAvatarIcon } from './Avatar'
-
-export type AgentsGrouping = 'state' | 'project'
-const GROUPING_KEY = 'mx-agents-grouping'
-
-/** The grouping of the list, kept per browser. */
-function useGrouping(): [AgentsGrouping, (g: AgentsGrouping) => void] {
-  const [g, setG] = React.useState<AgentsGrouping>(() => (store.get(GROUPING_KEY) === 'project' ? 'project' : 'state'))
-  const set = React.useCallback((v: AgentsGrouping) => {
-    store.set(GROUPING_KEY, v)
-    setG(v)
-  }, [])
-  return [g, set]
-}
 
 export type AgentState = 'waiting' | 'unread' | 'running' | 'failed' | 'active' | 'off'
 /** One state per agent, the most pressing first. */
@@ -37,43 +26,53 @@ export function agentState(a: Agent): AgentState {
   return 'active'
 }
 
-/** Groups "by state": waiting for you, to read, running, active (failed included), off. */
-const STATE_GROUPS: { id: string; label: (t: TFn) => string; has: (s: AgentState) => boolean }[] = [
-  { id: 'waiting', label: (t) => t('agents.side.waiting'), has: (s) => s === 'waiting' },
-  { id: 'unread', label: (t) => t('agents.side.toRead'), has: (s) => s === 'unread' },
-  { id: 'running', label: (t) => t('agents.side.running'), has: (s) => s === 'running' },
-  { id: 'active', label: (t) => t('agents.side.active'), has: (s) => s === 'active' || s === 'failed' },
-  { id: 'off', label: (t) => t('agents.side.off'), has: (s) => s === 'off' },
+/** The state filter: waiting for you, to read, running, active (failed included), off. */
+type StateFilter = 'waiting' | 'unread' | 'running' | 'active' | 'off'
+const STATE_GROUPS: { id: StateFilter; tone: DotTone; label: (t: TFn) => string; has: (s: AgentState) => boolean }[] = [
+  { id: 'waiting', tone: 'warn', label: (t) => t('agents.side.waiting'), has: (s) => s === 'waiting' },
+  { id: 'unread', tone: 'unread', label: (t) => t('agents.side.toRead'), has: (s) => s === 'unread' },
+  { id: 'running', tone: 'running', label: (t) => t('agents.side.running'), has: (s) => s === 'running' },
+  { id: 'active', tone: 'ok', label: (t) => t('agents.side.active'), has: (s) => s === 'active' || s === 'failed' },
+  { id: 'off', tone: 'idle', label: (t) => t('agents.side.off'), has: (s) => s === 'off' },
 ]
 
 /** Most recent activity first (its last result or skip), then by name. */
 const byActivity = (a: Agent, b: Agent) => (b.last_run?.at || b.created || 0) - (a.last_run?.at || a.created || 0) || a.display_name.localeCompare(b.display_name)
 
 /** `empty`: shown instead of the short "No agent yet" when there is no agent at all (the touch layout, where the list
- *  is the whole page). */
-export function AgentsList({ onNew, empty, className }: { onNew: () => void; empty?: React.ReactNode; className?: string }) {
+ *  is the whole page). `nav`: entries between "New agent" and the filter (the Office). */
+export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void; empty?: React.ReactNode; nav?: React.ReactNode; className?: string }) {
   const t = useT()
   const mask = useMask()
+  const touch = useCompact()
   const { data, isLoading, error, refetch } = useAgents()
   const { data: ws } = useWorkspace()
   const [params, setParams] = useSearchParams()
-  const [grouping, setGrouping] = useGrouping()
+  const [filter, setFilter] = React.useState<StateFilter | null>(null)
   const [q, setQ] = React.useState('')
   // ?topic=<project>/<topic>: only the agents of that topic (the link from a topic's menu in Sessions).
   const topic = params.get('topic') || ''
   const ql = q.trim().toLowerCase()
 
-  const shown = React.useMemo(() => {
+  // The topic chip and the search narrow first; the state chips count what is left.
+  const matching = React.useMemo(() => {
     const all = data?.agents || []
     return all
       .filter((a) => !topic || `${a.project}/${a.topic}` === topic)
       .filter((a) => !ql || [a.display_name, a.name, a.project, a.topic, a.description].some((x) => (x || '').toLowerCase().includes(ql)))
       .sort(byActivity)
   }, [data, topic, ql])
+  const counts = React.useMemo(() => {
+    const c = {} as Record<StateFilter, number>
+    for (const g of STATE_GROUPS) c[g.id] = matching.filter((a) => g.has(agentState(a))).length
+    return c
+  }, [matching])
+  const shown = React.useMemo(() => {
+    const g = STATE_GROUPS.find((x) => x.id === filter)
+    return g ? matching.filter((a) => g.has(agentState(a))) : matching
+  }, [matching, filter])
 
   const groups = React.useMemo(() => {
-    if (grouping === 'state')
-      return STATE_GROUPS.map((g) => ({ id: g.id, label: g.label(t), emoji: '', agents: shown.filter((a) => g.has(agentState(a))) })).filter((g) => g.agents.length)
     const m = new Map<string, Agent[]>()
     for (const a of [...shown].sort((x, y) => x.topic.localeCompare(y.topic) || x.display_name.localeCompare(y.display_name))) m.set(a.project, [...(m.get(a.project) || []), a])
     // Projects in the order of the workspace (the Sessions tree order).
@@ -81,31 +80,41 @@ export function AgentsList({ onNew, empty, className }: { onNew: () => void; emp
     return [...m.entries()]
       .sort(([x], [y]) => (order.indexOf(x) + 1 || 1e9) - (order.indexOf(y) + 1 || 1e9) || x.localeCompare(y))
       .map(([p, agents]) => ({ id: p, label: mask(p, 8), emoji: ws?.projects.find((x) => x.name === p)?.emoji || '', agents }))
-  }, [grouping, shown, t, ws, mask])
+  }, [shown, ws, mask])
 
   return (
     <div className={cn('flex min-h-0 flex-col', className)} data-testid="agents-list">
-      <div className="grid shrink-0 gap-2 px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('agents.side.search')} aria-label={t('agents.side.search')} className="h-8 pl-8 text-[13px]" data-testid="agents-search" />
-          </div>
-          <Button size="sm" onClick={onNew} className="h-8 shrink-0 max-md:h-10" data-testid="agent-new-side">
-            <Plus /> <span className="max-[359px]:sr-only">{t('agents.side.new')}</span>
-          </Button>
+      <div className={cn('grid shrink-0 gap-2 px-3 pt-3', touch ? 'pb-1' : 'pb-2')}>
+        <div className="relative min-w-0">
+          <Search className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground', touch ? 'left-3 size-[18px]' : 'left-2.5 size-3.5')} />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && (setQ(''), e.currentTarget.blur())}
+            placeholder={t('agents.side.search')}
+            aria-label={t('agents.side.search')}
+            className={cn('border-0 bg-muted dark:bg-muted', touch ? 'h-11 rounded-xl pl-10' : 'h-8 rounded-lg pl-8 text-[13px]')}
+            data-testid="agents-search"
+          />
         </div>
-        <Segmented
-          size="sm"
-          value={grouping}
-          onChange={setGrouping}
-          aria-label={t('agents.side.grouping')}
-          className="w-full [&>button]:flex-1"
-          options={[
-            { value: 'state', label: t('agents.side.byState') },
-            { value: 'project', label: t('agents.side.byProject') },
-          ]}
-        />
+        <Button size="sm" onClick={onNew} className={cn('w-full', touch ? 'h-11 rounded-xl' : 'h-8')} data-testid="agent-new-side">
+          <Plus /> {t('agents.side.new')}
+        </Button>
+      </div>
+      {nav}
+      <div className="grid shrink-0 gap-2 px-3 pt-2 pb-1.5">
+        <div className={cn('flex min-w-0 gap-1.5', touch ? '-my-1 overflow-x-auto py-1' : 'flex-wrap')} role="group" aria-label={t('agents.side.filter')} data-hscroll-ok data-testid="agents-filter">
+          <button type="button" className={chip(!filter, touch)} aria-pressed={!filter} onClick={() => setFilter(null)}>
+            {t('agents.side.all')}
+            <span className="tabular-nums opacity-70">{matching.length}</span>
+          </button>
+          {STATE_GROUPS.filter((g) => counts[g.id] > 0 || filter === g.id).map((g) => (
+            <button key={g.id} type="button" className={chip(filter === g.id, touch)} aria-pressed={filter === g.id} onClick={() => setFilter(filter === g.id ? null : g.id)} data-testid={`agents-filter-${g.id}`}>
+              <StatusDot tone={g.tone} pulse={g.id === 'waiting' || g.id === 'running'} className="size-1.5" /> {g.label(t)}
+              <span className="tabular-nums opacity-70">{counts[g.id]}</span>
+            </button>
+          ))}
+        </div>
         {topic && (
           <span className="flex min-w-0 items-center gap-1 self-start rounded-full bg-secondary py-0.5 pr-0.5 pl-2.5 text-xs">
             <span className="truncate">
@@ -144,7 +153,7 @@ export function AgentsList({ onNew, empty, className }: { onNew: () => void; emp
         ) : !groups.length && empty && !data?.agents.length ? (
           empty
         ) : !groups.length ? (
-          <EmptyState compact icon={Bot} title={ql || topic ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
+          <EmptyState compact icon={Bot} title={ql || topic || filter ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
         ) : (
           groups.map((g) => (
             <section key={g.id} aria-label={g.label} className="mt-2 first:mt-0">
@@ -154,7 +163,7 @@ export function AgentsList({ onNew, empty, className }: { onNew: () => void; emp
                 <span className="font-normal tabular-nums">{g.agents.length}</span>
               </h3>
               {g.agents.map((a) => (
-                <AgentRow key={a.path} agent={a} showProject={grouping === 'state'} />
+                <AgentRow key={a.path} agent={a} />
               ))}
             </section>
           ))
@@ -163,6 +172,14 @@ export function AgentsList({ onNew, empty, className }: { onNew: () => void; emp
     </div>
   )
 }
+
+/** The look of the filter chips (the All / Running / Unread chips of the Sessions list). */
+const chip = (on: boolean, touch: boolean) =>
+  cn(
+    'flex shrink-0 items-center gap-1.5 rounded-full font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+    touch ? 'h-10 px-3 text-[13px]' : 'h-6 px-2.5 text-xs',
+    on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:text-foreground active:bg-accent',
+  )
 
 const DOT: Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error' | 'idle' | 'ok'; pulse?: boolean }> = {
   waiting: { tone: 'warn', pulse: true },
@@ -173,7 +190,7 @@ const DOT: Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error' | 
   off: { tone: 'idle' },
 }
 
-function AgentRow({ agent: a, showProject }: { agent: Agent; showProject: boolean }) {
+function AgentRow({ agent: a }: { agent: Agent }) {
   const t = useT()
   const location = useLocation()
   const to = agentRoute(a)
@@ -205,7 +222,7 @@ function AgentRow({ agent: a, showProject }: { agent: Agent; showProject: boolea
           <Sensitive length={8}>{a.display_name}</Sensitive>
         </span>
         <span className="truncate text-xs text-muted-foreground">
-          <Sensitive length={10}>{showProject ? `${a.project} · ${a.topic}` : a.topic}</Sensitive>
+          <Sensitive length={10}>{a.topic}</Sensitive>
         </span>
       </span>
       <span className="shrink-0 empty:hidden">
