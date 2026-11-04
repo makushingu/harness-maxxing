@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, seg } from '../api'
 import type {
-  Agent, AgentDetail, AgentImportResult, AgentInput, AgentMessage, AgentRunResult, AgentSandboxStatus, AgentsPayload, AgentTemplate, AgentWebhookKind,
+  Agent, AgentDetail, AgentsLayout, AgentImportResult, AgentInput, AgentMessage, AgentRunResult, AgentSandboxStatus, AgentsPayload, AgentTemplate, AgentWebhookKind,
   AgentWebhookResult, Cron, FeedLevel, Ok, Session,
 } from '../types'
 import { qk } from './keys'
@@ -16,6 +16,7 @@ export const agentKeys = {
   thread: (path: string) => ['agents', 'thread', path] as const,
   templates: (lang: string) => ['agents', 'templates', lang] as const,
   sandbox: ['agents', 'sandbox'] as const,
+  layout: ['agents', 'layout'] as const,
 }
 
 /** "projects/acme/topics/blog/agents/writer" -> "/api/agents/acme/blog/writer" */
@@ -70,6 +71,18 @@ export function useAgentThread(path: string | null, limit = 200) {
 }
 
 const inv = [agentKeys.all, qk.workspace] as const
+
+/** The order of projects and agents and the project colours of the Agents page (shared by every device). */
+export function useAgentsLayoutData(enabled = true) {
+  return useQuery({ queryKey: agentKeys.layout, queryFn: () => api.get<AgentsLayout>('/api/agents/layout'), enabled, staleTime: 30_000 })
+}
+/** Saves the whole layout; the screen follows at once (put back if refused). */
+export function useSaveAgentsLayout() {
+  return useMut((b: AgentsLayout) => api.put<AgentsLayout>('/api/agents/layout', b), {
+    optimistic: (b) => [{ key: agentKeys.layout, update: () => b }],
+    invalidate: [agentKeys.layout],
+  })
+}
 
 export function useCreateAgent() {
   return useMut((b: AgentInput) => api.post<Agent>('/api/agents', b), { invalidate: inv, errorToast: false })

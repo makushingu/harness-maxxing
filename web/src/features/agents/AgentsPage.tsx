@@ -1,7 +1,8 @@
 // The overview of the Agents page, the Office (/agents with no agent selected, the right pane of AgentsLayout on a
 // computer; /agents/office on a phone). Two views, picked at the top right and kept per browser: Gamified (a
 // pixel-art office, OfficeGame.tsx) and Classic, below:
-// one section per project (dot in the project colour, name, count, like the lanes of Tasks), each agent a card with
+// one section per project (dot in the project colour, name, count, "..." menu, like the lanes of Tasks; order, colours
+// and drag and drop of projects and agents: layout.tsx), each agent a card with
 // its character sitting behind a small desk, its name and one status line in words. A small bubble above the head
 // only when something matters (working, new results, waiting for an OK, failed). The whole card opens the agent;
 // Run and the on/off switch show on hover or focus (always on touch screens).
@@ -10,17 +11,18 @@ import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ArrowLeft, Gamepad2, LayoutGrid, Play, Plus, ShieldCheck } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { agentRoute, useAgents, usePatchAgent, useWorkspace } from '@/lib/queries'
+import { agentRoute, useAgents, usePatchAgent } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn, store } from '@/lib/utils'
 import { useCompact } from '@/stores/media'
 import { Button, EmptyState, Segmented, Sensitive, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
-import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT, projectColor } from './Avatar'
+import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
 import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
 import { QuickCreate, type CreateStart } from './CreateAgent'
 import { OfficeGame } from './OfficeGame'
+import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi } from './layout'
 
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
@@ -41,17 +43,12 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
   const t = useT()
   const on = useAgentsOn()
   const { data, isLoading, error, refetch } = useAgents(on !== false)
-  const { data: ws } = useWorkspace()
   const agents = React.useMemo(() => data?.agents || [], [data])
   const [view, setView] = useOfficeView()
   const touch = useCompact()
-  // Projects in the order of the workspace (the Sessions tree order), agents by topic then name.
-  const groups = React.useMemo(() => {
-    const g = new Map<string, Agent[]>()
-    for (const a of [...agents].sort((x, y) => x.topic.localeCompare(y.topic) || x.display_name.localeCompare(y.display_name))) g.set(a.project, [...(g.get(a.project) || []), a])
-    const order = (ws?.projects || []).map((p) => p.name)
-    return [...g.entries()].sort(([x], [y]) => (order.indexOf(x) + 1 || 1e9) - (order.indexOf(y) + 1 || 1e9) || x.localeCompare(y))
-  }, [agents, ws])
+  // Projects and agents in the order of the layout (picked by hand, else workspace order / topic then name).
+  const layout = useAgentsLayout()
+  const groups = React.useMemo(() => layout.group(agents), [agents, layout])
 
   return (
     <Page
@@ -107,24 +104,19 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
       ) : agents.length === 0 ? (
         <AgentsEmpty onStart={onStart} />
       ) : view === 'game' ? (
-        <OfficeGame groups={groups} onStart={onStart} />
+        <OfficeGame groups={groups} layout={layout} onStart={onStart} />
       ) : (
         <div className="grid gap-8" data-testid="agents-overview">
-          {groups.map(([p, list]) => (
-            <section key={p} className="grid gap-3" aria-label={p} data-testid="agents-project">
-              <h2 className="flex items-center gap-2 px-0.5 text-[13px] font-semibold">
-                <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: OUTFIT[projectColor(p)] }} />
-                <Sensitive length={8}>{p}</Sensitive>
-                <span className="text-xs font-normal text-muted-foreground tabular-nums">{t('agents.overview.count', { count: list.length })}</span>
-              </h2>
+          {groups.map(({ project: p, agents: list }, i) => (
+            <ProjectSection key={p} project={p} count={list.length} index={i} layout={layout}>
               <ul className={GRID}>
-                {list.map((a) => (
+                {list.map((a, j) => (
                   <li key={a.path}>
-                    <AgentTile agent={a} />
+                    <AgentTile agent={a} index={j} layout={layout} />
                   </li>
                 ))}
               </ul>
-            </section>
+            </ProjectSection>
           ))}
         </div>
       )}
@@ -132,9 +124,28 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
   )
 }
 
-/** An agent: its character behind its desk, its name, its status; Run and the switch on hover. */
-function AgentTile({ agent: a }: { agent: Agent }) {
+/** A project of the Classic view: its header (colour, name, count, "..."), dragged to move the whole section. */
+function ProjectSection({ project: p, count: n, index, layout, children }: { project: string; count: number; index: number; layout: AgentsLayoutApi; children: React.ReactNode }) {
   const t = useT()
+  const dnd = useReorder({ kind: 'project', id: p, project: p, index }, (x) => layout.moveProject(x, p))
+  return (
+    <section {...dnd.target} className={cn('relative grid gap-3 rounded-xl', dnd.dragging && 'opacity-50')} aria-label={p} data-testid="agents-project" data-project={p}>
+      <DropBar side={dnd.side} className="inset-x-0 h-1" />
+      <h2 {...dnd.source} className={cn('group/head flex items-center gap-2 px-0.5 text-[13px] font-semibold', dnd.on && 'cursor-grab active:cursor-grabbing')} title={dnd.on ? t('agents.layout.dragProject') : undefined} data-testid="agents-project-head">
+        <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: OUTFIT[layout.colorOf(p)] }} data-testid="agents-project-dot" />
+        <Sensitive length={8}>{p}</Sensitive>
+        <span className="text-xs font-normal text-muted-foreground tabular-nums">{t('agents.overview.count', { count: n })}</span>
+        <ProjectMenu project={p} layout={layout} among={layout.projects} className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100" />
+      </h2>
+      {children}
+    </section>
+  )
+}
+
+/** An agent: its character behind its desk, its name, its status; Run and the switch on hover. */
+function AgentTile({ agent: a, index, layout }: { agent: Agent; index: number; layout: AgentsLayoutApi }) {
+  const t = useT()
+  const dnd = useReorder({ kind: 'agent', id: a.path, project: a.project, index }, (path) => layout.moveAgent(path, a))
   const lang = useLang()
   const navigate = useNavigate()
   const patch = usePatchAgent()
@@ -149,10 +160,17 @@ function AgentTile({ agent: a }: { agent: Agent }) {
       aria-label={t('agents.overview.open', { name: a.display_name })}
       onClick={open}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && (e.preventDefault(), open())}
-      className="group/tile relative grid cursor-pointer justify-items-center gap-3 rounded-xl border bg-card px-3 pt-5 pb-4 text-center transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      {...dnd.props}
+      className={cn(
+        'group/tile relative grid cursor-pointer justify-items-center gap-3 rounded-xl border bg-card px-3 pt-5 pb-4 text-center transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        dnd.dragging && 'opacity-50',
+        dnd.side && 'border-primary',
+      )}
       data-testid="agent-card"
       data-state={s.id}
+      data-path={a.path}
     >
+      <DropBar side={dnd.side} vertical={false} />
       <AtDesk agent={a} status={s} />
       <div className="grid w-full min-w-0 gap-0.5">
         <span className={cn('truncate text-sm font-medium', !a.enabled && 'text-muted-foreground')}>

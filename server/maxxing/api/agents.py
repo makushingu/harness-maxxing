@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .. import agents
@@ -153,6 +153,22 @@ def sandbox_status():
     from .. import agent_guard
     _on()
     return agent_guard.available(fresh=True)
+
+
+@router.get("/layout")
+def get_layout():
+    """The order of projects and agents and the project colours picked on the Agents page (agents.load_layout)."""
+    _on()
+    return agents.load_layout()
+
+
+@router.put("/layout")
+def put_layout(body: Any = Body(...)):
+    _on()
+    try:
+        return agents.save_layout(body)
+    except agents.AgentError as e:
+        raise _bad(e) from None
 
 
 @router.post("/import")

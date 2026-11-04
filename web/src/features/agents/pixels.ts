@@ -211,12 +211,13 @@ export function projectColor(project: string): string {
   return AVATAR_OPTIONS.color[h % AVATAR_OPTIONS.color.length]
 }
 
-/** A random character; `project` keeps its outfit colour. Accessories stay rare (one in two has none). */
-export function randomAvatar(project?: string): AgentAvatar {
+/** A random character; `color` = its outfit (its project's: useProjectColorOf in layout.tsx). Accessories stay rare
+ *  (one in two has none). */
+export function randomAvatar(color?: string): AgentAvatar {
   const r = <K extends AvatarPart>(k: K): string => AVATAR_OPTIONS[k][Math.floor(Math.random() * AVATAR_OPTIONS[k].length)]
   const out = {} as AgentAvatar
   for (const k of AVATAR_PARTS) out[k] = r(k)
   if (Math.random() < 0.5) out.accessory = 'none'
-  if (project) out.color = projectColor(project)
+  if (color) out.color = color
   return out
 }

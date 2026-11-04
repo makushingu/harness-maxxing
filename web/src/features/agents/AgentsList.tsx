@@ -1,5 +1,6 @@
 // The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name, its
-// topic, a status dot and its unread count, always grouped by project (workspace order). On top: the search field,
+// topic, a status dot and its unread count, always grouped by project (order and colour of layout.tsx: drag a project
+// header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: the search field,
 // "New agent", then `nav` (the Office entry of AgentsLayout), then the state filter (All / waiting for you / to read
 // / running / active / off, with counts; empty states hidden) and the ?topic= chip.
 // On a phone it is the whole page at /agents; an agent then opens full screen.
@@ -13,7 +14,8 @@ import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button, CountBadge, EmptyState, Input, Sensitive, Skeleton, StatusDot, useMask, type DotTone } from '@/components/ui'
 import { useCompact } from '@/stores/media'
-import { AgentAvatarIcon } from './Avatar'
+import { AgentAvatarIcon, OUTFIT } from './Avatar'
+import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi } from './layout'
 
 export type AgentState = 'waiting' | 'unread' | 'running' | 'failed' | 'active' | 'off'
 /** One state per agent, the most pressing first. */
@@ -72,15 +74,12 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
     return g ? matching.filter((a) => g.has(agentState(a))) : matching
   }, [matching, filter])
 
-  const groups = React.useMemo(() => {
-    const m = new Map<string, Agent[]>()
-    for (const a of [...shown].sort((x, y) => x.topic.localeCompare(y.topic) || x.display_name.localeCompare(y.display_name))) m.set(a.project, [...(m.get(a.project) || []), a])
-    // Projects in the order of the workspace (the Sessions tree order).
-    const order = (ws?.projects || []).map((p) => p.name)
-    return [...m.entries()]
-      .sort(([x], [y]) => (order.indexOf(x) + 1 || 1e9) - (order.indexOf(y) + 1 || 1e9) || x.localeCompare(y))
-      .map(([p, agents]) => ({ id: p, label: mask(p, 8), emoji: ws?.projects.find((x) => x.name === p)?.emoji || '', agents }))
-  }, [shown, ws, mask])
+  const layout = useAgentsLayout()
+  const groups = React.useMemo(
+    () => layout.group(shown).map(({ project: p, agents }) => ({ id: p, label: mask(p, 8), emoji: ws?.projects.find((x) => x.name === p)?.emoji || '', agents })),
+    [shown, ws, mask, layout],
+  )
+  const shownProjects = groups.map((g) => g.id)
 
   return (
     <div className={cn('flex min-h-0 flex-col', className)} data-testid="agents-list">
@@ -155,17 +154,26 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
         ) : !groups.length ? (
           <EmptyState compact icon={Bot} title={ql || topic || filter ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
         ) : (
-          groups.map((g) => (
-            <section key={g.id} aria-label={g.label} className="mt-2 first:mt-0">
-              <h3 className="flex h-7 items-center gap-1.5 px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                {g.emoji && <span aria-hidden>{g.emoji}</span>}
-                <span className="truncate">{g.label}</span>
-                <span className="font-normal tabular-nums">{g.agents.length}</span>
-              </h3>
-              {g.agents.map((a) => (
-                <AgentRow key={a.path} agent={a} />
+          groups.map((g, i) => (
+            <Group
+              key={g.id}
+              project={g.id}
+              label={g.label}
+              index={i}
+              layout={layout}
+              among={shownProjects}
+              head={
+                <>
+                  {g.emoji && <span aria-hidden>{g.emoji}</span>}
+                  <span className="truncate">{g.label}</span>
+                  <span className="font-normal tabular-nums">{g.agents.length}</span>
+                </>
+              }
+            >
+              {g.agents.map((a, j) => (
+                <AgentRow key={a.path} agent={a} index={j} layout={layout} />
               ))}
-            </section>
+            </Group>
           ))
         )}
       </div>
@@ -181,6 +189,29 @@ const chip = (on: boolean, touch: boolean) =>
     on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:text-foreground active:bg-accent',
   )
 
+/** A project: its header (colour, name and count, "..." menu; dragged to move the project), then its agents. */
+function Group({ project, label, index, layout, among, head, children }: { project: string; label: string; index: number; layout: AgentsLayoutApi; among: string[]; head: React.ReactNode; children: React.ReactNode }) {
+  const t = useT()
+  const dnd = useReorder({ kind: 'project', id: project, project, index }, (p) => layout.moveProject(p, project))
+  return (
+    <section {...dnd.target} aria-label={label} className={cn('relative mt-2 first:mt-0', dnd.dragging && 'opacity-50')}>
+      <DropBar side={dnd.side} />
+      <h3
+        {...dnd.source}
+        className={cn('group/head flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase', dnd.on && 'cursor-grab active:cursor-grabbing')}
+        title={dnd.on ? t('agents.layout.dragProject') : undefined}
+        data-testid="agents-group"
+        data-project={project}
+      >
+        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: OUTFIT[layout.colorOf(project)] }} data-testid="agents-project-dot" />
+        {head}
+        <ProjectMenu project={project} layout={layout} among={among} className="ml-auto opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100" />
+      </h3>
+      {children}
+    </section>
+  )
+}
+
 const DOT: Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error' | 'idle' | 'ok'; pulse?: boolean }> = {
   waiting: { tone: 'warn', pulse: true },
   unread: { tone: 'unread' },
@@ -190,8 +221,9 @@ const DOT: Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error' | 
   off: { tone: 'idle' },
 }
 
-function AgentRow({ agent: a }: { agent: Agent }) {
+function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; layout: AgentsLayoutApi }) {
   const t = useT()
+  const dnd = useReorder({ kind: 'agent', id: a.path, project: a.project, index }, (path) => layout.moveAgent(path, a))
   const location = useLocation()
   const to = agentRoute(a)
   // The open agent (its conversation or one of its runs) is highlighted.
@@ -204,13 +236,17 @@ function AgentRow({ agent: a }: { agent: Agent }) {
       role="listitem"
       to={{ pathname: to, search: location.search }}
       aria-current={active ? 'page' : undefined}
+      {...dnd.props}
       className={cn(
-        'flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
+        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
         active && 'bg-accent hover:bg-accent',
+        dnd.dragging && 'opacity-50',
       )}
       data-testid="agents-row"
       data-state={state}
+      data-path={a.path}
     >
+      <DropBar side={dnd.side} />
       <span className={cn('relative shrink-0', state === 'off' && 'opacity-60')}>
         <AgentAvatarIcon avatar={a.avatar} size={32} />
         <span className="absolute -right-0.5 -bottom-0.5 grid size-3 place-items-center rounded-full bg-background">
