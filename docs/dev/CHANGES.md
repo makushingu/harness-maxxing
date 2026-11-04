@@ -105,13 +105,21 @@ jobs, `telegram.agent_threads`). Memory level `agent` (`memory.files()`, skills 
   (`from_agent: {path, session}`, title kept, `source: "web"`) with the run's log copied and its Claude transcript
   copied to the topic's project folder under the same `csid` (resumed from there; no transcript -> fresh); `409
   busy` while the run is running.
-- UI: Agents page apart from Sessions (`features/agents/`, `AgentsLayout` with its own list by state / by project,
+- UI: Agents page apart from Sessions (`features/agents/`, `AgentsLayout` with its own list,
   `/agents/:p/:t/:a`, runs opened in place at `/agents/:p/:t/:a/runs/:sid`, links to an agent session redirected
   there); agents and their runs no longer show in the Sessions lists. Overview = one section per project, one card
   per agent (`pixels.ts`, 16x16 character from 6 parts: `color` = a UI accent, `skin`, `hair`, `hair_color`, `face`,
   `accessory`; old values mapped by `agents._OLD_AVATAR`, unknown ones = a stable pick from the name; outfit default
   = `agents.project_color` = web `projectColor`, FNV-1a % 6). Sessions sidebar: `Tree.tsx` `TopicAgents` = up to 2
   chips (face, name, state dot) under a topic row, `+N` -> `/agents?topic=<p>/<t>`, only with `agents_page` on.
+- UI: Agents list (`AgentsList.tsx`) always grouped by project (workspace order); the state grouping became filter
+  chips (All / waiting / to read / running / active / off with counts, empty ones hidden, not persisted); the
+  `mx-agents-grouping` localStorage key is no longer read. Aside order: search, New agent, Office entry (`nav` prop,
+  also on touch -> new route `/agents/office`), filter, list. Office = `AgentsOverview` with a view switch
+  (`mx-agents-office-view`: `classic` default | `game`); Gamified = `OfficeGame.tsx` (one room per project sized by
+  its agents, 2-5 columns, SVG pixel desks at 4 px per pixel, 3 on phones, free desk -> creation sheet on the room's
+  main topic; `mx-game-*` keyframes in `globals.css`). `statusOf` / `Status` moved to `parts.tsx`. i18n: removed
+  `agents.side.{overview,grouping,byState,byProject}`, added `agents.side.{filter,all}`, `agents.office.*`.
 - `web/src/pages/pageData.ts`: `staleTime` accepts a function (the type broke `tsc -b` after the file kind query
   change of a111).
 

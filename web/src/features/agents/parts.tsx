@@ -6,7 +6,7 @@ import { useT, type TFn, type TKey } from '@/i18n'
 import { useClaudeStatus, useContinueRun, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
 import type { Agent, AgentLimits, AgentWebhookResult, AgentTrigger, AgentTriggerInput, AgentWebhookKind, Cron, FeedLevel, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Checkbox, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask } from '@/components/ui'
+import { Badge, Button, Checkbox, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask, type DotTone } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { Page } from '@/components/shell/Page'
 import { fmtRelative } from '@/lib/format'
@@ -21,6 +21,20 @@ export const DEFAULT_LIMITS: AgentLimits = { usd_per_day: 2, runs_per_hour: 6, t
 export function agoText(at: number, lang: string, t: TFn): string {
   const age = Date.now() / 1000 - at
   return age > -60 && age < 60 ? t('agents.justNow') : fmtRelative(at, lang)
+}
+
+export type Status = { id: 'waiting' | 'running' | 'unread' | 'failed' | 'off' | 'idle'; tone: DotTone; pulse?: boolean; text: string }
+
+/** One status per agent in words, the most pressing first (working beats new results: it is live). */
+export function statusOf(a: Agent, t: TFn, lang: string): Status {
+  const last = a.last_run
+  if ((a.waiting || 0) > 0) return { id: 'waiting', tone: 'warn', pulse: true, text: t('agents.list.waiting') }
+  if ((a.running_now || 0) > 0) return { id: 'running', tone: 'running', pulse: true, text: t('agents.list.working') }
+  if ((a.thread_unread || 0) > 0) return { id: 'unread', tone: 'unread', text: t('agents.list.unread', { count: a.thread_unread || 0 }) }
+  if (!a.enabled) return { id: 'off', tone: 'idle', text: t('agents.side.state.off') }
+  if (last?.kind === 'result' && last.ok === false) return { id: 'failed', tone: 'error', text: t('agents.lastFailed', { when: agoText(last.at, lang, t) }) }
+  if (!last) return { id: 'idle', tone: 'idle', text: t('agents.neverRun') }
+  return { id: 'idle', tone: 'ok', text: t('agents.overview.ran', { when: agoText(last.at, lang, t) }) }
 }
 
 /** Settings -> Features -> agents_page (undefined while the settings load). */

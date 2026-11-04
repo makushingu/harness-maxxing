@@ -13,19 +13,28 @@ Agents are **off by default**: turn them on in **Settings -> Features -> Agents*
 sidebar, with the number of results to read.
 
 **Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
-itself lives. Agents' runs never show in Sessions: the Agents page has its own list of every agent (its face,
-`project · topic`, a dot for running / waiting for you / to read / failed / off), grouped **by state** or **by
-project**, with a search and **New agent**. In the Sessions list, a topic's agents show **under its row**: their
+itself lives. Agents' runs never show in Sessions: the Agents page has its own column of every agent (its face, its
+topic, a dot for running / waiting for you / to read / failed / off), grouped by project. From top to bottom: a
+search, **New agent**, the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
+*Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). In the Sessions list, a topic's agents show **under its row**: their
 face, their name and a dot when one works, waits for you, has something to read or failed (the ones that need you
 first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
 **Agents of this topic** in the topic's menu.
 
-With no agent open, the page shows every agent **at its desk**, one section per project (the dot is the project's
-color). Under each one, its name and one line that says where it is: *Working…*, *2 new results*, *Waiting for your
+With no agent open, the page shows the **Office**: every agent **at its desk**. Two views, picked at the top right
+(your browser remembers the choice):
+
+- **Classic**: one section per project (the dot is the project's color), one card per agent. Under each one, its name and one line that says where it is: *Working…*, *2 new results*, *Waiting for your
 OK*, *Last run failed*, *Off*, *Ran 7 min ago*, *Never run*. A small bubble above the head points out what needs you
 (dots while it works, the number of new results, a shield for an OK, **!** for a failure); an agent that is off sleeps.
-Click a card to open the agent; point at it for its on/off switch and **Run** (always shown on a touch screen). On a
-phone, the Agents page is the list.
+Click a card to open the agent; point at it for its on/off switch and **Run** (always shown on a touch screen).
+- **Gamified**: a pixel-art office, like a small video game. Each project is a **room** in its color, with its name
+  on a sign; the room has one desk per agent and grows as you add agents. An agent that works bobs at its desk and
+  its screen lights up; **!** means it waits for your OK, a green bubble counts its new results, a red screen means
+  its last run failed, and an agent that is off sleeps (**z Z**). Click a desk to open the agent; the **free desk**
+  (**+**) of a room creates a new agent in that project.
+
+On a phone, the Agents page is the list; **Office** opens the office full screen.
 
 ## What an agent is made of
 
@@ -120,8 +129,8 @@ On the right (**Profile** on a phone):
   reach, the folders it may write in, rules); **Limits**; **Claude Code** (callable from the topic's sessions, export
   as a Claude Code file). Delete is at the bottom.
 
-Opening the page marks its results as read. In the list on the left, **By state** shows first the agents waiting for
-your OK, then those with something **to read**.
+Opening the page marks its results as read. In the list on the left, the *Waiting for you* and *To read* chips show
+only the agents waiting for your OK or with something to read.
 
 ## Triggers
 
