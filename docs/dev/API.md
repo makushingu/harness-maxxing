@@ -531,8 +531,8 @@ E-mail page (`maxxing/mail/`, Settings -> Features -> `mail_page`, off by defaul
 copy of the mail on the server). Every route answers `409 disabled` while the page is off. Accounts:
 `<state>/mail/accounts.json` (no secret); each password is the vault key `MAIL_<ID>_PASSWORD`, never exposed to turns.
 Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, `409 exists|no_password`,
-`413 too_large`, `422 refused` (every recipient refused), `429 limit` (daily cap or more than 20 recipients),
-`502 auth|unreachable|tls|connection|imap|smtp`.
+`413 too_large`, `422 refused` (every recipient refused) | `auth` (sign-in refused), `429 limit` (daily cap or more than 20 recipients),
+`424 unreachable|tls|connection|imap|smtp` (the mail server failed; never a 5xx, which a proxy may replace by its own page).
 
 | Method | Path | Body | Response |
 |---|---|---|---|
