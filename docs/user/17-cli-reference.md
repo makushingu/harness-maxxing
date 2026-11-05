@@ -212,6 +212,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents group list [--json]` | the agent groups: path, name, members |
 | `maxxing agents group show P/G [--messages N]` | a group: members, goal, options, last messages (JSON) |
 | `maxxing agents group create P/G --member AGENT[=ROLE] ... [--name N] [--emoji E] [--goal T] [--lead AGENT] [--no-shared-files] [--ask-on-handover] [--json]` | create a group of 2 to 6 agents of project P |
+| `maxxing agents group update P/G [--name N] [--emoji E] [--goal T] [--lead AGENT] [--member AGENT[=ROLE] ...] [--shared-files on\|off] [--trust-members on\|off]` | change a group (`--member` replaces the members) |
 | `maxxing agents group say P/G TEXT` | write to a group as yourself; its members answer in turn (refused in an agent's run) |
 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See

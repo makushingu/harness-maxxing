@@ -196,3 +196,26 @@ def test_new_topic_hides_what_came_before(client, topic, mx):
     _idle(client, 2)
     p = _calls()[-1]["prompt"]
     assert "You are @reviewer" in p and "secret-before" not in p and "fresh" in p
+
+
+def test_same_folder_name_in_two_topics_gets_a_handle_from_its_name(client, topic, mx):
+    _setup(client)
+    r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/seo", "name": "writer",
+                                         "display_name": "Rédacteur Saints", "sandbox": False})
+    assert r.status_code == 200, r.text
+    r = client.post("/api/agent-groups", json={"project": "acme", "name": "duo", "members": [
+        {"path": W}, {"path": "projects/acme/topics/seo/agents/writer"}]})
+    assert r.status_code == 200, r.text
+    assert [m["handle"] for m in r.json()["members"]] == ["writer", "redacteur-saints"]   # "Writer", "Rédacteur Saints"
+    q = client.post("/api/agent-groups/acme/duo/messages", json={"text": "@redacteur-saints hi"}).json()
+    assert q["queued"] == ["projects/acme/topics/seo/agents/writer"]
+
+
+def test_cli_update(client, topic, mx, capsys):
+    from maxxing import cli
+    _setup(client)
+    assert cli.main(["agents", "group", "update", "acme/team", "--goal", "New goal", "--lead", "reviewer",
+                     "--trust-members", "off", "--member", "reviewer=checks", "--member", "writer"]) == 0
+    g = agent_rooms.get("projects/acme/groups/team")
+    assert g["goal"] == "New goal" and g["lead"] == R and not g["trust_members"]
+    assert [(m["handle"], m["role"]) for m in g["members"]] == [("reviewer", "checks"), ("writer", "")]
