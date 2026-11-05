@@ -477,7 +477,7 @@ def run_settings(path: str, outside: bool = False) -> dict:
     args += ["--append-system-prompt", OWNER_NOTE]
     forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
-            "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a),
+            "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a, approvals=a["approvals"] or forced),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
             "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"]}
 

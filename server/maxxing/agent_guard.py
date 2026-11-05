@@ -184,8 +184,10 @@ def mode(requested: str) -> str:
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"
 
 
-def settings(path: str, a: dict) -> dict:
-    """The `--settings` part of an agent turn: sandbox (when on) and the hook of its rules."""
+def settings(path: str, a: dict, approvals: bool = False) -> dict:
+    """The `--settings` part of an agent turn: sandbox (when on) and the hook of its rules. approvals: the turn asks
+    before risky tools (the agent's setting, or forced for an outside event): Claude Code would let every sandboxed
+    command through without asking (`autoAllowBashIfSandboxed`), and `maxxing` too if pre-allowed, so neither is."""
     out: dict = {}
     folder = config.workspace() / path
     if a.get("sandbox"):
@@ -193,7 +195,7 @@ def settings(path: str, a: dict) -> dict:
         secrets = secret_paths()
         locked = locked_paths(path)
         out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
-                          "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing:*"],
+                          "autoAllowBashIfSandboxed": not approvals, "excludedCommands": ["maxxing:*"],
                           "filesystem": {"denyRead": secrets, "allowWrite": write, "denyWrite": locked},
                           "network": {"allowedDomains": list(a.get("domains") or [])}}
         deny = []
@@ -204,9 +206,10 @@ def settings(path: str, a: dict) -> dict:
             deny.append(f"Edit(/{p + '/**' if p.endswith('/.claude') else p})")
         deny += [r for r in topic_edit_denied(path) if r not in deny]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
-        # server state is hidden): `maxxing` is allowed, check_cli limits what it does
+        # server state is hidden): `maxxing` is allowed, check_cli limits what it does; with approvals it is asked
         out["permissions"] = {"deny": deny,
-                              "allow": ["Bash(maxxing:*)"] + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
+                              "allow": ([] if approvals else ["Bash(maxxing:*)"])
+                              + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
     if a.get("rules"):
         cmd = hook_command(path)
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}
