@@ -12,6 +12,7 @@ export const GROUPS = {
   infra: ['infra'],
   git: ['git'],
   team: ['team'],
+  mail: ['mail'],
   agents: ['agents'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],

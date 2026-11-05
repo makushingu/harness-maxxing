@@ -627,6 +627,8 @@ export type Settings = {
   agents_page?: boolean
   /** Settings -> Features (beta): Maxxing mode on the Sessions page (its switch, meter and Alt+M) */
   maxxing_mode?: boolean
+  /** Settings -> Features: the E-mail page (/mail) and its sidebar entry */
+  mail_page?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
@@ -973,3 +975,95 @@ export type InfraView = {
   servers: { name: string; label?: string; host: string; user: string; port: number; note: string }[]
   refresh_min?: number
 }
+
+// ---- E-mail page (server/maxxing/mail, docs/dev/API.md#mail)
+export type MailTls = 'ssl' | 'starttls' | 'none'
+export type MailAccount = {
+  id: string
+  label: string
+  address: string
+  name: string
+  username: string
+  imap_host: string
+  imap_port: number
+  imap_tls: MailTls
+  smtp_host: string
+  smtp_port: number
+  smtp_tls: MailTls
+  signature: string
+  password_key: string
+  has_password: boolean
+  created?: number
+  smtp_checked?: number
+  /** recipients sent to today, and the daily cap (`mail_send_per_day`) */
+  sent_today?: number
+  send_per_day?: number
+}
+export type MailServerSettings = Pick<MailAccount, 'imap_host' | 'imap_port' | 'imap_tls' | 'smtp_host' | 'smtp_port' | 'smtp_tls'>
+export type MailDetect = MailServerSettings & { source: 'known' | 'mx' | 'autoconfig' | 'guess'; mx: string[] }
+export type MailTest = { imap: 'ok' | 'skipped'; smtp: 'ok' | 'error' | 'skipped'; smtp_port?: number; smtp_tls?: MailTls; smtp_changed?: boolean; smtp_error?: string; smtp_code?: string }
+export type MailRole = 'inbox' | 'drafts' | 'sent' | 'archive' | 'junk' | 'trash' | 'all' | 'flagged'
+export type MailFolder = { name: string; role: MailRole | null; delim: string | null; unread: number | null; total: number | null }
+export type MailAddress = { name: string; email: string }
+export type MailSummary = {
+  uid: number
+  from: MailAddress
+  to: MailAddress[]
+  subject: string
+  date: number | null
+  seen: boolean
+  flagged: boolean
+  answered: boolean
+  size: number | null
+  attachments: boolean
+}
+export type MailList = { folder: string; total: number; exists: number; page: number; size: number; messages: MailSummary[] }
+export type MailAttachment = { index: number; filename: string; content_type: string; size: number }
+export type MailMessage = {
+  uid: number
+  folder: string
+  from: MailAddress
+  to: MailAddress[]
+  cc: MailAddress[]
+  reply_to: MailAddress[]
+  bcc?: MailAddress[]
+  subject: string
+  date: number | null
+  message_id: string
+  in_reply_to?: string
+  references: string
+  text: string | null
+  html: string | null
+  remote_images: boolean
+  attachments: MailAttachment[]
+  seen: boolean
+  flagged: boolean
+  answered: boolean
+}
+export type MailComposeMode = 'reply' | 'replyall' | 'forward' | 'draft'
+/** Prefilled fields of a reply / forward / draft opened again (GET /api/mail/{acc}/compose). */
+export type MailCompose = {
+  to: string[]
+  cc: string[]
+  bcc?: string[]
+  subject: string
+  text: string
+  in_reply_to: string
+  references: string
+  attachments: MailAttachment[]
+}
+/** The JSON part of POST /api/mail/{acc}/send and /draft. */
+export type MailDraft = {
+  to: string[]
+  cc: string[]
+  bcc: string[]
+  subject: string
+  text: string
+  in_reply_to?: string
+  references?: string
+  reply?: { folder: string; uid: number }
+  forward?: { folder: string; uid: number; indexes: number[] }
+  draft?: { folder: string; uid: number }
+}
+export type MailSent = { ok: boolean; message_id: string; recipients: number; refused: string[]; sent_folder: string | null }
+export type MailAction = 'seen' | 'unseen' | 'flag' | 'unflag' | 'move' | 'archive' | 'trash' | 'junk' | 'inbox' | 'delete'

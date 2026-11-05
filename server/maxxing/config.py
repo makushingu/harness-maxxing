@@ -84,6 +84,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "infra_refresh_min": 15,
     "result_line_hidden": [],          # Sessions: parts of the line under each answer that are hidden (cost, tokens...)           # Infra: background refresh period (minutes) while the page is on
     "donation_hidden": False,          # Settings -> Support: hide the donation links shown elsewhere in the app
+    "mail_page": False,                # Settings -> Features: the E-mail page (IMAP/SMTP mailboxes)
     "dashboard": {"order": [], "hidden": []},
     "extensions": {"disabled": [], "pinned": []},
     "telegram": {

@@ -7,6 +7,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch, worktree `wt-email`): `maxxing/mail/`
+  (`__init__` accounts + detection + SMTP sign-in, `imap.py` live IMAP with one pooled connection per account,
+  `send.py` writing), `api/mail.py` (`/api/mail/*`, docs/dev/API.md#mail), `cmd_mail.py`. Accounts in
+  `<state>/mail/accounts.json`, password = vault `MAIL_<ID>_PASSWORD` (expose false). Writing: plain text,
+  `compose(mode=reply|replyall|forward|draft)` returns the starting fields (signature block then quote), `send()`
+  goes through the account's SMTP (`open_smtp`: AUTH PLAIN by hand for non-ASCII credentials, smtplib only sends
+  ASCII), appends to Sent unless the SMTP host files it (`AUTO_SENT`: gmail, office365, outlook), flags the replied
+  message `\Answered`, drops the draft it came from (`imap.drop`, drafts folder only). Drafts: `imap.append_draft`
+  (APPENDUID, else SEARCH by Message-ID). Caps: `MAX_RECIPIENTS` 20 a message, `mail_send_per_day` (config, default
+  100) recipients a mailbox a day in `<state>/mail/sent-count.json` (given back when the send fails), 25 MB of
+  attachments. `maxxing mail write` saves a draft unless `--send`. Tests `tests/test_mail.py` (+ `tests/fake_smtp.py`;
+  `MAXXING_TEST_IMAP=host:port:user:pw` runs a round trip on a real IMAP server). Mail is never put in the feed.
+
 - Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
   agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
   (configured or forced for an outside event) `autoAllowBashIfSandboxed` is false and `Bash(maxxing:*)` is no longer
