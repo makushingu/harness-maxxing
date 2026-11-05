@@ -112,8 +112,8 @@ class CronExpr:
 
 def _value(tok: str, lo: int, hi: int, names: list[str] | None, what: str) -> int:
     t = tok.lower()
-    if names and t[:3] in names and t.isalpha():
-        v = names.index(t[:3]) + (1 if names is MONTHS else 0)
+    if names and t in names:                            # exact abbreviations only: cron refuses "monday"
+        v = names.index(t) + (1 if names is MONTHS else 0)
     elif t.isascii() and t.isdigit():                  # "²" or "٣" are digits for str.isdigit()
         v = int(t)
     else:
@@ -441,8 +441,8 @@ def restore_job(cid: str) -> dict:
         if job is None:
             raise CronError(f"no removed job {cid}", "not_found")
         jobs.append({**_clean(job), "id": cid, "updated": time.time()})   # checked like a new job
-        _save_raw(jobs)
         sync_crontab(jobs)
+        _save_raw(jobs)
     return get_job(cid)  # type: ignore[return-value]
 
 
@@ -553,8 +553,8 @@ def create_job(fields: dict) -> dict:
         while any(x["id"] == j["id"] for x in jobs):
             j["id"] = new_id()
         jobs.append({k: j[k] for k in _STORED})
-        _save_raw(jobs)
         sync_crontab(jobs)
+        _save_raw(jobs)
     return get_job(j["id"])  # type: ignore[return-value]
 
 
@@ -586,8 +586,8 @@ def update_job(cid: str, fields: dict) -> dict | None:
                 j = _clean(merged)
                 j.update(id=cid, created=cur.get("created", time.time()), updated=time.time())
                 jobs[i] = {**cur, **{k: j[k] for k in _STORED}}
-                _save_raw(jobs)
                 sync_crontab(jobs)
+                _save_raw(jobs)
                 break
         else:
             return None
@@ -600,8 +600,8 @@ def delete_job(cid: str) -> bool:
         rest = [j for j in jobs if j["id"] != cid]
         if len(rest) == len(jobs):
             return False
-        _save_raw(rest, "deleted")
         sync_crontab(rest)
+        _save_raw(rest, "deleted")
         m = config.read_json(_dir() / "sessions.json", {}) or {}
         if m.pop(cid, None):
             config.write_json(_dir() / "sessions.json", m)
