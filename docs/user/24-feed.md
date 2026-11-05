@@ -23,6 +23,8 @@ GitHub run…). Its **…** menu marks it read or deletes it. Repeated routine e
 Some events wait for you and carry buttons:
 
 - an agent waiting for your OK: **Allow** / **Deny** in one click (the same answer as in its thread or its run);
+  when the notification can only show part of the request (a long command, the content of a file), it has **Open** and
+  **Deny** only: open the request to read all of it before you allow it (also on Telegram);
 - a server problem: **Seen** (the same as *Seen* in the server health card);
 - an agent that needs a look (failed run, daily budget reached...): **Open**.
 
