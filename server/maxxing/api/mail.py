@@ -81,6 +81,8 @@ class AccountPatch(BaseModel):
     smtp_port: Optional[int] = None
     smtp_tls: Optional[Tls] = None
     signature: Optional[str] = None
+    poll_min: Optional[int] = None
+    auth_servers: Optional[list[str]] = Field(default=None, max_length=10)
 
 
 class DetectIn(BaseModel):

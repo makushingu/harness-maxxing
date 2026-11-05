@@ -20,6 +20,35 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   attachments. `maxxing mail write` saves a draft unless `--send`. Tests `tests/test_mail.py` (+ `tests/fake_smtp.py`;
   `MAXXING_TEST_IMAP=host:port:user:pw` runs a round trip on a real IMAP server). Mail is never put in the feed.
 
+- E-mail for agents (`maxxing/mail/{access,poll,outbox,store}.py`): agent.json `mail` = `[Grant]` (`access.clean_grants`,
+  called by `agents.clean`; empty by default), enforced in agent turns by `cmd_mail.Guard` (identity from
+  `agent_guard.agent_turn`, never the environment): mailboxes of the grants only, rights read/draft/move/mark/send,
+  `senders` filter = sender seen only when `from_verified` and matching (lists: IMAP `FROM` narrowing + check, up to
+  `imap.SCAN_MAX`), recipients limited to the same patterns, `read` never sets `\Seen`, attachments saved only in the
+  agent folder / `writable_dirs` (not `locked_paths`), `--attach` only from its topic (not `secret_paths` /
+  `private_paths`), `add` refused. `from_verified` (`access.verified`): only the topmost `Authentication-Results`
+  counts, and only when its authserv-id's base domain is trusted (`access.trusted_servers`: the account's IMAP/SMTP
+  hosts + MX + `PROVIDER_ALIASES`, or `auth_servers`); dmarc=pass header.from, or dkim/spf pass aligned with the
+  From domain. `approve_send` always|new|never: `outbox.queue` files a draft, keeps the fields + files in
+  `<state>/mail/outbox/<id>/`, posts a feed event (source `mail`, ref `mailsend:<id>`, actions allow/deny/open,
+  `feed.HANDLERS["mailsend"] = "mail.outbox"`); `approve` claims the row once and sends with `draft` (dropped),
+  `deny` drops the draft, `draft_done` ends it when the owner sends / deletes the draft from the page. "new" =
+  recipients absent from `contacts` (senders seen by the checks, past recipients) and not the replied sender.
+  `<state>/mail/mail.db` (`store.py`, a cache set aside when unreadable): poll positions (UIDVALIDITY, last UID),
+  newest 500 mails per mailbox, contacts, `seen_by` (by Message-ID, else folder#uid, 90 days), outbox. Checks
+  (`poll.py`, server loop in `api/mail.py` every 30 s): mailboxes whose `poll_min` (5/10/30/60, default 10) is over,
+  INBOX + folders watched by triggers; first check of a folder (or new UIDVALIDITY) only notes the position; new
+  mail matching an enabled trigger of an enabled agent (grant senders, trigger senders / subject, not the mailbox's
+  own address) -> one `agents.fire(trigger="mail:<id>", text=..., wait=True)` per agent and check (outside text:
+  approvals forced unless `trust_outside`), busy -> `<state>/mail/pending.json`, retried next tick (a day at most).
+  API: `/api/mail/refresh`, `/all`, `/outbox`, `/outbox/{id}/send|deny`; accounts + `poll_min`, `auth_servers`,
+  `last_check`, `agents`, `waiting`; rows + `from_verified`, `message_id`, `seen_by`. CLI `maxxing mail refresh|outbox`;
+  `maxxing mail` allowed in sandboxed turns (`CLI_ALLOWED`, filtered by Guard). `maxxing agents create --mail
+  MAILBOX`; templates `mail-sort`, `mail-support`, `mail-invoices` (`mail` field, `fields(..., mail_account)`; the UI
+  asks the mailbox). UI: agent settings E-mail section (`AgentMail.tsx`), mail triggers in the agent's triggers,
+  mailbox picker for mail templates, E-mail page: Refresh, last check, All mailboxes, outbox banner, seen-by faces,
+  verified sender, `?account=&folder=&draft=` and `?add=` links. Tests `tests/test_mail_agents.py`.
+
 - Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
   agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
   (configured or forced for an outside event) `autoAllowBashIfSandboxed` is false and `Bash(maxxing:*)` is no longer

@@ -142,6 +142,8 @@ export type Agent = {
   subagent: boolean
   limits: AgentLimits
   triggers: AgentTrigger[]
+  /** mailboxes of the E-mail page it may use (none by default) */
+  mail?: MailGrant[]
   created: number
   session_count: number
   archived_count: number
@@ -179,6 +181,8 @@ export type AgentTemplate = {
   limits: Partial<AgentLimits>
   cron?: { schedule: string; prompt: string }
   webhook?: { kind: AgentWebhookKind; prompt: string }
+  /** made for a mailbox of the E-mail page: the user picks which one when creating it */
+  mail?: Omit<MailGrantInput, 'account'>
 }
 export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
 export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
@@ -207,6 +211,7 @@ export type AgentInput = {
   subagent?: boolean
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
+  mail?: MailGrantInput[]
 }
 export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
@@ -998,6 +1003,64 @@ export type MailAccount = {
   /** recipients sent to today, and the daily cap (`mail_send_per_day`) */
   sent_today?: number
   send_per_day?: number
+  /** minutes between two checks for new mail (5, 10, 30 or 60) */
+  poll_min?: MailPollMin
+  last_check?: MailCheck | null
+  /** the agents that may use this mailbox (their grant) */
+  agents?: MailAgentGrant[]
+  /** messages written by agents waiting for the owner's OK */
+  waiting?: number
+  /** servers whose Authentication-Results are trusted (empty = automatic) */
+  auth_servers?: string[]
+}
+export type MailPollMin = 5 | 10 | 30 | 60
+export type MailCheck = { at: number; ok: boolean; error: string }
+export type MailRight = 'read' | 'draft' | 'move' | 'mark' | 'send'
+export type MailApproveSend = 'always' | 'new' | 'never'
+export type MailTrigger = { enabled: boolean; folder: string; subject: string; senders: string[]; prompt: string }
+/** An agent's access to one mailbox (agent.json `mail`): nothing by default. `senders` empty = all mail; else only
+ *  mail whose sender the provider checked, and the agent writes only to them. */
+export type MailGrant = { account: string; rights: MailRight[]; senders: string[]; approve_send: MailApproveSend; trigger: MailTrigger | null }
+/** A grant as sent (POST / PATCH /api/agents): the server fills the trigger's missing fields. */
+export type MailGrantInput = Omit<MailGrant, 'trigger'> & { trigger: Partial<MailTrigger> | null }
+export type MailAgentGrant = Omit<MailGrant, 'account'> & { agent: string; name: string; avatar: AgentAvatar | null; enabled: boolean }
+/** What an agent did with a message (mail.db, never written to the mailbox), oldest first. */
+export type MailSeenBy = { agent: string; at: number; what: string; detail: string; name: string; avatar: AgentAvatar | null; exists: boolean }
+export type MailRefreshResult = { account: string; ok: boolean; error?: string; new: number; started: number }
+/** GET /api/mail/all: the newest mails of every mailbox, as the last checks saw them. */
+export type MailAllRow = {
+  account: string
+  address: string
+  folder: string
+  uid: number
+  message_id: string
+  from: MailAddress
+  from_verified: boolean
+  subject: string
+  date: number | null
+  snippet: string
+  seen: boolean
+  attachments: boolean
+  seen_by: MailSeenBy[]
+}
+export type MailAll = { messages: MailAllRow[]; checks: Record<string, MailCheck | null> }
+/** A message written by an agent, waiting for the owner's OK (GET /api/mail/outbox). */
+export type MailOutboxItem = {
+  id: string
+  account: string
+  agent: string
+  agent_name: string
+  avatar: AgentAvatar | null
+  at: number
+  to: string[]
+  cc: string[]
+  subject: string
+  text: string
+  files: { name: string; type: string; size: number }[]
+  draft: { folder: string; uid: number } | null
+  why: string
+  event_id: string | null
+  note: string
 }
 export type MailServerSettings = Pick<MailAccount, 'imap_host' | 'imap_port' | 'imap_tls' | 'smtp_host' | 'smtp_port' | 'smtp_tls'>
 export type MailDetect = MailServerSettings & { source: 'known' | 'mx' | 'autoconfig' | 'guess'; mx: string[] }
@@ -1016,6 +1079,10 @@ export type MailSummary = {
   answered: boolean
   size: number | null
   attachments: boolean
+  message_id?: string
+  /** the provider checked the sender's domain (DKIM / SPF / DMARC) */
+  from_verified?: boolean
+  seen_by?: MailSeenBy[]
 }
 export type MailList = { folder: string; total: number; exists: number; page: number; size: number; messages: MailSummary[] }
 export type MailAttachment = { index: number; filename: string; content_type: string; size: number }
@@ -1039,6 +1106,8 @@ export type MailMessage = {
   seen: boolean
   flagged: boolean
   answered: boolean
+  from_verified?: boolean
+  seen_by?: MailSeenBy[]
 }
 export type MailComposeMode = 'reply' | 'replyall' | 'forward' | 'draft'
 /** Prefilled fields of a reply / forward / draft opened again (GET /api/mail/{acc}/compose). */

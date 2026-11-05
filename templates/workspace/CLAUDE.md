@@ -135,6 +135,7 @@ would erase it". In this order:
 | `maxxing-tasks` | read or edit the task board (tasks.json) |
 | `maxxing-extension` | build a dashboard widget (Card or HTML/game) or a page extension |
 | `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, "where is X / is it up" |
+| `maxxing-mail` | the user's inbox (read, sort, draft replies with `maxxing mail`), or an agent that handles a mailbox |
 | `maxxing-mcp` | add, connect or remove an MCP server (a service's tools for Claude), for every session or one topic |
 | `maxxing-agents` | create or configure an agent (a lasting role in a topic, started by a schedule, a webhook, the feed, Telegram or another agent, with a budget) |
 | `maxxing-customize` | change the product itself and keep it through updates; adapt customizations when an update conflicts |

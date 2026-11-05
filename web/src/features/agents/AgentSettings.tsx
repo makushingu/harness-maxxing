@@ -1,6 +1,7 @@
-// An agent's advanced settings (the sheet opened from its profile), in five labelled sections with a small nav on top:
-//   Model · What it may do (permission mode, approvals, outside events, keys, tools) · Safety (sandbox, domains,
-//   writable folders, rules) · Limits · Claude Code (subagent, export, import), then the danger zone.
+// An agent's advanced settings (the sheet opened from its profile), in six labelled sections with a small nav on top:
+//   Model · What it may do (permission mode, approvals, outside events, keys, tools) · E-mail (its mailboxes,
+//   AgentMail.tsx) · Safety (sandbox, domains, writable folders, rules) · Limits · Claude Code (subagent, export,
+//   import), then the danger zone. `section` = the one shown first (?settings=mail on the agent's page).
 // Switches save at once; the fields (model, mode, tools, rules, limits) wait for the Save bar. Its name and character
 // are edited elsewhere: click the character at the top of its profile (Appearance.tsx).
 import * as React from 'react'
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { Button, confirm, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
+import { AgentMail } from './AgentMail'
 import { AppearanceDialog } from './Appearance'
 import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect } from './parts'
 
@@ -34,8 +36,8 @@ const draftOf = (a: AgentDetail): Draft => ({
   limits: { ...a.limits },
 })
 
-const SECTIONS = ['model', 'may', 'safety', 'limits', 'claude'] as const
-type SectionId = (typeof SECTIONS)[number]
+const SECTIONS = ['model', 'may', 'mail', 'safety', 'limits', 'claude'] as const
+export type SectionId = (typeof SECTIONS)[number]
 
 /** A section of the sheet: a title, one line of plain words, its settings. */
 function Section({ id, title, description, children }: { id: SectionId; title: string; description?: string; children: React.ReactNode }) {
@@ -109,7 +111,7 @@ function Details({ children, open }: { children: React.ReactNode; open?: boolean
   )
 }
 
-export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
+export function AgentSettings({ agent: a, section }: { agent: AgentDetail; section?: SectionId }) {
   const t = useT()
   const navigate = useNavigate()
   const patch = usePatchAgent()
@@ -122,6 +124,12 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
   React.useEffect(() => {
     if (!dirty) setD(draftOf(a))
   }, [a, dirty])
+  // opened on a section: scrolled to it once the sheet is in
+  React.useEffect(() => {
+    if (!section) return
+    const id = setTimeout(() => document.getElementById(`ag-sec-${section}`)?.scrollIntoView({ block: 'start' }), 250)
+    return () => clearTimeout(id)
+  }, [section])
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => {
     setD((x) => ({ ...x, [k]: v }))
     setDirty(true)
@@ -148,6 +156,7 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
   const titles: Record<SectionId, string> = {
     model: t('agents.settings.sec.model'),
     may: t('agents.settings.sec.may'),
+    mail: t('agents.mail.title'),
     safety: t('agents.settings.sec.safety'),
     limits: t('agents.settings.sec.limits'),
     claude: t('agents.settings.sec.claude'),
@@ -205,6 +214,10 @@ export function AgentSettings({ agent: a }: { agent: AgentDetail }) {
               </Details>
             </div>
           </div>
+        </Section>
+
+        <Section id="mail" title={titles.mail} description={t('agents.mail.desc')}>
+          <AgentMail agent={a} />
         </Section>
 
         <Section id="safety" title={titles.safety} description={t('agents.settings.sec.safetyDesc')}>
@@ -360,7 +373,7 @@ function SandboxFields({ agent: a }: { agent: AgentDetail }) {
 
 /** A short list of strings as chips (x to remove) and a field to add one (Enter or the + button; commas split). The
  *  field keeps what was typed until the server took it (`saved`). */
-function ListEditor({ value, onChange, placeholder, empty, error, testid }: { value: string[]; onChange: (l: string[], saved?: () => void) => void; placeholder: string; empty: string; error: string | null; testid: string }) {
+export function ListEditor({ value, onChange, placeholder, empty, error, testid }: { value: string[]; onChange: (l: string[], saved?: () => void) => void; placeholder: string; empty: string; error: string | null; testid: string }) {
   const t = useT()
   const [v, setV] = React.useState('')
   const add = () => {

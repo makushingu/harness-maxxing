@@ -19,17 +19,19 @@ import { Page } from '@/components/shell/Page'
 import { KIND_ICON, LOCATION_ICON, PLATFORMS, STATUS_TONE, locationLabel, providerName, rememberServers, statusText, subtitle } from './shared'
 import { AddDomain, AddServer, ConnectVps, RemoveDomain, ServerSettings } from './ServerConnect'
 import { HowItWorks, ServerCard, SourcesPanel, useHowItWorks } from './Overview'
+import { MailInfra } from './MailInfra'
 
-type Tab = 'overview' | 'sites' | 'databases' | 'buckets' | 'domains' | 'servers'
-const TAB_KINDS: Record<Exclude<Tab, 'overview'>, InfraKind[]> = {
+type Tab = 'overview' | 'sites' | 'databases' | 'buckets' | 'domains' | 'servers' | 'mail'
+type KindTab = Exclude<Tab, 'overview' | 'mail'>
+const TAB_KINDS: Record<KindTab, InfraKind[]> = {
   sites: ['site', 'worker', 'pages'],
   databases: ['database'],
   buckets: ['bucket'],
   domains: ['domain'],
   servers: ['server'],
 }
-const TABS = Object.keys(TAB_KINDS) as Exclude<Tab, 'overview'>[]
-const tabOf = (k: InfraKind): Exclude<Tab, 'overview'> => TABS.find((t) => TAB_KINDS[t].includes(k)) || 'sites'
+const TABS = Object.keys(TAB_KINDS) as KindTab[]
+const tabOf = (k: InfraKind): KindTab => TABS.find((t) => TAB_KINDS[t].includes(k)) || 'sites'
 const ORDER: Record<string, number> = { down: 0, warn: 1, unknown: 2, ok: 3 }
 
 /** Location groups: this server first, then the other servers, then the providers. */
@@ -500,7 +502,7 @@ export default function InfraPage() {
       ) : v ? (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {tab !== 'overview' && <Sources v={v} />}
+            {tab !== 'overview' && tab !== 'mail' && <Sources v={v} />}
             <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
               {how.hidden && tab === 'overview' && (
                 <button type="button" onClick={how.show} className="inline-flex items-center gap-1 hover:text-foreground">
@@ -526,10 +528,11 @@ export default function InfraPage() {
                 options={[
                   { value: 'overview', label: t('infra.tab.overview') },
                   ...TABS.map((x) => ({ value: x, label: `${t(`infra.tab.${x}`)} · ${visible.filter((r) => TAB_KINDS[x].includes(r.kind)).length}` })),
+                  { value: 'mail' as const, label: t('infra.mail.tab') },
                 ]}
               />
             </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className={cn('ml-auto flex flex-wrap items-center gap-2', tab === 'mail' && 'hidden')}>
               <Select
                 value={project}
                 onValueChange={setProject}
@@ -548,6 +551,8 @@ export default function InfraPage() {
           </div>
           {tab === 'overview' ? (
             <Overview v={v} items={visible} all={all} onOpen={(id) => set({ id })} onTab={(x) => set({ tab: x })} how={how} />
+          ) : tab === 'mail' ? (
+            <MailInfra />
           ) : (
             (() => {
               const items = visible.filter((r) => TAB_KINDS[tab].includes(r.kind))

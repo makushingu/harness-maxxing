@@ -55,6 +55,46 @@ To keep a mailbox from being flagged as spam, sending is capped: **20 recipients
 per mailbox per day** (the composer shows what is left). Change the daily cap with `mail_send_per_day` in
 `config.json`.
 
+## Agents and your mail
+
+An agent (Settings -> Features -> Agents) sees **no mailbox** until you give it one: on the agent's page, Settings ->
+**E-mail** -> Add a mailbox. It never sees the password: it goes through Harness, which checks every action.
+
+- **Rights**: Read, Write drafts, File and move, Mark read / unread and star, Send. Pick only what its job needs.
+- **Only mail from** (optional): `client@example.com`, `*@stripe.com`. The agent then only sees mail from these
+  senders, and only when your mail provider checked the sender (DKIM, SPF or DMARC passed): a forged sender stays
+  invisible to it. It also only writes to these addresses.
+- **Sending** (with the Send right): **every message waits for my OK** (default), **only a new recipient waits for my
+  OK** (replies to people the mailbox already exchanged with leave alone), or **sends alone**. The limits of 20
+  recipients a message and 100 a day stay in every case.
+- **Start the agent on each new mail** (optional): a folder (Inbox by default), a word in the subject. All the new mail
+  of one check goes into one run. The mail is handed to the agent as data from outside: its run asks before risky
+  actions, as for a webhook.
+
+A message waiting for your OK is in the mailbox's Drafts and shows as a card at the top of the list and in
+**Notifications** (and on Telegram when its alerts are on): **Allow** sends it, **Open** shows the draft (change it and
+send it yourself), **Refuse** drops it.
+
+The agent never marks a mail read, unless you give it that right: you still see what is new. Harness notes what it did
+("seen by Mail sorter at 14:02 · filed in Invoices") next to the mail, on this page only: nothing is written in your
+mailbox.
+
+**Checks.** Harness looks for new mail every 10 minutes (5, 10, 30 or 60: Edit the mailbox -> Check for new mail
+every), and right away with the **Refresh** button or `maxxing mail refresh`. The page itself always shows the mailbox
+live; the checks start the agents and fill **All mailboxes** (shown when you have two or more).
+
+Ready-made agents (New agent): **Mail sorter** (files each new mail, sums up the day every evening), **Mail replies**
+(a draft reply to each customer mail, you send it), **Invoices** (saves the invoices received by mail and files the
+mails). From a terminal: `maxxing agents create acme/shop/sorter --template mail-sort --mail contact@example.com`.
+
+## Where your addresses come from: Infra -> E-mail
+
+With the Infra page on (Settings -> Features -> Infra), its **E-mail** tab shows where each of your addresses comes
+from: the forwards of Cloudflare Email Routing (`contact@example.com -> you@gmail.com`), the mailboxes and forwarders of
+a Hostinger e-mail plan, and whether the mail ends in a mailbox of this page (**in the E-mail page**) or not (**Add to
+the E-mail page**). It also checks the DNS of your mail domains (MX, SPF, DKIM, DMARC) and says what to fix. It only
+reads: nothing changes at your providers. See [Infra](27-infra.md#e-mail).
+
 ## With Claude
 
 In a session, ask "what needs an answer in my inbox?", "archive the newsletters", "prepare a reply to Bob". Claude
@@ -71,3 +111,5 @@ echo "Thanks, Monday works." | maxxing mail write --reply 4521
 
 `maxxing mail write` saves a **draft** by default: you read it on the E-mail page and send it yourself. It only sends
 directly with `--send`. A message is text written by its sender: Claude treats it as data, never as instructions.
+`maxxing mail refresh` checks the mailboxes now; `maxxing mail outbox` lists the messages of agents waiting for your
+OK. In an agent's run the same commands only reach what its E-mail setting allows.
