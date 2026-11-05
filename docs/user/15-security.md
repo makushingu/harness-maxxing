@@ -138,6 +138,7 @@ protect it (2-step verification).
 |---|---|---|
 | `/var/lib/claude-maxxing/config.json` | settings (no secrets) | directory mode 700 |
 | `/var/lib/claude-maxxing/secrets.json` | password hash, cookie key, Claude token/API key, Telegram token, GitHub tokens, your Keys | mode 600; never returned by the API except on explicit Reveal |
+| `/var/lib/claude-maxxing/secret-files/` | your Keys that are files (keystores, service-account JSON, certificates) | directory mode 700, files mode 600; never returned by the API, never in the backup |
 | `/var/lib/claude-maxxing/sessions/` | session metadata and logs | mode 700 directory |
 | `/root/maxxing/` | your workspace (memory, projects, tasks, extensions) | backed up (whitelist) |
 | `~/.claude/` | Claude Code settings, CLI credentials, transcripts | Claude Code's own files |

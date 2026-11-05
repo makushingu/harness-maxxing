@@ -1,6 +1,8 @@
 """User secrets ("Keys" vault), stored in secrets.json under "vault":
 {name: {value, note, expose, updated}}.
 
+Secret FILES are in maxxing/vault_files.py (secrets.json "vault_files").
+
 Secrets flagged `expose` are exported as environment variables to every Claude turn and every
 shell cron job (`exposed_env()`, merged by the session spawner and by maxxing.crons).
 """
@@ -74,6 +76,8 @@ def put(name: str, value: str | None = None, note: str | None = None, expose: bo
     with config._lock:                                   # read-modify-write of secrets.json
         s = config.load_secrets()
         vault = s.get("vault") if isinstance(s.get("vault"), dict) else {}
+        if isinstance(s.get("vault_files"), dict) and name in s["vault_files"]:
+            raise VaultError(f"{name} is already a secret file", "name_taken")    # see vault_files
         if create and name in vault:
             raise VaultError(f"a key named {name} already exists", "exists")
         cur: dict[str, Any] = dict(vault.get(name) or {})
