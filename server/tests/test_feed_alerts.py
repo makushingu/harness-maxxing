@@ -138,6 +138,23 @@ def test_without_post_alert_the_older_telegram_message_stays(client, topic, mx, 
     wait_idle(client, sid)
 
 
+def test_read_on_the_web_updates_the_telegram_alert(client, mx, bridge):
+    seen = [{"id": "seen", "label": "Seen"}]
+    a, b, c = (feed.post(f"Problem {n}", "", "error", "health", ref=f"health:{n}", actions=seen) for n in "abc")
+    plain = feed.post("No ref", "", "error", "health")
+    wait_for(lambda: len([k for k, _ in bridge if k == "post"]) == 3, timeout=5)
+
+    def updates() -> list[int]:
+        return [e["id"] for k, e in bridge if k == "update" and e["read"]]
+    assert client.post(f"/api/feed/{a['id']}/act/seen").status_code == 200
+    wait_for(lambda: updates() == [a["id"]], timeout=5)       # its Seen button goes on Telegram
+    client.post(f"/api/feed/{a['id']}/act/seen")              # already read: nothing to edit
+    feed.act(b["id"], "seen", by="telegram")                  # Telegram edits its own message
+    assert client.post("/api/feed/read", json={"all": True}).status_code == 200
+    wait_for(lambda: sorted(updates()) == sorted([a["id"], c["id"]]), timeout=5)
+    assert plain["id"] not in updates()
+
+
 def test_failed_runs_fold_into_one_alert_ended_by_a_good_run(client, topic, mx):
     _agent(client)
     for _ in range(2):
