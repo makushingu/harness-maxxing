@@ -564,3 +564,11 @@ def test_a_lone_surrogate_in_a_name_or_a_description_is_stored(client, topic):
     assert r.json()["display_name"] == "Wri?ter"
     assert client.patch("/api/agents/acme/blog/writer", content=json.dumps({"description": "Again \ud800"}),
                       headers={"Content-Type": "application/json"}).status_code == 200
+
+
+def test_a_lone_surrogate_in_a_run_text_is_stored(client, topic):
+    _on(client)
+    _create(client)
+    run = _post_raw(client, "/api/agents/acme/blog/writer/run", {"text": "NOTOOL say a\ud800b"})
+    assert run.status_code == 200, run.text
+    wait_idle(client, run.json()["session"]["id"])

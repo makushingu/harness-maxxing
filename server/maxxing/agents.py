@@ -1211,6 +1211,7 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     reply_to: the id of a thread message; its session goes on with this message (no new session).
     wait: the caller tries again later when the budget is held by a run in progress (reason busy, nothing posted).
     The guards and the start are one step under _lock: triggers arriving together never pass the same guard."""
+    text, prompt = _utf8(text or ""), _utf8(prompt or "")    # a lone surrogate could not be stored (500)
     with _lock:
         return _fire(path, trigger=trigger, text=text, prompt=prompt, source=source, attachments=attachments,
                      depth=depth, cron_env=cron_env, timeout_s=timeout_s, reply_to=reply_to, wait=wait)
