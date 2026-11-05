@@ -423,7 +423,10 @@ def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client,
     p = _calls()[-1]["prompt"]
     assert p.startswith("NOTOOL something else") and "your last results in your thread" in p and "THREAD-" in p
     # an unknown reply_to: a new session as usual
-    assert client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL x", "reply_to": "nope"}).json()["started"]
+    x = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL x", "reply_to": "nope"}).json()
+    assert x["started"]
+    wait_idle(client, x["session"]["id"])
+    wait_for(lambda: len(_results(client)) == 4)        # its result is in before seen (a later one is unread again)
     # seen: nothing unread any more
     assert client.post("/api/agents/acme/blog/writer/seen").status_code == 200
     assert client.get("/api/agents/acme/blog/writer").json()["thread_unread"] == 0
