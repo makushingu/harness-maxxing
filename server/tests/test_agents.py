@@ -312,6 +312,22 @@ def test_events_waiting_in_the_debounce_window_survive_a_restart(client, topic, 
     assert agents.debouncer.pending == {} and agents.flush_due() == 0
 
 
+def test_a_restored_batch_keeps_its_hop_count(client, topic, monkeypatch):
+    from maxxing import agents, feed
+    _on(client)
+    _create(client)
+    fired = _feed_trigger(client, monkeypatch, debounce_s=60)
+    agents.scan_feed()
+    feed.post("order 8", source="shop", hops=2)
+    assert agents.scan_feed() == 1
+    agents.debouncer.pending.clear()                     # the server restarts inside the window
+    agents._feed_loaded.clear()
+    feed.post("order 9", source="shop")
+    agents.scan_feed()                                   # restored batch + a new event: no KeyError
+    assert [p["texts"] for p in agents.debouncer.pending.values()] == [["order 8", "order 9"]]
+    assert [p["depth"] for p in agents.debouncer.pending.values()] == [2]
+
+
 def test_feed_events_while_agents_is_off_are_skipped(client, topic, monkeypatch):
     from maxxing import agents, feed
     _on(client)
