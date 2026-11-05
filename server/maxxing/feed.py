@@ -211,8 +211,9 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
                 return None
         row = None
         if group:
+            # never into a resolved one: a new failure after a recovery is a new alert, not a hidden "x2"
             row = c.execute("SELECT * FROM events WHERE source=? AND grp=? AND read=0 AND level=? AND at>? "
-                            "ORDER BY id DESC LIMIT 1", (source, group, level, now - GROUP_WINDOW_S)).fetchone()
+                            "AND resolved IS NULL ORDER BY id DESC LIMIT 1", (source, group, level, now - GROUP_WINDOW_S)).fetchone()
         if row is not None:
             c.execute("UPDATE events SET count=count+1, at=?, title=?, body=?, url=? WHERE id=?",
                       (now, title, body, url, row["id"]))
