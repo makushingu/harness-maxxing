@@ -3,6 +3,17 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.117 - 2026-11-05
+
+New:
+- **Behind a proxy in Docker**: Harness Maxxing can run on the same server as Dokploy, Coolify or any Traefik in
+  Docker, with its domain served by that Traefik. `maxxing proxy on` opens a second private address for it, guarded
+  by a secret header, and writes the Traefik block to copy; the installer does it by itself when Docker holds ports
+  80/443. Nothing changes on other servers.
+
+Fixes:
+- **Scheduled jobs**, **Files** and **Sessions**: small fixes.
+
 ## 2.0.0-alpha.116 - 2026-11-04
 
 Changes:
