@@ -572,3 +572,7 @@ def test_a_lone_surrogate_in_a_run_text_is_stored(client, topic):
     run = _post_raw(client, "/api/agents/acme/blog/writer/run", {"text": "NOTOOL say a\ud800b"})
     assert run.status_code == 200, run.text
     wait_idle(client, run.json()["session"]["id"])
+
+
+def test_domains_with_a_trailing_newline_are_dropped():
+    assert agents._clean_domains(["example.com\n/", "ok.example.com"]) == ["ok.example.com"]
