@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -88,16 +89,26 @@ def public(d: dict) -> dict:
             "decided_at": d.get("decided_at")}
 
 
+_parsed: dict[str, tuple[tuple[int, int, int], dict | None]] = {}   # path -> ((inode, mtime_ns, size), content)
+
+
 def _all() -> list[dict]:
+    """Every request. A file is parsed again only when it changed: the watcher calls this every 2 s while one
+    request waits, and decided ones stay for a day."""
     try:
-        files = list(folder().glob("*.json"))
+        files = [(e.path, e.name, e.stat()) for e in os.scandir(folder()) if e.name.endswith(".json") and e.is_file()]
     except OSError:
         return []
     out = []
-    for f in files:
-        d = approval_mcp.read(f)
-        if d and ID_RE.match(str(d.get("id") or "")) and f.stem == d["id"]:
-            out.append(d)
+    for path, name, st in files:
+        key = (st.st_ino, st.st_mtime_ns, st.st_size)
+        hit = _parsed.get(path)
+        d = hit[1] if hit and hit[0] == key else approval_mcp.read(Path(path))
+        _parsed[path] = (key, d)
+        if d and ID_RE.match(str(d.get("id") or "")) and name[:-5] == d["id"]:
+            out.append(dict(d))
+    for path in set(_parsed) - {p for p, _, _ in files}:
+        _parsed.pop(path, None)
     out.sort(key=lambda d: d.get("at") or 0)
     return out
 
