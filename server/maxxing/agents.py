@@ -621,7 +621,10 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     f = dict(fields or {})
     description = _utf8(str(f.pop("description", "") or ""))
     data = clean({"sandbox": True, **f, "created": time.time()}, strict=True)
-    folder(path).mkdir(parents=True)
+    try:
+        folder(path).mkdir(parents=True)
+    except FileExistsError:                             # created by a request at the same moment
+        raise AgentError(409, "exists", f"Agent {name!r} already exists in {project}/{topic}") from None
     workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
     _save(path, data)
     _git_exclude(tdir)

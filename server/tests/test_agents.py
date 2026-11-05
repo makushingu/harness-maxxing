@@ -576,3 +576,16 @@ def test_a_lone_surrogate_in_a_run_text_is_stored(client, topic):
 
 def test_domains_with_a_trailing_newline_are_dropped():
     assert agents._clean_domains(["example.com\n/", "ok.example.com"]) == ["ok.example.com"]
+
+
+def test_the_same_agent_created_twice_at_once_answers_409(client, topic, monkeypatch):
+    _on(client)
+    real = Path.mkdir
+
+    def racing(self, *a, **kw):                     # the other request made the folder between the check and here
+        if self.name == "writer" and self.parent.name == "agents":
+            real(self, *a, **kw)
+        return real(self, *a, **kw)
+    monkeypatch.setattr(Path, "mkdir", racing)
+    r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "writer"})
+    assert r.status_code == 409, r.text
