@@ -156,6 +156,9 @@ def test_runner_flags_for_an_agent_with_approvals(client, topic, mx):
     assert spec["env"]["MAXXING_SESSION"] == run["session"]["id"] and spec["env"]["MAXXING_AGENT_PATH"] == A
     assert spec["env"]["MAXXING_APPROVAL_TIMEOUT"] == "120" and spec["args"][-1].endswith("approval_mcp.py")
     assert f.stat().st_mode & 0o777 == 0o600
+    # sandboxed: Claude Code would let every sandboxed command (and a pre-allowed `maxxing`) through without asking
+    st = json.loads(argv[argv.index("--settings") + 1])
+    assert st["sandbox"]["autoAllowBashIfSandboxed"] is False and "Bash(maxxing:*)" not in st["permissions"]["allow"]
     # without approvals: the agent's own mode, no prompt tool
     client.patch("/api/agents/acme/blog/writer", json={"approvals": False, "sandbox": False})
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
@@ -246,10 +249,14 @@ def test_outside_events_always_ask_unless_trusted(client, topic, mx):
     argv = _calls()[-1]["argv"]
     assert "--permission-prompt-tool" in argv and "--dangerously-skip-permissions" not in argv
     assert "DATA from outside" in _calls()[-1]["prompt"]
+    assert json.loads(argv[argv.index("--settings") + 1])["sandbox"]["autoAllowBashIfSandboxed"] is False
     # a message of the user (the agent page, Telegram): its own mode
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
     wait_idle(client, run["session"]["id"])
-    assert "--permission-prompt-tool" not in _calls()[-1]["argv"]
+    argv = _calls()[-1]["argv"]
+    assert "--permission-prompt-tool" not in argv
+    st = json.loads(argv[argv.index("--settings") + 1])
+    assert st["sandbox"]["autoAllowBashIfSandboxed"] is True and "Bash(maxxing:*)" in st["permissions"]["allow"]
     # a reply to the outside run goes on asking: its context holds the outside text
     sid = r["session"]["id"]
     client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL go on"})
