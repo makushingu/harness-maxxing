@@ -600,6 +600,9 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
     _save(path, data)
     _git_exclude(tdir)
+    if data["sandbox"]:
+        from . import agent_guard
+        agent_guard.ensure_profile()
     post(path, "note", "Agent created", status="created")
     _invalidate()
     return get(path)
@@ -646,6 +649,9 @@ def update(path: str, fields: dict) -> dict:
     known = set(clean({}).keys()) - {"version", "created"}
     data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
     _save(path, data)
+    if data["sandbox"] and not cur["sandbox"]:
+        from . import agent_guard
+        agent_guard.ensure_profile()
     st = _read_state(path)
     st["owner_at"] = time.time()
     _write_state(path, st)

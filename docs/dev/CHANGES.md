@@ -5,6 +5,23 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
+  agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
+  (configured or forced for an outside event) `autoAllowBashIfSandboxed` is false and `Bash(maxxing:*)` is no longer
+  pre-allowed (asked through the approval tool). `writable_dirs`: "." = the topic's entries but `TOPIC_LOCKED`
+  (agents/, CLAUDE.md, CLAUDE.local.md, memory.md, .claude, .mcp.json; denyWrite wins over allowWrite, so agents/
+  cannot be denied around the agent's own folder), `agents/...` refused in `_clean_writable`; `topic_edit_denied`
+  adds Edit denies (other agents' folders, `agents/*/agent.json|CLAUDE.md|.mcp.json|.claude/**`, topic files).
+  denyRead adds the Claude transcripts + history.jsonl, `~/.config`, `~/.local/share` (allowRead back: `READ_BACK`,
+  Claude Code itself and uv's pythons/tools), other projects / topics / agents, `.env` globs of the topic
+  (`private_paths`). Subagent prompt frames memory.md as notes. install.sh no longer loads the bwrap AppArmor profile:
+  `sandbox-setup` or `ensure_profile()` on create / sandbox on (root, best effort). Not run live here: this server's
+  units cannot nest user namespaces (apply-seccomp setgroups EPERM), checked from the generated settings + the
+  Claude Code 2.1.306 setting texts ("allowRead ... takes precedence over denyRead", "denyWrite takes precedence over
+  allowWrite", denyRead globs expanded on Linux, write globs skipped).
+
 ## 2.0.0-alpha.116 - 2026-11-04
 
 - Telegram modes: `config.telegram.mode` = `simple` | `threads` | `mirror` (`gateway.mode()`; no default in
