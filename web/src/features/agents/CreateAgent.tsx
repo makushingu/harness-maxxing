@@ -4,13 +4,14 @@
 // create. "By hand" = 3 steps:
 // Where (project, then topic) -> Who (name, face, role, model, permission mode) -> When (first triggers, guards).
 // The agent is created at the end; its cron and webhook triggers are added right after (webhook: its URL shown).
+// A ready-made agent made for a mailbox (`mail`) asks on the last step which mailbox of the E-mail page it gets.
 // "Import a Claude Code agent file": a .claude/agents/<name>.md file (picked or pasted) becomes an agent of a topic.
 import * as React from 'react'
-import { useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, Clock, Dices, FileUp, Rss, Send, ShieldCheck, SlidersHorizontal, Sparkles, Webhook } from 'lucide-react'
+import { Link, useNavigate } from 'react-router'
+import { ArrowLeft, ArrowRight, Check, Clock, Dices, FileUp, Mail, Rss, Send, ShieldCheck, SlidersHorizontal, Sparkles, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useImportAgent, useWorkspace } from '@/lib/queries'
+import { agentRoute, useAddAgentCron, useAddAgentWebhook, useAgentTemplates, useCreateAgent, useImportAgent, useMailAccounts, useSettings, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentAvatar, AgentImportResult, AgentLimits, AgentTemplate, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, PermissionMode } from '@/lib/types'
 import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Switch, Textarea, toast, useMask } from '@/components/ui'
@@ -48,6 +49,8 @@ type Form = {
   approvals: boolean
   allowed: string[]
   keys: string[]
+  /** the mailbox given to a template made for one (its `mail`) */
+  mailAccount: string
 }
 
 /** `colorOf` = the project's colour (useProjectColorOf: the one picked on the Agents page). */
@@ -77,6 +80,7 @@ const fresh = (topicPath?: string, colorOf: ColorOf = projectColor): Form => {
     approvals: false,
     allowed: [],
     keys: [],
+    mailAccount: '',
   }
 }
 
@@ -154,7 +158,15 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
   const [errors, setErrors] = React.useState<{ name?: string; form?: string; schedule?: string }>({})
   const [made, setMade] = React.useState<{ agent: Agent; hook?: AgentWebhookResult['hook']; warn?: string } | null>(null)
   const busy = create.isPending || addCron.isPending || addHook.isPending
+  const { data: settings } = useSettings()
+  const mailOn = !!settings?.mail_page
+  const needsMail = !!tpl?.mail
+  const { data: mailboxes } = useMailAccounts(open && needsMail && mailOn)
 
+  // the only mailbox is picked already
+  React.useEffect(() => {
+    if (needsMail && mailboxes?.length === 1 && !f.mailAccount) setF((x) => ({ ...x, mailAccount: mailboxes[0].id }))
+  }, [needsMail, mailboxes, f.mailAccount])
   React.useEffect(() => {
     if (open) {
       const tp = start?.template || null
@@ -197,6 +209,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
         allowed_tools: f.allowed,
         keys: f.keys,
         triggers: f.feed ? [{ kind: 'feed', enabled: true, ...f.feedTrigger }] : [],
+        ...(tpl?.mail && f.mailAccount && { mail: [{ account: f.mailAccount, ...tpl.mail }] }),
       })
     } catch (e) {
       const code = isApiError(e) ? e.code : ''
@@ -362,6 +375,33 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
           ) : (
             <>
               <p className="text-sm text-muted-foreground">{t('agents.create.whenExplain')}</p>
+              {needsMail && (
+                <div className="grid gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3" data-testid="agent-create-mail">
+                  <div className="flex items-start gap-3">
+                    <Mail className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <div className="grid min-w-0 flex-1 gap-0.5">
+                      <span className="text-sm font-medium">{t('agents.mail.createTitle')}</span>
+                      <span className="text-xs text-muted-foreground">{t('agents.mail.createDesc')}</span>
+                    </div>
+                  </div>
+                  {!mailOn || (mailboxes && !mailboxes.length) ? (
+                    <p className="text-xs">
+                      {!mailOn ? t('agents.mail.off') : t('agents.mail.noBox')}{' '}
+                      <Link to={mailOn ? '/mail' : '/settings/features'} className="text-primary underline" onClick={() => onOpenChange(false)}>
+                        {mailOn ? t('agents.mail.openMail') : t('agents.mail.openFeatures')}
+                      </Link>
+                    </p>
+                  ) : (
+                    <Select
+                      value={f.mailAccount || undefined}
+                      onValueChange={(v) => set('mailAccount', v)}
+                      placeholder={t('agents.mail.pick')}
+                      aria-label={t('agents.mail.pick')}
+                      options={(mailboxes || []).map((x) => ({ value: x.id, label: mask(x.label ? `${x.label} (${x.address})` : x.address, 10) }))}
+                    />
+                  )}
+                </div>
+              )}
               <TriggerToggle icon={Clock} title={t('agents.trigger.cron')} desc={t('agents.trigger.cronDesc')} on={f.cron} onChange={(v) => set('cron', v)} testId="agent-cron">
                 <SchedulePicker value={f.schedule} onChange={(v) => set('schedule', v)} error={errors.schedule} />
                 <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.cronPromptHint')}>
@@ -424,7 +464,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
                 {t('agents.create.next')} <ArrowRight />
               </Button>
             ) : (
-              <Button onClick={submit} loading={busy} data-testid="agent-submit">
+              <Button onClick={submit} loading={busy} disabled={needsMail && !f.mailAccount} data-testid="agent-submit">
                 <Check /> {t('agents.create.submit')}
               </Button>
             )}
@@ -556,8 +596,8 @@ export function QuickCreate({ topicPath, onManual, onImport, onTemplate, onDone 
                   <span className="text-sm font-medium">{tp.name}</span>
                   <span className="text-xs text-muted-foreground">{tp.summary}</span>
                   <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    {tp.cron ? <Clock className="size-3" /> : <Webhook className="size-3" />}
-                    {tp.cron ? t('agents.gallery.cron') : t('agents.gallery.webhook')}
+                    {tp.mail?.trigger ? <Mail className="size-3" /> : tp.cron ? <Clock className="size-3" /> : <Webhook className="size-3" />}
+                    {tp.mail?.trigger ? t('agents.mail.galleryTag') : tp.cron ? t('agents.gallery.cron') : t('agents.gallery.webhook')}
                     {tp.approvals && <><span aria-hidden>·</span><ShieldCheck className="size-3" /> {t('agents.gallery.asks')}</>}
                   </span>
                 </span>

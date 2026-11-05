@@ -1,15 +1,19 @@
 // Add or edit a mailbox: address + password, server settings detected from the address (known providers, MX,
-// Thunderbird's autoconfig), then a real sign-in to IMAP and SMTP before saving.
+// Thunderbird's autoconfig), then a real sign-in to IMAP and SMTP before saving. Editing also sets how often it is
+// checked for new mail, shows the agents that may use it, and (folded) the servers whose sender checks are trusted.
 import * as React from 'react'
+import { Link } from 'react-router'
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
 import {
   Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, SecretInput, Select, Textarea,
 } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { errorMessage } from '@/lib/api'
-import type { MailAccount, MailDetect, MailTls } from '@/lib/types'
-import { useMailAddAccount, useMailDeleteAccount, useMailDetect, useMailUpdateAccount } from '@/lib/queries'
+import type { MailAccount, MailDetect, MailPollMin, MailTls } from '@/lib/types'
+import { AGENT_PATH_RE, useMailAddAccount, useMailDeleteAccount, useMailDetect, useMailUpdateAccount } from '@/lib/queries'
+import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { useT } from '@/i18n'
+import { rightsText } from './agents'
 
 type Form = {
   address: string
@@ -24,18 +28,23 @@ type Form = {
   smtp_port: string
   smtp_tls: MailTls
   signature: string
+  poll_min: string
+  /** one host per line or comma */
+  auth_servers: string
 }
 
 const empty: Form = {
   address: '', password: '', label: '', name: '', username: '', imap_host: '', imap_port: '993', imap_tls: 'ssl',
-  smtp_host: '', smtp_port: '465', smtp_tls: 'ssl', signature: '',
+  smtp_host: '', smtp_port: '465', smtp_tls: 'ssl', signature: '', poll_min: '10', auth_servers: '',
 }
+const POLL: MailPollMin[] = [5, 10, 30, 60]
 
 function fromAccount(a: MailAccount): Form {
   return {
     address: a.address, password: '', label: a.label || '', name: a.name || '', username: a.username || '',
     imap_host: a.imap_host, imap_port: String(a.imap_port), imap_tls: a.imap_tls,
     smtp_host: a.smtp_host, smtp_port: String(a.smtp_port), smtp_tls: a.smtp_tls, signature: a.signature || '',
+    poll_min: String(a.poll_min || 10), auth_servers: (a.auth_servers || []).join('\n'),
   }
 }
 
@@ -49,16 +58,18 @@ function providerNote(address: string, d: MailDetect | null, imapHost: string): 
   return null
 }
 
-export function AccountDialog({ open, onOpenChange, account, onSaved }: {
+export function AccountDialog({ open, onOpenChange, account, onSaved, address }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   account?: MailAccount | null
   onSaved?: (a: MailAccount) => void
+  address?: string // a new mailbox prefilled with this address (Infra -> E-mail: "Add to the E-mail page")
 }) {
   const t = useT()
   const editing = !!account
   const [f, setF] = React.useState<Form>(empty)
   const [servers, setServers] = React.useState(false)
+  const [trust, setTrust] = React.useState(false)
   const [detected, setDetected] = React.useState<MailDetect | null>(null)
   const detect = useMailDetect()
   const add = useMailAddAccount()
@@ -68,14 +79,15 @@ export function AccountDialog({ open, onOpenChange, account, onSaved }: {
 
   React.useEffect(() => {
     if (!open) return
-    setF(account ? fromAccount(account) : empty)
+    setF(account ? fromAccount(account) : { ...empty, address: address || '', username: address || '' })
     setServers(!!account)
+    setTrust(!!account?.auth_servers?.length)
     setDetected(null)
     setConfirmDel(false)
     add.reset()
     update.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, account?.id])
+  }, [open, account?.id, address])
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }))
 
@@ -112,7 +124,11 @@ export function AccountDialog({ open, onOpenChange, account, onSaved }: {
       onOpenChange(false)
     }
     if (editing && account) {
-      update.mutate({ id: account.id, ...body, ...(f.password ? { password: f.password } : {}) }, { onSuccess: (r) => done(r.account, r.test) })
+      const extra = {
+        poll_min: Number(f.poll_min) as MailPollMin,
+        auth_servers: f.auth_servers.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),
+      }
+      update.mutate({ id: account.id, ...body, ...extra, ...(f.password ? { password: f.password } : {}) }, { onSuccess: (r) => done(r.account, r.test) })
     } else {
       add.mutate({ address: f.address.trim(), password: f.password, ...body }, { onSuccess: (r) => done(r.account, r.test) })
     }
@@ -200,6 +216,58 @@ export function AccountDialog({ open, onOpenChange, account, onSaved }: {
             <FormField label={t('mail.acc.signature')}>
               <Textarea rows={3} value={f.signature} onChange={(e) => set('signature', e.target.value)} />
             </FormField>
+          )}
+          {editing && account && (
+            <>
+              <FormField label={t('mail.agents.poll')} hint={t('mail.agents.pollHint')}>
+                <Select value={f.poll_min} onValueChange={(v) => set('poll_min', v)} options={POLL.map((n) => ({ value: String(n), label: t('mail.agents.pollMin', { count: n }) }))} />
+              </FormField>
+              <div className="grid gap-2" data-testid="mail-acc-agents">
+                <span className="text-sm font-medium">{t('mail.agents.title')}</span>
+                {account.agents?.length ? (
+                  <ul className="divide-y rounded-lg border">
+                    {account.agents.map((g) => {
+                      const m = AGENT_PATH_RE.exec(g.agent)
+                      return (
+                        <li key={g.agent}>
+                          <Link
+                            to={m ? `/agents/${m[1]}/${m[2]}/${m[3]}?settings=mail` : '/agents'}
+                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50"
+                          >
+                            <AgentAvatarIcon avatar={g.avatar} size={24} mood={g.enabled ? 'idle' : 'sleep'} />
+                            <span className="grid min-w-0 flex-1">
+                              <span className="truncate text-sm">{g.name}</span>
+                              <span className="truncate text-xs text-muted-foreground">
+                                {rightsText(t, g.rights)}
+                                {g.senders.length ? ` · ${t('mail.agents.onlyFrom', { list: g.senders.join(', ') })}` : ''}
+                                {g.trigger?.enabled ? ` · ${t('mail.agents.watches')}` : ''}
+                              </span>
+                            </span>
+                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                          </Link>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('mail.agents.none')}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setTrust((s) => !s)}
+                aria-expanded={trust}
+              >
+                {trust ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                {t('mail.agents.trust')}
+              </button>
+              {trust && (
+                <FormField label={t('mail.agents.trustLabel')} hint={t('mail.agents.trustHint')}>
+                  <Textarea rows={2} value={f.auth_servers} onChange={(e) => set('auth_servers', e.target.value)} placeholder="mx.example.com" className="font-mono text-[13px]" />
+                </FormField>
+              )}
+            </>
           )}
           {err && <p className="text-sm text-destructive">{errorMessage(err)}</p>}
           <DialogFooter className="gap-2 sm:justify-between">

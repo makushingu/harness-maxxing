@@ -1,6 +1,9 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, request } from '../api'
-import type { MailAccount, MailAction, MailCompose, MailComposeMode, MailDetect, MailDraft, MailFolder, MailList, MailMessage, MailSent, MailTest } from '../types'
+import type {
+  MailAccount, MailAction, MailAll, MailCompose, MailComposeMode, MailDetect, MailDraft, MailFolder, MailList, MailMessage, MailOutboxItem, MailPollMin, MailRefreshResult, MailSent, MailTest,
+} from '../types'
+import { qk } from './keys'
 import { useMut } from './util'
 
 // E-mail page (server/maxxing/mail): live IMAP, nothing cached on the server; the cache here keeps the views fast.
@@ -11,6 +14,11 @@ export const mailKeys = {
   list: (acc: string) => ['mail', 'list', acc] as const,
   listOf: (acc: string, folder: string, page: number, q: string, filter: string) => ['mail', 'list', acc, folder, page, q, filter] as const,
   message: (acc: string, folder: string, uid: number) => ['mail', 'message', acc, folder, uid] as const,
+  lists: ['mail', 'list'] as const,
+  foldersAll: ['mail', 'folders'] as const,
+  outboxAll: ['mail', 'outbox'] as const,
+  outbox: (acc: string) => ['mail', 'outbox', acc] as const,
+  everything: ['mail', 'all'] as const,
 }
 
 export function useMailAccounts(enabled = true) {
@@ -61,6 +69,8 @@ export type MailAccountIn = {
   smtp_port: number
   smtp_tls: string
   signature?: string
+  poll_min?: MailPollMin
+  auth_servers?: string[]
 }
 export function useMailDetect() {
   return useMut((address: string) => api.post<MailDetect>('/api/mail/detect', { address }), { errorToast: false })
@@ -83,7 +93,8 @@ export function useMailDeleteAccount() {
 export function useMailAction(acc: string) {
   return useMut((b: { folder: string; uids: number[]; action: MailAction; target?: string }) =>
     api.post<{ ok: boolean; moved_to: string | null }>(`/api/mail/${acc}/actions`, b), {
-    invalidate: [mailKeys.list(acc), mailKeys.folders(acc)],
+    // deleting a draft an agent wrote ends its request
+    invalidate: [mailKeys.list(acc), mailKeys.folders(acc), mailKeys.outboxAll],
   })
 }
 export function useMailCreateFolder(acc: string) {
@@ -114,7 +125,8 @@ function draftForm(d: MailDraft, files: File[]): FormData {
 export function useMailSend(acc: string) {
   return useMut(({ draft, files }: { draft: MailDraft; files: File[] }) =>
     request<MailSent>(`/api/mail/${acc}/send`, { method: 'POST', body: draftForm(draft, files) }), {
-    invalidate: [mailKeys.accounts, mailKeys.list(acc), mailKeys.folders(acc)],
+    // sending a draft an agent wrote ends its request (outbox, Notifications)
+    invalidate: [mailKeys.accounts, mailKeys.list(acc), mailKeys.folders(acc), mailKeys.outboxAll, qk.feed.all],
     errorToast: false,
   })
 }
@@ -123,5 +135,39 @@ export function useMailSaveDraft(acc: string) {
     request<{ folder: string; uid: number }>(`/api/mail/${acc}/draft`, { method: 'POST', body: draftForm(draft, files) }), {
     invalidate: [mailKeys.list(acc), mailKeys.folders(acc)],
     errorToast: false,
+  })
+}
+
+/** Check one mailbox (or all) for new mail now: new mail starts the agents watching it. */
+export function useMailRefresh() {
+  return useMut((account: string | undefined) => api.post<MailRefreshResult[]>('/api/mail/refresh', { account }), {
+    invalidate: [mailKeys.accounts, mailKeys.lists, mailKeys.foldersAll, mailKeys.everything, mailKeys.outboxAll],
+    errorToast: false,
+  })
+}
+/** "All mailboxes": the newest mails of every mailbox from the cache of the last checks (not live). */
+export function useMailAll(enabled = true) {
+  return useQuery({
+    queryKey: mailKeys.everything,
+    queryFn: () => api.get<MailAll>('/api/mail/all', { limit: 100 }),
+    enabled,
+    staleTime: 30_000,
+    refetchInterval: 120_000,
+    retry: false,
+  })
+}
+/** Messages written by agents that wait for the owner's OK (the same requests are "to do" events of the feed). */
+export function useMailOutbox(acc: string | null, enabled = true) {
+  return useQuery({
+    queryKey: mailKeys.outbox(acc || ''),
+    queryFn: () => api.get<MailOutboxItem[]>('/api/mail/outbox', { account: acc! }),
+    enabled: !!acc && enabled,
+    staleTime: 20_000,
+    refetchInterval: 60_000,
+  })
+}
+export function useMailOutboxAct() {
+  return useMut(({ id, action }: { id: string; action: 'send' | 'deny' }) => api.post<{ id: string; status: string }>(`/api/mail/outbox/${id}/${action}`, {}), {
+    invalidate: [mailKeys.outboxAll, mailKeys.accounts, mailKeys.lists, mailKeys.foldersAll, qk.feed.all],
   })
 }

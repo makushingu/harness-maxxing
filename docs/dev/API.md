@@ -516,6 +516,7 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 | POST | `/api/infra/servers/remove` | `{name}` | `{removed}`; `404` |
 | POST | `/api/infra/domains` | `{name}` | `{name}` (normalised: lower case, IDNA, no scheme/path); `400 invalid_domain`. A domain from any registrar, read through RDAP + public DNS |
 | POST | `/api/infra/domains/remove` | `{name}` | `{removed}`; `404` when it was not added by hand |
+| GET | `/api/infra/mail?refresh=1` | – | Infra -> E-mail, view only (`infra/mailinfo.py`; `409 disabled` when the Infra page is off). `{generated_at, cached, mail_page, mailboxes:[{id, address, label, domain, imap_host, imap_port, smtp_host, smtp_port, has_password, last_check:{at, ok, error}\|null}], cloudflare:{connected, key, error?, message?, zones:[{zone, name, routing:{enabled, status}\|null, rules:[{name, enabled, catch_all, from, action: forward\|worker\|drop, to:[address], worker}], error?, missing_permission?}], addresses:[{email, verified, verified_at}], addresses_error?, addresses_fix?, missing_permission_zones?, fix?}, hostinger:{connected, key, error?, orders:[{id, domain, status, plan, seats, expires, mailboxes:[{address, status, catch_all}], aliases:[{address, to, enabled}], forwarders:[{from, to, enabled, confirmed, keep_copy}], catchalls:[{domain, to, enabled, confirmed}], error?}]}, routes:[{domain, address (`*@domain` = catch-all), via: cloudflare\|hostinger, kind: forward\|worker\|drop\|mailbox\|alias\|catchall\|other, enabled, account, worker, to:[{address, verified: bool\|null, account}]}], domains:[{domain, sources:[cloudflare\|hostinger\|mail_page], expects, checked, error, mx:[host], spf:{record, count, lookups}, dkim:[selector], dmarc:{record, count, policy}, problems:[{level: error\|warn\|info, code, text, fix, params}]}]}`. `account` = id of the E-mail page mailbox with that address. Provider calls are GET only, cached 5 min (`<state>/infra/mail.json`), DNS facts 1 h (`<state>/infra/mail-dns.json`, public DoH, `MAXXING_DOH_API`); `refresh=1` skips both. A provider error is in the payload, never a 5xx. Problem codes: `dns_unreachable, no_mail, null_mx, no_mx, mx_not_cloudflare, no_spf, multiple_spf, spf_all, spf_lookups, no_dkim, no_dmarc, multiple_dmarc, dmarc_no_policy, dmarc_none` |
 
 Resource: `{id, kind: server|site|worker|pages|database|bucket|domain, name, location: local|<server>|cloudflare|hostinger|other,
 provider, urls, status: ok|warn|down|unknown, status_detail (http_<code>, unreachable, timeout, tls_invalid, cert_expiring,
@@ -549,6 +550,22 @@ Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, 
 | GET | `/api/mail/{id}/compose?mode=reply\|replyall\|forward\|draft&folder=&uid=` | – | `{to, cc, bcc?, subject, text, in_reply_to, references, attachments}`: the fields a composer starts with (signature then quote for a reply, forwarded header + body, a draft as saved; never oneself in reply all) |
 | POST | `/api/mail/{id}/send` | multipart: `data` = JSON `MailDraft` `{to, cc, bcc, subject, text, in_reply_to?, references?, reply?: {folder, uid}, forward?: {folder, uid, indexes}, draft?: {folder, uid}}`, `files` (≤ 30, ≤ 25 MB in total with the forwarded ones) | `{ok, message_id, recipients, refused, sent_folder}`: sent through the SMTP of the mailbox (plain text), copy filed in Sent (not for Gmail / Outlook, which do it), `reply` flagged answered, `draft` dropped. Capped: ≤ 20 recipients a message, `mail_send_per_day` (config, default 100) recipients a mailbox a day (`<state>/mail/sent-count.json`; a failed send gives them back) |
 | POST | `/api/mail/{id}/draft` | as `/send` | `{folder, uid}`: filed in Drafts, replacing `draft` |
+| POST | `/api/mail/refresh` | `{account?}` | `[{account, ok, error?, new, started}]`: check the mailbox(es) now (`mail/poll.py`); new mail starts the agents watching it |
+| GET | `/api/mail/all?limit=100&before=` | – | `{messages: [{account, address, folder, uid, message_id, from, from_verified, subject, date, snippet, seen, attachments, seen_by}], checks: {<id>: {at, ok, error}}}`: the newest mail of every mailbox as the checks saw it (cache, not live) |
+| GET | `/api/mail/outbox?account=` | – | `[{id, account, agent, agent_name, avatar, at, to, cc, subject, text, files, draft: {folder, uid}, why, event_id, note}]`: messages written by agents waiting for the owner's OK |
+| POST | `/api/mail/outbox/{id}/send\|deny` | – | `{id, status: sent\|refused}` (once; also the buttons of its Notifications event, ref `mailsend:<id>`) |
+
+Since the agents' e-mail (lot 2): `MailAccount` also has `poll_min` (5\|10\|30\|60 minutes between checks, default 10,
+PATCH-able), `auth_servers` (host names whose `Authentication-Results` are trusted; empty = the mailbox's own IMAP /
+SMTP / MX servers and their known aliases, PATCH-able), `last_check` (`{at, ok, error}` or null), `agents` (the agents
+that may use it: `{agent, name, avatar, enabled, rights, senders, approve_send, trigger}`) and `waiting` (outbox count).
+List rows and `/message` have `from_verified` (the topmost `Authentication-Results`, written by the mailbox's provider,
+says DMARC / DKIM / SPF passed for the sender's domain), `message_id`, and `seen_by`: `[{agent, at, what, detail, name,
+avatar, exists}]` (`what`: seen, read, draft, filed, archived, replied, sent, marked read...; kept in `<state>/mail/mail.db`,
+never written to the mailbox). An agent's `mail` setting (agent.json, `PATCH /api/agents/...` `{mail: [Grant]}`, 400
+`bad_mail`): `Grant = {account, rights: [read, draft, move, mark, send], senders: ["*@example.com", "bob@example.com"],
+approve_send: always|new|never, trigger: {enabled, folder, subject, senders, prompt} | null}`; enforced by `maxxing mail`
+in the agent's turns (`mail/access.py`, `cmd_mail.Guard`).
 
 ## Team
 
