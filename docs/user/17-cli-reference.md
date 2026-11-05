@@ -226,7 +226,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing mail move UID... --to FOLDER` / `mkdir NAME [--parent F]` | move / create a folder |
 | `maxxing mail attachment UID INDEX OUT` | save an attachment |
 | `maxxing mail write [--to A,B] [--cc ..] [--bcc ..] [-s SUBJECT] [--reply UID\|--reply-all UID\|--forward UID] [--attach FILE]... [--send] < body.txt` | write a message: saved as a **draft** for you to check and send, or sent with `--send` |
-| `maxxing mail refresh [-a A]` | check the mailboxes now (new mail starts the agents watching them; from an agent's run, none) |
+| `maxxing mail refresh [-a A]` | check the mailboxes now (new mail starts the agents watching them; from an agent's run: asks the server for a check) |
 | `maxxing mail outbox [-a A]` | messages written by agents waiting for your OK (an agent sees its own) |
 | `printf %s "$PW" \| maxxing mail add ADDRESS [--imap HOST[:PORT]] [--smtp HOST[:PORT]]` | add a mailbox (password on stdin) |
 

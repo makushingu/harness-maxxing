@@ -19,7 +19,7 @@ from __future__ import annotations
 import fnmatch
 import re
 from email.message import Message
-from typing import Any
+from typing import Any, Callable
 
 RIGHTS = ("read", "draft", "move", "mark", "send")
 APPROVE = ("always", "new", "never")
@@ -186,7 +186,9 @@ STAMPING = {"google.com", "yahoo.com", "yahoo.net", "messagingengine.com", "fast
             "zohomail.com", "icloud.com", "apple.com"}
 DETECT_MIN = 10          # recent mails with their topmost Authentication-Results noted...
 DETECT_DOMAINS = 3       # ...from at least this many sender domains...
-DETECT_SHARE = 0.9       # ...and this share of them topped by the same server
+DETECT_SHARE = 0.9       # ...and this share of them topped by the same server...
+DETECT_DAYS = 7          # ...received over at least a week, to offer an unknown server (a flood of planted headers
+                         # would have to last that long, and the owner still has to confirm it)
 
 
 def _cfws_free(s: str) -> str:
@@ -207,31 +209,42 @@ def authserv_id(top: str) -> str:
     return "" if "=" in tok else tok
 
 
-def detect(samples: list[tuple[str, str]], own_domain: str) -> str:
+def detect(samples: list[tuple[str, str, float | None]], own_domain: str, days: float = 0) -> str:
     """The base domain that tops the Authentication-Results of nearly all recent mail -> the provider stamps every
-    mail. samples: (authserv-id of the topmost header or "", sender address) of the newest mails. "" when unsure (a
-    provider that writes nothing: whatever header a sender planted would be the topmost one)."""
-    rows = [(base_domain(a) if a else "", (f or "").lower().rsplit("@", 1)[-1]) for a, f in samples]
-    rows = [r for r in rows if r[1] and r[1] != own_domain.lower()]     # its own mail may skip the check
-    if len(rows) < DETECT_MIN or len({d for _, d in rows}) < DETECT_DOMAINS:
+    mail. samples: (authserv-id of the topmost header or "", sender address, received at) of the newest mails, in the
+    order the server received them (never their Date: header, which the sender writes). days: the samples must span
+    that long. "" when unsure (a provider that writes nothing: whatever header a sender planted would be on top)."""
+    rows = [(base_domain(a) if a else "", (f or "").lower().rsplit("@", 1)[-1], r) for a, f, r in samples]
+    rows = [x for x in rows if x[1] and x[1] != own_domain.lower()]     # its own mail may skip the check
+    if len(rows) < DETECT_MIN or len({d for _, d, _ in rows}) < DETECT_DOMAINS:
         return ""
+    if days:
+        got = [r for _, _, r in rows if r]
+        if len(got) < len(rows) or max(got) - min(got) < days * 86400:
+            return ""
     counts: dict[str, int] = {}
-    for a, _ in rows:
+    for a, _, _ in rows:
         if a:
             counts[a] = counts.get(a, 0) + 1
     best = max(counts, key=lambda k: counts[k], default="")
     return best if best and counts[best] >= DETECT_SHARE * len(rows) else ""
 
 
-def sender_check(acc: dict, detected: str, mx: list[str] | None) -> dict:
+def sender_check(acc: dict, samples: list[tuple[str, str, float | None]], mx: Callable[[], list[str]]) -> dict:
     """How the mailbox's senders are checked -> {state, server}: "owner" (the owner named the servers:
-    auth_servers), "auto" (a known provider that stamps every mail, and the mailbox is there), "detected" (one server
-    tops nearly all mail but is not known: trusted once the owner confirms it), "none" (no sender is ever verified)."""
+    auth_servers), "auto" (a known provider that stamps every mail and hosts the mailbox: its IMAP / SMTP servers -
+    an MX alone could front another server), "detected" (one of the mailbox's own servers tops nearly all its mail of
+    the last week, not a known provider: trusted once the owner confirms it), "none" (no sender is ever verified)."""
     if acc.get("auth_servers"):
         return {"state": "owner", "server": ", ".join(acc["auth_servers"])}
-    if detected and detected in STAMPING and detected in trusted_servers(acc, mx):
-        return {"state": "auto", "server": detected}
-    return {"state": "detected" if detected else "none", "server": detected}
+    own = (acc.get("address") or "").rsplit("@", 1)[-1]
+    d = detect(samples, own)
+    if d and d in STAMPING and d in trusted_servers(acc):
+        return {"state": "auto", "server": d}
+    d = detect(samples, own, DETECT_DAYS)
+    if d and d in trusted_servers(acc, mx()):
+        return {"state": "detected", "server": d}
+    return {"state": "none", "server": ""}
 
 
 def top_result(msg: Message) -> str:

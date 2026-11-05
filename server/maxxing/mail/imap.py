@@ -376,20 +376,37 @@ def _select(m: imaplib.IMAP4, folder: str, readonly: bool) -> int:
         return 0
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f\u0080-\u009f\u2028\u2029]")
+
+
+def _line(s: str) -> str:
+    """A header value on one line: `=?utf-8?q?hi=0AFrom:_x?=` decodes to two lines that would read like Harness's own
+    (the text of an agent's turn, `maxxing mail read`)."""
+    return _CONTROL.sub(" ", s) if s else ""
+
+
 def _addr(v: Any) -> list[dict]:
     try:
-        return [{"name": a.display_name or "", "email": a.addr_spec or ""} for a in v.addresses]
+        return [{"name": _line(a.display_name or ""), "email": _line(a.addr_spec or "")} for a in v.addresses]
     except Exception:  # noqa: BLE001 - malformed header
-        return [{"name": "", "email": str(v or "")}] if v else []
+        return [{"name": "", "email": _line(str(v or ""))}] if v else []
 
 
 def _hdr(msg: Any, name: str) -> str:
     try:
         v = msg[name]
-        return str(v) if v is not None else ""
+        return _line(str(v)) if v is not None else ""
     except Exception:  # noqa: BLE001 - undecodable header
         raw = msg.get_all(name, failobj=[None])[0] if hasattr(msg, "get_all") else None
-        return str(raw or "")
+        return _line(str(raw or ""))
+
+
+def _idate(internal: bytes | None) -> float | None:
+    with contextlib.suppress(Exception):
+        t = imaplib.Internaldate2tuple(b'INTERNALDATE "' + internal + b'"') if internal else None
+        if t:
+            return time.mktime(t)
+    return None
 
 
 def _date(msg: Any, internal: bytes | None) -> float | None:
@@ -440,6 +457,7 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
             "to": _addr(msg["to"]) if msg["to"] else [],
             "subject": _hdr(msg, "subject"),
             "date": _date(msg, idate.group(1) if idate else None),
+            "received": _idate(idate.group(1) if idate else None),     # by the server (Date: is the sender's)
             "seen": "\\seen" in fl,
             "flagged": "\\flagged" in fl,
             "answered": "\\answered" in fl,
@@ -449,9 +467,6 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
             "auth": access.top_result(msg),          # replaced by from_verified (with_trust)
         }
     return [rows[u] for u in uids if u in rows]
-
-
-_CONTROL = re.compile(r"[\x00-\x1f\x7f\u0080-\u009f\u2028\u2029]")
 
 
 def _search_args(q: str | None, unread: bool, flagged: bool) -> tuple[list[str], bytes | None]:
@@ -492,12 +507,11 @@ def sender_check(acc: dict) -> dict:
     """{state, server}: access.sender_check with what the checks noted (store.auth_samples) and the MX."""
     from . import store
     domain = (acc.get("address") or "").rsplit("@", 1)[-1].lower()
-    detected = ""
+    samples: list = []
     if not acc.get("auth_servers"):
         with contextlib.suppress(Exception):
-            detected = access.detect(store.auth_samples(acc["id"]), domain)
-    mx = _mx_of(domain) if detected in access.STAMPING and domain else None
-    return access.sender_check(acc, detected, mx or [])
+            samples = store.auth_samples(acc["id"])
+    return access.sender_check(acc, samples, lambda: (_mx_of(domain) or []) if domain else [])
 
 
 def trust(acc: dict) -> set[str]:
@@ -634,7 +648,7 @@ def _render(msg: EmailMessage, uid: int, folder: str, seen_flags: list[str]) -> 
             if len(payload) <= MAX_INLINE:
                 cids[cid] = f"data:{ctype};base64," + base64.b64encode(payload).decode()
                 continue
-        name = p.get_filename() or ""
+        name = _line(p.get_filename() or "")
         if not name and p.get_content_disposition() != "attachment" and ctype.startswith("text/"):
             continue                                  # alternative bodies already shown
         if payload is None:
@@ -701,7 +715,7 @@ def attachment(acc: dict, folder: str, uid: int, index: int) -> tuple[str, str, 
     for i, p in enumerate(msg.walk()):
         if i == index and not p.is_multipart():
             ctype = p.get_content_type()
-            return p.get_filename() or f"part-{i}.{ctype.split('/')[-1]}", ctype, p.get_payload(decode=True) or b""
+            return _line(p.get_filename() or "") or f"part-{i}.{ctype.split('/')[-1]}", ctype, p.get_payload(decode=True) or b""
     raise MailError("not_found", "attachment not found")
 
 
