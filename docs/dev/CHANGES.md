@@ -38,6 +38,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (written while the server was down): feed event, thread message, Telegram; `_feed_new` returns True / False / None.
 - `approvals.decide` and the watcher's expiry read-check-write under `config.ProcessLock("approvals")`: two answers at
   once (web + Telegram) = one 200, one 409 `not_pending`.
+- Telegram `_alert_send_sync`: once the note `al:<id>` is stored, the event is read again (`feed.get`) and the message
+  edited at once if it changed meanwhile (an `update_alert` during the send found no message to edit).
 
 ## 2.0.0-alpha.116 - 2026-11-04
 
