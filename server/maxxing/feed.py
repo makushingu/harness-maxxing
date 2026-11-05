@@ -314,9 +314,13 @@ def update(event_id: int, *, title: str | None = None, body: str | None = None, 
 
 
 def resolve(ref: str, resolution: str = "", **kw: Any) -> dict | None:
-    """End the open event following `ref`, if any (the cause went away). Returns it."""
-    ev = find(ref)
-    return update(ev["id"], resolve=True, resolution=resolution, **kw) if ev else None
+    """End every open event following `ref` (the cause went away): an older one read or out of the grouping window
+    must not keep its buttons. Returns the newest, if any."""
+    with _conn() as c:
+        ids = [r[0] for r in c.execute("SELECT id FROM events WHERE ref=? AND resolved IS NULL ORDER BY id DESC",
+                                       (str(ref),))]
+    done = [update(i, resolve=True, resolution=resolution, **kw) for i in ids]
+    return next((ev for ev in done if ev), None)
 
 
 def act(event_id: int, action: str, by: str = "web") -> dict:
