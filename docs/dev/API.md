@@ -284,6 +284,9 @@ health problems itself every 60 s (not `cron_failed` nor
 | PUT | `/api/secrets/{name}` | `{value?, note?, expose?, create?}` | `{ok}` · `409 exists` with `create: true` when the name is taken · `400 invalid_name\|reserved_name\|value_required\|invalid_value\|invalid_note` (PATH, HOME…, MAXXING_* are reserved; a value has 1 to 16384 characters, no null byte, no lone surrogate) — `expose` = exported as env var to Claude sessions |
 | GET | `/api/secrets/{name}/reveal` | – | `{value}` |
 | DELETE | `/api/secrets/{name}` | – | `{ok}` |
+| GET | `/api/secret-files` | – | `[{name, filename, size, sha256, note, expose, updated}]` - secret FILES of the Keys vault (`maxxing/vault_files.py`); no endpoint ever returns the content (a file is read on the server: `maxxing keys get-file`, or its path in the environment when `expose`) |
+| PUT | `/api/secret-files/{name}?note=&expose=&create=&filename=` | raw body = the file (`application/octet-stream`, 1 byte to 1 MiB; no multipart: the global 1 MiB body cap applies). Query: `note` (≤ 200 chars), `expose` (bool), `create` (bool), `filename` (original name, display only, ≤ 100 chars after sanitizing) | `{ok}` · an empty body on an existing name changes only `note` / `expose` / `filename`, the file is kept · `409 exists` with `create=true` when the name is taken by a file, `409 name_taken` when it is a text key (and `PUT /api/secrets/{name}` answers `409 name_taken` for a name that is a file) · `400 invalid_name\|reserved_name` (same rules as keys) `\|file_required` (new name, empty body) `\|invalid_value` (over 1 MiB) `\|invalid_note` · `413 too_large` over the body cap — `expose` = the environment variable `NAME` of every Claude session and shell cron job holds the file's **path**, never its content |
+| DELETE | `/api/secret-files/{name}` | – | `{ok}` · removes the file and its entry · `404 not_found` |
 
 ## MCP servers
 Claude Code's MCP servers (maxxing/mcp.py), shown in Settings -> MCP. Bus topic `mcp`.

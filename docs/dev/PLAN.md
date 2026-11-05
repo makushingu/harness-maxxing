@@ -98,7 +98,7 @@ Browser (React SPA)  ──HTTPS──>  Caddy (optional)  ──>  maxxing serv
 | What | Default |
 |---|---|
 | Code (git clone) + venv | `/opt/claude-maxxing` (+ `.venv`) |
-| State | `/var/lib/claude-maxxing/` : `config.json`, `secrets.json` (600), `sessions/`, `crons/`, `telegram/`, `backup/`, `trash/`, `logs/` |
+| State | `/var/lib/claude-maxxing/` : `config.json`, `secrets.json` (600), `secret-files/` (700, files 600: Keys vault files), `sessions/`, `crons/`, `telegram/`, `backup/`, `trash/`, `logs/` |
 | Workspace | `/root/maxxing/` : `CLAUDE.md`, `memory.md`, `projects/<p>/topics/<t>/`, `tasks.json`, `extensions/` |
 | CLI | `/usr/local/bin/maxxing` → venv entry point |
 | Service | `claude-maxxing.service` ; turn units `maxxing-<sid8>` |

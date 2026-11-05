@@ -138,3 +138,27 @@ Write only the key *name* in memory files ("Shop API: key `SHOP_TOKEN`"). Extens
 `ctx["secret"]("NAME")`.
 
 Keys live in `/var/lib/claude-maxxing/secrets.json` (mode 600) and are not included in the backup.
+
+### Files
+
+Some secrets are not a line of text: a keystore (`.p12`, `.jks`), a service-account JSON, a certificate. The **Files**
+section of Settings → Keys stores them (1 byte to 1 MiB, binary is fine) under a name like a key
+(`ANDROID_KEYSTORE`, `GCP_SERVICE_ACCOUNT`; same naming rules, and a name is either a key or a file). Only the list is
+ever shown: name, original file name, size, a SHA-256 fingerprint and your note. The content is never sent to the
+browser; to replace a file, upload it again under the same name (**Edit**, then choose the new file; leave the file empty to change only the note or the switch).
+
+- **Expose** puts the file's **path** (not its content) in the environment variable of that name, for every Claude
+  session and every shell cron job: `keytool -keystore "$ANDROID_KEYSTORE" ...`. Nothing to copy into a project folder
+  and nothing to commit by mistake.
+- From the terminal (the file comes from disk, or from stdin with `-`):
+  `maxxing keys put-file NAME PATH [--note TEXT] [--no-expose]`, `maxxing keys get-file NAME [--output PATH]`
+  (the bytes on stdout, or a new file of mode 600; `--force` to overwrite), `maxxing keys delete-file NAME`.
+  `maxxing keys list` shows them with a `file` marker.
+- Files live in `/var/lib/claude-maxxing/secret-files/` (folder mode 700, files mode 600), next to `secrets.json`:
+  **never in the backup**, and covered by *Protect the secrets* like `secrets.json`.
+- Agents never get a file (their *Keys it can use* list is about text keys), and their commands cannot read or
+  change them with `maxxing keys`.
+
+This is safe storage that avoids leaks **by mistake** (a commit, the backup, a memory file): sessions run as the
+server's user, so it is not isolation from a session, which can read the path it is given - the same as for a key
+exposed as a variable. A certificate expiry date in the list may come later.

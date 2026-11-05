@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Keys can now be files.** Keep a keystore, a service-account JSON or a certificate in the new Files section of
+  Settings -> Keys, or with `maxxing keys put-file`, and expose its path to your sessions and jobs as an environment
+  variable. Files stay on the server, never in the backup, and are never shown or downloadable in the browser.
+
 ## 2.0.0-alpha.118 - 2026-11-05
 
 Fixes:

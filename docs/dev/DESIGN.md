@@ -116,6 +116,10 @@ domain components reused by onboarding **and** settings: `ClaudeConnect`, `Claud
 - Page actions: ≤ 3 visible buttons; on mobile use icons (`<span className="max-sm:hidden">label</span>`) or a "…"
   `DropdownMenu`.
 - Settings-like pages: stacked `SettingsCard`s (`grid gap-6`), danger zone last (`danger` prop).
+- Settings -> Keys, "Files" card (server API in API.md `/api/secret-files`): under the text keys, same
+  row style (name, filename, size, short sha256, note, Expose switch) with an **Add file** dialog (file picker) instead
+  of a value field. No Reveal and no download: the content is never sent to the browser. Replace = upload again on the
+  same name; Delete asks for confirmation.
 - **Density**: rows 40 px comfortable / 32 px compact (`--row-h`); lists use `divide-y` inside a bordered card.
 - Responsive targets: 375 / 768 / 1280 / 1920 px. Test at least 375 and 1280.
 

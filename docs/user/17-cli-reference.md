@@ -165,10 +165,13 @@ Remotion, the Whisper models, Garage). As root.
 
 | Command | Purpose |
 |---|---|
-| `maxxing keys list [--json]` | names, notes and whether each key is exposed (never the values) |
+| `maxxing keys list [--json]` | names, notes and whether each key is exposed, files marked `file` (never the values or contents) |
 | `maxxing keys get NAME` | print a value (exit code 1 when missing) |
 | `printf %s "$VALUE" \| maxxing keys set NAME [--note TEXT] [--no-expose]` | create or update a key; the value comes from stdin, never from the command line. A new key is exposed (environment variable of every session and shell job) unless `--no-expose`; an update keeps its note and exposure; a multi-line value (PEM, SSH key) keeps its final line break |
 | `maxxing keys delete NAME` | remove a key |
+| `maxxing keys put-file NAME PATH [--note TEXT] [--no-expose]` | store a secret **file** (keystore, service-account JSON, certificate; 1 byte to 1 MiB) read from `PATH`, or from stdin with `-`. A new file is exposed (the environment variable `NAME` holds its path in sessions and shell jobs) unless `--no-expose`; never in the backup |
+| `maxxing keys get-file NAME [--output PATH] [--force]` | write the file to stdout, or to `PATH` (mode 600; refuses an existing path unless `--force`) |
+| `maxxing keys delete-file NAME` | remove a secret file |
 | `maxxing infra status` / `infra list [--kind K] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot) |
 | `maxxing infra refresh` | read everything now (this server, other servers over SSH, Cloudflare, Hostinger, URL checks) |
 | `maxxing infra site add NAME (--dir D \| --port N) [--host H] [--dns] [--project P]` | put a site online: `https://<Harness address>/<NAME>/` (sandboxed) or its own host; `site remove`, `site list`, `reserved` |

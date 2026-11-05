@@ -33,7 +33,7 @@ def put_secret(name: str, body: SecretIn):
     try:
         vault.put(name, body.value, body.note, body.expose, create=body.create)
     except vault.VaultError as e:
-        if e.code == "exists":
+        if e.code in ("exists", "name_taken"):
             raise HTTPException(409, detail={"error": e.code, "message": str(e)}) from None
         raise _bad(e) from None
     return {"ok": True}

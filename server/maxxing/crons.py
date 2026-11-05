@@ -1005,8 +1005,9 @@ def _job_env(job: dict) -> dict[str, str]:
     except Exception:
         env = dict(os.environ)
         try:
-            from . import vault
+            from . import vault, vault_files
             env.update(vault.exposed_env())
+            env.update(vault_files.exposed_files_env())
         except Exception:
             pass
     env.update(MAXXING_CRON_ID=job["id"], MAXXING_CRON_NAME=job["name"])
