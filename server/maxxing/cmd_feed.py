@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 
@@ -30,11 +29,15 @@ def _configure(p) -> None:
     sub.add_parser("read-all", help="mark every event as read")
 
 
-def _self_trigger(source: str) -> str:
-    """From an agent's turn: refuse a source its own feed triggers watch (it would start itself again)."""
-    agent = os.environ.get("MAXXING_AGENT") or ""
+def _self_trigger(agent: str, source: str) -> str:
+    """From an agent's turn: refuse a source its own feed triggers watch (it would start itself again), a webhook's
+    source (only its signed deliveries post there: an agent could pass for them) and a built-in source."""
     if not agent:
         return ""
+    from . import feed
+    if source in feed.BUILTIN or any(h.get("name") == source for h in feed.settings()["hooks"]):
+        return (f"Refused: {source!r} is a webhook or built-in source, only its own deliveries post there. "
+                "Use another --source.")
     try:
         from . import agents
         if not agents.exists(agent):
@@ -52,12 +55,14 @@ def _run(a) -> int:
     from .feed import FeedError
     try:
         if a.feed_cmd == "post":
-            loop = _self_trigger(feed.clean_source(a.source))
+            from . import agent_guard
+            turn = agent_guard.agent_turn()         # from the turn's own session, not its (changeable) environment
+            loop = _self_trigger(turn["path"], feed.clean_source(a.source))
             if loop:
                 print(loop, file=sys.stderr)
                 return 2
             ev = feed.post(a.title, a.body, a.level, a.source, a.url, dedupe=a.dedupe, group=a.group,
-                           notify=not a.quiet)
+                           notify=not a.quiet, hops=turn["depth"] + 1 if turn["path"] else 0)
             if a.json:
                 print(json.dumps({"event": ev, "duplicate": ev is None}))
             else:
