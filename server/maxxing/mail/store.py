@@ -76,6 +76,8 @@ def _migrate(c: sqlite3.Connection) -> None:
         cols = {r[1] for r in c.execute("PRAGMA table_info(messages)")}
         if "auth_server" not in cols:
             c.execute("ALTER TABLE messages ADD COLUMN auth_server TEXT")     # NULL: noted before (not a sample)
+        if "received" not in cols:
+            c.execute("ALTER TABLE messages ADD COLUMN received REAL")        # INTERNALDATE (the server's)
         c.execute("PRAGMA user_version=1")
         c.commit()
 
@@ -135,6 +137,11 @@ def set_position(account: str, folder: str, *, uidvalidity: int | None = None, l
                   "VALUES (?,?,?,?,?,?,?)", (account, folder, uv, lu, time.time(), 1 if ok else 0, error[:500]))
 
 
+def forget_folder(account: str, folder: str) -> None:
+    with conn() as c:
+        c.execute("DELETE FROM messages WHERE account=? AND folder=?", (account, folder))
+
+
 def last_check(account: str) -> dict | None:
     """The newest check of a mailbox: {at, ok, error}."""
     with conn() as c:
@@ -157,16 +164,17 @@ def remember(account: str, folder: str, rows: list[dict], snippets: dict[int, st
         for r in rows:
             f = r.get("from") or {}
             c.execute("INSERT INTO messages(account, folder, uid, message_id, from_email, from_name, "
-                      "verified, subject, date, snippet, seen, attachments, at, auth_server) "
-                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account, folder, uid) DO UPDATE SET "
+                      "verified, subject, date, snippet, seen, attachments, at, auth_server, received) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account, folder, uid) DO UPDATE SET "
                       "message_id=excluded.message_id, from_email=excluded.from_email, from_name=excluded.from_name, "
                       "verified=excluded.verified, subject=excluded.subject, date=excluded.date, seen=excluded.seen, "
                       "attachments=excluded.attachments, at=excluded.at, auth_server=excluded.auth_server, "
+                      "received=excluded.received, "
                       "snippet=CASE WHEN excluded.snippet!='' THEN excluded.snippet ELSE messages.snippet END",
                       (account, folder, int(r["uid"]), r.get("message_id") or "", (f.get("email") or "").lower(),
                        f.get("name") or "", 1 if r.get("from_verified") else 0, r.get("subject") or "",
                        r.get("date"), (snippets or {}).get(int(r["uid"]), ""), 1 if r.get("seen") else 0,
-                       1 if r.get("attachments") else 0, now, str(r.get("auth_server") or "")[:200]))
+                       1 if r.get("attachments") else 0, now, str(r.get("auth_server") or "")[:200], r.get("received")))
         c.execute("DELETE FROM messages WHERE account=? AND rowid NOT IN (SELECT rowid FROM messages WHERE account=? "
                   "ORDER BY COALESCE(date, at) DESC LIMIT ?)", (account, account, KEEP_MESSAGES))
 
@@ -174,13 +182,13 @@ def remember(account: str, folder: str, rows: list[dict], snippets: dict[int, st
 AUTH_SAMPLES = 50
 
 
-def auth_samples(account: str) -> list[tuple[str, str]]:
-    """(authserv-id of the topmost Authentication-Results, sender) of the newest mails the checks noted (access.detect)."""
+def auth_samples(account: str) -> list[tuple[str, str, float | None]]:
+    """(authserv-id of the topmost Authentication-Results, sender, received at) of the newest INBOX mails the checks
+    noted (access.detect), newest first by UID - the order the server received them, not their Date: header."""
     with conn() as c:
-        rows = c.execute("SELECT auth_server, from_email FROM messages WHERE account=? AND folder='INBOX' AND "
-                         "auth_server IS NOT NULL ORDER BY COALESCE(date, at) DESC LIMIT ?",
-                         (account, AUTH_SAMPLES)).fetchall()
-    return [(r["auth_server"] or "", r["from_email"] or "") for r in rows]
+        rows = c.execute("SELECT auth_server, from_email, received FROM messages WHERE account=? AND folder='INBOX' "
+                         "AND auth_server IS NOT NULL ORDER BY uid DESC LIMIT ?", (account, AUTH_SAMPLES)).fetchall()
+    return [(r["auth_server"] or "", r["from_email"] or "", r["received"]) for r in rows]
 
 
 def add_contacts(account: str, addresses: list[str]) -> None:

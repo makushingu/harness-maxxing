@@ -133,7 +133,8 @@ def _clean(data: dict, partial: bool = False) -> dict:
                 raise MailError("invalid", f"poll_min: one of {', '.join(map(str, CHOICES))} (minutes)")
         elif k == "auth_servers":
             # the servers whose Authentication-Results are trusted (default: the mailbox's own, access.py)
-            v = [str(x).strip().lower() for x in (v if isinstance(v, list) else []) if HOST_RE.match(str(x).strip())][:10]
+            v = [str(x).strip().lower() for x in (v if isinstance(v, list) else [])
+                 if HOST_RE.match(str(x).strip()) and not _is_ip(str(x).strip())][:10]   # a name: base_domain needs one
         elif k in ("imap_port", "smtp_port"):
             v = int(v)
             if not 1 <= v <= 65535:
@@ -169,6 +170,15 @@ def _clean(data: dict, partial: bool = False) -> dict:
 
 
 # ---------------------------------------------------------------- detection of the server settings
+
+def _is_ip(v: str) -> bool:
+    import ipaddress
+    try:
+        ipaddress.ip_address(v.strip("[]"))
+        return True
+    except ValueError:
+        return False
+
 
 def _mx(domain: str, strict: bool = False) -> list[str] | None:
     """MX hosts through DNS over HTTPS (no resolver library needed). A failed lookup: [] (None when strict)."""

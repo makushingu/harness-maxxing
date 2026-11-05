@@ -257,11 +257,11 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
                            "refused": sorted(refused or {}), "sent_folder": None}
     # the follow-ups never fail the send: the message is gone
     if not _auto_sent(acc):
-        with contextlib.suppress(MailError, OSError):
+        with contextlib.suppress(Exception):           # imaplib.IMAP4.error too: the message is gone
             out["sent_folder"] = imap.append(acc, "sent", msg.as_bytes(), "(\\Seen)")
     rep = draft.get("reply") or None
     if rep and rep.get("uid"):
-        with contextlib.suppress(MailError, OSError, ValueError):
+        with contextlib.suppress(Exception):
             imap.act(acc, str(rep.get("folder") or "INBOX"), [int(rep["uid"])], "answered")
     _drop_draft(acc, draft)
     return out
@@ -270,7 +270,7 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
 def _drop_draft(acc: dict, draft: dict) -> None:
     d = draft.get("draft") or None
     if d and d.get("uid"):
-        with contextlib.suppress(MailError, OSError, ValueError):
+        with contextlib.suppress(Exception):
             imap.drop(acc, str(d.get("folder") or ""), int(d["uid"]))
 
 
