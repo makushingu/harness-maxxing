@@ -68,6 +68,17 @@ def test_run_and_send_without_the_server_loop(client, topic, capsys, monkeypatch
     assert cli.main(["agents", "send", "editor", "more"]) == 1
     assert "hops" in capsys.readouterr().err
     assert cli.main(["agents", "send", "writer", "me"]) == 2
+    # `run` from an agent turn is a hop too: same limit, never itself, framed as the sender's data
+    assert cli.main(["agents", "run", "editor", "more"]) == 1
+    assert "hops" in capsys.readouterr().err
+    assert cli.main(["agents", "run", "writer"]) == 2
+    monkeypatch.setenv("MAXXING_AGENT_DEPTH", "1")
+    assert cli.main(["agents", "run", "editor", "NOTOOL again", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    wait_idle(client, r["session"])
+    from maxxing.sessions import store
+    s = store.read(r["session"])
+    assert s["env"]["MAXXING_AGENT_DEPTH"] == "2" and s["env"]["MAXXING_AGENT_TRIGGER"] == f"agent:{A}"
 
 
 def test_create_and_add_triggers_from_a_session(client, topic, capsys, tmp_path):

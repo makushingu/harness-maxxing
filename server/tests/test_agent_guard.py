@@ -119,6 +119,7 @@ def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys)
     assert agent_guard.sandboxed_session(sid[:8]) == A
     assert agent_guard.UNIT_RE.search(f"0::/system.slice/maxxing-{sid[:8]}.service").group(1) == sid[:8]
     assert agent_guard.UNIT_RE.search("0::/system.slice/claude-maxxing.service") is None
+    assert agent_guard.UNIT_RE.search(f"0::/system.slice/maxxing-{sid[:8]}-4242.service").group(1) == sid[:8]
     monkeypatch.setattr(agent_guard, "sandboxed_turn", lambda: A)
     assert agent_guard.check_cli(["feed", "post", "--title", "x"]) is None
     assert agent_guard.check_cli(["agents", "send", "other", "hi"]) is None

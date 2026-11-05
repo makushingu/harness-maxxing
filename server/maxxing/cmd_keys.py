@@ -11,7 +11,6 @@ by default: every later Claude turn and shell job gets it as an environment vari
 from __future__ import annotations
 
 import json
-import os
 import sys
 
 from . import cli
@@ -40,7 +39,8 @@ def _handler(a) -> int:
         for r in [] if a.json else rows:
             print(f"{r['name']:<40} {'env' if r['expose'] else '   '}  {r['note']}")
         return 0
-    agent = os.environ.get("MAXXING_AGENT") or ""
+    from . import agent_guard
+    agent = agent_guard.agent_turn()["path"]        # from the turn's own session, not its (changeable) environment
     if agent and a.action in ("get", "set", "delete"):
         # a turn of an agent: only its own keys, read-only. A speed bump against injected orders (the real limit is
         # its permission mode and approvals), so a message saying "run maxxing keys get" gets nothing.
