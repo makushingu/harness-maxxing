@@ -747,6 +747,31 @@ const AGENT_DOT: Partial<Record<AgentState, { tone: 'warn' | 'unread' | 'running
  *  opening the agent's page, at most 2, then "+N" opens the Agents page narrowed to the topic. Status fields come
  *  from the agents list (GET /api/agents, also behind the nav badge); the tree only tells which agents exist.
  *  Their runs never show in this tree. */
+/** A name cut where it differs from its neighbours' (from the start of that word): two chips "Support FR" and
+ *  "Support EN" too narrow for their names read "Sup… FR" / "Sup… EN", not "Supp…" twice. [shared head, the rest]. */
+export function nameParts(name: string, names: string[]): [string, string] {
+  let d = 0
+  for (const o of names) {
+    if (o === name) continue
+    let i = 0
+    while (i < name.length && i < o.length && name[i] === o[i]) i++
+    d = Math.max(d, i)
+  }
+  const cut = d > 0 && d < name.length ? name.lastIndexOf(' ', d) + 1 : 0
+  // The space between both parts would vanish at the end of the first one: a no-break space stays.
+  return cut ? [name.slice(0, cut - 1) + '\u00a0', name.slice(cut)] : ['', name]
+}
+
+/** The two parts of `nameParts`: the shared head gives way first. */
+function NameParts({ parts: [head, rest] }: { parts: [string, string] }) {
+  return (
+    <>
+      {head && <span className="min-w-0 shrink-[1000] truncate">{head}</span>}
+      <span className="min-w-0 truncate">{rest}</span>
+    </>
+  )
+}
+
 function TopicAgents({ topic, className }: { topic: Topic; className?: string }) {
   const t = useT()
   const { data: settings } = useSettings()
@@ -759,6 +784,7 @@ function TopicAgents({ topic, className }: { topic: Topic; className?: string })
   }, [on, data, topic])
   if (!list.length) return null
   const more = list.length - TOPIC_AGENTS_SHOWN
+  const shown = list.slice(0, TOPIC_AGENTS_SHOWN).map((a) => a.display_name)
   const stateText = (a: Agent) => {
     const s = agentState(a)
     return s === 'unread' ? t('sessions.agent.unread', { count: a.thread_unread || 0 }) : t(`sessions.agent.${s}` as 'sessions.agent.active')
@@ -772,8 +798,10 @@ function TopicAgents({ topic, className }: { topic: Topic; className?: string })
         return (
           <Link key={a.path} to={agentRoute(a)} title={`${a.display_name} - ${stateText(a)}`} className={cn(chip, list.length > 1 && 'max-w-[45%]')} data-testid="topic-agent" data-state={s}>
             <AgentAvatarIcon avatar={a.avatar} size={16} mood={s === 'off' ? 'sleep' : 'idle'} className={cn(s === 'off' && 'opacity-60')} />
-            <span className={cn('truncate', (s === 'waiting' || s === 'unread') && 'font-medium text-foreground')}>
-              <Sensitive length={6}>{a.display_name}</Sensitive>
+            <span className={cn('flex min-w-0', (s === 'waiting' || s === 'unread') && 'font-medium text-foreground')}>
+              <Sensitive length={6}>
+                <NameParts parts={nameParts(a.display_name, shown)} />
+              </Sensitive>
             </span>
             {dot && <StatusDot tone={dot.tone} pulse={dot.pulse} className="size-1.5" />}
           </Link>
