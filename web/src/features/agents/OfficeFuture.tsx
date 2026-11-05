@@ -53,12 +53,26 @@ const FAR = starTile([[3, 2, '#8aa0d6'], [17, 7, '#6c7fb0'], [29, 3, '#9fb4e8'],
 const SKY = starTile([[7, 5, '#6c7fb0'], [38, 2, '#9fb4e8'], [61, 17, '#5a6b99'], [83, 9, '#8aa0d6'], [19, 29, '#5a6b99'], [52, 34, '#cfe8ff'], [90, 31, '#6c7fb0'], [70, 25, '#4d5d88'], [29, 16, '#4d5d88']], 96, 40)
 const NEAR = starTile([[6, 4, '#ffffff'], [27, 10, '#dff6ff'], [44, 2, '#ffffff'], [60, 13, '#cfe8ff']], 64, 16)
 
+/** LEDs blink in two shared rhythms (a page of desks would otherwise be hundreds of animations out of step, each
+ *  change repainting the office). */
+const ledClass = (g: number) => (g ? 'mx-future-led mx-future-led-b' : 'mx-future-led')
+
 export function OfficeFuture({ groups, layout, onStart }: { groups: ProjectGroup[]; layout: AgentsLayoutApi; onStart: (s: CreateStart) => void }) {
   const phone = useMediaQuery('(max-width: 639px)')
   const s = phone ? 3 : 4
+  // Every loop of every LED, glow and hologram fires an `animationiteration` event that bubbles up to React's root
+  // listener (a hundred a second on a full office): stop them here, nothing in the office listens to them.
+  const root = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    const el = root.current
+    const stop = (e: Event) => e.stopPropagation()
+    el?.addEventListener('animationiteration', stop)
+    return () => el?.removeEventListener('animationiteration', stop)
+  }, [])
   return (
     // The station: deep space with a faint grid, the bays docked in it.
     <div
+      ref={root}
       className="flex flex-wrap items-start gap-6 rounded-xl border border-[#1c2744] p-4 shadow-[inset_0_0_60px_rgba(94,231,255,0.06)] max-sm:justify-center max-sm:gap-4 max-sm:p-2.5"
       style={{
         backgroundColor: HULL.void,
@@ -165,10 +179,17 @@ function Viewport({ s, color, seed }: { s: number; color: string; seed: number }
       className="pointer-events-none absolute inset-x-[calc(var(--s)*2)] top-[calc(var(--s)*1)] overflow-hidden border"
       style={{ height: 10 * s, borderColor: STEEL.dark, boxShadow: `inset 0 0 0 1px ${HULL.ink}, inset 0 0 14px rgba(0,0,0,0.8)`, backgroundColor: '#03050c' }}
     >
-      <span
-        className="mx-future-stars absolute inset-0"
-        style={{ backgroundImage: `${NEAR}, ${FAR}`, backgroundSize: `var(--sw-near) ${16 * s}px, var(--sw-far) ${16 * s}px`, imageRendering: 'pixelated' }}
-      />
+      {/* Each layer is wider than the window by its drift and slides with a transform (drawn by the GPU, no repaint). */}
+      {[
+        [FAR, 'var(--sw-far)', 2],
+        [NEAR, 'var(--sw-near)', 4],
+      ].map(([tile, w, n]) => (
+        <span
+          key={n}
+          className="mx-future-stars absolute inset-y-0 left-0"
+          style={{ '--d': `calc(${w} * ${n})`, width: `calc(100% + ${w} * ${n})`, backgroundImage: tile, backgroundSize: `${w} ${16 * s}px`, imageRendering: 'pixelated' } as React.CSSProperties}
+        />
+      ))}
       <svg viewBox="0 0 16 10" width={16 * s} height={10 * s} shapeRendering="crispEdges" className="absolute top-0" style={{ left: `${x}%` }}>
         {/* a planet in the project colour, lit from the left, with a ring */}
         {px(5, 2, 5, 1, color)}
@@ -191,8 +212,11 @@ function Leds({ s, color, seed }: { s: number; color: string; seed: number }) {
     <svg viewBox="0 0 9 7" width={9 * s} height={7 * s} shapeRendering="crispEdges" className="shrink-0">
       {px(0, 0, 9, 7, HULL.ink)}
       {px(1, 1, 7, 5, STEEL.low)}
-      {lights.map((c, i) => (
-        <rect key={i} x={2 + (i % 3) * 2} y={2 + Math.floor(i / 3) * 2} width={1} height={1} fill={c} className="mx-future-led" style={{ animationDelay: `${-((seed + i * 7) % 13) / 10}s` }} />
+      {/* two groups blinking in turn (which LEDs go together differs from bay to bay) */}
+      {[0, 1].map((g) => (
+        <g key={g} className={ledClass(g)}>
+          {lights.map((c, i) => ((seed + i) % 2 === g ? px(2 + (i % 3) * 2, 2 + Math.floor(i / 3) * 2, 1, 1, c, `l${i}`) : null))}
+        </g>
       ))}
     </svg>
   )
@@ -319,8 +343,10 @@ function ConsoleFront({ s, color, screen, decor }: { s: number; color: string; s
       {px(2, 20, 26, 1, STEEL.mid)}
       {px(4, 23, 22, 1, STEEL.low)}
       {/* LEDs on the front, a vent on the right */}
-      {leds.map((c, i) => (
-        <rect key={`led${i}`} x={4 + i * 2} y={21} width={1} height={1} fill={c} className={off ? undefined : 'mx-future-led'} style={off ? undefined : { animationDelay: `${-i * 0.45}s` }} />
+      {[0, 1].map((g) => (
+        <g key={`led${g}`} className={off ? undefined : ledClass(g)}>
+          {leds.map((c, i) => (i % 2 === g ? px(4 + i * 2, 21, 1, 1, c, `led${i}`) : null))}
+        </g>
       ))}
       {px(19, 21, 7, 1, STEEL.low)}
       {/* keyboard of light */}
@@ -506,11 +532,11 @@ function Filler({ kind, s, color }: { kind: number; s: number; color: string }) 
               <g key={y}>
                 {px(10, y, 10, 4, STEEL.low, `u${y}`)}
                 {px(10, y, 10, 1, STEEL.mid, `uh${y}`)}
-                <rect x={11} y={y + 2} width={1} height={1} fill="#5dffa8" className="mx-future-led" style={{ animationDelay: `${-y / 10}s` }} />
-                <rect x={13} y={y + 2} width={1} height={1} fill={color} className="mx-future-led" style={{ animationDelay: `${-y / 7}s` }} />
                 {px(15, y + 2, 4, 1, '#000000', `v${y}`, 0.5)}
               </g>
             ))}
+            <g className={ledClass(0)}>{[5, 10, 15, 20].map((y) => px(11, y + 2, 1, 1, '#5dffa8', `g${y}`))}</g>
+            <g className={ledClass(1)}>{[5, 10, 15, 20].map((y) => px(13, y + 2, 1, 1, color, `c${y}`))}</g>
             {px(9, 26, 12, 1, color, 'base', 0.6)}
             {px(8, 28, 14, 1, color, 'glow', 0.2)}
           </g>
@@ -518,7 +544,7 @@ function Filler({ kind, s, color }: { kind: number; s: number; color: string }) 
           // a little robot on a wheel, its eye scanning
           <g>
             {px(14, 4, 1, 3, STEEL.hi)}
-            <rect x={13} y={3} width={3} height={1} fill={color} className="mx-future-led" />
+            <g className={ledClass(0)}>{px(13, 3, 3, 1, color)}</g>
             {px(9, 7, 12, 8, HULL.ink)}
             {px(10, 8, 10, 6, STEEL.top)}
             {px(10, 8, 10, 1, STEEL.hi)}
