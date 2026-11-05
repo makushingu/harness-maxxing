@@ -288,7 +288,8 @@ function FreeConsole({ s, color, label, onClick }: { s: number; color: string; l
 function Plate({ children, color, dot, dim, dashed }: { children: React.ReactNode; color: string; dot?: React.ReactNode; dim?: boolean; dashed?: boolean }) {
   return (
     <span
-      className={cn('relative -mt-1 flex h-5 max-w-full min-w-0 items-center gap-1 border px-1.5 font-mono text-[11px] leading-none font-semibold tracking-wide', dashed && 'border-dashed opacity-80')}
+      // On touch there is no tooltip to read a cut name: up to two lines there.
+      className={cn('relative -mt-1 flex h-5 max-w-full min-w-0 items-center gap-1 border px-1.5 font-mono text-[11px] leading-none font-semibold tracking-wide pointer-coarse:h-auto pointer-coarse:min-h-5 pointer-coarse:py-0.5', dashed && 'border-dashed opacity-80')}
       style={{
         borderColor: `color-mix(in oklab, ${color} ${dim ? 40 : 85}%, transparent)`,
         backgroundColor: 'rgba(6,9,20,0.88)',
@@ -297,7 +298,7 @@ function Plate({ children, color, dot, dim, dashed }: { children: React.ReactNod
       }}
     >
       {dot}
-      <span className="truncate">{children}</span>
+      <span className="truncate pointer-coarse:line-clamp-2 pointer-coarse:leading-[1.15] pointer-coarse:whitespace-normal pointer-coarse:[overflow-wrap:anywhere]">{children}</span>
     </span>
   )
 }
