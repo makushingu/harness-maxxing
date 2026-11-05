@@ -19,7 +19,9 @@ from ..security import require_auth
 router = APIRouter(prefix="/api/mail", tags=["mail"], dependencies=[Depends(require_auth)])
 
 STATUS = {"no_account": 404, "not_found": 404, "no_folder": 404, "exists": 409, "invalid": 400, "too_large": 413,
-          "no_password": 409, "auth": 502, "limit": 429, "refused": 422, "smtp": 502, "unreachable": 502, "tls": 502, "connection": 502, "imap": 502}
+          "no_password": 409, "auth": 422, "limit": 429, "refused": 422,
+          # the mail server failed, not ours: 424, never a 5xx (a proxy such as Cloudflare may hide a 502 body)
+          "smtp": 424, "unreachable": 424, "tls": 424, "connection": 424, "imap": 424}
 
 
 def _need_on() -> None:
