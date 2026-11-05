@@ -8,7 +8,7 @@
 import type * as React from 'react'
 import { create } from 'zustand'
 import { loadGroups } from '@/i18n'
-import { FILE_HREF } from './util'
+import { FILE_HREF, fileHrefPath } from './util'
 
 export const CONTENT_MIME = 'application/x-mx-content'
 const MAX_TEXT = 20_000
@@ -50,7 +50,7 @@ export function cleanPath(p: unknown): string | null {
 function fileAt(el: Element): string | null {
   const hit = el.closest<HTMLElement>(`[data-mx-file], a[href^="${FILE_HREF}"]`)
   if (!hit) return null
-  const raw = hit.dataset.mxFile ?? decodeURIComponent((hit.getAttribute('href') || '').slice(FILE_HREF.length))
+  const raw = hit.dataset.mxFile ?? fileHrefPath(hit.getAttribute('href') || '')
   return cleanPath(raw)
 }
 

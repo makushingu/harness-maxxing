@@ -20,7 +20,7 @@ import { QuotedFile } from './QuotedFile'
 import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
 import { gripRef } from './contentDrag'
 import { authServerOf, McpAuthButton } from '@/features/mcp/AuthButton'
-import { audioPaths, baseName, diffStats, FILE_HREF, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
+import { audioPaths, baseName, diffStats, FILE_HREF, fileHrefPath, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
 
 export type ItemCtx = {
   filesRoot: string | null
@@ -480,7 +480,13 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
   const md = React.useMemo(() => linkifyMarkdown(text, filesRoot), [text, filesRoot])
   const media = React.useMemo(() => mediaPaths(text, filesRoot), [text, filesRoot])
   const audio = React.useMemo(() => audioPaths(text, filesRoot), [text, filesRoot])
-  const onLink = React.useCallback((href: string) => (href.startsWith(FILE_HREF) ? () => open(decodeURIComponent(href.slice(FILE_HREF.length))) : null), [open])
+  const onLink = React.useCallback(
+    (href: string) => {
+      const p = href.startsWith(FILE_HREF) ? fileHrefPath(href) : null
+      return p === null ? null : () => open(p)
+    },
+    [open],
+  )
   return (
     <div className="group/msg relative min-w-0" onContextMenu={onContextMenu} {...touch}>
       {menu}
