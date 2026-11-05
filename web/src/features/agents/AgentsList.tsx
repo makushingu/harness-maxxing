@@ -82,7 +82,9 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
   const shownProjects = groups.map((g) => g.id)
 
   return (
-    <div className={cn('flex min-h-0 flex-col', className)} data-testid="agents-list">
+    // Short screen (a phone sideways): the search, the Office entry and the chips scroll away with the list, which
+    // would keep about two rows otherwise.
+    <div className={cn('flex min-h-0 flex-col [@media(max-height:500px)]:overflow-y-auto', className)} data-testid="agents-list">
       <div className={cn('grid shrink-0 gap-2 px-3 pt-3', touch ? 'pb-1' : 'pb-2')}>
         <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
@@ -141,7 +143,7 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
           </span>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" role="list">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [@media(max-height:500px)]:flex-none [@media(max-height:500px)]:overflow-visible" role="list">
         {isLoading ? (
           <div className="grid gap-1 px-1">
             {[0, 1, 2, 3].map((i) => (
