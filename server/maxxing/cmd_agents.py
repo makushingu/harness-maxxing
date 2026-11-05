@@ -13,6 +13,8 @@
   maxxing agents export <agent> [-o FILE]    the agent as a Claude Code agent file (.claude/agents/<name>.md)
   maxxing agents import FILE --topic <p>/<t> create an agent from a Claude Code agent file
   maxxing agents sandbox-setup               install what the sandbox needs (root): bubblewrap, socat, AppArmor
+  maxxing agents group list|show|create|update|say  agent groups (agent_rooms.py): a conversation of the owner with
+                                             2-6 agents of one project (owner only: refused in agent turns)
 
 <agent> = projects/<p>/topics/<t>/agents/<a>, <p>/<t>/<a>, or just <a> when only one agent has that name.
 Works without the server: fire() only writes files and starts the turn's unit; the server's session watcher
@@ -82,6 +84,38 @@ def _configure(p) -> None:
     s.add_argument("--topic", required=True, help="<project>/<topic> where it lives")
     s.add_argument("--name", default="", help="folder name (default: from the file)")
     sub.add_parser("sandbox-setup", help="install what the agents' sandbox needs (root): bubblewrap, socat, AppArmor")
+    s = sub.add_parser("group", help="agent groups: the owner talks to 2-6 agents of one project")
+    gs = s.add_subparsers(dest="group_cmd", required=True)
+    g = gs.add_parser("list", help="list the groups")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("show", help="a group: members, goal, options and its last messages (JSON)")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("--messages", type=int, default=20)
+    g = gs.add_parser("create", help="create a group in a project")
+    g.add_argument("group", help="<project>/<group> (group = 1-48 lowercase letters, digits, dashes)")
+    g.add_argument("--member", action="append", required=True,
+                   help="an agent of the project: <agent> or <agent>=<its role in the group> (2 to 6 times)")
+    g.add_argument("--name", default="", help="display name (default: the folder name)")
+    g.add_argument("--emoji", default="")
+    g.add_argument("--goal", default="", help="what the group is for (its CLAUDE.md)")
+    g.add_argument("--lead", default="", help="the member who answers when the message names nobody")
+    g.add_argument("--no-shared-files", action="store_true", help="no shared folder")
+    g.add_argument("--ask-on-handover", action="store_true",
+                   help="a hand-over between members asks before risky tools (members do not trust each other)")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("update", help="change a group: name, emoji, goal, members, lead, options")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("--member", action="append", help="replaces the members: <agent> or <agent>=<role> (2 to 6 times)")
+    g.add_argument("--name")
+    g.add_argument("--emoji")
+    g.add_argument("--goal", help="what the group is for (its CLAUDE.md)")
+    g.add_argument("--lead", help="a member, or \"\" for none")
+    g.add_argument("--shared-files", choices=("on", "off"))
+    g.add_argument("--trust-members", choices=("on", "off"), help="off: a hand-over asks before risky tools")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("say", help="write to the group as the owner (the members answer in turn)")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("text", nargs="+")
     s = sub.add_parser("cron", help="add a schedule to an agent")
     s.add_argument("agent")
     s.add_argument("--schedule", required=True, help='5-field cron, server time zone, e.g. "0 8 * * 1"')
@@ -314,6 +348,82 @@ def _import(a) -> int:
     return 0
 
 
+def _group_path(ref: str) -> str:
+    from . import agent_rooms
+    r = (ref or "").strip().strip("/")
+    path = r if agent_rooms.parse(r) else (agent_rooms.group_path(*r.split("/")) if r.count("/") == 1 else "")
+    if not path or not agent_rooms.exists(path):
+        raise ValueError(f"Group not found: {ref!r} (see `maxxing agents group list`)")
+    return path
+
+
+def _group(a) -> int:
+    from . import agent_rooms, agents
+    try:
+        if a.group_cmd == "list":
+            rows = agent_rooms.list_groups()
+            if a.json:
+                print(json.dumps(rows, indent=2, ensure_ascii=False))
+            elif not rows:
+                print("No group yet.")
+            for x in [] if a.json else rows:
+                print(f"{x['path']}  {x['emoji']} {x['display_name']}  "
+                      + " ".join("@" + m["slug"] + (" (paused)" if m["paused"] else "") for m in x["members"])
+                      + ("  speaking" if x["busy"] else ""))
+            return 0
+        if a.group_cmd == "create":
+            if a.group.count("/") != 1:
+                print("Give <project>/<group>", file=sys.stderr)
+                return 2
+            project, name = a.group.split("/")
+            members = []
+            for m in a.member:
+                ref, _, role = m.partition("=")
+                members.append({"path": resolve(ref), "role": role.strip()})
+            lead = resolve(a.lead) if a.lead else ""
+            g = agent_rooms.create(project, name, {"name": a.name, "emoji": a.emoji, "goal": a.goal, "lead": lead,
+                                                    "members": members, "shared_files": not a.no_shared_files,
+                                                    "trust_members": not a.ask_on_handover})
+            print(json.dumps({"group": g["path"]}) if a.json else f"group created: {g['path']}")
+            return 0
+        path = _group_path(a.group)
+        if a.group_cmd == "show":
+            print(json.dumps({**agent_rooms.get(path), "messages": agent_rooms.room(path, max(1, a.messages))},
+                             indent=2, ensure_ascii=False))
+            return 0
+        if a.group_cmd == "update":
+            f: dict = {}
+            for k in ("name", "emoji", "goal"):
+                if getattr(a, k) is not None:
+                    f[k] = getattr(a, k)
+            if a.member:
+                f["members"] = [{"path": resolve(m.partition("=")[0]), "role": m.partition("=")[2].strip()}
+                                for m in a.member]
+            if a.lead is not None:
+                f["lead"] = resolve(a.lead) if a.lead else ""
+            if a.shared_files:
+                f["shared_files"] = a.shared_files == "on"
+            if a.trust_members:
+                f["trust_members"] = a.trust_members == "on"
+            g = agent_rooms.update(path, f)
+            print(json.dumps({"group": g["path"]}) if a.json else f"group updated: {g['path']} - members "
+                  + " ".join("@" + m["handle"] for m in g["members"]))
+            return 0
+        if a.group_cmd == "say":
+            r = agent_rooms.say(path, " ".join(a.text))
+            hs = agent_rooms.handles(agent_rooms.load(path))
+            print("sent; " + ("next: " + ", ".join("@" + hs.get(p, agent_rooms.slug(p)) for p in r["queued"])
+                              if r["queued"] else "nobody answers (all named members are paused)"))
+            return 0
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except agents.AgentError as e:
+        print(e.message, file=sys.stderr)
+        return 2
+    return 2
+
+
 def _handler(a) -> int:
     from . import agents
     if a.agents_cmd == "list":
@@ -326,6 +436,8 @@ def _handler(a) -> int:
         return _sandbox_setup()
     if a.agents_cmd == "import":
         return _import(a)
+    if a.agents_cmd == "group":
+        return _group(a)
     try:
         path = resolve(a.agent)
     except ValueError as e:
