@@ -171,6 +171,7 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing keys delete NAME` | remove a key |
 | `maxxing infra status` / `infra list [--kind K] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot) |
 | `maxxing infra refresh` | read everything now (this server, other servers over SSH, Cloudflare, Hostinger, URL checks) |
+| `maxxing infra mail [--refresh] [--json]` | e-mail, view only: mailboxes of the E-mail page, Cloudflare Email Routing forwards, Hostinger e-mail, DNS health (MX, SPF, DKIM, DMARC) of the mail domains with what to fix |
 | `maxxing infra site add NAME (--dir D \| --port N) [--host H] [--dns] [--project P]` | put a site online: `https://<Harness address>/<NAME>/` (sandboxed) or its own host; `site remove`, `site list`, `reserved` |
 | `maxxing infra db install` / `db create NAME` / `db sqlite PATH` / `db backup` | PostgreSQL on localhost, one database + user per app (URL in the vault as `DB_<NAME>_URL`), nightly backups |
 | `maxxing infra bucket install` / `bucket create NAME [--public]` | S3 buckets on this server (Garage), keys in the vault as `S3_<NAME>_*` |

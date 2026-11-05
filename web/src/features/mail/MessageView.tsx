@@ -14,6 +14,7 @@ import type { MailAction, MailComposeMode, MailFolder } from '@/lib/types'
 import { mailAttachmentUrl, useMailMessage } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
+import { SeenByLine, Verified } from './agents'
 import { avatarTone, folderIcon, folderLabel, initials, whoFull } from './shared'
 
 function srcdoc(html: string, images: boolean): string {
@@ -144,9 +145,12 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
             <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold', avatarTone(m.from))}>{initials(m.from)}</span>
             <div className="grid min-w-0 flex-1 gap-0.5 text-[13px]">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <span className="truncate font-medium">
-                  {m.from.name || m.from.email}
-                  {m.from.name && <span className="ml-1.5 font-normal text-muted-foreground">{m.from.email}</span>}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate font-medium">
+                    {m.from.name || m.from.email}
+                    {m.from.name && <span className="ml-1.5 font-normal text-muted-foreground">{m.from.email}</span>}
+                  </span>
+                  <Verified on={m.from_verified} />
                 </span>
                 {m.date && <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(m.date, lang)}</span>}
               </div>
@@ -162,6 +166,7 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
               )}
             </div>
           </div>
+          <SeenByLine list={m.seen_by} />
           {!!m.attachments.length && (
             <div className="flex flex-wrap gap-2">
               {m.attachments.map((a) => {
