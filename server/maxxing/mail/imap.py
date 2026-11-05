@@ -451,6 +451,9 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
     return [rows[u] for u in uids if u in rows]
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f\u0080-\u009f\u2028\u2029]")
+
+
 def _search_args(q: str | None, unread: bool, flagged: bool) -> tuple[list[str], bytes | None]:
     crit: list[str] = []
     if unread:
@@ -459,38 +462,62 @@ def _search_args(q: str | None, unread: bool, flagged: bool) -> tuple[list[str],
         crit.append("FLAGGED")
     lit = None
     if q:
-        q = q.strip()[:200]
-        if q.isascii():
+        # control characters never reach the server: a CR/LF inside a quoted string would end the command and let
+        # the text send its own (UID STORE \Deleted, EXPUNGE) - `maxxing mail list -s` is open to read-only agents
+        q = " ".join(_CONTROL.sub(" ", q).split())[:200]
+        if q and q.isascii():
             crit.append("TEXT " + '"' + q.replace("\\", "\\\\").replace('"', '\\"') + '"')
-        else:
+        elif q:
             lit = q.encode()
     return crit or ["ALL"], lit
 
 
-_trust_cache: dict[tuple, tuple[float, set[str]]] = {}
-TRUST_TTL_S = 86400
+_mx_cache: dict[str, tuple[float, list[str] | None]] = {}
+MX_TTL_S = 86400
+MX_FAIL_TTL_S = 300
+
+
+def _mx_of(domain: str) -> list[str] | None:
+    """MX hosts of a domain, looked up once a day (a failed lookup again after 5 min) -> None when unknown."""
+    from . import _mx
+    hit = _mx_cache.get(domain)
+    if hit and time.time() - hit[0] < (MX_TTL_S if hit[1] is not None else MX_FAIL_TTL_S):
+        return hit[1]
+    mx = _mx(domain, strict=True)
+    _mx_cache[domain] = (time.time(), mx)
+    return mx
+
+
+def sender_check(acc: dict) -> dict:
+    """{state, server}: access.sender_check with what the checks noted (store.auth_samples) and the MX."""
+    from . import store
+    domain = (acc.get("address") or "").rsplit("@", 1)[-1].lower()
+    detected = ""
+    if not acc.get("auth_servers"):
+        with contextlib.suppress(Exception):
+            detected = access.detect(store.auth_samples(acc["id"]), domain)
+    mx = _mx_of(domain) if detected in access.STAMPING and domain else None
+    return access.sender_check(acc, detected, mx or [])
 
 
 def trust(acc: dict) -> set[str]:
-    """The servers whose Authentication-Results this mailbox trusts (access.trusted_servers; MX looked up once a day)."""
-    key = (acc.get("imap_host"), acc.get("smtp_host"), acc.get("address"), tuple(acc.get("auth_servers") or ()))
-    hit = _trust_cache.get(key)
-    if hit and time.time() - hit[0] < TRUST_TTL_S:
-        return hit[1]
-    mx: list[str] = []
-    if not acc.get("auth_servers") and "@" in (acc.get("address") or ""):
-        from . import _mx
-        mx = _mx(acc["address"].split("@", 1)[1])
-    out = access.trusted_servers(acc, mx)
-    _trust_cache[key] = (time.time(), out)
-    return out
+    """The base domains whose topmost Authentication-Results make a sender verified for this mailbox: the owner's
+    auth_servers, or the provider found by sender_check; none otherwise."""
+    c = sender_check(acc)
+    if c["state"] == "owner":
+        return {access.base_domain(s) for s in acc["auth_servers"]}
+    return {c["server"]} if c["state"] == "auto" else set()
 
 
-def with_trust(acc: dict, rows: list[dict]) -> list[dict]:
-    """`auth` (the top Authentication-Results) -> `from_verified`: the provider checked the sender's domain."""
-    t = trust(acc) if any(r.get("auth") for r in rows) else set()
+def with_trust(acc: dict, rows: list[dict], t: set[str] | None = None) -> list[dict]:
+    """`auth` (the top Authentication-Results) -> `from_verified`: the provider checked the sender's domain;
+    `auth_server`: who wrote that header (the checks note it: sender_check). t: trust(acc), computed before."""
+    if t is None:
+        t = trust(acc) if any(r.get("auth") for r in rows) else set()
     for r in rows:
-        r["from_verified"] = access.verified(r.pop("auth", "") or "", (r.get("from") or {}).get("email") or "", t)
+        top = r.pop("auth", "") or ""
+        r["auth_server"] = access.authserv_id(top)
+        r["from_verified"] = access.verified(top, (r.get("from") or {}).get("email") or "", t)
     return rows
 
 
@@ -502,6 +529,7 @@ def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, 
     """A page of a folder, newest first. senders: only the mails from these addresses / domains whose sender the
     provider checked (an agent's `senders`, access.py); `total` then counts the matches among the newest SCAN_MAX."""
     size = max(1, min(200, size))
+    t = trust(acc)                      # before the connection is held: it may look up the MX (up to 6 s)
     with session(acc) as m:
         exists = _select(m, folder, readonly=True)
         crit, lit = _search_args(q, unread, flagged)
@@ -516,12 +544,12 @@ def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, 
         uids = sorted((int(x) for x in _text(data).split()), reverse=True)
         if not senders:
             total = len(uids)
-            rows = with_trust(acc, _fetch_summaries(m, uids[page * size:(page + 1) * size]))
+            rows = with_trust(acc, _fetch_summaries(m, uids[page * size:(page + 1) * size]), t)
         else:
             kept: list[dict] = []
             grant = {"senders": senders}
             for i in range(0, min(len(uids), SCAN_MAX), 100):
-                for r in with_trust(acc, _fetch_summaries(m, uids[i:i + 100])):
+                for r in with_trust(acc, _fetch_summaries(m, uids[i:i + 100]), t):
                     if access.sender_ok(grant, r["from"]["email"], r["from_verified"]):
                         kept.append(r)
             total = len(kept)
@@ -540,7 +568,9 @@ def summaries(acc: dict, folder: str, uids: list[int]) -> list[dict]:
 
 
 def new_since(acc: dict, folder: str, last_uid: int | None, limit: int = 50) -> dict:
-    """{uidvalidity, uidnext, uids}: the messages of `folder` after last_uid (all when None: the newest `limit`)."""
+    """{uidvalidity, uids, more, messages}: the oldest `limit` messages of `folder` after last_uid (more: others
+    follow), or with last_uid None the newest `limit`."""
+    t = trust(acc)
     with session(acc) as m:
         _select(m, folder, readonly=True)
         validity = 0
@@ -550,11 +580,15 @@ def new_since(acc: dict, folder: str, last_uid: int | None, limit: int = 50) -> 
         typ, data = m.uid("SEARCH", "UID", crit)
         _ok(typ, data, "SEARCH")
         uids = sorted(int(x) for x in _text(data).split())
+        more = False
         if last_uid is not None:
             uids = [u for u in uids if u > int(last_uid)]   # "N:*" also returns the last message when none is newer
-        uids = uids[-limit:]
+            more = len(uids) > limit
+            uids = uids[:limit]                 # the oldest first: the rest comes with the next check, none is lost
+        else:
+            uids = uids[-limit:]                # a first look: only the newest
         rows = _fetch_summaries(m, uids) if uids else []
-    return {"uidvalidity": validity, "uids": uids, "messages": with_trust(acc, rows)}
+    return {"uidvalidity": validity, "uids": uids, "more": more, "messages": with_trust(acc, rows, t)}
 
 
 def _part_text(part: Any) -> str:

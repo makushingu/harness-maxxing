@@ -82,6 +82,11 @@ def public(acc: dict) -> dict:
     out["poll_min"] = poll.interval_min(acc)
     out["auth_servers"] = acc.get("auth_servers") or []
     try:
+        from . import imap
+        out["sender_check"] = imap.sender_check(acc)
+    except Exception:  # noqa: BLE001
+        out["sender_check"] = {"state": "none", "server": ""}
+    try:
         out["last_check"] = store.last_check(acc["id"])
     except Exception:  # noqa: BLE001 - the cache is optional
         out["last_check"] = None
@@ -165,17 +170,19 @@ def _clean(data: dict, partial: bool = False) -> dict:
 
 # ---------------------------------------------------------------- detection of the server settings
 
-def _mx(domain: str) -> list[str]:
-    """MX hosts through DNS over HTTPS (no resolver library needed)."""
+def _mx(domain: str, strict: bool = False) -> list[str] | None:
+    """MX hosts through DNS over HTTPS (no resolver library needed). A failed lookup: [] (None when strict)."""
     import httpx
+    from ..infra.dnsinfo import doh_api
     try:
-        r = httpx.get("https://cloudflare-dns.com/dns-query", params={"name": domain, "type": "MX"},
-                      headers={"accept": "application/dns-json"}, timeout=6)
+        r = httpx.get(doh_api(), params={"name": domain, "type": "MX"}, headers={"accept": "application/dns-json"},
+                      timeout=6)
+        r.raise_for_status()
         ans = r.json().get("Answer") or []
         hosts = [a["data"].split()[-1].rstrip(".").lower() for a in ans if a.get("type") == 15]
         return [h for h in hosts if h]                 # "0 ." = null MX (the domain takes no mail)
     except Exception:  # noqa: BLE001
-        return []
+        return None if strict else []
 
 
 def _ispdb(domain: str) -> dict | None:
@@ -353,6 +360,9 @@ def delete_account(acc_id: str) -> None:
     if cur.get("password_key"):
         vault.delete(cur["password_key"])
     imap.forget(acc_id)
+    with contextlib.suppress(Exception):
+        from . import outbox
+        outbox.forget(acc_id)               # its waiting messages end ("Mailbox removed"), before their rows go
     with contextlib.suppress(Exception):
         from . import store
         store.forget_account(acc_id)

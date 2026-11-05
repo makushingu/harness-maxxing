@@ -237,19 +237,29 @@ def test_sending_waits_for_the_owner_then_goes(client, box, monkeypatch, capsys,
     assert store.seen_by("me-example", ["<m3@x.org>"])["<m3@x.org>"][-1]["what"] == "replied"
 
 
-def test_approve_new_sends_alone_to_known_contacts(client, box, monkeypatch, capsys, smtp):
+def test_approve_new_sends_alone_to_people_the_owner_wrote_to(client, box, monkeypatch, capsys, smtp):
     _grant(client, rights=["read", "send"], approve_send="new")
+    store.remember("me-example", "INBOX", [box["rows"][3]])            # bob wrote: anyone can write first
     _as_agent(monkeypatch)
-    assert _cli(capsys, "write", "--reply", "3", "--send", stdin="ok", monkeypatch=monkeypatch)[0] == 0
-    assert len(smtp.messages) == 1                                      # replying to the sender: known
+    code, out, _ = _cli(capsys, "write", "--reply", "3", "--send", stdin="ok", monkeypatch=monkeypatch)
+    assert code == 0 and "new recipient: bob@x.org" in out and not smtp.messages
+    [w] = outbox.pending()
+    assert client.post(f"/api/mail/outbox/{w['id']}/send").json()["status"] == "sent"     # the owner allows it...
+    assert len(smtp.messages) == 1 and store.unknown("me-example", ["bob@x.org"]) == []   # ...bob is known now
+    assert _cli(capsys, "write", "--to", "bob@x.org", "-s", "Again", "--send", stdin="x", monkeypatch=monkeypatch)[0] == 0
+    assert len(smtp.messages) == 2                                      # alone this time
     code, out, _ = _cli(capsys, "write", "--to", "new@y.org", "-s", "Hello", "--send", stdin="x", monkeypatch=monkeypatch)
-    assert code == 0 and "new recipient: new@y.org" in out and len(smtp.messages) == 1
+    assert code == 0 and "new recipient: new@y.org" in out and len(smtp.messages) == 2
     [w] = outbox.pending()
     assert client.post(f"/api/mail/outbox/{w['id']}/deny").json()["status"] == "refused"
-    assert not outbox.pending() and len(smtp.messages) == 1
-    store.add_contacts("me-example", ["new@y.org"])                     # wrote to it once: known now
-    assert _cli(capsys, "write", "--to", "new@y.org", "-s", "Again", "--send", stdin="x", monkeypatch=monkeypatch)[0] == 0
-    assert len(smtp.messages) == 2
+    assert store.unknown("me-example", ["new@y.org"]) == ["new@y.org"]
+
+
+def test_an_agent_sending_alone_makes_no_contact(client, box, monkeypatch, capsys, smtp):
+    _grant(client, rights=["read", "send"], approve_send="never")
+    _as_agent(monkeypatch)
+    assert _cli(capsys, "write", "--to", "eve@z.org", "-s", "S", "--send", stdin="x", monkeypatch=monkeypatch)[0] == 0
+    assert len(smtp.messages) == 1 and store.unknown("me-example", ["eve@z.org"]) == ["eve@z.org"]
 
 
 def test_senders_also_limit_the_recipients(client, box, monkeypatch, capsys, smtp):

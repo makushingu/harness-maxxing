@@ -1012,7 +1012,10 @@ export type MailAccount = {
   waiting?: number
   /** servers whose Authentication-Results are trusted (empty = automatic) */
   auth_servers?: string[]
+  /** who checks the senders: the owner's servers, a known provider, one found but not confirmed, nobody */
+  sender_check?: MailSenderCheck
 }
+export type MailSenderCheck = { state: 'owner' | 'auto' | 'detected' | 'none'; server: string }
 export type MailPollMin = 5 | 10 | 30 | 60
 export type MailCheck = { at: number; ok: boolean; error: string }
 export type MailRight = 'read' | 'draft' | 'move' | 'mark' | 'send'

@@ -113,11 +113,10 @@ def approve(oid: str, by: str = "web") -> dict:
     try:
         acc = get_account(row["account"])
         draft = {**data["draft"], "draft": data.get("saved") or None}
-        res = send.send(acc, draft, _files(oid, data.get("files") or []))
-    except (MailError, OSError) as e:
-        store.outbox_set(oid, "waiting", getattr(e, "message", str(e)))   # the owner may try again
+        res = send.send(acc, draft, _files(oid, data.get("files") or []))     # allowed by the owner: contacts
+    except BaseException as e:
+        store.outbox_set(oid, "waiting", getattr(e, "message", None) or str(e) or type(e).__name__)  # try again
         raise
-    store.add_contacts(row["account"], [send._bare(a) for k in ("to", "cc", "bcc") for a in data["draft"].get(k) or []])
     _note_sent(row["account"], row["agent"], data["draft"], "sent", f"approved ({by})")
     store.outbox_set(oid, "sent", f"by {by}")
     _end(row, "Sent")
@@ -143,6 +142,9 @@ def deny(oid: str, by: str = "web") -> dict:
 def feed_action(oid: str, action: str, by: str, ev: dict) -> None:
     """A button of the event (web or Telegram): allow / deny. Open only shows the draft."""
     from .. import feed
+    from . import enabled
+    if action in ("allow", "deny") and not enabled():
+        raise feed.FeedError(409, "mail_off", "The E-mail page is switched off (Settings -> Features)")
     try:
         if action == "allow":
             approve(oid, by)
@@ -184,8 +186,34 @@ def pending(acc_id: str | None = None) -> list[dict]:
     return out
 
 
+STUCK_S = 600
+
+
+def unstick() -> int:
+    """A send cut in the middle (the server stopped): the message waits again, with a note to look in Sent first."""
+    n = 0
+    with store.conn() as c:
+        n = c.execute("UPDATE outbox SET status='waiting', note=? WHERE status='sending' AND done_at<?",
+                      ("interrupted while sending: check the Sent folder before sending it again",
+                       time.time() - STUCK_S)).rowcount
+    return n
+
+
+def forget(acc_id: str) -> None:
+    """The mailbox is removed: its waiting messages end, their files go."""
+    for row in store.outbox_list(None, acc_id, limit=10_000):
+        if row["status"] in ("waiting", "sending"):
+            store.outbox_set(row["id"], "refused", "mailbox removed")
+            _end(row, "Mailbox removed")
+        else:
+            with contextlib.suppress(OSError):
+                shutil.rmtree(_dir(row["id"]))
+
+
 def tidy() -> None:
-    """Old decided rows and their files go."""
+    """Old decided rows and their files go; old notes and contacts too (store.prune)."""
+    with contextlib.suppress(Exception):
+        store.prune()
     cutoff = time.time() - KEEP_DAYS * 86400
     with store.conn() as c:
         old = [r[0] for r in c.execute("SELECT id FROM outbox WHERE status!='waiting' AND COALESCE(done_at, at)<?",

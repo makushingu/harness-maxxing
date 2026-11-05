@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
 from typing import Literal, Optional
 from urllib.parse import quote
 
@@ -109,9 +110,12 @@ class ActionIn(BaseModel):
 @router.get("/accounts")
 async def get_accounts():
     _need_on()
-    cap = send.per_day()
-    return [{**mail.public(a), "sent_today": send.sent_today(a["id"]), "send_per_day": cap,
-             "agents": poll.grants_of(a["id"]), "waiting": len(outbox.pending(a["id"]))} for a in mail.list_accounts()]
+
+    def rows() -> list[dict]:               # mail.db, agents' files, maybe an MX lookup: off the event loop
+        cap = send.per_day()
+        return [{**mail.public(a), "sent_today": send.sent_today(a["id"]), "send_per_day": cap,
+                 "agents": poll.grants_of(a["id"]), "waiting": len(outbox.pending(a["id"]))} for a in mail.list_accounts()]
+    return await asyncio.to_thread(rows)
 
 
 @router.post("/detect")
@@ -173,7 +177,7 @@ async def delete_folder(acc_id: str, name: str):
 async def get_messages(acc_id: str, folder: str = "INBOX", page: int = 0, size: int = imap.PAGE, q: str = "",
                        unread: bool = False, flagged: bool = False):
     res = await _run(imap.messages, _acc(acc_id), folder, max(0, page), size, q or None, unread, flagged)
-    _seen_by(acc_id, folder, res["messages"])
+    await asyncio.to_thread(_seen_by, acc_id, folder, res["messages"])
     return res
 
 
@@ -206,7 +210,7 @@ def _seen_by(acc_id: str, folder: str, rows: list[dict]) -> None:
 async def get_message(acc_id: str, uid: int, folder: str = "INBOX", seen: bool = True):
     m = await _run(imap.message, _acc(acc_id), folder, uid, seen)
     m.pop("auth", None)
-    _seen_by(acc_id, folder, [m])
+    await asyncio.to_thread(_seen_by, acc_id, folder, [m])
     return m
 
 
@@ -297,6 +301,10 @@ async def post_refresh(body: RefreshIn = RefreshIn()):
             out.append(await asyncio.to_thread(poll.poll_account, a))
         except MailError as e:
             out.append({"account": a["id"], "ok": False, "error": e.message, "new": 0, "started": 0})
+        except Exception:  # noqa: BLE001 - one mailbox never fails the others
+            log.exception("mail: check of %s failed", a["id"])
+            out.append({"account": a["id"], "ok": False, "error": "the check failed (see the server log)", "new": 0,
+                        "started": 0})
     return out
 
 
@@ -315,11 +323,13 @@ async def get_all(limit: int = 100, before: Optional[float] = None):
              "seen": bool(r["seen"]), "attachments": bool(r["attachments"])}
         by.setdefault(f"{r['account']}\0{r['folder']}", []).append(m)
         out.append(m)
-    for k, ms in by.items():
-        acc_id, folder = k.split("\0", 1)
-        _seen_by(acc_id, folder, ms)
-    checks = {a: store.last_check(a) for a in accs}
-    return {"messages": out, "checks": checks}
+
+    def notes() -> dict:
+        for k, ms in by.items():
+            acc_id, folder = k.split("\0", 1)
+            _seen_by(acc_id, folder, ms)
+        return {a: store.last_check(a) for a in accs}
+    return {"messages": out, "checks": await asyncio.to_thread(notes)}
 
 
 @router.get("/outbox")
@@ -333,6 +343,7 @@ async def get_outbox(account: Optional[str] = None):
 
 @router.post("/outbox/{oid}/{action}")
 async def post_outbox(oid: str, action: Literal["send", "deny"]):
+    _need_on()
     fn = outbox.approve if action == "send" else outbox.deny
     r = await _run(fn, oid, "web")
     return {"id": oid, "status": r.get("status")}
@@ -348,8 +359,9 @@ async def _loop() -> None:
         try:
             if not mail.enabled():
                 continue
+            await asyncio.to_thread(outbox.unstick)
             await asyncio.to_thread(poll.poll_due)
-            now = asyncio.get_running_loop().time()
+            now = time.time()
             if now - last_tidy > 86400:
                 last_tidy = now
                 await asyncio.to_thread(outbox.tidy)

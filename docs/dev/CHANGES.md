@@ -49,6 +49,33 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   mailbox picker for mail templates, E-mail page: Refresh, last check, All mailboxes, outbox banner, seen-by faces,
   verified sender, `?account=&folder=&draft=` and `?add=` links. Tests `tests/test_mail_agents.py`.
 
+- E-mail hardening (before beta). `maxxing mail` runs as root outside the agent's sandbox, so: `imap._search_args`
+  turns every control character into a space (a CR/LF inside `UID SEARCH TEXT "..."` sent commands of its own);
+  `Guard.read_file` / `Guard.write_file` check the path of the opened file descriptor (`/proc/self/fd`), never follow
+  a final link (`O_NOFOLLOW`, file opened relative to the checked folder's fd), refuse non-regular files and a second
+  name (`st_nlink > 1`), attachments at most 25 MB (`ATTACH_MAX`). Sender checks: `access.authserv_id` /
+  `_cfws_free` (comments and quoted strings never count); `access.detect` (the base domain topping >= 90 % of the 50
+  newest INBOX mails, >= 10 mails from >= 3 sender domains, own domain left out; samples = `messages.auth_server`,
+  `store.auth_samples`, noted by the checks, `poll._sample` fills them on a new mailbox); `access.sender_check` ->
+  `{state: owner|auto|detected|none, server}` (`auto` = `STAMPING` provider whose servers host the mailbox), also in
+  `MailAccount.sender_check`; `imap.trust` = the owner's `auth_servers` bases, or the `auto` server, else nothing.
+  Contacts (approve_send "new") = recipients of what the owner sent from Harness or allowed (`send.send(...,
+  contacts=False)` for an agent's own send); the senders of incoming mail and the replied sender no longer count;
+  mail.db `user_version` 1 empties `contacts` and adds `messages.auth_server`. `mail read` and the check's event text
+  use random markers. In an agent turn: `outbox` lists its own rows, `-a` resolves among its mailboxes only, `refresh`
+  = `poll_account(fire=False)`. `cmd_mail` and `outbox.feed_action` refuse when the page is off (409 `mail_off`).
+  Checks: per-mailbox non-blocking lock (thread set + `flock LOCK_NB` on `<state>/mail/.poll-<id>.lock`; busy ->
+  `{skipped: "busy"}`); `imap.new_since` takes the oldest `limit` after `last_uid` (`more` -> `poll._again`, due at the
+  next tick); `pending.json` under `ProcessLock("mail-pending")`, text capped at 60 000 chars. Outbox: any exception
+  of `approve` puts the row back to `waiting`; `outbox.unstick()` (each tick) turns `sending` older than 10 min back
+  to `waiting` with a note; `outbox.forget` ends the waiting rows of a removed mailbox ("Mailbox removed").
+  `store.prune` (daily, from `outbox.tidy`): `seen_by` 90 days, contacts 2 years / 5 000 per mailbox. MX through
+  `dnsinfo.doh_api()`, a failed lookup cached 5 min (`imap._mx_of`). `/api/mail/accounts`, `seen_by` lookups off the
+  event loop; the trust is computed before the IMAP connection is held; `/refresh` reports any error per mailbox.
+  UI: sender check line + "Trust <server>" in Edit mailbox, warning under an agent's sender list, Notifications
+  decisions refresh the mail queries. Tests `tests/fake_imap.py` (an IMAP server in memory that logs every command)
+  + `tests/test_mail_imap.py`.
+
 - Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
   agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
   (configured or forced for an outside event) `autoAllowBashIfSandboxed` is false and `Bash(maxxing:*)` is no longer

@@ -556,8 +556,10 @@ Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, 
 | POST | `/api/mail/outbox/{id}/send\|deny` | – | `{id, status: sent\|refused}` (once; also the buttons of its Notifications event, ref `mailsend:<id>`) |
 
 Since the agents' e-mail (lot 2): `MailAccount` also has `poll_min` (5\|10\|30\|60 minutes between checks, default 10,
-PATCH-able), `auth_servers` (host names whose `Authentication-Results` are trusted; empty = the mailbox's own IMAP /
-SMTP / MX servers and their known aliases, PATCH-able), `last_check` (`{at, ok, error}` or null), `agents` (the agents
+PATCH-able), `auth_servers` (host names whose `Authentication-Results` are trusted, set by the owner, PATCH-able),
+`sender_check` (`{state: owner|auto|detected|none, server}`: who verifies the senders - the owner's servers, a known
+provider found on nearly all recent mail and hosting the mailbox, a server found but not confirmed (the UI offers to
+trust it = `auth_servers`), or nobody: then no sender is verified), `last_check` (`{at, ok, error}` or null), `agents` (the agents
 that may use it: `{agent, name, avatar, enabled, rights, senders, approve_send, trigger}`) and `waiting` (outbox count).
 List rows and `/message` have `from_verified` (the topmost `Authentication-Results`, written by the mailbox's provider,
 says DMARC / DKIM / SPF passed for the sender's domain), `message_id`, and `seen_by`: `[{agent, at, what, detail, name,

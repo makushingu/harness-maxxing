@@ -162,8 +162,8 @@ def base_domain(host: str) -> str:
 
 
 def trusted_servers(acc: dict, mx: list[str] | None = None) -> set[str]:
-    """Base domains whose Authentication-Results this mailbox trusts: its own servers (IMAP, SMTP, MX) and their
-    known aliases, or the account's `auth_servers` when set."""
+    """Base domains this mailbox is hosted by: its own servers (IMAP, SMTP, MX) and their known aliases, or the
+    account's `auth_servers` when set. Being one of them is not enough to be trusted: see sender_check."""
     if acc.get("auth_servers"):
         return {base_domain(s) for s in acc["auth_servers"]}
     out: set[str] = set()
@@ -178,6 +178,60 @@ def trusted_servers(acc: dict, mx: list[str] | None = None) -> set[str]:
 def _aligned(d: str, from_domain: str) -> bool:
     d = d.lower().strip(".").split("@")[-1]
     return bool(d) and (d == from_domain or from_domain.endswith("." + d) or d.endswith("." + from_domain))
+
+
+# providers known to write their own Authentication-Results on EVERY incoming mail: when the mailbox is really there
+# (its IMAP / SMTP / MX servers) and their name tops its recent mail, it is trusted without asking the owner
+STAMPING = {"google.com", "yahoo.com", "yahoo.net", "messagingengine.com", "fastmail.com", "zoho.com", "zoho.eu",
+            "zohomail.com", "icloud.com", "apple.com"}
+DETECT_MIN = 10          # recent mails with their topmost Authentication-Results noted...
+DETECT_DOMAINS = 3       # ...from at least this many sender domains...
+DETECT_SHARE = 0.9       # ...and this share of them topped by the same server
+
+
+def _cfws_free(s: str) -> str:
+    """The header without its quoted strings and (nested) comments: `dkim=pass (header.d=stripe.com)` or
+    `reason="header.from=stripe.com"` never count."""
+    s = re.sub(r'"(?:[^"\\]|\\.)*"', '""', s)
+    prev = None
+    while prev != s:
+        prev = s
+        s = re.sub(r"\((?:[^()\\]|\\.)*\)", " ", s)
+    return s.replace("(", " ").replace(")", " ")
+
+
+def authserv_id(top: str) -> str:
+    """The server that wrote an Authentication-Results header (its authserv-id, lowercase), "" when missing."""
+    head = _cfws_free(top or "").split(";", 1)[0].strip()
+    tok = head.split()[0].lower() if head else ""
+    return "" if "=" in tok else tok
+
+
+def detect(samples: list[tuple[str, str]], own_domain: str) -> str:
+    """The base domain that tops the Authentication-Results of nearly all recent mail -> the provider stamps every
+    mail. samples: (authserv-id of the topmost header or "", sender address) of the newest mails. "" when unsure (a
+    provider that writes nothing: whatever header a sender planted would be the topmost one)."""
+    rows = [(base_domain(a) if a else "", (f or "").lower().rsplit("@", 1)[-1]) for a, f in samples]
+    rows = [r for r in rows if r[1] and r[1] != own_domain.lower()]     # its own mail may skip the check
+    if len(rows) < DETECT_MIN or len({d for _, d in rows}) < DETECT_DOMAINS:
+        return ""
+    counts: dict[str, int] = {}
+    for a, _ in rows:
+        if a:
+            counts[a] = counts.get(a, 0) + 1
+    best = max(counts, key=lambda k: counts[k], default="")
+    return best if best and counts[best] >= DETECT_SHARE * len(rows) else ""
+
+
+def sender_check(acc: dict, detected: str, mx: list[str] | None) -> dict:
+    """How the mailbox's senders are checked -> {state, server}: "owner" (the owner named the servers:
+    auth_servers), "auto" (a known provider that stamps every mail, and the mailbox is there), "detected" (one server
+    tops nearly all mail but is not known: trusted once the owner confirms it), "none" (no sender is ever verified)."""
+    if acc.get("auth_servers"):
+        return {"state": "owner", "server": ", ".join(acc["auth_servers"])}
+    if detected and detected in STAMPING and detected in trusted_servers(acc, mx):
+        return {"state": "auto", "server": detected}
+    return {"state": "detected" if detected else "none", "server": detected}
 
 
 def top_result(msg: Message) -> str:
@@ -199,10 +253,10 @@ def verified(top: str, sender: str, trusted: set[str]) -> bool:
     from_domain = sender.rsplit("@", 1)[1]
     if not top.strip():
         return False
-    server = top.split(";", 1)[0].strip().split()[0] if top.strip() else ""
-    if base_domain(server) not in trusted:
+    server = authserv_id(top)
+    if not server or base_domain(server) not in trusted:
         return False
-    for kind, result, rest in _RESINFO.findall(top):
+    for kind, result, rest in _RESINFO.findall(_cfws_free(top)):
         if result.lower() != "pass":
             continue
         props = {k.lower(): v for k, v in _PROP.findall(rest)}
