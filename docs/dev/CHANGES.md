@@ -73,6 +73,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   post, mark_seen, feed event of an agent: list + that agent's detail + thread, `busKeysOf` in keys.ts). The plain
   `agents` topic (create, patch, delete, crons) no longer refetches the templates nor the sandbox check.
 
+## 2.0.0-alpha.117 - 2026-11-05
+
+- `proxylisten.py` + `maxxing proxy on|off|status`: config `proxy_listen` ("HOST:PORT", private address only, default
+  172.17.0.1:8790) opens a second socket in `cmd_serve` (uvicorn.Server with two sockets, IP_FREEBIND so it binds
+  before Docker brings docker0 up; without `proxy_listen` the old `uvicorn.run` path). `Gate` (ASGI): on that socket
+  every request needs `X-Maxxing-Proxy` = secrets.json `proxy_secret` (403 / websocket close 1008 otherwise, header
+  stripped), then client = last X-Forwarded-For entry, scheme from X-Forwarded-Proto; X-Forwarded-For is kept so
+  `api/pc.py` never sees it as local. Traefik block (0600) in `<state>/reverse-proxy.conf`, denied to Claude. With
+  ufw active: allow from 10/8, 172.16/12, 192.168/16 to that address and port (removed by `off` and uninstall).
+  install.sh `proxy_snippet`: docker-proxy / traefik / unnamed listener with Docker on 80/443 -> `maxxing proxy on`;
+  `secure_server` re-runs it after turning ufw on. Generic on purpose: no code for a given tool.
+- Radar fixes since a112 (crons day/month names and weekday ranges, file viewer link, path scan, plan chip size).
+
 ## 2.0.0-alpha.116 - 2026-11-04
 
 - Telegram modes: `config.telegram.mode` = `simple` | `threads` | `mirror` (`gateway.mode()`; no default in
