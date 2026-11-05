@@ -21,6 +21,8 @@ import time
 from email.message import EmailMessage
 from typing import Any, Iterator
 
+from . import access
+
 TIMEOUT_S = 25
 IDLE_S = 240            # a pooled connection older than this is closed instead of reused
 CHECK_S = 20            # NOOP before reusing a connection idle for longer than this
@@ -344,7 +346,7 @@ def rename_folder(acc: dict, name: str, new: str) -> str:
 
 # ---------------------------------------------------------------- messages
 
-HEADERS = "FROM TO CC SUBJECT DATE MESSAGE-ID CONTENT-TYPE"
+HEADERS = "FROM TO CC SUBJECT DATE MESSAGE-ID CONTENT-TYPE AUTHENTICATION-RESULTS"
 _UID = re.compile(rb"UID (\d+)")
 _FLAGS = re.compile(rb"FLAGS \(([^)]*)\)")
 _SIZE = re.compile(rb"RFC822\.SIZE (\d+)")
@@ -430,6 +432,8 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
             "answered": "\\answered" in fl,
             "size": int(size.group(1)) if size else None,
             "attachments": ctype.startswith("multipart/mixed"),
+            "message_id": _hdr(msg, "message-id").strip(),
+            "auth": access.top_result(msg),          # replaced by from_verified (with_trust)
         }
     return [rows[u] for u in uids if u in rows]
 
@@ -450,12 +454,46 @@ def _search_args(q: str | None, unread: bool, flagged: bool) -> tuple[list[str],
     return crit or ["ALL"], lit
 
 
+_trust_cache: dict[tuple, tuple[float, set[str]]] = {}
+TRUST_TTL_S = 86400
+
+
+def trust(acc: dict) -> set[str]:
+    """The servers whose Authentication-Results this mailbox trusts (access.trusted_servers; MX looked up once a day)."""
+    key = (acc.get("imap_host"), acc.get("smtp_host"), acc.get("address"), tuple(acc.get("auth_servers") or ()))
+    hit = _trust_cache.get(key)
+    if hit and time.time() - hit[0] < TRUST_TTL_S:
+        return hit[1]
+    mx: list[str] = []
+    if not acc.get("auth_servers") and "@" in (acc.get("address") or ""):
+        from . import _mx
+        mx = _mx(acc["address"].split("@", 1)[1])
+    out = access.trusted_servers(acc, mx)
+    _trust_cache[key] = (time.time(), out)
+    return out
+
+
+def with_trust(acc: dict, rows: list[dict]) -> list[dict]:
+    """`auth` (the top Authentication-Results) -> `from_verified`: the provider checked the sender's domain."""
+    t = trust(acc) if any(r.get("auth") for r in rows) else set()
+    for r in rows:
+        r["from_verified"] = access.verified(r.pop("auth", "") or "", (r.get("from") or {}).get("email") or "", t)
+    return rows
+
+
+SCAN_MAX = 1000         # messages looked at to fill a page when an agent only sees some senders
+
+
 def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, q: str | None = None,
-             unread: bool = False, flagged: bool = False) -> dict:
+             unread: bool = False, flagged: bool = False, senders: list[str] | None = None) -> dict:
+    """A page of a folder, newest first. senders: only the mails from these addresses / domains whose sender the
+    provider checked (an agent's `senders`, access.py); `total` then counts the matches among the newest SCAN_MAX."""
     size = max(1, min(200, size))
     with session(acc) as m:
         exists = _select(m, folder, readonly=True)
         crit, lit = _search_args(q, unread, flagged)
+        if senders:
+            crit = [c for c in crit if c != "ALL"] + access.imap_from(senders) or ["ALL"]
         if lit is not None:
             m.literal = lit
             typ, data = m.uid("SEARCH", "CHARSET", "UTF-8", *crit if crit != ["ALL"] else [], "TEXT")
@@ -463,10 +501,47 @@ def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, 
             typ, data = m.uid("SEARCH", *crit)
         _ok(typ, data, "SEARCH")
         uids = sorted((int(x) for x in _text(data).split()), reverse=True)
-        total = len(uids)
-        chunk = uids[page * size:(page + 1) * size]
-        rows = _fetch_summaries(m, chunk)
+        if not senders:
+            total = len(uids)
+            rows = with_trust(acc, _fetch_summaries(m, uids[page * size:(page + 1) * size]))
+        else:
+            kept: list[dict] = []
+            grant = {"senders": senders}
+            for i in range(0, min(len(uids), SCAN_MAX), 100):
+                for r in with_trust(acc, _fetch_summaries(m, uids[i:i + 100])):
+                    if access.sender_ok(grant, r["from"]["email"], r["from_verified"]):
+                        kept.append(r)
+            total = len(kept)
+            rows = kept[page * size:(page + 1) * size]
     return {"folder": folder, "total": total, "exists": exists, "page": page, "size": size, "messages": rows}
+
+
+def summaries(acc: dict, folder: str, uids: list[int]) -> list[dict]:
+    """The list rows of some messages (with from_verified), in the order of `uids`; missing ones are left out."""
+    if not uids:
+        return []
+    with session(acc) as m:
+        _select(m, folder, readonly=True)
+        rows = _fetch_summaries(m, [int(u) for u in uids])
+    return with_trust(acc, rows)
+
+
+def new_since(acc: dict, folder: str, last_uid: int | None, limit: int = 50) -> dict:
+    """{uidvalidity, uidnext, uids}: the messages of `folder` after last_uid (all when None: the newest `limit`)."""
+    with session(acc) as m:
+        _select(m, folder, readonly=True)
+        validity = 0
+        with contextlib.suppress(Exception):
+            validity = int(_text(m.response("UIDVALIDITY")[1]) or 0)
+        crit = f"{int(last_uid) + 1}:*" if last_uid is not None else "1:*"
+        typ, data = m.uid("SEARCH", "UID", crit)
+        _ok(typ, data, "SEARCH")
+        uids = sorted(int(x) for x in _text(data).split())
+        if last_uid is not None:
+            uids = [u for u in uids if u > int(last_uid)]   # "N:*" also returns the last message when none is newer
+        uids = uids[-limit:]
+        rows = _fetch_summaries(m, uids) if uids else []
+    return {"uidvalidity": validity, "uids": uids, "messages": with_trust(acc, rows)}
 
 
 def _part_text(part: Any) -> str:
@@ -538,6 +613,7 @@ def _render(msg: EmailMessage, uid: int, folder: str, seen_flags: list[str]) -> 
         "html": html_s,
         "remote_images": bool(html_s and _REMOTE.search(html_s)),
         "attachments": attachments,
+        "auth": access.top_result(msg),
         "seen": "\\seen" in seen_flags, "flagged": "\\flagged" in seen_flags, "answered": "\\answered" in seen_flags,
     }
 
@@ -567,7 +643,7 @@ def message(acc: dict, folder: str, uid: int, mark_seen: bool = True) -> dict:
         if mark_seen and "\\seen" not in fl:
             m.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Seen)")
             fl.append("\\seen")
-    return _render(_parse(raw), uid, folder, fl)
+    return with_trust(acc, [_render(_parse(raw), uid, folder, fl)])[0]
 
 
 def attachment(acc: dict, folder: str, uid: int, index: int) -> tuple[str, str, bytes]:

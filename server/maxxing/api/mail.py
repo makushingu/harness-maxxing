@@ -3,7 +3,9 @@ Every IMAP call runs in a thread (imaplib blocks). See docs/dev/API.md#mail."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import logging
 from typing import Literal, Optional
 from urllib.parse import quote
 
@@ -12,14 +14,15 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .. import mail
-from ..mail import imap, send
+from ..mail import imap, outbox, poll, send, store
 from ..mail.imap import MailError
 from ..security import require_auth
 
+log = logging.getLogger("maxxing.mail")
 router = APIRouter(prefix="/api/mail", tags=["mail"], dependencies=[Depends(require_auth)])
 
 STATUS = {"no_account": 404, "not_found": 404, "no_folder": 404, "exists": 409, "invalid": 400, "too_large": 413,
-          "no_password": 409, "auth": 422, "limit": 429, "refused": 422,
+          "no_password": 409, "auth": 422, "limit": 429, "refused": 422, "forbidden": 403,
           # the mail server failed, not ours: 424, never a 5xx (a proxy such as Cloudflare may hide a 502 body)
           "smtp": 424, "unreachable": 424, "tls": 424, "connection": 424, "imap": 424}
 
@@ -105,7 +108,8 @@ class ActionIn(BaseModel):
 async def get_accounts():
     _need_on()
     cap = send.per_day()
-    return [{**mail.public(a), "sent_today": send.sent_today(a["id"]), "send_per_day": cap} for a in mail.list_accounts()]
+    return [{**mail.public(a), "sent_today": send.sent_today(a["id"]), "send_per_day": cap,
+             "agents": poll.grants_of(a["id"]), "waiting": len(outbox.pending(a["id"]))} for a in mail.list_accounts()]
 
 
 @router.post("/detect")
@@ -166,12 +170,42 @@ async def delete_folder(acc_id: str, name: str):
 @router.get("/{acc_id}/messages")
 async def get_messages(acc_id: str, folder: str = "INBOX", page: int = 0, size: int = imap.PAGE, q: str = "",
                        unread: bool = False, flagged: bool = False):
-    return await _run(imap.messages, _acc(acc_id), folder, max(0, page), size, q or None, unread, flagged)
+    res = await _run(imap.messages, _acc(acc_id), folder, max(0, page), size, q or None, unread, flagged)
+    _seen_by(acc_id, folder, res["messages"])
+    return res
+
+
+def _agent_card(path: str, cache: dict) -> dict:
+    if path not in cache:
+        from .. import agents
+        try:
+            a = agents.load(path)
+            cache[path] = {"name": a["name"] or path.rsplit("/", 1)[-1], "avatar": a["avatar"],
+                           "exists": agents.exists(path)}
+        except Exception:  # noqa: BLE001
+            cache[path] = {"name": path.rsplit("/", 1)[-1], "avatar": None, "exists": False}
+    return cache[path]
+
+
+def _seen_by(acc_id: str, folder: str, rows: list[dict]) -> None:
+    """Each row gets `seen_by`: what the agents did with it (mail.db, never written to the mailbox)."""
+    keys = {store.mkey(r.get("message_id"), folder, r.get("uid")): r for r in rows}
+    try:
+        got = store.seen_by(acc_id, list(keys))
+    except Exception:  # noqa: BLE001 - the cache is optional
+        log.exception("mail.db unreadable")
+        got = {}
+    cache: dict = {}
+    for k, r in keys.items():
+        r["seen_by"] = [{**e, **_agent_card(e["agent"], cache)} for e in got.get(k, [])]
 
 
 @router.get("/{acc_id}/message")
 async def get_message(acc_id: str, uid: int, folder: str = "INBOX", seen: bool = True):
-    return await _run(imap.message, _acc(acc_id), folder, uid, seen)
+    m = await _run(imap.message, _acc(acc_id), folder, uid, seen)
+    m.pop("auth", None)
+    _seen_by(acc_id, folder, [m])
+    return m
 
 
 @router.get("/{acc_id}/attachment")
@@ -187,7 +221,12 @@ async def get_attachment(acc_id: str, uid: int, index: int, folder: str = "INBOX
 
 @router.post("/{acc_id}/actions")
 async def post_action(acc_id: str, body: ActionIn):
-    return await _run(imap.act, _acc(acc_id), body.folder, body.uids, body.action, body.target)
+    res = await _run(imap.act, _acc(acc_id), body.folder, body.uids, body.action, body.target)
+    if body.action in ("delete", "trash"):
+        for u in body.uids:
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(outbox.draft_done, acc_id, body.folder, u, "deleted")
+    return res
 
 
 @router.get("/{acc_id}/compose")
@@ -223,7 +262,12 @@ async def post_send(acc_id: str, data: str = Form(...), files: list[UploadFile] 
     forward: {folder, uid, indexes}, draft: {folder, uid}} + `files` (attachments)."""
     _need_on()
     draft, fs = await _draft_and_files(data, files)
-    return await _run(send.send, _acc(acc_id), draft, fs)
+    res = await _run(send.send, _acc(acc_id), draft, fs)
+    d = draft.get("draft") or {}
+    if d.get("uid"):                                    # a draft an agent wrote, sent by the owner from the page
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(outbox.draft_done, acc_id, str(d.get("folder") or ""), int(d["uid"]), "sent")
+    return res
 
 
 @router.post("/{acc_id}/draft")
@@ -232,3 +276,96 @@ async def post_draft(acc_id: str, data: str = Form(...), files: list[UploadFile]
     _need_on()
     draft, fs = await _draft_and_files(data, files)
     return await _run(send.save_draft, _acc(acc_id), draft, fs)
+
+
+# ---------------------------------------------------------------- checks, all mailboxes, the agents' outbox
+
+class RefreshIn(BaseModel):
+    account: Optional[str] = None
+
+
+@router.post("/refresh")
+async def post_refresh(body: RefreshIn = RefreshIn()):
+    """Check one mailbox (or all) now: new mail starts the agents watching it."""
+    _need_on()
+    accs = [_acc(body.account)] if body.account else mail.list_accounts()
+    out = []
+    for a in accs:
+        try:
+            out.append(await asyncio.to_thread(poll.poll_account, a))
+        except MailError as e:
+            out.append({"account": a["id"], "ok": False, "error": e.message, "new": 0, "started": 0})
+    return out
+
+
+@router.get("/all")
+async def get_all(limit: int = 100, before: Optional[float] = None):
+    """The newest mails of every mailbox, as the last checks saw them (not live)."""
+    _need_on()
+    accs = {a["id"]: a for a in mail.list_accounts()}
+    rows = await asyncio.to_thread(store.recent, list(accs), max(1, min(500, limit)), before)
+    by: dict[str, list[dict]] = {}
+    out = []
+    for r in rows:
+        m = {"account": r["account"], "address": accs[r["account"]]["address"], "folder": r["folder"], "uid": r["uid"],
+             "message_id": r["message_id"], "from": {"email": r["from_email"], "name": r["from_name"]},
+             "from_verified": bool(r["verified"]), "subject": r["subject"], "date": r["date"], "snippet": r["snippet"],
+             "seen": bool(r["seen"]), "attachments": bool(r["attachments"])}
+        by.setdefault(f"{r['account']}\0{r['folder']}", []).append(m)
+        out.append(m)
+    for k, ms in by.items():
+        acc_id, folder = k.split("\0", 1)
+        _seen_by(acc_id, folder, ms)
+    checks = {a: store.last_check(a) for a in accs}
+    return {"messages": out, "checks": checks}
+
+
+@router.get("/outbox")
+async def get_outbox(account: Optional[str] = None):
+    """Messages written by agents waiting for the owner's OK."""
+    _need_on()
+    rows = await asyncio.to_thread(outbox.pending, account)
+    cache: dict = {}
+    return [{**r, "avatar": _agent_card(r["agent"], cache)["avatar"]} for r in rows]
+
+
+@router.post("/outbox/{oid}/{action}")
+async def post_outbox(oid: str, action: Literal["send", "deny"]):
+    fn = outbox.approve if action == "send" else outbox.deny
+    r = await _run(fn, oid, "web")
+    return {"id": oid, "status": r.get("status")}
+
+
+_task: Optional[asyncio.Task] = None
+
+
+async def _loop() -> None:
+    last_tidy = 0.0
+    while True:
+        await asyncio.sleep(poll.TICK_S)
+        try:
+            if not mail.enabled():
+                continue
+            await asyncio.to_thread(poll.poll_due)
+            now = asyncio.get_running_loop().time()
+            if now - last_tidy > 86400:
+                last_tidy = now
+                await asyncio.to_thread(outbox.tidy)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("mail loop")
+
+
+async def startup() -> None:
+    global _task
+    _task = asyncio.get_running_loop().create_task(_loop())
+
+
+async def shutdown() -> None:
+    global _task
+    if _task is not None:
+        _task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await _task
+        _task = None

@@ -48,6 +48,9 @@ CLI_ALLOWED = {
     "feed": {"post", "list"},
     "agents": {"send", "show", "list", "templates"},
     "keys": {"get", "list"},          # filtered by the agent's `keys` (cmd_keys)
+    # filtered by the agent's `mail` (cmd_mail.Guard): its mailboxes, rights and senders
+    "mail": {"accounts", "folders", "list", "read", "attachment", "write", "move", "mkdir", "refresh", "outbox",
+             "archive", "trash", "junk", "inbox", "seen", "unseen", "flag", "unflag"},
     "status": None,                   # None = any
 }
 
