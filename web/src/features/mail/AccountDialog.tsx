@@ -39,6 +39,16 @@ function fromAccount(a: MailAccount): Form {
   }
 }
 
+// providers where a plain password is not enough: shown under the password field once the address is known
+const PROTON = /@(proton\.me|protonmail\.(com|ch)|pm\.me)$/i
+function providerNote(address: string, d: MailDetect | null, imapHost: string): 'gmail' | 'microsoft' | 'proton' | null {
+  const host = (imapHost || d?.imap_host || '').toLowerCase()
+  if (PROTON.test(address.trim()) || d?.mx.some((m) => /protonmail\.ch\.?$/i.test(m))) return 'proton'
+  if (host === 'imap.gmail.com') return 'gmail'
+  if (host === 'outlook.office365.com') return 'microsoft'
+  return null
+}
+
 export function AccountDialog({ open, onOpenChange, account, onSaved }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -84,6 +94,7 @@ export function AccountDialog({ open, onOpenChange, account, onSaved }: {
   }
 
   const err = (add.error || update.error) as Error | null
+  const note = editing ? null : providerNote(f.address, detected, f.imap_host)
   const busy = add.isPending || update.isPending
 
   const submit = (e: React.FormEvent) => {
@@ -136,6 +147,14 @@ export function AccountDialog({ open, onOpenChange, account, onSaved }: {
           <FormField label={t('mail.acc.password')} hint={editing ? t('mail.acc.passwordKeep') : t('mail.acc.passwordHint')}>
             <SecretInput value={f.password} onChange={(e) => set('password', e.target.value)} onFocus={runDetect} required={!editing} />
           </FormField>
+          {note && (
+            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              {t(`mail.acc.note.${note}`)}
+              {note === 'gmail' && (
+                <> <a className="text-primary underline" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">myaccount.google.com/apppasswords</a></>
+              )}
+            </p>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField label={t('mail.acc.name')} hint={t('mail.acc.nameHint')}>
               <Input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Alex Martin" />
