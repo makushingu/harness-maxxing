@@ -156,7 +156,8 @@ def _list(a) -> int:
                           for x in rows], indent=2))
         return 0
     if not agents.feature_on():
-        print("(Agents are off in Settings -> Features: their triggers still run, the page is hidden.)", file=sys.stderr)
+        print("(Agents are off in Settings -> Features: the page is hidden; schedules, Telegram and agents/run/send "
+              "still start them, feed and webhook events do not - those that come meanwhile are skipped.)", file=sys.stderr)
     if not rows:
         print("No agent yet.")
         return 0
@@ -269,7 +270,8 @@ def _create(a) -> int:
         if tpl and tpl.get("needs"):
             print(f"to connect: {tpl['needs']}")
         if not agents.feature_on():
-            print("(The Agents page is off: Settings -> Features -> Agents shows it. Triggers run anyway.)",
+            print("(The Agents page is off: Settings -> Features -> Agents shows it. Schedules and Telegram run anyway, "
+                  "feed and webhook triggers only once it is on.)",
                   file=sys.stderr)
     return 0
 
