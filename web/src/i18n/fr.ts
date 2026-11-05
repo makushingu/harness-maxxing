@@ -3208,6 +3208,7 @@ export const fr: Record<keyof typeof en, string> = {
   'groups.send': 'Envoyer',
   'groups.mention.title': 'Membres',
   'groups.mention.all': 'Tout le monde',
+  'groups.to': 'À :',
   'groups.pass': '{name} n\'a rien à ajouter',
   'groups.skip': '{name} n\'a pas pu répondre :',
   'groups.skip.failed': 'son tour a échoué (voir le déroulé)',
