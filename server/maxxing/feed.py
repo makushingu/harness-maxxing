@@ -342,8 +342,10 @@ def act(event_id: int, action: str, by: str = "web") -> dict:
             fn(value, action, by, ev)
     if action in ("seen", "open"):
         with _conn() as c:
-            c.execute("UPDATE events SET read=1 WHERE id=?", (int(event_id),))
+            changed = c.execute("UPDATE events SET read=1 WHERE id=? AND read=0", (int(event_id),)).rowcount
         bus.invalidate("feed")
+        if changed and ev.get("ref") and by != "telegram":       # Telegram edits its own message after the tap
+            _alert_out(get(event_id) or ev, new=False)            # its Seen button goes
     return get(event_id) or ev
 
 
@@ -525,6 +527,15 @@ def watch_id() -> int:
 
 def mark_read(ids: list[int] | None = None, source: str | None = None, everything: bool = False) -> int:
     with _conn() as c:
+        # open alerts read now: their Telegram message loses its Seen button (update_alert)
+        alerts = "SELECT id FROM events WHERE read=0 AND ref IS NOT NULL AND resolved IS NULL"
+        if everything:
+            out = [r[0] for r in c.execute(alerts)]
+        elif source:
+            out = [r[0] for r in c.execute(alerts + " AND source=?", (source,))]
+        else:
+            want = [i for i in map(_id, (ids or [])[:500]) if i is not None]
+            out = [r[0] for r in c.execute(alerts + f" AND id IN ({','.join('?' * len(want))})", want)] if want else []
         if everything:
             c.execute("UPDATE events SET read=1 WHERE read=0")
         elif source:
@@ -532,6 +543,10 @@ def mark_read(ids: list[int] | None = None, source: str | None = None, everythin
         elif ids:
             c.executemany("UPDATE events SET read=1 WHERE id=?", [(i,) for i in map(_id, ids[:500]) if i is not None])
     bus.invalidate("feed")
+    for i in out:
+        ev = get(i)
+        if ev:
+            _alert_out(ev, new=False)
     return unread_count()
 
 
