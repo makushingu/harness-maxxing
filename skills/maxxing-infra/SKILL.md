@@ -15,6 +15,7 @@ below, they validate, roll back on error, store credentials in the vault, regist
 maxxing infra status                 # sources (servers, Cloudflare, Hostinger), counts, everything down or to check
 maxxing infra list [--kind site|database|bucket|domain|server|worker|pages] [--json]
 maxxing infra refresh                # gather now (10-60 s); the server also does it every 15 min when the page is on
+maxxing infra mail [--json]          # e-mail (view only): mailboxes, Cloudflare / Hostinger forwards, DNS health of mail domains
 ```
 `list --json` gives each resource's `id`, `urls`, `status`/`status_detail`, `details` (target port, service unit,
 repository, DNS records, certificate, sizes...) and `links` (domain <-> sites, site <-> server...).

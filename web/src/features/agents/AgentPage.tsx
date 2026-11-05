@@ -8,7 +8,7 @@
 //   of its topic configures it: an agent cannot change its own role or settings).
 // Opening the page marks its results as read (POST /seen). Its runs open in place (RunView), never in Sessions.
 import * as React from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import {
   AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle,
 } from 'lucide-react'
@@ -28,7 +28,7 @@ import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
-import { AgentSettings } from './AgentSettings'
+import { AgentSettings, type SectionId } from './AgentSettings'
 import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
@@ -60,6 +60,16 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
   const touch = useCompact()
   const [profile, setProfile] = React.useState(false)
   const openProfile = () => (dockable ? setDocked(!wide) : setProfile(true))
+  // ?settings=<section> (a link from the E-mail page): the profile opens, then its settings on that section
+  const [search] = useSearchParams()
+  const wantSettings = !!search.get('settings') && !!a
+  React.useEffect(() => {
+    if (wantSettings && !wide) {
+      if (dockable) setDocked(true)
+      else setProfile(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantSettings])
   // On a phone the agent is full screen: back to the list (on a computer the list stays on the left).
   const back = touch ? (
     <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
@@ -545,7 +555,18 @@ function PanelSection({ title, action, children }: { title: string; action?: Rea
 
 function Profile({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
-  const [advanced, setAdvanced] = React.useState(false)
+  // the settings sheet: closed, open, or open on a section
+  const [advanced, setAdvanced] = React.useState<boolean | SectionId>(false)
+  const [params, setParams] = useSearchParams()
+  const want = params.get('settings')
+  React.useEffect(() => {
+    if (!want) return
+    setAdvanced(want === 'mail' ? 'mail' : true)
+    const p = new URLSearchParams(params)
+    p.delete('settings')
+    setParams(p, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [want])
   const [memory, setMemory] = React.useState(false)
   const lim = a.limits
   const spent = a.cost_today || 0
@@ -562,7 +583,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
 
       <PanelSection title={t('agents.panel.when')}>
         <p className="text-xs text-muted-foreground">{t('agents.when.manual')}</p>
-        <AgentTriggers agent={a} />
+        <AgentTriggers agent={a} onMailSettings={() => setAdvanced('mail')} />
         <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground" data-testid="agent-self-locked">
           <Lock className="mt-px size-3 shrink-0" /> {t('agents.edit.selfLocked')}
         </p>
@@ -637,13 +658,13 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           </span>
         </button>
       </div>
-      <Sheet open={advanced} onOpenChange={setAdvanced}>
+      <Sheet open={!!advanced} onOpenChange={setAdvanced}>
         <SheetContent side="right" className="md:w-[520px]">
           <SheetHeader>
             <SheetTitle>{t('agents.panel.advanced')}</SheetTitle>
           </SheetHeader>
           <SheetBody>
-            <AgentSettings agent={a} />
+            <AgentSettings agent={a} section={typeof advanced === 'string' ? advanced : undefined} />
           </SheetBody>
         </SheetContent>
       </Sheet>

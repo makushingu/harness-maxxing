@@ -67,6 +67,8 @@ def _configure(p) -> None:
                                                  "(e.g. api.github.com,*.example.com; default: none)")
     s.add_argument("--writable", default="", help="folders of the topic it may write in besides its own, comma-"
                                                   "separated (. = the whole topic)")
+    s.add_argument("--mail", default="", metavar="MAILBOX", help="a mailbox of the E-mail page it may use (id or "
+                   "address): read + drafts, or what a mail template says (`maxxing mail accounts`)")
     s.add_argument("--no-sandbox", action="store_true", help="no sandbox: its commands reach the whole server")
     s.add_argument("--trust-outside", action="store_true",
                    help="runs started by outside events (webhooks, feed, other agents) do not ask first: risky")
@@ -258,6 +260,23 @@ def _create(a) -> int:
     fields = {"avatar": {**{k: random.choice(list(v)) for k, v in agents.AVATAR.items()},
                          "color": agents.project_color(project)}, "permission_mode": "",
               **(agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]) if tpl else {})}
+    if a.mail:
+        from . import mail
+        from .mail.imap import MailError
+        try:
+            acc_id = mail.get_account(a.mail)["id"]
+        except MailError as e:
+            print(e.message, file=sys.stderr)
+            return 2
+        tm = (tpl or {}).get("mail") or {}
+        fields["mail"] = [{"account": acc_id, "rights": tm.get("rights") or ["read", "draft"],
+                           "approve_send": tm.get("approve_send") or "always", "senders": tm.get("senders") or [],
+                           "trigger": tm.get("trigger") or {"enabled": True, "folder": "INBOX", "prompt": ""}}]
+        if not tpl:
+            fields.setdefault("allowed_tools", [])
+    elif tpl and tpl.get("mail"):
+        print("This template is made for a mailbox: add --mail MAILBOX (`maxxing mail accounts`)", file=sys.stderr)
+        return 2
     fields.update({"name": a.name or fields.get("name") or name, "model": a.model, "telegram": a.telegram,
                    "enabled": not a.off, "trust_outside": a.trust_outside,
                    "approvals": a.approvals or bool(fields.get("approvals")),

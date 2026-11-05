@@ -38,6 +38,8 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
   a Hostinger VPS connects in one click),
   Cloudflare, Hostinger; statuses, certificate and domain expiry, links domain -> server -> site -> app -> repository;
   standard recipes to put a site online, create a PostgreSQL database or an S3 bucket (`maxxing infra`).
+- **E-mail** (optional) - your IMAP/SMTP mailboxes in a simple client (read, sort, search, reply, forward, drafts),
+  sent through each mailbox's own server, capped per day; Claude sorts them and prepares drafts (`maxxing mail`)
 - **Team** (optional) - chats with other Harness users (direct messages, groups, files, polls), server to server
   through a one-time invitation; Claude summarizes the messages you pick; any message can go to a session.
 - **Agents** (optional) - lasting roles inside a topic (a writer, an order handler, a monitor) with their own role,

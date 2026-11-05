@@ -384,6 +384,15 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     return out
 
 
+def _clean_mail(v: Any, strict: bool) -> list[dict]:
+    """The mailboxes of the E-mail page the agent may use, and how (mail/access.py). None by default."""
+    from .mail import access
+    try:
+        return access.clean_grants(v, strict)
+    except access.AccessError as e:
+        raise AgentError(400, "bad_mail", str(e)) from None
+
+
 def _utf8(s: str) -> str:
     """A lone surrogate (\\ud800 is valid JSON) as "?": UTF-8 cannot store it."""
     return s.encode("utf-8", "replace").decode("utf-8")
@@ -417,7 +426,7 @@ def clean(data: Any, strict: bool = False) -> dict:
             # sandbox: off for agents made before it existed (no field), on for new ones (create())
             "sandbox": bool(d.get("sandbox")), "domains": _clean_domains(d.get("domains"), strict),
             "writable": _clean_writable(d.get("writable"), strict), "rules": _clean_rules(d.get("rules"), strict),
-            "subagent": bool(d.get("subagent")),
+            "subagent": bool(d.get("subagent")), "mail": _clean_mail(d.get("mail"), strict),
             "limits": limits, "triggers": triggers,
             "created": c if isinstance(c := d.get("created"), (int, float)) and math.isfinite(c) else time.time()}
 
@@ -563,7 +572,7 @@ def public(path: str, stats: dict | None = None) -> dict:
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
                 "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
-                "limits", "triggers", "created")},
+                "mail", "limits", "triggers", "created")},
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": st.get("unread", 0)}
 

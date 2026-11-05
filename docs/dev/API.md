@@ -274,7 +274,7 @@ health problems itself every 60 s (not `cron_failed` nor
 | DELETE | `/api/backup` | – | forget repo + token (`409 busy` while a backup or restore runs) |
 
 ## Settings & secrets
-| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, maxxing_mode:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; Settings -> Support stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
+| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, mail_page:bool, maxxing_mode:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; Settings -> Support stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
 | PUT | `/api/settings/look` | `{theme:"dark"\|"light"\|"system", accent:"blue"\|"clay"\|"violet"\|"green"\|"amber"\|"rose", tint?:"neutral"\|"tinted"}` | `{ok, look}` · sent by the web app 600 ms after a change of theme / accent / tint (config `look`) · `422` bad value |
 | GET / PUT | `/api/settings/profile` | `{name ≤32, color: "clay"\|"blue"\|"violet"\|"green"\|"amber"\|"rose"\|"teal"\|"zinc", emoji}` | `Profile` (bus `profile`) |
 | GET / PUT | `/api/settings/register` | `{count?, email?, news?, asked?}` (email: valid or `""`) | `RegisterState` `{count, count_blocked, email, news, asked, registered, error, synced_at}` (bus `register`). Optional hello to the authors (`maxxing/register.py`): `count` (default `true`) = anonymous daily signal (cloud id + version + `os`, `arch`, `health` codes), `count_blocked` = `MAXXING_NO_TELEMETRY` / `DO_NOT_TRACK` set in the service environment (counter off whatever `count`); `email` (+ `news`) adds pseudo and language; neither = cloud row archived (kept, never contacted again). An update never turns on the email or the news; 2.0.0a94 turned `count` on once where `asked` was false. |
@@ -559,6 +559,7 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 | POST | `/api/infra/servers/remove` | `{name}` | `{removed}`; `404` |
 | POST | `/api/infra/domains` | `{name}` | `{name}` (normalised: lower case, IDNA, no scheme/path); `400 invalid_domain`. A domain from any registrar, read through RDAP + public DNS |
 | POST | `/api/infra/domains/remove` | `{name}` | `{removed}`; `404` when it was not added by hand |
+| GET | `/api/infra/mail?refresh=1` | – | Infra -> E-mail, view only (`infra/mailinfo.py`; `409 disabled` when the Infra page is off). `{generated_at, cached, mail_page, mailboxes:[{id, address, label, domain, imap_host, imap_port, smtp_host, smtp_port, has_password, last_check:{at, ok, error}\|null}], cloudflare:{connected, key, error?, message?, zones:[{zone, name, routing:{enabled, status}\|null, rules:[{name, enabled, catch_all, from, action: forward\|worker\|drop, to:[address], worker}], error?, missing_permission?}], addresses:[{email, verified, verified_at}], addresses_error?, addresses_fix?, missing_permission_zones?, fix?}, hostinger:{connected, key, error?, orders:[{id, domain, status, plan, seats, expires, mailboxes:[{address, status, catch_all}], aliases:[{address, to, enabled}], forwarders:[{from, to, enabled, confirmed, keep_copy}], catchalls:[{domain, to, enabled, confirmed}], error?}]}, routes:[{domain, address (`*@domain` = catch-all), via: cloudflare\|hostinger, kind: forward\|worker\|drop\|mailbox\|alias\|catchall\|other, enabled, account, worker, to:[{address, verified: bool\|null, account}]}], domains:[{domain, sources:[cloudflare\|hostinger\|mail_page], expects, checked, error, mx:[host], spf:{record, count, lookups}, dkim:[selector], dmarc:{record, count, policy}, problems:[{level: error\|warn\|info, code, text, fix, params}]}]}`. `account` = id of the E-mail page mailbox with that address. Provider calls are GET only, cached 5 min (`<state>/infra/mail.json`), DNS facts 1 h (`<state>/infra/mail-dns.json`, public DoH, `MAXXING_DOH_API`); `refresh=1` skips both. A provider error is in the payload, never a 5xx. Problem codes: `dns_unreachable, no_mail, null_mx, no_mx, mx_not_cloudflare, no_spf, multiple_spf, spf_all, spf_lookups, no_dkim, no_dmarc, multiple_dmarc, dmarc_no_policy, dmarc_none` |
 
 Resource: `{id, kind: server|site|worker|pages|database|bucket|domain, name, location: local|<server>|cloudflare|hostinger|other,
 provider, urls, status: ok|warn|down|unknown, status_detail (http_<code>, unreachable, timeout, tls_invalid, cert_expiring,
@@ -567,6 +568,49 @@ list_failed, file_missing), details, links:[id], project, note, hidden, declared
 `site:<server>:<host><path>`, `db:<server>:<engine>:<container|native>:<db>`, `db:<server>:sqlite:<path>`,
 `db:cloudflare:d1:<name>`, `bucket:<server>:garage:<name>`, `bucket:cloudflare:r2:<name>`, `worker:cloudflare:<name>`,
 `pages:cloudflare:<name>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).
+
+## Mail
+
+E-mail page (`maxxing/mail/`, Settings -> Features -> `mail_page`, off by default): any IMAP/SMTP mailbox, live (no
+copy of the mail on the server). Every route answers `409 disabled` while the page is off. Accounts:
+`<state>/mail/accounts.json` (no secret); each password is the vault key `MAIL_<ID>_PASSWORD`, never exposed to turns.
+Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, `409 exists|no_password`,
+`413 too_large`, `422 refused` (every recipient refused) | `auth` (sign-in refused), `429 limit` (daily cap or more than 20 recipients),
+`424 unreachable|tls|connection|imap|smtp` (the mail server failed; never a 5xx, which a proxy may replace by its own page).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/mail/accounts` | – | `[MailAccount]` `{id, label, address, name, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, signature, password_key, has_password, created, smtp_checked, sent_today, send_per_day}` |
+| POST | `/api/mail/detect` | `{address}` | `{source: known\|mx\|autoconfig\|guess, imap_*, smtp_*, mx}` (known providers, MX of the domain, Thunderbird's directory, else `mail.<domain>`) |
+| POST | `/api/mail/accounts` | `{address, password, label?, name?, username?, imap_host, imap_port, imap_tls: ssl\|starttls\|none, smtp_host, smtp_port, smtp_tls, signature?}` | `{account, test: {imap, smtp, smtp_port, smtp_tls, smtp_changed, smtp_error?}}` (signs in first; SMTP 465 that does not answer -> 587 STARTTLS) |
+| PATCH / DELETE | `/api/mail/accounts/{id}` | PATCH: same fields, all optional (`password` empty = kept) | `{account, test\|null}` / `{ok}` (DELETE removes the password from the vault, never the mailbox) |
+| POST | `/api/mail/accounts/{id}/test` | – | `test` as above |
+| GET / POST / PUT / DELETE | `/api/mail/{id}/folders` | POST `{name, parent?}`, PUT `{name, new_name}`, DELETE `?name=` | GET `[{name, role: inbox\|drafts\|sent\|archive\|junk\|trash\|all\|flagged\|null, delim, unread, total}]` |
+| GET | `/api/mail/{id}/messages?folder=&page=&size=&q=&unread=&flagged=` | – | `{folder, total, exists, page, size, messages: [{uid, from, to, subject, date, seen, flagged, answered, size, attachments}]}` (newest first; `q` = server-side IMAP TEXT search) |
+| GET | `/api/mail/{id}/message?folder=&uid=&seen=1` | – | `{uid, folder, from, to, cc, bcc, reply_to, subject, date, message_id, in_reply_to, references, text, html, remote_images, attachments: [{index, filename, content_type, size}], seen, flagged, answered}` (marks it read unless `seen=0`; `html` without scripts, `cid:` images inlined) |
+| GET | `/api/mail/{id}/attachment?folder=&uid=&index=&inline=` | – | the file (`inline` only for images and PDF; `CSP: sandbox`) |
+| POST | `/api/mail/{id}/actions` | `{folder, uids, action: seen\|unseen\|flag\|unflag\|move\|archive\|trash\|junk\|inbox\|delete, target?}` | `{ok, moved_to}` (`delete` only from trash / junk; an archive folder is created when missing) |
+| GET | `/api/mail/{id}/compose?mode=reply\|replyall\|forward\|draft&folder=&uid=` | – | `{to, cc, bcc?, subject, text, in_reply_to, references, attachments}`: the fields a composer starts with (signature then quote for a reply, forwarded header + body, a draft as saved; never oneself in reply all) |
+| POST | `/api/mail/{id}/send` | multipart: `data` = JSON `MailDraft` `{to, cc, bcc, subject, text, in_reply_to?, references?, reply?: {folder, uid}, forward?: {folder, uid, indexes}, draft?: {folder, uid}}`, `files` (≤ 30, ≤ 25 MB in total with the forwarded ones) | `{ok, message_id, recipients, refused, sent_folder}`: sent through the SMTP of the mailbox (plain text), copy filed in Sent (not for Gmail / Outlook, which do it), `reply` flagged answered, `draft` dropped. Capped: ≤ 20 recipients a message, `mail_send_per_day` (config, default 100) recipients a mailbox a day (`<state>/mail/sent-count.json`; a failed send gives them back) |
+| POST | `/api/mail/{id}/draft` | as `/send` | `{folder, uid}`: filed in Drafts, replacing `draft` |
+| POST | `/api/mail/refresh` | `{account?}` | `[{account, ok, error?, new, started}]`: check the mailbox(es) now (`mail/poll.py`); new mail starts the agents watching it |
+| GET | `/api/mail/all?limit=100&before=` | – | `{messages: [{account, address, folder, uid, message_id, from, from_verified, subject, date, snippet, seen, attachments, seen_by}], checks: {<id>: {at, ok, error}}}`: the newest mail of every mailbox as the checks saw it (cache, not live) |
+| GET | `/api/mail/outbox?account=` | – | `[{id, account, agent, agent_name, avatar, at, to, cc, subject, text, files, draft: {folder, uid}, why, event_id, note}]`: messages written by agents waiting for the owner's OK |
+| POST | `/api/mail/outbox/{id}/send\|deny` | – | `{id, status: sent\|refused}` (once; also the buttons of its Notifications event, ref `mailsend:<id>`) |
+
+Since the agents' e-mail (lot 2): `MailAccount` also has `poll_min` (5\|10\|30\|60 minutes between checks, default 10,
+PATCH-able), `auth_servers` (host names whose `Authentication-Results` are trusted, set by the owner, PATCH-able),
+`sender_check` (`{state: owner|auto|detected|none, server}`: who verifies the senders - the owner's servers, a known
+provider found on nearly all recent mail and hosting the mailbox, a server found but not confirmed (the UI offers to
+trust it = `auth_servers`), or nobody: then no sender is verified), `last_check` (`{at, ok, error}` or null), `agents` (the agents
+that may use it: `{agent, name, avatar, enabled, rights, senders, approve_send, trigger}`) and `waiting` (outbox count).
+List rows and `/message` have `from_verified` (the topmost `Authentication-Results`, written by the mailbox's provider,
+says DMARC / DKIM / SPF passed for the sender's domain), `message_id`, and `seen_by`: `[{agent, at, what, detail, name,
+avatar, exists}]` (`what`: seen, read, draft, filed, archived, replied, sent, marked read...; kept in `<state>/mail/mail.db`,
+never written to the mailbox). An agent's `mail` setting (agent.json, `PATCH /api/agents/...` `{mail: [Grant]}`, 400
+`bad_mail`): `Grant = {account, rights: [read, draft, move, mark, send], senders: ["*@example.com", "bob@example.com"],
+approve_send: always|new|never, trigger: {enabled, folder, subject, senders, prompt} | null}`; enforced by `maxxing mail`
+in the agent's turns (`mail/access.py`, `cmd_mail.Guard`).
 
 ## Team
 
