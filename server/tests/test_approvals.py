@@ -366,3 +366,26 @@ def test_a_lone_surrogate_in_the_tool_input_still_asks(tmp_path):
     approval_mcp.write_atomic(f, {"id": "x", "input": {"command": "echo a\ud800b"}})
     assert approval_mcp.read(f)["input"]["command"] == "echo a\ud800b"
     assert [p.name for p in tmp_path.iterdir()] == ["x.json"]           # no .tmp left behind
+
+
+def test_the_watcher_parses_only_the_requests_that_changed(client, topic, monkeypatch):
+    from maxxing import approval_mcp, approvals
+    d = approvals.folder()
+    d.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    for i in range(50):
+        rid = f"{i:016x}"
+        approval_mcp.write_atomic(d / f"{rid}.json", {"id": rid, "session": "s", "status": "allow", "at": now,
+                                                      "decided_at": now})
+    reads = []
+    real = approval_mcp.read
+    monkeypatch.setattr(approval_mcp, "read", lambda f: reads.append(f) or real(f))
+    assert len(approvals._all()) == 50
+    first = len(reads)
+    for _ in range(5):
+        approvals._all()
+    assert len(reads) == first
+    one = f"{1:016x}"
+    approval_mcp.write_atomic(d / f"{one}.json", {"id": one, "session": "s", "status": "deny", "at": now})
+    assert next(x for x in approvals._all() if x["id"] == one)["status"] == "deny"
+    assert len(reads) == first + 1
