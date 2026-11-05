@@ -36,6 +36,7 @@ import { GroupFace } from './AgentsList'
 import { GroupForm, claudeTopic } from './GroupForm'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
+import { MentionChip, mentionComponents, mentionNodes, namedIn, useMentionMap, type MentionMap } from './mentions'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -317,6 +318,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
   const box = React.useRef<HTMLDivElement>(null)
   const msgs = React.useMemo(() => data || [], [data])
   const byPath = React.useMemo(() => new Map(g.members.map((m) => [m.path, m])), [g.members])
+  const names = useMentionMap(g.members)
   const said = msgs.some((m) => m.kind === 'message')
   const last = msgs[msgs.length - 1]?.id
   // Newest at the bottom: follow it when a message arrives (unless the user scrolled up to read).
@@ -352,7 +354,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
             <>
               {!said && <HowItWorks group={g} />}
               {msgs.map((m) => (
-                <GroupMessage key={m.id} m={m} member={byPath.get(m.author)} root={ws?.root} />
+                <GroupMessage key={m.id} m={m} member={byPath.get(m.author)} root={ws?.root} names={names} />
               ))}
             </>
           )}
@@ -446,9 +448,10 @@ function skipText(t: TFn, m: AgentGroupMessage): string {
   return m.text.replace(/^@[a-z0-9-]+:\s*/i, '')
 }
 
-function GroupMessage({ m, member, root }: { m: AgentGroupMessage; member?: AgentGroupMember; root?: string }) {
+function GroupMessage({ m, member, root, names }: { m: AgentGroupMessage; member?: AgentGroupMember; root?: string; names: MentionMap }) {
   const t = useT()
   const lang = useLang()
+  const chips = React.useMemo(() => mentionComponents(names), [names])
   const [open, setOpen] = React.useState(false)
   const when = (
     <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
@@ -495,7 +498,7 @@ function GroupMessage({ m, member, root }: { m: AgentGroupMessage; member?: Agen
       <div className="ml-auto grid w-fit max-w-[85%] gap-1 max-sm:max-w-full" data-kind="mine">
         <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
           <p className="whitespace-pre-wrap break-words">
-            <Sensitive block>{m.text}</Sensitive>
+            <Sensitive block>{mentionNodes(m.text, names, 'primary')}</Sensitive>
           </p>
         </div>
         <span className="flex justify-end text-[11px] text-muted-foreground">{when}</span>
@@ -521,7 +524,9 @@ function GroupMessage({ m, member, root }: { m: AgentGroupMessage; member?: Agen
         <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
           <Sensitive block>
             <React.Suspense fallback={<p className="whitespace-pre-wrap break-words">{m.text}</p>}>
-              <Markdown className="text-sm">{linkifyMarkdown(m.text, root)}</Markdown>
+              <Markdown className="text-sm" components={chips}>
+                {linkifyMarkdown(m.text, root)}
+              </Markdown>
             </React.Suspense>
           </Sensitive>
           {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
@@ -567,6 +572,8 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     if (focus) input.current?.focus()
   }, [focus])
   const ready = g.members.filter((m) => m.exists).length >= 2
+  const names = useMentionMap(g.members)
+  const to = namedIn(text, names, g.members.filter((m) => m.exists))
 
   const at = mentionAt(text, caret)
   // The members (and @all) whose @name or name starts with what is typed, then the ones that contain it.
@@ -669,6 +676,15 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
             {t('groups.notReady')}
           </p>
         ) : (
+          <>
+          {to.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 px-1.5 pt-1 text-xs text-muted-foreground" data-testid="group-to">
+              <span>{t('groups.to')}</span>
+              {to.map((m) => (
+                <MentionChip key={m.path} member={m} handle={m.handle} />
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-1">
             <Textarea
               ref={input}
@@ -696,6 +712,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               <Send />
             </Button>
           </div>
+          </>
         )}
       </div>
     </div>
