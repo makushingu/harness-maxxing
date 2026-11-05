@@ -185,7 +185,7 @@ What needs you lands in the **Notifications** (dashboard panel, `/feed`, and Tel
 *Agents*), and the agent gets a red badge in the list until you read it:
 
 - it waits for your OK: **Allow** / **Deny** right in the notification (see [Approvals](#approvals));
-- a run failed (repeats fold into one notification, *×3*; the next good run ends it);
+- a run failed (repeats fold into one notification, *×3*; the next good run ends it, and a failure after that is a new notification);
 - its daily budget or its runs per hour are reached (its triggers are skipped; raise the limit on its page, or it
   starts again tomorrow / next hour);
 - its sandbox cannot run on the server, or a trigger lost its webhook.
