@@ -15,6 +15,7 @@ section: Reference
 | `maxxing 2fa status\|off\|forget-browsers` | two-step sign-in with Telegram: state, turn it off (the way back in when Telegram does not answer), make every browser ask again |
 | `maxxing status [--json]` | version, URL, service, Claude auth, Telegram, backup, paths |
 | `maxxing doctor [--json] [--live] [--offline] [--deps]` | check the installation; `--live` makes a real Claude call, `--offline` skips the update checks (GitHub, Claude Code release), `--deps` also looks up known vulnerabilities of the installed packages (osv.dev) |
+| `maxxing proxy on [HOST:PORT] [--domain D]` / `proxy off` / `proxy status [--json]` | a second private listen address (default `172.17.0.1:8790`) for a reverse proxy in Docker, guarded by a secret header; writes the Traefik block to `<state>/reverse-proxy.conf`; restart the service after (see [Installation](installation#behind-a-proxy-in-docker)) |
 | `maxxing harden [--undo] [--no-restart]` | apply (or remove) the systemd sandbox of the service, then restart it; restores the previous settings if the service does not come back (see [Security](security)) |
 
 ## maxxing init

@@ -38,6 +38,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "files_root": "/root",
     "bind": "127.0.0.1",
     "port": 8787,
+    # second listen address for a reverse proxy in a container ("HOST:PORT", "" = off): `maxxing proxy on`
+    "proxy_listen": "",
     "public_url": "",
     "timezone": "UTC",
     "system_clock": "follow",          # follow: system zone = timezone | keep: never touch it (shared server)
