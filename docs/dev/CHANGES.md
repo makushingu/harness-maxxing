@@ -32,6 +32,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   or leaves keys out (`_MINOR` keys aside). Not whole: the feed event gets `open` + `deny` (no `allow`, so
   `feed.act(..., "allow")` is a 400) and the older Telegram message Deny only; `_on_approval` refuses an `allow`
   callback for it.
+- Telegram `_on_alert`: a press counts only when notes.json `al:<id>` names this chat + message id (stale
+  buttons after a recreated feed.db, where ids restart, lose their buttons instead of deciding a new event).
 
 ## 2.0.0-alpha.116 - 2026-11-04
 
