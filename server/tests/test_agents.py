@@ -132,6 +132,42 @@ def test_guards_disabled_budget_rate(client, topic, monkeypatch):
     assert [m["reason"] for m in skips] == ["disabled", "budget", "rate"]
 
 
+def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, monkeypatch):
+    import threading
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
+    first = agents.fire(A, trigger="manual", prompt="NOTOOL a")
+    assert first["started"]
+    assert agents.fire(A, trigger="manual", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="feed:t_1", prompt="NOTOOL c", wait=True) == {"started": False, "reason": "busy"}
+    assert [m["reason"] for m in agents.thread(A) if m["kind"] == "skip"] == ["busy"]   # wait: nothing posted
+    from maxxing import feed
+    assert not feed.find(agents._ref(A, "budget"))                                      # not a budget alert
+    wait_idle(client, first["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert argv[argv.index("--max-budget-usd") + 1] == "2.00"
+    wait_for(lambda: not agents._read_state(A).get("held"))                            # released at the turn end
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.02")
+    again = agents.fire(A, trigger="manual", prompt="NOTOOL d")
+    assert again["started"]
+    wait_idle(client, again["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert argv[argv.index("--max-budget-usd") + 1] == "1.99"                          # 2 - the first run's 0.0123
+    # runs per hour: two triggers at the same moment, one slot left -> one run
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0, "runs_per_hour": 3}})
+    out: list = []
+    ts = [threading.Thread(target=lambda: out.append(agents.fire(A, trigger="manual", prompt="NOTOOL e")))
+          for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert sorted(r["started"] for r in out) == [False, True] and {r.get("reason") for r in out} == {None, "rate"}
+    for r in out:
+        if r["started"]:
+            wait_idle(client, r["session"]["id"])
+
+
 def test_budget_day_follows_the_harness_time_zone(client, topic):
     from maxxing.sessions import store
     _on(client)

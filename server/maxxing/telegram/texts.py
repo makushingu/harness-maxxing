@@ -219,9 +219,11 @@ WORDS["fr"].update({
 })
 AGENT_REASONS = {
     "en": {"disabled": "it is switched off", "budget": "its daily budget is reached",
+           "busy": "its run in progress holds the rest of today's budget: try again once it is done",
            "rate": "too many runs in the last hour", "missing": "it no longer exists",
            "depth": "too many hops between agents"},
     "fr": {"disabled": "il est désactivé", "budget": "son budget du jour est atteint",
+           "busy": "le tour en cours réserve le reste de son budget du jour : réessayez quand il aura fini",
            "rate": "trop de tours dans la dernière heure", "missing": "il n'existe plus",
            "depth": "trop d'allers-retours entre agents"},
 }

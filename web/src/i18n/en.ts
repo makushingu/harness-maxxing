@@ -2820,6 +2820,7 @@ export const en = {
   'agents.run.notStarted': 'The agent did not start',
   'agents.reason.disabled': 'The agent is switched off',
   'agents.reason.budget': 'Its daily budget is reached',
+  'agents.reason.busy': 'Its run in progress holds the rest of today\'s budget',
   'agents.reason.rate': 'Too many runs in the last hour',
   'agents.reason.missing': 'The agent no longer exists',
   'agents.reason.depth': 'Too many hops between agents',
