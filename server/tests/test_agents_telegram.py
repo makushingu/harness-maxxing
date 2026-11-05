@@ -177,6 +177,15 @@ async def test_approval_buttons_answer_the_request(api, tg, monkeypatch):
     await wait_for(lambda: "b" * 16 in gateway._approval_msgs, what="second message")
     await asyncio.to_thread(approvals.decide, "b" * 16, "deny")
     await wait_for(lambda: tg.sent("editMessageText")[-1]["text"].endswith("❌ Denied"), what="web answer shown")
+    # shown in part only (the content of a Write): Deny alone, a forged Allow is refused
+    cut = {**request("d" * 16), "tool": "Write", "input": {"file_path": "/a", "content": "x"}}
+    approval_mcp.write_atomic(approvals._file("d" * 16), cut)
+    gateway.notify_approval(cut)
+    await wait_for(lambda: "d" * 16 in gateway._approval_msgs, what="cut message")
+    assert [b["callback_data"] for b in tg.sent()[-1]["reply_markup"]["inline_keyboard"][0]] == [f"p:{'d' * 16}:deny"]
+    tg.callback(f"p:{'d' * 16}:allow", thread=tid, message_id=gateway._approval_msgs["d" * 16][1])
+    await asyncio.sleep(0.3)
+    assert approvals.get("d" * 16)["status"] == "pending"
     # an agent without its own thread: Alerts
     monkeypatch.setattr(agents, "load", lambda path: {"name": "Writer", "telegram": False})
     gateway.notify_approval(request("c" * 16))
