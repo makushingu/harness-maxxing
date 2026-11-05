@@ -473,7 +473,8 @@ def run_settings(path: str, outside: bool = False, session: str | None = None) -
     if a["limits"]["usd_per_day"]:                  # Claude Code stops the turn itself once the day's budget is spent
         with _lock:
             st = _read_state(path)
-            left = max(a["limits"]["usd_per_day"] - day_cost(path) - _held(st, but=session), 0.01)
+            left = max(a["limits"]["usd_per_day"] - day_cost(path, cold=bool(session)) - _held(st, but=session),
+                       0.01)
             if session:
                 _hold(path, st, session, left)
         args += ["--max-budget-usd", f"{left:.2f}"]
@@ -564,24 +565,27 @@ def list_in_topic(project: str, topic: str, stats: dict | None = None) -> list[d
     return out
 
 
-def list_agents(with_status: bool = False) -> list[dict]:
+def list_agents(with_status: bool = False, counts: bool = True) -> list[dict]:
+    """Every agent. counts: its session counts (one pass over the sessions, shared with the status); off for the
+    background passes, which only read the settings."""
     from . import workspace
-    stats = workspace._session_stats()
+    by = _agent_metas() if counts or with_status else {}
+    stats = _session_stats(by)
     out = []
     for p in workspace.project_names():
         for t in workspace.topic_names(p):
             out.extend(list_in_topic(p, t, stats))
     if with_status:
         for a in out:
-            a.update(status(a["path"]))
+            a.update(status(a["path"], by.get(a["path"], [])))
     return out
 
 
 def get(path: str) -> dict:
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
-    from . import workspace
-    return {**public(path, workspace._session_stats()), **status(path), "webhooks": hooks(path),
+    by = _agent_metas()
+    return {**public(path, _session_stats(by)), **status(path, by.get(path, [])), "webhooks": hooks(path),
             "trigger_stats": trigger_stats(path)}
 
 
@@ -860,43 +864,101 @@ def _changed_during(path: str, sid: str) -> list[str]:
 
 
 # ---- budget and rate ----------------------------------------------------------------------------------
-def _metas(path: str) -> list[dict]:
+def _agent_metas(since: float | None = None) -> dict[str, list[dict]]:
+    """Agent path -> the metas of its sessions, in one pass over the sessions folder. since: only the files written
+    after it (the others are not parsed: a fresh process - the runner - would read every meta of the install)."""
+    import os
     from .sessions import store
-    out = []
-    for sid in store.list_ids():
-        m = store.read_cached(sid)
-        if m and m.get("path") == path:
-            out.append(m)
+    out: dict[str, list[dict]] = {}
+    key = None
+    if since is None:
+        try:                                            # every meta write is a rename: the folder's mtime moves
+            st = os.stat(store.sessions_dir())
+            if time.time() - st.st_mtime > store.IDS_RACY_S:
+                key = (str(store.sessions_dir()), st.st_ino, st.st_mtime_ns)
+        except OSError:
+            pass
+        if key is not None and _by_agent.get("key") == key:
+            return {p: list(ms) for p, ms in _by_agent["by"].items()}
+        metas = (store.read_cached(sid) for sid in store.list_ids())
+    else:
+        def recent():
+            try:
+                with os.scandir(store.sessions_dir()) as it:
+                    for e in it:
+                        sid = e.name[:-5]
+                        if e.name.endswith(".json") and store.is_valid_id(sid) and e.stat().st_mtime >= since:
+                            yield store.read(sid)
+            except OSError:
+                return
+        metas = recent()
+    for m in metas:
+        p = (m or {}).get("path") or ""
+        if "/agents/" in p and is_agent_path(p):
+            out.setdefault(p, []).append(m)
+    if key is not None:
+        _by_agent.update(key=key, by={p: list(ms) for p, ms in out.items()})
     return out
 
 
-def day_cost(path: str, when: float | None = None) -> float:
+_by_agent: dict = {}            # the last _agent_metas() pass, by the sessions folder's (ino, mtime)
+
+
+def _metas(path: str) -> list[dict]:
+    return _agent_metas().get(path, [])
+
+
+def _session_stats(by: dict[str, list[dict]]) -> dict[str, dict[str, int]]:
+    """= workspace._session_stats for the agents' paths only (archived sessions only counted)."""
+    from .sessions import service
+    stats: dict[str, dict[str, int]] = {}
+    for path, metas in by.items():
+        st = stats[path] = {"sessions": 0, "archived": 0, "running": 0, "unread": 0}
+        for m in metas:
+            if m.get("archived") and m.get("state") != "running":
+                st["archived"] += 1
+                continue
+            s = service.public(m)
+            st["archived" if s["archived"] else "sessions"] += 1
+            st["running"] += s["state"] == "running"
+            st["unread"] += bool(s["unread"]) and not s["archived"]
+    return stats
+
+
+def day_cost(path: str, when: float | None = None, metas: list[dict] | None = None, cold: bool = False) -> float:
+    """What the agent's sessions cost on the day of `when` (today). cold: a fresh process (no meta cache), only the
+    sessions written in the last day are read - one that cost something today was written today."""
     from .sessions import store
     day = store.day_of(when or time.time())
+    if metas is None:
+        metas = _agent_metas(since=time.time() - 86400 - 3600 if cold and not when else None).get(path, [])
     total = 0.0
-    for m in _metas(path):
+    for m in metas:
         d = (m.get("days") or {}).get(day) if isinstance(m.get("days"), dict) else None
         if isinstance(d, dict):
             total += float(d.get("cost") or 0)
     return round(total, 4)
 
 
-def _runs_last_hour(path: str) -> int:
+def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
     cutoff = time.time() - 3600
-    return sum(1 for m in thread(path, 500) if m.get("kind") == "run" and (m.get("at") or 0) > cutoff)
+    return sum(1 for m in (thread(path, 500) if msgs is None else msgs)
+               if m.get("kind") == "run" and (m.get("at") or 0) > cutoff)
 
 
-def status(path: str) -> dict:
-    """{cost_today, runs_last_hour, last_run, running_now, running_sessions, thread_unread, waiting, alerts}."""
+def status(path: str, metas: list[dict] | None = None) -> dict:
+    """{cost_today, runs_last_hour, last_run, running_now, running_sessions, thread_unread, waiting, alerts}.
+    metas: the agent's session metas when the caller has them (list_agents: one pass for every agent)."""
+    metas = _metas(path) if metas is None else metas
     msgs = thread(path, 500)
     last = next((m for m in reversed(msgs) if m.get("kind") in ("result", "skip")), None)
-    running = [m for m in _metas(path) if m.get("state") == "running"]
+    running = [m for m in metas if m.get("state") == "running"]
     seen = float(_read_state(path).get("seen_at") or 0)
     waiting = 0
     if running:
         from . import approvals
         waiting = sum(approvals.waiting(m["id"]) for m in running if m.get("id"))
-    return {"cost_today": day_cost(path), "runs_last_hour": _runs_last_hour(path),
+    return {"cost_today": day_cost(path, metas=metas), "runs_last_hour": _runs_last_hour(path, msgs),
             "last_run": last, "running_now": len(running),
             "running_sessions": [{"id": m.get("id"), "title": m.get("title") or "",
                                   "started": m.get("spawned_at") or m.get("updated")} for m in running],
@@ -1277,7 +1339,7 @@ def check_alerts() -> int:
     from . import feed, feedhooks
     hooks = {h.get("id") for h in feedhooks.list_hooks()}
     n = 0
-    for a in list_agents():
+    for a in list_agents(counts=False):
         for t in a["triggers"]:
             ref = _ref(a["path"], f"trigger:{t['id']}")
             if t.get("hook_id") and t["hook_id"] not in hooks and a["enabled"] and t.get("enabled", True):
@@ -1451,7 +1513,7 @@ def scan_feed() -> int:
 
 
 def _feed_agents() -> list[dict]:
-    return [a for a in list_agents() if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
+    return [a for a in list_agents(counts=False) if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
 
 
 def pause_feed() -> None:

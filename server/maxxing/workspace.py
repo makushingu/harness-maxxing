@@ -341,7 +341,7 @@ def topic_permission_mode(path: str) -> str:
     An agent folder: the agent's mode (agent.json), else its topic's."""
     from . import agents
     if agents.is_agent_path(path):
-        own = (agents.run_settings(path) or {}).get("permission_mode") or ""
+        own = agents.load(path)["permission_mode"] if agents.exists(path) else ""
         return own if own in PERMISSION_MODES else topic_permission_mode(agents.topic_of(path))
     try:
         mode = _folder_meta(topic_dir(path)).get("permission_mode")
