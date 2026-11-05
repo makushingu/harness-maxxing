@@ -8,8 +8,8 @@
  *   other static files      stale-while-revalidate (icons, fonts, manifest, favicon)
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  */
-const VERSION = "6d96f7dec76f"
-const PRECACHE = ["/assets/index-C3rdiilV.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-CATZNyVw.js","/assets/createLucideIcon-Bl3st4bB.js","/assets/utils-BxUqpGCN.js","/assets/vendor-router-B8kuLWb3.js","/assets/vendor-ui-frGWvPt-.js","/assets/media-DeCDv_Hg.js","/assets/vendor-query-CthOliPc.js","/assets/files-B3ryJBIh.js","/assets/spinner-Bj30R7b4.js","/assets/index-DUx4ICCZ.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "f1f011f48c3c"
+const PRECACHE = ["/assets/index-7AeuzHmQ.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-K_Ak52ge.js","/assets/createLucideIcon-BD38Wc05.js","/assets/utils-C-pQe3ts.js","/assets/vendor-router-DgO_1_AU.js","/assets/vendor-ui-ZVez0Dwg.js","/assets/media-BT3qpMK1.js","/assets/vendor-query-B15ndlvG.js","/assets/files-BkEWpiMG.js","/assets/spinner-BXMgBLDl.js","/assets/index-DaFqipgc.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
