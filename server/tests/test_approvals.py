@@ -238,6 +238,31 @@ def test_a_request_written_while_the_server_was_down_is_announced_once(client, t
     assert [m["kind"] for m in agents.thread(A) if m.get("approval") == rid] == ["approval"]
 
 
+def test_two_answers_at_once_only_one_wins(client, mx):
+    from maxxing import approval_mcp, approvals
+    folder = approvals.folder()
+    folder.mkdir(parents=True, exist_ok=True)
+    for n in range(20):
+        rid = f"{n:016x}"
+        approval_mcp.write_atomic(folder / f"{rid}.json", {"id": rid, "session": "", "agent_path": "", "tool": "Bash",
+                                                           "input": {"command": "ls"}, "at": time.time(),
+                                                           "status": "pending"})
+        gate, won, lost = threading.Barrier(2), [], []
+
+        def answer(decision: str, by: str) -> None:
+            gate.wait()
+            try:
+                won.append(approvals.decide(rid, decision, by=by)["status"])
+            except approvals.ApprovalError as e:
+                lost.append(e.status)
+        ts = [threading.Thread(target=answer, args=a) for a in (("allow", "web"), ("deny", "telegram"))]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        assert len(won) == 1 and lost == [409] and approvals.get(rid)["status"] == won[0]
+
+
 def test_stopped_turn_expires_its_requests(client, topic, mx):
     _agent(client, approvals=True)
     sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
