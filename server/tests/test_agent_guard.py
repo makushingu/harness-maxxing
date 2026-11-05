@@ -270,3 +270,30 @@ def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic,
     assert argv[argv.index("--add-dir") + 1] == str(t)
     from maxxing import agents
     assert agents.clean({"writable": ["agents", "agents/x", "drafts"]})["writable"] == ["drafts"]
+
+
+def test_sandbox_hides_transcripts_logins_and_the_rest_of_the_workspace(client, topic, mx, monkeypatch, tmp_path):
+    from maxxing import agent_guard, config
+    home = tmp_path / "home"
+    (home / ".local/share/uv/python").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    _on(client)
+    _create(client)
+    _create(client, name="other")
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    (root / "projects/acme/topics/news").mkdir(parents=True)
+    (root / "projects/zeta/topics/x").mkdir(parents=True)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    s = _settings(_calls()[-1]["argv"])
+    fs = s["sandbox"]["filesystem"]
+    t = root / "projects/acme/topics/blog"
+    for p in (config.claude_dir() / "projects", home / ".config", home / ".local/share", root / "projects/zeta",
+              root / "projects/acme/topics/news", t / "agents/other", f"{t}/.env", f"{t}/*/.env"):
+        assert str(p) in fs["denyRead"], p
+    for p in (t, t / "agents/writer", root / "projects/acme", root / "projects"):
+        assert str(p) not in fs["denyRead"], p
+    assert fs["allowRead"] == [str(home / ".local/share/uv/python")]          # the tools it runs, only if present
+    deny = s["permissions"]["deny"]
+    assert f"Read(/{root}/projects/zeta/**)" in deny and f"Read(/{t}/.env)" in deny and f"Read(/{t}/*/.env)" in deny
+    assert f"Read(/{config.claude_dir()}/history.jsonl)" in deny
