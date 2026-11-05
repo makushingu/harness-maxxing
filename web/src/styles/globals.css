@@ -401,9 +401,12 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 /* The Space office (features/agents/OfficeFuture.tsx): stars drift in the windows (two layers, two speeds), LEDs
    blink, holograms flicker (never the agents' screens: they stay still), drones float, bubbles rise.
    Every animation ends at rest (its last frame) under the reduced-motion rule below. */
-.mx-future-stars { animation: mx-future-stars 90s linear infinite; }
-@keyframes mx-future-stars { from { background-position: 0 0, 0 0; } to { background-position: calc(var(--sw-near, 256px) * -4) 0, calc(var(--sw-far, 192px) * -2) 0; } }
+/* Stars: each layer is wider than its window by --d and slides with a transform (composited: no repaint per frame).
+   LEDs: two shared rhythms on groups (out-of-step animations on SVG children repaint the office all the time). */
+.mx-future-stars { animation: mx-future-stars 90s linear infinite; will-change: transform; }
+@keyframes mx-future-stars { from { transform: translateX(0); } to { transform: translateX(calc(var(--d) * -1)); } }
 .mx-future-led { animation: mx-future-led 1.6s steps(1, end) infinite; }
+.mx-future-led-b { animation-delay: -0.8s; }
 @keyframes mx-future-led { 0%, 100% { opacity: 1; } 55% { opacity: 0.25; } }
 .mx-future-holo { animation: mx-future-holo 3.4s steps(1, end) infinite; }
 @keyframes mx-future-holo { 0%, 100% { opacity: 1; } 46% { opacity: 0.55; } 48% { opacity: 1; } 80% { opacity: 0.8; } 82% { opacity: 1; } }
