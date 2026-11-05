@@ -653,6 +653,9 @@ export type TokenStats = {
 export type ChangelogEntry = { version: string; label: string; current: boolean; body: string }
 export type Changelog = { version: string; entries: ChangelogEntry[] }
 export type Secret = { name: string; note: string; expose: boolean; updated: number; preview: string }
+/** A file of the Keys vault: only its description, the content never reaches the browser. */
+export type SecretFile = { name: string; filename: string; size: number; sha256: string; note: string; expose: boolean; updated: number }
+export type SecretFilePutBody = { file?: File; note?: string; expose?: boolean; create?: boolean }
 export type SecretPutBody = { value?: string; note?: string; expose?: boolean; create?: boolean }
 
 /* ---------------------------------------------------------------- System */

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { api, seg } from '../api'
-import type { Ok, Secret, SecretPutBody } from '../types'
+import { api, request, seg } from '../api'
+import type { Ok, Secret, SecretFile, SecretFilePutBody, SecretPutBody } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -21,4 +21,28 @@ export function usePutSecret() {
 }
 export function useDeleteSecret() {
   return useMut((name: string) => api.del<Ok>(`/api/secrets/${seg(name)}`), { invalidate: [qk.secrets] })
+}
+
+/** Files of the vault (`/api/secret-files`): the list never holds a content. */
+export function useSecretFiles() {
+  return useQuery({ queryKey: qk.secretFiles, queryFn: () => api.get<SecretFile[]>('/api/secret-files') })
+}
+/** Raw-body upload; without `file` (empty body) only the note / switch change and the stored file is kept. */
+export function usePutSecretFile() {
+  return useMut(
+    ({ name, file, ...q }: SecretFilePutBody & { name: string }) =>
+      request<Ok>(`/api/secret-files/${seg(name)}`, {
+        method: 'PUT',
+        query: { ...q, filename: file?.name },
+        body: file ?? new Blob([]),
+      }),
+    {
+      optimistic: ({ name, file, ...b }) =>
+        file ? [] : [{ key: qk.secretFiles, update: (l: SecretFile[]) => l.map((x) => (x.name === name ? { ...x, ...b } : x)) }],
+      invalidate: [qk.secretFiles],
+    },
+  )
+}
+export function useDeleteSecretFile() {
+  return useMut((name: string) => api.del<Ok>(`/api/secret-files/${seg(name)}`), { invalidate: [qk.secretFiles] })
 }
