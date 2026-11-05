@@ -10,7 +10,9 @@ notification, a message in its Telegram thread, or another agent handing it work
 kept like any other, within limits you set (on/off, a daily budget, runs per hour).
 
 Agents are **off by default**: turn them on in **Settings -> Features -> Agents**. An **Agents** entry appears in the
-sidebar, with the number of results to read.
+sidebar, with the number of results to read. While Agents is off, schedules and Telegram still start agents, but feed
+and webhook events do not: the ones that come meanwhile are skipped when you turn it back on (each agent says how many in
+its thread).
 
 **Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
 itself lives. Agents' runs never show in Sessions: the Agents page has its own column of every agent (its face, its
