@@ -41,10 +41,13 @@ const FOLD_CHARS = 700
 /** Who wrote a run: the user (a message) or something else (an event, a schedule, another agent). */
 const isMine = (m: AgentMessage) => m.trigger === 'manual' || m.trigger === 'telegram' || m.source === 'manual' || m.source === 'telegram'
 
-export default function AgentPage() {
+/** `at`: the agent when the route's names say something else (an agent of a project called "groups", whose address
+ *  looks like a group's: AgentsLayout hands it over). */
+export default function AgentPage({ at }: { at?: { project: string; topic: string; name: string } } = {}) {
   const t = useT()
   const on = useAgentsOn()
-  const { project = '', topic = '', name = '' } = useParams()
+  const params = useParams()
+  const { project = '', topic = '', name = '' } = at || params
   const path = `projects/${project}/topics/${topic}/agents/${name}`
   const { data: a, isLoading, error, refetch } = useAgent(on === false ? null : path)
   // The profile can sit on the right of the conversation when there is room next to the list of agents: shown by
