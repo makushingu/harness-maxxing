@@ -183,6 +183,26 @@ def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
             if (s.get("title") or "").startswith("Writer")] == [first["id"]]
 
 
+def test_the_agents_list_reads_the_sessions_once(client, topic, monkeypatch):
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    assert client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "editor"}).status_code == 200
+    for name in ("writer", "editor"):
+        run = client.post(f"/api/agents/acme/blog/{name}/run", json={"text": "NOTOOL hi"}).json()
+        wait_idle(client, run["session"]["id"])
+    reads: list = []
+    real = store.read_cached
+    monkeypatch.setattr(store, "read_cached", lambda sid: reads.append(sid) or real(sid))
+    monkeypatch.setattr(agents, "_by_agent", {})        # no pass kept from before
+    rows = {a["name"]: a for a in agents.list_agents(with_status=True)}
+    assert len(reads) == len(store.list_ids())           # one pass for every agent
+    assert rows["writer"]["session_count"] + rows["writer"]["archived_count"] == 1
+    assert rows["editor"]["cost_today"] > 0 and rows["editor"]["runs_last_hour"] == 1
+    reads.clear()
+    assert [a["name"] for a in agents.list_agents(counts=False)] == ["editor", "writer"] and reads == []
+
+
 def test_budget_day_follows_the_harness_time_zone(client, topic):
     from maxxing.sessions import store
     _on(client)
