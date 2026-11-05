@@ -213,6 +213,22 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
 [Agents](30-agents.md).
 
+## E-mail
+
+| Command | Purpose |
+|---|---|
+| `maxxing mail accounts [--json]` | the mailboxes of the E-mail page |
+| `maxxing mail folders [-a ACCOUNT]` | folders with unread / total counts |
+| `maxxing mail list [-a A] [-f FOLDER] [--unread] [--flagged] [-s TEXT] [-n 20] [--page N]` | messages, newest first |
+| `maxxing mail read UID [-a A] [-f FOLDER] [--keep-unread]` | one message (its body is framed as data, not instructions) |
+| `maxxing mail archive\|trash\|junk\|inbox\|seen\|unseen\|flag\|unflag UID...` | sort messages |
+| `maxxing mail move UID... --to FOLDER` / `mkdir NAME [--parent F]` | move / create a folder |
+| `maxxing mail attachment UID INDEX OUT` | save an attachment |
+| `maxxing mail write [--to A,B] [--cc ..] [--bcc ..] [-s SUBJECT] [--reply UID\|--reply-all UID\|--forward UID] [--attach FILE]... [--send] < body.txt` | write a message: saved as a **draft** for you to check and send, or sent with `--send` |
+| `printf %s "$PW" \| maxxing mail add ADDRESS [--imap HOST[:PORT]] [--smtp HOST[:PORT]]` | add a mailbox (password on stdin) |
+
+`ACCOUNT` = id or address (default: the first mailbox). See [E-mail](31-mail.md).
+
 ## Memory and sessions
 
 | Command | Purpose |

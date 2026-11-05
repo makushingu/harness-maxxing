@@ -274,7 +274,7 @@ health problems itself every 60 s (not `cron_failed` nor
 | DELETE | `/api/backup` | – | forget repo + token (`409 busy` while a backup or restore runs) |
 
 ## Settings & secrets
-| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, maxxing_mode:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; Settings -> Support stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
+| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, mail_page:bool, maxxing_mode:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; Settings -> Support stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
 | PUT | `/api/settings/look` | `{theme:"dark"\|"light"\|"system", accent:"blue"\|"clay"\|"violet"\|"green"\|"amber"\|"rose", tint?:"neutral"\|"tinted"}` | `{ok, look}` · sent by the web app 600 ms after a change of theme / accent / tint (config `look`) · `422` bad value |
 | GET / PUT | `/api/settings/profile` | `{name ≤32, color: "clay"\|"blue"\|"violet"\|"green"\|"amber"\|"rose"\|"teal"\|"zinc", emoji}` | `Profile` (bus `profile`) |
 | GET / PUT | `/api/settings/register` | `{count?, email?, news?, asked?}` (email: valid or `""`) | `RegisterState` `{count, count_blocked, email, news, asked, registered, error, synced_at}` (bus `register`). Optional hello to the authors (`maxxing/register.py`): `count` (default `true`) = anonymous daily signal (cloud id + version + `os`, `arch`, `health` codes), `count_blocked` = `MAXXING_NO_TELEMETRY` / `DO_NOT_TRACK` set in the service environment (counter off whatever `count`); `email` (+ `news`) adds pseudo and language; neither = cloud row archived (kept, never contacted again). An update never turns on the email or the news; 2.0.0a94 turned `count` on once where `asked` was false. |
@@ -524,6 +524,31 @@ list_failed, file_missing), details, links:[id], project, note, hidden, declared
 `site:<server>:<host><path>`, `db:<server>:<engine>:<container|native>:<db>`, `db:<server>:sqlite:<path>`,
 `db:cloudflare:d1:<name>`, `bucket:<server>:garage:<name>`, `bucket:cloudflare:r2:<name>`, `worker:cloudflare:<name>`,
 `pages:cloudflare:<name>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).
+
+## Mail
+
+E-mail page (`maxxing/mail/`, Settings -> Features -> `mail_page`, off by default): any IMAP/SMTP mailbox, live (no
+copy of the mail on the server). Every route answers `409 disabled` while the page is off. Accounts:
+`<state>/mail/accounts.json` (no secret); each password is the vault key `MAIL_<ID>_PASSWORD`, never exposed to turns.
+Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, `409 exists|no_password`,
+`413 too_large`, `422 refused` (every recipient refused), `429 limit` (daily cap or more than 20 recipients),
+`502 auth|unreachable|tls|connection|imap|smtp`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/mail/accounts` | – | `[MailAccount]` `{id, label, address, name, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, signature, password_key, has_password, created, smtp_checked, sent_today, send_per_day}` |
+| POST | `/api/mail/detect` | `{address}` | `{source: known\|mx\|autoconfig\|guess, imap_*, smtp_*, mx}` (known providers, MX of the domain, Thunderbird's directory, else `mail.<domain>`) |
+| POST | `/api/mail/accounts` | `{address, password, label?, name?, username?, imap_host, imap_port, imap_tls: ssl\|starttls\|none, smtp_host, smtp_port, smtp_tls, signature?}` | `{account, test: {imap, smtp, smtp_port, smtp_tls, smtp_changed, smtp_error?}}` (signs in first; SMTP 465 that does not answer -> 587 STARTTLS) |
+| PATCH / DELETE | `/api/mail/accounts/{id}` | PATCH: same fields, all optional (`password` empty = kept) | `{account, test\|null}` / `{ok}` (DELETE removes the password from the vault, never the mailbox) |
+| POST | `/api/mail/accounts/{id}/test` | – | `test` as above |
+| GET / POST / PUT / DELETE | `/api/mail/{id}/folders` | POST `{name, parent?}`, PUT `{name, new_name}`, DELETE `?name=` | GET `[{name, role: inbox\|drafts\|sent\|archive\|junk\|trash\|all\|flagged\|null, delim, unread, total}]` |
+| GET | `/api/mail/{id}/messages?folder=&page=&size=&q=&unread=&flagged=` | – | `{folder, total, exists, page, size, messages: [{uid, from, to, subject, date, seen, flagged, answered, size, attachments}]}` (newest first; `q` = server-side IMAP TEXT search) |
+| GET | `/api/mail/{id}/message?folder=&uid=&seen=1` | – | `{uid, folder, from, to, cc, bcc, reply_to, subject, date, message_id, in_reply_to, references, text, html, remote_images, attachments: [{index, filename, content_type, size}], seen, flagged, answered}` (marks it read unless `seen=0`; `html` without scripts, `cid:` images inlined) |
+| GET | `/api/mail/{id}/attachment?folder=&uid=&index=&inline=` | – | the file (`inline` only for images and PDF; `CSP: sandbox`) |
+| POST | `/api/mail/{id}/actions` | `{folder, uids, action: seen\|unseen\|flag\|unflag\|move\|archive\|trash\|junk\|inbox\|delete, target?}` | `{ok, moved_to}` (`delete` only from trash / junk; an archive folder is created when missing) |
+| GET | `/api/mail/{id}/compose?mode=reply\|replyall\|forward\|draft&folder=&uid=` | – | `{to, cc, bcc?, subject, text, in_reply_to, references, attachments}`: the fields a composer starts with (signature then quote for a reply, forwarded header + body, a draft as saved; never oneself in reply all) |
+| POST | `/api/mail/{id}/send` | multipart: `data` = JSON `MailDraft` `{to, cc, bcc, subject, text, in_reply_to?, references?, reply?: {folder, uid}, forward?: {folder, uid, indexes}, draft?: {folder, uid}}`, `files` (≤ 30, ≤ 25 MB in total with the forwarded ones) | `{ok, message_id, recipients, refused, sent_folder}`: sent through the SMTP of the mailbox (plain text), copy filed in Sent (not for Gmail / Outlook, which do it), `reply` flagged answered, `draft` dropped. Capped: ≤ 20 recipients a message, `mail_send_per_day` (config, default 100) recipients a mailbox a day (`<state>/mail/sent-count.json`; a failed send gives them back) |
+| POST | `/api/mail/{id}/draft` | as `/send` | `{folder, uid}`: filed in Drafts, replacing `draft` |
 
 ## Team
 
