@@ -55,11 +55,20 @@ export const openFileViewer = (path: string, list?: string[]) => useFileViewer.g
 /** What a conversation link to a file looks like (`#mx-file=<path>`). */
 export const FILE_HREF = '#mx-file='
 
+/** The path of a `#mx-file=` link, or null when its escapes are malformed (`%E0%A4%A`). */
+export function fileHrefPath(href: string): string | null {
+  try {
+    return decodeURIComponent(href.slice(FILE_HREF.length))
+  } catch {
+    return null
+  }
+}
+
 /** Every file of a conversation, in reading order (buttons and diagrams carry data-mx-file, answer links #mx-file=). */
 export function threadFiles(thread: Element): string[] {
   const out: string[] = []
   for (const el of thread.querySelectorAll<HTMLElement>(`[data-mx-file], a[href^="${FILE_HREF}"]`)) {
-    const p = el.dataset.mxFile ?? decodeURIComponent((el.getAttribute('href') || '').slice(FILE_HREF.length))
+    const p = el.dataset.mxFile ?? fileHrefPath(el.getAttribute('href') || '')
     if (p && !out.includes(p)) out.push(p)
   }
   return out

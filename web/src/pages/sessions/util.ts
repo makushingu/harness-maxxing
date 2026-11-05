@@ -1,5 +1,5 @@
 import { fileThumbUrl } from '@/lib/queries/files'
-import { FILE_HREF } from '@/features/files/viewerStore'
+import { FILE_HREF, fileHrefPath } from '@/features/files/viewerStore'
 import {
   Bot,
   FileCode2,
@@ -177,9 +177,9 @@ export const rawUrl = (p: string, download = false) => `/api/files/raw?path=${en
 export const filesUrl = (p: string) => `/files?path=${encodeURIComponent(p)}`
 
 /* ---------------------------------------------------------------- Path linkification */
-export { FILE_HREF }
+export { FILE_HREF, fileHrefPath }
 const PATH_CHARS = "[^\\s`'\"()<>\\[\\]{}|,;*?]"
-const TRAIL = /[.,:;!?)\]]+$/
+const TRAIL = new Set('.,:;!?)]')
 
 /** Absolute paths inside `root` found in plain text → [start, end, path]. */
 export function findPaths(text: string, root: string | null | undefined): [number, number, string][] {
@@ -188,9 +188,9 @@ export function findPaths(text: string, root: string | null | undefined): [numbe
   const re = new RegExp(`(?<![\\w\\]\\)/.~-])(/${PATH_CHARS}+)`, 'g')
   const out: [number, number, string][] = []
   for (const m of text.matchAll(re)) {
-    let p = m[1]
-    const trail = TRAIL.exec(p)
-    if (trail) p = p.slice(0, -trail[0].length)
+    let end = m[1].length
+    while (end > 0 && TRAIL.has(m[1][end - 1])) end-- // a loop, not /[.,]+$/: that regex is quadratic on long runs
+    const p = m[1].slice(0, end)
     if (p.length < 2) continue
     if (r !== '/' && p !== r && !p.startsWith(r + '/')) continue
     if (r === '/' && p.split('/').length < 3) continue
