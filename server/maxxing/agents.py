@@ -384,6 +384,11 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     return out
 
 
+def _utf8(s: str) -> str:
+    """A lone surrogate (\\ud800 is valid JSON) as "?": UTF-8 cannot store it."""
+    return s.encode("utf-8", "replace").decode("utf-8")
+
+
 def clean(data: Any, strict: bool = False) -> dict:
     """agent.json with every field present and valid. strict: refuse bad values instead of dropping them."""
     d = data if isinstance(data, dict) else {}
@@ -398,7 +403,7 @@ def clean(data: Any, strict: bool = False) -> dict:
                             if isinstance(d.get("triggers"), list)) if x]
     if strict and isinstance(d.get("triggers"), list) and len(d["triggers"]) > MAX_TRIGGERS:
         raise AgentError(400, "too_many_triggers", f"At most {MAX_TRIGGERS} triggers")
-    name = " ".join(str(d.get("name") or "").split())[:60]
+    name = " ".join(_utf8(str(d.get("name") or "")).split())[:60]
     model = str(d.get("model") or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9._\[\]:-]{0,80}", model):
         if strict:
@@ -614,7 +619,7 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     if len(names(project, topic)) >= MAX_PER_TOPIC:
         raise AgentError(409, "too_many", f"At most {MAX_PER_TOPIC} agents per topic")
     f = dict(fields or {})
-    description = str(f.pop("description", "") or "")
+    description = _utf8(str(f.pop("description", "") or ""))
     data = clean({"sandbox": True, **f, "created": time.time()}, strict=True)
     folder(path).mkdir(parents=True)
     workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
@@ -677,7 +682,7 @@ def update(path: str, fields: dict) -> dict:
         st["owner_at"] = time.time()
         _write_state(path, st)
     if description is not None:
-        workspace._write_claude_md(folder(path), "agent", parse(path)[2], str(description))
+        workspace._write_claude_md(folder(path), "agent", parse(path)[2], _utf8(str(description)))
     _invalidate()
     return get(path)
 
