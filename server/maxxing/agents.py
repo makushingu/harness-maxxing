@@ -1454,7 +1454,8 @@ class Debouncer:
                 k = (str(r["path"]), str(r["trigger"]))
                 self.pending.setdefault(k, {"texts": [str(t) for t in r["texts"]], "first": float(r["first"]),
                                             "due": float(r["due"]), "source": str(r.get("source") or "feed"),
-                                            "prompt": str(r.get("prompt") or "")})
+                                            "prompt": str(r.get("prompt") or ""),
+                                            "depth": max(0, int(r.get("depth") or 0))})
             except (KeyError, TypeError, ValueError):
                 continue
 
