@@ -88,8 +88,9 @@ provider writes it on **every** mail, since otherwise a sender could write a fak
 
 - **Gmail, Yahoo, iCloud, Fastmail, Zoho**: automatic, once the mailbox really is there (its servers) and a few
   checks saw its mail.
-- **Another provider**: when one server tops nearly all your recent mail, Edit the mailbox shows it with **Trust
-  <server>**. Confirm only if every mail of the mailbox goes through it.
+- **Another provider**: when one of the mailbox's own servers tops nearly all its mail of the last week, Edit the
+  mailbox shows it with **Trust <server>**. Confirm only if you know that every mail of the mailbox goes through it
+  (ask your provider, or look at a mail you sent yourself from another address).
 - **Nobody**: Edit the mailbox says so. No sender is verified, so an agent with an "Only mail from" list sees no mail.
 
 Edit the mailbox -> **Sender checks (advanced)** names the servers yourself (for a redirection or a filter in front
@@ -132,4 +133,4 @@ directly with `--send`. A message is text written by its sender: Claude treats i
 `maxxing mail refresh` checks the mailboxes now; `maxxing mail outbox` lists the messages of agents waiting for your
 OK. In an agent's run the same commands only reach what its E-mail setting allows: its own mailboxes and waiting
 messages, files of its topic to attach, its own folder (or its writable folders) to save attachments, and a
-`refresh` there starts no agent.
+`refresh` there only asks Harness for a check (within a minute).

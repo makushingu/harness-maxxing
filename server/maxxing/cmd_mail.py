@@ -206,7 +206,8 @@ class Guard:
         if not any(d == target.parent or d in target.parents for d in dirs):
             raise Refused(f"{f}: an agent saves files in its own folder or its writable folders only")
         for s in agent_guard.locked_paths(self.path):
-            if target == Path(s) or Path(s) in target.parents:
+            s = Path(s).resolve()
+            if target == s or s in target.parents:
                 raise Refused(f"{f}: this file belongs to the owner")
         return p
 
@@ -216,32 +217,27 @@ class Guard:
 
     def read_file(self, f: str, max_bytes: int) -> tuple[Path, bytes]:
         import os
-        import stat
         self.readable(f)
-        try:
-            fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:                                    # a handle on the name only (opening a device could act already)
+            pfd = os.open(f, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC)
         except OSError as e:
             raise Refused(f"{f}: {e.strerror or e}") from None
         try:
-            st = os.fstat(fd)
-            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
-                raise Refused(f"{f}: an agent attaches ordinary files only")
+            real = self.readable(_fd_path(pfd))
+            st = _ordinary(pfd, f)
             if st.st_size > max_bytes:
                 raise Refused(f"{f}: too big ({st.st_size // 1_000_000} MB, at most {max_bytes // 1_000_000} MB)")
-            real = self.readable(_fd_path(fd))
-            with os.fdopen(os.dup(fd), "rb") as fh:
+            with open(f"/proc/self/fd/{pfd}", "rb") as fh:        # the same file, now checked
                 return real, fh.read(max_bytes + 1)[:max_bytes]
         finally:
-            os.close(fd)
+            os.close(pfd)
 
     def write_file(self, f: str, data: bytes, default_name: str) -> Path:
-        """Save `data` at f (a folder when it ends with / or is one: then under default_name)."""
+        """Save `data` at f (a folder when it ends with / or is one: then under default_name). Root never creates a
+        folder for the agent: it makes its folders itself, in its sandbox."""
         import os
-        import stat
         p = Path(os.path.abspath(f))
         if f.endswith("/") or (p.is_dir() and not p.is_symlink()):
-            self.writable(str(p / "x"))
-            p.mkdir(parents=True, exist_ok=True)
             p = p / (Path(default_name).name or "attachment")
         self.writable(str(p))
         try:
@@ -252,22 +248,38 @@ class Guard:
             real = Path(_fd_path(dfd)) / p.name
             self.writable(str(real))
             try:
-                fd = os.open(p.name, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o644,
-                             dir_fd=dfd)
+                pfd = os.open(p.name, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dfd)
+            except FileNotFoundError:
+                pfd = None
             except OSError as e:
                 raise Refused(f"{real}: {e.strerror or e}") from None
-            try:
-                st = os.fstat(fd)
-                if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
-                    raise Refused(f"{real}: not an ordinary file")
-                os.ftruncate(fd, 0)
-                with os.fdopen(os.dup(fd), "wb") as fh:
-                    fh.write(data)
-            finally:
-                os.close(fd)
+            if pfd is None:                     # a new file: created here, never through a link
+                try:
+                    fd = os.open(p.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644,
+                                 dir_fd=dfd)
+                except OSError as e:
+                    raise Refused(f"{real}: {e.strerror or e}") from None
+            else:                               # an existing one: an ordinary file with one name, then opened
+                try:
+                    _ordinary(pfd, str(real))
+                    fd = os.open(f"/proc/self/fd/{pfd}", os.O_WRONLY | os.O_CLOEXEC)
+                finally:
+                    os.close(pfd)
+            with os.fdopen(fd, "wb") as fh:
+                fh.truncate(0)
+                fh.write(data)
             return real
         finally:
             os.close(dfd)
+
+
+def _ordinary(fd: int, name: str):
+    import os
+    import stat
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+        raise Refused(f"{name}: not an ordinary file (an agent reads and writes ordinary files with one name only)")
+    return st
 
 
 def _fd_path(fd: int) -> str:
@@ -370,11 +382,17 @@ def _handler(a) -> int:
                 accs = [guard.account(a.account)[0]] if a.account else guard.accounts()
             else:
                 accs = [mail.get_account(a.account)] if a.account else mail.list_accounts()
-            res = [poll.poll_account(x, fire=not guard) for x in accs]    # from an agent: no other agent starts
+            if guard:               # the server checks at its next tick: an agent never moves the positions itself
+                for x in accs:
+                    poll.request(x["id"])
+                res = [{"account": x["id"], "ok": True, "requested": True} for x in accs]
+            else:
+                res = [poll.poll_account(x) for x in accs]
             if out:
                 out(res)
             for r in [] if out else res:
-                print(f"{r['account']}: " + ("a check is already running" if r.get("skipped") else
+                print(f"{r['account']}: " + ("check asked: the server runs it within a minute" if r.get("requested") else
+                                            "a check is already running" if r.get("skipped") else
                                             f"{r['new']} new, {r['started']} agent run(s) started" if r["ok"]
                                             else f"error: {r.get('error')}"))
             return 0

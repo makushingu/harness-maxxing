@@ -321,11 +321,18 @@ def test_the_check_starts_one_turn_per_check_for_matching_mail(client, box, monk
 
 def test_a_busy_agent_gets_the_mail_later(client, box, monkeypatch):
     _grant(client, rights=["read"], trigger={"enabled": True})
-    answers = [{"started": False, "reason": "busy"}, {"started": True}]
+    answers = [{"started": False, "reason": "busy"}, {"started": False, "reason": "busy"}, {"started": True}]
     fired = []
     monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or answers.pop(0))
-    assert poll._fire(A, "me-example", "mail text", "p", "e-mail") is False
-    assert poll.retry_pending() == 1 and fired[-1]["text"] == "mail text"
+    rows = box["rows"]
+    acc = box["acc"]
+    assert poll._fire(A, acc, "INBOX", [rows[1]], {1: "body one"}, "p") is False
+    assert poll._fire(A, acc, "INBOX", [rows[3]], {3: "body three"}, "p") is False
+    assert poll.retry_pending() == 1
+    text = fired[-1]["text"]                                             # both mails, rebuilt with ONE fresh marker
+    assert "body one" in text and "body three" in text and "UID: 1" in text and "UID: 3" in text
+    marks = {w for w in text.split() if w.startswith("MAIL-")}
+    assert len(marks) == 1 and marks.isdisjoint(fired[0]["text"].split())
     assert poll.retry_pending() == 0
 
 

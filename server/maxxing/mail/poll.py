@@ -45,8 +45,18 @@ def interval_min(acc: dict) -> int:
     return v if v in CHOICES else DEFAULT_MIN
 
 
+def _request_file(acc_id: str):
+    return config.state_dir("mail") / f".refresh-{acc_id}"
+
+
+def request(acc_id: str) -> None:
+    """Ask the server for a check of this mailbox at its next tick (`maxxing mail refresh` in an agent's run: the
+    check itself, its positions and the agents it starts stay the server's)."""
+    _request_file(acc_id).touch()
+
+
 def due(acc: dict, now: float | None = None) -> bool:
-    if acc["id"] in _again:
+    if acc["id"] in _again or _request_file(acc["id"]).exists():
         return True
     pos = store.position(acc["id"], "INBOX")
     return not pos or not pos.get("at") or (now or time.time()) - pos["at"] >= interval_min(acc) * 60 - 5
@@ -181,12 +191,14 @@ def _check_lock(acc_id: str) -> Iterator[bool]:
 
 def poll_account(acc: dict, fire: bool = True) -> dict:
     """Check one mailbox now -> {account, ok, error?, new, started, skipped?}. fire=False: note the new mail
-    without starting any agent (a check asked from an agent turn)."""
+    without starting any agent (that mail never starts one later: only for tests and tools, never an agent)."""
     out: dict[str, Any] = {"account": acc["id"], "ok": True, "new": 0, "started": 0}
     with _check_lock(acc["id"]) as mine:
         if not mine:
             return {**out, "skipped": "busy"}
         _again.discard(acc["id"])
+        with contextlib.suppress(OSError):
+            _request_file(acc["id"]).unlink()
         _sample(acc)
         watching = watchers(acc["id"]) if fire else []
         folders = ["INBOX"] + sorted({g["trigger"]["folder"] for _, g in watching} - {"INBOX"})
@@ -207,6 +219,7 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
                 except MailError as e:
                     store.set_position(acc["id"], folder, ok=False, error=e.message)
                     continue
+                store.forget_folder(acc["id"], folder)                     # its UIDs mean other mails now
             rows = res["messages"]
             if first:
                 last = max(res["uids"] or [0])
@@ -253,23 +266,25 @@ def _start(acc: dict, folder: str, path: str, grant: dict, rows: list[dict], bod
     from .. import agents
     if not agents.feature_on():
         return 0
-    text = event_text(acc, folder, rows, {u: b for u, b in bodies.items() if u in {int(r["uid"]) for r in rows[:TEXT_MAILS]}})
     prompt = grant["trigger"].get("prompt") or DEFAULT_PROMPT.format(acc=acc["id"], folder=folder)
-    source = f"e-mail ({acc['address']})"
     for r in rows:
         store.note(acc["id"], store.mkey(r.get("message_id"), folder, r["uid"]), path, "seen")
-    return 1 if _fire(path, acc["id"], text, prompt, source) else 0
+    return 1 if _fire(path, acc, folder, rows, bodies, prompt) else 0
 
 
-def _fire(path: str, acc_id: str, text: str, prompt: str, source: str) -> bool:
+def _fire(path: str, acc: dict, folder: str, rows: list[dict], bodies: dict[int, str], prompt: str) -> bool:
+    """One turn for these mails; the text is built here (one marker for all of them, also for mail kept while the
+    agent was busy)."""
     from .. import agents
+    shown = {u: b for u, b in bodies.items() if u in {int(r["uid"]) for r in rows[:TEXT_MAILS]}}
     try:
-        r = agents.fire(path, trigger=f"mail:{acc_id}", text=text, prompt=prompt, source=source, wait=True)
+        r = agents.fire(path, trigger=f"mail:{acc['id']}", text=event_text(acc, folder, rows, shown), prompt=prompt,
+                        source=f"e-mail ({acc['address']})", wait=True)
     except Exception:  # noqa: BLE001
         log.exception("mail: agent %s not started", path)
         return False
     if r.get("reason") == "busy":
-        _keep(path, acc_id, text, prompt, source)
+        _keep(path, acc["id"], folder, rows, shown, prompt)
         return False
     return bool(r.get("started"))
 
@@ -280,30 +295,33 @@ def _pending_file():
     return config.state_dir("mail") / "pending.json"
 
 
-PENDING_CHARS = 60_000         # text kept for one agent and mailbox (the newest part)
+PENDING_MAILS = 200            # mails kept for one agent, mailbox and folder (the newest)
+ROW_KEYS = ("uid", "from", "to", "subject", "date", "attachments", "from_verified", "message_id")
 _pending_lock = config.ProcessLock("mail-pending")
 
 
-def _keep(path: str, acc_id: str, text: str, prompt: str, source: str) -> None:
+def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[int, str], prompt: str) -> None:
+    """The mails (headers + the texts shown), never a text: the turn's text is built again when it starts."""
     f = _pending_file()
+    mails = [{k: m.get(k) for k in ROW_KEYS} | ({"body": bodies[int(m["uid"])]} if int(m["uid"]) in bodies else {})
+             for m in mails]
     with _pending_lock:
         rows = config.read_json(f, default=[]) or []
         rows = rows if isinstance(rows, list) else []
         for r in rows:
-            if r.get("agent") == path and r.get("account") == acc_id:
-                t = (r.get("text") or "") + "\n\n" + text
-                if len(t) > PENDING_CHARS:
-                    t = "[earlier mails cut: `maxxing mail list` shows them]\n\n" + t[-PENDING_CHARS:]
-                r["text"] = t
+            if (r.get("agent"), r.get("account"), r.get("folder")) == (path, acc_id, folder):
+                known = {int(m["uid"]) for m in r.get("mails") or []}
+                r["mails"] = ((r.get("mails") or []) + [m for m in mails if int(m["uid"]) not in known])[-PENDING_MAILS:]
                 break
         else:
-            rows.append({"agent": path, "account": acc_id, "text": text[-PENDING_CHARS:], "prompt": prompt,
-                         "source": source, "at": time.time()})
+            rows.append({"agent": path, "account": acc_id, "folder": folder, "mails": mails[-PENDING_MAILS:],
+                         "prompt": prompt, "at": time.time()})
         f.parent.mkdir(parents=True, exist_ok=True)
         config.write_json(f, rows[-50:])
 
 
 def retry_pending() -> int:
+    from . import get_account
     f = _pending_file()
     with _pending_lock:                     # taken out under the lock, started outside it (a busy one comes back)
         rows = config.read_json(f, default=[]) or []
@@ -312,10 +330,16 @@ def retry_pending() -> int:
         config.write_json(f, [])
     n = 0
     for r in rows:
-        if time.time() - float(r.get("at") or 0) > 86400:
+        if time.time() - float(r.get("at") or 0) > 86400 or not r.get("mails"):
             continue                                # a day late: not worth a turn
-        n += 1 if _fire(str(r["agent"]), str(r["account"]), str(r["text"]), str(r.get("prompt") or ""),
-                        str(r.get("source") or "e-mail")) else 0
+        try:
+            acc = get_account(str(r["account"]))
+        except MailError:
+            continue                                # the mailbox is gone
+        mails = [m for m in r["mails"] if isinstance(m, dict) and str(m.get("uid", "")).isdigit()]
+        bodies = {int(m["uid"]): str(m["body"]) for m in mails[:TEXT_MAILS] if m.get("body") is not None}
+        n += 1 if _fire(str(r["agent"]), acc, str(r.get("folder") or "INBOX"), mails, bodies,
+                        str(r.get("prompt") or "")) else 0
     return n
 
 
