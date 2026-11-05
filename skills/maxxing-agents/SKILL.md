@@ -1,6 +1,6 @@
 ---
 name: maxxing-agents
-description: Create (from a session, asking only what is missing), configure, run, switch off or debug a Harness Maxxing agent - a lasting role inside a topic (its own CLAUDE.md, memory and agent.json) started by a schedule, a webhook, a feed event, a Telegram message or another agent, within a daily budget. Use when the user wants "an agent that…", a bot that handles orders / e-mails / leads / posts by itself, wants to hand work from one agent to another, or asks why an agent did not run.
+description: Create (from a session, asking only what is missing), configure, run, switch off or debug a Harness Maxxing agent - a lasting role inside a topic (its own CLAUDE.md, memory and agent.json) started by a schedule, a webhook, a feed event, a Telegram message or another agent, within a daily budget. Also agent groups: 2-6 agents of a project in one conversation with the owner. Use when the user wants "an agent that…", a bot that handles orders / e-mails / leads / posts by itself, wants to hand work from one agent to another, wants several agents working together ("a team of agents", "a group"), or asks why an agent did not run.
 ---
 
 # Agents
@@ -156,6 +156,24 @@ The sender and the hop count come from `MAXXING_AGENT` and `MAXXING_AGENT_DEPTH`
 after 3 hops the start is refused. An agent cannot send to itself. Send a pointer (a file path, an id) rather
 than a long text.
 
+## Groups (several agents in one conversation)
+When the user wants several agents to work together and talk to them at once ("a writer, a reviewer and a
+publisher", "a council that weighs the options"), make a **group** (docs: `docs/user/31-agent-groups.md`): a folder
+`{{WORKSPACE}}/projects/<p>/groups/<g>/` (`CLAUDE.md` = the goal, `group.json`, `files/` = shared folder) whose members
+are 2 to 6 agents **of that project** (create the missing agents first, each with its own role). Only the owner writes
+to the group (UI, or `maxxing agents group say` from the owner's session - refused in an agent's run). Members are
+named `@<agent folder>`; `@all`; nobody named -> the lead; a member naming another one hands over; `PASS` = nothing
+to add; `stop @x` pauses x. Each member keeps one session per group and its own budget; the group's turns do not
+count in its runs per hour (the group's limits do: 3 hand-overs and 10 answers per message, 40 an hour).
+```bash
+maxxing agents group create acme/blog-team --member writer="writes the first draft" \
+  --member reviewer="checks facts and SEO" --lead writer --emoji 📝 \
+  --goal "Write the blog posts together: draft in files/, review, then publish."
+maxxing agents group say acme/blog-team "@writer draft a post about cold brew, then @reviewer check it"
+maxxing agents group show acme/blog-team --messages 10      # members, options, last messages (JSON)
+```
+Say what the group does, who is in it, and that it is on the Agents page (top of its project).
+
 ## CLI
 ```bash
 maxxing agents list [--json]                   # path, name, on/off, triggers, cost of the day
@@ -166,6 +184,7 @@ maxxing agents create <p>/<t>/<a> --role … | --template ID | cron | webhook | 
 maxxing agents templates [--lang fr] [--json]  # the ready-made agents
 maxxing agents export <agent> [-o FILE] | import FILE --topic <p>/<t>     # Claude Code agent files
 maxxing agents sandbox-setup                   # as root: what the sandbox needs (bubblewrap, socat, AppArmor)
+maxxing agents group list | show <p>/<g> | create <p>/<g> --member … | say <p>/<g> <text>   # see "Groups"
 ```
 `<agent>` = `projects/<p>/topics/<t>/agents/<a>`, `<p>/<t>/<a>`, or just `<a>` when the name is unique.
 

@@ -73,6 +73,25 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   post, mark_seen, feed event of an agent: list + that agent's detail + thread, `busKeysOf` in keys.ts). The plain
   `agents` topic (create, patch, delete, crons) no longer refetches the templates nor the sandbox check.
 
+## 2.0.0-alpha.119 - 2026-11-05
+
+- Agent groups (`maxxing/agent_rooms.py`, `api/agent_groups.py`, API.md#agent-groups, INTERNALS.md#maxxing.agent_rooms):
+  `projects/<p>/groups/<g>/{CLAUDE.md, group.json, files/}`, room `<state>/agents/rooms/<p>__<g>.{jsonl,json}`.
+  Routes `/api/agent-groups` (prefix apart from `/api/agents/{p}/{t}/{a}`: no clash). Bus `agent-groups`,
+  `agent-groups:<path>`. `group.json` added to `backup.ALWAYS`.
+- `agents.run_settings(path, outside, session, group="")`: the runner passes `MAXXING_AGENT_GROUP` from the session env;
+  a group turn gets the group's `files/` as a writable folder and is outside when it is a hand-over and the group's
+  `trust_members` is off (`agent_rooms.turn_outside`, per session id).
+- `agents.on_turn_end` reads the session meta env (the public session has none) and hands group turns to
+  `agent_rooms.on_turn_end`; their thread `run` / `result` lines carry `group`; no Telegram message for them.
+  `_runs_last_hour` skips `run` lines with `group` (a group's turns are bounded by its own limits).
+- `agents._git_exclude(dir, sub="agents")`: also used for a project's `groups/`.
+- `agent_guard.AGENT_OWNER_ONLY` += `group` (`maxxing agents group ...` refused in every agent turn).
+- CLI `maxxing agents group list|show|create|say` (cmd_agents.py). Fake claude: `REPLY_AS <folder>: <text>` (`AT:` -> `@`).
+- Web: `features/agents/{GroupPage,GroupForm}.tsx`, groups at the top of their project in `AgentsList`, routes
+  `/agents/groups/new` and `/agents/groups/:project/:name`, `lib/queries/agentGroups.ts`, showcase `agent-groups`.
+- Docs: `docs/user/31-agent-groups.md`, links from 01, 15, 16, 17, 30, README, help index, skill `maxxing-agents`.
+
 ## 2.0.0-alpha.118 - 2026-11-05
 
 - Audit of a117 (`proxylisten.py`). `guarded_protocol(port)` = uvicorn's HTTP protocol (httptools or h11) with, on the

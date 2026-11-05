@@ -19,6 +19,7 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   MCPUSE:<srv>  calls the tool mcp__<srv>__ping (MCP auto-loading tests)
   MCPLOAD       runs `maxxing mcp load $FAKE_CLAUDE_MCPLOAD` (python -m maxxing) like a turn asking for a server
   APPROVE       asks the --permission-prompt-tool MCP server about a Bash call (approval tests)
+  REPLY_AS x: t answers t when the turn runs in a folder named x (agent groups; the last such line wins)
   MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
 A `--system-prompt` that names chat sessions (short titles) gets $FAKE_CLAUDE_TITLE (default "Fake short
 title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail.
@@ -155,6 +156,10 @@ def record(o: dict, prompt: str, images: int = 0) -> None:
 
 
 def reply_for(prompt: str) -> str:
+    me = os.path.basename(os.getcwd())                   # REPLY_AS <agent folder>: <text> - agent group tests
+    said = [ln.split("REPLY_AS " + me + ":", 1)[1].strip() for ln in prompt.splitlines() if "REPLY_AS " + me + ":" in ln]
+    if said:
+        return said[-1].replace("AT:", "@")
     if "Summarize this conversation" in prompt:
         return "Summary: the user tested the fake Claude; nothing left to do."
     first = prompt.strip().splitlines()[0] if prompt.strip() else ""

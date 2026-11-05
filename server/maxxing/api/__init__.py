@@ -39,5 +39,6 @@ ROUTERS = [
     "team",
     "teampeer",
     "agents",
+    "agent_groups",
     "approvals",
 ]
