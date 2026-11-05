@@ -10,7 +10,7 @@
 import * as React from 'react'
 import { Link, useParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -618,6 +618,17 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
 
       <div className="grid gap-2">
         <EditWithClaude agent={a} variant="row" />
+        <Link
+          to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
+          className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent"
+          data-testid="agent-new-group"
+        >
+          <UsersRound className="size-4 shrink-0 text-muted-foreground" />
+          <span className="grid min-w-0 flex-1">
+            <span className="text-sm">{t('groups.withAgent')}</span>
+            <span className="truncate text-xs text-muted-foreground">{t('groups.withAgentDesc')}</span>
+          </span>
+        </Link>
         <button type="button" onClick={() => setAdvanced(true)} className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent" data-testid="agent-advanced">
           <Settings2 className="size-4 shrink-0 text-muted-foreground" />
           <span className="grid min-w-0 flex-1">
