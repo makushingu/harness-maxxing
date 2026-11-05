@@ -562,8 +562,9 @@ udp_listeners() { # "addr port process" for every UDP socket bound for listening
 }
 
 detect_server() {
-  local addr port name ssh_p seen=" "
+  local addr port name ssh_p seen=" " proxy_p
   ssh_p=" $(ssh_ports | tr '\n' ' ') "
+  proxy_p=$(cfg_get proxy_listen); proxy_p=${proxy_p##*:}
   while read -r addr port name; do
     [ -n "$port" ] || continue
     case "$addr" in 127.*|::1|localhost|100.*|fd7a:115c:a1e0:*) continue ;; esac   # loopback, Tailscale
@@ -571,6 +572,7 @@ detect_server() {
     case "$ssh_p" in *" $port "*) continue ;; esac
     case "$port:$name" in 53:systemd-resolve|5355:systemd-resolve) continue ;; esac   # DNS stub, LLMNR (Debian)
     if [ "$port" = "$PORT" ] && our_unit_active; then continue; fi
+    if [ -n "$proxy_p" ] && [ "$port" = "$proxy_p" ] && our_unit_active; then continue; fi   # maxxing proxy on
     case "$port" in
       80|443) case "$name" in caddy) [ -f "$CADDY_SITE" ] && continue ;; *) WEB_BUSY=${WEB_BUSY:-$name} ;; esac ;;
     esac
@@ -1335,6 +1337,7 @@ secure_server() {
     ufw_ipv6_warn
     ufw --force enable >/dev/null 2>&1 || true
     if ufw status 2>/dev/null | grep -q '^Status: active'; then done+=("firewall ($open)"); manifest "ufw enabled"; FW_ON=1
+      [ -z "$(cfg_get proxy_listen)" ] || mx proxy on >/dev/null 2>&1 || true   # its port for the container networks
     else failed+=("firewall (ufw could not be turned on - ufw status verbose)"); fi
   else
     failed+=("firewall (ufw could not be installed)")
@@ -1696,6 +1699,24 @@ NGINX
     LimitRequestBody 524288000
 </VirtualHost>
 APACHE
+    ;;
+    docker-proxy*|traefik*|"another web server")
+      if [ "$HAS_DOCKER" = 1 ] || [ "$WEB_BUSY" != "another web server" ]; then
+        # a proxy in a container (Traefik of Dokploy, Coolify...) cannot reach 127.0.0.1: a second, private
+        # address guarded by a secret header (maxxing proxy on, proxylisten.py) and a ready-made Traefik block
+        if mx proxy on --domain "$DOMAIN" >>"$WORK/proxy.log" 2>&1; then
+          ok "Docker keeps ports 80/443 - copy the Traefik block saved in $f into Traefik's dynamic configuration"
+          info "(Dokploy: /etc/dokploy/traefik/dynamic/, Coolify: /data/coolify/proxy/dynamic/), then https://$DOMAIN opens Harness Maxxing"
+          return 0
+        fi
+        warn "maxxing proxy on failed ($WORK/proxy.log) - generic block saved instead"
+      fi
+      cat > "$f" <<OTHER
+# Harness Maxxing behind your own reverse proxy ($WEB_BUSY on ports 80/443):
+#   https://$DOMAIN  ->  http://127.0.0.1:$PORT
+# keep responses unbuffered (live updates use server-sent events), allow uploads up to 500 MB
+# and long requests (1 h).
+OTHER
     ;;
     *) cat > "$f" <<OTHER
 # Harness Maxxing behind your own reverse proxy ($WEB_BUSY on ports 80/443):
