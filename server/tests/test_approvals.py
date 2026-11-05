@@ -288,3 +288,15 @@ def test_an_agent_sees_only_its_keys(client, topic, mx, monkeypatch, capsys):
     assert cmd_keys._handler(ns("get", "OTHER")) == 1
     assert cmd_keys._handler(ns("delete", "MX_TEST_VAR")) == 1
     assert cmd_keys._handler(ns("get", "MX_TEST_VAR")) == 0 and "secret-1" in capsys.readouterr().out
+    # in the turn's unit the agent comes from its session, not from the environment the turn can change
+    from maxxing import agent_guard
+    from maxxing.sessions import store
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: store.read(run["session"]["id"]))
+    monkeypatch.delenv("MAXXING_AGENT")
+    assert cmd_keys._handler(ns("get", "OTHER")) == 1
+    assert "were changed" in agent_guard.check_cli(["keys", "get", "OTHER"])
+    monkeypatch.setenv("MAXXING_AGENT", A)
+    monkeypatch.setenv("MAXXING_AGENT_DEPTH", "0")
+    assert agent_guard.check_cli(["keys", "get", "MX_TEST_VAR"]) is None
+    monkeypatch.setenv("MAXXING_AGENT_DEPTH", "-5")
+    assert "were changed" in agent_guard.check_cli(["agents", "send", "x", "hi"])

@@ -3,7 +3,7 @@
   maxxing agents list [--json]               every agent: path, name, on/off, triggers, cost of the day
   maxxing agents run <agent> [text] [--data] start the agent now (text = its task; --data: the text is outside data)
   maxxing agents send <agent> <text>         from a turn: hand work to another agent (the text is framed as data;
-                                             sender and depth come from MAXXING_AGENT / MAXXING_AGENT_DEPTH)
+                                             sender and depth come from the agent run of the turn)
   maxxing agents on <agent> | off <agent>    switch an agent on or off
   maxxing agents create <p>/<t>/<a> --role … create an agent (what a session runs when the user asks for one)
   maxxing agents show <agent>                its agent.json, role, triggers, cron jobs, webhook URLs (JSON)
@@ -124,11 +124,10 @@ def resolve(ref: str) -> str:
     return path
 
 
-def _depth() -> int:
-    try:
-        return max(0, int(os.environ.get("MAXXING_AGENT_DEPTH") or 0))
-    except ValueError:
-        return 0
+def _turn() -> dict:
+    """The agent run this command comes from ({path, depth}; path "" for the owner): see agent_guard.agent_turn."""
+    from . import agent_guard
+    return agent_guard.agent_turn()
 
 
 def _print_fire(path: str, r: dict, as_json: bool) -> int:
@@ -383,16 +382,18 @@ def _handler(a) -> int:
         print(e.message, file=sys.stderr)
         return 2
     text = " ".join(a.text).strip()
-    if a.agents_cmd == "run":
+    turn = _turn()
+    sender = turn["path"]
+    if a.agents_cmd == "run" and not sender:
         r = agents.fire(path, trigger="manual", source="command line",
                         **({"text": text} if a.data else {"prompt": text}))
         return _print_fire(path, r, a.json)
-    # send: from one agent's turn to another agent - the text is the sender's output, framed as data
-    sender = (os.environ.get("MAXXING_AGENT") or "").strip()
+    # send (or run from an agent's turn): from one agent's turn to another agent - the text is the sender's output,
+    # framed as data, one hop more
     if sender == path:
         print("An agent cannot send work to itself.", file=sys.stderr)
         return 2
-    if not text:
+    if not text and a.agents_cmd == "send":
         print("Nothing to send.", file=sys.stderr)
         return 2
     if agents.is_agent_path(sender):
@@ -403,7 +404,7 @@ def _handler(a) -> int:
         trigger, source = f"agent:{sender}", f"agent {label}"
     else:
         trigger, source = "agent:session", "session"
-    r = agents.fire(path, trigger=trigger, text=text, source=source, depth=_depth() + 1)
+    r = agents.fire(path, trigger=trigger, text=text, source=source, depth=turn["depth"] + 1)
     return _print_fire(path, r, a.json)
 
 
