@@ -13,7 +13,7 @@
 // button.
 // Agents and their runs never show in Sessions (sessions = where the user works, agents = automatic work).
 import * as React from 'react'
-import { Link, Route, Routes, useLocation, useSearchParams } from 'react-router'
+import { Link, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router'
 import { Building2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -69,7 +69,7 @@ export default function AgentsLayout() {
       <Routes>
         <Route index element={<AgentsOverview onNew={newAgent} onStart={openWith} />} />
         <Route path="office" element={<AgentsOverview onNew={newAgent} onStart={openWith} />} />
-        <Route path=":project/:topic/:name" element={<AgentPage />} />
+        <Route path=":project/:topic/:name" element={<AgentPageFor />} />
         <Route path=":project/:topic/:name/runs/:sid" element={<RunView />} />
       </Routes>
     </PreviewProvider>
@@ -123,4 +123,11 @@ export default function AgentsLayout() {
       {create}
     </div>
   )
+}
+
+/** One page per agent: going from one agent to another starts fresh, so a role being edited, a typed message or a
+ *  reply target never carries over to (and gets saved or sent to) the next agent. */
+function AgentPageFor() {
+  const { project = '', topic = '', name = '' } = useParams()
+  return <AgentPage key={`${project}/${topic}/${name}`} />
 }
