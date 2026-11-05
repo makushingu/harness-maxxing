@@ -549,9 +549,12 @@ export type ComposerApi = { mention: (slug: string) => void }
 
 /** The `@word` being typed just before the caret (start of the text or after a space / bracket), else null. */
 function mentionAt(text: string, caret: number): { start: number; q: string } | null {
-  const m = /(^|[\s(])@([a-z0-9-]*)$/i.exec(text.slice(0, caret))
+  const m = /(^|[\s(])@([\p{L}0-9-]*)$/iu.exec(text.slice(0, caret))
   return m ? { start: caret - m[2].length - 1, q: m[2].toLowerCase() } : null
 }
+
+/** Lower case without accents: « réd » finds « Rédacteur » and @redacteur. */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
 type MentionPick = { slug: string; label: string; member?: AgentGroupMember }
 
@@ -583,8 +586,9 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
       ...g.members.filter((m) => m.exists).map((m) => ({ slug: m.handle, label: m.display_name, member: m })),
       { slug: 'all', label: t('groups.mention.all') },
     ]
-    const starts = all.filter((p) => p.slug.startsWith(at.q) || p.label.toLowerCase().startsWith(at.q))
-    const inside = all.filter((p) => !starts.includes(p) && (p.slug.includes(at.q) || p.label.toLowerCase().includes(at.q)))
+    const q = fold(at.q)
+    const starts = all.filter((p) => p.slug.startsWith(q) || fold(p.label).startsWith(q))
+    const inside = all.filter((p) => !starts.includes(p) && (p.slug.includes(q) || fold(p.label).includes(q)))
     return [...starts, ...inside]
   })()
   const popup = !closed && !!at && picks.length > 0
