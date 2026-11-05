@@ -344,6 +344,21 @@ def test_topic_rename_moves_agent_sessions_state_and_crons(client, topic):
     assert any(m["kind"] == "run" for m in agents.thread(new))
 
 
+def test_deleting_the_topic_drops_its_agents_jobs_thread_and_place(client, topic):
+    from maxxing import crons
+    from maxxing.telegram import gateway
+    _on(client)
+    _create(client)
+    job = client.post("/api/agents/acme/blog/writer/crons", json={"prompt": "NOTOOL x"}).json()
+    gateway.mutate_tg(lambda t: t.__setitem__("agent_threads", {A: {"tid": 42, "name": "Writer"}}))
+    agents.save_layout({"projects": ["acme"], "colors": {"acme": "clay"}, "agents": {"acme": [A]}})
+    assert client.delete("/api/workspace/projects/acme/topics/blog").status_code == 200
+    assert crons.get_job(job["id"]) is None and A not in gateway.agent_threads()
+    lay = agents.load_layout()
+    assert lay["agents"] == {} and lay["projects"] == ["acme"] and lay["colors"] == {"acme": "clay"}
+    assert agents.thread(A)                              # the Activity stays for a restore from the Trash
+
+
 def _results(client) -> list[dict]:
     return [m for m in client.get("/api/agents/acme/blog/writer/thread").json()["messages"] if m["kind"] == "result"]
 
