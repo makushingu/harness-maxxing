@@ -53,7 +53,9 @@ Write a message as in any chat. Who answers depends on the names in it:
 | `what do you think?` (nobody named) | the lead; without a lead, the last member who spoke (else the first) |
 | `stop @publisher` | nobody: the publisher is **paused** until you name it again |
 
-While you type `@`, the names of the members are suggested. Members answer **one at a time**: each one reads what the
+While you type `@`, the names of the members are suggested. A member's `@name` is its folder name; when two
+members have the same one (three `writer` agents of different topics), it comes from their display names
+(`@writer-news`, `@writer-shop`): the group shows each member's `@name`. Members answer **one at a time**: each one reads what the
 others said before speaking.
 
 **Handing work over.** When a member names another one in its answer ("Draft ready in `files/post.md`, @reviewer can
@@ -132,6 +134,7 @@ removed and skipped; edit the group to replace it.
 | `maxxing agents group list [--json]` | every group: path, name, members (paused ones marked) |
 | `maxxing agents group show P/G [--messages N]` | its members, goal, options and last messages (JSON) |
 | `maxxing agents group create P/G --member AGENT[=ROLE] --member ... [--name N] [--emoji E] [--goal T] [--lead AGENT] [--no-shared-files] [--ask-on-handover] [--json]` | create a group (2 to 6 members of project P) |
+| `maxxing agents group update P/G [--name N] [--emoji E] [--goal T] [--lead AGENT] [--member AGENT[=ROLE] ...] [--shared-files on\|off] [--trust-members on\|off]` | change a group (`--member` replaces the members) |
 | `maxxing agents group say P/G TEXT` | write to the group as yourself: the members answer in turn |
 
 `P/G` = `project/group`. These commands are yours: they are refused in an agent's run.

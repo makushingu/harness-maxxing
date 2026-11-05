@@ -13,7 +13,7 @@
   maxxing agents export <agent> [-o FILE]    the agent as a Claude Code agent file (.claude/agents/<name>.md)
   maxxing agents import FILE --topic <p>/<t> create an agent from a Claude Code agent file
   maxxing agents sandbox-setup               install what the sandbox needs (root): bubblewrap, socat, AppArmor
-  maxxing agents group list|show|create|say  agent groups (agent_rooms.py): a conversation of the owner with
+  maxxing agents group list|show|create|update|say  agent groups (agent_rooms.py): a conversation of the owner with
                                              2-6 agents of one project (owner only: refused in agent turns)
 
 <agent> = projects/<p>/topics/<t>/agents/<a>, <p>/<t>/<a>, or just <a> when only one agent has that name.
@@ -102,6 +102,16 @@ def _configure(p) -> None:
     g.add_argument("--no-shared-files", action="store_true", help="no shared folder")
     g.add_argument("--ask-on-handover", action="store_true",
                    help="a hand-over between members asks before risky tools (members do not trust each other)")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("update", help="change a group: name, emoji, goal, members, lead, options")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("--member", action="append", help="replaces the members: <agent> or <agent>=<role> (2 to 6 times)")
+    g.add_argument("--name")
+    g.add_argument("--emoji")
+    g.add_argument("--goal", help="what the group is for (its CLAUDE.md)")
+    g.add_argument("--lead", help="a member, or \"\" for none")
+    g.add_argument("--shared-files", choices=("on", "off"))
+    g.add_argument("--trust-members", choices=("on", "off"), help="off: a hand-over asks before risky tools")
     g.add_argument("--json", action="store_true")
     g = gs.add_parser("say", help="write to the group as the owner (the members answer in turn)")
     g.add_argument("group", help="<project>/<group>")
@@ -380,6 +390,24 @@ def _group(a) -> int:
         if a.group_cmd == "show":
             print(json.dumps({**agent_rooms.get(path), "messages": agent_rooms.room(path, max(1, a.messages))},
                              indent=2, ensure_ascii=False))
+            return 0
+        if a.group_cmd == "update":
+            f: dict = {}
+            for k in ("name", "emoji", "goal"):
+                if getattr(a, k) is not None:
+                    f[k] = getattr(a, k)
+            if a.member:
+                f["members"] = [{"path": resolve(m.partition("=")[0]), "role": m.partition("=")[2].strip()}
+                                for m in a.member]
+            if a.lead is not None:
+                f["lead"] = resolve(a.lead) if a.lead else ""
+            if a.shared_files:
+                f["shared_files"] = a.shared_files == "on"
+            if a.trust_members:
+                f["trust_members"] = a.trust_members == "on"
+            g = agent_rooms.update(path, f)
+            print(json.dumps({"group": g["path"]}) if a.json else f"group updated: {g['path']} - members "
+                  + " ".join("@" + m["handle"] for m in g["members"]))
             return 0
         if a.group_cmd == "say":
             r = agent_rooms.say(path, " ".join(a.text))

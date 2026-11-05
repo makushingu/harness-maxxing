@@ -171,7 +171,11 @@ maxxing agents group create acme/blog-team --member writer="writes the first dra
   --goal "Write the blog posts together: draft in files/, review, then publish."
 maxxing agents group say acme/blog-team "@writer draft a post about cold brew, then @reviewer check it"
 maxxing agents group show acme/blog-team --messages 10      # members, options, last messages (JSON)
+maxxing agents group update acme/blog-team --goal "…" --lead reviewer --trust-members off   # --member … replaces them
 ```
+Ask little: the members and, if not obvious, the goal (one or two sentences); defaults for the rest. Members with the
+same folder name in different topics get their `@name` from their display name (`group show` lists each `handle`):
+give the user those names.
 Say what the group does, who is in it, and that it is on the Agents page (top of its project).
 
 ## CLI
@@ -184,7 +188,7 @@ maxxing agents create <p>/<t>/<a> --role … | --template ID | cron | webhook | 
 maxxing agents templates [--lang fr] [--json]  # the ready-made agents
 maxxing agents export <agent> [-o FILE] | import FILE --topic <p>/<t>     # Claude Code agent files
 maxxing agents sandbox-setup                   # as root: what the sandbox needs (bubblewrap, socat, AppArmor)
-maxxing agents group list | show <p>/<g> | create <p>/<g> --member … | say <p>/<g> <text>   # see "Groups"
+maxxing agents group list | show <p>/<g> | create <p>/<g> --member … | update <p>/<g> … | say <p>/<g> <text>   # see "Groups"
 ```
 `<agent>` = `projects/<p>/topics/<t>/agents/<a>`, `<p>/<t>/<a>`, or just `<a>` when the name is unique.
 

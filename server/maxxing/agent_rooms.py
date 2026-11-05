@@ -103,6 +103,47 @@ def slug(member: str) -> str:
     return p[2] if p else ""
 
 
+HANDLE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}\Z")
+
+
+def _slugify(text: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:48].strip("-")
+
+
+def _handles(members: list[dict]) -> None:
+    """Give each member its @name in the group (`handle`): the one it has when still valid and unique, else its
+    folder name, else (two members with the same folder name, in different topics) its display name, else
+    <topic>-<folder>."""
+    taken: set[str] = set()
+    for m in members:
+        h = str(m.get("handle") or "").lower()
+        if HANDLE_RE.match(h) and h not in taken and h not in ALL_WORDS:
+            m["handle"] = h
+            taken.add(h)
+        else:
+            m["handle"] = ""
+    folders = [slug(m["path"]) for m in members]
+    for m in members:
+        if m["handle"]:
+            continue
+        ap = agents.parse(m["path"]) or ("", "", "")
+        name = agents.load(m["path"]).get("name") or "" if agents.exists(m["path"]) else ""
+        for h in ([ap[2]] if folders.count(ap[2]) == 1 else []) + [_slugify(name), f"{ap[1]}-{ap[2]}"[:48], ap[2]]:
+            if h and HANDLE_RE.match(h) and h not in taken and h not in ALL_WORDS:
+                break
+        else:
+            h = f"{ap[2][:40]}-{len(taken) + 1}"
+        m["handle"] = h
+        taken.add(h)
+
+
+def handles(g: dict) -> dict[str, str]:
+    """member path -> its @name in the group."""
+    return {m["path"]: m.get("handle") or slug(m["path"]) for m in g["members"]}
+
+
 # ---- group.json ----------------------------------------------------------------------------------------
 def _num(v: Any, default: int, lo: int, hi: int) -> int:
     try:
@@ -134,15 +175,14 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
             continue
         if strict and not agents.exists(p):
             raise GroupError(404, "unknown_member", f"Agent {p!r} not found")
-        if ap[2] in seen:
-            if strict:
-                raise GroupError(400, "same_name", f"Two members are called @{ap[2]}: rename one of the agents")
+        if p in seen:
             continue
-        seen.add(ap[2])
-        members.append({"path": p, "role": _text(m.get("role"), ROLE_MAX)})
+        seen.add(p)
+        members.append({"path": p, "role": _text(m.get("role"), ROLE_MAX), "handle": str(m.get("handle") or "")})
     if strict and not MIN_MEMBERS <= len(members) <= MAX_MEMBERS:
         raise GroupError(400, "members", f"A group has {MIN_MEMBERS} to {MAX_MEMBERS} members")
     members = members[:MAX_MEMBERS]
+    _handles(members)
     lead = str(d.get("lead") or "")
     if lead not in [m["path"] for m in members]:
         lead = ""
@@ -211,7 +251,7 @@ def _member_view(m: dict, st: dict, current: str) -> dict:
     p = m["path"]
     ok = agents.exists(p)
     a = agents.load(p) if ok else {}
-    return {"path": p, "slug": slug(p), "role": m["role"], "exists": ok,
+    return {"path": p, "slug": m.get("handle") or slug(p), "handle": m.get("handle") or slug(p), "role": m["role"], "exists": ok,
             "display_name": (a.get("name") or slug(p)) if ok else slug(p),
             "avatar": a.get("avatar") if ok else agents._clean_avatar({}, p),
             "enabled": bool(a.get("enabled")) if ok else False,
@@ -283,6 +323,10 @@ def update(path: str, fields: dict) -> dict:
     f = dict(fields or {})
     cur = load(path)
     text = f.pop("goal", None)
+    if isinstance(f.get("members"), list):              # a member that stays keeps its @name
+        old = handles(cur)
+        f["members"] = [{**m, "handle": m.get("handle") or old.get(m.get("path") or "", "")} if isinstance(m, dict)
+                        else m for m in f["members"]]
     merged = {**cur, **{k: v for k, v in f.items() if v is not None}}
     if isinstance(f.get("limits"), dict):
         merged["limits"] = {**cur["limits"], **{k: v for k, v in f["limits"].items() if v is not None}}
@@ -374,7 +418,7 @@ def mark_seen(path: str) -> None:
 
 def mentions(text: str, members: list[dict], but: str = "") -> list[str]:
     """Member paths named in text, in order of first mention (@all: every member, in list order)."""
-    by = {slug(m["path"]): m["path"] for m in members}
+    by = {(m.get("handle") or slug(m["path"])): m["path"] for m in members}
     out: list[str] = []
     for m in MENTION_RE.finditer(text or ""):
         s = m.group(1).lower()
@@ -407,7 +451,7 @@ def say(path: str, text: str) -> dict:
         st = _read_state(path)
         paused = [p for p in st.get("paused") or [] if p in [m["path"] for m in members]]
         stops = {m.group(1).lower() for m in STOP_RE.finditer(text)}
-        stopped = [m["path"] for m in members if slug(m["path"]) in stops]
+        stopped = [m["path"] for m in members if (m.get("handle") or slug(m["path"])) in stops]
         rest = STOP_RE.sub(" ", text)
         named = mentions(rest, members)
         paused = [p for p in paused if p not in named] + [p for p in stopped if p not in paused]
@@ -498,7 +542,8 @@ def _frame(msgs: list[dict], members: dict[str, str]) -> str:
 
 def header(path: str, me: str) -> str:
     g = load(path)
-    lines = [f"You are @{slug(me)} in the agent group \"{g['name'] or parse(path)[1]}\". Only the owner writes to "
+    hs = handles(g)
+    lines = [f"You are @{hs.get(me, slug(me))} in the agent group \"{g['name'] or parse(path)[1]}\". Only the owner writes to "
              "the group; your answer is posted there for the owner and the other members to read."]
     gl = goal(path).strip()
     if gl:
@@ -506,7 +551,7 @@ def header(path: str, me: str) -> str:
     lines.append("Members:")
     for m in g["members"]:
         a = agents.load(m["path"]) if agents.exists(m["path"]) else {}
-        lines.append(f"- @{slug(m['path'])} ({a.get('name') or slug(m['path'])})"
+        lines.append(f"- @{hs[m['path']]} ({a.get('name') or slug(m['path'])})"
                      + (f": {m['role']}" if m["role"] else "") + (" - lead" if m["path"] == g["lead"] else "")
                      + (" - you" if m["path"] == me else ""))
     lines.append("How the group works: answer briefly, in the owner's language. To hand work to a member, name them "
@@ -520,7 +565,7 @@ def header(path: str, me: str) -> str:
 
 def _message(path: str, me: str, item: dict, st: dict, fresh: bool) -> str:
     g = load(path)
-    disp = {m["path"]: slug(m["path"]) for m in g["members"]}
+    disp = handles(g)
     msgs = room(path, 300)
     since = float((st.get("since") or {}).get(me) or 0)
     floor = next((m.get("at") or 0 for m in reversed(msgs) if m.get("reset")), 0)   # New topic: nothing before it
@@ -536,7 +581,7 @@ def _message(path: str, me: str, item: dict, st: dict, fresh: bool) -> str:
     if ctx:
         parts.append(ctx)
     if item.get("reason") == "handover":
-        parts.append(f"@{slug(item.get('from') or '')} handed over to you (see their message above).")
+        parts.append(f"@{disp.get(item.get('from') or '', slug(item.get('from') or ''))} handed over to you (see their message above).")
     if origin:
         parts.append("The owner's message to the group:\n" + (origin.get("text") or "").strip())
     return "\n\n".join(parts)
@@ -607,7 +652,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
         if reason == "rate":                             # a group's turns are bounded by the group's limits
             reason = None
         if reason:
-            post(path, "skip", f"@{slug(me)}: {SKIP_GROUP.get(reason, reason)}", author=me, reason=reason)
+            post(path, "skip", f"@{handles(g).get(me, slug(me))}: {SKIP_GROUP.get(reason, reason)}", author=me, reason=reason)
             if reason in ("budget",):
                 agents._limit_alert(me, reason)
             return None
@@ -634,7 +679,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                 sessions[me] = sid
                 st["turns"][sid] = {"outside": outside}
         except Exception as e:  # noqa: BLE001 - SessionError (bad model, busy...)
-            post(path, "skip", f"@{slug(me)}: {e}", author=me, reason="error")
+            post(path, "skip", f"@{handles(g).get(me, slug(me))}: {e}", author=me, reason="error")
             return None
         st.setdefault("since", {})[me] = time.time()
         agents._hold_left(me, a, sid)
@@ -683,7 +728,7 @@ def on_turn_end(path: str, member: str, sid: str, text: str, ok: bool, cost: flo
         g = load(path)
         t = (text or "").strip()
         if not ok:
-            post(path, "skip", f"@{slug(member)}: the turn failed - {t[:300]}", author=member, reason="failed",
+            post(path, "skip", f"@{handles(g).get(member, slug(member))}: the turn failed - {t[:300]}", author=member, reason="failed",
                  session=sid)
         elif not t or t.strip("*_ .").upper() in PASS_WORDS:
             post(path, "pass", "", author=member, session=sid, cost=cost)

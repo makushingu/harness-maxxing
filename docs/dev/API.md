@@ -469,7 +469,7 @@ INTERNALS.md#maxxing.agent_rooms).
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/agent-groups` | – | `{groups: [Group]}` (every project, sorted by project then folder) |
-| POST | `/api/agent-groups` | `{project, name (folder slug), display_name?, emoji?, goal?, members: [{path, role?}], lead?, shared_files?, trust_members?, limits?}` | `Group` · `400 invalid_name` / `bad_member` (not an agent of the project) / `same_name` (two members with the same folder name) / `members` (not 2-6) · `404 not_found` / `unknown_member` · `409 exists` / `too_many` (20 per project) |
+| POST | `/api/agent-groups` | `{project, name (folder slug), display_name?, emoji?, goal?, members: [{path, role?}], lead?, shared_files?, trust_members?, limits?}` | `Group` · `400 invalid_name` / `bad_member` (not an agent of the project) / `members` (not 2-6) · `404 not_found` / `unknown_member` · `409 exists` / `too_many` (20 per project) |
 | GET | `/api/agent-groups/{p}/{g}` | – | `Group` · `404 not_found` |
 | PATCH | `/api/agent-groups/{p}/{g}` | the create fields but `project` / `name` (`limits` merged; `goal` rewrites CLAUDE.md; `members` checked like create) | `Group` (members removed: their group session and queued turns dropped) |
 | DELETE | `/api/agent-groups/{p}/{g}?keep_files=` | – | `{ok}`: turn stopped, folder and room deleted; `keep_files=true` moves `files/` to `projects/<p>/groups/.kept-<g>-<unix time>/` first. Members and their sessions stay |
@@ -482,7 +482,7 @@ INTERNALS.md#maxxing.agent_rooms).
 
 ```
 Group = {path: "projects/<p>/groups/<g>", project, name, display_name, emoji, goal (CLAUDE.md description),
-         members: [{path, slug, role, exists, display_name, avatar, enabled, paused, speaking}], lead (member path|""),
+         members: [{path, handle (its @name: the folder name; when two members share it, from the display name, else <topic>-<folder>; stored in group.json), slug (= handle), role, exists, display_name, avatar, enabled, paused, speaking}], lead (member path|""),
          shared_files: bool (default true), trust_members: bool (default true),
          limits: {waves: 3 (1-6), replies: 10 (1-30), per_hour: 40 (1-200)}, created,
          files_path ("projects/<p>/groups/<g>/files" | "" when shared_files is off), busy (a turn runs or is queued),
@@ -499,7 +499,7 @@ outside (approvals forced unless `trust_outside`) when it is a hand-over and `tr
 (`last_assistant_text`) is posted by `agents.on_turn_end` -> `agent_rooms.on_turn_end`: `PASS` / empty = `pass`; the
 members it names are queued as the next wave. The member's thread gets `run` / `result` lines with `group: <path>`
 (no Telegram message for group turns). Bus topics `agent-groups` and `agent-groups:<path>`. CLI:
-`maxxing agents group list | show <p>/<g> | create <p>/<g> --member A[=role]... | say <p>/<g> <text>` (`group` is in
+`maxxing agents group list | show <p>/<g> | create <p>/<g> --member A[=role]... | update <p>/<g> ... | say <p>/<g> <text>` (`group` is in
 `agent_guard.AGENT_OWNER_ONLY`: refused in every agent turn).
 
 ## Approvals
