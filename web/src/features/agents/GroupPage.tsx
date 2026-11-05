@@ -606,11 +606,17 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     setText(next)
     setCaret(pos)
     setClosed(false)
-    requestAnimationFrame(() => {
-      el?.focus()
-      el?.setSelectionRange(pos, pos)
-    })
+    placeAt.current = pos
   }
+  // The caret goes after the inserted name as soon as the new text is in the box (before the next key is typed).
+  const placeAt = React.useRef<number | null>(null)
+  React.useLayoutEffect(() => {
+    const el = input.current
+    if (placeAt.current == null || !el) return
+    el.focus()
+    el.setSelectionRange(placeAt.current, placeAt.current)
+    placeAt.current = null
+  }, [text])
   React.useImperativeHandle(ref, () => ({ mention: (slug: string) => insert(slug) }))
   const pick = (p: MentionPick) => at && insert(p.slug, at.start, caret)
 
