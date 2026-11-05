@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import re
 import secrets as _secrets
 import time
@@ -413,7 +414,7 @@ def clean(data: Any, strict: bool = False) -> dict:
             "writable": _clean_writable(d.get("writable"), strict), "rules": _clean_rules(d.get("rules"), strict),
             "subagent": bool(d.get("subagent")),
             "limits": limits, "triggers": triggers,
-            "created": d.get("created") if isinstance(d.get("created"), (int, float)) else time.time()}
+            "created": c if isinstance(c := d.get("created"), (int, float)) and math.isfinite(c) else time.time()}
 
 
 def _parse_file(f: Path) -> dict:

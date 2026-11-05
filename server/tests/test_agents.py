@@ -540,3 +540,12 @@ def test_a_topic_in_a_git_clone_does_not_commit_its_agents(client, topic):
     client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "second"})
     assert (tdir / ".git" / "info" / "exclude").read_text().count("/agents/") == 1
     assert not (tdir / ".gitignore").exists()                          # never a tracked file
+
+
+def test_a_created_date_that_is_not_finite_does_not_break_the_list(client, topic):
+    _on(client)
+    _create(client)
+    f = Path(client.get("/api/workspace/tree").json()["root"]) / A / "agent.json"
+    f.write_text(f.read_text().replace('"created": ', '"created": NaN, "x": ', 1))
+    r = client.get("/api/agents")
+    assert r.status_code == 200 and r.json()
