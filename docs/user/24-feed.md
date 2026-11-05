@@ -30,7 +30,8 @@ Some events wait for you and carry buttons:
 
 Once handled, or when the cause goes away (the request was answered elsewhere, the problem is fixed, the agent
 runs again), the event says how it ended (*Allowed*, *Denied*, *No answer in time*, *Fixed*...) and its buttons go.
-Clicking twice, or on the web and then on Telegram, gives the same answer. The **To handle** filter of the `/feed`
+Clicking twice, or on the web and then on Telegram, gives the same answer. Reading an alert on the web (Seen, Open,
+**Mark all read**) also removes its Seen button on Telegram. The **To handle** filter of the `/feed`
 page (and the *to handle* count of the dashboard panel) shows only the alerts still waiting.
 
 ## What arrives by itself
