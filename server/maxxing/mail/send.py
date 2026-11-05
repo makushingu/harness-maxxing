@@ -248,6 +248,9 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
         _give_back(acc["id"], len(rcpts))
         err = e.smtp_error.decode("utf-8", "replace") if isinstance(getattr(e, "smtp_error", None), bytes) else str(e)
         raise MailError("smtp", f"the mail server refused the message: {err}") from None
+    with contextlib.suppress(Exception):
+        from . import store
+        store.add_contacts(acc["id"], rcpts)
     out: dict[str, Any] = {"ok": True, "message_id": msg["Message-ID"], "recipients": len(rcpts),
                            "refused": sorted(refused or {}), "sent_folder": None}
     # the follow-ups never fail the send: the message is gone
