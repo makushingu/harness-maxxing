@@ -357,3 +357,28 @@ def test_source_counts_are_not_recomputed_while_the_feed_is_unchanged(client, mx
     feed.mark_read(everything=True)
     assert client.get("/api/feed").json()["unread"] == 0
     assert len(calls) == 3
+
+
+def test_the_pending_count_is_kept_indexed_and_left_out_of_later_pages(client, mx, monkeypatch):
+    for n in range(3):
+        feed.post(f"plain {n}")
+    ev = feed.post("Disk full", "", "error", "health", ref="health:d", actions=[{"id": "seen"}])
+    with feed._conn() as c:
+        names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+        assert {"events_agent", "events_pending"} <= names
+        plan = " ".join(r[-1] for r in c.execute(
+            f"EXPLAIN QUERY PLAN SELECT COUNT(*) FROM events WHERE at>? AND {feed._PENDING}", (0,)))
+        assert "events_pending" in plan
+        plan = " ".join(r[-1] for r in c.execute(
+            "EXPLAIN QUERY PLAN SELECT COUNT(*) FROM events WHERE agent=? AND resolved IS NULL", ("a",)))
+        assert "events_agent" in plan
+    calls = []
+    real = feed._kept
+    monkeypatch.setattr(feed, "_kept", lambda name, fn: real(name, lambda c: calls.append(name) or fn(c)))
+    for _ in range(3):
+        assert client.get("/api/feed", params={"limit": 2}).json()["pending"] == 1
+    assert calls.count("pending") == 1                     # counted once while the feed is unchanged
+    page = client.get("/api/feed", params={"limit": 2, "before": ev["id"]}).json()
+    assert "pending" not in page and len(page["events"]) == 2      # "Load more": no count
+    feed.act(ev["id"], "seen")
+    assert client.get("/api/feed").json()["pending"] == 0 and calls.count("pending") == 2

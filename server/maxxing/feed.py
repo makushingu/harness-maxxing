@@ -126,6 +126,10 @@ def _open(path: Path, key: str) -> sqlite3.Connection:
                 if col not in have:
                     c.execute(f"ALTER TABLE events ADD COLUMN {col} {kind}")
             c.execute("CREATE INDEX IF NOT EXISTS events_ref ON events(ref) WHERE ref IS NOT NULL")
+            # agent_alerts (the agents list), and the alerts waiting for a click (`pending` of list_events)
+            c.execute("CREATE INDEX IF NOT EXISTS events_agent ON events(agent) WHERE agent IS NOT NULL")
+            c.execute("CREATE INDEX IF NOT EXISTS events_pending ON events(at) "
+                      "WHERE actions IS NOT NULL AND resolved IS NULL")
             _ready.add(key)
     return c
 
@@ -405,7 +409,7 @@ def release_delivery(hook: str, key: str) -> None:
 def list_events(source: str | None = None, unread: bool = False, before: int | None = None,
                 limit: int = 50, pending: bool = False) -> dict:
     """Newest first. `pending`: only the alerts waiting for a click (buttons, not resolved). The totals of every
-    source come along, with `pending` = how many alerts wait."""
+    source come along, with `pending` = how many alerts wait (first page only: "Load more" does not need it)."""
     limit = max(1, min(int(limit or 50), 200))
     where, args = ["at>?"], [time.time() - RETENTION_DAYS * 86400]
     if source:
@@ -421,10 +425,12 @@ def list_events(source: str | None = None, unread: bool = False, before: int | N
     with _conn() as c:
         rows = c.execute(f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ?",
                          (*args, limit + 1)).fetchall()
-        waiting = c.execute(f"SELECT COUNT(*) FROM events WHERE at>? AND {_PENDING}", (args[0],)).fetchone()[0]
     sources = source_counts()
-    return {"events": [_row(r) for r in rows[:limit]], "more": len(rows) > limit,
-            "unread": sum(s["unread"] for s in sources), "pending": waiting, "sources": sources}
+    out = {"events": [_row(r) for r in rows[:limit]], "more": len(rows) > limit,
+           "unread": sum(s["unread"] for s in sources), "sources": sources}
+    if not before:
+        out["pending"] = pending_count()
+    return out
 
 
 def max_id() -> int:
@@ -463,18 +469,29 @@ def _aggregate(c: sqlite3.Connection, cutoff: float) -> list[dict]:
     return [{"source": r["source"], "total": r["total"], "unread": r["unread"] or 0, "last": r["last"]} for r in srcs]
 
 
-def source_counts() -> list[dict]:
-    """Per-source totals for the chips. Counting the whole journal is linear in its size, so the result is kept
-    until feed.db (or its WAL) changes - written by this process or another one - or a minute passes (retention)."""
+def _kept(name: str, compute):
+    """compute(conn), kept until feed.db (or its WAL) changes - written by this process or another one - or a minute
+    passes (retention)."""
     path = db_path()
     with _conn() as c:
         key = (str(path), _db_stamp(path), int(time.time() // 60))
-        hit = _counts.get(key[0])
+        hit = _counts.get((name, key[0]))
         if hit and hit[0] == key:
-            return [dict(x) for x in hit[1]]
-        sources = _aggregate(c, time.time() - RETENTION_DAYS * 86400)
-    _counts[key[0]] = (key, sources)
-    return [dict(x) for x in sources]
+            return hit[1]
+        value = compute(c)
+    _counts[(name, key[0])] = (key, value)
+    return value
+
+
+def source_counts() -> list[dict]:
+    """Per-source totals for the chips. Counting the whole journal is linear in its size: kept (_kept)."""
+    return [dict(x) for x in _kept("sources", lambda c: _aggregate(c, time.time() - RETENTION_DAYS * 86400))]
+
+
+def pending_count() -> int:
+    """How many alerts wait for a click (index events_pending; kept like source_counts)."""
+    return _kept("pending", lambda c: c.execute(f"SELECT COUNT(*) FROM events WHERE at>? AND {_PENDING}",
+                                                (time.time() - RETENTION_DAYS * 86400,)).fetchone()[0])
 
 
 def unread_count() -> int:
