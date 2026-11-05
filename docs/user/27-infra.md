@@ -35,6 +35,7 @@ The page itself never changes your sites or databases; the only thing it does on
   with the eye button.
 - **Servers**: one card per server with its address, its system, memory / disk / CPU in use and how many sites,
   databases and buckets run on it.
+- **E-mail**: where your addresses come from (see [E-mail](#e-mail) below).
 - Click any line for its details, what it is linked to, its repository (opens the Git page), its Cloudflare /
   Hostinger dashboard, a project, a note, to hide it, or to ask Claude about it.
 
@@ -146,12 +147,37 @@ database: shop
 Lines: `site`, `database`, `bucket`, `domain`, `server`, `worker`, `pages`, `id` (one resource each), or filters
 `project: acme`, `kind: database`, `location: <server>`. Shown when the Infra page is on (otherwise the text stays).
 
+## E-mail
+
+The **E-mail** tab shows, domain by domain, where each address comes from and where its mail goes. It only reads:
+nothing is created or changed at your providers.
+
+- **Mailboxes of the E-mail page**: address, IMAP / SMTP servers, last check (OK or the error, and when). Click one to
+  open it on the E-mail page.
+- **Cloudflare Email Routing**: for each zone, whether routing is on, and its rules: `contact@example.com -> you@gmail.com`,
+  the rules handled by a Worker or dropped, and the catch-all. A destination not verified at Cloudflare is flagged.
+- **Hostinger Email**: your e-mail plans, their mailboxes, aliases, forwarders and catch-alls ("No Hostinger e-mail
+  plan" when there is none).
+- **The chain**: each forward ends with **in the E-mail page** when the destination is one of your mailboxes there,
+  else with **Add to the E-mail page**.
+- **DNS health** of every domain that receives mail: MX, SPF (one record, under 10 lookups), DKIM (looked up on a few
+  common selectors), DMARC (its policy), each problem with what to change, for example "No DMARC record: add a TXT
+  record `_dmarc.example.com` `v=DMARC1; p=none; rua=mailto:you@example.com`".
+
+Providers are read again after 5 minutes, the DNS after an hour; **Refresh** reads everything now.
+
+**Permission missing** on a Cloudflare zone: the token sees the zone but not its Email Routing. Add the permission
+**Zone -> Email Routing Rules -> Read** for all zones to the Cloudflare token (Settings -> Keys; edit the token on
+Cloudflare, the value does not change). The destination addresses need **Account -> Email Routing Addresses -> Read**.
+Other mail providers (Migadu, Purelymail, Zoho, OVHcloud, cPanel hosts) are not read yet: their addresses still show
+when they are on the E-mail page.
+
 ## Terminal
 
 `maxxing infra status`, `maxxing infra list [--kind site] [--json]`, `maxxing infra refresh`, and the recipes:
 `site add|remove|list`, `db install|create|sqlite|backup`, `bucket install|create`, `server connect|add|rename|remove|list`,
 `domain add|remove|list`,
-`annotate`. See `maxxing infra --help` and the CLI reference.
+`annotate`, and `maxxing infra mail [--refresh] [--json]` (the E-mail tab). See `maxxing infra --help` and the CLI reference.
 
 ## Safety of `infra.json`
 

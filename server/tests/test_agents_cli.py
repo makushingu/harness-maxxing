@@ -124,7 +124,7 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
             d = agents.clean(agent_templates.fields(t), strict=True)        # every field valid as is
             assert d["permission_mode"] == "default" and "Edit(./memory.md)" in d["allowed_tools"]
             assert all(t["avatar"][k] in v for k, v in agents.AVATAR.items())
-            assert bool(t.get("cron")) != bool(t.get("webhook"))
+            assert (t.get("cron") or t.get("webhook") or t.get("mail")) and not (t.get("cron") and t.get("webhook"))
             if t.get("cron"):
                 crons.validate(t["cron"]["schedule"])
     assert agent_templates.get("support", "fr")["name"] == "SAV" and agent_templates.get("support", "de")["name"] == "Customer support"

@@ -52,6 +52,8 @@ missing and never re-create a project or topic you deleted.
 - **Infra** (Settings -> Features): every site, database, bucket, domain and server, here and at Cloudflare /
   Hostinger, with its status; a Hostinger VPS connects in one click; ask Claude to put a site online or create a
   database, it is done the standard way.
+- **E-mail** (Settings -> Features): your IMAP/SMTP mailboxes (Gmail, Outlook.com, OVH, Purelymail...) - read,
+  sort, search, reply, forward, drafts - and Claude can sort them and prepare replies for you to send.
 - **Team** (Settings -> Features): chat with the people you work with, server to server; Claude summarizes
   what you pick and any message can go to a session.
 - **Agents** (Settings -> Features): lasting roles inside a topic - a writer, an order handler, a lead sorter - each

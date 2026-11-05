@@ -1,11 +1,12 @@
 // What starts an agent ("When it works" in its profile panel): its schedules (normal Claude cron jobs in its folder,
 // also on the Crons page), its feed triggers (a webhook made for it is a feed source + a trigger on it: its address,
-// what came in, a test), and its Telegram thread.
+// what came in, a test), its new-mail triggers (read-only here: set in its settings, E-mail section) and its Telegram
+// thread.
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Clock, MoreHorizontal, Pencil, Play, Rss, Send, Trash2, Webhook } from 'lucide-react'
+import { ChevronRight, Clock, Mail, MoreHorizontal, Pencil, Play, Rss, Send, Trash2, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { agentKeys, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron, useTestAgentTrigger } from '@/lib/queries'
+import { agentKeys, useMailAccounts, useSettings, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron, useTestAgentTrigger } from '@/lib/queries'
 import type { AgentDetail, AgentTrigger, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, Cron } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -34,8 +35,12 @@ function AddRow({ icon: Icon, label, onClick, testId }: { icon: React.ComponentT
 
 /** "When it works": the agent's triggers as sentences (schedules, webhooks with their address and what came in,
  * feed filters, Telegram), each switchable, then the rows that add one. */
-export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
+export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail; onMailSettings?: () => void }) {
   const t = useT()
+  const { data: settings } = useSettings()
+  const mailOn = !!settings?.mail_page
+  const watching = (a.mail || []).filter((g) => g.trigger?.enabled)
+  const { data: mailboxes } = useMailAccounts(mailOn && watching.length > 0)
   const lang = useLang()
   const patch = usePatchAgent()
   const test = useTestAgentTrigger()
@@ -143,6 +148,24 @@ export function AgentTriggers({ agent: a }: { agent: AgentDetail }) {
           </div>
         )
       })}
+      {mailOn &&
+        watching.map((g) => (
+          <button
+            key={g.account}
+            type="button"
+            onClick={onMailSettings}
+            className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-left hover:bg-accent/50"
+            data-testid="agent-mail-trigger-row"
+          >
+            <Mail className="size-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1 truncate text-sm">
+              <Sensitive length={10}>
+                {t('agents.mail.when', { address: mailboxes?.find((x) => x.id === g.account)?.address || g.account, folder: g.trigger?.folder || 'INBOX' })}
+              </Sensitive>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </button>
+        ))}
       <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5">
         <Send className="size-4 shrink-0 text-primary" />
         <span className="min-w-0 flex-1 text-sm">{t('agents.when.telegram')}</span>
