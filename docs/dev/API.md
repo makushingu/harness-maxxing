@@ -243,7 +243,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | POST | `/api/telegram/sync` | – | (threads modes; `simple`: nothing to do, `{created:0, deleted:0, …}`) makes the threads match: "Crons" + "Alerts" + one per open session (human, not archived, active in the last `thread_days` days, ≤ 50; created / renamed / deleted; a thread found deleted - on a send or a rename - is reopened for its session; Telegram has no silent check, so threads are not probed) → `{created:int, deleted:int, topics_enabled:bool, error:string\|null, notice:string\|null}` (topics disabled for the bot → `topics_enabled:false`, `notice` set and `error` null, everything goes to the main chat). Also automatic: a few seconds after any session change and every 10 min |
 | PUT | `/api/telegram/settings` | partial settings (`mode`, `notify_crons`, `notify_system`, `login_alerts`, `reply_mode`, `thread_days` 1–365; `mirror_web` = older clients: true → mode `mirror`, false → `threads` when it was `mirror`) | `{ok, mode, deleting:int}` - to `simple`: the session threads and Crons / Alerts / Notifications are deleted from Telegram in the background (`deleting` = how many; agents' threads stay); to a threads mode: created by the next sync |
 | POST | `/api/telegram/test` | – | sends a test message and checks the receiving side → `{ok, sent, poller:{running, last_poll_ok, last_poll_age, error, error_code}, webhook:{url, pending_updates, last_error}\|null, problems:[string]}` (`ok` = sent and no problem: poller stopped or in error, no getUpdates for 5 min, webhook set) · `409 not_linked` · `502 telegram_error` (not sent; same fields) |
-| DELETE | `/api/telegram` | – | unlink + forget token, threads and the reply map (`messages.json`) |
+| DELETE | `/api/telegram` | – | unlink + forget token, threads and the reply map (`messages.db`) |
 
 Agent threads (agent.json `telegram: true`): `config.telegram.agent_threads = {agent path: {tid, name}}`, one permanent
 thread per agent named `🤖 <display name> · <project>/<topic>`, created on its first result, renamed when the name
@@ -251,7 +251,7 @@ changes, never deleted by the session sync, deleted with the agent. A message th
 "telegram")` (the bot answers "⏳ <name> is on it." or why it did not start); threads off: results go to the main
 chat with `🤖 <name>` in front, and a reply to one of them fires the agent the same way.
 
-Replies (every mode): `state_dir('telegram')/messages.json` maps `"<chat>:<message id>"` -> `{sid}` or `{agent}`
+Replies (every mode): `state_dir('telegram')/messages.db` (SQLite) maps `"<chat>:<message id>"` -> `{sid}` or `{agent}`
 (newest 5000, 60 days): the user's messages, the live status, the answers, the bell, `/sessions` cards. A message that
 replies to a mapped one goes to that session (un-archived) or fires that agent, unless it is written in a session's own
 thread. Alerts = events of the Notifications feed with buttons: `feed.py` calls `gateway.post_alert(ev)` /

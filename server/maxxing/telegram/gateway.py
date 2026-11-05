@@ -14,7 +14,7 @@ Modes (`config.telegram.mode`, see `mode()`)
 - "simple" (default of new installs): one chat to follow. A message that answers nothing asks in which
   topic ("where?" buttons, or "↩ Continue" the last session), the session runs WITHOUT a thread and every
   message about it (live status, answer, bell) is sent as a reply in the chat. Replying to any of those
-  messages continues that session: `config.state_dir('telegram')/messages.json` maps (chat, message id) ->
+  messages continues that session: `config.state_dir('telegram')/messages.db` maps (chat, message id) ->
   {sid} | {agent}. Alerts (sign-ins, two-step sign-in, server problems, health problems of the dashboard,
   failed jobs, agents' approvals, `post_alert`) land in the same chat. Agents with the `telegram` option keep
   their own thread.
@@ -53,7 +53,7 @@ State files (state_dir('telegram')):
                from Telegram), health:{issue id: {chat, mid, html, seen}}}
                (`last_error` = older versions; status() still reports it as poll_error or sync_error)
   offset.json {offset}
-  messages.json  {"<chat>:<message id>": {sid|agent, at}} (replies -> their session or agent)
+  messages.db    SQLite msgs(k "<chat>:<message id>", v {sid|agent}, at) (replies -> their session or agent)
   notes.json  {"p:<approval id>" | "al:<alert id>": [chat, message id, html]} (messages edited later)
 """
 from __future__ import annotations
@@ -68,6 +68,7 @@ import logging
 import os
 import re
 import secrets
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -465,35 +466,96 @@ _msgs_lock = threading.Lock()
 
 
 def _msgs_path() -> Path:
-    return config.state_dir("telegram") / "messages.json"
+    return config.state_dir("telegram") / "messages.db"
+
+
+_msgs_conn: dict[str, Any] = {"key": None, "c": None}     # one connection per process (closing one = a checkpoint)
+
+
+def _msgs_open(p: Path) -> sqlite3.Connection:
+    for attempt in (0, 1):
+        try:
+            c = sqlite3.connect(p, timeout=10, isolation_level=None, check_same_thread=False)
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("PRAGMA synchronous=NORMAL")      # no fsync per send: a crash may lose the last few, fine here
+            c.execute("CREATE TABLE IF NOT EXISTS msgs(k TEXT PRIMARY KEY, v TEXT NOT NULL, at REAL NOT NULL)")
+            c.execute("CREATE INDEX IF NOT EXISTS msgs_at ON msgs(at)")
+            return c
+        except sqlite3.DatabaseError as e:
+            if attempt or not any(w in str(e).lower() for w in ("not a database", "malformed", "corrupt")):
+                raise
+            log.warning("telegram message map unreadable: started again")
+            for suffix in ("", "-wal", "-shm"):
+                Path(f"{p}{suffix}").unlink(missing_ok=True)
+    raise AssertionError("unreachable")
+
+
+def _msgs_db() -> sqlite3.Connection:
+    """The map, a small SQLite table (one row per message: a send no longer rewrites thousands of entries). Any
+    process; call it under `_msgs_lock`. Reopened when the file was deleted or replaced (unlink, forget). The older
+    messages.json is taken in once; an unreadable base is started again (it is only routing)."""
+    p = _msgs_path()
+    try:
+        st = p.stat()
+        key = (str(p), st.st_dev, st.st_ino)
+    except OSError:
+        key = None
+    if key is None or key != _msgs_conn["key"]:
+        if _msgs_conn["c"] is not None:
+            _msgs_conn["c"].close()
+            _msgs_conn["c"] = None
+        c = _msgs_open(p)
+        st = p.stat()
+        _msgs_conn.update(key=(str(p), st.st_dev, st.st_ino), c=c)
+    c = _msgs_conn["c"]
+    old = p.with_name("messages.json")
+    if old.exists():
+        m = config.read_json(old, {}) or {}
+        rows = [(k, json.dumps({x: y for x, y in v.items() if x != "at"}), v["at"])
+                for k, v in (m.items() if isinstance(m, dict) else []) if isinstance(v, dict)
+                and isinstance(v.get("at"), (int, float))]
+        c.executemany("INSERT OR IGNORE INTO msgs(k, v, at) VALUES (?,?,?)", rows)
+        old.unlink(missing_ok=True)
+    return c
 
 
 def bind_messages(chat: Any, ids: list, target: dict) -> None:
     """Remember that the messages `ids` of `chat` belong to `target` ({"sid": …} or {"agent": path}): a reply to
-    one of them goes there. Blocking (small file), any thread."""
+    one of them goes there. Blocking (small write), any thread."""
     ids = [i for i in ids if isinstance(i, int)]
     if not ids or chat is None:
         return
+    now = time.time()
     with _msgs_lock:
-        m = config.read_json(_msgs_path(), {}) or {}
-        if not isinstance(m, dict):
-            m = {}
-        now = time.time()
-        for i in ids:
-            m.pop(f"{chat}:{i}", None)
-            m[f"{chat}:{i}"] = {**target, "at": now}
-        cut = now - MSGS_DAYS * 86400
-        m = {k: v for k, v in list(m.items())[-MSGS_KEEP:] if isinstance(v, dict) and float(v.get("at") or 0) >= cut}
         try:
-            config.write_json(_msgs_path(), m)
-        except OSError:
+            c = _msgs_db()
+            with c:
+                c.execute("BEGIN")
+                c.executemany("INSERT OR REPLACE INTO msgs(k, v, at) VALUES (?,?,?)",
+                              [(f"{chat}:{i}", json.dumps(target), now) for i in ids])
+                c.execute("DELETE FROM msgs WHERE at<?", (now - MSGS_DAYS * 86400,))
+                c.execute("DELETE FROM msgs WHERE rowid IN (SELECT rowid FROM msgs ORDER BY at DESC, rowid DESC "
+                          "LIMIT -1 OFFSET ?)", (MSGS_KEEP,))
+        except (OSError, sqlite3.Error):
             log.warning("telegram message map not saved", exc_info=True)
+
+
+def _msgs_all() -> dict:
+    """The whole map {"<chat>:<message id>": {sid|agent, at}}, oldest first (tests, checks)."""
+    with _msgs_lock:
+        rows = _msgs_db().execute("SELECT k, v, at FROM msgs ORDER BY at, rowid").fetchall()
+    return {k: {**json.loads(v), "at": at} for k, v, at in rows}
 
 
 def bound(chat: Any, mid: Any) -> dict | None:
     """The session ({"sid"}) or agent ({"agent"}) a message of the chat belongs to, or None."""
-    m = config.read_json(_msgs_path(), {}) or {}
-    v = m.get(f"{chat}:{mid}") if isinstance(m, dict) else None
+    try:
+        with _msgs_lock:
+            r = _msgs_db().execute("SELECT v FROM msgs WHERE k=?", (f"{chat}:{mid}",)).fetchone()
+        v = json.loads(r[0]) if r else None
+    except (OSError, sqlite3.Error, ValueError):
+        log.warning("telegram message map not read", exc_info=True)
+        return None
     return v if isinstance(v, dict) and (v.get("sid") or v.get("agent")) else None
 
 
@@ -3179,6 +3241,7 @@ async def forget() -> None:
         tg.pop("two_factor", None)                     # no bridge, no second step
     mutate_tg(fn)
     for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path(), _msgs_path(),
+              Path(f"{_msgs_path()}-wal"), Path(f"{_msgs_path()}-shm"), _msgs_path().with_name("messages.json"),
               config.state_dir("telegram") / "notes.json"):
         try:
             p.unlink()
