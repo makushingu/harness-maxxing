@@ -237,7 +237,7 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
             grouped = False
             if cur.lastrowid % 50 == 0:
                 c.execute("DELETE FROM events WHERE at<?", (now - RETENTION_DAYS * 86400,))
-    bus.invalidate("feed", *(("agents",) if agent else ()))
+    bus.invalidate("feed", *((f"agents:{agent}",) if agent else ()))
     if notify and not grouped:
         _to_telegram(ev)
     elif grouped and ev.get("ref"):
@@ -311,7 +311,7 @@ def update(event_id: int, *, title: str | None = None, body: str | None = None, 
     if r is None:
         return None
     ev = _row(r)
-    bus.invalidate("feed", *(("agents",) if ev.get("agent") else ()))
+    bus.invalidate("feed", *((f"agents:{ev['agent']}",) if ev.get("agent") else ()))
     if notify and ev.get("ref"):
         _alert_out(ev, new=False)
     return ev

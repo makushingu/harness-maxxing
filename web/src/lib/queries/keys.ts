@@ -94,11 +94,23 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   license: [qk.license, ['system']],
   infra: [['infra']],
   team: [['team']],
-  agents: [['agents']],
+  // an agent was created, changed or removed (templates and the sandbox check do not move with it)
+  agents: [['agents', 'list'], ['agents', 'one'], ['agents', 'thread'], ['agents', 'layout']],
+  agents_layout: [['agents', 'layout']],
   /** someone started / stopped writing, came online: the list and the faces only */
   team_live: [['team', 'state']],
   mcp: [['mcp']],
   approvals: [['approvals']],
+}
+
+/** Query keys of one bus topic: `agents:<path>` = that agent's thread or unread changed (a message, a feed event
+ *  of the agent, "seen"): the list's counters, its page and its thread, not every agent's. */
+export function busKeysOf(topic: string): readonly (readonly unknown[])[] {
+  if (topic.startsWith('agents:')) {
+    const path = topic.slice(7)
+    return [['agents', 'list'], ['agents', 'one', path], ['agents', 'thread', path]]
+  }
+  return BUS_KEYS[topic as BusTopic] || []
 }
 
 /** Data the bus keeps fresh on its own (file watchers + every write path): no refetch when the tab is shown
