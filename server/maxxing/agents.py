@@ -685,22 +685,65 @@ def delete(path: str) -> None:
         workspace._delete(path, "agent")
     except workspace.WorkspaceError as e:
         raise AgentError(e.status, e.code, e.message) from None
+    _drop_triggers([path])
+    for ext in ("json", "jsonl"):
+        _state_file(path, ext).unlink(missing_ok=True)
+    _invalidate()
+
+
+def _drop_triggers(paths: list[str]) -> None:
+    """Deleted agents: their cron jobs are deleted (kept in the cron archive) and their Telegram threads dropped."""
+    if not paths:
+        return
     try:
         from . import crons
         for j in crons.list_jobs():
-            if j.get("topic_path") == path:
+            if j.get("topic_path") in paths:
                 crons.delete_job(j["id"])
     except Exception:
-        log.exception("could not delete the cron jobs of %s", path)
-    for ext in ("json", "jsonl"):
-        _state_file(path, ext).unlink(missing_ok=True)
-    try:                                                # its Telegram thread goes with it
+        log.exception("could not delete the cron jobs of %s", paths)
+    try:                                                # their Telegram threads go with them
         from .telegram import gateway
-        if path in gateway.agent_threads():
-            gateway.drop_agent_thread(path, delete=True)
+        threads = gateway.agent_threads()
+        for path in paths:
+            if path in threads:
+                gateway.drop_agent_thread(path, delete=True)
     except Exception:
-        log.exception("could not drop the Telegram thread of %s", path)
-    _invalidate()
+        log.exception("could not drop the Telegram threads of %s", paths)
+
+
+def under(prefix: str) -> list[str]:
+    """Agent paths inside a project ("projects/<p>") or a topic folder."""
+    parts = prefix.strip("/").split("/")
+    if len(parts) == 2:
+        topics = [p.name for p in (_ws() / prefix / "topics").glob("*") if SLUG_RE.match(p.name)]
+    elif len(parts) == 4:
+        topics = [parts[3]]
+    else:
+        return []
+    return [agent_path(parts[1], t, n) for t in sorted(topics) for n in names(parts[1], t)]
+
+
+def deleted_with(prefix: str, paths: list[str]) -> None:
+    """A project or topic went to the Trash with these agents: their cron jobs and Telegram threads go, their place
+    on the Agents page too (their thread and state stay: a restore from the Trash brings them back)."""
+    _drop_triggers(paths)
+    try:
+        f = _layout_file()
+        if f.exists():
+            with _layout_lock:
+                lay = _clean_layout(config.read_json(f, {}))
+                lay["agents"] = {p: [x for x in xs if not x.startswith(prefix + "/")] for p, xs in lay["agents"].items()}
+                if prefix.count("/") == 1:
+                    name = prefix.split("/")[1]
+                    lay["projects"] = [p for p in lay["projects"] if p != name]
+                    lay["colors"].pop(name, None)
+                    lay["agents"].pop(name, None)
+                config.write_json(f, _clean_layout(lay))
+    except OSError:
+        log.exception("agents layout not cleaned (%s)", prefix)
+    if paths:
+        _invalidate()
 
 
 def remap(old_prefix: str, new_prefix: str) -> None:
