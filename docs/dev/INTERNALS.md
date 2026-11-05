@@ -374,7 +374,32 @@ call it), only the API and the page are cut.
 - User secrets (Keys vault) live in secrets.json under `"vault": {name: {value, note, expose, updated}}`.
   `config.exposed_env()` (owner: organisation, in maxxing/vault.py) -> dict of secrets flagged `expose`,
   merged into every Claude turn's environment by the runner spawner (sessions/spawn.py currently reads the vault
-  itself - same result) and into shell cron jobs.
+  itself - same result) and into shell cron jobs. Secret files: see `maxxing.vault_files` (`vault_files` key).
+
+## maxxing.vault_files  (owner: organisation)
+Secret FILES of the Keys vault (a keystore, a service-account JSON, a certificate): content a text value cannot hold
+(binary, several kB). Same names as text keys (`vault.check_name`: NAME_RE, RESERVED, `MAXXING_*`), and a name is
+either a text key or a file, never both (`name_taken`; `vault.put` refuses a name that is a file).
+- Storage: the bytes in `STATE/secret-files/<NAME>` (directory mode 700, file mode 600, re-applied on every write),
+  the metadata in secrets.json under `"vault_files": {NAME: {filename, size, sha256, note, expose, updated}}`.
+  `filename` is the original name, display only (directories and control characters dropped, ≤ 100 chars), never used
+  as a path. Size: 1 byte to `MAX_SIZE` (1 MiB), binary allowed, else `VaultError("invalid_value")`.
+- `put(name, data=None, filename=None, note=None, expose=None, create=False)`: new name needs `data`
+  (`file_required`); `None` fields keep their value (no `data` = metadata only). The bytes go to a temp file of the
+  same directory (`mkstemp`, chmod 600, fsync) then `os.replace`; the metadata is saved under `config._lock` like
+  `vault.put`. `delete(name) -> bool` removes file + entry. `list_files()` -> metadata only, sorted, never the
+  content. `read(name) -> bytes | None` (CLI `get-file`; no HTTP route calls it), `exists(name)`.
+- `exposed_files_env() -> {NAME: "/abs/path"}` for entries flagged `expose` whose file exists (a regular file, not a
+  symlink); never raises. The value is the PATH, never the content. Merged wherever `vault.exposed_env()` is:
+  `sessions.spawn._exposed_vault` (so `auth_env()` and the shell cron jobs through it) and the fallback of
+  `crons._job_env`. An agent's turn (`auth_env(keys=...)`) never gets a file: its `keys` setting is about text keys.
+- Not in the backup: `backup.collect` walks the workspace only and prunes any `secret-files` folder
+  (`PRUNE_DIRS`); `secrets.json` is on its deny list. The folder is under the state dir, which the sandbox of agents
+  already hides (`agent_guard.secret_paths`), and with `protect_secrets` Claude's tools refuse `STATE/secret-files/**`
+  (`spawn.protected_paths`).
+- Agent guard: `maxxing keys put-file|get-file|delete-file` are refused in an agent's turn like `set` / `delete`
+  (`cmd_keys._handler`); a file is never available to an agent, even one listed in its `keys`.
+- Possible follow-up: certificate expiry (parse a PEM/PKCS#12 in the list); the sha256 is the fingerprint for now.
 
 ## maxxing.crons  (owner: organisation)
 - `run_job(id) -> Run | None` (blocking; None = unknown or already running) · `spawn_run(id)` · `sync_crontab()`

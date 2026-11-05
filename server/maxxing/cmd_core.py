@@ -560,6 +560,8 @@ def do_init(a: argparse.Namespace) -> dict:
         report["secret"] = f"{a.secret_from_stdin} {'stored' if val else 'removed'}"
     if config.secrets_path().exists():
         os.chmod(config.secrets_path(), 0o600)
+    if (st / "secret-files").is_dir():
+        os.chmod(st / "secret-files", 0o700)
 
     ws = Path(raw["workspace"])
     report["workspace_created"] = copy_templates(ws)

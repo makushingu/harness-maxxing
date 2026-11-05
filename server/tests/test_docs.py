@@ -46,7 +46,7 @@ def test_full_and_cache(client, docs):
 def test_all_updates_in_settings(client, docs):
     """Settings -> Updates lists every version (the docs have no changelog page)."""
     import re
-    n = len(re.findall(r"^## ", (config.CODE / "CHANGELOG.md").read_text(), re.M))
+    n = len(re.findall(r"^## (?!Unreleased)", (config.CODE / "CHANGELOG.md").read_text(), re.M))   # not yet a version
     r = client.get("/api/system/changelog", params={"limit": 500}).json()
     assert len(r["entries"]) == n and r["entries"][0]["current"]
     assert "changelog" not in [x["slug"] for x in client.get("/api/docs").json()]

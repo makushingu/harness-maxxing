@@ -22,6 +22,7 @@ ROUTERS = [
     "backup",
     "settings",
     "secrets",
+    "secret_files",
     "system",
     "docs",
     "dashboard",

@@ -31,12 +31,15 @@ def normalize(v: str) -> str:
 
 
 def parse(text: str) -> list[dict]:
-    """-> [{version, label, current, body}] newest first (body = the markdown of that section)."""
+    """-> [{version, label, current, body}] newest first (body = the markdown of that section). A `## Unreleased`
+    section (changes waiting for a version number, see CONTRIBUTING.md) is not an entry yet: it is skipped."""
     out: list[dict] = []
     cur: dict | None = None
     for line in text.splitlines():
         m = _HEAD.match(line)
-        if m:
+        if m and m["version"].lower() == "unreleased":
+            cur = None
+        elif m:
             cur = {"version": m["version"], "label": (m["label"] or "").strip(),
                    "current": normalize(m["version"]) == normalize(__version__), "body": []}
             out.append(cur)
