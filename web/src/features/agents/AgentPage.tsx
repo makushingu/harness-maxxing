@@ -58,8 +58,8 @@ export default function AgentPage() {
   const [profile, setProfile] = React.useState(false)
   const openProfile = () => (dockable ? setDocked(!wide) : setProfile(true))
   // ?settings=<section> (a link from the E-mail page): the profile opens, then its settings on that section
-  const [params] = useSearchParams()
-  const wantSettings = !!params.get('settings') && !!a
+  const [search] = useSearchParams()
+  const wantSettings = !!search.get('settings') && !!a
   React.useEffect(() => {
     if (wantSettings && !wide) {
       if (dockable) setDocked(true)
