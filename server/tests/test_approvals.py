@@ -358,3 +358,11 @@ def test_an_agent_sees_only_its_keys(client, topic, mx, monkeypatch, capsys):
     assert agent_guard.check_cli(["keys", "get", "MX_TEST_VAR"]) is None
     monkeypatch.setenv("MAXXING_AGENT_DEPTH", "-5")
     assert "were changed" in agent_guard.check_cli(["agents", "send", "x", "hi"])
+
+
+def test_a_lone_surrogate_in_the_tool_input_still_asks(tmp_path):
+    from maxxing import approval_mcp
+    f = tmp_path / "x.json"
+    approval_mcp.write_atomic(f, {"id": "x", "input": {"command": "echo a\ud800b"}})
+    assert approval_mcp.read(f)["input"]["command"] == "echo a\ud800b"
+    assert [p.name for p in tmp_path.iterdir()] == ["x.json"]           # no .tmp left behind
