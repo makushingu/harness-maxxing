@@ -43,7 +43,8 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
 - **Agents** (optional) - lasting roles inside a topic (a writer, an order handler, a monitor) with their own role,
   memory and character, started by hand, a schedule, a webhook, a notification, their Telegram thread or another
   agent; a daily budget, outside text kept as data, approvals (also on Telegram), Claude Code's sandbox; ready-made
-  agents and Claude Code agent files (`maxxing agents`).
+  agents and Claude Code agent files (`maxxing agents`); agent groups: 2-6 agents of a project in one conversation
+  with you, answering in turn and handing work over with `@name`, with a shared folder.
 - **Tasks** - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos

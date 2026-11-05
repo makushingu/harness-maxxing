@@ -94,9 +94,12 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   license: [qk.license, ['system']],
   infra: [['infra']],
   team: [['team']],
-  // an agent was created, changed or removed (templates and the sandbox check do not move with it)
-  agents: [['agents', 'list'], ['agents', 'one'], ['agents', 'thread'], ['agents', 'layout']],
+  // an agent was created, changed or removed (templates and the sandbox check do not move with it); the groups show
+  // the names, faces and switches of their members
+  agents: [['agents', 'list'], ['agents', 'one'], ['agents', 'thread'], ['agents', 'layout'], ['agent-groups', 'list'], ['agent-groups', 'one']],
   agents_layout: [['agents', 'layout']],
+  // a group was created, changed or removed, or one of them spoke (its own topic below carries its messages)
+  'agent-groups': [['agent-groups', 'list'], ['agent-groups', 'one']],
   /** someone started / stopped writing, came online: the list and the faces only */
   team_live: [['team', 'state']],
   mcp: [['mcp']],
@@ -109,6 +112,11 @@ export function busKeysOf(topic: string): readonly (readonly unknown[])[] {
   if (topic.startsWith('agents:')) {
     const path = topic.slice(7)
     return [['agents', 'list'], ['agents', 'one', path], ['agents', 'thread', path]]
+  }
+  /** `agent-groups:<group path>` = that group's conversation or state (who speaks, paused members) changed. */
+  if (topic.startsWith('agent-groups:')) {
+    const path = topic.slice(13)
+    return [['agent-groups', 'list'], ['agent-groups', 'one', path], ['agent-groups', 'messages', path]]
   }
   return BUS_KEYS[topic as BusTopic] || []
 }

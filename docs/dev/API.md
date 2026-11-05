@@ -459,6 +459,49 @@ fails before Claude starts. With `rules`: `hooks.PreToolUse` = `<python> -m maxx
 change). A session in a topic gets `--agents <json>` with the topic's agents that have `subagent` on
 (`agent_format.subagents`). Tests: `MAXXING_SANDBOX_CHECK=0` skips the availability check.
 
+## Agent groups
+
+In the Agents page (same `agents_page` switch: `404 feature_off` while off). A group = a folder
+`projects/<p>/groups/<g>/` (`CLAUDE.md` = its goal, `group.json`, `files/` = the shared folder) whose members are 2-6
+agents of project `<p>`; only the owner writes to it, its members answer one turn at a time (`agent_rooms.py`, see
+INTERNALS.md#maxxing.agent_rooms).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/agent-groups` | – | `{groups: [Group]}` (every project, sorted by project then folder) |
+| POST | `/api/agent-groups` | `{project, name (folder slug), display_name?, emoji?, goal?, members: [{path, role?}], lead?, shared_files?, trust_members?, limits?}` | `Group` · `400 invalid_name` / `bad_member` (not an agent of the project) / `members` (not 2-6) · `404 not_found` / `unknown_member` · `409 exists` / `too_many` (20 per project) |
+| GET | `/api/agent-groups/{p}/{g}` | – | `Group` · `404 not_found` |
+| PATCH | `/api/agent-groups/{p}/{g}` | the create fields but `project` / `name` (`limits` merged; `goal` rewrites CLAUDE.md; `members` checked like create) | `Group` (members removed: their group session and queued turns dropped) |
+| DELETE | `/api/agent-groups/{p}/{g}?keep_files=` | – | `{ok}`: turn stopped, folder and room deleted; `keep_files=true` moves `files/` to `projects/<p>/groups/.kept-<g>-<unix time>/` first. Members and their sessions stay |
+| GET | `/api/agent-groups/{p}/{g}/messages?limit=200&before=<at>` | – | `{messages: [GroupMessage]}` oldest first |
+| POST | `/api/agent-groups/{p}/{g}/messages` | `{text}` (≤ 4000) | `{message: GroupMessage, queued: [agent path]}`: the owner's message; the members named (`@slug`, `@all`/`@everyone`/`@tous`; none: the lead, else the last member who spoke, else the first not paused) are queued (replacing pending hand-overs) and the first starts unless a turn runs. `stop @slug` pauses that member (a message holding only stops queues nobody); naming a paused member resumes it · `400 empty` |
+| POST | `/api/agent-groups/{p}/{g}/stop` | – | `{ok}`: queue emptied, the running turn stopped (`service.stop`); its answer is still posted, it hands over to nobody |
+| POST | `/api/agent-groups/{p}/{g}/reset` | – | `{ok}`: "New topic" - stop, then every member starts a new session at its next turn |
+| POST | `/api/agent-groups/{p}/{g}/seen` | – | `{ok}`: `unread` 0 |
+| POST | `/api/agent-groups/{p}/{g}/members/{mp}/{mt}/{ma}/pause` | `{paused: bool}` | `Group` · `404 not_member` |
+
+```
+Group = {path: "projects/<p>/groups/<g>", project, name, display_name, emoji, goal (CLAUDE.md description),
+         members: [{path, handle (its @name: the folder name; when two members share it, from the display name, else <topic>-<folder>; stored in group.json), slug (= handle), role, exists, display_name, avatar, enabled, paused, speaking}], lead (member path|""),
+         shared_files: bool (default true), trust_members: bool (default true),
+         limits: {waves: 3 (1-6), replies: 10 (1-30), per_hour: 40 (1-200)}, created,
+         files_path ("projects/<p>/groups/<g>/files" | "" when shared_files is off), busy (a turn runs or is queued),
+         speaking (member path | ""), speaking_session (sid | ""), last_at, unread: 0|1}
+GroupMessage = {id, at, kind: "message"|"pass"|"skip"|"note"|"stop", author: "me"|<member path>|"", text,
+                session? (the member's group session), cost?, reason? (skip: disabled|budget|busy|missing|failed|error),
+                limit? (note: waves|replies|per_hour), reset? (note of New topic)}
+```
+Turns: a member keeps one session per group (`state.sessions`), continued with `service.send_message`; a new one is
+`create_session(<agent path>, source "agent", cron true, env {MAXXING_AGENT, MAXXING_AGENT_TRIGGER: "group:<path>",
+MAXXING_AGENT_DEPTH: 0, MAXXING_AGENT_GROUP: <path>})`. The agent's `gate()` applies except `rate` (the group's limits
+replace runs per hour). `run_settings(path, outside, session, group)` adds `files/` to `writable` and makes the turn
+outside (approvals forced unless `trust_outside`) when it is a hand-over and `trust_members` is off. The answer
+(`last_assistant_text`) is posted by `agents.on_turn_end` -> `agent_rooms.on_turn_end`: `PASS` / empty = `pass`; the
+members it names are queued as the next wave. The member's thread gets `run` / `result` lines with `group: <path>`
+(no Telegram message for group turns). Bus topics `agent-groups` and `agent-groups:<path>`. CLI:
+`maxxing agents group list | show <p>/<g> | create <p>/<g> --member A[=role]... | update <p>/<g> ... | say <p>/<g> <text>` (`group` is in
+`agent_guard.AGENT_OWNER_ONLY`: refused in every agent turn).
+
 ## Approvals
 
 A turn of an agent with `approvals: true` runs in permission mode `default` with
