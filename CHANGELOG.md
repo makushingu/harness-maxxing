@@ -15,6 +15,23 @@ New:
 
 ## 2.0.0-alpha.118 - 2026-11-05
 
+New:
+- **E-mail** (Settings -> Features, off by default): your mailboxes next to your sessions, from any provider with
+  IMAP and SMTP (Gmail with an app password, OVH, o2switch, Purelymail...). Read, sort, search, flag, archive, move;
+  write, reply, reply all and forward with attachments and your signature; drafts are kept in the mailbox. Messages
+  leave through your mailbox's own server, at most 20 recipients a message and 100 a day: it is a mailbox, not a
+  newsletter tool. In a session, Claude sorts your mail and prepares replies as drafts for you to send
+  (`maxxing mail`).
+- **E-mail for your agents**: give an agent one of your mailboxes, with only the rights it needs (read, write
+  drafts, file, mark, send) and, if you like, only the mail of some senders, checked by your provider so a forged
+  sender stays out. By default every message it wants to send waits for your OK in Notifications (or only the ones to
+  new recipients, or none). It can start on each new mail; it never marks your mail read, and the page shows what it
+  did ("seen by Mail sorter · filed in Invoices"). Ready-made agents: Mail sorter, Mail replies, Invoices. Mailboxes
+  are checked every 10 minutes (or 5, 30, 60), Refresh checks now, and **All mailboxes** shows them together.
+- **Infra -> E-mail**: where each of your addresses goes (Cloudflare Email Routing forwards, Hostinger e-mail plans),
+  whether it ends in the E-mail page, and the DNS health of your mail domains (MX, SPF, DKIM, DMARC) with what to fix.
+  It only reads.
+
 Fixes:
 - **Behind a proxy in Docker**: the address opened by `maxxing proxy on` is harder to misuse: a connection must send
   its request within 10 s and at most 512 are open at once, only private addresses and real domain names are

@@ -522,6 +522,14 @@ unless public (no DNS rebinding to a local address). `team_insecure` / MAXXING_T
   `hosted_by` from CNAME suffixes then IP ranges (Cloudflare proxy last). build.py: public A records fill `records`
   when no zone was read, so sites/domains link to our servers (`hosted_by: "server"`) for any registrar.
   Registry `domains: [...]` = domains added by hand (source `added`).
+- `mailinfo.py` (Infra -> E-mail, `GET /api/infra/mail`, `maxxing infra mail`): view only, outside the snapshot.
+  Mailboxes of `maxxing.mail`; Cloudflare `/zones/{id}/email/routing` (+ `/rules`, `/rules/catch_all` when the list
+  has no `all` matcher, only for zones with routing on, 4 zones at once) and `/accounts/{id}/email/routing/addresses`;
+  Hostinger `/api/mail/v1/orders` then per order `/mailboxes`, `/aliases`, `/forwarders`, `/catchalls` (`page`,
+  `per_page=100`). `routes()` flattens both into address -> destinations, `account` = the E-mail page mailbox it ends
+  in. DNS facts per domain (MX, SPF + lookups following include:/redirect= up to 12 queries, DMARC, DKIM on
+  `DKIM_SELECTORS`), problems computed at read time. Domains checked: zones with routing on or unreadable,
+  Hostinger order domains, E-mail page domains (not the public providers of `mail.KNOWN`). Caches 5 min / 1 h.
 - `connect.py`: Harness SSH key `<state>/ssh/infra_ed25519` (made on first need, dir 700). `auto_connect()` (in
   `refresh()`, after the providers): a running Hostinger VPS whose root keys (API `GET .../virtual-machines/<id>/ssh-keys`)
   include one of `~/.ssh/*.pub` or the Harness key, and whose IPs no registered server has, is registered (label

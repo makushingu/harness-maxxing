@@ -41,4 +41,5 @@ ROUTERS = [
     "agents",
     "agent_groups",
     "approvals",
+    "mail",
 ]

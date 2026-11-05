@@ -7,6 +7,83 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch, worktree `wt-email`): `maxxing/mail/`
+  (`__init__` accounts + detection + SMTP sign-in, `imap.py` live IMAP with one pooled connection per account,
+  `send.py` writing), `api/mail.py` (`/api/mail/*`, docs/dev/API.md#mail), `cmd_mail.py`. Accounts in
+  `<state>/mail/accounts.json`, password = vault `MAIL_<ID>_PASSWORD` (expose false). Writing: plain text,
+  `compose(mode=reply|replyall|forward|draft)` returns the starting fields (signature block then quote), `send()`
+  goes through the account's SMTP (`open_smtp`: AUTH PLAIN by hand for non-ASCII credentials, smtplib only sends
+  ASCII), appends to Sent unless the SMTP host files it (`AUTO_SENT`: gmail, office365, outlook), flags the replied
+  message `\Answered`, drops the draft it came from (`imap.drop`, drafts folder only). Drafts: `imap.append_draft`
+  (APPENDUID, else SEARCH by Message-ID). Caps: `MAX_RECIPIENTS` 20 a message, `mail_send_per_day` (config, default
+  100) recipients a mailbox a day in `<state>/mail/sent-count.json` (given back when the send fails), 25 MB of
+  attachments. `maxxing mail write` saves a draft unless `--send`. Tests `tests/test_mail.py` (+ `tests/fake_smtp.py`;
+  `MAXXING_TEST_IMAP=host:port:user:pw` runs a round trip on a real IMAP server). Mail is never put in the feed.
+
+- E-mail for agents (`maxxing/mail/{access,poll,outbox,store}.py`): agent.json `mail` = `[Grant]` (`access.clean_grants`,
+  called by `agents.clean`; empty by default), enforced in agent turns by `cmd_mail.Guard` (identity from
+  `agent_guard.agent_turn`, never the environment): mailboxes of the grants only, rights read/draft/move/mark/send,
+  `senders` filter = sender seen only when `from_verified` and matching (lists: IMAP `FROM` narrowing + check, up to
+  `imap.SCAN_MAX`), recipients limited to the same patterns, `read` never sets `\Seen`, attachments saved only in the
+  agent folder / `writable_dirs` (not `locked_paths`), `--attach` only from its topic (not `secret_paths` /
+  `private_paths`), `add` refused. `from_verified` (`access.verified`): only the topmost `Authentication-Results`
+  counts, and only when its authserv-id's base domain is trusted (`access.trusted_servers`: the account's IMAP/SMTP
+  hosts + MX + `PROVIDER_ALIASES`, or `auth_servers`); dmarc=pass header.from, or dkim/spf pass aligned with the
+  From domain. `approve_send` always|new|never: `outbox.queue` files a draft, keeps the fields + files in
+  `<state>/mail/outbox/<id>/`, posts a feed event (source `mail`, ref `mailsend:<id>`, actions allow/deny/open,
+  `feed.HANDLERS["mailsend"] = "mail.outbox"`); `approve` claims the row once and sends with `draft` (dropped),
+  `deny` drops the draft, `draft_done` ends it when the owner sends / deletes the draft from the page. "new" =
+  recipients absent from `contacts` (senders seen by the checks, past recipients) and not the replied sender.
+  `<state>/mail/mail.db` (`store.py`, a cache set aside when unreadable): poll positions (UIDVALIDITY, last UID),
+  newest 500 mails per mailbox, contacts, `seen_by` (by Message-ID, else folder#uid, 90 days), outbox. Checks
+  (`poll.py`, server loop in `api/mail.py` every 30 s): mailboxes whose `poll_min` (5/10/30/60, default 10) is over,
+  INBOX + folders watched by triggers; first check of a folder (or new UIDVALIDITY) only notes the position; new
+  mail matching an enabled trigger of an enabled agent (grant senders, trigger senders / subject, not the mailbox's
+  own address) -> one `agents.fire(trigger="mail:<id>", text=..., wait=True)` per agent and check (outside text:
+  approvals forced unless `trust_outside`), busy -> `<state>/mail/pending.json`, retried next tick (a day at most).
+  API: `/api/mail/refresh`, `/all`, `/outbox`, `/outbox/{id}/send|deny`; accounts + `poll_min`, `auth_servers`,
+  `last_check`, `agents`, `waiting`; rows + `from_verified`, `message_id`, `seen_by`. CLI `maxxing mail refresh|outbox`;
+  `maxxing mail` allowed in sandboxed turns (`CLI_ALLOWED`, filtered by Guard). `maxxing agents create --mail
+  MAILBOX`; templates `mail-sort`, `mail-support`, `mail-invoices` (`mail` field, `fields(..., mail_account)`; the UI
+  asks the mailbox). UI: agent settings E-mail section (`AgentMail.tsx`), mail triggers in the agent's triggers,
+  mailbox picker for mail templates, E-mail page: Refresh, last check, All mailboxes, outbox banner, seen-by faces,
+  verified sender, `?account=&folder=&draft=` and `?add=` links. Tests `tests/test_mail_agents.py`.
+
+- E-mail hardening (before beta). `maxxing mail` runs as root outside the agent's sandbox, so: `imap._search_args`
+  turns every control character into a space (a CR/LF inside `UID SEARCH TEXT "..."` sent commands of its own);
+  `Guard.read_file` / `Guard.write_file` check the path of the opened file descriptor (`/proc/self/fd`), never follow
+  a final link (`O_PATH | O_NOFOLLOW` handle checked first, then reopened through `/proc/self/fd`; a new file
+  `O_CREAT | O_EXCL` relative to the checked folder's fd), refuse non-regular files and a second name
+  (`st_nlink > 1`), never create a folder as root (`OUT/` must exist), attachments at most 25 MB (`ATTACH_MAX`).
+  Header values (subject, names, addresses, attachment names) lose their control characters (`imap._line`). Sender checks: `access.authserv_id` /
+  `_cfws_free` (comments and quoted strings never count); `access.detect` (the base domain topping >= 90 % of the 50
+  newest INBOX mails by UID - never the Date: header -, >= 10 mails from >= 3 sender domains, own domain left out;
+  samples = `messages.auth_server` + `messages.received` (INTERNALDATE), `store.auth_samples`, noted by the checks,
+  `poll._sample` fills them on a new mailbox); `access.sender_check` -> `{state: owner|auto|detected|none, server}`
+  (`auto` = `STAMPING` provider hosting the mailbox's IMAP/SMTP servers - not the MX alone; `detected` = one of the
+  mailbox's own IMAP/SMTP/MX base domains, samples spanning >= 7 days, offered to the owner), also in
+  `MailAccount.sender_check`; `imap.trust` = the owner's `auth_servers` bases, or the `auto` server, else nothing.
+  Contacts (approve_send "new") = recipients of what the owner sent from Harness or allowed (`send.send(...,
+  contacts=False)` for an agent's own send); the senders of incoming mail and the replied sender no longer count;
+  mail.db `user_version` 1 empties `contacts` and adds `messages.auth_server`. `mail read` and the check's event text
+  use random markers; mail kept for a busy agent (`pending.json`) keeps the rows (headers + shown texts, 200 at
+  most), the text and its marker are built again when the turn starts. In an agent turn: `outbox` lists its own
+  rows, `-a` resolves among its mailboxes only, `refresh` only asks the server (`poll.request`:
+  `<state>/mail/.refresh-<id>`, due at the next tick; an agent never moves the positions). A new UIDVALIDITY drops the
+  cached mails of the folder. `auth_servers` refuses IP addresses. `cmd_mail` and `outbox.feed_action` refuse when the page is off (409 `mail_off`).
+  Checks: per-mailbox non-blocking lock (thread set + `flock LOCK_NB` on `<state>/mail/.poll-<id>.lock`; busy ->
+  `{skipped: "busy"}`); `imap.new_since` takes the oldest `limit` after `last_uid` (`more` -> `poll._again`, due at the
+  next tick); `pending.json` under `ProcessLock("mail-pending")`, text capped at 60 000 chars. Outbox: any exception
+  of `approve` puts the row back to `waiting`; `outbox.unstick()` (each tick) turns `sending` older than 10 min back
+  to `waiting` with a note; `outbox.forget` ends the waiting rows of a removed mailbox ("Mailbox removed").
+  `store.prune` (daily, from `outbox.tidy`): `seen_by` 90 days, contacts 2 years / 5 000 per mailbox. MX through
+  `dnsinfo.doh_api()`, a failed lookup cached 5 min (`imap._mx_of`). After SMTP accepted a message, its follow-ups
+  (copy in Sent, \Answered, draft dropped) never raise: a sent message never waits again. `/api/mail/accounts`, `seen_by` lookups off the
+  event loop; the trust is computed before the IMAP connection is held; `/refresh` reports any error per mailbox.
+  UI: sender check line + "Trust <server>" in Edit mailbox, warning under an agent's sender list, Notifications
+  decisions refresh the mail queries. Tests `tests/fake_imap.py` (an IMAP server in memory that logs every command)
+  + `tests/test_mail_imap.py`.
+
 - Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
   agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
   (configured or forced for an outside event) `autoAllowBashIfSandboxed` is false and `Bash(maxxing:*)` is no longer
