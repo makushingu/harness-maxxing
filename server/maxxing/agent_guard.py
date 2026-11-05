@@ -134,6 +134,51 @@ def locked_paths(path: str) -> list[str]:
     return out + [str(p) for p in (folder / ".mcp.json", topic / ".mcp.json") if p.exists()]
 
 
+# what an agent never writes in its topic, even with `writable: "."`: the other agents (and new ones), the topic's
+# own role and memory (read by every session of the topic), its Claude Code settings
+TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json")
+
+
+def writable_dirs(path: str, a: dict) -> list[str]:
+    """The `writable` folders of a sandboxed agent, as absolute paths. "." (the whole topic) becomes every entry of the
+    topic but TOPIC_LOCKED: the sandbox's denyWrite wins over allowWrite, so the topic's `agents/` cannot be denied
+    without denying the agent's own folder, and a new folder there would be a new agent. A folder in `agents/` (or one
+    holding it through a link) is never writable."""
+    topic = (config.workspace() / path).parent.parent
+    t, agents_dir = topic.resolve(), (topic / "agents").resolve()
+    out: list[str] = []
+    for w in a.get("writable") or []:
+        p = (topic / w).resolve()
+        if p == t:
+            try:
+                kids = sorted(topic.iterdir())
+            except OSError:
+                kids = []
+            todo = [k.resolve() for k in kids if k.name not in TOPIC_LOCKED]
+        else:
+            todo = [p]
+        for q in todo:
+            if q == agents_dir or agents_dir in q.parents or q in agents_dir.parents or q == t:
+                continue
+            if str(q) not in out:
+                out.append(str(q))
+    return out
+
+
+def topic_edit_denied(path: str) -> list[str]:
+    """`permissions.deny` for Write/Edit (not sandboxed, --add-dir lets them into the `writable` folders): the other
+    agents' folders, any agent's settings / role / Claude Code files (a new agent included), the topic's own files."""
+    folder = config.workspace() / path
+    topic = folder.parent.parent
+    ag = topic / "agents"
+    out = [f"Edit(/{ag}/*/{f})" for f in ("agent.json", "CLAUDE.md", ".mcp.json")] + [f"Edit(/{ag}/*/.claude/**)"]
+    try:
+        out += [f"Edit(/{d}/**)" for d in sorted(ag.iterdir()) if d.is_dir() and d.name != folder.name]
+    except OSError:
+        pass
+    return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / '.claude'}/**)"]
+
+
 def mode(requested: str) -> str:
     """Permission mode of a sandboxed turn: never bypass (Claude Code lets every domain through in bypass)."""
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"
@@ -144,8 +189,7 @@ def settings(path: str, a: dict) -> dict:
     out: dict = {}
     folder = config.workspace() / path
     if a.get("sandbox"):
-        topic = folder.parent.parent
-        write = [str(folder)] + [str((topic / w).resolve()) for w in a.get("writable") or []]
+        write = [str(folder)] + writable_dirs(path, a)
         secrets = secret_paths()
         locked = locked_paths(path)
         out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
@@ -158,6 +202,7 @@ def settings(path: str, a: dict) -> dict:
             deny += [f"Read(/{g})", f"Edit(/{g})"]
         for p in locked:                                # its settings and role: the owner's, never the agent's
             deny.append(f"Edit(/{p + '/**' if p.endswith('/.claude') else p})")
+        deny += [r for r in topic_edit_denied(path) if r not in deny]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does
         out["permissions"] = {"deny": deny,
@@ -181,9 +226,12 @@ def add_dirs(path: str, a: dict) -> list[str]:
     if not a.get("sandbox"):
         return []
     topic = (config.workspace() / path).parent.parent
+    dirs = writable_dirs(path, a)
+    if "." in (a.get("writable") or []):            # the whole topic: Write/Edit keep to it (topic_edit_denied)
+        dirs = [str(topic.resolve())] + [d for d in dirs if not Path(d).is_relative_to(topic.resolve())]
     out: list[str] = []
-    for w in a.get("writable") or []:
-        out += ["--add-dir", str((topic / w).resolve())]
+    for d in dirs:
+        out += ["--add-dir", d]
     return out
 
 

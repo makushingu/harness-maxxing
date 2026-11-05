@@ -36,13 +36,13 @@ def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     assert sb["network"]["allowedDomains"] == ["api.github.com", "*.example.com"]
     root = client.get("/api/workspace/tree").json()["root"]
     assert sb["filesystem"]["allowWrite"][0] == f"{root}/{A}"
-    assert f"{root}/projects/acme/topics/blog" in sb["filesystem"]["allowWrite"]
+    assert f"{root}/projects/acme/topics/blog" not in sb["filesystem"]["allowWrite"]     # "." = its entries (below)
     from maxxing import config
     assert str(config.STATE) in sb["filesystem"]["denyRead"]
     deny = s["permissions"]["deny"]
     assert f"Read(/{config.STATE}/**)" in deny and any(r.startswith("Edit(/") and ".maxxing.json" in r for r in deny)
     assert s["permissions"]["allow"] == ["Bash(maxxing:*)", "WebFetch(domain:api.github.com)", "WebFetch(domain:*.example.com)"]
-    assert argv[argv.index("--add-dir") + 1].endswith("/drafts")
+    assert argv[argv.index("--add-dir") + 1] == f"{root}/projects/acme/topics/blog"     # "." holds drafts
     # switched off: the agent's own mode, no sandbox
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
@@ -241,3 +241,32 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 9}})
     assert agents._changed_during(A, "sid-2") == []
     assert agents._changed_during(A, "unknown") == []
+
+
+def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic, mx):
+    _on(client)
+    _create(client, writable=["."])
+    assert client.patch("/api/agents/acme/blog/writer", json={"writable": ["agents/other"]}).status_code == 400
+    _create(client, name="other")
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    t = root / "projects/acme/topics/blog"
+    (t / "site").mkdir()
+    (t / "README.md").write_text("hi")
+    (t / "memory.md").write_text("")
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    s = _settings(argv)
+    write = s["sandbox"]["filesystem"]["allowWrite"]
+    assert write[0] == f"{root}/{A}" and f"{t}/site" in write and f"{t}/README.md" in write
+    for p in (t, t / "agents", t / "agents/other", t / "CLAUDE.md", t / "memory.md", t / ".claude"):
+        assert str(p) not in write, p
+    assert all(not w.startswith(f"{t}/agents/") for w in write[1:])
+    deny = s["permissions"]["deny"]                         # Write / Edit, let into the topic by --add-dir
+    for r in (f"Edit(/{t}/agents/other/**)", f"Edit(/{t}/agents/*/agent.json)", f"Edit(/{t}/agents/*/CLAUDE.md)",
+              f"Edit(/{t}/agents/*/.claude/**)", f"Edit(/{t}/CLAUDE.md)", f"Edit(/{t}/memory.md)"):
+        assert r in deny, r
+    assert f"Edit(/{t}/agents/writer/**)" not in deny                  # its own memory stays its own
+    assert argv[argv.index("--add-dir") + 1] == str(t)
+    from maxxing import agents
+    assert agents.clean({"writable": ["agents", "agents/x", "drafts"]})["writable"] == ["drafts"]
