@@ -1700,16 +1700,22 @@ NGINX
 </VirtualHost>
 APACHE
     ;;
-    docker-proxy*|traefik*|"another web server")
-      if [ "$HAS_DOCKER" = 1 ] || [ "$WEB_BUSY" != "another web server" ]; then
+    docker-proxy*|dockerd*|traefik*|"another web server")
+      local bridge=""
+      if [ "$HAS_DOCKER" = 1 ]; then
+        bridge=$(ip -4 -o addr show docker0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1 || true)
+      fi
+      if [ -n "$bridge" ]; then
         # a proxy in a container (Traefik of Dokploy, Coolify...) cannot reach 127.0.0.1: a second, private
         # address guarded by a secret header (maxxing proxy on, proxylisten.py) and a ready-made Traefik block
-        if mx proxy on --domain "$DOMAIN" >>"$WORK/proxy.log" 2>&1; then
+        if mx proxy on "$bridge:8790" --domain "$DOMAIN" >>"$WORK/proxy.log" 2>&1; then
           ok "Docker keeps ports 80/443 - copy the Traefik block saved in $f into Traefik's dynamic configuration"
           info "(Dokploy: /etc/dokploy/traefik/dynamic/, Coolify: /data/coolify/proxy/dynamic/), then https://$DOMAIN opens Harness Maxxing"
           return 0
         fi
         warn "maxxing proxy on failed ($WORK/proxy.log) - generic block saved instead"
+      elif [ "$HAS_DOCKER" = 1 ]; then
+        warn "Docker has no docker0 bridge here: for a proxy in a container, see maxxing proxy on (generic block saved)"
       fi
       cat > "$f" <<OTHER
 # Harness Maxxing behind your own reverse proxy ($WEB_BUSY on ports 80/443):
@@ -1738,6 +1744,10 @@ setup_access() {
   esac
   if [ "$ACCESS" != domain ] && [ -f "$CADDY_SITE" ]; then
     warn "an old Caddy site exists ($CADDY_SITE) - remove it and its import line in $CADDYFILE if unused"
+  fi
+  if [ "$ACCESS" != domain ] && [ -n "$(cfg_get proxy_listen)" ]; then   # no longer public through a Traefik
+    mx proxy off >/dev/null 2>&1 || true
+    warn "the address for a proxy in Docker is closed - remove the harness-maxxing block from your Traefik"
   fi
 }
 

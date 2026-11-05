@@ -3,6 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.118 - 2026-11-05
+
+Fixes:
+- **Behind a proxy in Docker**: the address opened by `maxxing proxy on` is harder to misuse: a connection must send
+  its request within 10 s and at most 512 are open at once, only private addresses and real domain names are
+  accepted, and `maxxing proxy on --new-secret` replaces the secret header. The installer uses Docker's real bridge
+  address, no longer stops when Docker has no default bridge, and closes the address when you leave domain access.
+
 ## 2.0.0-alpha.117 - 2026-11-05
 
 New:
