@@ -2,10 +2,10 @@
 // (avatar: {color, skin, hair, hair_color, face, accessory}). One <rect> per run of pixels on a 16x16 grid with crisp
 // edges: sharpest at multiples of 16 px (16 in a session header, 32 in lists, 64-96 on the Agents page). The tile
 // behind it is a soft tint of its outfit colour (an accent colour of the UI), so it sits on light and dark themes.
-import type * as React from 'react'
+import * as React from 'react'
 import { cn } from '@/lib/utils'
 import type { AgentAvatar } from '@/lib/types'
-import { GRID, normalize, pixelsOf, type Run } from './pixels'
+import { AVATAR_PARTS, GRID, normalize, pixelsOf, type Run } from './pixels'
 
 export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, HAIR, INK, OUTFIT, SKIN, projectColor, randomAvatar, type AvatarPart } from './pixels'
 
@@ -24,18 +24,19 @@ type Props = {
   animate?: boolean
 }
 
-const Rects = ({ runs }: { runs: Run[] }) => (
+// The runs come from pixelsOf's cache (same array for the same face), so a redraw of the page skips the rects.
+const Rects = React.memo(({ runs }: { runs: Run[] }) => (
   <>
     {runs.map((r) => (
       <rect key={`${r.x}.${r.y}`} x={r.x} y={r.y} width={r.w} height={1} fill={r.fill} />
     ))}
   </>
-)
+))
 
 /** The tile: a rounded square (corners cut by one pixel). */
 const TILE = `M1 0h${GRID - 2}v1h1v${GRID - 2}h-1v1h-${GRID - 2}v-1h-1v-${GRID - 2}h1z`
 
-export function AgentAvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = false }: Props) {
+function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = false }: Props) {
   const a = normalize(avatar)
   const px = pixelsOf(a, mood === 'sleep')
   const blink = animate && px.blink.length > 0
@@ -66,3 +67,13 @@ export function AgentAvatarIcon({ avatar, size = 32, className, title, tile = tr
     </svg>
   )
 }
+
+/** Memoized on the 6 parts (a refetch hands a new avatar object with the same face): lists and the Office draw
+ *  thousands of rects. */
+export const AgentAvatarIcon = React.memo(AvatarIcon, (p, n) => {
+  const { avatar: pa, ...pr } = p
+  const { avatar: na, ...nr } = n
+  const keys = new Set([...Object.keys(pr), ...Object.keys(nr)]) as Set<keyof typeof pr>
+  for (const k of keys) if (pr[k] !== nr[k]) return false
+  return pa === na || (!!pa && !!na && AVATAR_PARTS.every((k) => pa[k] === na[k]))
+})
