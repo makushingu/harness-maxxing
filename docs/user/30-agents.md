@@ -228,6 +228,8 @@ until you switch it on):
   other command-line logins (GitHub CLI, cloud tools). Claude's own Read / Edit tools are refused there too;
 - they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). The same domains
   are allowed for its web page reads;
+- its commands run without asking, inside these walls; with **ask before risky actions** on (or in a run started
+  from outside) they ask like any other action, `maxxing` included, unless an allowed tool covers them;
 - it never runs in **bypass** mode (the sandbox would not hold the domain list): **bypass** becomes **accept
   edits**;
 - inside its runs, `maxxing` only does the agent's own work: `feed post|list`, `agents send|show|list|templates`,
