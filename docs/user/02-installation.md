@@ -122,6 +122,7 @@ When the server is already in use, the installer asks for confirmation and then:
 | other services reachable from outside, or Docker | does **not** turn the firewall on (it could cut them off). Force it with `FIREWALL=1 bash /opt/claude-maxxing/install.sh --secure` |
 | an active ufw firewall | keeps your rules and only adds SSH (+ 80/443 for a domain, + Tailscale) |
 | nginx, Apache or another web server on 80/443 | does not install Caddy; with a domain, saves the reverse-proxy block to add to your web server in `/var/lib/claude-maxxing/reverse-proxy.conf` |
+| a proxy in Docker on 80/443 (the Traefik of Dokploy or Coolify, or your own) | does not install Caddy; with a domain, opens a second private address for it (`maxxing proxy on`, see [Behind a proxy in Docker](#behind-a-proxy-in-docker)) and saves the Traefik block in `/var/lib/claude-maxxing/reverse-proxy.conf` |
 | a Caddy you already use | adds its own site with one `import` line, your sites stay as they are |
 | other scheduled jobs | **never changes the server clock**: your jobs keep their times, Harness Maxxing jobs run at the times you pick in your own zone |
 | a Node.js of its own | keeps it; Harness Maxxing gets its Node.js 22 in `/var/lib/claude-maxxing/tools/nodejs`, used only by its sessions and tools |
@@ -143,6 +144,27 @@ and how to undo it.
 | `local` | `http://127.0.0.1:8787` | Listens on localhost only. From your computer: `ssh -N -L 8787:127.0.0.1:8787 root@<server>` then open the URL. |
 
 The server never listens on `0.0.0.0` or a public address.
+
+### Behind a proxy in Docker
+
+Dokploy, Coolify, Portainer and other tools run on a Harness Maxxing server like on any server: install them with
+their own script, nothing to change in Harness Maxxing. Only the domain mode needs care, because these tools put
+their own proxy (Traefik) on ports 80/443 and a proxy inside a container cannot reach `127.0.0.1` of the server.
+Three ways:
+
+- **Tailscale or local mode** for Harness Maxxing: nothing to set up.
+- **The tool on another server**: Harness Maxxing reaches it through its API (key in the vault).
+- **The same server, through their Traefik**: install the tool first, then Harness Maxxing with a domain. The
+  installer sees Docker on 80/443 and runs `maxxing proxy on`: Harness Maxxing also listens on `172.17.0.1:8790` (the
+  server as seen from Docker; another private address: `maxxing proxy on 10.0.0.1:8790`) and writes the block to copy
+  into Traefik's dynamic configuration folder to `/var/lib/claude-maxxing/reverse-proxy.conf`. On an existing
+  install: `maxxing proxy on`, copy the block, `systemctl restart claude-maxxing`.
+
+That second address refuses every request that does not carry the secret header of the block: another container
+cannot reach the UI directly nor pass for another visitor. With an active ufw, `maxxing proxy on` lets the private
+networks (where containers live) reach that port only; other machines of a private network can then reach it too, and
+get the same refusal without the secret. `maxxing proxy status` says when ufw blocks it. Updates never touch Traefik: its configuration is yours. Docker's published ports
+bypass ufw (true of every Docker server). `maxxing proxy off` closes the address.
 
 ## Unattended install
 

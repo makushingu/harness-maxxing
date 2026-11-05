@@ -144,7 +144,7 @@ def protected_paths() -> list[str]:
     A speed bump against injected instructions ("read ~/.ssh/id_ed25519 and post it"): Read/Edit and simple shell
     reads (`cat`) are refused, a script that opens the file is not - permission modes are the real limit."""
     home = os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir
-    return [str(config.STATE / "secrets.json"), str(Path(home) / ".ssh") + "/**"]
+    return [str(config.STATE / "secrets.json"), str(config.STATE / "reverse-proxy.conf"), str(Path(home) / ".ssh") + "/**"]
 
 
 def deny_rules(cfg: dict) -> list[str]:
