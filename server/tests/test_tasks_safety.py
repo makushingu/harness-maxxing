@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+from types import SimpleNamespace
 
 from maxxing import search
 from maxxing.api import tasks as tasks_api
@@ -110,8 +111,8 @@ def test_reading_the_tasks_does_not_copy_the_whole_file(client, mx, monkeypatch)
         {"id": f"t_{i}", "title": f"task {i}", "labels": ["a"]} for i in range(50)]}))
     assert client.get("/api/tasks").status_code == 200        # warm the cache and the workspace sync
     copies = []
-    real = tasks_api.copy.deepcopy
-    monkeypatch.setattr(tasks_api.copy, "deepcopy", lambda x, *a: copies.append(1) or real(x, *a))
+    real = tasks_api.copy.deepcopy                            # only the tasks module's copies (not the app's loops)
+    monkeypatch.setattr(tasks_api, "copy", SimpleNamespace(deepcopy=lambda x, *a: copies.append(1) or real(x, *a)))
     assert len(client.get("/api/tasks").json()["tasks"]) == 50
     assert tasks_api.summary()["open"] == 50
     assert copies == []
