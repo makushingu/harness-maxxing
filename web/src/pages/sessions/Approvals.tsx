@@ -18,10 +18,14 @@ const AGENT_PATH = /^projects\/[^/]+\/topics\/[^/]+\/agents\/[^/]+$/
 export function ApprovalCards({ session }: { session: Session | undefined }) {
   const maybe = !!session && (AGENT_PATH.test(session.path) || !!session.approvals)
   const { data } = useSessionApprovals(session?.id || '', maybe)
-  if (!data?.length) return null
+  // The one denied first on its own comes first (on top, where the stack starts).
+  const cards = React.useMemo(() => [...(data || [])].sort((a, b) => (a.expires ?? Infinity) - (b.expires ?? Infinity)), [data])
+  if (!cards.length) return null
+  // At most 40 % of the screen's height (30 % on a phone sideways, where one card would be more): the thread and the
+  // composer stay in sight, the cards scroll inside.
   return (
-    <div className="mx-auto grid w-full max-w-(--mx-read,860px) gap-2 px-3 pb-2">
-      {data.map((a) => (
+    <div className="mx-auto grid max-h-[40dvh] w-full auto-rows-max [@media(max-height:500px)]:max-h-[30dvh] max-w-(--mx-read,860px) shrink-0 gap-2 overflow-y-auto overscroll-contain px-3 pb-2">
+      {cards.map((a) => (
         <ApprovalCard key={a.id} approval={a} />
       ))}
     </div>
@@ -45,15 +49,16 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
   }
   return (
     <div role="group" aria-label={t('approval.title')} className={cn('min-w-0 text-[13px]', !plain && 'mx-rise overflow-hidden rounded-lg border border-primary/40 bg-card shadow-xs', className)}>
-      <div className={cn('flex min-w-0 items-center gap-2', plain ? 'pb-2' : 'border-b bg-primary/6 px-2.5 py-1.5')}>
+      {/* Narrow card: the countdown goes to its own line (and wraps), then the title gives way; the tool name never does. */}
+      <div className={cn('flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5', plain ? 'pb-2' : 'border-b bg-primary/6 px-2.5 py-1.5')}>
         {!plain && <ShieldQuestion className="size-3.5 shrink-0 text-primary" />}
-        {!plain && <span className="shrink-0 font-medium text-foreground">{t('approval.title')}</span>}
-        <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+        {!plain && <span className="min-w-0 truncate font-medium text-foreground">{t('approval.title')}</span>}
+        <span className="flex max-w-full shrink-0 items-center gap-1.5 text-muted-foreground" title={a.tool}>
           <Icon className="size-3.5 shrink-0" />
           <span className="truncate font-mono text-[12px]">{name}</span>
         </span>
         {left != null && (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{t('approval.left', { time: fmtDuration(left) })}</span>
+          <span className="ml-auto max-w-full text-xs text-muted-foreground tabular-nums">{t('approval.left', { time: fmtDuration(left) })}</span>
         )}
       </div>
       <div className={cn('grid min-w-0 gap-2', !plain && 'px-2.5 py-2')}>
