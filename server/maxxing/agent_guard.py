@@ -336,11 +336,11 @@ def hook(path: str) -> int:
 
 
 # ---- the maxxing CLI inside a sandboxed turn ---------------------------------------------------------
-UNIT_RE = re.compile(r"/maxxing-([0-9a-f]{8})\.service(?:/|$)")
+UNIT_RE = re.compile(r"/maxxing-([0-9a-f]{8})(?:-\d+)?\.service(?:/|$)")
 
 
-def sandboxed_turn() -> str | None:
-    """The agent path when this process belongs to a sandboxed agent turn (its systemd unit), else None."""
+def turn_meta() -> dict | None:
+    """The session of the turn this process belongs to (its systemd unit maxxing-<sid8>), else None."""
     try:
         cg = Path("/proc/self/cgroup").read_text()
     except OSError:
@@ -348,17 +348,50 @@ def sandboxed_turn() -> str | None:
     m = UNIT_RE.search(cg)
     if not m:
         return None
-    return sandboxed_session(m.group(1))
+    from .sessions import store
+    for sid in store.list_ids():
+        if sid.startswith(m.group(1)):
+            return store.read(sid) or {}
+    return None
+
+
+def agent_turn() -> dict:
+    """The agent run this process belongs to -> {path, depth} (path "" when none). In a turn's unit it comes from the
+    session the server wrote (the run's MAXXING_AGENT*), never from this process's environment, which the turn can
+    change (`env -u MAXXING_AGENT ...`); outside a unit (direct spawn, the owner's shell) the environment is all
+    there is. `tampered`: an agent turn whose environment says something else (refused by check_cli)."""
+    meta = turn_meta()
+    env = os.environ if meta is None else (meta.get("env") or {})
+    path = (env.get("MAXXING_AGENT") or "").strip()
+    try:
+        depth = max(0, int(env.get("MAXXING_AGENT_DEPTH") or 0))
+    except ValueError:
+        depth = 0
+    tampered = bool(meta is not None and path and (
+        (os.environ.get("MAXXING_AGENT") or "").strip() != path
+        or (os.environ.get("MAXXING_AGENT_DEPTH") or "0").strip() != str(env.get("MAXXING_AGENT_DEPTH") or "0")))
+    return {"path": path, "depth": depth, "tampered": tampered}
+
+
+def sandboxed_turn() -> str | None:
+    """The agent path when this process belongs to a sandboxed agent turn (its systemd unit), else None."""
+    meta = turn_meta()
+    p = (meta or {}).get("path") or ""
+    return p if p and _sandboxed(p) else None
+
+
+def _sandboxed(p: str) -> bool:
+    from . import agents
+    return agents.exists(p) and agents.load(p)["sandbox"]
 
 
 def sandboxed_session(sid8: str) -> str | None:
     """The agent path of session <sid8...> when it runs in a sandboxed agent folder, else None."""
-    from . import agents
     from .sessions import store
     for sid in store.list_ids():
         if sid.startswith(sid8):
             p = (store.read(sid) or {}).get("path") or ""
-            if agents.exists(p) and agents.load(p)["sandbox"]:
+            if _sandboxed(p):
                 return p
     return None
 
@@ -372,7 +405,11 @@ def check_cli(argv: list[str]) -> str | None:
     words = [a for a in argv if not a.startswith("-")]
     if not words:
         return None
-    if os.environ.get("MAXXING_AGENT") and words[0] == "agents" and len(words) > 1 and words[1] in AGENT_OWNER_ONLY:
+    turn = agent_turn()
+    if turn["tampered"]:
+        return ("Refused: the MAXXING_AGENT* variables of this agent turn were changed. Run `maxxing` with the "
+                "environment the run was started with.")
+    if turn["path"] and words[0] == "agents" and len(words) > 1 and words[1] in AGENT_OWNER_ONLY:
         return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
                 "triggers, settings or role included). Say what should change in your answer; the owner applies it "
                 "from the agent page or a session.")
