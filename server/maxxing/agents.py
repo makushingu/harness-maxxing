@@ -1235,11 +1235,13 @@ class Debouncer:
         self.pending: dict[tuple[str, str], dict] = {}
 
     def add(self, path: str, trigger: dict | str, text: str, source: str, debounce_s: float,
-            prompt: str = "") -> None:
+            prompt: str = "", depth: int = 0) -> None:
         tid = trigger if isinstance(trigger, str) else trigger["id"]
         k = (path, tid)
-        p = self.pending.setdefault(k, {"texts": [], "first": time.time(), "source": source, "prompt": prompt})
+        p = self.pending.setdefault(k, {"texts": [], "first": time.time(), "source": source, "prompt": prompt,
+                                        "depth": 0})
         p["texts"].append(text)
+        p["depth"] = max(p["depth"], depth)      # an event posted from an agent run: one hop of that chain
         p["due"] = p["first"] + max(0.0, debounce_s)
 
     def due(self, now: float | None = None) -> list[tuple[str, str, dict]]:
@@ -1275,7 +1277,7 @@ def scan_feed() -> int:
             for t in a["triggers"]:
                 if t["kind"] == "feed" and _matches(t, ev):
                     debouncer.add(a["path"], t, _event_text(ev), f"feed ({ev.get('source')})",
-                                  a["limits"]["debounce_s"], t.get("prompt") or "")
+                                  a["limits"]["debounce_s"], t.get("prompt") or "", depth=ev.get("hops") or 0)
                     n += 1
     config.write_json(st_file, {"last_id": max([last] + [int(e["id"]) for e in events])})
     return n
@@ -1289,7 +1291,8 @@ def flush_due() -> int:
             f"Event {i + 1}/{len(texts)}:\n{t}" for i, t in enumerate(texts))
         trig = "telegram" if tid == "telegram" else f"feed:{tid}"
         try:
-            fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"])
+            fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"],
+                 depth=p.get("depth") or 0)
             n += 1
         except Exception:
             log.exception("agent fire failed for %s", path)

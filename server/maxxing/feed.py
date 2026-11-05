@@ -42,7 +42,8 @@ OWN_THREAD = {"crons", "system", "security"}
 # Alerts: an event can carry buttons (`actions`), follow something (`ref`: "approval:<id>", "health:<id>",
 # "agent:<path>") and end (`resolved` = when, `resolution` = how). `act()` runs a button through the module of its
 # ref kind (HANDLERS) and is idempotent: a second click on a decided request gets the same event back.
-_ALERT_COLS = (("actions", "TEXT"), ("ref", "TEXT"), ("agent", "TEXT"), ("resolved", "REAL"), ("resolution", "TEXT"))
+_ALERT_COLS = (("actions", "TEXT"), ("ref", "TEXT"), ("agent", "TEXT"), ("resolved", "REAL"), ("resolution", "TEXT"),
+               ("hops", "INTEGER"))     # hops: posted from an agent run (its depth + 1), carried to the runs it starts
 HANDLERS = {"approval": "approvals", "health": "health"}       # ref kind -> module with feed_action(value, action, by)
 ACTION_STYLES = ("primary", "danger", "default", "link")
 _lock = threading.Lock()
@@ -150,7 +151,7 @@ def _row(r: sqlite3.Row) -> dict:
     return {"id": r["id"], "at": r["at"], "source": r["source"], "level": r["level"], "title": r["title"],
             "body": r["body"], "url": r["url"], "count": r["count"], "read": bool(r["read"]),
             "actions": _actions(r["actions"]), "ref": r["ref"], "agent": r["agent"], "resolved": r["resolved"],
-            "resolution": r["resolution"] or ""}
+            "resolution": r["resolution"] or "", "hops": r["hops"] or 0}
 
 
 def clean_source(source: str | None) -> str:
@@ -184,9 +185,11 @@ def _clean_url(url: str | None) -> str:
 
 def post(title: str, body: str = "", level: str = "info", source: str = "custom", url: str = "",
          dedupe: str | None = None, group: str | None = None, notify: bool = True, *,
-         actions: list[dict] | None = None, ref: str | None = None, agent: str | None = None) -> dict | None:
+         actions: list[dict] | None = None, ref: str | None = None, agent: str | None = None,
+         hops: int = 0) -> dict | None:
     """Add an event. Returns it, or None when `dedupe` says it was already posted. `actions` (buttons), `ref` (what it
-    follows) and `agent` (the agent it is about) make it an alert: see act() and update()."""
+    follows) and `agent` (the agent it is about) make it an alert: see act() and update(). `hops`: posted from an agent
+    run (agents.scan_feed starts the runs it triggers that many hops deep)."""
     title, body, url = _utf8(title), _utf8(body), _utf8(url)
     acts = _clean_actions(actions)
     ref = (_utf8(str(ref)) or "")[:300] or None if ref else None
@@ -218,8 +221,9 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
         else:
             try:
                 cur = c.execute("INSERT INTO events(at, source, level, title, body, url, dedupe, grp, actions, ref, "
-                                "agent) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                                (now, source, level, title, body, url, dedupe, group, acts, ref, agent))
+                                "agent, hops) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (now, source, level, title, body, url, dedupe, group, acts, ref, agent,
+                                 max(0, int(hops or 0)) or None))
             except sqlite3.IntegrityError:             # the same dedupe key inserted by a concurrent request
                 if dedupe:
                     return None
