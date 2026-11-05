@@ -91,13 +91,20 @@ export function useCreateAgent() {
 export function usePatchAgent({ errorToast = true }: { errorToast?: boolean } = {}) {
   return useMut(({ path, ...b }: AgentInput & { path: string }) => api.patch<Agent>(agentUrl(path), b), {
     errorToast,
+    // One at a time: some fields (triggers) are sent whole, so a later edit must not land before an earlier one.
+    scope: { id: 'agent-patch' },
     // Switches and small edits show at once (list, detail); the bus / invalidation reconciles.
     optimistic: ({ path, ...b }) => {
       const patch = <T extends Agent>(a: T): T => {
         if (a.path !== path) return a
-        const { display_name, avatar, limits, triggers: _t, ...rest } = b
+        const { display_name, avatar, limits, triggers, ...rest } = b
+        // Triggers already known (switched, edited, removed) show at once, so a second quick switch builds its
+        // list from this one; a new trigger waits for the server (its id).
+        const byId = new Map(a.triggers.map((x) => [x.id, x]))
+        const known = triggers?.every((x) => x.id && byId.has(x.id))
         return {
           ...a,
+          ...(triggers && known && { triggers: triggers.map((x) => ({ ...byId.get(x.id!)!, ...x, kind: 'feed' as const })) }),
           ...Object.fromEntries(Object.entries(rest).filter(([k]) => k in a)),
           ...(display_name !== undefined && { display_name }),
           ...(avatar && { avatar: { ...a.avatar, ...avatar } }),
