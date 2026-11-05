@@ -31,10 +31,27 @@ def test_parse_fields():
 
 @pytest.mark.parametrize("bad", ["", "* * * *", "61 * * * *", "* * * * * *", "*/0 * * * *", "5-1 * * * *",
                                  "@sometimes", "a * * * *", "* * 0 * *", "1,,2 * * * *",
-                                 "² * * * *", "٣ * * * *", "*/² * * * *"])           # Unicode digits: refused
+                                 "² * * * *", "٣ * * * *", "*/² * * * *",           # Unicode digits: refused
+                                 "0 9 * * monday", "0 9 * january *", "0 9 * * monkey"])  # cron refuses long names
 def test_parse_errors(bad):
     with pytest.raises(crons.CronError):
         crons.parse(bad)
+
+
+def test_a_refused_crontab_leaves_the_jobs_unchanged(monkeypatch):
+    keep = crons.create_job({"name": "Keep", "schedule": "@hourly", "command": "true"})
+    before = crons.jobs_path().read_text()
+
+    def refuse(text):
+        raise crons.CronError("crontab refused the update: bad day-of-week", "crontab_error")
+    monkeypatch.setattr(crons, "write_crontab", refuse)
+    with pytest.raises(crons.CronError):
+        crons.create_job({"name": "New", "schedule": "*/5 * * * *", "command": "true"})
+    with pytest.raises(crons.CronError):
+        crons.update_job(keep["id"], {"schedule": "*/10 * * * *"})
+    with pytest.raises(crons.CronError):
+        crons.delete_job(keep["id"])
+    assert crons.jobs_path().read_text() == before
 
 
 def test_next_runs_timezone():
