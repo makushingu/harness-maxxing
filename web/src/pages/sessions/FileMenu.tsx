@@ -9,7 +9,7 @@ import { downloadFile } from '@/features/files/download'
 import { copyText } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useOpenPreview } from './FilePreview'
-import { FILE_HREF } from './util'
+import { FILE_HREF, fileHrefPath } from './util'
 
 type At = { x: number; y: number; path: string }
 
@@ -17,8 +17,8 @@ type At = { x: number; y: number; path: string }
 function fileAt(el: Element | null): string | null {
   const hit = el?.closest<HTMLElement>(`[data-mx-file], a[href^="${FILE_HREF}"]`)
   if (!hit) return null
-  const p = hit.dataset.mxFile ?? decodeURIComponent((hit.getAttribute('href') || '').slice(FILE_HREF.length))
-  return p.startsWith('/') ? p : null
+  const p = hit.dataset.mxFile ?? fileHrefPath(hit.getAttribute('href') || '')
+  return p?.startsWith('/') ? p : null
 }
 
 export function FileMenu({ scope, onQuote }: { scope: React.RefObject<HTMLElement | null>; onQuote: (path: string) => void }) {
