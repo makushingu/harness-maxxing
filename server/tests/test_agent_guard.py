@@ -297,3 +297,22 @@ def test_sandbox_hides_transcripts_logins_and_the_rest_of_the_workspace(client, 
     deny = s["permissions"]["deny"]
     assert f"Read(/{root}/projects/zeta/**)" in deny and f"Read(/{t}/.env)" in deny and f"Read(/{t}/*/.env)" in deny
     assert f"Read(/{config.claude_dir()}/history.jsonl)" in deny
+
+
+def test_the_apparmor_profile_waits_for_a_sandboxed_agent(client, topic, mx, monkeypatch, tmp_path):
+    from maxxing import agent_guard
+    calls: list = []
+    monkeypatch.setattr(agent_guard, "load_profile", lambda: calls.append(1) or True)
+    agent_guard.ensure_profile()
+    assert calls == []                                         # tests (MAXXING_SANDBOX_CHECK=0): never
+    monkeypatch.setenv("MAXXING_SANDBOX_CHECK", "1")
+    monkeypatch.setattr(agent_guard.os, "geteuid", lambda: 0)
+    _on(client)
+    _create(client, sandbox=False)
+    assert calls == []
+    client.patch("/api/agents/acme/blog/writer", json={"sandbox": True})
+    assert calls == [1]
+    _create(client, name="other")
+    assert calls == [1, 1]
+    # the installer no longer loads it for everyone
+    assert "apparmor_parser" not in (Path(__file__).resolve().parents[2] / "install.sh").read_text()
