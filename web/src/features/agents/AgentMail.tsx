@@ -156,6 +156,9 @@ function GrantCard({ grant: g, account, onChange, onRemove }: { grant: MailGrant
           error={null}
           testid="agent-mail-senders"
         />
+        {g.senders.length > 0 && account?.sender_check && !['auto', 'owner'].includes(account.sender_check.state) && (
+          <p className="text-xs text-warning">{t('agents.mail.sendersUnchecked', { address: account.address })}</p>
+        )}
       </div>
 
       <div className="grid gap-3 border-t pt-3">
