@@ -655,12 +655,13 @@ export function ToolInput({ name, input, diff, display }: { name: string; input:
   const open = useOpenPreview()
   const file = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : null
   return (
-    <div className="grid min-w-0 gap-2">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
       {file && (
-        <Tooltip content={display && display !== file ? <span className="max-w-[min(80vw,640px)] font-mono break-all">{file}</span> : null}>
-          <button type="button" data-mx-file={file} draggable onClick={() => open(file)} className="inline-flex min-w-0 items-center gap-1.5 justify-self-start font-mono text-xs text-primary hover:underline">
-            <FileText className="size-3.5 shrink-0" />
-            <span className="truncate">{display || file}</span>
+        <Tooltip content={<span className="max-w-[min(80vw,640px)] font-mono break-all">{file}</span>}>
+          {/* A long path loses its folders first: the file name is what the user reads (and approves). */}
+          <button type="button" data-mx-file={file} draggable onClick={() => open(file)} className="inline-flex max-w-full min-w-0 items-center justify-self-start font-mono text-xs text-primary hover:underline pointer-coarse:min-h-8">
+            <FileText className="mr-1.5 size-3.5 shrink-0" />
+            <PathText path={display || file} />
           </button>
         </Tooltip>
       )}
@@ -684,6 +685,21 @@ export function ToolInput({ name, input, diff, display }: { name: string; input:
         <pre className="max-h-64 overflow-auto rounded-md bg-muted/60 px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{JSON.stringify(input, null, 2)}</pre>
       ) : null}
     </div>
+  )
+}
+
+/** A path on one line that shrinks its folders first (down to "…"), then the middle of the file name: its end
+ *  (extension included) always shows. */
+function PathText({ path }: { path: string }) {
+  const cut = path.lastIndexOf('/', path.length - 2) + 1
+  const base = Array.from(path.slice(cut))
+  const tail = base.length > 24 ? base.slice(-12).join('') : ''
+  return (
+    <>
+      {cut > 0 && <span className="min-w-[2ch] shrink-[1000] truncate">{path.slice(0, cut)}</span>}
+      <span className="min-w-0 truncate">{tail ? base.slice(0, -12).join('') : base.join('')}</span>
+      {tail && <span className="shrink-0 whitespace-pre">{tail}</span>}
+    </>
   )
 }
 
