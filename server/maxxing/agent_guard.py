@@ -9,8 +9,8 @@
                command, run outside, and in a sandboxed agent turn it only accepts a short list of sub-commands
                (`check_cli`), found from the turn's cgroup (systemd unit maxxing-<sid8>), not from an environment
                variable the turn could change.
-    rules      fixed rules of the agent ({tool, match, reason}): a PreToolUse hook (`python -m maxxing.agent_guard
-               hook <agent path>`) refuses a matching tool call and tells Claude why.
+    rules      fixed rules of the agent ({tool, match, reason}): a PreToolUse hook (`python -I ... agent_guard
+               hook <agent path>`, `hook_command`) refuses a matching tool call and tells Claude why.
 
 Ubuntu 24.04+ restricts user namespaces (kernel.apparmor_restrict_unprivileged_userns=1): bubblewrap needs an
 AppArmor profile allowing them (`APPARMOR_PROFILE`), or every sandboxed command fails. `available()` checks it all;
@@ -163,9 +163,17 @@ def settings(path: str, a: dict) -> dict:
         out["permissions"] = {"deny": deny,
                               "allow": ["Bash(maxxing:*)"] + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
     if a.get("rules"):
-        cmd = f"{shlex.quote(sys.executable)} -m maxxing.agent_guard hook {shlex.quote(path)}"
+        cmd = hook_command(path)
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}
     return out
+
+
+def hook_command(path: str) -> str:
+    """The rules hook, run by Claude Code outside the sandbox from the agent folder (which the agent writes): `-I`
+    keeps the folder (and PYTHONPATH) off sys.path, so a `maxxing/` package written there is never imported."""
+    boot = (f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parent.parent)!r}); "
+            "from maxxing.agent_guard import main; sys.exit(main(sys.argv))")
+    return f"{shlex.quote(sys.executable)} -I -c {shlex.quote(boot)} hook {shlex.quote(path)}"
 
 
 def add_dirs(path: str, a: dict) -> list[str]:

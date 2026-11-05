@@ -3,6 +3,7 @@ the Claude Code agent file format, subagents of a topic, "Continue in Sessions" 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -80,7 +81,7 @@ def test_rules_become_a_pretooluse_hook(client, topic, mx):
     wait_idle(client, run["session"]["id"])
     hooks = _settings(_calls()[-1]["argv"])["hooks"]["PreToolUse"]
     cmd = hooks[0]["hooks"][0]["command"]
-    assert hooks[0]["matcher"] == "*" and "maxxing.agent_guard hook" in cmd and cmd.endswith(A)
+    assert hooks[0]["matcher"] == "*" and " -I -c " in cmd and cmd.endswith(f"hook {A}")
     from maxxing import agent_guard
     rules = [{"tool": "Bash", "match": "sendmail", "reason": "Write a draft instead"},
              {"tool": "*", "match": "rm -rf", "reason": ""}]
@@ -96,6 +97,16 @@ def test_rules_become_a_pretooluse_hook(client, topic, mx):
     out = subprocess.run([sys.executable, "-m", "maxxing.agent_guard", "hook", A], capture_output=True, text=True,
                          input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}}))
     assert out.returncode == 0 and out.stdout == ""
+    # run from the agent folder, as Claude Code does: a `maxxing/` package the agent wrote there is never imported
+    from maxxing import agents
+    fake = agents.folder(A) / "maxxing"
+    fake.mkdir()
+    (fake / "__init__.py").write_text("")
+    (fake / "agent_guard.py").write_text("import sys; print('PWNED'); sys.exit(0)\n")
+    out = subprocess.run(cmd, shell=True, cwd=agents.folder(A), capture_output=True, text=True,
+                         env={**os.environ, "PYTHONPATH": str(agents.folder(A))},
+                         input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "sendmail x"}}))
+    assert "PWNED" not in out.stdout and json.loads(out.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys):
