@@ -44,6 +44,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (taken in and deleted on first use), one connection per process (`synchronous=NORMAL`, reopened when the file is
   replaced). A bound send was a 520 KB read + rewrite (62 ms at 5,000 entries), now ~0.2 ms;
   same limits (MSGS_KEEP newest, MSGS_DAYS). `_msgs_all()` lists it.
+- Feed: `feed.db` gets partial indexes `events_agent` (`agent IS NOT NULL`, for `agent_alerts`) and `events_pending`
+  (`at WHERE actions IS NOT NULL AND resolved IS NULL`), created on open. `list_events` returns `pending` on the first
+  page only (no `before`); `pending_count()` is kept like `source_counts()` (`_kept`: feed.db/WAL stamp + minute).
+  50k events: first page 28 ms -> 0.6 ms, "Load more" 32 -> 0.5 ms, cold pending count 49 -> 0.4 ms, `agent_alerts`
+  3.3 -> 0.5 ms.
+- Feed: `post(group=)` never folds into a resolved event; `resolve(ref)` ends every open event of the ref (returns
+  the newest); `act` seen/open (not by Telegram) and `mark_read` call `update_alert` for the open alerts they read.
 
 ## 2.0.0-alpha.116 - 2026-11-04
 
