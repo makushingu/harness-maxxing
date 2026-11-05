@@ -1567,10 +1567,8 @@ def flush_due() -> int:
             f"Event {i + 1}/{len(texts)}:\n{t}" for i, t in enumerate(texts))
         trig = "telegram" if tid == "telegram" else f"feed:{tid}"
         try:
-            fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"],
-                 depth=p.get("depth") or 0)
-            n += 1
-            r = fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"], wait=True)
+            r = fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"],
+                     depth=p.get("depth") or 0, wait=True)
         except Exception:
             log.exception("agent fire failed for %s", path)
             continue
