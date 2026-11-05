@@ -5,7 +5,7 @@
 // - useGlobalBus(): connects /api/stream once and invalidates React Query keys by topic.
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { BUS_KEYS, BUS_TURN_KEYS, LIVE_KEYS, busSkips, liveStreams } from './queries/keys'
+import { BUS_KEYS, BUS_TURN_KEYS, LIVE_KEYS, busKeysOf, busSkips, liveStreams } from './queries/keys'
 import type { BusTopic, InvalidatePayload } from './types'
 import { checkForUpdate } from '@/pwa'
 
@@ -154,7 +154,7 @@ export function useGlobalBus(enabled: boolean): SSEStatus {
           timer.current = undefined
           const batch = [...pending.current] as BusTopic[]
           pending.current.clear()
-          const keys = batch.flatMap((t) => BUS_KEYS[t] || [])
+          const keys = batch.flatMap(busKeysOf)
           const turn = batch.includes('sessions') && batch.includes('workspace')
           if (turn) keys.push(...BUS_TURN_KEYS)
           invalidate(keys, (k) => busSkips(k, turn))
