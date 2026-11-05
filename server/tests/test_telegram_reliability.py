@@ -254,8 +254,8 @@ async def test_failed_start_keeps_the_messages(api, tg, svc, monkeypatch):
     await wait_for(lambda: any("Could not start the session: disk full" in t for t in _texts(tg)), what="told")
     assert gateway.gateway()._new[0]["msgs"][0]["text"] == "keep me"
     tg.callback(f"w:0:{gateway._path_hash(TOPIC)}")                   # tapped again: it works
-    await wait_for(lambda: svc.sent, what="replayed")
-    assert svc.sent[0]["text"] == "keep me" and gateway.gateway()._new == {}
+    await wait_for(lambda: svc.sent and gateway.gateway()._new == {}, what="replayed")   # sent, then dropped
+    assert svc.sent[0]["text"] == "keep me"
 
 
 # ---- 9. main-chat commands ------------------------------------------------------------------------
