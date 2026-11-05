@@ -62,6 +62,10 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   if (method !== 'GET') headers['X-Maxxing'] = '1'
   if (opts.body instanceof FormData) {
     body = opts.body
+  } else if (opts.body instanceof Blob) {
+    // raw bytes (a secret file): the browser keeps the type of a File, so it is always sent as a stream of bytes
+    headers['Content-Type'] = 'application/octet-stream'
+    body = opts.body
   } else if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json'
     body = JSON.stringify(opts.body)

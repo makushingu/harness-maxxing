@@ -167,6 +167,10 @@ function buildState(scenario) {
       st.backup.history.push({ at: t - i * DAY - 5 * HOUR + Math.floor(r() * 300), ok: !failed, commit: failed ? null : sha().slice(0, 7),
         files: failed ? 0 : 38 + Math.floor(r() * 6), error: failed ? 'remote: Repository not found. fatal: unable to access (HTTP 404) — token expired?' : null })
     }
+    st.secretFiles = [
+      ['ANDROID_KEYSTORE', 'release.jks', 2764, 'Play Store upload key', true],
+      ['GCP_SERVICE_ACCOUNT', 'sa-acme-prod.json', 2381, 'Reporting service account (acme)', false],
+    ].map(([name, filename, size, note, expose], i) => ({ name, filename, size, note, expose, sha256: crypto.createHash('sha256').update(name).digest('hex'), updated: t - (i * 5 + 3) * DAY }))
     st.secrets = SECRET_SEED.map(([name, note, expose, value], i) => ({ name, note, expose, value, updated: t - (i * 9 + 2) * DAY }))
   } else if (scenario === 'onboarding' || scenario === 'setup') {
     st.layout.hidden = ['claude-usage']
@@ -1788,6 +1792,32 @@ R('DELETE', '/api/secrets/:name', ({ params }) => {
   return { ok: true }
 })
 
+R('GET', '/api/secret-files', () => S.secretFiles)
+R('PUT', '/api/secret-files/:name', ({ params, q, rawBody }) => {
+  const name = decodeURIComponent(params.name)
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name)) fail(400, 'invalid_name', 'invalid name')
+  if (rawBody.length > 1024 * 1024) fail(400, 'invalid_value', 'file too large')
+  if (S.secrets.some((x) => x.name === name)) fail(409, 'name_taken', 'name used by a key')
+  let f = S.secretFiles.find((x) => x.name === name)
+  if (f && q.get('create') === '1') fail(409, 'exists', 'file exists')
+  if (!f) {
+    if (!rawBody.length) fail(400, 'file_required', 'file required')
+    f = { name, filename: '', size: 0, note: '', expose: false, sha256: '', updated: now() }
+    S.secretFiles.push(f)
+  }
+  if (rawBody.length) Object.assign(f, { size: rawBody.length, sha256: crypto.createHash('sha256').update(rawBody).digest('hex'), filename: q.get('filename') || f.filename })
+  else if (q.get('filename')) f.filename = q.get('filename')
+  if (q.has('note')) f.note = q.get('note')
+  if (q.has('expose')) f.expose = q.get('expose') === '1' || q.get('expose') === 'true'
+  f.updated = now()
+  return { ok: true }
+})
+R('DELETE', '/api/secret-files/:name', ({ params }) => {
+  const f = S.secretFiles.find((x) => x.name === params.name) || fail(404, 'not_found', 'File not found')
+  S.secretFiles = S.secretFiles.filter((x) => x !== f)
+  return { ok: true }
+})
+
 /* ---- system */
 R('GET', '/api/system/health', () => healthObj())
 R('GET', '/api/system/services', () => S.services)
@@ -1936,7 +1966,7 @@ async function handleApi(req, res, url) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     rawBody = await readBody(req)
     const ct = req.headers['content-type'] || ''
-    if (rawBody.length && !ct.startsWith('multipart/')) {
+    if (rawBody.length && !ct.startsWith('multipart/') && !ct.startsWith('application/octet-stream')) {
       try { body = JSON.parse(rawBody.toString('utf8')) } catch { return sendJson(res, 400, { error: 'bad_json', message: 'Request body is not valid JSON' }) }
       if (body === null || typeof body !== 'object') body = {}
     }

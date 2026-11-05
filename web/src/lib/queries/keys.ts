@@ -45,6 +45,7 @@ export const qk = {
   feedback: ['settings', 'feedback'] as const,
   license: ['settings', 'license'] as const,
   secrets: ['secrets'] as const,
+  secretFiles: ['secret-files'] as const,
   health: ['health'] as const,
   system: {
     services: ['system', 'services'] as const,

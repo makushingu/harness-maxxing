@@ -33,6 +33,7 @@ import {
 } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
+import { KeyFilesCard } from './KeyFiles'
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 
@@ -73,6 +74,7 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
         onError: (err) => {
           if (isApiError(err, 'exists')) setErrors({ name: t('keys.exists') })
           else if (isApiError(err) && ['invalid_name', 'reserved_name'].includes(err.code)) setErrors({ name: errorMessage(err) })
+          else if (isApiError(err, 'name_taken')) setErrors({ name: t('keyfiles.err.nameTakenKey') })
           else if (isApiError(err, 'value_required')) setErrors({ value: errorMessage(err) })
           else setErrors({ form: errorMessage(err) })
         },
@@ -250,6 +252,7 @@ export function KeysSection() {
           </>
         )}
       </SettingsCard>
+      <KeyFilesCard />
       <SecretDialog open={dialog.open} editing={dialog.editing} onOpenChange={(o) => setDialog((d) => ({ ...d, open: o }))} />
     </SectionStack>
   )
