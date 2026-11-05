@@ -22,7 +22,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 HOST_RE = re.compile(r"^[A-Za-z0-9.-]{1,253}$")
 TLS = ("ssl", "starttls", "none")
 FIELDS = ("label", "address", "name", "username", "imap_host", "imap_port", "imap_tls",
-          "smtp_host", "smtp_port", "smtp_tls", "signature")
+          "smtp_host", "smtp_port", "smtp_tls", "signature", "poll_min", "auth_servers")
 
 # Settings of the big providers (the rest: Thunderbird's autoconfig database, then "mail.<domain>").
 KNOWN = {
@@ -76,8 +76,15 @@ def password_key(acc_id: str) -> str:
 
 def public(acc: dict) -> dict:
     from .. import vault
+    from . import poll, store
     out = {k: acc.get(k) for k in ("id", *FIELDS, "password_key", "created", "smtp_checked")}
     out["has_password"] = bool(vault.get(acc.get("password_key") or ""))
+    out["poll_min"] = poll.interval_min(acc)
+    out["auth_servers"] = acc.get("auth_servers") or []
+    try:
+        out["last_check"] = store.last_check(acc["id"])
+    except Exception:  # noqa: BLE001 - the cache is optional
+        out["last_check"] = None
     return out
 
 
@@ -114,7 +121,15 @@ def _clean(data: dict, partial: bool = False) -> dict:
         if k not in data or data[k] is None:
             continue
         v = data[k]
-        if k in ("imap_port", "smtp_port"):
+        if k == "poll_min":
+            from .poll import CHOICES
+            v = int(v)
+            if v not in CHOICES:
+                raise MailError("invalid", f"poll_min: one of {', '.join(map(str, CHOICES))} (minutes)")
+        elif k == "auth_servers":
+            # the servers whose Authentication-Results are trusted (default: the mailbox's own, access.py)
+            v = [str(x).strip().lower() for x in (v if isinstance(v, list) else []) if HOST_RE.match(str(x).strip())][:10]
+        elif k in ("imap_port", "smtp_port"):
             v = int(v)
             if not 1 <= v <= 65535:
                 raise MailError("invalid", f"{k}: invalid port")
@@ -338,3 +353,6 @@ def delete_account(acc_id: str) -> None:
     if cur.get("password_key"):
         vault.delete(cur["password_key"])
     imap.forget(acc_id)
+    with contextlib.suppress(Exception):
+        from . import store
+        store.forget_account(acc_id)

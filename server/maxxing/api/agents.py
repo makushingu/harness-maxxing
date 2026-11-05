@@ -96,10 +96,17 @@ class AgentIn(BaseModel):
     writable: Optional[list[str]] = Field(default=None, max_length=20)
     rules: Optional[list[Rule]] = Field(default=None, max_length=20)
     subagent: Optional[bool] = None
+    mail: Optional[list[dict]] = Field(default=None, max_length=10)    # mailboxes of the E-mail page (mail/access.py)
 
 
 def _fields(body: AgentIn) -> dict:
     f = body.model_dump(exclude_none=True, exclude={"topic_path", "name", "display_name"})
+    if f.get("mail"):
+        from .. import mail
+        have = {a["id"] for a in mail.list_accounts()}
+        bad = [g.get("account") for g in f["mail"] if isinstance(g, dict) and g.get("account") not in have]
+        if bad:
+            raise HTTPException(400, detail={"error": "bad_mail", "message": f"No mailbox {bad[0]!r} on the E-mail page"})
     if body.display_name is not None:
         f["name"] = body.display_name
     for k in ("avatar", "limits"):
