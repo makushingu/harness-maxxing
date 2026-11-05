@@ -241,6 +241,20 @@ async def test_feed_alerts_buttons_call_feed_act(api, tg, svc, monkeypatch):
     assert not any("Disk full" in (q.get("text") or "") for q in tg.sent())
 
 
+async def test_an_alert_answered_while_it_was_sent_loses_its_buttons(api, tg, svc):
+    await _link_simple(api, tg)
+    from maxxing import feed
+    ev = feed.post("Writer asks", "git push", "warning", "agents", "/agents/acme/blog/writer", notify=False,
+                   ref="approval:r2", actions=[{"id": "allow", "label": "Allow", "style": "primary"},
+                                               {"id": "deny", "label": "Deny", "style": "danger"}])
+    feed.update(ev["id"], resolve=True, resolution="Allowed", notify=False)   # answered on the web meanwhile
+    gateway.post_alert({**ev, "telegram": "loud"})                           # the send that was under way
+    assert _bot("Writer asks", tg)["reply_markup"]["inline_keyboard"][0]
+    edit = next(e for e in tg.sent("editMessageText") if "Writer asks" in e["text"])
+    assert "Allowed" in edit["text"] and edit["reply_markup"] == {"inline_keyboard": []}
+    assert f"al:{ev['id']}" not in gateway._notes()
+
+
 async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypatch):
     await _link_simple(api, tg)
     got: list = []

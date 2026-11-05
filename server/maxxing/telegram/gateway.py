@@ -3693,6 +3693,14 @@ def _alert_send_sync(ev: dict) -> None:
                bind={"agent": path} if path and (target is None or target[1] is None) else None)
     if sent:
         _note_set(f"al:{ev['id']}", [(target or _target(ALERTS))[0] or chat, sent[-1], ""])
+        # answered / changed while it was being sent (update_alert found no message then): edit it now
+        try:
+            from .. import feed
+            now = feed.get(int(ev["id"]))
+        except Exception:  # noqa: BLE001 - the feed is gone: the message stays as sent
+            now = None
+        if isinstance(now, dict) and (_alert_html(now), _alert_markup(now)) != (_alert_html(ev), _alert_markup(ev)):
+            _alert_update_sync(now)
 
 
 def _alert_update_sync(ev: dict) -> None:
