@@ -108,17 +108,47 @@ def setup() -> list[str]:
 
 # ---- settings of a sandboxed turn ------------------------------------------------------------------
 def secret_paths() -> list[str]:
-    """What a sandboxed agent never reads: the server state (vault, config), SSH keys, Claude and other CLI logins."""
+    """What a sandboxed agent never reads: the server state (vault, config), SSH keys, Claude and other CLI logins,
+    the Claude transcripts of every session."""
     home = Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir)
     paths = [config.STATE, home / ".ssh", home / ".claude" / ".credentials.json", home / ".claude.json",
              config.claude_dir() / ".credentials.json", home / ".git-credentials", home / ".netrc",
              home / ".config" / "gh", home / ".aws", home / ".docker" / "config.json", home / ".config" / "rclone"]
+    paths += [config.claude_dir() / "projects", home / ".claude" / "projects", config.claude_dir() / "history.jsonl",
+              home / ".config", home / ".local" / "share"]       # transcripts of every session; other tools' logins
     out: list[str] = []
     for p in paths:
         s = str(p)
         if s not in out:
             out.append(s)
     return out
+
+
+# under the denied ~/.local/share: Claude Code itself (its sandbox helper), the interpreters and tools its commands
+# run (the product's venv python is uv's)
+READ_BACK = ("claude", "uv/python", "uv/tools", "pnpm", "fnm", "mise/installs")
+ENV_GLOBS = (".env", ".env.*", "*/.env", "*/.env.*", "*/*/.env", "*/*/.env.*")
+
+
+def private_paths(path: str) -> list[str]:
+    """What a sandboxed agent never reads in the workspace: the other projects, the other topics of its project, the
+    other agents of its topic, and the `.env` files of its topic (globs, expanded by Claude Code at sandbox start)."""
+    root = config.workspace()
+    folder = root / path
+    topic = folder.parent.parent
+    out: list[str] = []
+    for d, keep in ((root / "projects", topic.parent.parent), (topic.parent, topic), (topic / "agents", folder)):
+        try:
+            out += [str(k) for k in sorted(d.iterdir()) if k.is_dir() and k != keep]
+        except OSError:
+            pass
+    return out + [f"{topic}/{g}" for g in ENV_GLOBS]
+
+
+def read_back() -> list[str]:
+    """`allowRead` inside the denied folders: the tools its commands run."""
+    share = Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir) / ".local" / "share"
+    return [str(share / p) for p in READ_BACK if (share / p).exists()]
 
 
 def locked_paths(path: str) -> list[str]:
@@ -192,15 +222,17 @@ def settings(path: str, a: dict, approvals: bool = False) -> dict:
     folder = config.workspace() / path
     if a.get("sandbox"):
         write = [str(folder)] + writable_dirs(path, a)
-        secrets = secret_paths()
+        secrets = secret_paths() + private_paths(path)
         locked = locked_paths(path)
         out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
                           "autoAllowBashIfSandboxed": not approvals, "excludedCommands": ["maxxing:*"],
-                          "filesystem": {"denyRead": secrets, "allowWrite": write, "denyWrite": locked},
+                          "filesystem": {"denyRead": secrets, "allowRead": read_back(), "allowWrite": write,
+                                         "denyWrite": locked},
                           "network": {"allowedDomains": list(a.get("domains") or [])}}
         deny = []
         for p in secrets:
-            g = p + "/**" if not Path(p).is_file() and not p.endswith(".json") else p
+            g = p + "/**" if not Path(p).is_file() and not p.endswith((".json", ".jsonl")) and "*" not in p \
+                and not Path(p).name.startswith(".env") else p
             deny += [f"Read(/{g})", f"Edit(/{g})"]
         for p in locked:                                # its settings and role: the owner's, never the agent's
             deny.append(f"Edit(/{p + '/**' if p.endswith('/.claude') else p})")

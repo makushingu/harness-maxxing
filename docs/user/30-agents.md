@@ -224,8 +224,10 @@ until you switch it on):
 - its commands can **write only in its own folder**, plus the **folders of the topic** you list (`.` = the topic's
   existing files and folders; never the other agents, the topic's `CLAUDE.md` / `memory.md` / `.claude/`, nor a new
   file at the topic's root);
-- they **cannot read the server's secrets**: the Harness state (Keys vault, settings), SSH keys, the Claude sign-in,
-  other command-line logins (GitHub CLI, cloud tools). Claude's own Read / Edit tools are refused there too;
+- they **cannot read the server's secrets**: the Harness state (Keys vault, settings), SSH keys, the Claude sign-in
+  and the transcripts of your sessions, other command-line logins (`~/.config`, `~/.local/share`, cloud tools), nor
+  the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
+  topic. Claude's own Read / Edit tools are refused there too;
 - they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). The same domains
   are allowed for its web page reads;
 - its commands run without asking, inside these walls; with **ask before risky actions** on (or in a run started
