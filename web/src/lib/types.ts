@@ -183,9 +183,11 @@ export type AgentTemplate = {
 export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
 export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
 export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }
-/** A member of an agent group (an agent of the group's project). `slug` = its folder name, the @name in the group. */
+/** A member of an agent group (an agent of the group's project). `handle` = its @name in the group: its folder name,
+ *  or made from its display name when two members share a folder name (`slug` = the same, older name). */
 export type AgentGroupMember = {
   path: string
+  handle: string
   slug: string
   /** one line: what it does in this group */
   role: string
