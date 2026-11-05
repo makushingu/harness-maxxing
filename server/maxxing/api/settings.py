@@ -15,7 +15,7 @@ from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
-KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "git_page", "infra_page", "team_page", "agents_page",
+KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "git_page", "infra_page", "team_page", "agents_page", "mail_page",
         "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 _URL = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")
@@ -33,6 +33,7 @@ class SettingsIn(BaseModel):
     team_page: Optional[bool] = None
     agents_page: Optional[bool] = None
     maxxing_mode: Optional[bool] = None
+    mail_page: Optional[bool] = None
     memory_max_lines: Optional[int] = None
     result_line_hidden: Optional[list[Literal[RESULT_FIELDS]]] = None  # type: ignore[valid-type]
     donation_hidden: Optional[bool] = None
@@ -52,6 +53,7 @@ def current() -> dict:
             "infra_page": bool(cfg.get("infra_page", False)),
             "team_page": bool(cfg.get("team_page", False)),
             "agents_page": bool(cfg.get("agents_page", False)),
+            "mail_page": bool(cfg.get("mail_page", False)),
             "maxxing_mode": bool(cfg.get("maxxing_mode", False)),
             "memory_max_lines": memory.max_lines(),
             "result_line_hidden": [f for f in RESULT_FIELDS if f in (cfg.get("result_line_hidden") or [])],

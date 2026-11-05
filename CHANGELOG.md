@@ -5,6 +5,14 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## 2.0.0-alpha.118 - 2026-11-05
 
+New:
+- **E-mail** (Settings -> Features, off by default): your mailboxes next to your sessions, from any provider with
+  IMAP and SMTP (Gmail with an app password, OVH, o2switch, Purelymail...). Read, sort, search, flag, archive, move;
+  write, reply, reply all and forward with attachments and your signature; drafts are kept in the mailbox. Messages
+  leave through your mailbox's own server, at most 20 recipients a message and 100 a day: it is a mailbox, not a
+  newsletter tool. In a session, Claude sorts your mail and prepares replies as drafts for you to send
+  (`maxxing mail`).
+
 Fixes:
 - **Behind a proxy in Docker**: the address opened by `maxxing proxy on` is harder to misuse: a connection must send
   its request within 10 s and at most 512 are open at once, only private addresses and real domain names are
