@@ -549,3 +549,18 @@ def test_a_created_date_that_is_not_finite_does_not_break_the_list(client, topic
     f.write_text(f.read_text().replace('"created": ', '"created": NaN, "x": ', 1))
     r = client.get("/api/agents")
     assert r.status_code == 200 and r.json()
+
+
+def _post_raw(client, url: str, body: dict):
+    """A body with a lone surrogate (valid JSON, refused by UTF-8): httpx cannot send it with json=."""
+    return client.post(url, content=json.dumps(body), headers={"Content-Type": "application/json"})
+
+
+def test_a_lone_surrogate_in_a_name_or_a_description_is_stored(client, topic):
+    _on(client)
+    r = _post_raw(client, "/api/agents", {"topic_path": "projects/acme/topics/blog", "name": "writer",
+                                          "display_name": "Wri\ud800ter", "description": "Posts \ud800"})
+    assert r.status_code == 200, r.text
+    assert r.json()["display_name"] == "Wri?ter"
+    assert client.patch("/api/agents/acme/blog/writer", content=json.dumps({"description": "Again \ud800"}),
+                      headers={"Content-Type": "application/json"}).status_code == 200
