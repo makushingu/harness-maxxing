@@ -133,30 +133,58 @@ export function TriggerChips({ agent, crons, className }: { agent: Agent; crons?
   )
 }
 
+/** A number field that keeps what is typed ("0.", "0,5", empty) and only hands over a valid number; the text is
+ *  rebuilt from the value when it changes from outside, or on blur. */
+function NumberInput({ value, onValue, ...rest }: { value: number; onValue: (n: number) => void } & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>) {
+  const [text, setText] = React.useState(String(value))
+  const typed = React.useRef<number | null>(null)
+  const parse = (s: string) => (s.trim() === '' ? NaN : Number(s.replace(',', '.')))
+  // Follow the value when it changes from outside (not when it is just what is being typed, even rounded).
+  React.useEffect(() => {
+    if (typed.current === null) setText(String(value))
+  }, [value])
+  return (
+    <Input
+      {...rest}
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value)
+        const n = parse(e.target.value)
+        if (Number.isFinite(n) && n >= 0) {
+          typed.current = n
+          onValue(n)
+        }
+      }}
+      onBlur={(e) => {
+        typed.current = null
+        setText(String(value))
+        rest.onBlur?.(e)
+      }}
+    />
+  )
+}
+
 /** Daily budget, runs per hour, time limit, grouping window. */
 export function LimitsFields({ value, onChange }: { value: AgentLimits; onChange: (l: AgentLimits) => void }) {
   const t = useT()
   const num = (k: keyof AgentLimits, scale = 1) => ({
-    value: String(Math.round((value[k] / scale) * 100) / 100),
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-      const n = Number(e.target.value.replace(',', '.'))
-      if (Number.isFinite(n) && n >= 0) onChange({ ...value, [k]: k === 'usd_per_day' ? n : Math.round(n * scale) })
-    },
-    inputMode: 'decimal' as const,
+    value: Math.round((value[k] / scale) * 100) / 100,
+    onValue: (n: number) => onChange({ ...value, [k]: k === 'usd_per_day' ? n : Math.round(n * scale) }),
   })
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <FormField label={t('agents.limits.usd')} hint={t('agents.limits.usdHint')}>
-        <Input {...num('usd_per_day')} data-testid="limit-usd" />
+        <NumberInput {...num('usd_per_day')} data-testid="limit-usd" />
       </FormField>
       <FormField label={t('agents.limits.runs')} hint={t('agents.limits.runsHint')}>
-        <Input {...num('runs_per_hour')} />
+        <NumberInput {...num('runs_per_hour')} />
       </FormField>
       <FormField label={t('agents.limits.timeout')} hint={t('agents.limits.timeoutHint')}>
-        <Input {...num('timeout_s', 60)} />
+        <NumberInput {...num('timeout_s', 60)} />
       </FormField>
       <FormField label={t('agents.limits.debounce')} hint={t('agents.limits.debounceHint')}>
-        <Input {...num('debounce_s')} />
+        <NumberInput {...num('debounce_s')} />
       </FormField>
     </div>
   )
