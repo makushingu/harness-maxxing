@@ -281,9 +281,9 @@ export function useRunNow() {
   return { go, pending: run.isPending, vars: run.variables }
 }
 
-/** Why a trigger did not start a turn (server reasons: disabled, budget, rate, missing...). */
+/** Why a trigger did not start a turn (server reasons: disabled, budget, busy, rate, missing...). */
 export function reasonText(t: TFn, reason?: string): string {
-  if (reason === 'disabled' || reason === 'budget' || reason === 'rate' || reason === 'missing' || reason === 'depth') return t(`agents.reason.${reason}` as 'agents.reason.budget')
+  if (reason === 'disabled' || reason === 'budget' || reason === 'busy' || reason === 'rate' || reason === 'missing' || reason === 'depth') return t(`agents.reason.${reason}` as 'agents.reason.budget')
   return reason || ''
 }
 

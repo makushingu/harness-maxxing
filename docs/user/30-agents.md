@@ -173,7 +173,7 @@ which starts A) stop after 3 hops, like `maxxing agents send`.
 | Limit | Default | |
 |---|---|---|
 | **On / off** | on | an agent switched off starts for nothing (its schedule runs are skipped) |
-| **Daily budget** | 2 USD | once today's sessions of the agent cost that much, it waits until tomorrow (the day of your time zone in Settings); a turn that reaches it is stopped in the middle (Claude Code `--max-budget-usd`) (0 = no budget) |
+| **Daily budget** | 2 USD | once today's sessions of the agent cost that much, it waits until tomorrow (the day of your time zone in Settings); a turn that reaches it is stopped in the middle (Claude Code `--max-budget-usd`); a run holds what is left of the day until it ends, so a trigger meanwhile is skipped (feed events wait for it) (0 = no budget) |
 | **Runs per hour** | 6 | more starts in the same hour are refused (0 = no limit) |
 | **Time limit** | 30 min | a run is stopped after this |
 | **Grouping delay** | 60 s | events closer than this go into one run |

@@ -51,6 +51,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   3.3 -> 0.5 ms.
 - Feed: `post(group=)` never folds into a resolved event; `resolve(ref)` ends every open event of the ref (returns
   the newest); `act` seen/open (not by Telegram) and `mark_read` call `update_alert` for the open alerts they read.
+- Agents budget: each run holds its `--max-budget-usd` in `<state>/agents/<key>.json` `held: {sid: {usd, at}}`
+  (set by `fire` at the start, then by `run_settings(..., session=sid)` in the runner, dropped by `on_turn_end` or once
+  the session is no longer running). `gate()` returns `busy` when spent + held reaches the budget; `fire()` runs gate +
+  start + the `run` post under `agents._lock` (runs per hour race too); `fire(wait=True)` (feed) returns `busy`
+  without posting and `flush_due` retries after `BUSY_RETRY_S`.
 - Session `days` keys (Stats, agents' daily budget) are days of `config.timezone` (`store.day_of`), no longer
   of the system zone; agent run titles and thread context times too (`agents._local`).
 - Agents feed triggers: `_feed.json` = `{last_id, pending, off?}`. A missing `last_id` (not 0) means "never
