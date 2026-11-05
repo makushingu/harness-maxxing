@@ -433,15 +433,16 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
       { path: a.path, text: v, reply_to: replyTo?.id },
       {
         onSuccess: (r) => {
-          if (!r.started) {
+          if (r.started) onCancelReply()
+          else {
             setText(v)
             toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
           }
         },
+        // The reply target stays with the text, so sending again still goes on with the same session.
         onError: () => setText(v),
       },
     )
-    onCancelReply()
   }
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
