@@ -411,7 +411,8 @@ def _group(a) -> int:
             return 0
         if a.group_cmd == "say":
             r = agent_rooms.say(path, " ".join(a.text))
-            print("sent; " + ("next: " + ", ".join("@" + agent_rooms.slug(p) for p in r["queued"])
+            hs = agent_rooms.handles(agent_rooms.load(path))
+            print("sent; " + ("next: " + ", ".join("@" + hs.get(p, agent_rooms.slug(p)) for p in r["queued"])
                               if r["queued"] else "nobody answers (all named members are paused)"))
             return 0
     except ValueError as e:

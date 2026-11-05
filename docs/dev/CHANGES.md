@@ -90,6 +90,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - CLI `maxxing agents group list|show|create|say` (cmd_agents.py). Fake claude: `REPLY_AS <folder>: <text>` (`AT:` -> `@`).
 - Web: `features/agents/{GroupPage,GroupForm}.tsx`, groups at the top of their project in `AgentsList`, routes
   `/agents/groups/new` and `/agents/groups/:project/:name`, `lib/queries/agentGroups.ts`, showcase `agent-groups`.
+- Members' `handle` (@name in the group, stored in group.json): folder name, else (same folder name twice) the
+  display name slugified, else `<topic>-<folder>`; kept when a member stays (`update`). CLI `group update`.
+- Web: quick create (tick agents, Create; name made from theirs), "Or set it up with Claude" and "Edit with Claude"
+  (prefilled sessions), "New group with this agent" on the agent page (`/agents/groups/new?with=<agent path>`).
+- `web/src/styles/globals.css`: `@source not '../../dist'` - Tailwind no longer scans the committed build (bytes of
+  its .br files made every other build differ).
 - Docs: `docs/user/31-agent-groups.md`, links from 01, 15, 16, 17, 30, README, help index, skill `maxxing-agents`.
 
 ## 2.0.0-alpha.118 - 2026-11-05

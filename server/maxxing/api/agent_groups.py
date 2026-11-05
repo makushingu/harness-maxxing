@@ -42,6 +42,7 @@ def _get(project: str, name: str) -> str:
 class Member(BaseModel):
     path: str = Field(max_length=200)
     role: str = Field("", max_length=agent_rooms.ROLE_MAX)
+    handle: str = Field("", max_length=48)              # its @name in the group ("": kept, else made)
 
 
 class Limits(BaseModel):

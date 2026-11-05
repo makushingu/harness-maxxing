@@ -18,15 +18,22 @@ Groups are part of the **Agents** page (Settings -> Features -> Agents). Nothing
 
 ## Create a group
 
-1. On the **Agents** page, click the **group button** next to the **+** at the top of the list (or open
-   `/agents/groups/new`).
-2. Pick a **starter** (Writing, Council, Support) to fill in the texts, or start from scratch.
-3. Choose the **project**: the members are agents of this project (they can come from different topics of it).
-4. Give it a **name**, an emoji and a **goal**: a few lines that say what the group is for and how it works. The goal
-   is the group's `CLAUDE.md`, read by every member.
-5. Pick **2 to 6 agents**, in the order they speak when you write to everyone, and give each a **role in one line**
-   ("writes the first draft", "checks the SEO").
-6. Optional: a **lead**, the member who answers when your message names nobody.
+**The quick way**: on the **Agents** page, click the **group button** next to the **+** at the top of the list (or
+**New group with this agent** on an agent's page). Choose the **project**, tick **2 to 6 agents** (in the order they
+speak when you write to everyone) and press **Create the group**. Its name is made from theirs; the rest uses the
+defaults. Then tell them in your first message what the group is for.
+
+**With Claude**: **Or set it up with Claude** (under the button), or ask in any session ("make a group with my three
+writers to coordinate the blogs"): Claude asks what is missing and creates it.
+
+**More options** (on the same page, and later in **Edit** or **Edit with Claude** in the group's **...** menu):
+
+- a **starter** (Writing, Council, Support) that fills in the texts;
+- a **goal**: a few lines that say what the group is for and how it works. It is the group's `CLAUDE.md`, read by
+  every member;
+- a **role in one line** for each member ("writes the first draft", "checks the SEO");
+- a **lead**, the member who answers when your message names nobody;
+- an emoji, the shared folder, "Members trust each other" and the limits (below).
 
 The group appears **at the top of its project** in the Agents list, with its members' faces. It lives in a folder of
 the project, next to the topics:

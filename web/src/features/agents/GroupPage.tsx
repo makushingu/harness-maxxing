@@ -9,9 +9,9 @@
 // - the box: Enter sends, `@` lists the members (and @all) to pick who answers.
 // Opening the group marks it read (POST /seen), again when an answer comes in while it is open.
 import * as React from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
-  ArrowLeft, AtSign, Bot, FolderOpen, MoreHorizontal, Pause, Pencil, Play, PlayCircle, RotateCcw, Send, ShieldCheck, Square, Trash2, UsersRound,
+  ArrowLeft, AtSign, Bot, FolderOpen, MoreHorizontal, Pause, Pencil, Play, PlayCircle, RotateCcw, Send, ShieldCheck, Square, Trash2, UsersRound, WandSparkles,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -33,7 +33,8 @@ import { ApprovalCard } from '@/pages/sessions/Approvals'
 import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { GroupFace } from './AgentsList'
-import { GroupForm } from './GroupForm'
+import { GroupForm, claudeTopic } from './GroupForm'
+import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
@@ -158,6 +159,9 @@ function GroupMenu({ group: g, onEdit }: { group: AgentGroup; onEdit: () => void
   const [deleting, setDeleting] = React.useState(false)
   const [keep, setKeep] = React.useState(false)
   const files = g.files_path ? absTopicDir(ws, g.files_path) : null
+  // A normal session of the project changes the group's files (no CLI command for it): its CLAUDE.md and group.json.
+  const editWithClaude = () =>
+    navigate(draftUrl(claudeTopic(ws, g.project), t('groups.claude.edit', { name: g.display_name, path: absTopicDir(ws, g.path) || g.path })))
   const newTopic = async () => {
     if (await confirm({ title: t('groups.reset.title'), description: t('groups.reset.desc'), confirmText: t('groups.reset.go') })) reset.mutate({ path: g.path })
   }
@@ -174,6 +178,9 @@ function GroupMenu({ group: g, onEdit }: { group: AgentGroup; onEdit: () => void
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={onEdit} data-testid="group-edit-open">
             <Pencil /> {t('common.edit')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={editWithClaude} data-testid="group-edit-claude">
+            <WandSparkles /> {t('agents.edit.button')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={newTopic} data-testid="group-reset">
             <RotateCcw /> {t('groups.reset.item')}
@@ -236,7 +243,7 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
         {g.members.map((m) => {
           const ap = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/.exec(m.path)
           return (
-            <span key={m.path} className={cn('flex shrink-0 items-center rounded-full border bg-card', m.speaking && 'border-primary/50 bg-primary/5')} data-testid="group-member" data-slug={m.slug} data-paused={m.paused || undefined}>
+            <span key={m.path} className={cn('flex shrink-0 items-center rounded-full border bg-card', m.speaking && 'border-primary/50 bg-primary/5')} data-testid="group-member" data-handle={m.handle} data-paused={m.paused || undefined}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -260,15 +267,15 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
                         ) : !m.enabled ? (
                           t('groups.member.off')
                         ) : (
-                          <Sensitive length={10}>{m.role || `@${m.slug}`}</Sensitive>
+                          <Sensitive length={10}>{m.role || `@${m.handle}`}</Sensitive>
                         )}
                       </span>
                     </span>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onSelect={() => onMention(m.slug)} disabled={!m.exists}>
-                    <AtSign /> {t('groups.member.mention', { slug: m.slug })}
+                  <DropdownMenuItem onSelect={() => onMention(m.handle)} disabled={!m.exists}>
+                    <AtSign /> {t('groups.member.mention', { slug: m.handle })}
                   </DropdownMenuItem>
                   {ap && m.exists && (
                     <DropdownMenuItem onSelect={() => navigate(agentRoute({ project: ap[1], topic: ap[2], name: ap[3] }))}>
@@ -352,7 +359,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
           {g.speaking && <Speaking group={g} />}
         </div>
       </div>
-      <Composer group={g} ref={composer} />
+      <Composer group={g} ref={composer} first={!said} />
     </div>
   )
 }
@@ -360,7 +367,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
 /** Before the first message: how a group works, in three lines, and an example with its members' names. */
 function HowItWorks({ group: g }: { group: AgentGroup }) {
   const t = useT()
-  const [a, b] = g.members.map((m) => m.slug)
+  const [a, b] = g.members.map((m) => m.handle)
   return (
     <div className="grid gap-2 rounded-xl border border-dashed px-4 py-3 text-sm" data-testid="group-empty">
       <p className="flex items-center gap-2 font-medium">
@@ -371,10 +378,12 @@ function HowItWorks({ group: g }: { group: AgentGroup }) {
         <li>{t('groups.empty.line2')}</li>
         <li>{t('groups.empty.line3')}</li>
       </ul>
+      {/* No goal yet (a quick creation): the first message can say what the group is for. */}
+      {!g.goal.trim() && <p className="font-medium text-foreground">{t('groups.empty.goal')}</p>}
       <p className="text-xs text-muted-foreground">
         {t('groups.empty.example')}{' '}
         <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px] text-foreground">
-          <Sensitive>{t('groups.empty.exampleText', { a: a || 'writer', b: b || 'reviewer' })}</Sensitive>
+          <Sensitive>{t(g.goal.trim() ? 'groups.empty.exampleText' : 'groups.empty.goalExample', { a: a || 'writer', b: b || 'reviewer' })}</Sensitive>
         </code>
       </p>
     </div>
@@ -541,7 +550,9 @@ function mentionAt(text: string, caret: number): { start: number; q: string } | 
 
 type MentionPick = { slug: string; label: string; member?: AgentGroupMember }
 
-function Composer({ group: g, ref }: { group: AgentGroup; ref?: React.Ref<ComposerApi> }) {
+/** `first`: nothing said yet (the placeholder invites to say what the group is for when it has no goal). Opened right
+ *  after its creation (router state `focus`), the box has the focus. */
+function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref<ComposerApi>; first?: boolean }) {
   const t = useT()
   const touch = useCompact()
   const say = useGroupSay()
@@ -550,6 +561,11 @@ function Composer({ group: g, ref }: { group: AgentGroup; ref?: React.Ref<Compos
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
   const input = React.useRef<HTMLTextAreaElement>(null)
+  const location = useLocation()
+  const focus = !!(location.state as { focus?: boolean } | null)?.focus
+  React.useEffect(() => {
+    if (focus) input.current?.focus()
+  }, [focus])
   const ready = g.members.filter((m) => m.exists).length >= 2
 
   const at = mentionAt(text, caret)
@@ -557,7 +573,7 @@ function Composer({ group: g, ref }: { group: AgentGroup; ref?: React.Ref<Compos
   const picks: MentionPick[] = (() => {
     if (!at) return []
     const all: MentionPick[] = [
-      ...g.members.filter((m) => m.exists).map((m) => ({ slug: m.slug, label: m.display_name, member: m })),
+      ...g.members.filter((m) => m.exists).map((m) => ({ slug: m.handle, label: m.display_name, member: m })),
       { slug: 'all', label: t('groups.mention.all') },
     ]
     const starts = all.filter((p) => p.slug.startsWith(at.q) || p.label.toLowerCase().startsWith(at.q))
@@ -669,7 +685,7 @@ function Composer({ group: g, ref }: { group: AgentGroup; ref?: React.Ref<Compos
               onFocus={() => setClosed(false)}
               minRows={1}
               maxRows={8}
-              placeholder={t('groups.placeholder')}
+              placeholder={first && !g.goal.trim() ? t('groups.placeholderGoal') : t('groups.placeholder')}
               aria-label={t('groups.placeholder')}
               aria-expanded={popup}
               aria-autocomplete="list"
