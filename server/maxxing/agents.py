@@ -671,9 +671,10 @@ def update(path: str, fields: dict) -> dict:
     if data["sandbox"] and not cur["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()
-    st = _read_state(path)
-    st["owner_at"] = time.time()
-    _write_state(path, st)
+    with _lock:
+        st = _read_state(path)
+        st["owner_at"] = time.time()
+        _write_state(path, st)
     if description is not None:
         workspace._write_claude_md(folder(path), "agent", parse(path)[2], str(description))
     _invalidate()
@@ -841,23 +842,26 @@ def _fingerprint(path: str) -> dict[str, str]:
 def _snapshot(path: str, sid: str) -> None:
     """At the start of a run: what its settings and role look like (compared at its end, on_turn_end)."""
     try:
-        st = _read_state(path)
-        snaps = {k: v for k, v in (st.get("snapshots") or {}).items()
-                 if isinstance(v, dict) and time.time() - float(v.get("at") or 0) < 2 * 86400}
-        snaps[sid] = {"at": time.time(), "files": _fingerprint(path)}
-        st["snapshots"] = snaps
-        _write_state(path, st)
+        files = _fingerprint(path)
+        with _lock:                                     # the server and the runners write this file
+            st = _read_state(path)
+            snaps = {k: v for k, v in (st.get("snapshots") or {}).items()
+                     if isinstance(v, dict) and time.time() - float(v.get("at") or 0) < 2 * 86400}
+            snaps[sid] = {"at": time.time(), "files": files}
+            st["snapshots"] = snaps
+            _write_state(path, st)
     except Exception:  # noqa: BLE001 - never stops a run
         log.exception("agent %s: snapshot", path)
 
 
 def _changed_during(path: str, sid: str) -> list[str]:
     """The owned files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
-    st = _read_state(path)
-    snap = (st.get("snapshots") or {}).pop(sid, None)
-    if not isinstance(snap, dict):
-        return []
-    _write_state(path, st)
+    with _lock:
+        st = _read_state(path)
+        snap = (st.get("snapshots") or {}).pop(sid, None)
+        if not isinstance(snap, dict):
+            return []
+        _write_state(path, st)
     if float(st.get("owner_at") or 0) >= float(snap.get("at") or 0):
         return []
     now = _fingerprint(path)
