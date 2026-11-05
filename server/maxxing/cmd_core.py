@@ -2582,7 +2582,7 @@ def _uninstall_components(changed: list[str], purge: bool) -> None:
         systemctl("try-restart", "fail2ban", timeout=60)
         line(OK, f"fail2ban jail removed ({F2B_JAIL})")
     from . import proxylisten
-    if proxylisten.configured():
+    if proxylisten.saved(config.load_config()):
         r = proxylisten.disable()
         line(OK, f"proxy address {r['was']} closed" + (" and its ufw rules removed" if r["ufw"] else ""),
              "remove the harness-maxxing block from your Traefik")

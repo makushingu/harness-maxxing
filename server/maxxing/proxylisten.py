@@ -15,6 +15,7 @@ from __future__ import annotations
 import hmac
 import ipaddress
 import os
+import re
 import secrets as pysecrets
 import shutil
 import socket
@@ -28,6 +29,10 @@ HEADER = b"x-maxxing-proxy"
 SECRET_NAME = "proxy_secret"
 UFW_FROM = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")   # container networks (bridge, overlay)
 UFW_COMMENT = "Harness Maxxing (proxy in a container)"
+PRIVATE_NETS = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"))
+DOMAIN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")   # = install.sh valid_domain
+HEADER_TIMEOUT = 10.0       # s: a connection on the proxy address must send a whole request head in that time
+MAX_CONNECTIONS = 512       # open at once on the proxy address (each idle one costs memory and a file descriptor)
 IP_FREEBIND = 15            # Linux: bind before the interface exists (Docker may start after us)
 IPV6_FREEBIND = 78
 
@@ -44,9 +49,9 @@ def parse(value: str) -> tuple[str, int]:
         ip = ipaddress.ip_address(host)
     except ValueError:
         raise ValueError(f"{host!r}: an IP address is needed (e.g. 172.17.0.1)") from None
-    if ip.is_loopback or ip.is_unspecified or not ip.is_private:
-        raise ValueError(f"{host}: only a private address the containers reach (e.g. 172.17.0.1), "
-                         "never a public one, 0.0.0.0 or 127.0.0.1")
+    if not any(ip in net for net in PRIVATE_NETS):
+        raise ValueError(f"{host}: only a private address the containers reach (10/8, 172.16/12, 192.168/16, "
+                         "fc00::/7, e.g. 172.17.0.1), never a public one, 0.0.0.0 or 127.0.0.1")
     p = int(port)
     if not 1024 <= p <= 65535:
         raise ValueError(f"port {p}: between 1024 and 65535")
@@ -108,6 +113,7 @@ class Gate:
                 fwd.append(v)
             elif k == b"x-forwarded-proto":
                 proto = v
+                continue                                    # put back below as the single value used
             headers.append((k, v))
         if not given or not hmac.compare_digest(given, self.secret):
             if scope["type"] == "websocket":
@@ -123,9 +129,72 @@ class Gate:
             pass
         p = proto.split(b",")[-1].strip().lower()
         if p in (b"http", b"https"):
+            scope["headers"].append((b"x-forwarded-proto", p))   # cookies' Secure flag reads it (security.py)
             secure = p == b"https"
             scope["scheme"] = ("wss" if secure else "ws") if scope["type"] == "websocket" else p.decode()
         return await self.app(scope, receive, send)
+
+
+def guarded_protocol(port: int, base: type | None = None) -> type:
+    """The HTTP protocol of uvicorn, with two limits on the proxy address only (any container can open connections
+    there, before the secret is even read): a request head must arrive within HEADER_TIMEOUT (uvicorn has no such
+    timeout: half-sent requests would stay open forever), and at most MAX_CONNECTIONS at once."""
+    if base is None:
+        from uvicorn.protocols.http.auto import AutoHTTPProtocol as base   # noqa: N813
+    open_now: set = set()
+
+    class Guarded(base):  # type: ignore[misc, valid-type]
+        _mx_timer = None
+        _mx_mark: Any = None
+
+        def connection_made(self, transport: Any) -> None:
+            super().connection_made(transport)
+            sock = transport.get_extra_info("sockname")
+            self._mx_ours = bool(sock) and sock[1] == port
+            if not self._mx_ours:
+                return
+            if len(open_now) >= MAX_CONNECTIONS:
+                transport.close()
+                return
+            open_now.add(self)
+            self._mx_arm()
+
+        def _mx_arm(self) -> None:
+            if self._mx_timer:
+                self._mx_timer.cancel()
+            self._mx_mark = self.cycle
+            self._mx_timer = self.loop.call_later(HEADER_TIMEOUT, self._mx_expire)
+
+        def _mx_expire(self) -> None:
+            self._mx_timer = None
+            t = self.transport
+            if t is None or t.is_closing() or t.get_protocol() is not self:   # closed, or now a websocket
+                return
+            c = self.cycle                                  # no new request head since the timer started, and
+            if c is self._mx_mark and (c is None or c.response_complete):   # nothing being answered (pipelining)
+                t.close()
+
+        def handle_websocket_upgrade(self, *args: Any) -> None:
+            super().handle_websocket_upgrade(*args)
+            # the websocket protocol owns the connection from now on (its connection_lost is not ours): it leaves
+            # the count; a websocket without the secret is closed by the Gate right away
+            open_now.discard(self)
+            if self._mx_timer:
+                self._mx_timer.cancel()
+                self._mx_timer = None
+
+        def on_response_complete(self) -> None:
+            super().on_response_complete()
+            if getattr(self, "_mx_ours", False) and self.transport and not self.transport.is_closing():
+                self._mx_arm()                              # the next request head on a kept-alive connection
+
+        def connection_lost(self, exc: Exception | None) -> None:
+            open_now.discard(self)
+            if self._mx_timer:
+                self._mx_timer.cancel()
+            super().connection_lost(exc)
+
+    return Guarded
 
 
 def wrap(app: Any, cfg: dict | None = None) -> Any:
@@ -193,21 +262,30 @@ def _ufw(action: str, host: str, port: int) -> bool:
     return ok
 
 
-def enable(address: str = "", domain: str = "") -> dict:
+def saved(cfg: dict) -> tuple[str, int] | None:
+    try:
+        return parse(str(cfg.get("proxy_listen") or "")) if cfg.get("proxy_listen") else None
+    except ValueError:
+        return None
+
+
+def enable(address: str = "", domain: str = "", new_secret: bool = False) -> dict:
     cfg = config.load_config()
     host, port = parse(address or str(cfg.get("proxy_listen") or "") or DEFAULT)
+    domain = (domain or _host_of(cfg) or "ui.example.com").lower()
+    if len(domain) > 253 or not DOMAIN.match(domain):
+        raise ValueError(f"{domain!r}: not a domain name (e.g. ui.example.com)")
     if port == int(cfg.get("port") or 8787):
         raise ValueError(f"port {port} is the main port of Harness Maxxing: pick another one")
     if ":" in host and _ufw_active():
         raise ValueError(f"ufw is active: use an IPv4 address, or open {host} port {port} to your containers by hand")
-    old = configured(cfg)
-    secret = config.get_secret(SECRET_NAME) or pysecrets.token_urlsafe(32)
+    old = saved(cfg)
+    secret = (not new_secret and config.get_secret(SECRET_NAME)) or pysecrets.token_urlsafe(32)
     config.set_secret(SECRET_NAME, secret)
     config.update_config(proxy_listen=f"[{host}]:{port}" if ":" in host else f"{host}:{port}")
     if old and old != (host, port):
         _ufw("delete", *old)
     ufw = _ufw("allow", host, port)
-    domain = domain or _host_of(cfg) or "ui.example.com"
     f = config.STATE / "reverse-proxy.conf"           # holds the secret: 0600 (same file as install.sh writes)
     f.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -219,11 +297,10 @@ def enable(address: str = "", domain: str = "") -> dict:
 
 def disable() -> dict:
     cfg = config.load_config()
-    try:                                              # even without a secret: its ufw rules still go
-        old = parse(str(cfg.get("proxy_listen") or "")) if cfg.get("proxy_listen") else None
-    except ValueError:
-        old = None
+    old = saved(cfg)                                 # even without a secret: its ufw rules still go
     config.update_config(proxy_listen="")
+    config.set_secret(SECRET_NAME, None)              # a new one next time: the old block is worthless
+    (config.STATE / "reverse-proxy.conf").unlink(missing_ok=True)
     ufw = _ufw("delete", *old) if old else False
     return {"was": f"{old[0]}:{old[1]}" if old else "", "ufw": ufw}
 
@@ -234,6 +311,16 @@ def ufw_missing(host: str, port: int) -> bool:
         return False
     r = subprocess.run(["ufw", "status"], capture_output=True, text=True, timeout=30)
     return not any(host in ln and f"{port}/tcp" in ln for ln in r.stdout.splitlines())
+
+
+def address_present(host: str) -> bool:
+    """Some interface of this server has this address (Docker's bridge appears only once Docker runs)."""
+    with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, 0))
+        except OSError:
+            return False
+    return True
 
 
 def listening(host: str, port: int) -> bool:
