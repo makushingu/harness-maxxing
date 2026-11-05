@@ -667,16 +667,17 @@ def update(path: str, fields: dict) -> dict:
     from . import workspace
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
-    cur = load(path)
     f = dict(fields or {})
     description = f.pop("description", None)
-    if "limits" in f and isinstance(f["limits"], dict):
-        f["limits"] = {**cur["limits"], **f["limits"]}
-    if "avatar" in f and isinstance(f["avatar"], dict):
-        f["avatar"] = {**cur["avatar"], **f["avatar"]}
     known = set(clean({}).keys()) - {"version", "created"}
-    data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
-    _save(path, data)
+    with _lock:                                         # two PUT at once: both changes are kept
+        cur = load(path)
+        if "limits" in f and isinstance(f["limits"], dict):
+            f["limits"] = {**cur["limits"], **f["limits"]}
+        if "avatar" in f and isinstance(f["avatar"], dict):
+            f["avatar"] = {**cur["avatar"], **f["avatar"]}
+        data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
+        _save(path, data)
     if data["sandbox"] and not cur["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()
