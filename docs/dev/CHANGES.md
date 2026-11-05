@@ -73,6 +73,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   post, mark_seen, feed event of an agent: list + that agent's detail + thread, `busKeysOf` in keys.ts). The plain
   `agents` topic (create, patch, delete, crons) no longer refetches the templates nor the sandbox check.
 
+## 2.0.0-alpha.118 - 2026-11-05
+
+- Audit of a117 (`proxylisten.py`). `guarded_protocol(port)` = uvicorn's HTTP protocol (httptools or h11) with, on the
+  proxy socket only (`sockname` port): a request head within `HEADER_TIMEOUT` 10 s (re-armed after each response; a
+  response being sent is never cut), `MAX_CONNECTIONS` 512 (`open_now`; a websocket upgrade leaves the count, its
+  protocol owns `connection_lost`). Before: half-sent heads stayed open forever (~20 KB each, any container).
+  `PRIVATE_NETS` allow-list (is_private let 6to4, Teredo, 169.254, 198.18, ::ffff: through). `DOMAIN` = install.sh
+  `valid_domain` (a `--domain` with backticks wrote a Traefik rule). `--new-secret`; `disable()` drops the secret and
+  `reverse-proxy.conf`; `saved()` for the ufw rules of an old address. Gate keeps one X-Forwarded-Proto (the value
+  used; security.py reads it for Secure cookies). install.sh: docker0's address (`|| true` under pipefail), proxy
+  path only with Docker (Traefik on the host gets the 127.0.0.1 block), `dockerd*`, `setup_access` runs
+  `maxxing proxy off` outside domain mode.
+
 ## 2.0.0-alpha.117 - 2026-11-05
 
 - `proxylisten.py` + `maxxing proxy on|off|status`: config `proxy_listen` ("HOST:PORT", private address only, default

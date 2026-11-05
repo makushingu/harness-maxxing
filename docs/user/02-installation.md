@@ -155,15 +155,16 @@ Three ways:
 - **Tailscale or local mode** for Harness Maxxing: nothing to set up.
 - **The tool on another server**: Harness Maxxing reaches it through its API (key in the vault).
 - **The same server, through their Traefik**: install the tool first, then Harness Maxxing with a domain. The
-  installer sees Docker on 80/443 and runs `maxxing proxy on`: Harness Maxxing also listens on `172.17.0.1:8790` (the
-  server as seen from Docker; another private address: `maxxing proxy on 10.0.0.1:8790`) and writes the block to copy
+  installer sees Docker on 80/443 and runs `maxxing proxy on`: Harness Maxxing also listens on the address of Docker's
+  bridge, port 8790 (`172.17.0.1:8790` by default: the server as seen from Docker; another private address: `maxxing proxy on 10.0.0.1:8790`) and writes the block to copy
   into Traefik's dynamic configuration folder to `/var/lib/claude-maxxing/reverse-proxy.conf`. On an existing
   install: `maxxing proxy on`, copy the block, `systemctl restart claude-maxxing`.
 
 That second address refuses every request that does not carry the secret header of the block: another container
 cannot reach the UI directly nor pass for another visitor. With an active ufw, `maxxing proxy on` lets the private
 networks (where containers live) reach that port only; other machines of a private network can then reach it too, and
-get the same refusal without the secret. `maxxing proxy status` says when ufw blocks it. Updates never touch Traefik: its configuration is yours. Docker's published ports
+get the same refusal without the secret. A connection there must send its request within 10 s, and at most 512 are
+open at once. If the block leaks, `maxxing proxy on --new-secret` makes it worthless (copy the new one). `maxxing proxy status` says when ufw blocks it. Updates never touch Traefik: its configuration is yours. Docker's published ports
 bypass ufw (true of every Docker server). `maxxing proxy off` closes the address.
 
 ## Unattended install

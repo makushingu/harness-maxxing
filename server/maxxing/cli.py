@@ -35,7 +35,8 @@ def cmd_serve(a) -> int:
     if not extra or extra[1] == port:
         uvicorn.run(create_app(), **opts)
         return 0
-    uc = uvicorn.Config(proxylisten.wrap(create_app(), cfg), **opts)   # + an address for a proxy in a container
+    uc = uvicorn.Config(proxylisten.wrap(create_app(), cfg), http=proxylisten.guarded_protocol(extra[1]),
+                        **opts)                       # + an address for a proxy in a container
     sockets = [uc.bind_socket()]
     try:
         sockets.append(proxylisten.open_socket(*extra))
