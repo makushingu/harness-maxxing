@@ -197,21 +197,22 @@ def _agent_name(path: str) -> str:
 CUT_NOTE = "Only part of the request is shown: open it to see all of it before allowing."
 
 
-def _feed_new(d: dict) -> None:
+def _feed_new(d: dict) -> bool | None:
     """A waiting request = a Notifications event with Allow / Deny (source `agents`), once per request. When its
     summary is not the whole request (cut, or the content of a Write left out), no one-tap Allow: Deny and Open (the
-    request card shows everything)."""
+    request card shows everything). True: posted now, False: it already was, None: the feed failed."""
     try:
         from . import feed
         path = d.get("agent_path") or ""
         text, whole = summary(str(d.get("tool") or ""), d.get("input"))
         acts = ([{"id": "allow", "label": "Allow", "style": "primary"}] if whole else
                 [{"id": "open", "label": "Open", "style": "link"}])
-        feed.post(f"{_agent_name(path)} is waiting for your OK", text if whole else f"{text}\n{CUT_NOTE}",
+        return feed.post(f"{_agent_name(path)} is waiting for your OK", text if whole else f"{text}\n{CUT_NOTE}",
                   "warning", "agents", _agent_url(path), dedupe=f"approval:{d['id']}", ref=f"approval:{d['id']}",
-                  agent=path or None, actions=acts + [{"id": "deny", "label": "Deny", "style": "danger"}])
+                  agent=path or None, actions=acts + [{"id": "deny", "label": "Deny", "style": "danger"}]) is not None
     except Exception:  # noqa: BLE001 - the feed is a nicety here
         log.exception("feed event for an approval failed")
+        return None
 
 
 FEED_DONE = {"allow": "Allowed", "deny": "Denied", "timeout": "No answer in time, denied",
@@ -314,11 +315,15 @@ def scan(force: bool = False) -> bool:
 
 
 def prime() -> None:
-    """At startup: what is already there is not new (no repeated thread messages after a restart)."""
+    """At startup: what is already there is not new (no repeated thread messages after a restart), except a request
+    written while the server was down (its turn survives restarts): announced once, when it has no feed event yet."""
     now = time.time()
     for d in _all():
         if d.get("status") != "pending":
             _feed_done(d)                       # answered or expired while the server was down: its event says so
+        elif _running(d.get("session") or "") and _feed_new(d) is not False:
+            _post(d, "approval", short(str(d.get("tool") or ""), d.get("input")), status="pending")
+            _telegram("notify_approval", d)
         if d.get("status") != "pending" and now - float(d.get("decided_at") or d.get("at") or now) > KEEP_S:
             _file(d["id"]).unlink(missing_ok=True)
         else:
