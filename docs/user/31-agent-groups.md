@@ -60,7 +60,9 @@ Write a message as in any chat. Who answers depends on the names in it:
 | `what do you think?` (nobody named) | the lead; without a lead, the last member who spoke (else the first) |
 | `stop @publisher` | nobody: the publisher is **paused** until you name it again |
 
-While you type `@`, the names of the members are suggested. A member's `@name` is its folder name; when two
+While you type `@`, the members are suggested with their face (type a few letters of the `@name` or of the name).
+In the conversation every `@name` shows as a small badge with the member's face and name, and the line **To:** above
+the box shows who your message goes to before you send it. A member's `@name` is its folder name; when two
 members have the same one (three `writer` agents of different topics), it comes from their display names
 (`@writer-news`, `@writer-shop`): the group shows each member's `@name`. Members answer **one at a time**: each one reads what the
 others said before speaking.
