@@ -40,6 +40,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   once (web + Telegram) = one 200, one 409 `not_pending`.
 - Telegram `_alert_send_sync`: once the note `al:<id>` is stored, the event is read again (`feed.get`) and the message
   edited at once if it changed meanwhile (an `update_alert` during the send found no message to edit).
+- Telegram reply map: `state_dir('telegram')/messages.db` (SQLite `msgs(k, v, at)`, WAL) instead of `messages.json`
+  (taken in and deleted on first use), one connection per process (`synchronous=NORMAL`, reopened when the file is
+  replaced). A bound send was a 520 KB read + rewrite (62 ms at 5,000 entries), now ~0.2 ms;
+  same limits (MSGS_KEEP newest, MSGS_DAYS). `_msgs_all()` lists it.
 
 ## 2.0.0-alpha.116 - 2026-11-04
 
