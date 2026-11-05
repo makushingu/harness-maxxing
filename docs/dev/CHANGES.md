@@ -36,6 +36,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   buttons after a recreated feed.db, where ids restart, lose their buttons instead of deciding a new event).
 - `approvals.prime()` announces a pending request of a running turn that has no `approval:<id>` feed event yet
   (written while the server was down): feed event, thread message, Telegram; `_feed_new` returns True / False / None.
+- `approvals.decide` and the watcher's expiry read-check-write under `config.ProcessLock("approvals")`: two answers at
+  once (web + Telegram) = one 200, one 409 `not_pending`.
 
 ## 2.0.0-alpha.116 - 2026-11-04
 

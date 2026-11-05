@@ -127,17 +127,21 @@ def get(rid: str) -> dict:
     return d
 
 
+_lock = config.ProcessLock("approvals")     # read-check-write of a request (decide, the watcher's expiry)
+
+
 def decide(rid: str, decision: str, message: str = "", by: str = "web") -> dict:
     """The user's answer. 409 when the request is no longer waiting (answered, timed out, session stopped)."""
     if decision not in DECISIONS:
         raise ApprovalError(400, "bad_decision", "decision: allow or deny")
-    d = get(rid)
-    if d.get("status") != "pending":
-        raise ApprovalError(409, "not_pending", f"This request is already {d.get('status')}")
-    d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),
-             decided_by=by)
-    approval_mcp.write_atomic(_file(rid), d)
-    _seen[rid] = decision
+    with _lock:                                 # web, Telegram and the feed at once: one answer, the others get 409
+        d = get(rid)
+        if d.get("status") != "pending":
+            raise ApprovalError(409, "not_pending", f"This request is already {d.get('status')}")
+        d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),
+                 decided_by=by)
+        approval_mcp.write_atomic(_file(rid), d)
+        _seen[rid] = decision
     if _counts.get(d.get("session") or "", 0) > 0:
         _counts[d["session"]] -= 1
     _note(d)
@@ -287,9 +291,12 @@ def scan(force: bool = False) -> bool:
     for d in items:
         rid, st = d["id"], d.get("status")
         if st == "pending" and now - float(d.get("at") or now) > ORPHAN_GRACE_S and not _running(d.get("session") or ""):
-            d = {**d, "status": "expired", "decided_at": now}          # its turn is gone: nobody waits for it
-            approval_mcp.write_atomic(_file(rid), d)
-            st = "expired"
+            with _lock:                         # its turn is gone: nobody waits for it (unless answered meanwhile)
+                cur = approval_mcp.read(_file(rid)) or d
+                if cur.get("status") == "pending":
+                    cur = {**cur, "status": "expired", "decided_at": now}
+                    approval_mcp.write_atomic(_file(rid), cur)
+            d, st = cur, cur.get("status")
         final.append(d)
         prev = _seen.get(rid)
         if prev == st:
