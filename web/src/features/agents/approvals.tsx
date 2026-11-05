@@ -87,7 +87,9 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
     <>
       <button
         type="button"
-        className={cn('cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
+        // The marker is small (24 x 32 px): on touch its hit area is larger than its drawing, a near miss must not
+        // open the desk underneath.
+        className={cn("relative cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:before:absolute pointer-coarse:before:-inset-3 pointer-coarse:before:content-['']", className)}
         style={style}
         onClick={(e) => (stop(e), e.currentTarget.blur(), setOpen(true))}
         onKeyDown={stop}

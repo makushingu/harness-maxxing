@@ -65,7 +65,7 @@ export function FeaturesSection() {
               }
             >
               {tgReady && (
-                <Link to="/settings/telegram" className="text-sm font-medium text-primary hover:underline">
+                <Link to="/settings/telegram" className="inline-flex items-center text-sm font-medium text-primary hover:underline pointer-coarse:min-h-10">
                   {t(`telegram.mode.${tg?.settings?.mode ?? 'simple'}` as 'telegram.mode.simple')}
                 </Link>
               )}

@@ -248,7 +248,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
                     disabled={i > step}
                     onClick={() => setStep(i as Step)}
                     aria-current={i === step ? 'step' : undefined}
-                    className={cn('flex items-center gap-1.5 rounded-full px-2 py-1 disabled:cursor-default', i === step ? 'bg-primary/15 font-medium text-primary' : 'text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground')}
+                    className={cn("relative flex items-center gap-1.5 rounded-full px-2 py-1 disabled:cursor-default pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-['']", i === step ? 'bg-primary/15 font-medium text-primary' : 'text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground')}
                   >
                     <span className={cn('flex size-4 items-center justify-center rounded-full text-[10px] tabular-nums', i < step ? 'bg-primary text-primary-foreground' : 'border')}>{i < step ? <Check className="size-3" /> : i + 1}</span>
                     {label}
