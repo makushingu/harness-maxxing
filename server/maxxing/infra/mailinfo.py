@@ -116,10 +116,15 @@ def cloudflare_mail() -> dict:
     def zone(z: dict) -> dict:
         item: dict[str, Any] = {"zone": z.get("id"), "name": z.get("name"), "routing": None, "rules": []}
         try:
-            r = cf.get(f"/zones/{z['id']}/email/routing").get("result") or {}
-            item["routing"] = {"enabled": bool(r.get("enabled")), "status": r.get("status")}
-            if not item["routing"]["enabled"]:
-                return item
+            try:
+                r = cf.get(f"/zones/{z['id']}/email/routing").get("result") or {}
+                item["routing"] = {"enabled": bool(r.get("enabled")), "status": r.get("status")}
+                if not item["routing"]["enabled"]:
+                    return item
+            except ProviderError as e:
+                # the routing settings need their own permission; the rules (what matters here) may still be readable
+                if _err(e).get("error") != "missing_permission":
+                    raise
             rules = [_cf_rule(x) for x in cf.all(f"/zones/{z['id']}/email/routing/rules", 50, 500) if isinstance(x, dict)]
             if not any(x["catch_all"] for x in rules):
                 try:
@@ -129,6 +134,8 @@ def cloudflare_mail() -> dict:
                 except (ProviderError, *_ODD):
                     pass
             item["rules"] = rules
+            if item["routing"] is None:                 # settings unreadable, rules read: routing is on if a rule is
+                item["routing"] = {"enabled": any(x.get("enabled") for x in rules), "status": None}
         except (ProviderError, *_ODD) as e:
             item.update(_err(e))
             if item["error"] == "missing_permission":
