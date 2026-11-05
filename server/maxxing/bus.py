@@ -2,7 +2,8 @@
 
 Any code (async or a worker thread) calls `invalidate("sessions", "tasks")`; every connected
 browser receives `event: invalidate` with the topics and refetches the matching queries.
-Topics: sessions, workspace, tasks, crons, telegram, backup, health, extensions.
+Topics: sessions, workspace, tasks, crons, telegram, backup, health, extensions... (`agents:<path>` = one agent's
+thread / unread, `agents_layout` = the Office layout only).
 """
 from __future__ import annotations
 

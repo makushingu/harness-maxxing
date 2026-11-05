@@ -69,6 +69,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   scanned"; `pending` = the debounced batches (`Debouncer.dump/load`, reloaded at the first scan of the process);
   `off` is set by the server loop while Agents is off (`agents.pause_feed`), and the next scan skips the events since
   then (`agents.skip_backlog`: one `note` with `status: skipped_off, events: n` per agent that had matches).
+- Agents bus topics are finer: `agents_layout` (save_layout: the layout query only) and `agents:<path>` (thread
+  post, mark_seen, feed event of an agent: list + that agent's detail + thread, `busKeysOf` in keys.ts). The plain
+  `agents` topic (create, patch, delete, crons) no longer refetches the templates nor the sandbox check.
 
 ## 2.0.0-alpha.116 - 2026-11-04
 

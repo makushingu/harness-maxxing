@@ -246,7 +246,7 @@ def save_layout(data: Any) -> dict:
         extra = {k: v for k, v in (old.items() if isinstance(old, dict) else ()) if k not in new}
         config.write_json(_layout_file(), {**extra, **new})
     from . import bus
-    bus.invalidate("agents")
+    bus.invalidate("agents_layout")              # the layout only: no agent, thread or status changed
     return load_layout()
 
 
@@ -788,13 +788,14 @@ def post(path: str, kind: str, text: str, **extra: Any) -> dict:
             tmp = f.with_suffix(".tmp")
             tmp.write_text("\n".join(lines) + "\n")
             tmp.replace(f)
-    _invalidate_thread()
+    _invalidate_thread(path)
     return msg
 
 
-def _invalidate_thread() -> None:
+def _invalidate_thread(path: str) -> None:
+    """This agent's thread / unread changed: `agents:<path>` refreshes the list, its page and its thread only."""
     from . import bus
-    bus.invalidate("agents")
+    bus.invalidate(f"agents:{path}")
 
 
 def thread(path: str, limit: int = 100, before: float | None = None) -> list[dict]:
@@ -1000,7 +1001,7 @@ def mark_seen(path: str) -> None:
         st = _read_state(path)
         st["seen_at"] = time.time()
         _write_state(path, st)
-    _invalidate_thread()
+    _invalidate_thread(path)
     tidy(path)
 
 

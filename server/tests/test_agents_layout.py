@@ -69,3 +69,17 @@ def test_rename_moves_the_layout(client, topic):
     lay = agents.load_layout()
     assert lay["projects"] == ["shop"] and lay["colors"] == {"shop": "amber"}
     assert lay["agents"] == {"shop": ["projects/shop/topics/news/agents/writer"]}
+
+
+def test_bus_topics_name_what_changed(mx, monkeypatch):
+    """A layout save announces the layout only, a thread message / "seen" / feed event of an agent names that agent:
+    the browsers refetch that agent's page and thread, not every agent query."""
+    from maxxing import bus, feed
+    sent: list[tuple] = []
+    monkeypatch.setattr(bus, "invalidate", lambda *t: sent.append(t))
+    agents.save_layout({"projects": [], "colors": {}, "agents": {}})
+    agents.post(A, "note", "hello")
+    agents.mark_seen(A)
+    feed.post("Done", "", "info", "agents", notify=False, agent=A)
+    assert sent[:3] == [("agents_layout",), (f"agents:{A}",), (f"agents:{A}",)]
+    assert ("feed", f"agents:{A}") in sent and not any("agents" in t for t in sent)
