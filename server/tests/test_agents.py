@@ -589,3 +589,26 @@ def test_the_same_agent_created_twice_at_once_answers_409(client, topic, monkeyp
     monkeypatch.setattr(Path, "mkdir", racing)
     r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "writer"})
     assert r.status_code == 409, r.text
+
+
+def test_two_updates_at_once_keep_both_changes(client, topic, monkeypatch):
+    import threading
+    _on(client)
+    _create(client)
+    gate = threading.Barrier(2)
+    real = agents.load
+
+    def slow_load(path):                            # both requests read agent.json before either writes it
+        d = real(path)
+        try:
+            gate.wait(timeout=0.5)
+        except threading.BrokenBarrierError:
+            pass
+        return d
+    monkeypatch.setattr(agents, "load", slow_load)
+    t = threading.Thread(target=lambda: agents.update(A, {"model": "sonnet"}))
+    t.start()
+    agents.update(A, {"telegram": True})
+    t.join()
+    d = real(A)
+    assert d["model"] == "sonnet" and d["telegram"] is True
