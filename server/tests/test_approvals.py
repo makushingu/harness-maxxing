@@ -220,6 +220,24 @@ def test_orphan_request_is_expired_by_the_watcher(client, topic, mx, monkeypatch
     assert json.loads((folder / "00112233aabbccdd.json").read_text())["status"] == "expired"
 
 
+def test_a_request_written_while_the_server_was_down_is_announced_once(client, topic, mx, monkeypatch):
+    from maxxing import agents, approval_mcp, approvals, feed
+    _agent(client, approvals=True)
+    monkeypatch.setattr(approvals, "_running", lambda sid: True)
+    approvals._seen.clear()
+    folder = approvals.folder()
+    folder.mkdir(parents=True, exist_ok=True)
+    rid = "0123456789abcdef"
+    approval_mcp.write_atomic(folder / f"{rid}.json", {
+        "id": rid, "session": "s1", "agent_path": A, "tool": "Bash", "input": {"command": "git push"},
+        "at": time.time(), "expires": time.time() + 1800, "status": "pending"})
+    for _ in range(2):                                      # a second restart: not again
+        approvals.prime()
+        approvals.scan(force=True)
+    assert feed.find(f"approval:{rid}")
+    assert [m["kind"] for m in agents.thread(A) if m.get("approval") == rid] == ["approval"]
+
+
 def test_stopped_turn_expires_its_requests(client, topic, mx):
     _agent(client, approvals=True)
     sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
