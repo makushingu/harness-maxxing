@@ -244,7 +244,9 @@ until you switch it on):
 When to switch it off: the agent must write outside its topic, use the server's own logins (git or `gh`
 credentials, SSH keys) or deploy into system folders. Off, its commands can do everything the server's user can.
 
-The sandbox needs `bubblewrap` and `socat`, and on Ubuntu 24.04+ a small AppArmor profile; the installer adds them.
+The sandbox needs `bubblewrap` and `socat` (the installer adds them), and on Ubuntu 24.04+ a small AppArmor profile
+that lets `/usr/bin/bwrap` create user namespaces for every local user: it is loaded only when you create (or
+sandbox) an agent, or by `maxxing agents sandbox-setup`, never by the installer.
 If one is missing, the agent's page says so and its runs stop instead of running without walls:
 `maxxing agents sandbox-setup` (as root) installs them, `maxxing doctor` checks them. It is a strong fence, not a
 vault: the turn still runs as the server's user, MCP servers and tools you allow outside the shell are not inside it.

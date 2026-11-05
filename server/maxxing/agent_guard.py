@@ -14,7 +14,7 @@
 
 Ubuntu 24.04+ restricts user namespaces (kernel.apparmor_restrict_unprivileged_userns=1): bubblewrap needs an
 AppArmor profile allowing them (`APPARMOR_PROFILE`), or every sandboxed command fails. `available()` checks it all;
-`maxxing agents sandbox-setup` installs what is missing. Imports stay light (the session runner reads this).
+`maxxing agents sandbox-setup` installs what is missing; the first sandboxed agent loads the profile (`ensure_profile`). Imports stay light (the session runner reads this).
 """
 from __future__ import annotations
 
@@ -98,12 +98,34 @@ def setup() -> list[str]:
         env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
         subprocess.run(["apt-get", "install", "-y", "-q", *pkgs], check=True, env=env, stdout=subprocess.DEVNULL)
         done.append("installed " + ", ".join(pkgs))
-    if _userns_restricted() and not _bwrap_profile_loaded():
-        APPARMOR_FILE.write_text(APPARMOR_PROFILE)
-        subprocess.run(["apparmor_parser", "-r", str(APPARMOR_FILE)], check=True)
+    if load_profile():
         done.append(f"AppArmor profile {APPARMOR_FILE}")
     available(fresh=True)
     return done
+
+
+def load_profile() -> bool:
+    """Load the AppArmor profile when the kernel restricts user namespaces and it is missing (root). It lets
+    /usr/bin/bwrap create them for every local user, so it is loaded only once agents are sandboxed: by
+    `sandbox-setup` or the first sandboxed agent (`ensure_profile`), never by the installer. True = loaded now."""
+    import subprocess
+    if not _userns_restricted() or _bwrap_profile_loaded():
+        return False
+    APPARMOR_FILE.write_text(APPARMOR_PROFILE)
+    subprocess.run(["apparmor_parser", "-r", str(APPARMOR_FILE)], check=True)
+    return True
+
+
+def ensure_profile() -> None:
+    """Best effort, when a sandboxed agent is created or sandboxed: the profile its runs need (else they stop and the
+    agent page points at `maxxing agents sandbox-setup`)."""
+    if os.environ.get("MAXXING_SANDBOX_CHECK") == "0" or sys.platform != "linux" or os.geteuid() != 0:
+        return
+    try:
+        if load_profile():
+            available(fresh=True)
+    except Exception:                               # noqa: BLE001 - no apparmor_parser, read-only /etc...
+        pass
 
 
 # ---- settings of a sandboxed turn ------------------------------------------------------------------
