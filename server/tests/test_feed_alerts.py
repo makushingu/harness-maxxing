@@ -62,6 +62,14 @@ def test_event_buttons_update_and_act(client, mx):
     done = feed.resolve("x:1", "Fixed")
     assert done["resolved"] and done["actions"] == [] and done["resolution"] == "Fixed"
     assert feed.find("x:1") is None and feed.find("x:1", open_only=False)["id"] == ev["id"]
+    # every open event of a ref ends, not only the newest (an older one was read, so a repeat did not fold into it)
+    old = feed.post("Run failed", "", "error", "agents", group="g", ref="x:2", actions=[{"id": "open"}])
+    feed.mark_read([old["id"]])
+    new = feed.post("Run failed", "", "error", "agents", group="g", ref="x:2", actions=[{"id": "open"}])
+    assert new["id"] != old["id"]
+    assert feed.resolve("x:2", "Worked")["id"] == new["id"]
+    assert all(feed.get(i)["resolved"] and feed.get(i)["actions"] == [] for i in (old["id"], new["id"]))
+    assert feed.resolve("x:2") is None
     # resolved: a late click gets the same event back, no error
     assert client.post(f"/api/feed/{ev['id']}/act/fix").json()["event"]["resolution"] == "Fixed"
     # listed with the new fields; old events (no column values) read fine
