@@ -274,8 +274,9 @@ class Runner:
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
         from maxxing import agents                      # an agent folder: its model and tool lists
-        agent = agents.run_settings(meta.get("path") or "", (meta.get("env") or {}).get("MAXXING_AGENT_OUTSIDE") == "1",
-                                    session=self.sid)
+        env = meta.get("env") or {}
+        agent = agents.run_settings(meta.get("path") or "", env.get("MAXXING_AGENT_OUTSIDE") == "1",
+                                    session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         if agent.get("sandbox"):                        # Claude Code's sandbox; never bypass (domains not enforced)

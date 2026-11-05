@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.119 - 2026-11-05
+
+New:
+- **Agent groups**: put 2 to 6 agents of a project in one conversation. You write; they answer in turn, read each
+  other and hand work over with `@name` (a writer drafts, a reviewer checks, a publisher puts it online), each `@name`
+  shown with the member's face. Name who
+  answers (`@writer`, `@all`, or nobody: the lead), pause a member with `stop @name`, stop everything with one button.
+  Each member keeps its own memory, budget and sandbox, and the group has a shared folder where all of them can
+  write. Limits stop agents from talking in circles. On the Agents page, next to New agent. [Show me](#show:agent-groups)
+
 ## 2.0.0-alpha.118 - 2026-11-05
 
 Fixes:

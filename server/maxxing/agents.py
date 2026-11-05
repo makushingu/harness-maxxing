@@ -461,16 +461,23 @@ OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep
               "(what and why); the owner applies it.")
 
 
-def run_settings(path: str, outside: bool = False, session: str | None = None) -> dict:
+def run_settings(path: str, outside: bool = False, session: str | None = None, group: str = "") -> dict:
     """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
     args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
     agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
     risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
     its turns see. session: the session whose turn starts now - the budget cap it gets is held for it until the turn
-    ends, so turns running side by side never get the same money twice."""
+    ends, so turns running side by side never get the same money twice. group: the agent group whose session this
+    is (MAXXING_AGENT_GROUP, agent_rooms.py): its shared folder is writable, a hand-over is outside text unless the
+    group trusts its members."""
     if not exists(path):
         return {}
     a = load(path)
+    if group:
+        from . import agent_rooms
+        if agent_rooms.is_member(group, path):
+            a = {**a, "writable": list(a["writable"]) + agent_rooms.turn_writable(group)}
+            outside = outside or bool(session and agent_rooms.turn_outside(group, session))
     args: list[str] = []
     if a["allowed_tools"]:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
@@ -636,9 +643,10 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     return get(path)
 
 
-def _git_exclude(tdir: Path) -> None:
+def _git_exclude(tdir: Path, sub: str = AGENTS_DIR) -> None:
     """A topic that is (or sits in) a git clone - a blog, an app - must not commit its agents: their folder goes to
-    the clone's local `.git/info/exclude` (never to a tracked .gitignore). Best effort."""
+    the clone's local `.git/info/exclude` (never to a tracked .gitignore). Best effort. sub: the folder to keep out
+    (`groups` for a project's agent groups, agent_rooms.py)."""
     try:
         root = _ws().resolve()
         d = tdir.resolve()
@@ -651,7 +659,7 @@ def _git_exclude(tdir: Path) -> None:
                     g = (g / (g / "commondir").read_text().strip()).resolve()
             if g and g.is_dir():
                 rel = tdir.resolve().relative_to(d).as_posix()
-                pattern = "/agents/" if rel == "." else f"/{rel}/agents/"
+                pattern = f"/{sub}/" if rel == "." else f"/{rel}/{sub}/"
                 ex = g / "info" / "exclude"
                 text = ex.read_text(errors="replace") if ex.is_file() else ""
                 if pattern not in text.splitlines():
@@ -660,7 +668,7 @@ def _git_exclude(tdir: Path) -> None:
                 return
             d = d.parent
     except OSError:
-        log.warning("could not exclude the agents folder of %s from its git clone", tdir, exc_info=True)
+        log.warning("could not exclude the %s folder of %s from its git clone", sub, tdir, exc_info=True)
 
 
 def update(path: str, fields: dict) -> dict:
@@ -781,6 +789,11 @@ def remap(old_prefix: str, new_prefix: str) -> None:
                 crons.update_job(j["id"], {"topic_path": new_prefix + tp[len(old_prefix):]})
     except Exception:
         log.exception("agent cron jobs not moved (%s -> %s)", old_prefix, new_prefix)
+    try:                                                # agent groups: members' paths, a project's room files
+        from . import agent_rooms
+        agent_rooms.remap(old_prefix, new_prefix)
+    except Exception:
+        log.exception("agent groups not moved (%s -> %s)", old_prefix, new_prefix)
 
 
 # ---- the agent's thread (Activity) ------------------------------------------------------------------
@@ -957,8 +970,8 @@ def day_cost(path: str, when: float | None = None, metas: list[dict] | None = No
 
 def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
     cutoff = time.time() - 3600
-    return sum(1 for m in (thread(path, 500) if msgs is None else msgs)
-               if m.get("kind") == "run" and (m.get("at") or 0) > cutoff)
+    return sum(1 for m in (thread(path, 500) if msgs is None else msgs)    # a group's turns: the group's limits
+               if m.get("kind") == "run" and not m.get("group") and (m.get("at") or 0) > cutoff)
 
 
 def status(path: str, metas: list[dict] | None = None) -> dict:
@@ -1390,7 +1403,15 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                 cost = round(float(result[k]), 4)
                 break
     _release(path, session["id"])
-    msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost)
+    from .sessions import store
+    group = str(((store.read(session["id"]) or {}).get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
+    msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost, **({"group": group} if group else {}))
+    if group:
+        try:
+            from . import agent_rooms
+            agent_rooms.on_turn_end(group, path, session["id"], text, ok, cost)
+        except Exception:  # noqa: BLE001
+            log.exception("agent %s: group %s turn end", path, group)
     try:
         _turn_alert(path, session, ok, text)
     except Exception:  # noqa: BLE001 - the feed is a nicety here
@@ -1402,7 +1423,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                                "the agent page.", status="changed", session=session["id"], files=changed)
     except Exception:  # noqa: BLE001
         log.exception("agent %s: changed files check", path)
-    if load(path)["telegram"]:
+    if load(path)["telegram"] and not group:          # a group's answers are read in the group
         try:
             from .telegram import gateway
             gateway.notify_agent(path, text, ok=ok, thread_msg=msg["id"])

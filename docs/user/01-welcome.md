@@ -56,7 +56,8 @@ missing and never re-create a project or topic you deleted.
   what you pick and any message can go to a session.
 - **Agents** (Settings -> Features): lasting roles inside a topic - a writer, an order handler, a lead sorter - each
   with its role, its memory and a little character; they start by themselves (a schedule, a webhook, a notification,
-  their Telegram thread, another agent), within a daily budget. See [Agents](agents).
+  their Telegram thread, another agent), within a daily budget. See [Agents](agents). A [group](agent-groups) puts
+  several of them in one conversation: you write, they answer in turn and hand work to each other.
 - **Tasks**: a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons**: scheduled shell commands or Harness prompts, with history and Telegram reports.
 - **Telegram**: talk to the same sessions from your phone, one thread per open session.

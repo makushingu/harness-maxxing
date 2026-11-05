@@ -183,6 +183,86 @@ export type AgentTemplate = {
 export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
 export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
 export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }
+/** A member of an agent group (an agent of the group's project). `handle` = its @name in the group: its folder name,
+ *  or made from its display name when two members share a folder name (`slug` = the same, older name). */
+export type AgentGroupMember = {
+  path: string
+  handle: string
+  slug: string
+  /** one line: what it does in this group */
+  role: string
+  /** false: the agent was deleted (it no longer speaks) */
+  exists: boolean
+  display_name: string
+  avatar: AgentAvatar
+  enabled: boolean
+  /** "stop @slug" or the pause button: it does not speak until named again */
+  paused: boolean
+  /** its turn is in progress */
+  speaking: boolean
+}
+export type AgentGroupLimits = { waves: number; replies: number; per_hour: number }
+/** An agent group = a folder projects/<p>/groups/<g>/ (CLAUDE.md = its goal, group.json, files/ = the shared folder).
+ *  Only the owner writes; the members answer in turn and hand over with @slug. */
+export type AgentGroup = {
+  /** projects/<p>/groups/<g> */
+  path: string
+  project: string
+  /** folder slug */
+  name: string
+  display_name: string
+  /** "" when none */
+  emoji: string
+  goal: string
+  members: AgentGroupMember[]
+  /** member path ("" = none: the last one who spoke, else the first member) */
+  lead: string
+  shared_files: boolean
+  trust_members: boolean
+  limits: AgentGroupLimits
+  created: number
+  /** projects/<p>/groups/<g>/files, "" when the shared folder is off */
+  files_path: string
+  /** a turn in progress or members waiting their turn */
+  busy: boolean
+  /** the member path speaking now, "" */
+  speaking: string
+  /** the session of the turn in progress, "" */
+  speaking_session: string
+  last_at: number
+  /** 1: a member spoke since the owner last opened the group */
+  unread: number
+}
+/** One line of a group's conversation. kind: message (author "me" or a member path), pass (it had nothing to add),
+ *  skip (a member could not speak: `reason`), note / stop (system lines, author ""). */
+export type AgentGroupMessage = {
+  id: string
+  at: number
+  kind: 'message' | 'pass' | 'skip' | 'note' | 'stop'
+  author: string
+  text: string
+  session?: string
+  cost?: number | null
+  reason?: string
+  /** note: the limit reached (waves, replies, per_hour) */
+  limit?: string
+  /** note: "New topic" (the members start fresh sessions) */
+  reset?: boolean
+}
+export type AgentGroupInput = {
+  /** create only */
+  project?: string
+  /** create only: the folder slug */
+  name?: string
+  display_name?: string
+  emoji?: string
+  goal?: string
+  members?: { path: string; role: string }[]
+  lead?: string
+  shared_files?: boolean
+  trust_members?: boolean
+  limits?: Partial<AgentGroupLimits>
+}
 /** The order and colours picked by hand on the Agents page (GET/PUT /api/agents/layout), the same on every device. */
 export type AgentsLayout = { projects: string[]; colors: Record<string, string>; agents: Record<string, string[]> }
 export type AgentInput = {
@@ -329,7 +409,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
