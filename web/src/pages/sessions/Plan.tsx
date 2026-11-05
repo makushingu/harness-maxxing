@@ -41,7 +41,7 @@ export function PlanNotice({ session, onAdjust }: { session: Session; onAdjust: 
             onClick={() => patch.mutate({ id: session.id, plan_mode: false })}
             disabled={patch.isPending}
             aria-label={t('plan.leave')}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:size-10"
           >
             <X className="size-3.5" />
           </button>
@@ -68,7 +68,7 @@ export function PlanChip({ session }: { session: Session }) {
         aria-label={t('plan.chip')}
         onClick={() => patch.mutate({ id: session.id, plan_mode: false })}
         className={cn(
-          'inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-primary/12 px-2 text-xs font-medium whitespace-nowrap text-primary transition-colors hover:bg-primary/20',
+          'inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-primary/12 px-2 text-xs pointer-coarse:h-10 font-medium whitespace-nowrap text-primary transition-colors hover:bg-primary/20',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         )}
       >

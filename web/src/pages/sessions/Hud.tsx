@@ -16,7 +16,7 @@ import { useT } from '@/i18n'
 import { useSessionLog, type Item } from './log'
 import { usePending } from './store'
 import { useApprove } from './Plan'
-import { baseName, FILE_HREF, isImage, isVideo, linkifyMarkdown, mediaPaths } from './util'
+import { baseName, FILE_HREF, fileHrefPath, isImage, isVideo, linkifyMarkdown, mediaPaths } from './util'
 import { Thumb } from '@/features/files/Thumb'
 
 const W = 520
@@ -226,7 +226,10 @@ function AnswerView({ text, filesRoot, onOpen }: { text: string; filesRoot: stri
   }, [text, media, filesRoot])
   const onLink = React.useCallback(
     (href: string) => {
-      if (href.startsWith(FILE_HREF)) return () => onOpen(`/files?path=${encodeURIComponent(decodeURIComponent(href.slice(FILE_HREF.length)))}`)
+      if (href.startsWith(FILE_HREF)) {
+        const p = fileHrefPath(href)
+        return p === null ? null : () => onOpen(`/files?path=${encodeURIComponent(p)}`)
+      }
       if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/api/')) return () => onOpen(href)
       return null
     },
