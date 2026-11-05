@@ -144,6 +144,12 @@ def test_failed_runs_fold_into_one_alert_ended_by_a_good_run(client, topic, mx):
     wait_idle(client, sid)
     done = wait_for(lambda: (e := feed.find(f"agent:{A}#failed", open_only=False)) and e["resolved"] and e, timeout=10)
     assert done["resolution"] == "The next run worked"
+    # failing again after the recovery: a new open alert, not a repeat folded into the resolved one
+    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "FAIL again"}).json()["session"]["id"]
+    wait_idle(client, sid)
+    again = wait_for(lambda: feed.find(f"agent:{A}#failed"), timeout=10)
+    assert again["id"] != done["id"] and again["count"] == 1 and again["actions"][0]["id"] == "open"
+    assert feed.get(done["id"])["count"] == 2 and feed.agent_alerts(A) == 1
 
 
 def test_budget_and_rate_alerts_once_until_the_agent_runs_again(client, topic, mx, monkeypatch):
