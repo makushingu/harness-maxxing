@@ -974,6 +974,12 @@ class Gateway:
         if not _feed_alerts():
             await self._edit_markup(msg, None)
             return _w("cb_done")
+        # only the message posted for that event: an older one with the same id (feed.db recreated, ids restarted)
+        # must not decide a new, unrelated request
+        info, here = _notes().get(f"al:{aid}"), [str((msg.get("chat") or {}).get("id")), str(msg.get("message_id"))]
+        if not info or [str(x) for x in info[:2]] != here:
+            await self._edit_markup(msg, None)
+            return _w("cb_done")
         try:
             ev = await asyncio.to_thread(feed.act, int(aid), action, by="telegram")
         except Exception as e:  # noqa: BLE001 - FeedError (bad action, gone), ApprovalError (unknown request)

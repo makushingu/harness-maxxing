@@ -216,6 +216,11 @@ async def test_feed_alerts_buttons_call_feed_act(api, tg, svc, monkeypatch):
     assert [b["callback_data"] for b in p["reply_markup"]["inline_keyboard"][0]] == ["al:7:allow", "al:7:deny"]
     assert not p.get("disable_notification") and p.get("message_thread_id") is None
     mid = gateway._notes()["al:7"][1]
+    # an older message with the same event id (feed.db recreated) decides nothing, and loses its buttons
+    tg.callback("al:7:allow", message_id=mid + 100)
+    await wait_for(lambda: any(q.get("message_id") == mid + 100 for q in tg.sent("editMessageReplyMarkup")),
+                   what="stale buttons cleared")
+    assert acted == []
     tg.callback("al:7:allow", message_id=mid)
     await wait_for(lambda: acted == [(7, "allow", "telegram")], what="act")
     await wait_for(lambda: any("Allowed on Telegram" in (q.get("text") or "") for q in tg.sent("editMessageText")),
