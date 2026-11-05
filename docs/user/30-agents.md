@@ -130,7 +130,8 @@ The page is a **conversation** with the agent, like a contact in a chat app:
   continued already opens the same copy again.
 - Finished runs you have read are filed away by themselves; nothing is lost: every result keeps its **Open the run**.
 
-On the right (**Profile** on a phone):
+On the right (**Profile** on a phone; on a computer **Profile** folds and unfolds it, remembered in the browser, and
+it starts folded on screens narrower than 1600 px so the conversation keeps its room):
 
 - **Its character and name** at the top: click them to change its **name and look** (a pencil shows on hover).
 - **Its role**: click it to edit (its `CLAUDE.md`).

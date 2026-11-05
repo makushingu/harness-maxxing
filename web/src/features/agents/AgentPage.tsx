@@ -47,10 +47,16 @@ export default function AgentPage() {
   const { project = '', topic = '', name = '' } = useParams()
   const path = `projects/${project}/topics/${topic}/agents/${name}`
   const { data: a, isLoading, error, refetch } = useAgent(on === false ? null : path)
-  // The profile sits on the right of the conversation when there is room next to the list of agents.
-  const wide = useMediaQuery('(min-width: 1280px)')
+  // The profile can sit on the right of the conversation when there is room next to the list of agents: shown by
+  // default from 1600 px, folded below (the conversation would be narrower than a phone); "Profile" folds / unfolds
+  // it, remembered in this browser. Narrower: a sheet.
+  const dockable = useMediaQuery('(min-width: 1280px)')
+  const roomy = useMediaQuery('(min-width: 1600px)')
+  const [docked, setDocked] = useDockedProfile()
+  const wide = dockable && (docked ?? roomy)
   const touch = useCompact()
   const [profile, setProfile] = React.useState(false)
+  const openProfile = () => (dockable ? setDocked(!wide) : setProfile(true))
   // On a phone the agent is full screen: back to the list (on a computer the list stays on the left).
   const back = touch ? (
     <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
@@ -97,16 +103,20 @@ export default function AgentPage() {
         leading={
           <div className="flex items-center gap-2">
             {back}
-            <button type="button" onClick={() => !wide && setProfile(true)} className={cn('shrink-0', wide && 'cursor-default')} aria-label={t('agents.panel.open')}>
+            <button type="button" onClick={() => !wide && openProfile()} className={cn('relative shrink-0', wide && 'cursor-default')} aria-label={t('agents.panel.open')}>
               <AgentAvatarIcon avatar={a.avatar} size={32} />
+              {running && <StatusDot tone="running" pulse label={t('agents.runningNow')} className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background sm:hidden" />}
             </button>
           </div>
         }
         title={
-          <span className="flex items-center gap-2">
-            <Sensitive length={8}>{a.display_name}</Sensitive>
+          // On a phone the name keeps the room: "Running now" is a dot on the avatar there.
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate">
+              <Sensitive length={8}>{a.display_name}</Sensitive>
+            </span>
             {running ? (
-              <Badge variant="default" className="gap-1">
+              <Badge variant="default" className="shrink-0 gap-1 max-sm:hidden">
                 <StatusDot tone="running" pulse className="size-1.5" /> {t('agents.runningNow')}
               </Badge>
             ) : (
@@ -126,12 +136,13 @@ export default function AgentPage() {
                 <EnabledSwitch agent={a} />
               </span>
             </Tooltip>
-            <EditWithClaude agent={a} />
-            {!wide && (
-              <Button variant="outline" size="sm" onClick={() => setProfile(true)} data-testid="agent-profile-open">
-                <Info /> <span className="max-sm:sr-only">{t('agents.panel.open')}</span>
-              </Button>
-            )}
+            {/* Phone: in the profile only (its "Edit with Claude" row), the header leaves the room to the name. */}
+            <span className="contents max-sm:hidden">
+              <EditWithClaude agent={a} />
+            </span>
+            <Button variant={wide ? 'secondary' : 'outline'} size="sm" onClick={openProfile} aria-pressed={dockable ? wide : undefined} data-testid="agent-profile-open">
+              <Info /> <span className="max-sm:sr-only">{t('agents.panel.open')}</span>
+            </Button>
           </>
         }
       />
@@ -143,7 +154,7 @@ export default function AgentPage() {
           </aside>
         )}
       </div>
-      {!wide && (
+      {!dockable && (
         <Sheet open={profile} onOpenChange={setProfile}>
           <SheetContent side="right" data-testid="agent-profile">
             <SheetHeader>
@@ -157,6 +168,30 @@ export default function AgentPage() {
       )}
     </div>
   )
+}
+
+const DOCK_KEY = 'mx-agent-profile'
+
+/** The user's choice for the profile column on a computer: shown, folded, or null (the default for the width). */
+function useDockedProfile(): [boolean | null, (v: boolean) => void] {
+  const read = () => {
+    try {
+      const v = localStorage.getItem(DOCK_KEY)
+      return v === 'shown' ? true : v === 'folded' ? false : null
+    } catch {
+      return null
+    }
+  }
+  const [docked, setState] = React.useState<boolean | null>(read)
+  const set = React.useCallback((v: boolean) => {
+    setState(v)
+    try {
+      localStorage.setItem(DOCK_KEY, v ? 'shown' : 'folded')
+    } catch {
+      /* private mode: this page only */
+    }
+  }, [])
+  return [docked, set]
 }
 
 function EnabledSwitch({ agent: a }: { agent: AgentDetail }) {
