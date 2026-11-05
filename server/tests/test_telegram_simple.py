@@ -55,7 +55,7 @@ async def test_simple_mode_no_threads_and_replies_continue(api, tg, svc):
     ans = _bot("Here is the plan", tg)
     assert ans["reply_parameters"]["message_id"] == mid and ans.get("message_thread_id") is None
     # the answer's message id (bound to the session)
-    bound = config.read_json(gateway._msgs_path(), {})
+    bound = gateway._msgs_all()
     answer_mid = max(int(k.split(":")[1]) for k, v in bound.items() if v.get("sid") == sid)
     tg.message("and the budget?", **_reply_to(ans, answer_mid))
     await wait_for(lambda: len(svc.sent) == 2, what="continued")
@@ -113,7 +113,7 @@ async def test_bell_follows_the_turn_not_the_session(api, tg, svc):
     await wait_for(lambda: any("✅ <b>" in (p.get("text") or "") for p in tg.sent()), what="bell")
     bell = next(p for p in tg.sent() if "✅ <b>" in (p.get("text") or ""))
     assert bell.get("message_thread_id") is None and not bell.get("disable_notification")
-    bound = config.read_json(gateway._msgs_path(), {})
+    bound = gateway._msgs_all()
     assert sum(1 for v in bound.values() if v.get("sid") == sid) >= 3    # message, answer, bell…
     # a job's turn never rings
     job = svc.create_session(TOPIC, title="Nightly", source="cron", cron=True, notify=True)["id"]
@@ -253,6 +253,21 @@ async def test_an_alert_answered_while_it_was_sent_loses_its_buttons(api, tg, sv
     edit = next(e for e in tg.sent("editMessageText") if "Writer asks" in e["text"])
     assert "Allowed" in edit["text"] and edit["reply_markup"] == {"inline_keyboard": []}
     assert f"al:{ev['id']}" not in gateway._notes()
+
+
+def test_message_map_keeps_the_newest_and_takes_in_the_old_file(mx_state, monkeypatch):
+    import time
+    old = gateway._msgs_path().with_name("messages.json")
+    old.parent.mkdir(parents=True, exist_ok=True)
+    config.write_json(old, {"555:1": {"sid": "s_old", "at": time.time() - 10},
+                            "555:2": {"sid": "s_gone", "at": time.time() - 61 * 86400}})
+    assert gateway.bound(555, 1) == {"sid": "s_old"} and not old.exists()
+    monkeypatch.setattr(gateway, "MSGS_KEEP", 3)
+    gateway.bind_messages(555, [10, 11], {"sid": "s_a"})
+    gateway.bind_messages(555, [12], {"agent": "projects/acme/topics/blog/agents/writer"})
+    gateway.bind_messages(555, [10], {"sid": "s_b"})                       # bound again: newest
+    assert list(gateway._msgs_all()) == ["555:11", "555:12", "555:10"]     # the oldest and the 60-day-old went
+    assert gateway.bound(555, 10) == {"sid": "s_b"} and gateway.bound(555, 1) is None and gateway.bound(556, 10) is None
 
 
 async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypatch):
