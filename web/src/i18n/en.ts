@@ -3226,6 +3226,7 @@ export const en = {
   'groups.send': 'Send',
   'groups.mention.title': 'Members',
   'groups.mention.all': 'Everyone',
+  'groups.to': 'To:',
   'groups.pass': '{name} has nothing to add',
   'groups.skip': '{name} could not answer:',
   'groups.skip.failed': 'its turn failed (see the run)',
