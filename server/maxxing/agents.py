@@ -84,7 +84,7 @@ MAX_DEPTH = 3                                  # agent -> agent hops
 MAX_DOMAINS = 50
 MAX_RULES = 20
 RULE_TOOLS = ("Bash", "Write", "Edit", "WebFetch", "*")   # `rules`: the tool a rule watches (* = any tool)
-DOMAIN_RE = re.compile(r"^(\*\.)?[a-z0-9]([a-z0-9-]{0,62}\.)*[a-z0-9-]{1,63}$")
+DOMAIN_RE = re.compile(r"^(\*\.)?[a-z0-9]([a-z0-9-]{0,62}\.)*[a-z0-9-]{1,63}\Z")
 
 
 class AgentError(Exception):
