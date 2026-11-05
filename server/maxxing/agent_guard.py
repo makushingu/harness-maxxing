@@ -397,7 +397,7 @@ def sandboxed_session(sid8: str) -> str | None:
 
 
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
-AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "import", "sandbox-setup"}
+AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "import", "sandbox-setup", "group"}
 
 
 def check_cli(argv: list[str]) -> str | None:

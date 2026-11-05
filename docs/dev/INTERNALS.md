@@ -295,6 +295,32 @@ call it), only the API and the page are cut.
   (deny); stdin closed -> `expired`. `maxxing.approvals` lists / decides them and its watcher (api/approvals.py)
   posts to the agent thread, the bus and Telegram (`gateway.notify_approval` / `approval_done`).
 
+## maxxing.agent_rooms  (owner: organisation)
+Agent groups: the owner talks to 2-6 agents of one project in one conversation (API.md#agent-groups).
+- **Folder** `<workspace>/projects/<p>/groups/<g>/`: `CLAUDE.md` (`# Group <name>` + goal), `group.json` (`clean(data,
+  project, strict)`: `{version, name, emoji, members: [{path, role}], lead, shared_files, trust_members, limits:
+  {waves, replies, per_hour}, created}`, unknown keys kept; in `backup.ALWAYS`), `files/` (shared folder). Members must
+  be agents of `<p>`: a sandboxed agent cannot read other topics (`agent_guard.private_paths`), but `projects/<p>/groups`
+  is not denied, so every member reads the group folder; `files/` is added to its writable folders during group
+  turns only (`turn_writable`). `groups/` goes to the project's git exclude when the project is a clone
+  (`agents._git_exclude(dir, "groups")`).
+- **State** `<state>/agents/rooms/<p>__<g>.jsonl` (the conversation, `ROOM_KEEP` lines) and `.json` `{sessions:
+  {member: sid}, since: {member: at of its last turn}, queue: [{path, wave, reason: owner|handover, from}], current:
+  {path, session, at, reason, wave}|null, paused: [member], origin: id of the owner's last message, replies, turns:
+  {sid: {outside}}, seen_at}`. `_lock` (ProcessLock "agent-rooms") is taken before `agents._lock`, never the reverse.
+- **Flow** `say()` -> queue -> `pump()` starts the head when no turn is `current` (`_alive`: running or queued, else
+  `HOLD_START_S` after its start) -> `_start()` (agent `gate` minus `rate`, `_hold_left`, `_snapshot`, thread `run`
+  line with `group`) -> runner -> `agents.on_turn_end` (reads `MAXXING_AGENT_GROUP` from the session meta) ->
+  `agent_rooms.on_turn_end` (post the answer, queue the members named for the next wave, `pump`). Limits checked in
+  `pump`: `replies` per owner message, `per_hour` per group; `waves` in `on_turn_end`. `recover()` at server start
+  pumps groups whose turn ended while it was down. A hand-over is queued only when the turn answered the owner's
+  latest message (`current.origin`); "New topic" (`reset`) drops the sessions and nothing before its note reaches a
+  member. `remap(old, new)` (from `agents.remap`, topic / project renamed): member paths in group.json and the state
+  follow; a renamed project's room files are renamed and its members start fresh sessions.
+- **Message to a member** (`_message`): the room header on its first turn (`header`: name, goal, members + roles,
+  rules, shared folder path), then the messages since its last turn framed as data (`GROUP-<hex>` markers,
+  `DELTA_MAX`), then "@x handed over to you" for a hand-over, then the owner's last message in clear.
+
 ## maxxing.backup  (owner: connectivity)
 - `run() -> dict`, `restore(ref=None) -> dict`, `restore_from(repo, token, ref=None)`, `status()`,
   `history(limit)`, `last_success_age_h() -> float | None` (health check).

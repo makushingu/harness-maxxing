@@ -5,6 +5,8 @@
 //   /agents/office                           -> the same Office (the way to it on a phone, where /agents is the list)
 //   /agents/<project>/<topic>/<name>         -> the agent: its conversation + its profile (AgentPage)
 //   /agents/<project>/<topic>/<name>/runs/<sid> -> one run, the full session in place (RunView)
+//   /agents/groups/<project>/<name>          -> an agent group: the owner talks to several agents (GroupPage)
+//   /agents/groups/new?project=<p>           -> the form of a new group (GroupForm)
 //   ?new=1 opens the creation sheet, ?topic=<project>/<topic> narrows the list.
 // "New agent" and "Edit with Claude" open a new-session draft in Sessions (EditWithClaude.tsx), not a page here.
 // The left column, top to bottom: title, search, New agent, the Office entry, the state filter, the agents by project.
@@ -25,6 +27,9 @@ import { AgentsEmpty, AgentsOverview } from './AgentsPage'
 import AgentPage from './AgentPage'
 import { RunView } from './RunView'
 import { CreateAgent, type CreateStart } from './CreateAgent'
+import GroupPage from './GroupPage'
+import { NewGroupPage } from './GroupForm'
+import { useAgentGroups, useWorkspace } from '@/lib/queries'
 import { AgentsOff, useAgentsOn } from './parts'
 
 export default function AgentsLayout() {
@@ -69,6 +74,9 @@ export default function AgentsLayout() {
       <Routes>
         <Route index element={<AgentsOverview onNew={newAgent} onStart={openWith} />} />
         <Route path="office" element={<AgentsOverview onNew={newAgent} onStart={openWith} />} />
+        <Route path="groups/new" element={<NewGroupPage />} />
+        {/* Static "groups" ranks before the agents' :project: see GroupPageFor for a project called "groups". */}
+        <Route path="groups/:project/:name" element={<GroupPageFor />} />
         <Route path=":project/:topic/:name" element={<AgentPageFor />} />
         <Route path=":project/:topic/:name/runs/:sid" element={<RunView />} />
       </Routes>
@@ -130,4 +138,16 @@ export default function AgentsLayout() {
 function AgentPageFor() {
   const { project = '', topic = '', name = '' } = useParams()
   return <AgentPage key={`${project}/${topic}/${name}`} />
+}
+
+/** One page per group (same reason). /agents/groups/<a>/<b> is also the address of the agent <b> of the topic <a> in a
+ *  project called "groups": that agent shows when no group has that name. */
+function GroupPageFor() {
+  const { project = '', name = '' } = useParams()
+  const { data: ws } = useWorkspace()
+  const agentHere = !!ws?.projects.find((p) => p.name === 'groups')?.topics.some((x) => x.name === project)
+  const { data: groups } = useAgentGroups(agentHere)
+  if (agentHere && groups && !groups.some((g) => g.project === project && g.name === name))
+    return <AgentPage key={`groups/${project}/${name}`} at={{ project: 'groups', topic: project, name }} />
+  return <GroupPage key={`${project}/${name}`} />
 }

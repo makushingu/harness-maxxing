@@ -49,7 +49,8 @@ log = logging.getLogger("maxxing.backup")
 REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
 TOKEN_RE = re.compile(r"\A[\x21-\x7e]{1,255}\Z")   # printable ASCII: it goes into an HTTP header
 ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*.patch", "projects/*/.maxxing.json",
-          "projects/*/topics/*/.maxxing.json", "projects/.order.json", "projects/*/topics/*/agents/*/agent.json"]
+          "projects/*/topics/*/.maxxing.json", "projects/.order.json", "projects/*/topics/*/agents/*/agent.json",
+          "projects/*/groups/*/group.json"]
 META_DIR = "_maxxing"
 CRON_NAME = "Memory backup"
 MAX_FILE = 5 * 1024 * 1024

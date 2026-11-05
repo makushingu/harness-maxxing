@@ -209,9 +209,13 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents export AGENT [-o FILE]` | the agent as a Claude Code agent file (`.claude/agents/<name>.md`) |
 | `maxxing agents import FILE --topic P/T [--name N]` | create an agent from a Claude Code agent file |
 | `maxxing agents sandbox-setup` | install what the agents' sandbox needs (root): `bubblewrap`, `socat`, the AppArmor profile |
+| `maxxing agents group list [--json]` | the agent groups: path, name, members |
+| `maxxing agents group show P/G [--messages N]` | a group: members, goal, options, last messages (JSON) |
+| `maxxing agents group create P/G --member AGENT[=ROLE] ... [--name N] [--emoji E] [--goal T] [--lead AGENT] [--no-shared-files] [--ask-on-handover] [--json]` | create a group of 2 to 6 agents of project P |
+| `maxxing agents group say P/G TEXT` | write to a group as yourself; its members answer in turn (refused in an agent's run) |
 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
-[Agents](30-agents.md).
+[Agents](30-agents.md) and [Agent groups](31-agent-groups.md).
 
 ## Memory and sessions
 

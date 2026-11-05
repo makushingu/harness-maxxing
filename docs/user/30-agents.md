@@ -50,6 +50,9 @@ on the server: every browser and phone shows the same.
 
 On a phone, the Agents page is the list; **Office** opens the office full screen.
 
+**Several agents in one conversation**: a [group](agent-groups) puts 2 to 6 agents of a project in one chat where you
+write and they answer in turn, handing work to each other with `@name` (a writer, a reviewer, a publisher...).
+
 ## What an agent is made of
 
 An agent is a folder of its topic: `projects/acme/topics/blog/agents/writer/`.
