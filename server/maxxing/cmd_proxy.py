@@ -13,6 +13,7 @@ def _configure(p) -> None:
                                    "and write the Traefik block")
     on.add_argument("address", nargs="?", default="", help="HOST:PORT, a private address the containers reach")
     on.add_argument("--domain", default="", help="domain of the UI (default: the host of public_url)")
+    on.add_argument("--new-secret", action="store_true", help="a new secret header (copy the block into Traefik again)")
     sub.add_parser("off", help="close the proxy address")
     st = sub.add_parser("status", help="proxy address, listening or not")
     st.add_argument("--json", action="store_true")
@@ -22,7 +23,7 @@ def _handler(a) -> int:
     from . import config, proxylisten
     if a.action == "on":
         try:
-            r = proxylisten.enable(a.address, a.domain)
+            r = proxylisten.enable(a.address, a.domain, a.new_secret)
         except ValueError as e:
             print(e, file=sys.stderr)
             return 2
@@ -45,7 +46,13 @@ def _handler(a) -> int:
     elif not addr:
         print("off (maxxing proxy on opens an address for a reverse proxy in a container)")
     else:
-        print(f"{info['address']}: {'listening' if info['listening'] else 'NOT listening (restart the service)'}")
+        if info["listening"]:
+            print(f"{info['address']}: listening")
+        elif not proxylisten.address_present(addr[0]):
+            print(f"{info['address']}: no interface of this server has {addr[0]} (is Docker running? its bridge address:"
+                  " ip -4 addr show docker0; then maxxing proxy on <that address>:{addr[1]})")
+        else:
+            print(f"{info['address']}: NOT listening (systemctl restart claude-maxxing)")
         if info["ufw_blocks"]:
             print("ufw is active without a rule for it: the proxy cannot reach it (run: maxxing proxy on)")
     return 0

@@ -36,7 +36,8 @@ def test_only_a_private_address_is_accepted():
     assert proxylisten.parse("172.17.0.1:8790") == ("172.17.0.1", 8790)
     assert proxylisten.parse("[fd00::1]:9000") == ("fd00::1", 9000)
     for bad in ("0.0.0.0:8790", "127.0.0.1:8790", "8.8.8.8:8790", "172.17.0.1", "host:8790", "172.17.0.1:80",
-                "[::]:8790", "172.17.0.1:99999"):
+                "[::]:8790", "172.17.0.1:99999", "[2002::1]:8790", "[2001::1]:8790", "169.254.169.254:8790",
+                "[::ffff:172.17.0.1]:8790", "100.64.0.1:8790", "198.18.0.1:8790"):
         with pytest.raises(ValueError):
             proxylisten.parse(bad)
 
@@ -159,10 +160,13 @@ def test_a_websocket_without_the_secret_is_refused(two_addresses):
 INSTALL = Path(__file__).resolve().parents[2] / "install.sh"
 
 
-def _snippet(tmp_path, web_busy: str, docker: str, mx_rc: int = 0) -> tuple[subprocess.CompletedProcess, str]:
+def _snippet(tmp_path, web_busy: str, docker: str, mx_rc: int = 0, bridge: str = "172.18.0.1"
+             ) -> tuple[subprocess.CompletedProcess, str]:
     calls = tmp_path / "mx-calls"
+    calls.unlink(missing_ok=True)
+    fake_ip = f'ip() {{ [ -n "{bridge}" ] && echo "4: docker0    inet {bridge}/16 brd 172.18.255.255 scope global"; }}; '
     script = (f'MAXXING_INSTALL_LIB=1 source "{INSTALL}"; set +e; STATE_DIR="{tmp_path}"; WORK="{tmp_path}"; '
-              f'DOMAIN=ui.example.com; PORT=8787; WEB_BUSY="{web_busy}"; HAS_DOCKER={docker}; '
+              f'DOMAIN=ui.example.com; PORT=8787; WEB_BUSY="{web_busy}"; HAS_DOCKER={docker}; {fake_ip}'
               f'mx() {{ echo "$*" >> "{calls}"; return {mx_rc}; }}; proxy_snippet')
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
     return r, calls.read_text() if calls.exists() else ""
@@ -170,11 +174,14 @@ def _snippet(tmp_path, web_busy: str, docker: str, mx_rc: int = 0) -> tuple[subp
 
 def test_installer_opens_the_proxy_address_when_docker_holds_the_web_ports(tmp_path):
     r, calls = _snippet(tmp_path, "docker-proxy", "1")
-    assert r.returncode == 0 and calls.strip() == "proxy on --domain ui.example.com"
+    assert r.returncode == 0 and calls.strip() == "proxy on 172.18.0.1:8790 --domain ui.example.com"   # docker0
     assert "Traefik" in r.stdout
     r, calls = _snippet(tmp_path, "another web server", "1")          # Swarm ports: no process listens
     assert "proxy on" in calls
-    (tmp_path / "mx-calls").unlink()
+    r, calls = _snippet(tmp_path, "traefik", "0", bridge="")          # Traefik on the host reaches 127.0.0.1
+    assert calls == "" and "127.0.0.1:8787" in (tmp_path / "reverse-proxy.conf").read_text()
+    r, calls = _snippet(tmp_path, "docker-proxy", "1", bridge="")     # no docker0: said, generic block
+    assert calls == "" and "docker0" in r.stdout + r.stderr
     r, calls = _snippet(tmp_path, "nginx", "1")                        # nginx keeps its own block
     assert calls == "" and "proxy_pass http://127.0.0.1:8787" in (tmp_path / "reverse-proxy.conf").read_text()
     r, calls = _snippet(tmp_path, "another web server", "0")           # no Docker: the generic block
@@ -201,3 +208,101 @@ def test_off_removes_the_ufw_rules_even_without_a_secret(mx, monkeypatch):
 def test_the_traefik_block_is_denied_to_claude(mx):
     from maxxing.sessions import spawn
     assert any("reverse-proxy.conf" in r for r in spawn.deny_rules(config.load_config()))
+
+
+def test_the_domain_and_the_secret(mx):
+    with pytest.raises(ValueError):
+        proxylisten.enable(domain="x`) || PathPrefix(`/`)")          # no rule injection into the block
+    r = proxylisten.enable(domain="UI.Example.com")
+    assert r["domain"] == "ui.example.com"
+    first = config.get_secret("proxy_secret")
+    proxylisten.enable(new_secret=True)
+    assert config.get_secret("proxy_secret") != first
+    assert config.get_secret("proxy_secret") in (mx["state"] / "reverse-proxy.conf").read_text()
+    proxylisten.disable()
+    assert not config.get_secret("proxy_secret") and not (mx["state"] / "reverse-proxy.conf").exists()
+
+
+def test_the_scheme_header_the_app_reads_is_the_one_used(two_addresses):
+    a = two_addresses
+    d = get(a["proxy"] + "/", headers={"X-Maxxing-Proxy": a["secret"], "X-Forwarded-For": "203.0.113.9",
+                                       "X-Forwarded-Proto": "http, https"}).json()
+    assert d["scheme"] == "https" and d["headers"].count("x-forwarded-proto") == 1
+
+
+@pytest.fixture
+def guarded(monkeypatch):
+    monkeypatch.setattr(proxylisten, "HEADER_TIMEOUT", 1.0)
+    monkeypatch.setattr(proxylisten, "MAX_CONNECTIONS", 3)
+    main = socket.socket(); main.bind(("127.0.0.1", 0)); main.listen(); main.set_inheritable(True)
+    extra = proxylisten.open_socket("127.0.0.2", 0)
+    port = extra.getsockname()[1]
+    uc = uvicorn.Config(proxylisten.Gate(_echo, "127.0.0.2", port, "s"), http=proxylisten.guarded_protocol(port),
+                        log_level="warning", lifespan="on")
+    server = _ThreadServer(uc)
+    t = threading.Thread(target=lambda: asyncio.run(server.serve(sockets=[main, extra])), daemon=True)
+    t.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    yield "127.0.0.2", port, main.getsockname()[1]
+    server.should_exit = True
+    t.join(5)
+
+
+def test_a_half_sent_request_is_dropped_on_the_proxy_address(guarded):
+    host, port, main_port = guarded
+    slow = socket.create_connection((host, port))
+    slow.sendall(b"GET / HTTP/1.1\r\nHost: x\r\nX-Pad: ")       # never finishes its head
+    slow.settimeout(5)
+    assert slow.recv(10) == b""                                      # closed after HEADER_TIMEOUT
+    keep = socket.create_connection(("127.0.0.1", main_port))       # the main address has no such limit
+    keep.sendall(b"GET / HTTP/1.1\r\nHost: x\r\nX-Pad: ")
+    keep.settimeout(2)
+    with pytest.raises(socket.timeout):
+        keep.recv(10)
+    keep.close()
+
+
+def test_a_finished_request_and_a_websocket_are_not_cut(guarded):
+    host, port, _ = guarded
+    with httpx.Client(trust_env=False) as c:                          # kept-alive connection, 2 requests 1.5 s apart
+        assert c.get(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}).status_code == 200
+        time.sleep(1.5)
+        assert c.get(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}).status_code == 200
+    from websockets.sync.client import connect
+    with connect(f"ws://{host}:{port}/ws", additional_headers={"X-Maxxing-Proxy": "s"}, open_timeout=3,
+                 proxy=None) as ws:
+        time.sleep(1.5)                                               # past HEADER_TIMEOUT: still open
+        assert json.loads(ws.recv(timeout=3))["scheme"] == "ws"
+
+
+def test_the_proxy_address_caps_its_connections(guarded):
+    host, port, _ = guarded
+    socks = [socket.create_connection((host, port)) for _ in range(3)]   # MAX_CONNECTIONS = 3 here
+    time.sleep(0.2)
+    extra = socket.create_connection((host, port))
+    extra.settimeout(3)
+    assert extra.recv(10) == b""
+    for x in socks:
+        x.close()
+
+
+def test_closed_websockets_give_their_place_back(guarded):
+    host, port, _ = guarded
+    from websockets.sync.client import connect
+    for _ in range(5):                                                # MAX_CONNECTIONS = 3 here
+        with connect(f"ws://{host}:{port}/ws", additional_headers={"X-Maxxing-Proxy": "s"}, open_timeout=3,
+                     proxy=None) as ws:
+            ws.recv(timeout=3)
+    time.sleep(0.2)
+    assert get(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}).status_code == 200
+
+
+def test_installer_goes_on_without_docker0_under_set_e(tmp_path):
+    script = (f'MAXXING_INSTALL_LIB=1 source "{INSTALL}"; set -euo pipefail; STATE_DIR="{tmp_path}"; WORK="{tmp_path}"; '
+              'DOMAIN=ui.example.com; PORT=8787; WEB_BUSY=docker-proxy; HAS_DOCKER=1; '
+              'ip() { return 1; }; mx() { return 0; }; proxy_snippet; echo REACHED')
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
+    assert "REACHED" in r.stdout and "docker0" in r.stdout + r.stderr
