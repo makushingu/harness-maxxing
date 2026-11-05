@@ -210,6 +210,17 @@ def thread_prev_cost(m: dict, csid: str | None) -> float:
     return float(tc.get("total") or 0) if csid and tc.get("csid") == csid else 0.0
 
 
+def day_of(when: float) -> str:
+    """YYYY-MM-DD of `when` in the Harness time zone (Settings -> timezone, the crons' too): the keys of `days`."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        zone = ZoneInfo(config.load_config().get("timezone") or "UTC")
+    except Exception:  # noqa: BLE001 - unknown zone name: the system's
+        return time.strftime("%Y-%m-%d", time.localtime(when))
+    return datetime.fromtimestamp(when, zone).strftime("%Y-%m-%d")
+
+
 def add_usage(m: dict, usage: dict | None, cost: float, when: float) -> None:
     """Add one Claude `result` (raw usage + cost) to the meta counters. `tokens` is only kept up to date
     once it exists (new sessions; older ones are backfilled from their log first, see stats.py)."""
@@ -220,7 +231,7 @@ def add_usage(m: dict, usage: dict | None, cost: float, when: float) -> None:
         for k, src in TOKEN_KEYS:
             tk[k] = int(tk.get(k) or 0) + int(u.get(src) or 0)
     days = m.get("days") if isinstance(m.get("days"), dict) else {}
-    day = time.strftime("%Y-%m-%d", time.localtime(when))
+    day = day_of(when)
     d = days.get(day) if isinstance(days.get(day), dict) else {"tokens": 0, "cost": 0.0}
     days[day] = {"tokens": int(d.get("tokens") or 0) + total, "cost": round(float(d.get("cost") or 0) + float(cost or 0), 6)}
     m["days"] = {k: days[k] for k in sorted(days)[-DAYS_KEPT:]}

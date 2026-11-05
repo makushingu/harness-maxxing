@@ -51,6 +51,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   3.3 -> 0.5 ms.
 - Feed: `post(group=)` never folds into a resolved event; `resolve(ref)` ends every open event of the ref (returns
   the newest); `act` seen/open (not by Telegram) and `mark_read` call `update_alert` for the open alerts they read.
+- Session `days` keys (Stats, agents' daily budget) are days of `config.timezone` (`store.day_of`), no longer
+  of the system zone; agent run titles and thread context times too (`agents._local`).
 - Agents feed triggers: `_feed.json` = `{last_id, pending, off?}`. A missing `last_id` (not 0) means "never
   scanned"; `pending` = the debounced batches (`Debouncer.dump/load`, reloaded at the first scan of the process);
   `off` is set by the server loop while Agents is off (`agents.pause_feed`), and the next scan skips the events since
