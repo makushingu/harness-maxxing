@@ -311,6 +311,19 @@ def _prefix(m: imaplib.IMAP4) -> tuple[str, str]:
     return "", delim
 
 
+def _resolve(m: imaplib.IMAP4, name: str) -> str:
+    """A folder named the way a person says it ("Invoices") -> its name on the server ("INBOX.Invoices" on servers
+    that keep every folder under INBOX). Unknown names are returned as they are."""
+    names = [f["name"] for f in _list_raw(m)]
+    if name in names:
+        return name
+    prefix, _ = _prefix(m)
+    if prefix and prefix + name in names:
+        return prefix + name
+    low = [n for n in names if n.lower() == name.lower() or n.lower() == (prefix + name).lower()]
+    return low[0] if len(low) == 1 else name
+
+
 def create_folder(acc: dict, name: str, parent: str | None = None) -> str:
     name = name.strip()
     if not name or len(name) > 200 or any(c in name for c in "\r\n\0*%"):
@@ -712,7 +725,7 @@ def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None
             if action == "move":
                 if not target:
                     raise MailError("invalid", "move needs a target folder")
-                moved_to = target
+                moved_to = _resolve(m, target)
             elif action == "inbox":
                 moved_to = "INBOX"
             else:

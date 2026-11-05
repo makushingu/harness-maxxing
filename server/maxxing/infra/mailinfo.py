@@ -277,7 +277,7 @@ def dns_facts(domain: str) -> dict:
             out["spf_lookups"] = _spf_lookups(c, out["spf"][0], [SPF_MAX_QUERIES], {domain}) if len(out["spf"]) == 1 else None
             out["dmarc"] = [t for t in _txt(c, f"_dmarc.{domain}") if t.lower().startswith("v=dmarc1")]
             out["dkim"] = [s for s in DKIM_SELECTORS
-                           if any("p=" in t.replace(" ", "") for t in _txt(c, f"{s}._domainkey.{domain}"))]
+                           if any(re.search(r"(^|;)p=[^;]+", t.replace(" ", "")) for t in _txt(c, f"{s}._domainkey.{domain}"))]   # "p=" alone: a revoked key
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
         return {"error": str(e)[:120] or type(e).__name__, "checked": out["checked"]}
     return out
