@@ -235,7 +235,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing mail outbox [-a A]` | messages written by agents waiting for your OK (an agent sees its own) |
 | `printf %s "$PW" \| maxxing mail add ADDRESS [--imap HOST[:PORT]] [--smtp HOST[:PORT]]` | add a mailbox (password on stdin) |
 
-`ACCOUNT` = id or address (default: the first mailbox). See [E-mail](31-mail.md).
+`ACCOUNT` = id or address (default: the first mailbox). See [E-mail](32-mail.md).
 
 ## Memory and sessions
 
