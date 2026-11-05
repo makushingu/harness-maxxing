@@ -21,6 +21,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   units cannot nest user namespaces (apply-seccomp setgroups EPERM), checked from the generated settings + the
   Claude Code 2.1.306 setting texts ("allowRead ... takes precedence over denyRead", "denyWrite takes precedence over
   allowWrite", denyRead globs expanded on Linux, write globs skipped).
+- Agent turn identity: `agent_guard.agent_turn()` -> `{path, depth, tampered}` read from the session meta of the turn's
+  unit (`turn_meta()`, cgroup `maxxing-<sid8>[-N].service`; the suffixed retry name is now matched too), not from
+  `MAXXING_AGENT*` (env only outside a unit: direct spawn, the owner's shell). Used by `keys get`, `agents send|run`,
+  `feed post`; `check_cli` refuses a turn whose env disagrees with its record.
+- `maxxing agents run` from an agent turn = `send` (depth + 1, not itself, trigger `agent:<sender>`, text as data).
+- `feed post` from an agent turn refuses BUILTIN and feed hook sources; events get a `hops` column (poster depth + 1),
+  `Debouncer` keeps the max per batch and `flush_due` fires with it, so feed chains stop at `MAX_DEPTH`.
 
 ## 2.0.0-alpha.116 - 2026-11-04
 

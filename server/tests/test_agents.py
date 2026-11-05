@@ -180,6 +180,11 @@ def test_feed_trigger_with_debounce(client, topic, monkeypatch):
     path, k = fired[0]
     assert path == A and k["trigger"].startswith("feed:t_") and "Event 1/2" in k["text"] and "order 12" in k["text"]
     assert k["prompt"] == "NOTOOL handle it"
+    assert k["depth"] == 0
+    # an event posted from an agent run starts the next run one hop deeper (chains end at MAX_DEPTH)
+    feed.post("refund from an agent", source="shop", level="warning", hops=2)
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1
+    assert fired[-1][1]["depth"] == 2
 
 
 def test_webhook_trigger_makes_a_feed_hook(client, topic):
@@ -298,6 +303,12 @@ def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeyp
     assert cli.main(["feed", "post", "loop", "--source", "shop"]) == 2
     assert "would start it again" in capsys.readouterr().err
     assert cli.main(["feed", "post", "fine", "--source", "blog-report"]) == 0
+    from maxxing import feed, feedhooks
+    assert feed.list_events("blog-report", False, None, 1)["events"][0]["hops"] == 1
+    feedhooks.create("stripe-b", "generic")
+    for src in ("stripe-b", "security"):                 # a webhook's (or built-in) source: never from an agent
+        assert cli.main(["feed", "post", "Payment succeeded", "--source", src]) == 2
+        assert "only its own deliveries" in capsys.readouterr().err
     monkeypatch.delenv("MAXXING_AGENT")
     assert cli.main(["feed", "post", "from a script", "--source", "shop"]) == 0
 
