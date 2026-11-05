@@ -108,6 +108,8 @@ def test_session_ids_are_kept_and_follow_the_folder(mx, monkeypatch):
     assert listed["n"] == n                                            # the folder did not change: not listed again
     b = store.new_meta("", "b")                                        # written by another process (trash restore)
     (store.sessions_dir() / f"{b['id']}.json").write_text(json.dumps(b))
+    st = os.stat(store.sessions_dir())                                 # a coarse-tick kernel may keep the folder's
+    os.utime(store.sessions_dir(), ns=(st.st_atime_ns, st.st_mtime_ns + 10**7))   # mtime (what IDS_RACY_S covers)
     assert sorted(store.list_ids()) == sorted([a, b["id"]])
     store.remove(a)
     assert store.list_ids() == [b["id"]]
