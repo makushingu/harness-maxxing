@@ -168,6 +168,21 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
             wait_idle(client, r["session"]["id"])
 
 
+def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    url = f"/api/agents/acme/blog/writer/runs/{run['session']['id']}/continue"
+    first = client.post(url).json()["session"]
+    assert first["path"] == "projects/acme/topics/blog" and first["id"] != run["session"]["id"]
+    assert client.patch(f"/api/sessions/{first['id']}", json={"archived": True}).status_code == 200
+    again = client.post(url).json()["session"]
+    assert again["id"] == first["id"] and again["archived"] is False
+    assert [s["id"] for s in client.get("/api/sessions?path=projects/acme/topics/blog").json()
+            if (s.get("title") or "").startswith("Writer")] == [first["id"]]
+
+
 def test_budget_day_follows_the_harness_time_zone(client, topic):
     from maxxing.sessions import store
     _on(client)

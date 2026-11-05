@@ -126,7 +126,8 @@ The page is a **conversation** with the agent, like a contact in a chat app:
 - **Open the run** shows the whole session (every command, every file) right in the Agents page, with a way back to
   the conversation. A link to an agent's session (Telegram, a notification, the search) opens it there too.
 - **Continue in Sessions** turns a run into a normal session of the topic: same history, same Claude thread (the run
-  itself does not change), your own permissions instead of the agent's guards. Use it to take over by hand.
+  itself does not change), your own permissions instead of the agent's guards. Use it to take over by hand. A run
+  continued already opens the same copy again.
 - Finished runs you have read are filed away by themselves; nothing is lost: every result keeps its **Open the run**.
 
 On the right (**Profile** on a phone):

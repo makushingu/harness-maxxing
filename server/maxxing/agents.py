@@ -489,7 +489,8 @@ def run_settings(path: str, outside: bool = False, session: str | None = None) -
 
 def continue_in_sessions(path: str, sid: str) -> dict:
     """"Continue in Sessions": a copy of one run of the agent as a normal session of its topic - same history and the
-    same Claude thread (forked: the run itself is not changed), no agent rules (the user's own permissions)."""
+    same Claude thread (forked: the run itself is not changed), no agent rules (the user's own permissions). A run
+    continued already gives back its copy."""
     import shutil
     from .sessions import service, store
     src = store.read(sid) if store.is_valid_id(sid) else None
@@ -497,6 +498,15 @@ def continue_in_sessions(path: str, sid: str) -> dict:
         raise AgentError(404, "not_found", "This run is not one of the agent's sessions")
     if src.get("state") == "running" or src.get("queue"):
         raise AgentError(409, "busy", "Wait for the run to finish")
+    for other in store.list_ids():                  # continued already: that copy (two would share one Claude thread)
+        m = store.read_cached(other)
+        if m and m.get("path") == topic_of(path) and (m.get("from_agent") or {}).get("session") == sid:
+            if m.get("archived"):
+                with store.edit(other) as e:
+                    e["archived"] = False
+                from . import bus
+                bus.invalidate("sessions", "workspace")
+            return service.get_session(other) or service.public(m)
     a = load(path)
     name = a["name"] or parse(path)[2]
     title = src.get("title") or ""                  # runs are titled "<agent> - <date>" (fire)
