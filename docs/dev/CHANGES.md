@@ -51,6 +51,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   3.3 -> 0.5 ms.
 - Feed: `post(group=)` never folds into a resolved event; `resolve(ref)` ends every open event of the ref (returns
   the newest); `act` seen/open (not by Telegram) and `mark_read` call `update_alert` for the open alerts they read.
+- Agents list speed: `agents._agent_metas()` = one pass over the session metas grouped by agent path (kept until
+  the sessions folder's mtime moves, `_by_agent`), shared by the counts (`agents._session_stats`, archived sessions
+  only counted) and `status(path, metas)` (thread parsed once). `list_agents(counts=False)` for the background passes
+  (feed scan, alerts). The runner's `run_settings(session=)` reads only the metas written in the last 25 h
+  (`day_cost(cold=True)`). `workspace.topic_permission_mode` reads agent.json instead of `run_settings`. 3,000
+  sessions / 30 agents: `list_agents(with_status)` 3.3 s -> 0.28 s (0.19 s of it = `feed.agent_alerts`), `get` 190 ->
+  8-15 ms, background list 115 -> 15 ms, runner cold 156 -> 36 ms (90 % of sessions older than a day).
 - Agents budget: each run holds its `--max-budget-usd` in `<state>/agents/<key>.json` `held: {sid: {usd, at}}`
   (set by `fire` at the start, then by `run_settings(..., session=sid)` in the runner, dropped by `on_turn_end` or once
   the session is no longer running). `gate()` returns `busy` when spent + held reaches the budget; `fire()` runs gate +
