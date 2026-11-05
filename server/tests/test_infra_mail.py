@@ -24,7 +24,7 @@ def fake_cloudflare(calls):
         calls.append(p)
         if p == "/zones":
             return ok([{"id": "z1", "name": "shop.example.com"}, {"id": "z2", "name": "blog.example.org"},
-                       {"id": "z3", "name": "quiet.example.net"}])
+                       {"id": "z3", "name": "quiet.example.net"}, {"id": "z4", "name": "rules.example.com"}])
         if p == "/accounts/acc/email/routing/addresses":
             return ok([{"email": "owner@gmail.com", "verified": "2026-01-01T00:00:00Z"},
                        {"email": "late@example.net", "verified": None}])
@@ -43,6 +43,11 @@ def fake_cloudflare(calls):
             return ok({"enabled": True, "matchers": [{"type": "all"}], "actions": [{"type": "drop"}]})
         if p.startswith("/zones/z2/"):
             return DENIED                                   # the token sees the zone, not its Email Routing
+        if p == "/zones/z4/email/routing":
+            return DENIED                                   # the settings need their own permission...
+        if p == "/zones/z4/email/routing/rules":            # ...the rules are readable all the same
+            return ok([{"name": "hi", "enabled": True, "matchers": [{"type": "literal", "field": "to", "value": "hi@rules.example.com"}],
+                        "actions": [{"type": "forward", "value": ["owner@gmail.com"]}]}])
         if p == "/zones/z3/email/routing":
             return ok({"enabled": False, "status": "unconfigured"})
         return 404, {"success": False, "errors": [{"code": 7003, "message": "no route"}]}, J
@@ -133,6 +138,8 @@ def test_cloudflare_hostinger_routes_and_dns(org, monkeypatch):
     assert zones["quiet.example.net"]["routing"]["enabled"] is False and zones["quiet.example.net"]["rules"] == []
     assert not any(c.startswith("/zones/z3/email/routing/rules") for c in cf_calls)        # routing off: no rule call
     assert cf["missing_permission_zones"] == 1
+    assert zones["rules.example.com"]["routing"] == {"enabled": True, "status": None} and not zones["rules.example.com"].get("missing_permission")
+    assert zones["rules.example.com"]["rules"][0]["to"] == ["owner@gmail.com"]
     assert cf["fix"] == "Add the permission Zone → Email Routing Rules → Read for all zones to the Cloudflare token (Settings → Keys)"
     assert {a["email"]: a["verified"] for a in cf["addresses"]} == {"late@example.net": False, "owner@gmail.com": True}
 
@@ -154,7 +161,7 @@ def test_cloudflare_hostinger_routes_and_dns(org, monkeypatch):
     assert boxes["me@acme.example"]["domain"] == "acme.example" and "last_check" in boxes["me@acme.example"]
 
     doms = {d["domain"]: d for d in v["domains"]}
-    assert set(doms) == {"shop.example.com", "blog.example.org", "acme.example"}           # gmail.com is not checked
+    assert set(doms) == {"shop.example.com", "blog.example.org", "rules.example.com", "acme.example"}   # not gmail.com
     shop = doms["shop.example.com"]
     assert shop["mx"] == ["route1.mx.cloudflare.net", "route2.mx.cloudflare.net"]
     assert shop["spf"]["count"] == 1 and shop["spf"]["lookups"] == 1
