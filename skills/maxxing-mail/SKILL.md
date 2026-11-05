@@ -6,7 +6,7 @@ description: Read, sort, search, file and answer e-mail from the mailboxes of th
 # E-mail
 
 The E-mail page (Settings -> Features -> E-mail) holds IMAP/SMTP mailboxes. Claude never sees a password: everything
-goes through `maxxing mail`. Docs: `docs/user/31-mail.md` (Settings -> Docs -> E-mail).
+goes through `maxxing mail`. Docs: `docs/user/32-mail.md` (Settings -> Docs -> E-mail).
 
 ## In a session
 

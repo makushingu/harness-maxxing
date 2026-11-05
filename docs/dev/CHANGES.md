@@ -5,9 +5,9 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.120 - 2026-11-05
 
-- E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch, worktree `wt-email`): `maxxing/mail/`
+- E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch): `maxxing/mail/`
   (`__init__` accounts + detection + SMTP sign-in, `imap.py` live IMAP with one pooled connection per account,
   `send.py` writing), `api/mail.py` (`/api/mail/*`, docs/dev/API.md#mail), `cmd_mail.py`. Accounts in
   `<state>/mail/accounts.json`, password = vault `MAIL_<ID>_PASSWORD` (expose false). Writing: plain text,
@@ -83,6 +83,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   UI: sender check line + "Trust <server>" in Edit mailbox, warning under an agent's sender list, Notifications
   decisions refresh the mail queries. Tests `tests/fake_imap.py` (an IMAP server in memory that logs every command)
   + `tests/test_mail_imap.py`.
+
 
 - Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
   agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
