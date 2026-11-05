@@ -9,7 +9,7 @@ import {
 } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { errorMessage } from '@/lib/api'
-import type { MailAccount, MailDetect, MailPollMin, MailTls } from '@/lib/types'
+import type { MailAccount, MailDetect, MailPollMin, MailSenderCheck, MailTls } from '@/lib/types'
 import { AGENT_PATH_RE, useMailAddAccount, useMailDeleteAccount, useMailDetect, useMailUpdateAccount } from '@/lib/queries'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { useT } from '@/i18n'
@@ -253,6 +253,15 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
                   <p className="text-xs text-muted-foreground">{t('mail.agents.none')}</p>
                 )}
               </div>
+              {account?.sender_check && (
+                <SenderCheck
+                  check={account.sender_check}
+                  onTrust={(server) => {
+                    set('auth_servers', server)
+                    setTrust(true)
+                  }}
+                />
+              )}
               <button
                 type="button"
                 className="flex items-center gap-1.5 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -295,5 +304,23 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Who checks the senders of this mailbox (server: imap.sender_check) - an agent's "only mail from" list needs it. */
+function SenderCheck({ check, onTrust }: { check: MailSenderCheck; onTrust: (server: string) => void }) {
+  const t = useT()
+  if (check.state === 'auto' || check.state === 'owner') {
+    return <p className="text-xs text-muted-foreground">{t(`mail.check.${check.state}`, { server: check.server })}</p>
+  }
+  return (
+    <div className="grid gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+      <p>{t(`mail.check.${check.state}`, { server: check.server })}</p>
+      {check.state === 'detected' && (
+        <Button type="button" size="sm" variant="outline" className="justify-self-start" onClick={() => onTrust(check.server)}>
+          {t('mail.check.trust', { server: check.server })}
+        </Button>
+      )}
+    </div>
   )
 }

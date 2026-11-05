@@ -220,9 +220,10 @@ def _auto_sent(acc: dict) -> bool:
     return any(h == d or h.endswith("." + d) for d in AUTO_SENT)
 
 
-def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = None) -> dict:
+def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = None, contacts: bool = True) -> dict:
     """Send through the SMTP server of the mailbox, file a copy in Sent, flag the replied message, drop the draft
-    it came from. Returns {ok, message_id, sent_folder, recipients}."""
+    it came from. Returns {ok, message_id, sent_folder, recipients}. contacts: the recipients become known
+    contacts (approve_send "new") - only for what the owner sent or allowed, never for an agent's own send."""
     from . import open_smtp
     msg, rcpts = build(acc, draft, files)
     if not rcpts:
@@ -248,9 +249,10 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
         _give_back(acc["id"], len(rcpts))
         err = e.smtp_error.decode("utf-8", "replace") if isinstance(getattr(e, "smtp_error", None), bytes) else str(e)
         raise MailError("smtp", f"the mail server refused the message: {err}") from None
-    with contextlib.suppress(Exception):
-        from . import store
-        store.add_contacts(acc["id"], rcpts)
+    if contacts:
+        with contextlib.suppress(Exception):
+            from . import store
+            store.add_contacts(acc["id"], rcpts)
     out: dict[str, Any] = {"ok": True, "message_id": msg["Message-ID"], "recipients": len(rcpts),
                            "refused": sorted(refused or {}), "sent_folder": None}
     # the follow-ups never fail the send: the message is gone

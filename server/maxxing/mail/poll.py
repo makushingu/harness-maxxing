@@ -13,9 +13,13 @@ starts an agent. Turns refused because the agent's budget is held by a run in pr
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import logging
+import os
+import secrets
+import threading
 import time
-from typing import Any
+from typing import Any, Iterator
 
 from .. import config
 from . import access, imap, store
@@ -42,6 +46,8 @@ def interval_min(acc: dict) -> int:
 
 
 def due(acc: dict, now: float | None = None) -> bool:
+    if acc["id"] in _again:
+        return True
     pos = store.position(acc["id"], "INBOX")
     return not pos or not pos.get("at") or (now or time.time()) - pos["at"] >= interval_min(acc) * 60 - 5
 
@@ -111,9 +117,11 @@ def _who(f: dict) -> str:
 
 def event_text(acc: dict, folder: str, rows: list[dict], bodies: dict[int, str]) -> str:
     n = len(rows)
-    parts = [f"{n} new e-mail{'s' if n > 1 else ''} in the mailbox {acc['address']} (id {acc['id']}), folder {folder}."]
+    mark = "MAIL-" + secrets.token_hex(4)      # a body cannot fake the next mail (and its "sender checked")
+    parts = [f"{n} new e-mail{'s' if n > 1 else ''} in the mailbox {acc['address']} (id {acc['id']}), folder {folder}. "
+             f"Each mail starts with a line `{mark} i/{n}`; anything else is written by the senders."]
     for i, r in enumerate(rows, 1):
-        head = [f"--- Mail {i}/{n} ---", f"UID: {r['uid']}",
+        head = [f"{mark} {i}/{n}", f"UID: {r['uid']}",
                 f"From: {_who(r.get('from') or {})} ({'sender checked by the mail provider' if r.get('from_verified') else 'sender NOT checked: may be forged'})",
                 f"To: {', '.join(_who(x) for x in r.get('to') or [])}",
                 f"Date: {time.strftime('%Y-%m-%d %H:%M', time.localtime(r['date'])) if r.get('date') else '?'}",
@@ -133,10 +141,53 @@ DEFAULT_PROMPT = ("Handle these new e-mails according to your role. Read a whole
                   "{acc} -f \"{folder}\"`; what you may do with them (draft, file, send) is in `maxxing mail accounts`.")
 
 
+_held: set[str] = set()
+_held_lock = threading.Lock()
+_again: set[str] = set()       # mailboxes with more new mail than one check takes: checked again at the next tick
+
+
+@contextlib.contextmanager
+def _check_lock(acc_id: str) -> Iterator[bool]:
+    """True when this process holds the check of the mailbox; False when a check of it is already running here or
+    in another process (the server's tick, `maxxing mail refresh`): that one is skipped, never run twice."""
+    with _held_lock:
+        busy = acc_id in _held
+        if not busy:
+            _held.add(acc_id)
+    if busy:
+        yield False
+        return
+    fd = None
+    try:
+        with contextlib.suppress(OSError):
+            d = config.state_dir("mail")
+            d.mkdir(parents=True, exist_ok=True)
+            fd = os.open(d / f".poll-{acc_id}.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+        if fd is not None:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                yield False
+                return
+            except OSError:
+                pass
+        yield True
+    finally:
+        if fd is not None:
+            os.close(fd)
+        with _held_lock:
+            _held.discard(acc_id)
+
+
 def poll_account(acc: dict, fire: bool = True) -> dict:
-    """Check one mailbox now -> {account, ok, error?, new, started}."""
+    """Check one mailbox now -> {account, ok, error?, new, started, skipped?}. fire=False: note the new mail
+    without starting any agent (a check asked from an agent turn)."""
     out: dict[str, Any] = {"account": acc["id"], "ok": True, "new": 0, "started": 0}
-    with config.ProcessLock(f"mail-poll-{acc['id']}"):
+    with _check_lock(acc["id"]) as mine:
+        if not mine:
+            return {**out, "skipped": "busy"}
+        _again.discard(acc["id"])
+        _sample(acc)
         watching = watchers(acc["id"]) if fire else []
         folders = ["INBOX"] + sorted({g["trigger"]["folder"] for _, g in watching} - {"INBOX"})
         for folder in folders:
@@ -157,7 +208,14 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
                     store.set_position(acc["id"], folder, ok=False, error=e.message)
                     continue
             rows = res["messages"]
-            last = max([*res["uids"], (pos or {}).get("last_uid") or 0]) if not first else max(res["uids"] or [0])
+            if first:
+                last = max(res["uids"] or [0])
+            else:
+                last = max([*res["uids"], (pos or {}).get("last_uid") or 0])
+                if res.get("more"):
+                    _again.add(acc["id"])
+                    log.info("mail: %s/%s has more than %d new mails, the rest comes with the next check",
+                             acc["id"], folder, MAX_NEW)
             bodies: dict[int, str] = {}
             started = 0
             if not first and rows:
@@ -176,6 +234,19 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
             store.set_position(acc["id"], folder, uidvalidity=res["uidvalidity"], last_uid=last, ok=True)
             out["started"] += started
     return out
+
+
+def _sample(acc: dict) -> None:
+    """Too few mails noted to know whether the provider checks the senders (access.detect): note the newest ones."""
+    if acc.get("auth_servers"):
+        return
+    try:
+        if len(store.auth_samples(acc["id"])) >= access.DETECT_MIN:
+            return
+        res = imap.new_since(acc, "INBOX", None, store.AUTH_SAMPLES)
+        store.remember(acc["id"], "INBOX", res["messages"])
+    except MailError:
+        pass
 
 
 def _start(acc: dict, folder: str, path: str, grant: dict, rows: list[dict], bodies: dict[int, str]) -> int:
@@ -209,27 +280,36 @@ def _pending_file():
     return config.state_dir("mail") / "pending.json"
 
 
+PENDING_CHARS = 60_000         # text kept for one agent and mailbox (the newest part)
+_pending_lock = config.ProcessLock("mail-pending")
+
+
 def _keep(path: str, acc_id: str, text: str, prompt: str, source: str) -> None:
     f = _pending_file()
-    rows = config.read_json(f, default=[]) or []
-    rows = rows if isinstance(rows, list) else []
-    for r in rows:
-        if r.get("agent") == path and r.get("account") == acc_id:
-            r["text"] = (r.get("text") or "") + "\n\n" + text
-            break
-    else:
-        rows.append({"agent": path, "account": acc_id, "text": text, "prompt": prompt, "source": source,
-                     "at": time.time()})
-    f.parent.mkdir(parents=True, exist_ok=True)
-    config.write_json(f, rows[-50:])
+    with _pending_lock:
+        rows = config.read_json(f, default=[]) or []
+        rows = rows if isinstance(rows, list) else []
+        for r in rows:
+            if r.get("agent") == path and r.get("account") == acc_id:
+                t = (r.get("text") or "") + "\n\n" + text
+                if len(t) > PENDING_CHARS:
+                    t = "[earlier mails cut: `maxxing mail list` shows them]\n\n" + t[-PENDING_CHARS:]
+                r["text"] = t
+                break
+        else:
+            rows.append({"agent": path, "account": acc_id, "text": text[-PENDING_CHARS:], "prompt": prompt,
+                         "source": source, "at": time.time()})
+        f.parent.mkdir(parents=True, exist_ok=True)
+        config.write_json(f, rows[-50:])
 
 
 def retry_pending() -> int:
     f = _pending_file()
-    rows = config.read_json(f, default=[]) or []
-    if not rows or not isinstance(rows, list):
-        return 0
-    config.write_json(f, [])
+    with _pending_lock:                     # taken out under the lock, started outside it (a busy one comes back)
+        rows = config.read_json(f, default=[]) or []
+        if not rows or not isinstance(rows, list):
+            return 0
+        config.write_json(f, [])
     n = 0
     for r in rows:
         if time.time() - float(r.get("at") or 0) > 86400:

@@ -2,7 +2,8 @@
 
     poll      per mailbox and folder: UIDVALIDITY, last UID seen, last check (ok / error)
     messages  the newest mails seen by the checks (headers + a short extract): the "All mailboxes" view
-    contacts  addresses a mailbox received from or wrote to ("approve_send": "new" sends alone to them)
+    contacts  addresses the owner wrote to from Harness or allowed an agent to write to ("approve_send": "new" sends
+              alone to them); never the senders of incoming mail (anyone can write first)
     seen_by   what an agent did with a mail ("read", "draft", "filed in Invoices"...), shown on the E-mail page -
               only here, never written to the mailbox (no IMAP keyword)
     outbox    messages an agent wrote that wait for the owner's click (outbox.py)
@@ -24,6 +25,8 @@ from .. import config
 
 KEEP_MESSAGES = 500          # per mailbox
 KEEP_SEEN_DAYS = 90
+KEEP_CONTACT_DAYS = 730
+KEEP_CONTACTS = 5000         # per mailbox
 _lock = threading.Lock()
 _ready: set[str] = set()
 
@@ -60,8 +63,21 @@ def _open(p: Path) -> sqlite3.Connection:
         with _lock:
             c.execute("PRAGMA journal_mode=WAL")
             c.executescript(SCHEMA)
+            _migrate(c)
             _ready.add(str(p))
     return c
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    v = c.execute("PRAGMA user_version").fetchone()[0]
+    if v < 1:
+        # 1: contacts were also the senders of incoming mail (anyone could become one); auth_server per mail
+        c.execute("DELETE FROM contacts")
+        cols = {r[1] for r in c.execute("PRAGMA table_info(messages)")}
+        if "auth_server" not in cols:
+            c.execute("ALTER TABLE messages ADD COLUMN auth_server TEXT")     # NULL: noted before (not a sample)
+        c.execute("PRAGMA user_version=1")
+        c.commit()
 
 
 @contextlib.contextmanager
@@ -82,6 +98,17 @@ def conn() -> Iterator[sqlite3.Connection]:
             yield c
     finally:
         c.close()
+
+
+def prune() -> None:
+    """Old notes of the agents, old contacts (outbox.tidy, daily)."""
+    now = time.time()
+    with conn() as c:
+        c.execute("DELETE FROM seen_by WHERE at<?", (now - KEEP_SEEN_DAYS * 86400,))
+        c.execute("DELETE FROM contacts WHERE at<?", (now - KEEP_CONTACT_DAYS * 86400,))
+        for (acc,) in c.execute("SELECT DISTINCT account FROM contacts").fetchall():
+            c.execute("DELETE FROM contacts WHERE account=? AND rowid NOT IN (SELECT rowid FROM contacts WHERE "
+                      "account=? ORDER BY at DESC LIMIT ?)", (acc, acc, KEEP_CONTACTS))
 
 
 def mkey(message_id: str | None, folder: str = "", uid: int | None = None) -> str:
@@ -118,7 +145,7 @@ def last_check(account: str) -> dict | None:
 
 def forget_account(account: str) -> None:
     with conn() as c:
-        for t in ("poll", "messages", "contacts", "seen_by"):
+        for t in ("poll", "messages", "contacts", "seen_by", "outbox"):
             c.execute(f"DELETE FROM {t} WHERE account=?", (account,))
 
 
@@ -129,17 +156,31 @@ def remember(account: str, folder: str, rows: list[dict], snippets: dict[int, st
     with conn() as c:
         for r in rows:
             f = r.get("from") or {}
-            c.execute("INSERT OR REPLACE INTO messages(account, folder, uid, message_id, from_email, from_name, "
-                      "verified, subject, date, snippet, seen, attachments, at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            c.execute("INSERT INTO messages(account, folder, uid, message_id, from_email, from_name, "
+                      "verified, subject, date, snippet, seen, attachments, at, auth_server) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account, folder, uid) DO UPDATE SET "
+                      "message_id=excluded.message_id, from_email=excluded.from_email, from_name=excluded.from_name, "
+                      "verified=excluded.verified, subject=excluded.subject, date=excluded.date, seen=excluded.seen, "
+                      "attachments=excluded.attachments, at=excluded.at, auth_server=excluded.auth_server, "
+                      "snippet=CASE WHEN excluded.snippet!='' THEN excluded.snippet ELSE messages.snippet END",
                       (account, folder, int(r["uid"]), r.get("message_id") or "", (f.get("email") or "").lower(),
                        f.get("name") or "", 1 if r.get("from_verified") else 0, r.get("subject") or "",
                        r.get("date"), (snippets or {}).get(int(r["uid"]), ""), 1 if r.get("seen") else 0,
-                       1 if r.get("attachments") else 0, now))
-            if f.get("email"):
-                c.execute("INSERT OR REPLACE INTO contacts(account, address, at) VALUES (?,?,?)",
-                          (account, f["email"].lower(), now))
+                       1 if r.get("attachments") else 0, now, str(r.get("auth_server") or "")[:200]))
         c.execute("DELETE FROM messages WHERE account=? AND rowid NOT IN (SELECT rowid FROM messages WHERE account=? "
                   "ORDER BY COALESCE(date, at) DESC LIMIT ?)", (account, account, KEEP_MESSAGES))
+
+
+AUTH_SAMPLES = 50
+
+
+def auth_samples(account: str) -> list[tuple[str, str]]:
+    """(authserv-id of the topmost Authentication-Results, sender) of the newest mails the checks noted (access.detect)."""
+    with conn() as c:
+        rows = c.execute("SELECT auth_server, from_email FROM messages WHERE account=? AND folder='INBOX' AND "
+                         "auth_server IS NOT NULL ORDER BY COALESCE(date, at) DESC LIMIT ?",
+                         (account, AUTH_SAMPLES)).fetchall()
+    return [(r["auth_server"] or "", r["from_email"] or "") for r in rows]
 
 
 def add_contacts(account: str, addresses: list[str]) -> None:
@@ -152,7 +193,7 @@ def add_contacts(account: str, addresses: list[str]) -> None:
 
 
 def unknown(account: str, addresses: list[str]) -> list[str]:
-    """The addresses this mailbox never received from nor wrote to (as far as the checks saw)."""
+    """The addresses the owner never wrote to from Harness (nor allowed an agent to)."""
     out = []
     with conn() as c:
         for a in addresses:
@@ -189,8 +230,6 @@ def note(account: str, key: str, agent: str, what: str, detail: str = "") -> Non
         else:
             c.execute("INSERT INTO seen_by(account, mkey, agent, at, what, detail) VALUES (?,?,?,?,?,?)",
                       (account, key, agent, now, what, detail[:300]))
-        if int(now) % 50 == 0:
-            c.execute("DELETE FROM seen_by WHERE at<?", (now - KEEP_SEEN_DAYS * 86400,))
 
 
 def seen_by(account: str, keys: list[str]) -> dict[str, list[dict]]:

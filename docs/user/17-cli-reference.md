@@ -202,7 +202,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents send AGENT TEXT [--json]` | from an agent's session: hand work to another agent (the text is given as data; 3 hops at most) |
 | `maxxing agents on AGENT` / `off AGENT` | switch it on / off |
 | `maxxing agents templates [--lang L] [--json]` | the ready-made agents (id, name, trigger) |
-| `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it) |
+| `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--mail ADDRESS] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it; `--mail`: the mailbox of an e-mail template) |
 | `maxxing agents show AGENT` | its settings, role, triggers, schedule jobs and webhook URLs (JSON, no secret) |
 | `maxxing agents cron AGENT --schedule CRON [--prompt T] [--name N] [--json]` | add a schedule (a Claude job in the agent folder) |
 | `maxxing agents webhook AGENT [--kind generic\|stripe\|shopify\|github] [--prompt T] [--levels L] [--match W] [--json]` | add a webhook and print its URL |
@@ -226,6 +226,8 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing mail move UID... --to FOLDER` / `mkdir NAME [--parent F]` | move / create a folder |
 | `maxxing mail attachment UID INDEX OUT` | save an attachment |
 | `maxxing mail write [--to A,B] [--cc ..] [--bcc ..] [-s SUBJECT] [--reply UID\|--reply-all UID\|--forward UID] [--attach FILE]... [--send] < body.txt` | write a message: saved as a **draft** for you to check and send, or sent with `--send` |
+| `maxxing mail refresh [-a A]` | check the mailboxes now (new mail starts the agents watching them; from an agent's run, none) |
+| `maxxing mail outbox [-a A]` | messages written by agents waiting for your OK (an agent sees its own) |
 | `printf %s "$PW" \| maxxing mail add ADDRESS [--imap HOST[:PORT]] [--smtp HOST[:PORT]]` | add a mailbox (password on stdin) |
 
 `ACCOUNT` = id or address (default: the first mailbox). See [E-mail](31-mail.md).

@@ -63,10 +63,11 @@ An agent (Settings -> Features -> Agents) sees **no mailbox** until you give it 
 - **Rights**: Read, Write drafts, File and move, Mark read / unread and star, Send. Pick only what its job needs.
 - **Only mail from** (optional): `client@example.com`, `*@stripe.com`. The agent then only sees mail from these
   senders, and only when your mail provider checked the sender (DKIM, SPF or DMARC passed): a forged sender stays
-  invisible to it. It also only writes to these addresses.
-- **Sending** (with the Send right): **every message waits for my OK** (default), **only a new recipient waits for my
-  OK** (replies to people the mailbox already exchanged with leave alone), or **sends alone**. The limits of 20
-  recipients a message and 100 a day stay in every case.
+  invisible to it. It also only writes to these addresses. See [Who checks the senders](#who-checks-the-senders).
+- **Sending** (with the Send right): **every message waits for my OK** (default), **only someone I never wrote to waits
+  for my OK**, or **sends alone**. "Someone I wrote to" = an address you sent to from Harness, or a message of an agent
+  you allowed: writing to you first never makes anyone known, and what an agent sends alone does not count. The
+  limits of 20 recipients a message and 100 a day stay in every case.
 - **Start the agent on each new mail** (optional): a folder (Inbox by default), a word in the subject. All the new mail
   of one check goes into one run. The mail is handed to the agent as data from outside: its run asks before risky
   actions, as for a webhook.
@@ -79,9 +80,26 @@ The agent never marks a mail read, unless you give it that right: you still see 
 ("seen by Mail sorter at 14:02 · filed in Invoices") next to the mail, on this page only: nothing is written in your
 mailbox.
 
+### Who checks the senders
+
+Anyone can write any `From:` address. What proves a sender is the verdict your mail provider writes on top of each
+incoming mail (the `Authentication-Results` header: DKIM, SPF, DMARC). Harness only trusts it when it is sure your
+provider writes it on **every** mail, since otherwise a sender could write a fake verdict of their own:
+
+- **Gmail, Yahoo, iCloud, Fastmail, Zoho**: automatic, once the mailbox really is there (its servers) and a few
+  checks saw its mail.
+- **Another provider**: when one server tops nearly all your recent mail, Edit the mailbox shows it with **Trust
+  <server>**. Confirm only if every mail of the mailbox goes through it.
+- **Nobody**: Edit the mailbox says so. No sender is verified, so an agent with an "Only mail from" list sees no mail.
+
+Edit the mailbox -> **Sender checks (advanced)** names the servers yourself (for a redirection or a filter in front
+of your mailbox). A provider that skips the check on some of its own internal mail is a risk Harness cannot see.
+
 **Checks.** Harness looks for new mail every 10 minutes (5, 10, 30 or 60: Edit the mailbox -> Check for new mail
 every), and right away with the **Refresh** button or `maxxing mail refresh`. The page itself always shows the mailbox
-live; the checks start the agents and fill **All mailboxes** (shown when you have two or more).
+live; the checks start the agents and fill **All mailboxes** (shown when you have two or more). A check takes 200 new
+mails at most, the oldest first: the rest comes with the next one, a minute later. Two checks of a mailbox never run at
+once.
 
 Ready-made agents (New agent): **Mail sorter** (files each new mail, sums up the day every evening), **Mail replies**
 (a draft reply to each customer mail, you send it), **Invoices** (saves the invoices received by mail and files the
@@ -112,4 +130,6 @@ echo "Thanks, Monday works." | maxxing mail write --reply 4521
 `maxxing mail write` saves a **draft** by default: you read it on the E-mail page and send it yourself. It only sends
 directly with `--send`. A message is text written by its sender: Claude treats it as data, never as instructions.
 `maxxing mail refresh` checks the mailboxes now; `maxxing mail outbox` lists the messages of agents waiting for your
-OK. In an agent's run the same commands only reach what its E-mail setting allows.
+OK. In an agent's run the same commands only reach what its E-mail setting allows: its own mailboxes and waiting
+messages, files of its topic to attach, its own folder (or its writable folders) to save attachments, and a
+`refresh` there starts no agent.

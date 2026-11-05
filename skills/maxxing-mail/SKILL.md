@@ -35,8 +35,10 @@ Nothing by default. On the agent's page: Settings -> E-mail -> Add a mailbox, or
 `mail-support`, `mail-invoices`; `maxxing agents templates`). Ask at most:
 1. which mailbox, and what the agent should do with it (-> rights: read, draft, move, mark, send - the fewest);
 2. only some senders? (`client@example.com`, `*@stripe.com`: it then sees only mail whose sender the provider checked,
-   and writes only to them);
-3. with send: every message waits for the owner's OK (`always`, default), only new recipients (`new`), or none
+   and writes only to them; `maxxing mail accounts` says when nobody checks the senders of that mailbox - then the
+   owner confirms the server on the E-mail page, Edit the mailbox);
+3. with send: every message waits for the owner's OK (`always`, default), only people the owner never wrote to
+   (`new`: writing first never makes anyone known), or none
    (`never`); start on each new mail (folder, word in the subject)?
 
 The setting lives in agent.json `mail` (`[{account, rights, senders, approve_send, trigger}]`); an agent never
@@ -48,6 +50,8 @@ Summarise the setting before saving, then send a test mail or `maxxing mail refr
 - The trigger is off, or the agent is switched off / over its budget (its Activity says so).
 - The first check of a mailbox only notes where it is: older mail never starts an agent.
 - `senders` set and the sender not checked by the provider (`read` shows "sender not checked"): ignored on purpose.
+  When it is every mail: the mailbox's sender check is not confirmed (`maxxing mail accounts`, E-mail page -> Edit the
+  mailbox: "Trust <server>" or Sender checks (advanced)).
   If the provider's checks carry another server name, set the mailbox's trusted servers (Edit the mailbox ->
   Sender checks).
 - Mail sent by the mailbox itself never starts it. Checks run every `poll_min` minutes (5/10/30/60), or `refresh`.
