@@ -455,12 +455,13 @@ OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep
               "(what and why); the owner applies it.")
 
 
-def run_settings(path: str, outside: bool = False) -> dict:
+def run_settings(path: str, outside: bool = False, session: str | None = None) -> dict:
     """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
     args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
     agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
     risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
-    its turns see."""
+    its turns see. session: the session whose turn starts now - the budget cap it gets is held for it until the turn
+    ends, so turns running side by side never get the same money twice."""
     if not exists(path):
         return {}
     a = load(path)
@@ -470,8 +471,12 @@ def run_settings(path: str, outside: bool = False) -> dict:
     if a["disallowed_tools"]:
         args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
     if a["limits"]["usd_per_day"]:                  # Claude Code stops the turn itself once the day's budget is spent
-        left = a["limits"]["usd_per_day"] - day_cost(path)
-        args += ["--max-budget-usd", f"{max(left, 0.01):.2f}"]
+        with _lock:
+            st = _read_state(path)
+            left = max(a["limits"]["usd_per_day"] - day_cost(path) - _held(st, but=session), 0.01)
+            if session:
+                _hold(path, st, session, left)
+        args += ["--max-budget-usd", f"{left:.2f}"]
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
     args += ["--append-system-prompt", OWNER_NOTE]
@@ -960,21 +965,64 @@ def test_trigger(path: str, tid: str) -> dict:
 
 
 def gate(path: str) -> str | None:
-    """Why a trigger may not start a turn now (None = it may): disabled, budget, rate."""
+    """Why a trigger may not start a turn now (None = it may): disabled, budget, busy (the rest of the budget is held
+    by runs in progress), rate. fire() asks it again under _lock, with the start of the run."""
     if not exists(path):
         return "missing"
     a = load(path)
     if not a["enabled"]:
         return "disabled"
     lim = a["limits"]
-    if lim["usd_per_day"] and day_cost(path) >= lim["usd_per_day"]:
-        return "budget"
+    if lim["usd_per_day"]:
+        spent = day_cost(path)
+        if spent >= lim["usd_per_day"]:
+            return "budget"
+        held = _held(_read_state(path))
+        if held and spent + held >= lim["usd_per_day"] - 0.01:
+            return "busy"
     if lim["runs_per_hour"] and _runs_last_hour(path) >= lim["runs_per_hour"]:
         return "rate"
     return None
 
 
+# ---- budget held by the runs in progress (<state>/agents/<key>.json "held": {session: {usd, at}}) -------------
+HOLD_START_S = 300              # a hold whose session cannot be read is kept this long (the run is being created)
+
+
+def _held(st: dict, but: str | None = None) -> float:
+    """USD held by the agent's runs still in progress (but: leave this session out). Drops the holds of runs that
+    ended (on_turn_end drops them too; this covers a server down at that moment)."""
+    from .sessions import store
+    keep, total = {}, 0.0
+    for sid, h in (st.get("held") or {}).items() if isinstance(st.get("held"), dict) else ():
+        if not store.is_valid_id(sid):
+            continue
+        m = store.read_cached(sid)
+        live = (m.get("state") == "running" or bool(m.get("queue"))) if m else \
+            time.time() - float((h or {}).get("at") or 0) < HOLD_START_S
+        if live:
+            keep[sid] = h
+            if sid != but:
+                total += float((h or {}).get("usd") or 0)
+    st["held"] = keep
+    return round(total, 4)
+
+
+def _hold(path: str, st: dict, sid: str, usd: float) -> None:
+    st.setdefault("held", {})[sid] = {"usd": round(usd, 4), "at": time.time()}
+    _write_state(path, st)
+
+
+def _release(path: str, sid: str) -> None:
+    with _lock:
+        st = _read_state(path)
+        if isinstance(st.get("held"), dict) and sid in st["held"]:
+            st["held"].pop(sid)
+            _write_state(path, st)
+
+
 SKIP_TEXT = {"disabled": "The agent is switched off", "budget": "Daily budget reached",
+             "busy": "The rest of today's budget is held by the run in progress",
              "rate": "Too many runs in the last hour", "missing": "The agent no longer exists",
              "depth": "Too many hops between agents"}
 
@@ -1031,14 +1079,25 @@ def context(path: str) -> str:
 
 def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: str = "manual",
          attachments: list[str] | None = None, depth: int = 0, cron_env: dict | None = None,
-         timeout_s: int | None = None, reply_to: str | None = None) -> dict:
+         timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False) -> dict:
     """Start a new session of the agent -> {started: bool, session?, reason?, continued?}.
     trigger: "manual", "cron:<job id>", "feed:<trigger id>", "telegram", "agent:<from path>".
-    reply_to: the id of a thread message; its session goes on with this message (no new session)."""
+    reply_to: the id of a thread message; its session goes on with this message (no new session).
+    wait: the caller tries again later when the budget is held by a run in progress (reason busy, nothing posted).
+    The guards and the start are one step under _lock: triggers arriving together never pass the same guard."""
+    with _lock:
+        return _fire(path, trigger=trigger, text=text, prompt=prompt, source=source, attachments=attachments,
+                     depth=depth, cron_env=cron_env, timeout_s=timeout_s, reply_to=reply_to, wait=wait)
+
+
+def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attachments: list[str] | None,
+          depth: int, cron_env: dict | None, timeout_s: int | None, reply_to: str | None, wait: bool) -> dict:
     if depth > MAX_DEPTH:
         reason = "depth"
     else:
         reason = gate(path)
+    if reason == "busy" and wait:
+        return {"started": False, "reason": reason}
     if reason:
         if reason != "missing":
             post(path, "skip", SKIP_TEXT.get(reason, reason), trigger=trigger, reason=reason, source=source)
@@ -1056,6 +1115,7 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     sid = _reply_session(path, reply_to) if reply_to else None
     if sid:
         r = service.send_message(sid, message, attachments=attachments, source="agent")
+        _hold_left(path, a, sid)
         _snapshot(path, sid)
         post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=sid,
              reply_to=reply_to)
@@ -1072,9 +1132,17 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=timeout_s or a["limits"]["timeout_s"],
                                permission_mode=a["permission_mode"])
+    _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
     post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"])
     return {"started": True, "session": s}
+
+
+def _hold_left(path: str, a: dict, sid: str) -> None:
+    """The run just started holds what is left of the day until its runner sets its cap (run_settings)."""
+    if a["limits"]["usd_per_day"]:
+        st = _read_state(path)
+        _hold(path, st, sid, max(a["limits"]["usd_per_day"] - day_cost(path) - _held(st, but=sid), 0.01))
 
 
 # ---- alerts: what needs the user lands in the Notifications feed (source `agents`, see feed.act) ---------------
@@ -1190,6 +1258,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             if isinstance(result.get(k), (int, float)):
                 cost = round(float(result[k]), 4)
                 break
+    _release(path, session["id"])
     msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost)
     try:
         _turn_alert(path, session, ok, text)
@@ -1212,6 +1281,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
 
 # ---- feed triggers (server): new feed events are read from feed.db ------------------------------------
 FEED_POLL_S = 10.0
+BUSY_RETRY_S = 30.0             # feed events whose agent's budget is held by a run in progress: tried again then
 
 
 def _matches(t: dict, ev: dict) -> bool:
@@ -1384,8 +1454,15 @@ def flush_due() -> int:
             fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"],
                  depth=p.get("depth") or 0)
             n += 1
+            r = fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"], wait=True)
         except Exception:
             log.exception("agent fire failed for %s", path)
+            continue
+        if r.get("reason") == "busy":                   # the run in progress holds the budget: once it ends
+            debouncer.pending.setdefault((path, tid), {**p, "due": time.time() + BUSY_RETRY_S})
+            _save_feed_pos(f, int(st.get("last_id") or 0))
+        else:
+            n += 1
     return n
 
 

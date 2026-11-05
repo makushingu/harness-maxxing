@@ -2802,6 +2802,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.run.notStarted': "L'agent n'a pas démarré",
   'agents.reason.disabled': "L'agent est désactivé",
   'agents.reason.budget': 'Son budget du jour est atteint',
+  'agents.reason.busy': 'Le tour en cours réserve le reste de son budget du jour',
   'agents.reason.rate': 'Trop de tours dans la dernière heure',
   'agents.reason.missing': "L'agent n'existe plus",
   'agents.reason.depth': "Trop d'échanges entre agents",
