@@ -47,9 +47,13 @@ _mine_lock = threading.Lock()
 def write_atomic(f: Path, data: dict) -> None:
     tmp = f.with_name(f".{f.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        json.dump(data, fh, ensure_ascii=False)
-    os.replace(tmp, f)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(data, fh)                             # ASCII: a lone surrogate in a tool input is stored too
+        os.replace(tmp, f)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def read(f: Path) -> dict | None:
