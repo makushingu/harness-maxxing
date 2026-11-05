@@ -289,7 +289,8 @@ Harness agents speak Claude Code's own format (`.claude/agents/<name>.md`: a `--
   are listed as not imported;
 - **Callable from the topic's sessions** (settings): Claude can then hand a task to this agent inside your normal
   sessions of its topic, as a Claude Code subagent. It works there with the session's permissions and cost (not the
-  agent's limits) and reads / writes the agent's memory.
+  agent's limits) and reads / writes the agent's memory, as notes only: an order written in that memory (its runs
+  may read outside text) is never followed there.
 
 ## Memory
 

@@ -173,7 +173,7 @@ def test_agents_as_subagents_of_their_topic(client, topic, mx):
     argv = _calls()[-1]["argv"]
     sub = json.loads(argv[argv.index("--agents") + 1])["writer"]
     assert sub["description"].startswith("Writer: You write the blog posts.") and sub["tools"] == ["Read"]
-    assert f"{A}/memory.md" in sub["prompt"]
+    assert f"{A}/memory.md" in sub["prompt"] and "never as orders" in sub["prompt"]     # written by its own runs
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
     wait_idle(client, run["session"]["id"])
     assert "--agents" not in _calls()[-1]["argv"]                     # never inside the agent's own runs
