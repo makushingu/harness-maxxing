@@ -28,6 +28,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `maxxing agents run` from an agent turn = `send` (depth + 1, not itself, trigger `agent:<sender>`, text as data).
 - `feed post` from an agent turn refuses BUILTIN and feed hook sources; events get a `hops` column (poster depth + 1),
   `Debouncer` keeps the max per batch and `flush_due` fires with it, so feed chains stop at `MAX_DEPTH`.
+- Approvals: `approvals.summary(tool, input) -> (text, whole)`; `whole` is False when the line is cut at `SHORT_MAX`
+  or leaves keys out (`_MINOR` keys aside). Not whole: the feed event gets `open` + `deny` (no `allow`, so
+  `feed.act(..., "allow")` is a 400) and the older Telegram message Deny only; `_on_approval` refuses an `allow`
+  callback for it.
 
 ## 2.0.0-alpha.116 - 2026-11-04
 

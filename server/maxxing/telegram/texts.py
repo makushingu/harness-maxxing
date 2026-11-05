@@ -204,6 +204,7 @@ WORDS["en"].update({
     "approval_btn_allow": "✅ Allow", "approval_btn_deny": "❌ Deny",
     "approval_allow": "✅ Allowed", "approval_deny": "❌ Denied",
     "approval_timeout": "⏱ No answer in time, denied", "approval_expired": "⏹ Expired (the turn stopped)",
+    "approval_cut": "Only part of it is shown: open the request in Harness to allow it.",
 })
 WORDS["fr"].update({
     "agent_intro": "🤖 <b>{name}</b> publie ses résultats ici. Écrivez ici pour lui confier une tâche.",
@@ -214,6 +215,7 @@ WORDS["fr"].update({
     "approval_btn_allow": "✅ Autoriser", "approval_btn_deny": "❌ Refuser",
     "approval_allow": "✅ Autorisé", "approval_deny": "❌ Refusé",
     "approval_timeout": "⏱ Pas de réponse à temps, refusé", "approval_expired": "⏹ Expiré (le tour s'est arrêté)",
+    "approval_cut": "Seule une partie est affichée : ouvrez la demande dans Harness pour l'autoriser.",
 })
 AGENT_REASONS = {
     "en": {"disabled": "it is switched off", "budget": "its daily budget is reached",

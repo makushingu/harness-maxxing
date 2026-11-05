@@ -52,19 +52,32 @@ def _redact(v: Any) -> Any:
     return v
 
 
-def short(tool: str, inp: Any) -> str:
-    """One line for a thread / a notification: "Bash: git push", "Write: /path/file"."""
+# keys that change nothing of what a tool does: a summary without them still shows the whole request
+_MINOR = {"Bash": {"description", "timeout", "run_in_background"}, "Read": {"offset", "limit"}}
+
+
+def summary(tool: str, inp: Any) -> tuple[str, bool]:
+    """`short()` and whether it shows the whole request (False: cut, or other keys left out such as the content of
+    a Write). Only a complete summary may be allowed from a one-tap button (feed, Telegram)."""
     inp = inp if isinstance(inp, dict) else {}
     for k in ("command", "file_path", "notebook_path", "path", "url", "pattern", "query", "prompt", "description"):
         if isinstance(inp.get(k), str) and inp[k].strip():
             text = " ".join(inp[k].split())
+            rest = {o for o, v in inp.items() if o != k and v not in (None, "", [], {})} - _MINOR.get(tool, set())
             break
     else:
-        text = json.dumps(inp, ensure_ascii=False)[:SHORT_MAX] if inp else ""
+        text = json.dumps(inp, ensure_ascii=False) if inp else ""
+        rest = set()
     from . import logs
     text = logs.redact(text)
+    whole = len(text) <= SHORT_MAX and not rest
     text = text if len(text) <= SHORT_MAX else text[:SHORT_MAX - 1] + "…"
-    return f"{tool}: {text}" if text else tool
+    return (f"{tool}: {text}" if text else tool), whole
+
+
+def short(tool: str, inp: Any) -> str:
+    """One line for a thread / a notification: "Bash: git push", "Write: /path/file"."""
+    return summary(tool, inp)[0]
 
 
 def public(d: dict) -> dict:
@@ -181,15 +194,22 @@ def _agent_name(path: str) -> str:
         return path.rsplit("/", 1)[-1] or "An agent"
 
 
+CUT_NOTE = "Only part of the request is shown: open it to see all of it before allowing."
+
+
 def _feed_new(d: dict) -> None:
-    """A waiting request = a Notifications event with Allow / Deny (source `agents`), once per request."""
+    """A waiting request = a Notifications event with Allow / Deny (source `agents`), once per request. When its
+    summary is not the whole request (cut, or the content of a Write left out), no one-tap Allow: Deny and Open (the
+    request card shows everything)."""
     try:
         from . import feed
         path = d.get("agent_path") or ""
-        feed.post(f"{_agent_name(path)} is waiting for your OK", short(str(d.get("tool") or ""), d.get("input")),
+        text, whole = summary(str(d.get("tool") or ""), d.get("input"))
+        acts = ([{"id": "allow", "label": "Allow", "style": "primary"}] if whole else
+                [{"id": "open", "label": "Open", "style": "link"}])
+        feed.post(f"{_agent_name(path)} is waiting for your OK", text if whole else f"{text}\n{CUT_NOTE}",
                   "warning", "agents", _agent_url(path), dedupe=f"approval:{d['id']}", ref=f"approval:{d['id']}",
-                  agent=path or None, actions=[{"id": "allow", "label": "Allow", "style": "primary"},
-                                               {"id": "deny", "label": "Deny", "style": "danger"}])
+                  agent=path or None, actions=acts + [{"id": "deny", "label": "Deny", "style": "danger"}])
     except Exception:  # noqa: BLE001 - the feed is a nicety here
         log.exception("feed event for an approval failed")
 

@@ -2571,6 +2571,10 @@ class Gateway:
         from .. import approvals
         rid, _, decision = val.rpartition(":")
         try:
+            if decision == "allow":                        # never offered for a request shown in part only
+                d = await asyncio.to_thread(approvals.get, rid)
+                if not approvals.summary(str(d.get("tool") or ""), d.get("input"))[1]:
+                    return _w("approval_cut")[:190]
             await asyncio.to_thread(approvals.decide, rid, decision, "", "telegram")
             approval_done(rid, decision)                   # edited here: with feed alerts approvals.py no longer does
             return _w(f"approval_{decision}")
@@ -3538,8 +3542,12 @@ def _approval_send_sync(d: dict) -> None:
     except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
         log.exception("agent thread for an approval")
     name = fmt.escape(_agent_display(path)) if path else "Claude"
-    html = _w("approval_ask", name=name, what=fmt.escape(approvals.short(str(d.get("tool") or ""), d.get("input"))))
-    markup = keyboard([[(_w("approval_btn_allow"), f"p:{d['id']}:allow"), (_w("approval_btn_deny"), f"p:{d['id']}:deny")]])
+    what, whole = approvals.summary(str(d.get("tool") or ""), d.get("input"))
+    html = _w("approval_ask", name=name, what=fmt.escape(what))
+    if not whole:                                  # part of it only: Allow from the request card, which shows it all
+        html += "\n" + _w("approval_cut")
+    markup = keyboard([([(_w("approval_btn_allow"), f"p:{d['id']}:allow")] if whole else [])
+                       + [(_w("approval_btn_deny"), f"p:{d['id']}:deny")]])
     sent: list = []
     _send_sync(ALERTS, [html], False, markup, target=target, sent=sent,
                bind={"agent": path} if path and (target is None or target[1] is None) else None)
