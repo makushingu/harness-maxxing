@@ -1229,7 +1229,8 @@ def _event_text(ev: dict) -> str:
 
 
 class Debouncer:
-    """Events for one trigger closer than debounce_s go into one turn (server process only)."""
+    """Events for one trigger closer than debounce_s go into one turn (server process only; the batches waiting
+    are also kept in _feed.json, so a restart in the window does not lose them)."""
 
     def __init__(self) -> None:
         self.pending: dict[tuple[str, str], dict] = {}
@@ -1251,24 +1252,60 @@ class Debouncer:
             out.append((k[0], k[1], self.pending.pop(k)))
         return out
 
+    def dump(self) -> list[dict]:
+        return [{"path": k[0], "trigger": k[1], **p} for k, p in self.pending.items()]
+
+    def load(self, rows: Any) -> None:
+        for r in rows if isinstance(rows, list) else []:
+            try:
+                k = (str(r["path"]), str(r["trigger"]))
+                self.pending.setdefault(k, {"texts": [str(t) for t in r["texts"]], "first": float(r["first"]),
+                                            "due": float(r["due"]), "source": str(r.get("source") or "feed"),
+                                            "prompt": str(r.get("prompt") or "")})
+            except (KeyError, TypeError, ValueError):
+                continue
+
 
 debouncer = Debouncer()
+_feed_loaded: dict = {}         # {file}: the batches saved in this state's _feed.json are back in the debouncer
+
+
+def _feed_state() -> Path:
+    return config.state_dir("agents") / "_feed.json"
+
+
+def _read_feed_state() -> tuple[Path, dict]:
+    f = _feed_state()
+    st = config.read_json(f, {}) or {}
+    if _feed_loaded.get("file") != str(f):              # first look in this process: batches of before a restart
+        _feed_loaded["file"] = str(f)
+        debouncer.load(st.get("pending"))
+    return f, st
+
+
+def _save_feed_pos(f: Path, last_id: int) -> None:
+    config.write_json(f, {"last_id": last_id, "pending": debouncer.dump()})
 
 
 def scan_feed() -> int:
     """Hand the feed events posted since the last scan to the matching feed triggers. -> number matched."""
     from . import feed
-    st_file = config.state_dir("agents") / "_feed.json"
-    st = config.read_json(st_file, {}) or {}
-    last = int(st.get("last_id") or 0)
+    st_file, st = _read_feed_state()
     top = feed.max_id()
-    if not last or top < last:                          # first scan (or a new feed.db): start from now
-        config.write_json(st_file, {"last_id": top})
+    if "last_id" not in st:                             # first scan: start from now (0 = an empty feed, kept)
+        _save_feed_pos(st_file, top)
+        return 0
+    last = int(st.get("last_id") or 0)
+    if st.get("off"):                                   # Agents was off meanwhile: those events are skipped
+        skip_backlog()
+        return 0
+    if top < last:                                      # a new feed.db: start from now
+        _save_feed_pos(st_file, top)
         return 0
     if top == last:
         return 0
     events = feed.events_after(last, 200)
-    agents = [a for a in list_agents() if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
+    agents = _feed_agents()
     n = 0
     for ev in events:
         if ev.get("source") == ALERT_SOURCE:       # the agents' own alerts never start an agent (loops)
@@ -1279,13 +1316,59 @@ def scan_feed() -> int:
                     debouncer.add(a["path"], t, _event_text(ev), f"feed ({ev.get('source')})",
                                   a["limits"]["debounce_s"], t.get("prompt") or "", depth=ev.get("hops") or 0)
                     n += 1
-    config.write_json(st_file, {"last_id": max([last] + [int(e["id"]) for e in events])})
+    _save_feed_pos(st_file, max([last] + [int(e["id"]) for e in events]))
     return n
+
+
+def _feed_agents() -> list[dict]:
+    return [a for a in list_agents() if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
+
+
+def pause_feed() -> None:
+    """Agents was switched off: feed events wait unread; once it is back on they are skipped (skip_backlog)."""
+    f, st = _read_feed_state()
+    if "last_id" in st and not st.get("off"):
+        config.write_json(f, {**st, "off": True})
+
+
+def skip_backlog() -> int:
+    """Agents was switched back on: the feed events posted while it was off are not handled (a turn holding days of
+    old orders would help nobody). Each agent with a matching feed trigger says so once in its thread. -> skipped."""
+    from . import feed
+    st_file, st = _read_feed_state()
+    top = feed.max_id()
+    last = int(st.get("last_id") or 0)
+    if "last_id" not in st or top <= last:
+        _save_feed_pos(st_file, top)
+        return 0
+    agents = _feed_agents()
+    counts: dict[str, int] = {}
+    pos = last
+    while pos < top:
+        events = feed.events_after(pos, 1000)
+        if not events:
+            break
+        for ev in events:
+            if ev.get("source") == ALERT_SOURCE:
+                continue
+            for a in agents:
+                if any(t["kind"] == "feed" and _matches(t, ev) for t in a["triggers"]):
+                    counts[a["path"]] = counts.get(a["path"], 0) + 1
+        pos = max(int(e["id"]) for e in events)
+    _save_feed_pos(st_file, top)
+    for path, k in counts.items():
+        post(path, "note", f"{k} feed event{'s' if k > 1 else ''} came while Agents was off: not handled "
+                           "(only the events from now on start the agent).", status="skipped_off", events=k)
+    return sum(counts.values())
 
 
 def flush_due() -> int:
     n = 0
-    for path, tid, p in debouncer.due():
+    f, st = _read_feed_state()
+    due = debouncer.due()
+    if due:                                             # saved first: a crash mid-way never starts them twice
+        _save_feed_pos(f, int(st.get("last_id") or 0))
+    for path, tid, p in due:
         texts = p["texts"]
         text = texts[0] if len(texts) == 1 else "\n\n---\n\n".join(
             f"Event {i + 1}/{len(texts)}:\n{t}" for i, t in enumerate(texts))

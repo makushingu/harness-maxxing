@@ -187,6 +187,67 @@ def test_feed_trigger_with_debounce(client, topic, monkeypatch):
     assert fired[-1][1]["depth"] == 2
 
 
+def _feed_trigger(client, monkeypatch, debounce_s: int = 0) -> list:
+    from maxxing import agents
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"debounce_s": debounce_s},
+                 "triggers": [{"kind": "feed", "source": "shop", "prompt": "NOTOOL handle it"}]})
+    fired: list = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append((path, k)) or {"started": True})
+    return fired
+
+
+def test_first_event_on_an_empty_feed_starts_the_agent(client, topic, monkeypatch):
+    from maxxing import agents, feed
+    _on(client)
+    _create(client)
+    fired = _feed_trigger(client, monkeypatch)
+    assert feed.max_id() == 0
+    assert agents.scan_feed() == 0                       # first scan of an empty feed: position 0 is kept
+    feed.post("order 1", source="shop")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1 and "order 1" in fired[0][1]["text"]
+
+
+def test_events_waiting_in_the_debounce_window_survive_a_restart(client, topic, monkeypatch):
+    from maxxing import agents, feed
+    _on(client)
+    _create(client)
+    fired = _feed_trigger(client, monkeypatch, debounce_s=60)
+    agents.scan_feed()
+    feed.post("order 7", source="shop")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 0          # waits for the window
+    agents.debouncer.pending.clear()                     # the server restarts
+    agents._feed_loaded.clear()
+    agents.scan_feed()
+    assert [p["texts"] for p in agents.debouncer.pending.values()] == [["order 7"]]
+    for p in agents.debouncer.pending.values():
+        p["due"] = 0
+    assert agents.flush_due() == 1 and "order 7" in fired[0][1]["text"]
+    agents.debouncer.pending.clear()                     # restarts again: nothing is started twice
+    agents._feed_loaded.clear()
+    agents.scan_feed()
+    assert agents.debouncer.pending == {} and agents.flush_due() == 0
+
+
+def test_feed_events_while_agents_is_off_are_skipped(client, topic, monkeypatch):
+    from maxxing import agents, feed
+    _on(client)
+    _create(client)
+    fired = _feed_trigger(client, monkeypatch)
+    agents.scan_feed()
+    assert client.put("/api/settings", json={"agents_page": False}).status_code == 200
+    agents.pause_feed()                                  # the server loop, while Agents is off
+    feed.post("old order 1", source="shop")
+    feed.post("old order 2", source="shop")
+    feed.post("not for it", source="other")
+    _on(client)
+    assert agents.scan_feed() == 0 and agents.flush_due() == 0
+    notes = [m for m in agents.thread(A) if m.get("status") == "skipped_off"]
+    assert len(notes) == 1 and notes[0]["events"] == 2 and "while Agents was off" in notes[0]["text"]
+    feed.post("new order", source="shop")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1 and "new order" in fired[0][1]["text"]
+    assert len([m for m in agents.thread(A) if m.get("status") == "skipped_off"]) == 1
+
+
 def test_webhook_trigger_makes_a_feed_hook(client, topic):
     _on(client)
     _create(client)

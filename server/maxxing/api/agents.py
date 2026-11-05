@@ -317,12 +317,16 @@ TICK_S = 2.0
 
 
 async def _loop() -> None:
-    last_scan = 0.0
+    last_scan, paused = 0.0, False
     while True:
         await asyncio.sleep(TICK_S)
         try:
-            if not agents.feature_on():
+            if not agents.feature_on():             # feed triggers wait; their backlog is skipped once back on
+                if not paused:
+                    await asyncio.to_thread(agents.pause_feed)
+                    paused = True
                 continue
+            paused = False
             now = asyncio.get_running_loop().time()
             if now - last_scan >= agents.FEED_POLL_S:
                 last_scan = now
