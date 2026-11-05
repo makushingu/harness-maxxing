@@ -326,7 +326,8 @@ def _clean_domains(v: Any, strict: bool = False) -> list[str]:
 
 
 def _clean_writable(v: Any, strict: bool = False) -> list[str]:
-    """Folders of the topic (relative to it, "." = the whole topic) the agent may write in, besides its own folder."""
+    """Folders of the topic (relative to it, "." = the whole topic but its agents and own files) the agent may write
+    in, besides its own folder."""
     out: list[str] = []
     for p in v if isinstance(v, list) else []:
         p = str(p).strip().strip("/") or "."
@@ -334,6 +335,10 @@ def _clean_writable(v: Any, strict: bool = False) -> list[str]:
         if len(p) > 200 or any(x in ("..", "") for x in parts) or any(c in p for c in "\n\r\0*?["):
             if strict:
                 raise AgentError(400, "bad_path", f"Not a folder of the topic: {p!r}")
+            continue
+        if parts[0] == AGENTS_DIR:                  # the agents of the topic: the owner's (agent_guard.writable_dirs)
+            if strict:
+                raise AgentError(400, "bad_path", "The agents' folders are never writable by an agent")
             continue
         if p not in out:
             out.append(p)

@@ -221,8 +221,9 @@ Your own messages (its page, its Telegram thread, the Run button) are tasks, not
 New agents run in **Claude Code's sandbox** (settings -> **Sandbox**; agents made before it existed stay without it
 until you switch it on):
 
-- its commands can **write only in its own folder**, plus the **folders of the topic** you list (`.` = the whole
-  topic);
+- its commands can **write only in its own folder**, plus the **folders of the topic** you list (`.` = the topic's
+  existing files and folders; never the other agents, the topic's `CLAUDE.md` / `memory.md` / `.claude/`, nor a new
+  file at the topic's root);
 - they **cannot read the server's secrets**: the Harness state (Keys vault, settings), SSH keys, the Claude sign-in,
   other command-line logins (GitHub CLI, cloud tools). Claude's own Read / Edit tools are refused there too;
 - they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). The same domains

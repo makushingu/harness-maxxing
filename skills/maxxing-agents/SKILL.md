@@ -36,7 +36,7 @@ one message**, only those you cannot infer:
 | **When it runs** | "every morning / each Monday" -> schedule; "when an order / a payment / a PR / a form arrives" -> webhook of that service; "when the feed shows…" -> feed trigger on an existing source; "I'll write to it" -> Telegram or manual | nothing in the request says when |
 | **Results** | its Activity thread (always); Telegram if the user wants it on the phone | - |
 | **Safety** | runs started by outside text (webhook, feed, another agent) always ask before risky actions (never `--trust-outside` unless the user insists); `--approvals` if even its own runs may send, pay, delete or publish; `--keys A,B` = only the vault keys it needs (none by default); budget $2/day, 6 runs/hour | it acts on money, customers or public posts |
-| **Sandbox** | on by default: its commands write only in its folder (`--writable drafts,.` = folders of the topic too) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default). `--no-sandbox` only if the user insists (it then reaches the whole server) | its role calls an API whose host you cannot deduce |
+| **Sandbox** | on by default: its commands write only in its folder (`--writable drafts,site` = folders of the topic too; give the folders it needs, `.` only if it must edit files at the topic's root: never `agents/`, the topic's CLAUDE.md / memory.md / .claude, nor new files at the root) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default). `--no-sandbox` only if the user insists (it then reaches the whole server) | its role calls an API whose host you cannot deduce |
 | **Name** | short and human ("Game Dev", "Support"); folder = lowercase-dashes of it | - |
 
 Then, before creating, show a short summary (name, topic, role in 2-3 lines, trigger in plain words,
@@ -90,7 +90,7 @@ field), or add a trigger with the commands above.
   inside its turns `maxxing keys get` only answers for these.
 - `allowed_tools` / `disallowed_tools`: Claude Code tool rules (`Read`, `Bash(git:*)`...).
 - `sandbox` (Claude Code's sandbox, on for new agents; never bypass; in its runs `maxxing` only accepts `feed post|list`,
-  `agents send|show|list|templates`, `keys get|list`, `status`), `domains` (hosts its commands may reach), `writable` (topic folders it may write in, `.` = all), `rules`
+  `agents send|show|list|templates`, `keys get|list`, `status`), `domains` (hosts its commands may reach), `writable` (topic folders it may write in, `.` = the topic's existing files and folders except `agents/`, CLAUDE.md, memory.md, .claude), `rules`
   (`[{"tool": "Bash", "match": "sendmail", "reason": "write a draft instead"}]`: refused before running, reason shown
   to Claude), `subagent` (callable as a Claude Code subagent from the topic's sessions). A run that fails with
   "sandbox cannot run on this server" -> `maxxing agents sandbox-setup` as root (or `maxxing doctor`).
