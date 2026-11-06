@@ -569,7 +569,7 @@ export default function MailPage() {
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input className="h-8 pr-8 pl-8 text-[13px]" placeholder={t('mail.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t('mail.search')} />
           {(q || query) && (
-            <button type="button" className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => (setQ(''), setQuery(''))} aria-label={t('mail.clearSearch')}>
+            <button type="button" className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground before:absolute before:-inset-3 before:content-['']" onClick={() => (setQ(''), setQuery(''))} aria-label={t('mail.clearSearch')}>
               <X className="size-4" />
             </button>
           )}
