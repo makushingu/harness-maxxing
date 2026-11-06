@@ -85,12 +85,13 @@ def watchers(acc_id: str) -> list[tuple[str, dict]]:
     return out
 
 
-def grants_of(acc_id: str) -> list[dict]:
-    """Every agent that may use this mailbox: [{agent, name, avatar, rights, senders, approve_send, trigger}]."""
+def grants_of(acc_id: str, listed: list[dict] | None = None) -> list[dict]:
+    """Every agent that may use this mailbox: [{agent, name, avatar, rights, senders, approve_send, trigger}].
+    listed: agents.list_agents(counts=False) already read (a list of mailboxes reads the agents once)."""
     from .. import agents
     out = []
     with contextlib.suppress(Exception):
-        for a in agents.list_agents(counts=False):
+        for a in agents.list_agents(counts=False) if listed is None else listed:
             for g in a.get("mail") or []:
                 if g["account"] == acc_id:
                     out.append({"agent": a["path"], "name": a["display_name"], "avatar": a["avatar"],

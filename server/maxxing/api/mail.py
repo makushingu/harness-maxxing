@@ -131,8 +131,14 @@ async def get_accounts():
 
     def rows() -> list[dict]:               # mail.db, agents' files, maybe an MX lookup: off the event loop
         cap = send.per_day()
+        accounts = mail.list_accounts()
+        listed: list[dict] = []                     # the agents read once, not once per mailbox
+        if accounts:
+            from .. import agents
+            with contextlib.suppress(Exception):
+                listed = agents.list_agents(counts=False)
         return [{**mail.public(a), "sent_today": send.sent_today(a["id"]), "send_per_day": cap,
-                 "agents": poll.grants_of(a["id"]), "waiting": len(outbox.pending(a["id"]))} for a in mail.list_accounts()]
+                 "agents": poll.grants_of(a["id"], listed), "waiting": len(outbox.pending(a["id"]))} for a in accounts]
     return await asyncio.to_thread(rows)
 
 
