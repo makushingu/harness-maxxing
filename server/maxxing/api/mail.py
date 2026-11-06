@@ -10,6 +10,7 @@ import contextvars
 import functools
 import json
 import logging
+import re
 import time
 from typing import Literal, Optional
 from urllib.parse import quote
@@ -231,9 +232,14 @@ async def get_message(acc_id: str, uid: int, folder: str = "INBOX", seen: bool =
     return m
 
 
+CTYPE_RE = re.compile(r"[a-z0-9.+-]+/[a-z0-9.+-]+")
+
+
 @router.get("/{acc_id}/attachment")
 async def get_attachment(acc_id: str, uid: int, index: int, folder: str = "INBOX", inline: bool = False):
     name, ctype, data = await _run(imap.attachment, _acc(acc_id), folder, uid, index)
+    if not CTYPE_RE.fullmatch(ctype):        # `image/\xe9` (read as image/\ufffd) was a 500: the header is latin-1
+        ctype = "application/octet-stream"
     # only images and PDF open in the browser; everything else downloads (an HTML attachment never renders here)
     safe_inline = inline and (ctype.startswith("image/") and ctype != "image/svg+xml" or ctype == "application/pdf")
     disp = "inline" if safe_inline else "attachment"
