@@ -8,8 +8,8 @@ import { useInfra, useSettings } from '@/lib/queries'
 import type { InfraKind, InfraResource } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { CodeBlock, Skeleton, StatusDot } from '@/components/ui'
-import { KIND_ICON, STATUS_TONE, locationLabel, rememberServers, statusText } from './shared'
+import { CodeBlock, Sensitive, Skeleton, StatusDot } from '@/components/ui'
+import { KIND_ICON, PROVIDER_NAMES, STATUS_TONE, locationLabel, rememberServers, statusText } from './shared'
 
 const KINDS: InfraKind[] = ['site', 'database', 'bucket', 'domain', 'server', 'worker', 'pages']
 const MAX = 12
@@ -90,9 +90,11 @@ export function InfraBlock({ code, className }: { code: string; className?: stri
                 <StatusDot tone={STATUS_TONE[r.status]} label={statusText(r, t)} />
                 <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                 <Link to={`/infra?id=${encodeURIComponent(r.id)}`} className="truncate font-medium text-foreground no-underline hover:underline">
-                  {r.name}
+                  <Sensitive length={14}>{r.name}</Sensitive>
                 </Link>
-                <span className="shrink-0 text-xs text-muted-foreground">{locationLabel(r.location, t)}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {r.location === 'local' || r.location === 'other' || PROVIDER_NAMES[r.location] ? locationLabel(r.location, t) : <Sensitive>{locationLabel(r.location, t)}</Sensitive>}
+                </span>
                 {r.status !== 'ok' && r.status !== 'unknown' && (
                   <span className={cn('shrink-0 text-xs', r.status === 'down' ? 'text-destructive' : 'text-warning')}>{statusText(r, t)}</span>
                 )}

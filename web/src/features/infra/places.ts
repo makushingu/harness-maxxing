@@ -7,7 +7,8 @@ import type { TFn } from '@/i18n'
 import { PLATFORMS, PROVIDER_NAMES, locationLabel, providerName } from './shared'
 
 export type Tier = 'own' | 'hosted' | 'none'
-export type Place = { key: string; label: string; tier: Tier; color: string; icon: LucideIcon }
+/** `sensitive`: the label is the user's own data (a server name), masked in presentation mode. */
+export type Place = { key: string; label: string; tier: Tier; color: string; icon: LucideIcon; sensitive?: boolean }
 
 const PROVIDER_COLOR: Record<string, string> = {
   cloudflare: 'oklch(0.72 0.16 55)',
@@ -30,11 +31,12 @@ export function placeInfo(key: string, v: InfraView | undefined, t: TFn): Place 
   if (key === 'none') return { key, label: t('infra.place.none'), tier: 'none', color: 'var(--muted-foreground)', icon: CircleDashed }
   const servers = serverNames(v)
   const i = servers.indexOf(key)
-  if (i >= 0) return { key, label: locationLabel(key, t), tier: 'own', color: SERVER_COLORS[i % SERVER_COLORS.length], icon: Server }
+  if (i >= 0) return { key, label: locationLabel(key, t), tier: 'own', color: SERVER_COLORS[i % SERVER_COLORS.length], icon: Server, sensitive: true }
   if (key === 'server') return { key, label: t('infra.yourServer'), tier: 'own', color: SERVER_COLORS[0], icon: Server }
   return {
     key,
     label: key === 'other' ? t('infra.elsewhere') : providerName(key, t) || locationLabel(key, t),
+    sensitive: key !== 'other' && !PROVIDER_NAMES[key],
     tier: 'hosted',
     color: PROVIDER_COLOR[key] || 'oklch(0.6 0.02 260)',
     icon: key === 'shopify' ? ShoppingBag : Cloud,
