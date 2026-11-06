@@ -159,3 +159,20 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
     assert client.post("/api/agents", json={**body, "name": "ui-x", "template": "nope"}).status_code == 400
     assert cli.main(["agents", "create", "acme/blog/x"]) == 2
     assert cli.main(["agents", "templates"]) == 0 and "pr-review" in capsys.readouterr().out
+
+
+def test_an_interrupted_create_gives_the_name_back(client, topic, monkeypatch):
+    from maxxing import workspace
+    client.put("/api/settings", json={"agents_page": True})
+    real = workspace._init_level
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(workspace, "_init_level", boom)
+    try:
+        agents.create("projects/acme/topics/blog", "half", {})
+    except OSError:
+        pass
+    assert not agents.folder(agents.agent_path("acme", "blog", "half")).exists()
+    monkeypatch.setattr(workspace, "_init_level", real)
+    assert agents.create("projects/acme/topics/blog", "half", {})["path"].endswith("/half")
