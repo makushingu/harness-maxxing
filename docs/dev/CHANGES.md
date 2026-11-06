@@ -14,12 +14,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   takes an agent path), a group's through `POST /api/agent-groups/{p}/{g}/uploads` (`agent_rooms.attachments_dir`).
   `service.month_dir` (used by `uploads_dir`) refuses `attachments/` or the month folder as a symbolic link (a
   sandboxed agent writes its own folder). `agent_guard.locked_paths` adds `<agent>/attachments` (created) to the
-  read-only paths. Thread `run` and group `message` items keep `attachments`; a member gets the files of the owner's
+  read-only paths (`Edit(/…/attachments/**)` too), and `TOPIC_LOCKED` gets `attachments` (a sandboxed agent with
+  `writable: ["."]` no longer writes the topic's uploads: no swapped file read by the owner's sessions, no link to
+  race an upload through). `checked_attachments` refuses an `attachments` folder that is a link; `month_dir` turns an
+  OSError (a file in the way, a missing parent) into `400 bad_path`. Thread `run` and group `message` items keep `attachments`; a member gets the files of the owner's
   message as session attachments only the first time it sees it (`_origin_files`, by `since`), their paths in the text
   every time (`_files_note` in the framed history).
-- Search: kind `group` (`search._index_groups`, key `g:<group path>`, with the sessions at every refresh: one stat of
-  the room and of group.json; a changed room is dropped and indexed again whole, at most 2 MB). `api/search` leaves
-  `group` out while `agents_page` is off. Palette: agents and groups as static commands (`useAgents` /
+- Search: kind `group` (`search._index_groups`, key `g:<group path>`, with the sessions at every refresh while
+  `agents_page` is on: one stat of the room and of group.json, only the new lines read - sig `{ino, offset, group}`;
+  a rewritten room or a changed group.json starts over; Agents off drops the rows). `api/search` leaves `group` out
+  while Agents is off (only `group` asked: no results). Palette: agents and groups as static commands (`useAgents` /
   `useAgentGroups`, loaded when the palette opens and Agents is on), `group` hits open the group page.
 
 - Mail outbox: `POST /api/mail/{acc}/draft` on a waiting agent draft calls `outbox.draft_saved` (row `saved` moves to

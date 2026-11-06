@@ -206,6 +206,7 @@ def locked_paths(path: str) -> list[str]:
     try:
         if not att.is_symlink():
             att.mkdir(exist_ok=True)
+        if att.is_dir() and not att.is_symlink():
             out.append(str(att))
     except OSError:
         pass
@@ -216,8 +217,9 @@ def locked_paths(path: str) -> list[str]:
 
 
 # what an agent never writes in its topic, even with `writable: "."`: the other agents (and new ones), the topic's
-# own role and memory (read by every session of the topic), its Claude Code settings
-TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json")
+# own role and memory (read by every session of the topic), its Claude Code settings, the owner's uploads
+# (attachments/: a file swapped there would be read by the owner's sessions, a link would send the next upload away)
+TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json", "attachments")
 
 
 def writable_dirs(path: str, a: dict) -> list[str]:
@@ -257,7 +259,7 @@ def topic_edit_denied(path: str) -> list[str]:
         out += [f"Edit(/{d}/**)" for d in sorted(ag.iterdir()) if d.is_dir() and d.name != folder.name]
     except OSError:
         pass
-    return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / '.claude'}/**)"]
+    return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / d}/**)" for d in (".claude", "attachments")]
 
 
 def mode(requested: str) -> str:
@@ -286,7 +288,7 @@ def settings(path: str, a: dict, approvals: bool = False) -> dict:
                 and not Path(p).name.startswith(".env") else p
             deny += [f"Read(/{g})", f"Edit(/{g})"]
         for p in locked:                                # its settings and role: the owner's, never the agent's
-            deny.append(f"Edit(/{p + '/**' if p.endswith('/.claude') else p})")
+            deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
         deny += [r for r in topic_edit_denied(path) if r not in deny]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does; with approvals it is asked

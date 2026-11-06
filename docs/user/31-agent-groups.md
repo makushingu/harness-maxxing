@@ -63,7 +63,7 @@ Write a message as in any chat. Who answers depends on the names in it:
 
 **Files.** The paperclip, a paste or a drop attaches up to 10 files to your message. They are saved in the group's
 `attachments/` folder, which every member reads (and none writes); the members who answer that message get them
-(images in front of them), the others see their paths in the conversation.
+with it, the others see their paths in the conversation.
 
 While you type `@`, the members are suggested with their face (type a few letters of the `@name` or of the name).
 In the conversation every `@name` shows as a small badge with the member's face and name, and the line **To:** above

@@ -261,6 +261,8 @@ until you switch it on):
 - it **never changes itself**: its settings (`agent.json`: triggers, limits, keys, sandbox...), its role
   (`CLAUDE.md`) and the Claude Code project files of its folder and topic (`.claude/`, an existing `.mcp.json`) are read-only in
   its runs. Its memory stays its own.
+- it **never touches your uploads**: the `attachments/` folders of its topic and of its own folder (the files you
+  send in sessions, from Telegram or on its page) are read-only for it.
 
 When to switch it off: the agent must write outside its topic, use the server's own logins (git or `gh`
 credentials, SSH keys) or deploy into system folders. Off, its commands can do everything the server's user can.

@@ -76,8 +76,34 @@ def test_uploads_never_follow_a_link(client, topic, mx, tmp_path):
 
 def test_sandbox_keeps_attachments_read_only(client, topic, mx):
     _agent(client)
+    att = agents.folder(A) / "attachments"
     locked = agent_guard.locked_paths(A)
-    assert str(agents.folder(A) / "attachments") in locked and (agents.folder(A) / "attachments").is_dir()
+    assert str(att) in locked and att.is_dir()
+    topic_dir = agents.folder(A).parent.parent
+    (topic_dir / "attachments").mkdir(exist_ok=True)
+    (topic_dir / "notes").mkdir()
+    a = {**agents.load(A), "sandbox": True, "writable": ["."]}
+    st = agent_guard.settings(A, a)
+    assert str(topic_dir / "notes") in st["sandbox"]["filesystem"]["allowWrite"]
+    assert str(topic_dir / "attachments") not in st["sandbox"]["filesystem"]["allowWrite"]
+    assert f"Edit(/{att}/**)" in st["permissions"]["deny"]
+    assert f"Edit(/{topic_dir / 'attachments'}/**)" in st["permissions"]["deny"]
+
+
+def test_a_link_or_a_file_in_place_of_the_folder(client, topic, mx, tmp_path):
+    _agent(client)
+    att = agents.folder(A) / "attachments"
+    p = _upload(client, f"/api/uploads?path={A}")
+    real = tmp_path / "real"
+    att.rename(real)
+    att.symlink_to(real)                          # the same file, through a link to the folder
+    linked = str(att / Path(p).relative_to(att).as_posix())
+    r = client.post("/api/agents/acme/blog/writer/run", json={"text": "x", "attachments": [linked]})
+    assert r.status_code == 400 and r.json()["error"] == "bad_attachment"
+    att.unlink()
+    att.write_text("not a folder")
+    r = client.post(f"/api/uploads?path={A}", files=[("file", ("x.txt", b"x", "text/plain"))])
+    assert r.status_code == 400 and r.json()["error"] == "bad_path"
 
 
 def test_group_message_with_files(client, topic, mx):
@@ -114,9 +140,16 @@ def test_group_conversations_are_searched(client, topic, mx):
     assert hit["path"] == "projects/acme/groups/team" and hit["title"] == "Team" and "@writer" in hit["snippet"]
     assert any(h["kind"] == "group" for h in client.get("/api/search", params={"q": "zanzibar"}).json()["results"])
     assert any(h["kind"] == "group" for h in client.get("/api/search", params={"q": "Team"}).json()["results"])
+    # a new message is found at the next search (only the new lines are read)
+    r = client.post(f"{G}/messages", json={"text": "@writer the wombat\nREPLY_AS writer: Wombats noted"})
+    _idle(client, 2)
+    hit = [h for h in client.get("/api/search", params={"q": "wombats"}).json()["results"] if h["kind"] == "group"]
+    assert hit and hit[0]["title"] == "Team"
+    assert len([h for h in client.get("/api/search", params={"q": "quokkas"}).json()["results"] if h["kind"] == "group"]) == 1
     # Agents off: no group in the results; a deleted group leaves the index
     assert client.put("/api/settings", json={"agents_page": False}).status_code == 200
     assert not [h for h in client.get("/api/search", params={"q": "quokkas"}).json()["results"] if h["kind"] == "group"]
+    assert client.get("/api/search", params={"q": "quokkas", "kinds": "group"}).json()["results"] == []
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
     assert client.delete(G).status_code == 200
     search.refresh(full=False)
