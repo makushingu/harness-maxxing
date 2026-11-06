@@ -563,6 +563,12 @@ def _delete(prefix: str, kind: str) -> None:
     agents.to_trash(inside, dest)                   # their thread and state go with them (back with a restore)
     if kind in ("project", "topic"):                # its agents' cron jobs and Telegram threads go too
         agents.deleted_with(prefix, inside)
+    if kind == "project":                           # its agent groups' conversations go to the Trash with it
+        from . import agent_rooms
+        try:
+            agent_rooms.deleted_with(prefix.split("/")[1], dest)
+        except OSError:
+            log.exception("agent group rooms not moved (%s)", prefix)
     _changed("deleted", kind, prefix)
 
 

@@ -312,6 +312,8 @@ def create(project: str, name: str, fields: dict | None = None) -> dict:
     _write_goal(path, data["name"] or name, text)
     if data["shared_files"]:
         files_dir(path).mkdir(exist_ok=True)
+    for ext in ("json", "jsonl"):                       # left by a project deleted before they went to the Trash
+        _state_file(path, ext).unlink(missing_ok=True)
     _save(path, data)
     agents._git_exclude(folder(path).parent.parent, GROUPS_DIR)
     post(path, "note", "Group created")
@@ -871,6 +873,52 @@ def _swap_messages(path: str, old: str, new: str) -> None:
         tmp = f.with_suffix(".tmp")
         tmp.write_text("".join(x + "\n" for x in out))
         tmp.replace(f)
+
+
+ROOM_SAVED = ".room"            # <group folder>/.room.json(l): its state files while the project is in the Trash
+
+
+def deleted_with(project: str, dest: Path) -> None:
+    """A project went to the Trash (its folder is now `dest`): each group's conversation and state go with it, into
+    the group's folder, so the same project and group made again start clean and a restore brings them back."""
+    with _lock:
+        d = config.state_dir("agents", "rooms")
+        for f in list(d.glob(f"{project}__*")):
+            g = f.name[len(project) + 2:].rsplit(".", 1)[0]
+            to = dest / GROUPS_DIR / g
+            if f.suffix in (".json", ".jsonl") and agents.SLUG_RE.match(g) and (to / GROUP_FILE).is_file():
+                shutil.move(str(f), str(to / (ROOM_SAVED + f.suffix)))
+            else:
+                f.unlink(missing_ok=True)               # a group already gone: nothing to keep
+    _invalidate(tree=True)
+
+
+def restored(old_prefix: str, new_prefix: str) -> None:
+    """A project came back from the Trash (as `new_prefix`, "projects/<p>" or "projects/<p>-restored"): its groups
+    get their conversations back; under a new name their members' paths follow and they start fresh sessions."""
+    pn = new_prefix.split("/")[1]
+    with _lock:
+        for g in names(pn):
+            path = group_path(pn, g)
+            for ext in ("json", "jsonl"):
+                src = folder(path) / f"{ROOM_SAVED}.{ext}"
+                if src.is_file() and not _state_file(path, ext).exists():
+                    shutil.move(str(src), str(_state_file(path, ext)))
+                src.unlink(missing_ok=True)
+            st = _read_state(path)
+            st.update(current=None, queue=[], turns={})
+            if old_prefix != new_prefix:
+                f = folder(path) / GROUP_FILE
+                try:
+                    raw = json.loads(f.read_text())
+                    config.write_json(f, _swap(raw, old_prefix, new_prefix))
+                except (OSError, ValueError):
+                    pass
+                st = _swap(st, old_prefix, new_prefix)
+                st.update(sessions={}, since={})
+                _swap_messages(path, old_prefix, new_prefix)
+            _write_state(path, st)
+    _invalidate(tree=True)
 
 
 def recover() -> int:
