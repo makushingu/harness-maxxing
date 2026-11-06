@@ -352,6 +352,8 @@ export type Approval = {
   status: 'pending' | 'allow' | 'deny' | 'timeout' | 'expired'
   message: string
   decided_at: number | null
+  /** The input was too long to keep whole: only Deny (the server refuses Allow). */
+  clipped?: boolean
 }
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string }
 export type PatchSessionBody = { title?: string; model?: string; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
