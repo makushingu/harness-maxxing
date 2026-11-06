@@ -213,6 +213,8 @@ def test_the_traefik_block_is_denied_to_claude(mx):
 def test_the_domain_and_the_secret(mx):
     with pytest.raises(ValueError):
         proxylisten.enable(domain="x`) || PathPrefix(`/`)")          # no rule injection into the block
+    with pytest.raises(ValueError):
+        proxylisten.enable(domain="ui.example.com\n")                 # a pasted newline: a Host() rule that never matches
     r = proxylisten.enable(domain="UI.Example.com")
     assert r["domain"] == "ui.example.com"
     first = config.get_secret("proxy_secret")

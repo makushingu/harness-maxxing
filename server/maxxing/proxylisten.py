@@ -30,7 +30,7 @@ SECRET_NAME = "proxy_secret"
 UFW_FROM = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")   # container networks (bridge, overlay)
 UFW_COMMENT = "Harness Maxxing (proxy in a container)"
 PRIVATE_NETS = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"))
-DOMAIN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")   # = install.sh valid_domain
+DOMAIN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]\Z")   # = install.sh valid_domain
 HEADER_TIMEOUT = 10.0       # s: a connection on the proxy address must send a whole request head in that time
 MAX_CONNECTIONS = 512       # open at once on the proxy address (each idle one costs memory and a file descriptor)
 MAX_PER_SOURCE = 128        # of those, from one source address (one container cannot take every place from the proxy)
