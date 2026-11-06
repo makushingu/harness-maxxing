@@ -14,7 +14,8 @@ when you want **several points of view** before you decide:
 - **Council**: one agent argues for, one against, a third sums up and recommends.
 - **Support**: a first agent sorts a request, then hands it to the right specialist.
 
-Groups are part of the **Agents** page (Settings -> Features -> Agents). Nothing changes until you create one.
+Groups are part of the **Agents** page (Settings -> Features -> Agents). Nothing changes until you create one. While
+Agents is switched off, no member's turn starts in any group: the hand-overs that were waiting are dropped.
 
 ## Create a group
 

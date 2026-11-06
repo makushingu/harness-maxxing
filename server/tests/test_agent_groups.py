@@ -388,3 +388,15 @@ def test_a_failed_create_does_not_keep_the_name(client, topic, monkeypatch):
     monkeypatch.setattr(agent_rooms, "_save", real)
     r = client.post("/api/agent-groups", json={"project": "acme", "name": "other", "members": [{"path": W}, {"path": R}]})
     assert r.status_code == 200, r.text
+
+
+def test_agents_switched_off_start_no_more_group_turn(client, topic):
+    _setup(client)
+    P = "projects/acme/groups/team"
+    agent_rooms._write_state(P, {"current": None, "origin": "o",
+                                 "queue": [{"path": R, "wave": 2, "reason": "handover", "from": W}]})
+    assert client.put("/api/settings", json={"agents_page": False}).status_code == 200
+    n = len(_calls())
+    agent_rooms.pump(P)
+    st = agent_rooms._read_state(P)
+    assert not st.get("current") and not st.get("queue") and len(_calls()) == n
