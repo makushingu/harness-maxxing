@@ -85,7 +85,8 @@ export function useDeleteGroup() {
 export function useGroupSay() {
   const qc = useQueryClient()
   return useMut(
-    ({ path, text }: { path: string; text: string }) => api.post<{ message: AgentGroupMessage; queued: string[] }>(groupUrl(path, '/messages'), { text }),
+    ({ path, text, attachments }: { path: string; text: string; attachments?: string[] }) =>
+      api.post<{ message: AgentGroupMessage; queued: string[] }>(groupUrl(path, '/messages'), { text, attachments: attachments?.length ? attachments : undefined }),
     {
       onSuccess: (r, { path }) => {
         qc.setQueryData(groupKeys.messages(path), (old: AgentGroupMessage[] | undefined) => (old && !old.some((m) => m.id === r.message.id) ? [...old, r.message] : old))

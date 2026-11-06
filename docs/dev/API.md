@@ -397,7 +397,7 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 | PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
 | DELETE | `/api/agents/{p}/{t}/{a}` | – | `{ok}`: folder + sessions to the Trash, its cron jobs deleted, its thread, state and Telegram thread dropped · `409 has_running_sessions` |
 | GET | `/api/agents/{p}/{t}/{a}/thread?limit=100&before=<at>` | – | `{messages: [AgentMessage]}` oldest first (the Activity tab) |
-| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?, reply_to?}` | `{started: true, session: Session, continued?: true}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed). `reply_to` = a thread message id: its session goes on with the text (`continued`, no new session; a gone session -> a new one). A new session gets the last 3 results of the thread as framed context |
+| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?, reply_to?, attachments?:[filepath] (≤ 10)}` (`attachments`: uploaded first with `POST /api/uploads?path=<agent path>`, each a regular file under `<agent>/attachments/` with no link below it, else `400 bad_attachment`; files only = the text "See the attached files."; the thread's `run` message keeps `attachments`) | `{started: true, session: Session, continued?: true}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed). `reply_to` = a thread message id: its session goes on with the text (`continued`, no new session; a gone session -> a new one). A new session gets the last 3 results of the thread as framed context |
 | POST | `/api/agents/{p}/{t}/{a}/seen` | – | `{ok}`: the thread is read (`thread_unread` 0) and the finished, read runs are archived (`agents.tidy`) |
 | POST | `/api/agents/{p}/{t}/{a}/triggers/{tid}/test` | – | `{event: FeedEvent}`: a sample feed event on the trigger's source (its first level, its `match` words), so the agent starts as for a real one · `404 not_found` |
 | POST | `/api/agents/{p}/{t}/{a}/webhook` | `{kind: "generic"\|"stripe"\|"shopify"\|"github", prompt?, levels?, match?}` | `{agent, hook: FeedHook}`: a feed hook named `<topic>-<agent>` + a feed trigger on its source |
@@ -437,7 +437,7 @@ Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [
 AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
                 trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
                 session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note),
-                reply_to?: message id (run that continued a session)}
+                reply_to?: message id (run that continued a session), attachments?: [filepath] (run)}
 ```
 Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:
 `maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent> | templates |
@@ -475,7 +475,8 @@ INTERNALS.md#maxxing.agent_rooms).
 | PATCH | `/api/agent-groups/{p}/{g}` | the create fields but `project` / `name` (`limits` merged; `goal` rewrites CLAUDE.md; `members` checked like create, except a former member whose agent was deleted: dropped) | `Group` (+ `dropped: [path]` when such members were dropped; members removed: their group session and queued turns dropped) |
 | DELETE | `/api/agent-groups/{p}/{g}?keep_files=` | – | `{ok}`: turn stopped, folder and room deleted; `keep_files=true` moves `files/` to `projects/<p>/groups/.kept-<g>-<unix time>/` first. Members and their sessions stay |
 | GET | `/api/agent-groups/{p}/{g}/messages?limit=200&before=<at>&after=<at>` | – | `{messages: [GroupMessage]}` oldest first (`after`: only the newer ones, how the group page refreshes) |
-| POST | `/api/agent-groups/{p}/{g}/messages` | `{text}` (≤ 4000) | `{message: GroupMessage, queued: [agent path]}`: the owner's message (the same text again within 3 s: `{message: <the first>, queued: [], duplicate: true}`, posted once); the members named (`@slug`, `@all`/`@everyone`/`@tous`; none: the lead, else the last member who spoke, else the first not paused) are queued (replacing pending hand-overs) and the first starts unless a turn runs. `stop @slug` pauses that member (a message holding only stops queues nobody); naming a paused member resumes it · `400 empty` |
+| POST | `/api/agent-groups/{p}/{g}/uploads` | multipart `file` (one or more) | `{files:[Upload]}` saved under `<group>/attachments/YYYY-MM/` (as `/api/uploads`: limits, never through a symbolic link: `400 bad_path`) |
+| POST | `/api/agent-groups/{p}/{g}/messages` | `{text, attachments?:[filepath] (≤ 10, from .../uploads, else 400 bad_attachment)}` (≤ 4000; text or files) | `{message: GroupMessage, queued: [agent path]}`: the owner's message (the same text again within 3 s: `{message: <the first>, queued: [], duplicate: true}`, posted once); the members named (`@slug`, `@all`/`@everyone`/`@tous`; none: the lead, else the last member who spoke, else the first not paused) are queued (replacing pending hand-overs) and the first starts unless a turn runs. `stop @slug` pauses that member (a message holding only stops queues nobody); naming a paused member resumes it · `400 empty` |
 | POST | `/api/agent-groups/{p}/{g}/stop` | – | `{ok}`: queue emptied, the running turn stopped (`service.stop`); its answer is still posted, it hands over to nobody |
 | POST | `/api/agent-groups/{p}/{g}/reset` | – | `{ok}`: "New topic" - stop, then every member starts a new session at its next turn |
 | POST | `/api/agent-groups/{p}/{g}/seen` | – | `{ok}`: `unread` 0 |
@@ -490,7 +491,9 @@ Group = {path: "projects/<p>/groups/<g>", project, name, display_name, emoji, go
          speaking (member path | ""), speaking_session (sid | ""), last_at, unread: 0|1}
 GroupMessage = {id, at, kind: "message"|"pass"|"skip"|"note"|"stop", author: "me"|<member path>|"", text,
                 session? (the member's group session), cost?, reason? (skip: disabled|budget|busy|missing|failed|error),
-                limit? (note: waves|replies|per_hour), reset? (note of New topic)}
+                limit? (note: waves|replies|per_hour), reset? (note of New topic),
+                attachments?: [filepath] (the owner's message: sent to the members who answer it the first time they see
+                it - `_origin_files`; its paths are in the text of every turn)}
 ```
 Turns: a member keeps one session per group (`state.sessions`), continued with `service.send_message`; a new one is
 `create_session(<agent path>, source "agent", cron true, env {MAXXING_AGENT, MAXXING_AGENT_TRIGGER: "group:<path>",
@@ -767,5 +770,5 @@ a day, `search.db` is VACUUMed when more than 25 % of its pages are free (and it
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/search?q=&kinds=session,file,memory,task&limit=30` | – | `{results:[{kind, id (session id / file path / task id), path, title, snippet, at, score}], took_ms}` — every word required, as a prefix from 3 characters, accent-insensitive, BM25 (title x4; a session's title is on its title row only), one result per session/file/task (deduplicated in SQL), only the `RANK_MAX` (5 000) newest matching rows ranked, `cancelled: true` (no results) when the client went away; `snippet` marks matches with `\u0002`…`\u0003` |
+| GET | `/api/search?q=&kinds=session,file,memory,task,group&limit=30` | – | `{results:[{kind, id (session id / file path / task id / group path), path, title, snippet, at, score}], took_ms}` — every word required, as a prefix from 3 characters, accent-insensitive, BM25 (title x4; a session's title is on its title row only), one result per session/file/task (deduplicated in SQL), only the `RANK_MAX` (5 000) newest matching rows ranked, `cancelled: true` (no results) when the client went away; `group` = the conversations of the agent groups (`<state>/agents/rooms/*.jsonl`, a changed room indexed again whole, title row = the group's name, rows `@writer: …`), left out while Agents is off; `snippet` marks matches with `\u0002`…`\u0003` |
 | GET | `/api/search/stats` | – | `{counts:{session, file, memory, task}, bytes, refreshed_at}` |

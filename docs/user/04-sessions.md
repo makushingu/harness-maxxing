@@ -361,6 +361,8 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 **Ctrl/⌘+K** (or the search bar at the top of the sidebar) is the one search of the app. It finds:
 
 - **sessions**, by their title and by what you and Claude wrote;
+- with Agents on, every **agent** and **agent group** by its name (and its project, topic or members), and what
+  was said in the groups' conversations;
 - **memory** (`memory.md`, `CLAUDE.md`), **tasks** (title, notes, labels) and the **content** of the
   text files of the workspace (markdown, code, config…), plus file and folder **names**. Every `memory.md` /
   `CLAUDE.md` is always found; in a very big workspace each topic gets its fair share of the other files, and

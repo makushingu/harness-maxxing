@@ -29,9 +29,11 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
 import secrets as _secrets
 import shutil
+import stat
 import time
 from pathlib import Path
 from typing import Any
@@ -407,6 +409,39 @@ def _clean_mail(v: Any, strict: bool) -> list[dict]:
         return access.clean_grants(v, strict)
     except access.AccessError as e:
         raise AgentError(400, "bad_mail", str(e)) from None
+
+
+ATTACH_MAX = 10   # files attached to one message (web page of an agent or of a group)
+
+
+def checked_attachments(base: Path, files: list[str] | None) -> list[str]:
+    """The files the owner attached to a message -> their absolute paths. Each one must be a regular file under
+    <base>/attachments/ (where the upload of the page put it; Telegram too), with no symbolic link below that folder:
+    a message only hands the agent a file uploaded for it, in a folder its sandbox reads."""
+    if not files:
+        return []
+    if len(files) > ATTACH_MAX:
+        raise AgentError(400, "too_many_attachments", f"At most {ATTACH_MAX} files a message")
+    top = os.path.normpath(str(base / "attachments"))
+    real = os.path.realpath(top)
+    out: list[str] = []
+    for f in files:
+        p = str(f or "")
+        name = os.path.basename(p)
+        rel = os.path.relpath(p, top) if os.path.isabs(p) and "\0" not in p else ".."
+        # under attachments/ and no symbolic link below it (the workspace itself may sit behind one)
+        if os.path.normpath(p) != p or rel == ".." or rel.startswith("../") or \
+                os.path.realpath(p) != os.path.join(real, rel):
+            raise AgentError(400, "bad_attachment", f"Attachment outside this folder: {name}")
+        try:
+            st = os.lstat(p)
+        except OSError:
+            raise AgentError(400, "bad_attachment", f"Attachment not found: {name}") from None
+        if not stat.S_ISREG(st.st_mode):
+            raise AgentError(400, "bad_attachment", f"Not a file: {name}")
+        if p not in out:
+            out.append(p)
+    return out
 
 
 def _utf8(s: str) -> str:
@@ -1417,7 +1452,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
         _hold_left(path, a, sid)
         _snapshot(path, sid)
         post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=sid,
-             reply_to=reply_to)
+             reply_to=reply_to, **({"attachments": list(attachments)} if attachments else {}))
         return {"started": True, "continued": True, "session": r["session"]}
     if trigger in CONVERSATIONAL or trigger.startswith("agent:"):
         ctx = context(path)
@@ -1433,7 +1468,8 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                permission_mode=a["permission_mode"])
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
-    post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"])
+    post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"],
+         **({"attachments": list(attachments)} if attachments else {}))
     return {"started": True, "session": s}
 
 

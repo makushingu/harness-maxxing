@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.121 - 2026-11-06
+
+New:
+- **Files for your agents and groups**: attach files to a message to an agent or to an agent group (paperclip, paste
+  or drop, up to 10), as in a session: a photo, a PDF, a brief. The agent reads them; in a group, the members who
+  answer get them. A message can be only files.
+- **Agents in the search**: Ctrl/⌘+K opens any agent or agent group by its name, and finds what was said in the
+  groups' conversations.
+
 ## 2.0.0-alpha.120 - 2026-11-05
 
 New:

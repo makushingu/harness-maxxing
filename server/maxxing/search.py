@@ -46,7 +46,7 @@ from . import config
 log = logging.getLogger("maxxing.search")
 
 SCHEMA_VERSION = "2"                 # 2: session title on the title row only (see _migrate)
-KINDS = ("session", "file", "memory", "task")
+KINDS = ("session", "file", "memory", "task", "group")   # group: the conversations of the agent groups
 TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".org", ".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
             ".css", ".scss", ".html", ".htm", ".vue", ".svelte", ".astro", ".php", ".rb", ".go", ".rs", ".java",
             ".kt", ".swift", ".c", ".h", ".cpp", ".cs", ".sh", ".bash", ".zsh", ".sql", ".yaml", ".yml", ".toml",
@@ -240,6 +240,57 @@ def _index_sessions(con: sqlite3.Connection) -> None:
         # all read - or only a cut last line left (a runner killed mid-write): skipped until something changes
         if sig["offset"] >= size or read_all:
             _seen[key] = stamp
+    for key in known - alive:
+        _drop(con, key)
+        _seen.pop(key, None)
+
+
+def _index_groups(con: sqlite3.Connection) -> None:
+    """The conversations of the agent groups (<state>/agents/rooms/<p>__<g>.jsonl, at most 2 MB each): a changed
+    room is indexed again whole - a title row (the group's name) and one row per message ("@writer: ...")."""
+    from . import agent_rooms
+    known = {k for (k,) in con.execute("SELECT key FROM src WHERE key LIKE 'g:%'")}
+    alive = set()
+    try:
+        rooms = sorted(config.state_dir("agents", "rooms").glob("*.jsonl"))
+    except OSError:
+        rooms = []
+    for f in rooms:
+        parts = f.stem.split("__")
+        if len(parts) != 2:
+            continue
+        path = agent_rooms.group_path(*parts)
+        key = f"g:{path}"
+        if not agent_rooms.exists(path):
+            continue
+        alive.add(key)
+        stamp = (_stat_key(f), _stat_key(agent_rooms.folder(path) / agent_rooms.GROUP_FILE))
+        if key in known and _seen.get(key) == stamp and None not in stamp:
+            continue
+        _drop(con, key)
+        try:
+            g = agent_rooms.load(path)
+            hs = agent_rooms.handles(g)
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception:  # noqa: BLE001 - a broken group is skipped, the next refresh tries again
+            alive.discard(key)
+            continue
+        title = g.get("name") or parts[1]
+        con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+                    (key, "group", path, path, title, "", stamp[0][1] if stamp[0] else None))
+        for line in lines:
+            try:
+                m = json.loads(line)
+            except ValueError:
+                continue
+            text = (m.get("text") or "").strip() if isinstance(m, dict) and m.get("kind") == "message" else ""
+            if not text:
+                continue
+            who = "Owner" if m.get("author") == "me" else "@" + hs.get(m.get("author") or "", agent_rooms.slug(m.get("author") or ""))
+            con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+                        (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS], m.get("at")))
+        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps({"room": str(f)})))
+        _seen[key] = stamp
     for key in known - alive:
         _drop(con, key)
         _seen.pop(key, None)
@@ -457,6 +508,7 @@ def refresh(full: bool = True, deep: bool | None = True) -> None:
         try:
             before = con.total_changes
             _index_sessions(con)
+            _index_groups(con)
             _state["sessions_at"] = time.time()
             if full:
                 walk = deep if deep is not None else time.time() - _state["files_at"] >= FILES_EVERY_S
@@ -614,7 +666,7 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
                     SELECT kind, ref, path, title, at, snip, MIN(score) AS best FROM hits
                     GROUP BY kind, ref ORDER BY best LIMIT ?""",
                 (match, floor, *wanted, limit)).fetchall()
-            untitled = [f"s:{r[1]}" for r in rows if r[0] == "session" and not r[3]]
+            untitled = [f"{r[0][0]}:{r[1]}" for r in rows if r[0] in ("session", "group") and not r[3]]
             titles = dict(con.execute(
                 f"SELECT ref, title FROM items WHERE body='' AND src IN ({','.join('?' * len(untitled))})",
                 untitled).fetchall()) if untitled else {}
@@ -629,7 +681,7 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
     out = []
     for kind, ref, path, title, at, snip, score in rows:
         title = title or titles.get(ref) or "Untitled"       # a message row: the title of its session
-        if not snip.strip() and kind == "session":
+        if not snip.strip() and kind in ("session", "group"):
             snip = title
         out.append({"kind": kind, "id": ref, "path": path, "title": title, "snippet": snip, "at": at,
                     "score": round(-score, 3)})
