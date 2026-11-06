@@ -60,6 +60,7 @@ export function useSetSessionCache() {
     const prev = qc.getQueryData<Session>(qk.sessions.one(s.id))
     // queue_items is a new array on every payload: keep the cached one while it says the same (no re-render)
     if (prev?.queue_items && s.queue_items && JSON.stringify(prev.queue_items) === JSON.stringify(s.queue_items)) s = { ...s, queue_items: prev.queue_items }
+    if (prev?.sent_items && s.sent_items && JSON.stringify(prev.sent_items) === JSON.stringify(s.sent_items)) s = { ...s, sent_items: prev.sent_items }
     qc.setQueryData(qk.sessions.one(s.id), s)
     const now = Date.now()
     const ticking = !!prev && (Object.keys(s) as (keyof Session)[]).every((k) => prev[k] === s[k] || TICKING.has(k))
