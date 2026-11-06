@@ -25,6 +25,7 @@ from .imap import MailError
 
 MAX_RECIPIENTS = 20
 MAX_ATTACH = 25 * 1024 * 1024          # total size of the attachments of one message
+MAX_FORWARDED = 50                      # attachments of the original a forward carries
 DEFAULT_PER_DAY = 100
 MODES = ("reply", "replyall", "forward", "draft")
 # SMTP servers that file the sent copy by themselves (an IMAP copy would show the message twice)
@@ -48,8 +49,29 @@ def _addr_list(values: Any) -> list[str]:
             continue
         if any(c in addr + name for c in "\r\n\0") or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr):
             raise MailError("invalid", f"invalid address: {addr or name}")
-        out.append(email.utils.formataddr((name.strip(), addr)) if name.strip() else addr)
+        addr = _idna(addr)
+        name = name.strip()
+        if not name:
+            out.append(addr)
+        elif addr.isascii():
+            out.append(email.utils.formataddr((name, addr)))
+        else:       # non-ASCII before the @ (SMTPUTF8): formataddr cannot, the header is written as UTF-8 (`build`)
+            if re.search(r'[()<>\[\]:;@\\,."]', name):
+                name = '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
+            out.append(f"{name} <{addr}>")
     return out
+
+
+def _idna(addr: str) -> str:
+    """`user@例え.jp` -> `user@xn--r8jz45g.jp`: a non-ASCII domain goes out in its ASCII form (every mail server
+    takes it). A non-ASCII part before the @ stays: it needs SMTPUTF8 (`send`)."""
+    local, _, domain = addr.rpartition("@")
+    if domain.isascii():
+        return addr
+    try:
+        return f"{local}@{domain.encode('idna').decode('ascii')}"
+    except UnicodeError:
+        raise MailError("invalid", f"invalid address: {addr}") from None
 
 
 def _bare(a: str) -> str:
@@ -63,11 +85,24 @@ def _subject(prefix: str, subject: str) -> str:
     return f"{prefix}: {s}" if s else f"{prefix}:"
 
 
+QUOTED_MAX = 200_000        # characters of the original kept in a reply / forward (a sent text is capped at MAX_TEXT)
+MAX_TEXT = 2_000_000
+
+
+def _cut(body: str | None) -> str:
+    """The text of the original, cut past QUOTED_MAX with a marker: a 5 MB log quoted whole could never be sent."""
+    body = (body or "").strip()
+    if len(body) <= QUOTED_MAX:
+        return body
+    return body[:QUOTED_MAX] + f"\n\n[... cut: {len(body) - QUOTED_MAX:,} more characters of the original message]"
+
+
 def _quote(m: dict) -> str:
     body = m.get("text")
     if body is None and m.get("html"):
         from ..cmd_mail import _html_text
         body = _html_text(m["html"])
+    body = _cut(body)
     who = m["from"]["name"] or m["from"]["email"]
     when = time.strftime("%Y-%m-%d %H:%M", time.localtime(m["date"])) if m.get("date") else ""
     lines = (body or "").strip().splitlines()
@@ -114,7 +149,7 @@ def compose(acc: dict, mode: str, folder: str, uid: int) -> dict:
         if m["cc"]:
             head.append(f"Cc: {', '.join(_fmt(x) for x in m['cc'])}")
         return {"to": [], "cc": [], "subject": _subject("Fwd", m["subject"]),
-                "text": signature_block(acc) + "\n".join(head) + "\n\n" + (body or "").strip(),
+                "text": signature_block(acc) + "\n".join(head) + "\n\n" + _cut(body),
                 "in_reply_to": "", "references": "", "attachments": m["attachments"]}
     if (m["from"]["email"] or "").lower() == me:       # replying to one's own sent message: same recipients
         first = [x for x in m["to"] if (x["email"] or "").lower() != me] or [m["from"]]    # a note to oneself
@@ -200,10 +235,12 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     if any(c in subject for c in "\r\n\0"):
         raise MailError("invalid", "invalid subject")
     text = str(draft.get("text") or "")
-    if len(text) > 2_000_000:
-        raise MailError("too_large", "message text too long")
+    if len(text) > MAX_TEXT:
+        raise MailError("too_large", f"message text too long (at most {MAX_TEXT:,} characters)")
     text = text.replace("\r\n", "\n")
-    msg = EmailMessage()
+    # a non-ASCII address (before the @): headers in UTF-8 (RFC 6532), the only valid form; the default policy would
+    # RFC 2047-encode the address itself, which no server reads. Sending it needs SMTPUTF8 (`send`)
+    msg = EmailMessage(policy=email.policy.SMTPUTF8) if not all(a.isascii() for a in to + cc + bcc) else EmailMessage()
     msg["From"] = email.utils.formataddr((acc.get("name") or "", acc["address"])) if acc.get("name") else acc["address"]
     if to:
         msg["To"] = ", ".join(to)
@@ -224,7 +261,10 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     parts: list[tuple[str, str, bytes]] = list(files or [])
     fwd = draft.get("forward") or None
     if fwd and fwd.get("indexes"):
-        parts += _forwarded(acc, str(fwd.get("folder") or "INBOX"), int(fwd["uid"]), [int(i) for i in fwd["indexes"][:50]])
+        if len(fwd["indexes"]) > MAX_FORWARDED:        # never cut silently: the page listed them all
+            raise MailError("limit", f"at most {MAX_FORWARDED} forwarded attachments per message "
+                                     f"({len(fwd['indexes'])} chosen): remove some, or forward it in two messages")
+        parts += _forwarded(acc, str(fwd.get("folder") or "INBOX"), int(fwd["uid"]), [int(i) for i in fwd["indexes"]])
     for name, ctype, data in parts:
         total += len(data)
         if total > MAX_ATTACH:
