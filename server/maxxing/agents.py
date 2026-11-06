@@ -93,7 +93,19 @@ DOMAIN_RE = re.compile(r"^(\*\.)?[a-z0-9]([a-z0-9-]{0,62}\.)*[a-z0-9-]{1,63}\Z")
 WILDCARD_TOO_WIDE = {"co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp",
                      "co.in", "co.za", "co.kr", "com.br", "com.cn", "com.mx", "com.tr", "com.ar", "com.sg", "com.hk",
                      "github.io", "gitlab.io", "pages.dev", "workers.dev", "vercel.app", "netlify.app",
-                     "herokuapp.com", "web.app", "firebaseapp.com", "ngrok.io", "ngrok-free.app"}
+                     "herokuapp.com", "web.app", "firebaseapp.com", "ngrok.io", "ngrok-free.app", "blogspot.com",
+                     "wordpress.com", "appspot.com", "azurewebsites.net", "cloudapp.net", "onrender.com", "fly.dev",
+                     "railway.app", "deno.dev", "glitch.me", "replit.dev", "repl.co", "surge.sh", "r2.dev",
+                     "trycloudflare.com", "loca.lt", "ondigitalocean.app", "azurestaticapps.net", "duckdns.org",
+                     "web.core.windows.net", "blob.core.windows.net"}
+# shared clouds with regional names under them (*.s3.eu-west-3.amazonaws.com): every name below is refused too
+WILDCARD_TOO_WIDE_UNDER = ("amazonaws.com", "cloudfront.net", "googleapis.com", "googleusercontent.com",
+                           "core.windows.net", "azureedge.net")
+
+
+def _wildcard_too_wide(base: str) -> bool:
+    return ("." not in base or base in WILDCARD_TOO_WIDE
+            or any(base == s or base.endswith("." + s) for s in WILDCARD_TOO_WIDE_UNDER))
 
 
 class AgentError(Exception):
@@ -338,7 +350,7 @@ def _clean_domains(v: Any, strict: bool = False) -> list[str]:
             if strict:
                 raise AgentError(400, "bad_domain", f"Not a host name: {d!r}")
             continue
-        if d.startswith("*.") and ("." not in d[2:] or d[2:] in WILDCARD_TOO_WIDE):
+        if d.startswith("*.") and _wildcard_too_wide(d[2:]):
             if strict:
                 raise AgentError(400, "bad_domain", f"Too wide a wildcard, name a site (*.example.com): {d!r}")
             continue

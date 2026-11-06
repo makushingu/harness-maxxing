@@ -250,7 +250,8 @@ until you switch it on):
   the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
   topic. Claude's own Read / Edit tools are refused there too;
 - they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). A wildcard names a
-  site: `*.com`, `*.co.uk` or `*.github.io` are refused. The same domains are allowed for its web page reads;
+  site: `*.com`, `*.co.uk`, `*.github.io` or a shared host such as `*.s3.amazonaws.com` or `*.blogspot.com` are
+  refused (name the bucket or the blog itself). The same domains are allowed for its web page reads;
 - its commands run without asking, inside these walls; with **ask before risky actions** on (or in a run started
   from outside) they ask like any other action, `maxxing` included, unless an allowed tool covers them;
 - it never runs in **bypass** mode (the sandbox would not hold the domain list): **bypass** becomes **accept
