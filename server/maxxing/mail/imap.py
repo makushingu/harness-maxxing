@@ -2,7 +2,10 @@
 
 One pooled connection per account (`session()`): a page view runs 2-3 requests and an IMAP login costs a TLS
 handshake + LOGIN, so the connection is kept for IDLE_S seconds and checked with NOOP before reuse. Every call
-holds the account lock for its whole duration (imaplib is not thread safe).
+holds the account lock for its whole duration (imaplib is not thread safe). A slow or silent server must never hold
+the caller for long: connections time out (CONNECT_S, TIMEOUT_S per operation), the lock is waited for LOCK_WAIT_S at
+most (then `mail_busy`), at most MAX_WAITING callers wait on one account, and a server that just timed out is not
+tried again for DOWN_S (the check of the mailboxes would otherwise wait CONNECT_S for each folder in turn).
 """
 from __future__ import annotations
 
@@ -23,7 +26,11 @@ from typing import Any, Iterator
 
 from . import access
 
-TIMEOUT_S = 25
+CONNECT_S = 15         # TCP + TLS + greeting
+TIMEOUT_S = 25          # each read or write on an open connection
+LOCK_WAIT_S = 30        # another call on the same account: longer than this -> mail_busy
+MAX_WAITING = 2         # callers waiting on one account's lock (more -> mail_busy at once)
+DOWN_S = 60             # a server that timed out is not tried again before this
 IDLE_S = 240            # a pooled connection older than this is closed instead of reused
 CHECK_S = 20            # NOOP before reusing a connection idle for longer than this
 MAX_FETCH = 50 * 1024 * 1024
@@ -34,6 +41,8 @@ imaplib._MAXLINE = 10_000_000   # long LIST/SEARCH lines on big mailboxes
 
 
 class MailError(Exception):
+    timed_out = False       # the server did not answer in time (session() then fails fast for DOWN_S)
+
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
@@ -106,13 +115,16 @@ def open_imap(host: str, port: int, tls: str, username: str, password: str) -> i
     ctx = ssl.create_default_context()
     try:
         if tls == "ssl":
-            m = imaplib.IMAP4_SSL(host, port, ssl_context=ctx, timeout=TIMEOUT_S)
+            m = imaplib.IMAP4_SSL(host, port, ssl_context=ctx, timeout=CONNECT_S)
         else:
-            m = imaplib.IMAP4(host, port, timeout=TIMEOUT_S)
+            m = imaplib.IMAP4(host, port, timeout=CONNECT_S)
             if tls == "starttls":
                 m.starttls(ssl_context=ctx)
+        m.sock.settimeout(TIMEOUT_S)
     except (socket.timeout, TimeoutError):
-        raise MailError("unreachable", f"{host}:{port} does not answer (blocked port or wrong server)") from None
+        e = MailError("unreachable", f"{host}:{port} does not answer (blocked port or wrong server)")
+        e.timed_out = True
+        raise e from None
     except ssl.SSLError as e:
         raise MailError("tls", f"{host}:{port}: TLS error ({e.reason or e})") from None
     except (OSError, imaplib.IMAP4.error) as e:
@@ -135,6 +147,9 @@ class _Slot:
         self.conn: imaplib.IMAP4 | None = None
         self.used = 0.0
         self.key: tuple = ()
+        self.waiting = 0
+        self.stale = False                      # forget() could not get the lock: close before the next use
+        self.down: tuple[float, str] | None = None   # (until, message): the server timed out a moment ago
 
 
 _slots: dict[str, _Slot] = {}
@@ -156,33 +171,78 @@ def _close(slot: _Slot) -> None:
 def forget(acc_id: str) -> None:
     """Drop the pooled connection (account changed or deleted)."""
     s = _slot(acc_id)
-    with s.lock:
-        _close(s)
+    s.down = None
+    if s.lock.acquire(timeout=LOCK_WAIT_S):
+        try:
+            _close(s)
+            s.stale = False
+        finally:
+            s.lock.release()
+    else:                                       # a call is stuck on it: the next one starts afresh
+        s.stale = True
+
+
+def _busy(acc: dict) -> MailError:
+    return MailError("mail_busy", f"{acc.get('address') or acc['id']} is busy with another request (its mail server is "
+                                  "slow): try again in a moment")
+
+
+def _acquire(s: _Slot, acc: dict) -> None:
+    with _slots_lock:
+        if s.waiting >= MAX_WAITING and s.lock.locked():
+            raise _busy(acc)
+        s.waiting += 1
+    try:
+        got = s.lock.acquire(timeout=LOCK_WAIT_S)
+    finally:
+        with _slots_lock:
+            s.waiting -= 1
+    if not got:
+        raise _busy(acc)
 
 
 @contextlib.contextmanager
 def session(acc: dict) -> Iterator[imaplib.IMAP4]:
     s = _slot(acc["id"])
-    with s.lock:
+    _acquire(s, acc)
+    try:
         key = (acc["imap_host"], acc["imap_port"], acc["imap_tls"], acc["username"], acc.get("password_key"))
         now = time.time()
-        if s.conn is not None and (s.key != key or now - s.used > IDLE_S):
+        if s.down and s.down[0] > now and s.conn is None:
+            raise MailError("unreachable", s.down[1])
+        if s.conn is not None and (s.stale or s.key != key or now - s.used > IDLE_S):
             _close(s)
+        s.stale = False
         if s.conn is not None and now - s.used > CHECK_S:
             try:
                 s.conn.noop()
             except Exception:  # noqa: BLE001 - dead connection: open a new one
                 s.conn = None
         if s.conn is None:
-            s.conn = open_imap(acc["imap_host"], int(acc["imap_port"]), acc["imap_tls"], acc["username"], _password(acc))
+            try:
+                s.conn = open_imap(acc["imap_host"], int(acc["imap_port"]), acc["imap_tls"], acc["username"], _password(acc))
+            except MailError as e:
+                if e.timed_out:
+                    s.down = (time.time() + DOWN_S, e.message)
+                raise
             s.key = key
+            s.down = None
         try:
             yield s.conn
         except (imaplib.IMAP4.abort, OSError) as e:
+            with contextlib.suppress(Exception):
+                s.conn.shutdown()
             s.conn = None
+            if isinstance(e, TimeoutError):
+                s.down = (time.time() + DOWN_S, f"{acc['imap_host']} stopped answering (more than {TIMEOUT_S} s)")
+                err = MailError("unreachable", s.down[1])
+                err.timed_out = True
+                raise err from None
             raise MailError("connection", f"connection to {acc['imap_host']} lost: {e}") from None
         finally:
             s.used = time.time()
+    finally:
+        s.lock.release()
 
 
 def _text(x: Any) -> str:

@@ -1,9 +1,13 @@
 """E-mail page (Settings -> Features -> mail_page): IMAP/SMTP accounts, folders, messages, flags and moves.
-Every IMAP call runs in a thread (imaplib blocks). See docs/dev/API.md#mail."""
+Every IMAP/SMTP call runs in a thread of its own small pool (imaplib blocks): a slow or silent mail server then never
+holds the threads the rest of the server shares (sign-in, approvals...). See docs/dev/API.md#mail."""
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
+import contextvars
+import functools
 import json
 import logging
 import time
@@ -24,8 +28,19 @@ router = APIRouter(prefix="/api/mail", tags=["mail"], dependencies=[Depends(requ
 
 STATUS = {"no_account": 404, "not_found": 404, "no_folder": 404, "exists": 409, "invalid": 400, "too_large": 413,
           "no_password": 409, "changed": 409, "auth": 422, "limit": 429, "refused": 422, "forbidden": 403,
-          # the mail server failed, not ours: 424, never a 5xx (a proxy such as Cloudflare may hide a 502 body)
-          "smtp": 424, "unreachable": 424, "tls": 424, "connection": 424, "imap": 424}
+          # the mail server failed, not ours: 424, never a 5xx (a proxy such as Cloudflare may hide a 502 body);
+          # mail_busy: 503 + Retry-After, the mailbox is held by another request (Cloudflare passes a 503 through)
+          "smtp": 424, "unreachable": 424, "tls": 424, "connection": 424, "imap": 424,
+          "mail_busy": 503}
+
+MAIL_THREADS = 8        # one stuck account holds at most 1 + imap.MAX_WAITING of them
+_pool = concurrent.futures.ThreadPoolExecutor(MAIL_THREADS, thread_name_prefix="mail")
+
+
+async def _in_pool(fn, *args, **kw):
+    """asyncio.to_thread, on the mail pool."""
+    ctx = contextvars.copy_context()
+    return await asyncio.get_running_loop().run_in_executor(_pool, functools.partial(ctx.run, fn, *args, **kw))
 
 
 def _need_on() -> None:
@@ -34,13 +49,14 @@ def _need_on() -> None:
 
 
 def _err(e: MailError) -> HTTPException:
-    return HTTPException(STATUS.get(e.code, 400), detail={"error": e.code, "message": e.message})
+    return HTTPException(STATUS.get(e.code, 400), detail={"error": e.code, "message": e.message},
+                         headers={"Retry-After": "10"} if e.code == "mail_busy" else None)
 
 
 async def _run(fn, *args, **kw):
     _need_on()
     try:
-        return await asyncio.to_thread(fn, *args, **kw)
+        return await _in_pool(fn, *args, **kw)
     except MailError as e:
         raise _err(e) from None
 
@@ -303,7 +319,7 @@ async def post_refresh(body: RefreshIn = RefreshIn()):
     out = []
     for a in accs:
         try:
-            out.append(await asyncio.to_thread(poll.poll_account, a))
+            out.append(await _in_pool(poll.poll_account, a))
         except MailError as e:
             out.append({"account": a["id"], "ok": False, "error": e.message, "new": 0, "started": 0})
         except Exception:  # noqa: BLE001 - one mailbox never fails the others
@@ -365,7 +381,7 @@ async def _loop() -> None:
             if not mail.enabled():
                 continue
             await asyncio.to_thread(outbox.unstick)
-            await asyncio.to_thread(poll.poll_due)
+            await _in_pool(poll.poll_due)
             now = time.time()
             if now - last_tidy > 86400:
                 last_tidy = now
