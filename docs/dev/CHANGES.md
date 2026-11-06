@@ -32,6 +32,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   maximum, or negative where 0 = no limit (400 `bad_limit`); below a non-zero minimum it is still raised to it.
   Not strict (a hand-edited agent.json), a negative budget / rate takes the default instead of 0; a positive
   budget never rounds to 0 (floor 0.01).
+- `agents.Debouncer.add` stops keeping texts once a batch holds `EVENT_MAX` characters (what `frame` sends) and
+  counts the rest in `dropped` (saved in `_feed.json`); `flush_due` numbers events out of the full count and
+  says how many were not shown. A busy agent's batch no longer grows and is rewritten without bound.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
