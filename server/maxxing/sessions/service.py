@@ -923,10 +923,13 @@ def _tail_events(sid: str, nbytes: int = 512 * 1024) -> list[dict]:
     return normalize.normalize_lines(lines)
 
 
-def last_assistant_text(sid: str) -> str:
+def last_assistant_text(sid: str, turn_only: bool = False) -> str:
+    """turn_only: from the last turn only ("" if it wrote nothing, never the answer of the turn before)."""
     for ev in reversed(_tail_events(sid)):
         if ev["type"] == "assistant":
             return ev["text"]
+        if turn_only and ev["type"] == "user":
+            return ""
     return ""
 
 
