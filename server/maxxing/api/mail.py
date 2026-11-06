@@ -23,7 +23,7 @@ log = logging.getLogger("maxxing.mail")
 router = APIRouter(prefix="/api/mail", tags=["mail"], dependencies=[Depends(require_auth)])
 
 STATUS = {"no_account": 404, "not_found": 404, "no_folder": 404, "exists": 409, "invalid": 400, "too_large": 413,
-          "no_password": 409, "auth": 422, "limit": 429, "refused": 422, "forbidden": 403,
+          "no_password": 409, "changed": 409, "auth": 422, "limit": 429, "refused": 422, "forbidden": 403,
           # the mail server failed, not ours: 424, never a 5xx (a proxy such as Cloudflare may hide a 502 body)
           "smtp": 424, "unreachable": 424, "tls": 424, "connection": 424, "imap": 424}
 
@@ -281,7 +281,12 @@ async def post_draft(acc_id: str, data: str = Form(...), files: list[UploadFile]
     """Same body as /send: files the message in Drafts (replacing `draft` when given). Returns {folder, uid}."""
     _need_on()
     draft, fs = await _draft_and_files(data, files)
-    return await _run(send.save_draft, _acc(acc_id), draft, fs)
+    res = await _run(send.save_draft, _acc(acc_id), draft, fs)
+    d = draft.get("draft") or {}
+    if d.get("uid"):                                    # an agent's waiting draft changed by the owner: its request follows
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(outbox.draft_saved, acc_id, {"folder": str(d.get("folder") or ""), "uid": int(d["uid"])}, res)
+    return res
 
 
 # ---------------------------------------------------------------- checks, all mailboxes, the agents' outbox
