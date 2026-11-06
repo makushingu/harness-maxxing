@@ -498,9 +498,14 @@ export function SessionColumn({ col, sid, variant, index, count, place }: { col:
       if (st.status !== 'ready' || !sessionNow.current) return null // unknown: kept for the next load
       const queued = sessionNow.current.queue_items || []
       const queue = queued.map((q) => q.text)
+      const sent = sessionNow.current.sent_items || [] // held behind a summary: received, not in the log yet
       return left.filter((e) => {
         if (e.tagged)
-          return !st.items.some((it) => it.kind === 'user' && it.ev.client_ids?.includes(e.id)) && !queued.some((q) => q.client_ids?.includes(e.id))
+          return (
+            !st.items.some((it) => it.kind === 'user' && it.ev.client_ids?.includes(e.id)) &&
+            !queued.some((q) => q.client_ids?.includes(e.id)) &&
+            !sent.some((q) => q.client_ids?.includes(e.id))
+          )
         const text = e.text.trim()
         if (st.items.some((it) => it.kind === 'user' && (it.ev.at ?? Infinity) >= e.at / 1000 - 60 && it.ev.text.trim() === text)) return false
         // the server cuts a queued text at QUEUE_PREVIEW_CHARS: only a cut one is compared on its start
@@ -1276,7 +1281,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
         if (st.status !== 'ready') return null
         const got = (e: OutboxEntry) =>
           e.tagged
-            ? st.items.some((it) => it.kind === 'user' && it.ev.client_ids?.includes(e.id)) || !!x.queue_items?.some((q) => q.client_ids?.includes(e.id))
+            ? st.items.some((it) => it.kind === 'user' && it.ev.client_ids?.includes(e.id)) || !!x.queue_items?.some((q) => q.client_ids?.includes(e.id)) || !!x.sent_items?.some((q) => q.client_ids?.includes(e.id))
             : st.items.some((it) => it.kind === 'user' && it.ev.text.trim() === e.text.trim())
         if (!left.some(got)) continue
         made.current = x.id
