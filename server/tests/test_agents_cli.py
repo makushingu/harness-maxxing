@@ -202,3 +202,10 @@ def test_an_unreadable_role_file_is_a_plain_error(client, topic, tmp_path, capsy
     f.write_bytes(b"\xff\xfe\x00bad")
     assert cli.main(["agents", "create", "acme/blog/x1", "--role-file", str(f)]) == 2
     assert "Cannot read" in capsys.readouterr().err
+
+
+def test_an_export_to_an_unwritable_path_is_a_plain_error(client, topic, tmp_path, capsys):
+    client.put("/api/settings", json={"agents_page": True})
+    agents.create("projects/acme/topics/blog", "w", {})
+    assert cli.main(["agents", "export", "w", "-o", str(tmp_path / "nodir" / "o.md")]) == 2
+    assert "Cannot write" in capsys.readouterr().err
