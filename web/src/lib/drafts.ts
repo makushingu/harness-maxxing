@@ -1,10 +1,10 @@
 /** What the composer keeps in localStorage (pages/sessions/store.ts): the draft under `mx-draft:<key>`, its quotes,
  *  attachments and sends in flight under `mx-draft:<key>:quotes|:atts|:out`, the last prefill under `mx-prefilled:<key>`.
  *  Kept here, out of the sessions page, so signing out can clear it without loading that page. */
-const PREFIXES = ['mx-draft:', 'mx-prefilled:']
+const PREFIXES = ['mx-draft:', 'mx-prefilled:', 'mx-mail-']
 const PARTS = ['', ':quotes', ':atts', ':out']
 
-/** Signing out: no unsent text or attachment path of any session stays in this browser. */
+/** Signing out: no unsent text or attachment path of any session, nor mail being written, stays in this browser. */
 export function forgetAllDrafts() {
   try {
     const keys: string[] = []
@@ -13,6 +13,8 @@ export function forgetAllDrafts() {
       if (k && PREFIXES.some((p) => k.startsWith(p))) keys.push(k)
     }
     for (const k of keys) localStorage.removeItem(k)
+    // the files of a mail being written (features/mail/localDraft.ts)
+    indexedDB.deleteDatabase('mx-mail')
   } catch {
     /* private mode */
   }
