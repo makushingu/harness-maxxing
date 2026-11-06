@@ -111,6 +111,31 @@ def _queue_preview(m: dict) -> list[dict]:
     return out
 
 
+SENT_PREVIEW_CHARS = 4000
+
+
+def _sent_preview(m: dict) -> list[dict]:
+    """Messages sent but not in the log yet: the one held at the head while a summary runs first (smart resume,
+    idle compaction), or the head while its turn starts. The thread shows them as sent, also in a tab or on a
+    device that did not send them (a reloaded page, another window): else they vanish until their turn starts."""
+    q = m.get("queue") or []
+    if not isinstance(q, list) or m.get("state") != "running":
+        return []
+    out = []
+    for i, x in enumerate(q):
+        if not isinstance(x, dict) or not (x.get("held") or (i == 0 and not m.get("pid"))):
+            continue
+        if (x.get("source") or "web") == "system":     # a summary waiting to start: not a message
+            continue
+        att = x.get("attachments")
+        out.append({"text": str(x.get("text") or "")[:SENT_PREVIEW_CHARS],
+                    "attachments": [str(a) for a in att] if isinstance(att, list) else [],
+                    "source": str(x.get("source") or "web"),
+                    **({"voice": _voice_paths(x)} if _voice_paths(x) else {}),
+                    **({"client_ids": [str(c) for c in x["client_ids"]]} if isinstance(x.get("client_ids"), list) else {})})
+    return out
+
+
 def _num(v: object) -> float:
     """A number from a session file that may have been edited by hand (string, null, junk -> 0)."""
     try:
@@ -124,7 +149,7 @@ def public(meta: dict) -> dict:
     m = _effective(meta)
     finished, seen = _num(m.get("finished_at")), _num(m.get("seen_at"))
     return {"id": m["id"], "title": m.get("title") or "Untitled", "path": m.get("path") or "",
-            "state": m.get("state") or "idle", "queue": _waiting(m), "queue_items": _queue_preview(m),
+            "state": m.get("state") or "idle", "queue": _waiting(m), "queue_items": _queue_preview(m), "sent_items": _sent_preview(m),
             "created": m.get("created"), "updated": m.get("updated") or m.get("created"),
             "turns": int(_num(m.get("turns"))), "cost_usd": round(_num(m.get("cost_usd")), 4),
             "model": m.get("model") or "", "real_model": m.get("real_model") or None,
