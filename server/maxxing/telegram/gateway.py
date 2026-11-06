@@ -3819,7 +3819,12 @@ def _alert_html(ev: dict) -> str:
             html += "\n<i>" + fmt.escape(_w("alert_cut")) + "</i>"
     if ev.get("resolved") and ev.get("resolution"):
         html += f"\n<i>{fmt.escape(str(ev['resolution'])[:200])}</i>"
-    return html
+    return _utf8(html)
+
+
+def _utf8(s: str) -> str:
+    """A lone surrogate (valid JSON in an event) as "?": the send could not encode it and the alert was lost."""
+    return s.encode("utf-8", "replace").decode("utf-8")
 
 
 def _alert_markup(ev: dict) -> dict | None:
@@ -3835,7 +3840,7 @@ def _alert_markup(ev: dict) -> dict | None:
                 base = (config.load_config().get("public_url") or "").rstrip("/")
                 url = base + url if base.startswith("https://") else ""
             if url.startswith("https://"):
-                row.append({"text": str(act.get("label") or _w("open_btn"))[:40], "url": url})
+                row.append({"text": _utf8(str(act.get("label") or _w("open_btn"))[:40]), "url": url})
             continue
         if act["id"] == "seen" and ev.get("read"):
             continue                                       # already seen (on the web)
@@ -3843,7 +3848,7 @@ def _alert_markup(ev: dict) -> dict | None:
             continue                                       # shown in part only: Send / Allow from the UI (Refuse stays)
         data = f"al:{ev['id']}:{act['id']}"
         if len(data.encode()) <= 64:
-            row.append({"text": str(act.get("label") or act["id"])[:40], "callback_data": data})
+            row.append({"text": _utf8(str(act.get("label") or act["id"])[:40]), "callback_data": data})
     return {"inline_keyboard": [row]} if row else None
 
 
