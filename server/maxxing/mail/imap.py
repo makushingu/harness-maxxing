@@ -826,6 +826,15 @@ def append_draft(acc: dict, raw: bytes) -> tuple[str | None, int]:
     return target, 0
 
 
+def has(acc: dict, folder: str, uid: int) -> bool:
+    """Whether message `uid` is still in `folder` (not flagged deleted). Raises MailError when the server does not say."""
+    with session(acc) as m:
+        _select(m, folder, readonly=True)
+        typ, data = m.uid("SEARCH", "UID", str(int(uid)), "UNDELETED")
+        _ok(typ, data, "SEARCH")
+        return int(uid) in {int(x) for x in _text(data).split()}
+
+
 def drop(acc: dict, folder: str, uid: int) -> None:
     """Delete a draft for good (a draft replaced by its new version, or sent). Only in the drafts folder."""
     with session(acc) as m:

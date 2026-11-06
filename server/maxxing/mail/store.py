@@ -298,6 +298,12 @@ def outbox_claim(oid: str, status: str, note: str = "") -> bool:
     return n == 1
 
 
+def outbox_data(oid: str, data: dict) -> bool:
+    """New data for a request still waiting (never one being sent)."""
+    with conn() as c:
+        return c.execute("UPDATE outbox SET data=? WHERE id=? AND status='waiting'", (json.dumps(data), oid)).rowcount > 0
+
+
 def outbox_set(oid: str, status: str, note: str = "") -> None:
     with conn() as c:
         c.execute("UPDATE outbox SET status=?, done_at=?, note=? WHERE id=?", (status, time.time(), note[:500], oid))

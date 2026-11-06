@@ -103,7 +103,8 @@ def box(client, topic, smtp, monkeypatch):
             "date": time.time(), "seen": False, "flagged": False, "answered": False, "size": 10, "attachments": False,
             "message_id": "<m3@x.org>", "from_verified": True},
     }
-    state = {"rows": rows, "marked": [], "acts": [], "drafts": []}
+    state = {"rows": rows, "marked": [], "acts": [], "drafts": [], "gone": set()}
+    monkeypatch.setattr(imap, "has", lambda acc, folder, uid: uid not in state["gone"])
     monkeypatch.setattr(imap, "summaries", lambda acc, folder, uids: [dict(rows[u]) for u in uids if u in rows])
 
     def message(acc, folder, uid, mark_seen=True):
@@ -281,6 +282,55 @@ def test_the_owner_sending_the_draft_from_the_page_ends_the_request(client, box,
         {"to": ["bob@x.org"], "subject": "S (changed)", "text": "y", "draft": w["draft"]})})
     assert r.status_code == 200, r.text
     assert not outbox.pending() and feed.find(f"mailsend:{w['id']}", open_only=False)["resolution"] == "Sent from the E-mail page"
+
+
+def test_a_draft_changed_by_the_owner_is_never_sent_twice(client, box, monkeypatch, capsys, smtp):
+    import json
+    _grant(client, rights=["read", "send"])
+    _as_agent(monkeypatch)
+    _cli(capsys, "write", "--to", "bob@x.org", "-s", "S", "--send", stdin="agent text", monkeypatch=monkeypatch)
+    [w] = outbox.pending()
+    ev = feed.find(f"mailsend:{w['id']}")
+    r = client.post("/api/mail/me-example/draft", data={"data": json.dumps(
+        {"to": ["bob@x.org"], "subject": "S (edited)", "text": "owner text", "draft": w["draft"]})})
+    new = r.json()
+    assert new == {"folder": "Drafts", "uid": 102}
+    [w2] = outbox.pending()
+    assert w2["draft"] == new                                           # the request follows the owner's copy
+    assert feed.get(ev["id"])["resolution"].startswith("Changed on the E-mail page")
+    with pytest.raises(imap.MailError) as e:                            # Allow no longer sends the agent's version
+        outbox.approve(w["id"])
+    assert e.value.code == "changed" and not smtp.messages and outbox.pending()
+    assert client.post(f"/api/mail/outbox/{w['id']}/send").status_code == 409
+    r = client.post("/api/mail/me-example/send", data={"data": json.dumps(
+        {"to": ["bob@x.org"], "subject": "S (edited)", "text": "owner text", "draft": new})})
+    assert r.status_code == 200 and len(smtp.messages) == 1 and not outbox.pending()
+
+
+def test_allow_sends_nothing_once_the_draft_is_deleted(client, box, monkeypatch, capsys, smtp):
+    _grant(client, rights=["read", "send"])
+    _as_agent(monkeypatch)
+    _cli(capsys, "write", "--to", "bob@x.org", "-s", "S", "--send", stdin="x", monkeypatch=monkeypatch)
+    [w] = outbox.pending()
+    box["gone"].add(w["draft"]["uid"])                                  # deleted in another mail app
+    with pytest.raises(imap.MailError):
+        outbox.approve(w["id"])
+    assert not smtp.messages and not outbox.pending()
+    assert feed.find(f"mailsend:{w['id']}", open_only=False)["resolution"] == "Draft deleted"
+
+
+def test_the_request_lists_the_forwarded_attachments(client, box, monkeypatch, capsys, smtp):
+    _grant(client, rights=["read", "send"])
+    _as_agent(monkeypatch)
+    monkeypatch.setattr(send, "compose", lambda acc, mode, folder, uid: {
+        "to": [], "cc": [], "subject": "Fwd: Invoice 12", "text": "\n---------- Forwarded message ----------", "in_reply_to": "",
+        "references": "", "attachments": [{"index": 2, "filename": "contract.pdf"}, {"index": 3, "filename": "id.jpg"}]})
+    monkeypatch.setattr(imap, "attachment", lambda acc, folder, uid, i: (f"f{i}", "application/pdf", b"%PDF"))
+    code, _, err = _cli(capsys, "write", "--forward", "1", "--to", "bob@x.org", "--send", stdin="x", monkeypatch=monkeypatch)
+    assert code == 0, err
+    [w] = outbox.pending()
+    body = feed.find(f"mailsend:{w['id']}")["body"]
+    assert "Attachments (2): contract.pdf (forwarded), id.jpg (forwarded)" in body
 
 
 # ---------------------------------------------------------------- the check and the trigger

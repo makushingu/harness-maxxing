@@ -520,7 +520,8 @@ def _write(a, acc: dict, out, guard: Guard | None = None, g: dict | None = None)
         if mode != "forward":
             draft["reply"] = {"folder": a.folder, "uid": uid}
         elif c["attachments"]:
-            draft["forward"] = {"folder": a.folder, "uid": uid, "indexes": [x["index"] for x in c["attachments"]]}
+            draft["forward"] = {"folder": a.folder, "uid": uid, "indexes": [x["index"] for x in c["attachments"]],
+                                "names": [x["filename"] for x in c["attachments"]]}   # shown in the owner's request
     else:
         draft["text"] = body.rstrip() + send.signature_block(acc)
     files = []
