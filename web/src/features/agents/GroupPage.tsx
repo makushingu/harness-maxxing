@@ -420,7 +420,7 @@ function Speaking({ group: g }: { group: AgentGroup }) {
     <div className="flex items-start gap-2" data-kind="speaking" data-testid="group-speaking">
       <AgentAvatarIcon avatar={m.avatar} size={32} animate />
       <div className={cn('grid min-w-0 gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', asks.length > 0 && 'flex-1 border-warning/40 bg-warning/5')}>
-        <span className="flex items-center gap-2 text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-2 text-muted-foreground wrap-anywhere">
           {asks.length || waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
           {asks.length || waiting ? t('agents.conv.waiting', { name: m.display_name }) : t('groups.writing', { name: m.display_name })}
         </span>
