@@ -130,8 +130,10 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
     assert agent_templates.get("support", "fr")["name"] == "SAV" and agent_templates.get("support", "de")["name"] == "Customer support"
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
     vault.put("SHOPIFY_TOKEN", "x")
+    vault.put("STRIPE_SECRET_KEY", "x")             # a full key: the read-only templates never take it
     got = client.get("/api/agents/templates?lang=fr").json()["templates"]
     assert [t["id"] for t in got][:2] == ["support", "sales"] and got[0]["keys_present"] == ["SHOPIFY_TOKEN"]
+    assert got[1]["keys_present"] == ["SHOPIFY_TOKEN"]
     # create from a template: its settings, its first trigger, what to connect
     assert cli.main(["agents", "create", "acme/blog/digest", "--template", "sales", "--lang", "fr"]) == 0
     out = capsys.readouterr().out

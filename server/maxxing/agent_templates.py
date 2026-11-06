@@ -62,7 +62,7 @@ TEMPLATES: list[dict[str, Any]] = [
                   "rembourse jamais rien. Garde dans ta mémoire comment interroger l'API et les totaux passés."},
         "cron": {"schedule": "0 20 * * *", "prompt": {"en": "Sum up today's sales.", "fr": "Résume les ventes d'aujourd'hui."}},
         "permission_mode": "default", "approvals": False, "allowed_tools": READ + ["Bash(curl:*)"],
-        "domains": ["api.stripe.com", "*.myshopify.com"], "keys": ["STRIPE_SECRET_KEY", "STRIPE_RESTRICTED_KEY", "SHOPIFY_TOKEN", "SHOPIFY_ADMIN_TOKEN"],
+        "domains": ["api.stripe.com", "*.myshopify.com"], "keys": ["STRIPE_RESTRICTED_KEY", "SHOPIFY_TOKEN", "SHOPIFY_ADMIN_TOKEN"],
         "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
         "needs": {"en": "A read-only API key in Settings -> Keys (a Stripe restricted key, a Shopify token with read scopes), checked in its keys.",
                   "fr": "Une clé d'API en lecture seule dans Réglages -> Clés (clé restreinte Stripe, jeton Shopify en lecture), cochée dans ses clés."},
