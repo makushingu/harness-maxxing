@@ -1388,7 +1388,7 @@ class Gateway:
         text = _with_context(msg, text) if text else \
             f"(sent from Telegram: {', '.join(os.path.basename(a) for a in saved)})"
         rep = (msg.get("reply_to_message") or {}).get("message_id")
-        reply_to = await asyncio.to_thread(agents.telegram_reply_to, path, rep) if rep else None
+        reply_to = await asyncio.to_thread(agents.telegram_reply_to, path, rep, msg["chat"].get("id")) if rep else None
         try:
             res = await asyncio.to_thread(agents.fire, path, trigger="telegram", prompt=text, source="telegram",
                                           attachments=saved or None, reply_to=reply_to)
@@ -3587,7 +3587,7 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str 
     if thread_msg and sent:                            # a reply to these messages goes on with that session
         try:
             from .. import agents
-            agents.remember_telegram(path, sent, thread_msg)
+            agents.remember_telegram(path, sent, thread_msg, chat)
         except Exception:  # noqa: BLE001
             log.exception("agent Telegram mapping")
     return ok
