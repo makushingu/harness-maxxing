@@ -283,6 +283,14 @@ def dns_facts(domain: str) -> dict:
             out["spf"] = [t for t in _txt(c, domain) if t.lower().startswith("v=spf1")]
             out["spf_lookups"] = _spf_lookups(c, out["spf"][0], [SPF_MAX_QUERIES], {domain}) if len(out["spf"]) == 1 else None
             out["dmarc"] = [t for t in _txt(c, f"_dmarc.{domain}") if t.lower().startswith("v=dmarc1")]
+            if not out["dmarc"]:        # a subdomain without its own record: receivers apply the parent's (RFC 7489)
+                labels = domain.split(".")
+                for i in range(1, len(labels) - 1):
+                    parent = ".".join(labels[i:])
+                    rec = [t for t in _txt(c, f"_dmarc.{parent}") if t.lower().startswith("v=dmarc1")]
+                    if rec:
+                        out["dmarc_parent"] = {"domain": parent, "records": rec}
+                        break
             out["dkim"] = [s for s in DKIM_SELECTORS
                            if any(re.search(r"(^|;)p=[^;]+", t.replace(" ", "")) for t in _txt(c, f"{s}._domainkey.{domain}"))]   # "p=" alone: a revoked key
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
@@ -340,9 +348,13 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
         out.append(_p("error", "multiple_spf", f"{len(spf)} SPF records on {domain}: receivers treat that as an error.",
                       "Merge them into one TXT record that starts with v=spf1.", domain=domain, count=len(spf)))
     else:
-        rec = spf[0]
+        rec = spf[0].lower()            # SPF terms are case-insensitive (RFC 7208)
         if re.search(r"(^|\s)\+?all(\s|$)", rec):
             out.append(_p("error", "spf_all", f"The SPF record of {domain} ends with +all: anyone may send as @{domain}.",
+                          "End it with ~all (or -all).", domain=domain))
+        elif re.search(r"(^|\s)\?all(\s|$)", rec) or not re.search(r"(^|\s)[~-]all(\s|$)|(^|\s)redirect=", rec):
+            out.append(_p("warn", "spf_neutral", f"The SPF record of {domain} does not end with ~all or -all: it says "
+                          f"nothing about other senders, so anyone can claim to send mail as @{domain}.",
                           "End it with ~all (or -all).", domain=domain))
         if (facts.get("spf_lookups") or 0) > 10:
             out.append(_p("error", "spf_lookups", f"The SPF record of {domain} needs about {facts['spf_lookups']} DNS lookups (limit 10).",
@@ -353,7 +365,16 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
                       + ", ".join(DKIM_SELECTORS) + ").", domain=domain, selectors=", ".join(DKIM_SELECTORS)))
     dmarc = facts.get("dmarc") or []
     record = f"v=DMARC1; p=none; rua=mailto:{rua}"
-    if not dmarc:
+    parent = facts.get("dmarc_parent") or {}
+    if not dmarc and parent.get("records"):
+        # p=none here would WEAKEN the parent's policy for this subdomain: never advised
+        pol = _policy(parent["records"], sub=True) or "?"
+        out.append(_p("info", "dmarc_inherited", f"No DMARC record on {domain}: the policy of {parent['domain']} "
+                      f"applies (p={pol}).",
+                      "Nothing to add. Do not add a p=none record here: it would weaken that policy for this domain."
+                      if pol != "none" else f"Once SPF and DKIM pass, switch the record of {parent['domain']} to "
+                      "p=quarantine, then p=reject.", domain=domain, parent=parent["domain"], policy=pol))
+    elif not dmarc:
         out.append(_p("warn", "no_dmarc", f"No DMARC record on {domain}.",
                       f"Add a TXT record _dmarc.{domain}: {record}", domain=domain, record=record))
     elif len(dmarc) > 1:
@@ -371,8 +392,13 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
     return out
 
 
-def _policy(dmarc: list[str]) -> str | None:
-    m = re.search(r"(?:^|;)\s*p\s*=\s*([a-z]+)", dmarc[0].lower()) if len(dmarc) == 1 else None
+def _policy(dmarc: list[str], sub: bool = False) -> str | None:
+    """p= of the one record; sub: the policy it sets for subdomains (sp=, else p=)."""
+    if len(dmarc) != 1:
+        return None
+    rec = dmarc[0].lower()
+    m = re.search(r"(?:^|;)\s*sp\s*=\s*([a-z]+)", rec) if sub else None
+    m = m or re.search(r"(?:^|;)\s*p\s*=\s*([a-z]+)", rec)
     return m.group(1) if m else None
 
 
@@ -400,7 +426,8 @@ def domains_health(wanted: dict[str, dict], refresh: bool = False, rua_of: dict[
                     "spf": {"record": spf[0] if len(spf) == 1 else None, "count": len(spf), "lookups": f.get("spf_lookups")},
                     "dkim": f.get("dkim") or [],
                     "dmarc": {"record": (f.get("dmarc") or [None])[0], "count": len(f.get("dmarc") or []),
-                              "policy": _policy(f.get("dmarc") or [])},
+                              "policy": _policy(f.get("dmarc") or []),
+                              "parent": (f.get("dmarc_parent") or {}).get("domain")},     # inherited from it
                     "problems": problems(d, f, bool(w.get("expects")), bool(w.get("cf_routing")),
                                          (rua_of or {}).get(d) or f"dmarc@{d}")})
     return out
