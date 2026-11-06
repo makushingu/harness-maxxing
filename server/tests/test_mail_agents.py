@@ -409,6 +409,88 @@ def test_mail_kept_for_a_busy_agent_follows_its_rights_now(client, box, monkeypa
     assert poll.retry_pending() == 0 and config.read_json(poll._pending_file(), default=[]) == []
 
 
+def _poll_box(client, box, monkeypatch):
+    """The `box` mailbox after a first check (uids 1-3 known) with uids 4, 5 (stripe, matching) new."""
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    rows = box["rows"]
+    uids = [1, 2, 3]
+
+    def new_since(acc, folder, last_uid, limit=50):
+        got = [u for u in uids if last_uid is None or u > last_uid]
+        return {"uidvalidity": 7, "uids": got, "messages": [dict(rows[u]) for u in got]}
+    monkeypatch.setattr(imap, "new_since", new_since)
+    assert poll.poll_account(box["acc"])["started"] == 0
+    rows[4] = {**rows[1], "uid": 4, "subject": "Invoice 13", "message_id": "<m4@stripe.com>"}
+    rows[5] = {**rows[1], "uid": 5, "subject": "Invoice 14", "message_id": "<m5@stripe.com>"}
+    uids += [4, 5]
+    return rows, uids
+
+
+def test_one_unreadable_mail_never_blocks_the_check(client, box, monkeypatch):
+    rows, uids = _poll_box(client, box, monkeypatch)
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    good = imap.excerpt
+
+    def excerpt(acc, folder, uid, limit=0):
+        if uid == 4:
+            raise LookupError("unknown encoding: x-bogus")          # anything the parser may still raise
+        return good(acc, folder, uid, limit)
+    monkeypatch.setattr(imap, "excerpt", excerpt)
+    r = poll.poll_account(box["acc"])
+    assert r["started"] == 1 and store.position("me-example", "INBOX")["last_uid"] == 5
+    assert "UID: 4" in fired[0]["text"] and "text of 5" in fired[0]["text"]
+    assert poll.poll_account(box["acc"])["started"] == 0 and len(fired) == 1     # no new start on the next tick
+    real = store.remember
+    monkeypatch.setattr(store, "remember", lambda acc, folder, rs, sn=None: (_ for _ in ()).throw(ValueError("bad"))
+                        if any(x["uid"] == 6 for x in rs) else real(acc, folder, rs, sn))
+    rows[6] = {**rows[1], "uid": 6, "message_id": "<m6@stripe.com>"}           # its headers cannot be kept
+    rows[7] = {**rows[1], "uid": 7, "message_id": "<m7@stripe.com>"}
+    uids += [6, 7]
+    assert poll.poll_account(box["acc"])["started"] == 1 and store.position("me-example", "INBOX")["last_uid"] == 7
+    assert "UID: 6" in fired[1]["text"] and "UID: 7" in fired[1]["text"]
+    assert {m["uid"] for m in store.recent(["me-example"])} >= {5, 7} and 6 not in {m["uid"] for m in store.recent(["me-example"])}
+
+
+def test_a_restart_in_the_middle_of_a_check_starts_nobody_twice(client, box, monkeypatch):
+    _poll_box(client, box, monkeypatch)
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    real = store.set_position
+
+    def crash(*a, **k):
+        raise KeyboardInterrupt                                      # the service stops before the position is saved
+    monkeypatch.setattr(store, "set_position", crash)
+    with pytest.raises(KeyboardInterrupt):
+        poll.poll_account(box["acc"])
+    assert not fired
+    monkeypatch.setattr(store, "set_position", real)
+    poll.poll_account(box["acc"])                                    # after the restart: same mails, already kept
+    poll.retry_pending()
+    assert len(fired) == 1 and "UID: 4" in fired[0]["text"] and "UID: 5" in fired[0]["text"]
+    assert poll.retry_pending() == 0 and len(fired) == 1
+
+
+def test_a_restart_while_kept_turns_start_loses_none(client, box, monkeypatch):
+    rows, acc = box["rows"], box["acc"]
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    poll._keep(A, acc["id"], "INBOX", [rows[1]], {}, "p")
+    poll._keep(A, acc["id"], "Invoices", [rows[3]], {}, "p")
+    monkeypatch.setattr(poll, "watchers", lambda acc_id: [(A, {"trigger": {"folder": f, "enabled": True}, "rights": ["read"],
+                                                              "senders": [], "account": acc_id}) for f in ("INBOX", "Invoices")])
+
+    def crash(path, **kw):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(agents, "fire", crash)
+    with pytest.raises(KeyboardInterrupt):
+        poll.retry_pending()
+    left = config.read_json(poll._pending_file(), default=[])
+    assert [r["folder"] for r in left] == ["Invoices"]               # only the turn being started is out
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    assert poll.retry_pending() == 1 and "UID: 3" in fired[0]["text"]
+
+
 def test_a_removed_mailbox_leaves_no_rights_behind(client, box):
     _grant(client, rights=["read", "send"], approve_send="never")
     assert client.delete("/api/mail/accounts/me-example").status_code == 200
