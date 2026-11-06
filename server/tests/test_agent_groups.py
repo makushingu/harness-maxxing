@@ -236,6 +236,28 @@ def test_a_group_folder_is_readable_by_its_members_only(client, topic):
     assert team in hidden and kept in hidden
 
 
+def test_deleted_member_is_dropped_on_save_and_never_picked(client, topic, mx):
+    _setup(client, lead=R)
+    E = "projects/acme/topics/blog/agents/editor"
+    assert client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "editor",
+                                            "sandbox": False}).status_code == 200
+    assert client.patch(G, json={"members": [{"path": W}, {"path": R}, {"path": E}]}).status_code == 200
+    client.post(f"{G}/messages", json={"text": "@reviewer hi\nREPLY_AS reviewer: me"})
+    _idle(client, 1)
+    assert client.delete("/api/agents/acme/seo/reviewer").status_code == 200
+    # the lead and the last speaker are gone: the next live member answers
+    r = client.post(f"{G}/messages", json={"text": "hello team\nREPLY_AS writer: hi"})
+    assert r.json()["queued"] == [W]
+    assert _idle(client, 2)[-1]["author"] == W
+    # the form sends the members it had: the deleted one is dropped (and said), not a refusal
+    r = client.patch(G, json={"display_name": "Team 2", "members": [{"path": W}, {"path": R}, {"path": E}]})
+    assert r.status_code == 200, r.text
+    assert r.json()["dropped"] == [R] and [m["path"] for m in r.json()["members"]] == [W, E] and r.json()["lead"] == ""
+    # an agent that never was a member must exist
+    r = client.patch(G, json={"members": [{"path": W}, {"path": E}, {"path": "projects/acme/topics/blog/agents/nope"}]})
+    assert r.status_code == 404 and r.json()["error"] == "unknown_member"
+
+
 def test_room_trimmed_by_size_and_read_from_the_end(client, topic, mx, monkeypatch):
     _setup(client)
     path = "projects/acme/groups/team"

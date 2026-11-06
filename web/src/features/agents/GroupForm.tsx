@@ -170,7 +170,9 @@ export function GroupForm({
     [agents, f.project],
   )
   const picked = f.members.map((m) => m.path)
-  const count = f.members.length
+  // members whose agent was deleted since: shown apart with Remove (the server drops them on save anyway)
+  const gone = editing && agentsData ? group.members.filter((m) => !byPath.has(m.path) && picked.includes(m.path)) : []
+  const count = f.members.length - gone.length
   const auto = autoName(f.members.map((m) => byPath.get(m.path)?.display_name || m.path.split('/').pop() || ''))
   const display = f.display.trim() || auto
   const taken = (groups || []).filter((g) => g.project === f.project).map((g) => g.name)
@@ -277,7 +279,28 @@ export function GroupForm({
         </div>
       )}
       {errors.members && <p className="text-sm text-destructive">{errors.members}</p>}
-      {editing && group.members.some((m) => !byPath.has(m.path)) && <p className="text-xs text-muted-foreground">{t('groups.field.goneMembers')}</p>}
+      {gone.length > 0 && (
+        <div className="grid gap-1.5" data-testid="group-gone-members">
+          <p className="text-xs text-muted-foreground">{t('groups.field.goneMembers')}</p>
+          {gone.map((m) => (
+            <div key={m.path} className="flex min-w-0 items-center gap-2.5 rounded-lg border border-dashed px-3 py-1.5">
+              <AgentAvatarIcon avatar={m.avatar} size={24} />
+              <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                <Sensitive length={8}>{m.display_name}</Sensitive>
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setF((x) => ({ ...x, members: x.members.filter((y) => y.path !== m.path), lead: x.lead === m.path ? '' : x.lead }))}
+                data-testid="group-gone-remove"
+              >
+                {t('groups.field.goneRemove')}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 
