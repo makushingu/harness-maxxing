@@ -52,6 +52,7 @@ NAME_MAX, ROLE_MAX, GOAL_MAX = 60, 120, 4000
 LIMITS = {"waves": (3, 1, 6), "replies": (10, 1, 30), "per_hour": (40, 1, 200)}   # name: (default, min, max)
 ROOM_KEEP = 1000                # messages kept in a room
 ROOM_BYTES = 2 * 1024 * 1024    # a room file past this size is trimmed back to half of it (and ROOM_KEEP messages)
+SAME_SAY_S = 3                  # the same owner message again within this many seconds = a double submit, posted once
 TEXT_MAX = 4000                 # characters of a message kept in the room
 DELTA_MAX = 12000               # characters of "what was said since your last turn" sent to a member
 PASS_WORDS = ("PASS", "[PASS]")
@@ -500,6 +501,9 @@ def say(path: str, text: str) -> dict:
     members = g["members"]
     with _lock:
         st = _read_state(path)
+        prev = next((m for m in reversed(room(path, 20)) if m.get("author") == "me" and m.get("kind") == "message"), None)
+        if prev and prev.get("text") == text[:TEXT_MAX] and time.time() - float(prev.get("at") or 0) < SAME_SAY_S:
+            return {"message": prev, "queued": [], "duplicate": True}   # two tabs, a double tap: posted once
         paused = [p for p in st.get("paused") or [] if p in [m["path"] for m in members]]
         stops = {m.group(1).lower() for m in STOP_RE.finditer(text)}
         stopped = [m["path"] for m in members if (m.get("handle") or slug(m["path"])) in stops]
