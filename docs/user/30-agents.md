@@ -102,7 +102,8 @@ learn in its memory and do the few things its role needs (for example `curl` for
 before anything else, and the keys it suggests are checked only if your Keys vault holds them (the read-only ones
 never suggest a full Stripe key `STRIPE_SECRET_KEY`: store a restricted key as `STRIPE_RESTRICTED_KEY`). The blue note at the
 top says what is left to connect (a webhook address in Shopify, a key, the list of sites). From the command line:
-`maxxing agents templates`, then `maxxing agents create acme/shop/sales --template sales`.
+`maxxing agents templates`, then `maxxing agents create acme/shop/sales --template sales`. Both ways give the same
+settings, the sites it may reach (`api.stripe.com`...) included.
 
 **By hand** gives the three steps (the first one already filled in):
 

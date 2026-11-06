@@ -274,6 +274,8 @@ export type AgentsLayout = { projects: string[]; colors: Record<string, string>;
 export type AgentInput = {
   topic_path?: string
   name?: string
+  /** Create only: the ready-made agent it starts from; the server applies its settings (domains, writable...) under the form's. */
+  template?: string
   display_name?: string
   description?: string
   avatar?: Partial<AgentAvatar>
