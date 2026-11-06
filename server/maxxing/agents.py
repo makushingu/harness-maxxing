@@ -31,6 +31,7 @@ import logging
 import math
 import re
 import secrets as _secrets
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -663,11 +664,15 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
         folder(path).mkdir(parents=True)
     except FileExistsError:                             # created by a request at the same moment
         raise AgentError(409, "exists", f"Agent {name!r} already exists in {project}/{topic}") from None
-    workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
-    for ext in ("json", "jsonl"):                       # an older agent of that name left its thread: not this one's
-        _state_file(path, ext).unlink(missing_ok=True)
-    _save(path, data)
-    _git_exclude(tdir)
+    try:
+        workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
+        for ext in ("json", "jsonl"):                   # an older agent of that name left its thread: not this one's
+            _state_file(path, ext).unlink(missing_ok=True)
+        _save(path, data)
+        _git_exclude(tdir)
+    except BaseException:                               # a half-made folder would keep the name taken
+        shutil.rmtree(folder(path), ignore_errors=True)
+        raise
     if data["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()
