@@ -286,3 +286,15 @@ def test_forwarding_a_mail_with_a_mail_attached_keeps_both(acc, srv, smtp):
     assert parts["Inner.eml"].get_content_type() == "message/rfc822"
     assert (parts["Inner.eml"]["Content-Transfer-Encoding"] or "7bit").lower() != "base64"
     assert parts["f.pdf"].get_content() == b"%PDF-1.4 x"
+
+
+@pytest.mark.parametrize("field", ["to", "cc", "bcc"])
+@pytest.mark.parametrize("value", ["c@d.com>", "(c@d.com", "a@b.com, c@d.com>", "Bob <>", "a@b.com;c@d.com"])
+def test_an_address_the_parser_rejects_is_refused_not_dropped(acc, field, value):
+    draft = {"to": "a@x.org", "text": "t"} | {field: value}
+    with pytest.raises(MailError) as e:
+        send.build(acc, draft)
+    assert e.value.code == "invalid"
+    msg, rcpts = send.build(acc, {"to": "a@x.org, ", "cc": ", b@x.org,", "text": "t"})      # stray commas are fine
+    assert rcpts == ["a@x.org", "b@x.org"]
+

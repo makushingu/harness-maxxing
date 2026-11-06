@@ -36,18 +36,45 @@ log = logging.getLogger("maxxing.mail")
 _count_lock = config.ProcessLock("mail-sent-count")    # the server and `maxxing mail write --send` count together
 
 
+_HEADER_BREAK = re.compile("[\r\n\0\x0b\x0c\x1c-\x1e\x85\u2028\u2029]")   # what Python's header folding splits on
+
+
+def _bad_header(s: str) -> bool:
+    """A value no header can hold: a line break of any kind (email raises ValueError on U+2028 and the like) or a lone
+    surrogate (UnicodeEncodeError when the message is written)."""
+    return bool(_HEADER_BREAK.search(s)) or not _utf8(s)
+
+
+def _utf8(s: str) -> bool:
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _addr_list(values: Any) -> list[str]:
     """`a@x.com, "B" <b@y.com>` or a list -> ['a@x.com', 'B <b@y.com>'], each checked."""
     if not values:
         return []
     if isinstance(values, str):
         values = [values]
+    pairs = []
+    for v in values:
+        v = str(v).strip(" \t\r\n,")
+        if not v:
+            continue
+        got = email.utils.getaddresses([v])
+        # a list the parser rejects comes back as one ('', ''): never drop a recipient the user typed without a word
+        if not any(a.strip() for _, a in got) or any(n.strip() and not a.strip() for n, a in got):
+            raise MailError("invalid", f"invalid address: {v[:200]}")
+        pairs += got
     out = []
-    for name, addr in email.utils.getaddresses([str(v) for v in values]):
+    for name, addr in pairs:
         addr = addr.strip()
         if not addr:
             continue
-        if any(c in addr + name for c in "\r\n\0") or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr):
+        if _bad_header(addr + name) or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr):
             raise MailError("invalid", f"invalid address: {addr or name}")
         addr = _idna(addr)
         name = name.strip()
