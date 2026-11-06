@@ -2657,6 +2657,7 @@ export const en = {
   'approval.deny': 'Deny',
   'approval.messagePlaceholder': 'Message to Claude (optional, sent with Deny)',
   'approval.left': 'denied in {time} without an answer',
+  'approval.clipped': 'This request is too long to be shown whole: it can only be denied. Ask the agent for smaller steps.',
   'plan.newLabel': 'Plan mode',
   'plan.newHint': 'Harness explores and proposes a plan first; it changes nothing until you validate it.',
   'plan.hudApprove': 'Validate the plan',
