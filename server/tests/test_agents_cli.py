@@ -176,3 +176,21 @@ def test_an_interrupted_create_gives_the_name_back(client, topic, monkeypatch):
     assert not agents.folder(agents.agent_path("acme", "blog", "half")).exists()
     monkeypatch.setattr(workspace, "_init_level", real)
     assert agents.create("projects/acme/topics/blog", "half", {})["path"].endswith("/half")
+
+
+def test_two_watch_at_once_keep_both_triggers(client, topic, monkeypatch, capsys):
+    import threading
+    client.put("/api/settings", json={"agents_page": True})
+    path = agents.create("projects/acme/topics/blog", "w", {})["path"]
+    real, other = agents.update, []
+
+    def update(p, fields):
+        if not other:                                     # a second `watch` runs while the first one saves
+            other.append(threading.Thread(target=cli.main, args=(["agents", "watch", "w", "--source", "other"],)))
+            other[0].start()
+            other[0].join(1)
+        return real(p, fields)
+    monkeypatch.setattr(agents, "update", update)
+    assert cli.main(["agents", "watch", "w", "--source", "mine"]) == 0
+    other[0].join(5)
+    assert sorted(t.get("source") for t in agents.load(path)["triggers"]) == ["mine", "other"]
