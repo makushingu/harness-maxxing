@@ -48,9 +48,13 @@ Folders on the left, messages in the middle, the open message on the right (one 
 - The paperclip attaches files (25 MB in total). A forward keeps the original attachments; remove the ones you do
   not want.
 - **Save the draft** files it in the Drafts folder of the mailbox (so you find it in your phone's mail app too).
-  Open a message of the Drafts folder to go on writing it. `Ctrl+Enter` sends.
+  Open a message of the Drafts folder to go on writing it, attachments included. `Ctrl+Enter` sends.
+- What you type is also kept in this browser as you go: after a reload, a closed tab or Back, the message opens again
+  the next time you come to the E-mail page (signing out clears it).
+- If the connection to the mail server drops while sending, the message may have left anyway: check Sent before
+  sending it again (the composer asks before a second try).
 - The message leaves through the SMTP server of your mailbox, never from this server. A copy goes to Sent (Gmail
-  and Outlook file it themselves). A reply marks the original as answered.
+  and Outlook file it themselves). A reply marks the original as answered, also when you send it later from its draft in this browser.
 
 To keep a mailbox from being flagged as spam, sending is capped: **20 recipients per message** and **100 recipients
 per mailbox per day** (the composer shows what is left). Change the daily cap with `mail_send_per_day` in
