@@ -53,6 +53,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `trash.restore` calls `agents.from_trash` (keys remapped to the restored path, jobs back via `crons.restore_job`
   with `topic_path` remapped); `_remove` deletes the box. `agents.create` drops leftover state of its key. A restored
   agent whose name is taken gets a slug name (`<name>-restored`, `_free_dir_name`), not `<name> (restored)`.
+- `agent_format.parse_md`: YAML block values (`key: >` / `|`, with chomping) are read from their indented lines;
+  the description is found in the body with whitespace normalised (an exported wrapped first paragraph is not added twice).
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
