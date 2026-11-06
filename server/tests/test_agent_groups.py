@@ -275,6 +275,15 @@ def test_room_trimmed_by_size_and_read_from_the_end(client, topic, mx, monkeypat
     assert agent_rooms.room(path, 5, before=msgs[-1]["at"])[-1]["id"] == msgs[-2]["id"]
 
 
+def test_same_message_twice_is_posted_once(client, topic, mx):
+    _setup(client)
+    a = client.post(f"{G}/messages", json={"text": "@writer go\nREPLY_AS writer: done"}).json()
+    b = client.post(f"{G}/messages", json={"text": "@writer go\nREPLY_AS writer: done"}).json()
+    assert b["duplicate"] and b["message"]["id"] == a["message"]["id"]
+    _idle(client, 1)
+    assert len([m for m in _msgs(client) if m["author"] == "me"]) == 1
+
+
 def test_group_events_leave_the_workspace_tree_alone(client, topic, mx, monkeypatch):
     from maxxing import bus
     _setup(client)
