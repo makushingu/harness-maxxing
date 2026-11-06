@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.122 - 2026-11-06
 
 New:
 - **Keys can now be files.** Keep a keystore, a service-account JSON or a certificate in the new Files section of

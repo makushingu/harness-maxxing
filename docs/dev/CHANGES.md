@@ -5,6 +5,25 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.122 - 2026-11-06
+
+- Secret files in the Keys vault (issue #29). New module
+  `vault_files` (INTERNALS.md): bytes in `STATE/secret-files/<NAME>` (700 / 600, atomic via same-dir temp +
+  `os.replace`), metadata in secrets.json `vault_files` `{filename, size, sha256, note, expose, updated}`. 1 byte to
+  1 MiB, a name is a text key or a file (`name_taken`; `vault.put` checks it too, `PUT /api/secrets/{name}` answers 409
+  for it). API `GET /api/secret-files`, `PUT /api/secret-files/{name}` (raw body + query `note`, `expose`, `create`,
+  `filename`; no multipart so the 1 MiB `bodylimit` applies; empty body = metadata only), `DELETE`; nothing returns
+  the content. `exposed_files_env()` ({NAME: path}) merged with `vault.exposed_env()` in `spawn._exposed_vault` and the
+  `crons._job_env` fallback. CLI `keys put-file|get-file|delete-file`, `keys list` marks files (`--json` adds `kind`,
+  and `filename`, `size`, `sha256` for files); the three are refused in agent turns. `spawn.protected_paths` adds
+  `STATE/secret-files/**`; `backup.PRUNE_DIRS` adds `secret-files`; `maxxing init` re-applies mode 700.
+  `changelog.parse` skips a `## Unreleased` section (not shown before the maintainers give it a version) and
+  `test_all_updates_in_settings` counts versions only. Tests: `tests/test_vault_files.py`.
+  Web: "Files" card under the keys in Settings -> Keys (`sections/KeyFiles.tsx`, hooks `useSecretFiles` /
+  `usePutSecretFile` / `useDeleteSecretFile` in `queries/secrets.ts`, type `SecretFile`); `api.request` sends a `Blob`
+  body as `application/octet-stream`; error codes are mapped to `keyfiles.err.*` texts, the 1 MiB limit is also checked
+  in the browser; the mock serves `/api/secret-files` (octet-stream bodies are no longer parsed as JSON).
+
 ## 2.0.0-alpha.121 - 2026-11-06
 
 - Attachments of agents and groups: `agents.checked_attachments(base, files)` (≤ `ATTACH_MAX` 10; each a regular file
@@ -185,22 +204,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   + `tests/test_mail_imap.py`.
 
 
-- Secret files in the Keys vault (issue #29). New module
-  `vault_files` (INTERNALS.md): bytes in `STATE/secret-files/<NAME>` (700 / 600, atomic via same-dir temp +
-  `os.replace`), metadata in secrets.json `vault_files` `{filename, size, sha256, note, expose, updated}`. 1 byte to
-  1 MiB, a name is a text key or a file (`name_taken`; `vault.put` checks it too, `PUT /api/secrets/{name}` answers 409
-  for it). API `GET /api/secret-files`, `PUT /api/secret-files/{name}` (raw body + query `note`, `expose`, `create`,
-  `filename`; no multipart so the 1 MiB `bodylimit` applies; empty body = metadata only), `DELETE`; nothing returns
-  the content. `exposed_files_env()` ({NAME: path}) merged with `vault.exposed_env()` in `spawn._exposed_vault` and the
-  `crons._job_env` fallback. CLI `keys put-file|get-file|delete-file`, `keys list` marks files (`--json` adds `kind`,
-  and `filename`, `size`, `sha256` for files); the three are refused in agent turns. `spawn.protected_paths` adds
-  `STATE/secret-files/**`; `backup.PRUNE_DIRS` adds `secret-files`; `maxxing init` re-applies mode 700.
-  `changelog.parse` skips a `## Unreleased` section (not shown before the maintainers give it a version) and
-  `test_all_updates_in_settings` counts versions only. Tests: `tests/test_vault_files.py`.
-  Web: "Files" card under the keys in Settings -> Keys (`sections/KeyFiles.tsx`, hooks `useSecretFiles` /
-  `usePutSecretFile` / `useDeleteSecretFile` in `queries/secrets.ts`, type `SecretFile`); `api.request` sends a `Blob`
-  body as `application/octet-stream`; error codes are mapped to `keyfiles.err.*` texts, the 1 MiB limit is also checked
-  in the browser; the mock serves `/api/secret-files` (octet-stream bodies are no longer parsed as JSON).
 - Agents' sandbox (`agent_guard`): the rules hook is `python -I -c <boot> hook <path>` (`hook_command`; `-I` keeps the
   agent folder, the hook's cwd, and PYTHONPATH off sys.path). `settings(path, a, approvals)`: with approvals
   (configured or forced for an outside event) `autoAllowBashIfSandboxed` is false and `Bash(maxxing:*)` is no longer
