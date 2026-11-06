@@ -271,7 +271,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
         aria-live="polite"
         data-testid="agent-thread"
       >
-        <div className="mx-auto grid max-w-3xl content-start gap-3 px-4 py-5 md:px-8">
+        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
           {isLoading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
           ) : error ? (
@@ -311,8 +311,8 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
   return (
     <div className="flex items-start gap-2" data-kind="working">
       <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div className={cn('grid gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
-        <span className="flex items-center gap-2 text-muted-foreground">
+      <div className={cn('grid min-w-0 gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
+        <span className="flex items-center gap-2 text-muted-foreground wrap-anywhere">
           {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
           {waiting ? t('agents.conv.waiting', { name: a.display_name }) : t('agents.conv.working', { name: a.display_name })}
         </span>
@@ -379,7 +379,7 @@ function ThreadMessage({
   if (m.kind === 'run') {
     if (isMine(m))
       return (
-        <div className="ml-auto grid w-fit max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
+        <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
           {quote}
           <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
             <p className="whitespace-pre-wrap break-words">
@@ -394,7 +394,7 @@ function ThreadMessage({
     return (
       <div className="grid gap-1 rounded-xl border border-dashed px-3 py-2 text-sm sm:ml-9" data-kind="run">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
+          <span className="min-w-0 font-medium text-foreground wrap-anywhere">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
           {when}
         </div>
         {m.text && (
@@ -413,7 +413,7 @@ function ThreadMessage({
       <AgentAvatarIcon avatar={a.avatar} size={32} />
       <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          <span className="font-medium">
+          <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{a.display_name}</Sensitive>
           </span>
           {m.kind === 'approval' ? (

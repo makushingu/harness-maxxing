@@ -351,7 +351,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
         aria-live="polite"
         data-testid="group-thread"
       >
-        <div className="mx-auto grid max-w-3xl content-start gap-3 px-4 py-5 md:px-8">
+        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
           {isLoading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
           ) : error ? (
@@ -502,8 +502,8 @@ const GroupMessage = React.memo(function GroupMessage({
     )
   if (m.author === 'me')
     return (
-      <div className="ml-auto grid w-fit max-w-[85%] gap-1 max-sm:max-w-full" data-kind="mine">
-        <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
+      <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="mine">
+        <div className="min-w-0 rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
           <p className="whitespace-pre-wrap break-words">
             <Sensitive block>{mentionNodes(m.text, names, 'primary')}</Sensitive>
           </p>
@@ -517,7 +517,7 @@ const GroupMessage = React.memo(function GroupMessage({
       <AgentAvatarIcon avatar={member?.avatar} size={32} />
       <div className="grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          <span className="font-medium">
+          <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{who}</Sensitive>
           </span>
           {member?.role && (
