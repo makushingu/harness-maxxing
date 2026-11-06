@@ -295,10 +295,13 @@ def test_domain_wildcards_name_a_site_not_an_extension(client, topic, mx):
     from maxxing import agents
     _on(client)
     _create(client, domains=["*.example.com"])
-    for d in ("*.com", "*.io", "*.co.uk", "*.github.io"):
+    for d in ("*.com", "*.io", "*.co.uk", "*.github.io", "*.s3.amazonaws.com", "*.s3.eu-west-3.amazonaws.com",
+              "*.amazonaws.com", "*.blogspot.com", "*.cloudfront.net", "*.blob.core.windows.net",
+              "*.storage.googleapis.com", "*.r2.dev"):
         r = client.patch("/api/agents/acme/blog/writer", json={"domains": [d]})
         assert r.status_code == 400 and r.json()["error"] == "bad_domain", d
-    ok = ["*.example.com", "*.api.example.co.uk", "api.github.com", "user.github.io", "*.example.io"]
+    ok = ["*.example.com", "*.api.example.co.uk", "api.github.com", "user.github.io", "*.example.io",
+          "bucket.s3.amazonaws.com", "*.myapp.herokuapp.com"]
     assert client.patch("/api/agents/acme/blog/writer", json={"domains": ok}).json()["domains"] == ok
     # an agent.json written by hand (or imported) loses the wide ones on load
     assert agents.clean({"domains": ["*.com", "*.example.com", "*.co.uk"]})["domains"] == ["*.example.com"]
