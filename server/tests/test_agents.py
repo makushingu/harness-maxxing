@@ -168,6 +168,25 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
             wait_idle(client, r["session"]["id"])
 
 
+def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic, monkeypatch):
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "1.5")
+    sid = agents.fire(A, trigger="manual", prompt="NOTOOL a")["session"]["id"]
+    wait_for(lambda: (store.read(sid) or {}).get("state") == "running")
+    with store.edit(sid) as m:                     # a 2nd turn queued while the 1st runs (mcp_auto, a compaction...)
+        m["queue"] = (m.get("queue") or []) + [{"text": "NOTOOL second", "attachments": [], "source": "system"}]
+    wait_for(lambda: (store.read(sid) or {}).get("turns", 0) >= 1, timeout=10)
+    wait_for(lambda: any(m["kind"] == "result" for m in agents.thread(A)), timeout=5)   # turn 1's end was handled
+    assert (store.read(sid) or {}).get("state") == "running"                            # turn 2 runs
+    assert sid in (agents._read_state(A).get("held") or {})
+    assert agents.fire(A, trigger="manual", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
+    wait_idle(client, sid, timeout=20)
+    wait_for(lambda: not agents._read_state(A).get("held"))                            # released at its own end
+
+
 def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
     _on(client)
     _create(client)

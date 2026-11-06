@@ -1177,10 +1177,13 @@ def _hold(path: str, st: dict, sid: str, usd: float) -> None:
     _write_state(path, st)
 
 
-def _release(path: str, sid: str) -> None:
+def _release(path: str, sid: str, ended: float) -> None:
+    """Drops the session's hold if it was made before its turn ended at `ended`: a hold made later belongs to the
+    next turn of the same session (its queue: mcp_auto, a compaction, a message typed while it ran)."""
     with _lock:
         st = _read_state(path)
-        if isinstance(st.get("held"), dict) and sid in st["held"]:
+        h = st["held"].get(sid) if isinstance(st.get("held"), dict) else None
+        if h is not None and float((h or {}).get("at") or 0) <= ended:
             st["held"].pop(sid)
             _write_state(path, st)
 
@@ -1423,9 +1426,13 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             if isinstance(result.get(k), (int, float)):
                 cost = round(float(result[k]), 4)
                 break
-    _release(path, session["id"])
     from .sessions import store
-    group = str(((store.read(session["id"]) or {}).get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
+    meta = store.read(session["id"]) or {}
+    ended = meta.get("finished_at")
+    if not isinstance(ended, (int, float)):
+        ended = 0.0 if meta.get("state") == "running" or meta.get("queue") else time.time()
+    _release(path, session["id"], float(ended))
+    group = str((meta.get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
     msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost, **({"group": group} if group else {}))
     if group:
         try:
