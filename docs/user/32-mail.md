@@ -59,7 +59,13 @@ Folders on the left, messages in the middle, the open message on the right (one 
   recipients get). A reply marks the original as answered, also when you send it later from Drafts.
 - If the connection to the mail server breaks after it received the message, Harness says it was **probably sent**
   instead of offering to send it again: check the Sent folder (or ask the recipient) first. The draft is kept, and the
-  composer asks before a second try.
+  composer asks before a second try. When the server refuses the message (spam, too large) or the connection stalls
+  while the message is still being sent, nothing was sent: Harness says so and you can try again.
+- A forward carries at most 50 attachments of the original (25 MB in total), and a reply or a forward quotes at most
+  200,000 characters of the original (the rest is marked as cut).
+- Addresses with accents or non-Latin letters work. A domain such as `例え.jp` is sent in its standard ASCII form
+  (`xn--...`); letters of that kind before the @ need a mail server that supports them (SMTPUTF8), else Harness says
+  it cannot send it.
 - Replying to a mail whose **Reply-To** is not its sender sends the answer to the Reply-To address. That address
   never becomes a known contact by itself, so agents with "new recipients wait for my OK" still ask before writing
   to it.
