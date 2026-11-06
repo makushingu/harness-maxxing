@@ -30,7 +30,7 @@ export function AgentMail({ agent: a }: { agent: AgentDetail }) {
   const [pick, setPick] = React.useState('')
 
   return (
-    <div className="grid gap-4" data-testid="agent-mail">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4" data-testid="agent-mail">
       <p className="text-[13px] text-muted-foreground">{t('agents.mail.none')}</p>
       {settings && !on ? (
         <Callout tone="info">
@@ -109,7 +109,7 @@ function GrantCard({ grant: g, account, onChange, onRemove }: { grant: MailGrant
   if (tr?.folder && !folderOptions.some((o) => o.value === tr.folder)) folderOptions.unshift({ value: tr.folder, label: tr.folder })
 
   return (
-    <div className="grid gap-4 rounded-xl border p-3" data-testid="agent-mail-grant">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 rounded-xl border p-3" data-testid="agent-mail-grant">
       <div className="flex items-center gap-2">
         <Mail className="size-4 shrink-0 text-primary" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">

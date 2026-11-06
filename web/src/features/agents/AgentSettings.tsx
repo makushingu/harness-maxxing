@@ -42,7 +42,7 @@ export type SectionId = (typeof SECTIONS)[number]
 /** A section of the sheet: a title, one line of plain words, its settings. */
 function Section({ id, title, description, children }: { id: SectionId; title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section id={`ag-sec-${id}`} data-section={id} className="grid scroll-mt-14 gap-4 border-t pt-6" aria-labelledby={`ag-sec-${id}-t`}>
+    <section id={`ag-sec-${id}`} data-section={id} className="grid scroll-mt-14 grid-cols-[minmax(0,1fr)] gap-4 border-t pt-6" aria-labelledby={`ag-sec-${id}-t`}>
       <div className="grid gap-1">
         <h3 id={`ag-sec-${id}-t`} className="text-[15px] font-semibold tracking-tight">
           {title}
