@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Clock } from 'lucide-react'
 import { qk, useLogin } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
+import { safeNext } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Button, CodeBlock, FormField, SecretInput } from '@/components/ui'
 import { TwoFactorWait } from '@/features/auth/TwoFactorWait'
@@ -23,8 +24,7 @@ export default function LoginPage() {
   const input = React.useRef<HTMLInputElement>(null)
 
   const enter = () => {
-    const next = params.get('next')
-    navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true })
+    navigate(safeNext(params.get('next')), { replace: true })
   }
 
   const submit = (e: React.FormEvent) => {
