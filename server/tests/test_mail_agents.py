@@ -593,3 +593,49 @@ def test_the_mailbox_list_reads_the_agents_once(client, box, monkeypatch):
     accs = client.get("/api/mail/accounts").json()
     assert len(accs) == 4 and len(calls) == 1
     assert [x["agent"] for x in accs[0]["agents"]] == [A] and all(not x["agents"] for x in accs[1:])
+
+
+@pytest.mark.parametrize("n", [6, 40, 200])
+def test_every_new_mail_is_in_the_turn_within_the_event_limit(client, box, monkeypatch, n):
+    """6 mails with 2,500-character texts were cut after the 3rd by agents.frame() (EVENT_MAX), the others already
+    "seen": now every UID is in the framed turn, the texts share what the headers leave, and only the texts that
+    fit are fetched."""
+    rows, uids = _poll_box(client, box, monkeypatch)
+    for u in (4, 5):
+        rows.pop(u)
+    uids[:] = [1, 2, 3]
+    fired, fetched = [], []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    monkeypatch.setattr(imap, "excerpt", lambda acc, folder, uid, limit=0: fetched.append(uid) or
+                        {"text": f"text of {uid} " + "lorem ipsum " * 400, "html": None})
+    new = list(range(10, 10 + n))
+    for u in new:
+        rows[u] = {**rows[1], "uid": u, "subject": f"Invoice {u} " + "x" * 120, "message_id": f"<m{u}@stripe.com>",
+                   "to": [{"name": "Me", "email": "me@example.com"}]}
+    uids += new
+    assert poll.poll_account(box["acc"])["started"] == 1
+    kw = fired[0]
+    framed = agents.frame(kw["prompt"], kw["text"], kw["source"])
+    assert len(kw["text"]) <= agents.EVENT_MAX and "[... cut]" not in framed
+    assert all(f"UID: {u}" in framed or f" {u}," in framed or f" {u})" in framed for u in new)
+    assert f"{n} new e-mails" in framed
+    shown = [u for u in new if f"text of {u}" in framed]
+    assert set(fetched) <= set(new[:poll.TEXT_MAILS]) and set(shown) <= set(fetched)
+    assert shown == new if n == 6 else len(shown) < poll.TEXT_MAILS
+    assert len(fetched) - len(shown) <= 1                                # no fetch for a text that cannot fit
+    if n > 30:
+        assert "more new e-mails not shown here" in framed
+    for u in new:                                                        # all "seen": all in the text
+        assert store.seen_by("me-example", [f"<m{u}@stripe.com>"])[f"<m{u}@stripe.com>"][0]["what"] == "seen"
+
+
+def test_a_few_short_mails_keep_their_whole_text(client, box, monkeypatch):
+    """The negative case: two mails with short texts come whole, with no "more" line."""
+    rows, uids = _poll_box(client, box, monkeypatch)
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    assert poll.poll_account(box["acc"])["started"] == 1
+    text = fired[0]["text"]
+    assert "text of 4" in text and "text of 5" in text and "[... cut" not in text and "not shown here" not in text
+    long = poll.event_text(box["acc"], "INBOX", [rows[4]], {4: "y" * 3000})
+    assert "y" * poll.TEXT_CHARS in long and "y" * (poll.TEXT_CHARS + 1) not in long and "[... cut:" in long

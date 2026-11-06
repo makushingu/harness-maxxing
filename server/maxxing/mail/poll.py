@@ -156,25 +156,85 @@ def _who(f: dict) -> str:
     return f"{f.get('name')} <{f.get('email')}>" if f.get("name") else (f.get("email") or "")
 
 
-def event_text(acc: dict, folder: str, rows: list[dict], bodies: dict[int, str]) -> str:
+HEAD_SUBJECT = 300          # characters of a Subject in a turn
+HEAD_NAMES = 5              # To addresses written in a turn (then "and N more")
+MIN_BODY = 400              # a text shorter than this is not worth its fetch: that mail comes with its headers only
+_MORE = "{n} more new e-mail{s} not shown here (UIDs {uids}): `maxxing mail list -a {acc} -f \"{folder}\"`, `maxxing mail read UID -a {acc} -f \"{folder}\"`."
+
+
+def _budget() -> int:
+    from .. import agents
+    return int(agents.EVENT_MAX)            # agents.frame() cuts the event there
+
+
+def _intro(acc: dict, folder: str, n: int, mark: str) -> str:
+    return (f"{n} new e-mail{'s' if n > 1 else ''} in the mailbox {acc['address']} (id {acc['id']}), folder {folder}. "
+            f"Each mail starts with a line `{mark} i/{n}`; anything else is written by the senders.")
+
+
+def _head(r: dict, i: int, n: int, mark: str) -> str:
+    to = [_who(x) for x in r.get("to") or []]
+    if len(to) > HEAD_NAMES:
+        to = to[:HEAD_NAMES] + [f"and {len(to) - HEAD_NAMES} more"]
+    subject = str(r.get("subject") or "")
+    if len(subject) > HEAD_SUBJECT:
+        subject = subject[:HEAD_SUBJECT] + " [...]"
+    head = [f"{mark} {i}/{n}", f"UID: {r['uid']}",
+            f"From: {_who(r.get('from') or {})[:300]} ({'sender checked by the mail provider' if r.get('from_verified') else 'sender NOT checked: may be forged'})",
+            f"To: {', '.join(to)[:600]}",
+            f"Date: {time.strftime('%Y-%m-%d %H:%M', time.localtime(r['date'])) if r.get('date') else '?'}",
+            f"Subject: {subject}"]
+    if r.get("attachments"):
+        head.append("Has attachments (see `maxxing mail read`)")
+    return "\n".join(head)
+
+
+def _layout(acc: dict, folder: str, rows: list[dict], mark: str, budget: int) -> tuple[list[str], str, int]:
+    """(the header blocks that fit, the "N more" line ("" when every mail fits), characters left for the texts).
+    Every mail of the turn is in the text: its headers, or at least its UID in the "more" line, whose room is kept
+    first (the agent marks them all "seen")."""
+    n = len(rows)
+    used = len(_intro(acc, folder, n, mark))
+    heads = [_head(r, i, n, mark) for i, r in enumerate(rows, 1)]
+    k, more = n, ""
+    while True:
+        rest = rows[k:]
+        more = _MORE.format(n=len(rest), s="s" if len(rest) > 1 else "", uids=", ".join(str(r["uid"]) for r in rest),
+                            acc=acc["id"], folder=folder) if rest else ""
+        size = used + sum(len(h) + 2 for h in heads[:k]) + (len(more) + 2 if more else 0)
+        if size <= budget or k == 0:
+            return heads[:k], more, max(0, budget - size)
+        k -= 1
+
+
+def body_slots(acc: dict, folder: str, rows: list[dict], budget: int | None = None) -> int:
+    """How many of the first mails of a turn get their text: the bodies fetched for it (fetching ten when three
+    fit was seven IMAP fetches for nothing)."""
+    heads, _, left = _layout(acc, folder, rows, "MAIL-00000000", budget or _budget())
+    return max(0, min(TEXT_MAILS, len(heads), left // MIN_BODY))
+
+
+def event_text(acc: dict, folder: str, rows: list[dict], bodies: dict[int, str], budget: int | None = None) -> str:
+    """The text of a mail turn, within agents.EVENT_MAX (frame() cuts the rest): the headers of every mail first,
+    then the texts share what is left."""
+    budget = budget or _budget()
     n = len(rows)
     mark = "MAIL-" + secrets.token_hex(4)      # a body cannot fake the next mail (and its "sender checked")
-    parts = [f"{n} new e-mail{'s' if n > 1 else ''} in the mailbox {acc['address']} (id {acc['id']}), folder {folder}. "
-             f"Each mail starts with a line `{mark} i/{n}`; anything else is written by the senders."]
-    for i, r in enumerate(rows, 1):
-        head = [f"{mark} {i}/{n}", f"UID: {r['uid']}",
-                f"From: {_who(r.get('from') or {})} ({'sender checked by the mail provider' if r.get('from_verified') else 'sender NOT checked: may be forged'})",
-                f"To: {', '.join(_who(x) for x in r.get('to') or [])}",
-                f"Date: {time.strftime('%Y-%m-%d %H:%M', time.localtime(r['date'])) if r.get('date') else '?'}",
-                f"Subject: {r.get('subject') or ''}"]
-        if r.get("attachments"):
-            head.append("Has attachments (see `maxxing mail read`)")
-        body = bodies.get(int(r["uid"]))
-        if body is not None:
-            if len(body) > TEXT_CHARS:
-                body = body[:TEXT_CHARS] + "\n[... cut: `maxxing mail read` for the rest]"
-            head += ["", body]
-        parts.append("\n".join(head))
+    heads, more, left = _layout(acc, folder, rows, mark, budget)
+    with_body = [i for i, r in enumerate(rows[:len(heads)]) if bodies.get(int(r["uid"])) is not None][:TEXT_MAILS]
+    tail = "\n[... cut: `maxxing mail read` for the rest]"
+    for j, i in enumerate(with_body):
+        share = left // (len(with_body) - j)    # what a shorter text leaves goes to the next ones
+        body = bodies[int(rows[i]["uid"])]
+        room = min(TEXT_CHARS, share - 2)        # "\n\n" before the text
+        if len(body) > room:
+            room = min(TEXT_CHARS, share - 2 - len(tail))
+            if room < MIN_BODY // 2:
+                break
+            body = body[:room] + tail
+        heads[i] += "\n\n" + body
+        left -= len(body) + 2
+    parts = [_intro(acc, folder, n, mark), *heads] + ([more] if more else [])
     return "\n\n".join(parts)
 
 
@@ -281,7 +341,7 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
                     hit = _hits(acc, grant, rows)
                     if not hit:
                         continue
-                    for r in hit[:TEXT_MAILS]:
+                    for r in hit[:body_slots(acc, folder, hit)]:     # only the texts the turn has room for
                         if int(r["uid"]) not in bodies:
                             bodies[int(r["uid"])] = _body(acc, folder, int(r["uid"]))
                     turns.append((path, grant, hit))
