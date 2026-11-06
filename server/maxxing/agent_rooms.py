@@ -392,7 +392,7 @@ def post(path: str, kind: str, text: str, author: str = "", **extra: Any) -> dic
     """Append a message. kind: message (author "me" or a member path), pass, skip (a member could not speak), note,
     stop. Never raises for a full disk: the caller's turn goes on. A deleted group gets nothing (no file again)."""
     msg = {"id": _secrets.token_hex(6), "at": time.time(), "kind": kind, "author": author,
-           "text": (text or "")[:TEXT_MAX], **extra}
+           "text": agents._utf8(text or "")[:TEXT_MAX], **extra}             # a lone surrogate could not be written
     f = _state_file(path, "jsonl")
     with _lock:                                         # the trim rewrites the file: never two at once
         if not exists(path):

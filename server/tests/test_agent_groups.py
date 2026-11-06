@@ -400,3 +400,14 @@ def test_agents_switched_off_start_no_more_group_turn(client, topic):
     agent_rooms.pump(P)
     st = agent_rooms._read_state(P)
     assert not st.get("current") and not st.get("queue") and len(_calls()) == n
+
+
+def test_a_lone_surrogate_in_an_answer_does_not_stop_the_group(client, topic):
+    _setup(client)
+    P = "projects/acme/groups/team"
+    st = agent_rooms._read_state(P)
+    st["current"] = {"path": W, "session": "s1", "at": 1.0, "wave": 1, "origin": st.get("origin")}
+    agent_rooms._write_state(P, st)
+    agent_rooms.on_turn_end(P, W, "s1", "bad \ud800 text", True, 0.0)     # valid JSON, not UTF-8
+    assert not agent_rooms._read_state(P).get("current")
+    assert [m for m in agent_rooms.room(P) if m["text"] == "bad ? text"]
