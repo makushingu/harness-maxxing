@@ -583,7 +583,9 @@ copy of the mail on the server). Every route answers `409 disabled` while the pa
 `<state>/mail/accounts.json` (no secret); each password is the vault key `MAIL_<ID>_PASSWORD`, never exposed to turns.
 Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, `409 exists|no_password`,
 `413 too_large`, `422 refused` (every recipient refused) | `auth` (sign-in refused), `429 limit` (daily cap or more than 20 recipients),
-`424 unreachable|tls|connection|imap|smtp` (the mail server failed; never a 5xx, which a proxy may replace by its own page).
+`424 unreachable|tls|connection|imap|smtp` (the mail server failed; never a 5xx, which a proxy may replace by its own page),
+`503 mail_busy` + `Retry-After` (another request holds that mailbox's IMAP connection for more than 30 s: a slow server).
+Mail calls run on their own pool of 8 threads; a server that timed out is not tried again for 60 s (`unreachable` at once).
 
 | Method | Path | Body | Response |
 |---|---|---|---|
