@@ -455,3 +455,36 @@ def test_an_agent_turn_lists_only_its_own_text_keys(mx, monkeypatch, capsys):
     assert run(monkeypatch, "list") == 0
     out = capsys.readouterr().out
     assert "MINE" in out and "OWNER_STRIPE_LIVE" in out and "GCP_SA" in out
+
+
+def test_any_cli_command_into_a_closed_pipe_is_quiet(mx, monkeypatch):
+    for i in range(400):
+        vault.put(f"PIPE_{i}", "v", note="a note long enough to fill the pipe buffer " * 3)
+    r, w = os.pipe()
+    os.close(r)                                       # `| head` that already left
+    fake = io.TextIOWrapper(os.fdopen(w, "wb"), write_through=True)
+    monkeypatch.setattr("sys.stdout", fake)
+    try:
+        assert run(monkeypatch, "list", "--json") == 141
+    finally:
+        monkeypatch.undo()
+        fake.close()                                  # w now points at /dev/null: closes quietly
+
+
+def test_a_broken_pipe_of_the_command_itself_is_still_an_error(mx, monkeypatch):
+    from maxxing import cmd_keys
+    r, w = os.pipe()                                  # stdout's reader is still there
+    fake = io.TextIOWrapper(os.fdopen(w, "wb"), write_through=True)
+    monkeypatch.setattr("sys.stdout", fake)
+
+    def boom(a):
+        raise BrokenPipeError(32, "Broken pipe")      # a socket or a child of the command
+    monkeypatch.setattr(cmd_keys, "_handler", boom)
+    monkeypatch.setitem(cli.COMMANDS, "keys", (*cli.COMMANDS["keys"][:2], boom))
+    try:
+        with pytest.raises(BrokenPipeError):
+            cli.main(["keys", "list"])
+    finally:
+        monkeypatch.undo()
+        fake.close()
+        os.close(r)
