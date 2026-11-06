@@ -6,6 +6,7 @@
 import * as React from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuthState } from '@/lib/queries'
+import { safeNext } from '@/lib/utils'
 import { useUI } from '@/stores/ui'
 import { useT } from '@/i18n'
 import { Button, EmptyState } from '@/components/ui'
@@ -62,7 +63,7 @@ export function Root() {
   }
   if (PUBLIC.includes(path)) {
     const next = new URLSearchParams(loc.search).get('next')
-    const safe = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
+    const safe = safeNext(next)
     return <Navigate to={data.onboarding_completed ? safe : '/welcome'} replace />
   }
   if (!data.onboarding_completed && path !== '/welcome' && !path.startsWith('/docs')) return <Navigate to="/welcome" replace />
