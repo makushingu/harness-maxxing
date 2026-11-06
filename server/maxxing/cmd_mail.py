@@ -7,7 +7,9 @@
     maxxing mail archive|trash|junk|inbox|seen|unseen|flag|unflag UID... [-a A] [-f FOLDER]
     maxxing mail move UID... --to FOLDER [-a A] [-f FOLDER]
     maxxing mail mkdir NAME [--parent FOLDER] [-a A]
-    maxxing mail attachment UID INDEX OUT [-a A] [-f FOLDER]
+    maxxing mail attachment UID INDEX OUT [--force] [-a A] [-f FOLDER]
+                                                   OUT a folder: saved under the attachment's name, "name (2).pdf"
+                                                   when taken; OUT a file that exists: replaced only with --force
     maxxing mail write [--to A,B] [--cc ..] [--bcc ..] [-s SUBJECT] [--reply UID | --reply-all UID | --forward UID]
                        [--attach FILE]... [--send] < body.txt
                                                    saves a draft (Drafts folder) for the user to check and send from
@@ -77,6 +79,7 @@ def _configure(p) -> None:
     at.add_argument("uid", type=int)
     at.add_argument("index", type=int)
     at.add_argument("out")
+    at.add_argument("--force", action="store_true", help="replace OUT when it is a file that exists")
     wr = common(sub.add_parser("write", help="write a message (body on stdin): saved as a draft, or --send"))
     wr.add_argument("--to", default="")
     wr.add_argument("--cc", default="")
@@ -257,19 +260,36 @@ class Guard:
         finally:
             os.close(pfd)
 
-    def write_file(self, f: str, data: bytes, default_name: str) -> Path:
-        """Save `data` at f (a folder when it ends with / or is one: then under default_name). Root never creates a
-        folder for the agent: it makes its folders itself, in its sandbox."""
+    def write_file(self, f: str, data: bytes, default_name: str, force: bool = False) -> Path:
+        """Save `data` at f (a folder when it ends with / or is one: then under default_name, made safe and numbered
+        when taken; an existing file is replaced only with force). Root never creates a folder for the agent: it
+        makes its folders itself, in its sandbox."""
         import os
         p = Path(os.path.abspath(f))
-        if f.endswith("/") or (p.is_dir() and not p.is_symlink()):
-            p = p / (Path(default_name).name or "attachment")
+        into = f.endswith("/") or (p.is_dir() and not p.is_symlink())
+        if into:
+            p = p / default_name
         self.writable(str(p))
         try:
             dfd = os.open(p.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         except OSError as e:
             raise Refused(f"{p.parent}: {e.strerror or e}") from None
         try:
+            if into:                            # a new name, created here (O_EXCL, never through a link)
+                for name in _numbered(p.name):
+                    real = Path(_fd_path(dfd)) / name
+                    self.writable(str(real))
+                    try:
+                        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644,
+                                     dir_fd=dfd)
+                        break
+                    except FileExistsError:
+                        continue
+                    except OSError as e:
+                        raise Refused(f"{real}: {e.strerror or e}") from None
+                else:
+                    raise Refused(f"{p.parent}: too many files named {p.name}")
+                return _fill(fd, data, real)
             real = Path(_fd_path(dfd)) / p.name
             self.writable(str(real))
             try:
@@ -287,15 +307,85 @@ class Guard:
             else:                               # an existing one: an ordinary file with one name, then opened
                 try:
                     _ordinary(pfd, str(real))
+                    if not force:
+                        raise Refused(f"{real}: already exists (--force replaces it, or give a folder)")
                     fd = os.open(f"/proc/self/fd/{pfd}", os.O_WRONLY | os.O_CLOEXEC)
+                except OSError as e:
+                    raise Refused(f"{real}: {e.strerror or e}") from None
                 finally:
                     os.close(pfd)
-            with os.fdopen(fd, "wb") as fh:
-                fh.truncate(0)
-                fh.write(data)
-            return real
+            return _fill(fd, data, real)
         finally:
             os.close(dfd)
+
+
+# names a session reads by itself when it works in a folder (role, memory, Claude Code settings): an attachment never
+# lands under one of them, the sender chose that name
+_SPECIAL_NAMES = {"claude.md", "claude.local.md", "memory.md", "agent.json", "agents.md"}
+
+
+def attachment_name(name: str, index: int) -> str:
+    """A file name for an attachment, chosen by its sender: its last part only (no folder, `..`), no control
+    character, no leading dot (`.env`, `.mcp.json`, `.claude`), never a name a session reads by itself, 200 bytes
+    at most (its extension kept)."""
+    leaf = name.replace("\\", "/").rsplit("/", 1)[-1]
+    leaf = "".join(c for c in leaf if c >= " " and c != "\x7f").strip().lstrip(".").strip()
+    if not leaf:
+        return f"part-{index}"
+    if leaf.lower() in _SPECIAL_NAMES:
+        leaf = f"attachment-{leaf}"
+    if len(leaf.encode()) > 200:
+        stem, dot, ext = leaf.rpartition(".")
+        ext = f".{ext}" if dot and stem and len(ext) <= 16 else ""
+        stem = leaf[: len(leaf) - len(ext)]
+        while len((stem + ext).encode()) > 200:
+            stem = stem[:-1]
+        leaf = stem + ext
+    return leaf
+
+
+def _numbered(name: str):
+    """name, then "name (2).ext", "name (3).ext"... (a name already taken in the folder is never replaced)."""
+    stem, dot, ext = name.rpartition(".")
+    stem, ext = (stem, f".{ext}") if dot and stem else (name, "")
+    yield name
+    for n in range(2, 1000):
+        yield f"{stem} ({n}){ext}"
+
+
+def _fill(fd: int, data: bytes, real: Path) -> Path:
+    import os
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.truncate(0)
+            fh.write(data)
+    except OSError as e:
+        raise Refused(f"{real}: {e.strerror or e}") from None
+    return real
+
+
+def _save(out: str, data: bytes, default_name: str, force: bool) -> Path:
+    """The owner's `mail attachment`: OUT a folder (made when it ends with /) -> a new file under the attachment's
+    name, numbered when taken; OUT a file -> replaced only with force. OS errors become `mail: ...` (Refused)."""
+    import os
+    p = Path(os.path.abspath(out))
+    try:
+        if out.endswith("/"):
+            p.mkdir(parents=True, exist_ok=True)
+        if p.is_dir():
+            for name in _numbered(default_name):
+                try:
+                    fd = os.open(p / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o644)
+                    return _fill(fd, data, p / name)
+                except FileExistsError:
+                    continue
+            raise Refused(f"{p}: too many files named {default_name}")
+        if not force and os.path.lexists(p):
+            raise Refused(f"{p}: already exists (--force replaces it, or give a folder)")
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC, 0o644)
+    except OSError as e:
+        raise Refused(f"{e.filename or p}: {e.strerror or e}") from None
+    return _fill(fd, data, p)
 
 
 def _ordinary(fd: int, name: str):
@@ -514,21 +604,16 @@ def _handler(a) -> int:
             print(json.dumps({"name": name}) if out else f"folder {name} created")
             return 0
         if a.action == "attachment":
-            dest = Path(a.out)
             if g:
                 guard.need(g, "read")
                 guard.check_senders(acc, g, a.folder, [a.uid])
                 guard.writable(a.out)
             name, ctype, data = imap.attachment(acc, a.folder, a.uid, a.index)
+            name = attachment_name(name, a.index)                  # the sender's choice
             if g:
-                dest = guard.write_file(a.out, data, name)
+                dest = guard.write_file(a.out, data, name, a.force)
             else:
-                if a.out.endswith("/"):
-                    dest.mkdir(parents=True, exist_ok=True)
-                if dest.is_dir():
-                    leaf = Path(name.replace("\\", "/")).name
-                    dest = dest / (leaf if leaf.strip(".") else f"part-{a.index}")    # `..`, `.`: the sender's choice
-                dest.write_bytes(data)
+                dest = _save(a.out, data, name, a.force)
             print(json.dumps({"path": str(dest), "content_type": ctype}) if out else f"{dest} ({len(data)} bytes)")
             return 0
         if a.action == "write":
@@ -580,7 +665,10 @@ def _write(a, acc: dict, out, guard: Guard | None = None, g: dict | None = None)
             p, data = guard.read_file(f, ATTACH_MAX)
         else:
             p = Path(f)
-            data = p.read_bytes()
+            try:
+                data = p.read_bytes()
+            except OSError as e:
+                raise Refused(f"{f}: {e.strerror or e}") from None
         files.append((p.name, mimetypes.guess_type(p.name)[0] or "application/octet-stream", data))
     rcpts = [send._bare(x) for k in ("to", "cc", "bcc") for x in draft.get(k) or []]
     if g:
