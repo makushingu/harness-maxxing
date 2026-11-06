@@ -859,16 +859,41 @@ STORE = {"seen": ("+FLAGS.SILENT", "(\\Seen)"), "unseen": ("-FLAGS.SILENT", "(\\
          "flag": ("+FLAGS.SILENT", "(\\Flagged)"), "unflag": ("-FLAGS.SILENT", "(\\Flagged)")}
 
 
+def _expunge(m: imaplib.IMAP4, uids: str) -> None:
+    """Delete for good the messages `uids` (flagged \\Deleted by the caller) of the selected folder, and only them.
+    Without UIDPLUS, a plain EXPUNGE would also remove what another mail app only marked deleted: those lose the flag
+    for the EXPUNGE, then get it back (a cut connection leaves them unmarked, never erased)."""
+    if "UIDPLUS" in m.capabilities:
+        m.uid("EXPUNGE", uids)
+        return
+    mine = set(_uid_set(uids))
+    typ, data = m.uid("SEARCH", "DELETED")
+    _ok(typ, data, "SEARCH")
+    others = ",".join(str(u) for u in sorted({int(x) for x in _text(data).split()} - mine))
+    if others:
+        _ok(*m.uid("STORE", others, "-FLAGS.SILENT", "(\\Deleted)"), "keep the other deleted mails")
+    try:
+        m.expunge()
+    finally:
+        if others:
+            m.uid("STORE", others, "+FLAGS.SILENT", "(\\Deleted)")
+
+
+def _uid_set(uids: str) -> list[int]:
+    out: list[int] = []
+    for part in uids.split(","):
+        a, _, b = part.partition(":")
+        out += range(int(a), int(b or a) + 1)
+    return out
+
+
 def _move(m: imaplib.IMAP4, uids: str, target: str) -> None:
     if "MOVE" in m.capabilities:
         _ok(*m.uid("MOVE", uids, _q(target)), f"move to {target}")
         return
     _ok(*m.uid("COPY", uids, _q(target)), f"copy to {target}")
     m.uid("STORE", uids, "+FLAGS.SILENT", "(\\Deleted)")
-    if "UIDPLUS" in m.capabilities:
-        m.uid("EXPUNGE", uids)
-    else:
-        m.expunge()
+    _expunge(m, uids)
 
 
 def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None = None) -> dict:
@@ -890,10 +915,7 @@ def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None
             if not here or _role(here) not in ("trash", "junk"):
                 raise MailError("invalid", "delete for good only works from the trash or the junk folder; use trash")
             m.uid("STORE", us, "+FLAGS.SILENT", "(\\Deleted)")
-            if "UIDPLUS" in m.capabilities:
-                m.uid("EXPUNGE", us)
-            else:
-                m.expunge()
+            _expunge(m, us)
         else:
             if action == "move":
                 if not target:
@@ -968,7 +990,4 @@ def drop(acc: dict, folder: str, uid: int) -> None:
             raise MailError("invalid", "only a draft can be dropped")
         _select(m, folder, readonly=False)
         m.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
-        if "UIDPLUS" in m.capabilities:
-            m.uid("EXPUNGE", str(uid))
-        else:
-            m.expunge()
+        _expunge(m, str(int(uid)))
