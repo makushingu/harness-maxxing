@@ -13,7 +13,7 @@ import { fetchMailCompose, useMailSaveDraft, useMailSend } from '@/lib/queries'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { forgetCompose, forgetReply, rememberReply, saveCompose, saveFiles } from './localDraft'
+import { forgetCompose, forgetReply, holdCompose, rememberReply, saveCompose, saveFiles } from './localDraft'
 
 export type ComposeInit = {
   mode: 'new' | MailComposeMode
@@ -27,8 +27,12 @@ export type ComposeInit = {
   references?: string
   /** the message replied to (flagged "answered" once sent) */
   reply?: { folder: string; uid: number }
-  /** attachments taken from an existing message (forward, or a draft opened again); `acc` when not `acc` above */
-  source?: { folder: string; uid: number; attachments: MailAttachment[]; acc?: string }
+  /** the mailbox of `reply` when it is not `acc` above (a kept copy whose From was changed) */
+  replyAcc?: string
+  /** attachments taken from an existing message (forward, or a draft opened again); `acc` when not `acc` above.
+   *  `unread`: the draft this dialog saved could not be read back yet: its attachments are its parts from `skip` on,
+   *  in the order `order` (the indexes `kept` had in the previous draft); they are read before the next send or save */
+  source?: { folder: string; uid: number; attachments: MailAttachment[]; acc?: string; unread?: { skip: number; order: number[] } }
   /** the draft this message replaces (dropped once sent or saved again); `acc` when not `acc` above */
   draft?: { folder: string; uid: number; acc?: string }
   /** a message this browser kept (localStorage + IndexedDB) and opens again after a reload */
@@ -84,9 +88,16 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
   const save = useMailSaveDraft(acc)
   // one send or save at a time: the state of the mutations lags one render behind a fast double Ctrl+Enter
   const inFlight = React.useRef(false)
-  const busy = send.isPending || save.isPending
+  // the drafts read around a save (before: a draft not read back yet; after: the new one) count as the save
+  const [reading, setReading] = React.useState(false)
+  const busy = send.isPending || save.isPending || reading
   const [dirty, setDirty] = React.useState(!!init.restored)
+  // counts the user's changes: a save only marks the message clean if nothing changed while it ran
+  const edits = React.useRef(0)
   const closed = React.useRef(false)
+  // the mailbox of the message replied to: a From changed to another mailbox drops the reply (never flag a mail of
+  // the other mailbox "answered")
+  const replyAcc = init.replyAcc || init.acc
 
   const toInput = React.useRef<HTMLInputElement>(null)
   // a new message or a forward starts in To; a reply or a draft in the text, above the quoted message
@@ -108,7 +119,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
   const total = kept.reduce((n, a) => n + a.size, 0) + files.reduce((n, f) => n + f.size, 0)
   const left = account?.send_per_day != null ? Math.max(0, account.send_per_day - (account.sent_today || 0)) : null
 
-  const build = (): MailDraft => ({
+  const build = (src = source, att = kept): MailDraft => ({
     to: split(to),
     cc: showCc ? split(cc) : [],
     bcc: showCc ? split(bcc) : [],
@@ -117,8 +128,8 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     in_reply_to: init.in_reply_to,
     references: init.references,
     // the message replied to is in the mailbox the dialog was opened from
-    reply: acc === init.acc ? init.reply : undefined,
-    forward: source && kept.length && acc === source.acc ? { folder: source.folder, uid: source.uid, indexes: kept.map((a) => a.index) } : undefined,
+    reply: acc === replyAcc ? init.reply : undefined,
+    forward: src && att.length && acc === src.acc ? { folder: src.folder, uid: src.uid, indexes: att.map((a) => a.index) } : undefined,
     draft: draft && acc === draft.acc ? { folder: draft.folder, uid: draft.uid } : undefined,
   })
 
@@ -128,7 +139,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     if (closed.current || !dirty) return
     saveCompose({
       mode: init.mode, acc, to: split(to), cc: split(cc), bcc: split(bcc), subject, text,
-      in_reply_to: init.in_reply_to, references: init.references, reply: init.reply, source, draft,
+      in_reply_to: init.in_reply_to, references: init.references, reply: init.reply, replyAcc, source, draft,
       showCc, kept, files: files.length,
     })
   }
@@ -140,6 +151,8 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
   React.useEffect(() => {
     if (dirty && !closed.current) void saveFiles(files)
   }, [dirty, files])
+  // while the dialog is open, other tabs leave its kept copy alone
+  React.useEffect(() => holdCompose(), [])
   React.useEffect(() => {
     const flush = () => snapshot.current()
     window.addEventListener('pagehide', flush)
@@ -182,7 +195,26 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     onClose()
   }
 
-  const doSend = () => {
+  // A draft saved by this dialog whose re-read failed (mailbox busy, network): its attachments are read now. Returns
+  // what to forward, or null (error shown) when it still cannot be read: never point at the draft the save dropped.
+  const readSource = async (): Promise<{ src: typeof source; att: MailAttachment[] } | null> => {
+    const u = source?.unread
+    if (!source || !u || !kept.length || acc !== source.acc) return { src: source, att: kept }
+    try {
+      const c = await fetchMailCompose(source.acc!, 'draft', source.folder, source.uid)
+      const att = kept.map((k) => c.attachments[u.skip + u.order.indexOf(k.index)]).filter(Boolean)
+      if (att.length !== kept.length || kept.some((k) => !u.order.includes(k.index))) throw new Error('mismatch')
+      const src = { folder: source.folder, uid: source.uid, attachments: c.attachments, acc: source.acc }
+      setSource(src)
+      setKept(att)
+      return { src, att }
+    } catch (e) {
+      setError(isApiError(e, 'mail_busy') ? t('mail.busy') : t('mail.compose.unreadDraft'))
+      return null
+    }
+  }
+
+  const doSend = async () => {
     if (inFlight.current || busy) return
     setError(null)
     if (!recipients) return setError(t('mail.compose.noRecipient'))
@@ -193,8 +225,16 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     inFlight.current = true
     busyStart()
     const sent = draft
+    setReading(true)
+    const ready = await readSource()
+    setReading(false)
+    if (!ready) {
+      inFlight.current = false
+      busyEnd()
+      return
+    }
     send.mutate(
-      { draft: build(), files },
+      { draft: build(ready.src, ready.att), files },
       {
         onSuccess: (r) => {
           if (sent) forgetReply(sent.acc, sent)
@@ -216,45 +256,80 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
       },
     )
   }
-  const doSave = (close: boolean) => {
+  const doSave = async (close: boolean) => {
     if (inFlight.current || busy) return
     setError(null)
     inFlight.current = true
     busyStart()
     const previous = draft && draft.acc === acc ? draft : undefined
+    const done = () => {
+      setReading(false)
+      inFlight.current = false
+      busyEnd()
+    }
+    setReading(true)
+    const ready = await readSource()
+    if (!ready) return done()
     const saved = files
+    const keptSaved = ready.att
+    const forwarded = !!build(ready.src, ready.att).forward
+    const at = edits.current
     save.mutate(
-      { draft: build(), files },
+      { draft: build(ready.src, ready.att), files },
       {
+        // Send and Save stay off until the new draft is read back (or given up): they must not point at the old one
         onSuccess: async (r) => {
-          const next = { folder: r.folder, uid: r.uid, acc }
-          setDraft(next)
-          if (init.reply && acc === init.acc && r.uid) rememberReply(acc, next, init.reply, previous)
-          // every attachment is in the new draft now (the files sent, the kept ones read from `source`): read them
-          // from there from now on, the previous draft is gone. Without its uid (no UIDPLUS) or its list, the new
-          // files stay here and go again with the next save or the send.
-          if (r.uid) {
-            try {
-              const c = await fetchMailCompose(acc, 'draft', r.folder, r.uid)
-              setSource({ folder: r.folder, uid: r.uid, attachments: c.attachments, acc })
-              setKept(c.attachments)
-              setFiles((f) => f.filter((x) => !saved.includes(x)))
-            } catch {
-              /* keep them here */
-            }
+          try {
+            await afterSave(r)
+          } finally {
+            done()
           }
-          setDirty(false)
-          forgetCompose()
-          if (close) finish()
-          else toast.success(t('mail.compose.saved'))
         },
-        onError: (e) => setError(isApiError(e, 'mail_busy') ? t('mail.busy') : errorMessage(e)),
-        onSettled: () => {
-          inFlight.current = false
-          busyEnd()
+        onError: (e) => {
+          setError(isApiError(e, 'mail_busy') ? t('mail.busy') : errorMessage(e))
+          done()
         },
       },
     )
+    async function afterSave(r: { folder: string; uid: number }) {
+      const next = { folder: r.folder, uid: r.uid, acc }
+      setDraft(next)
+      if (init.reply && acc === replyAcc && r.uid) rememberReply(acc, next, init.reply, previous)
+      // every attachment is in the new draft now (the files sent first, then the kept ones read from `source`):
+      // read them from there from now on, the previous draft is gone. Without its uid (no UIDPLUS) the new files
+      // stay here and go again with the next save or the send.
+      if (r.uid) {
+        let c: Awaited<ReturnType<typeof fetchMailCompose>> | null = null
+        for (const wait of [0, 700, 2000]) {
+          if (wait) await new Promise((w) => window.setTimeout(w, wait))
+          try {
+            c = await fetchMailCompose(acc, 'draft', r.folder, r.uid)
+            break
+          } catch {
+            /* mailbox busy, network: try again */
+          }
+        }
+        if (c) {
+          const got = c.attachments
+          setSource({ folder: r.folder, uid: r.uid, attachments: got, acc })
+          setKept(got)
+          setFiles((f) => f.filter((x) => !saved.includes(x)))
+        } else if (forwarded) {
+          // the kept attachments now live in the new draft only: read them from it before the next send or save
+          setSource({ folder: r.folder, uid: r.uid, attachments: [], acc, unread: { skip: saved.length, order: keptSaved.map((k) => k.index) } })
+        }
+      }
+      // something typed while the save ran is in neither the saved draft nor anywhere else: stay dirty, the local
+      // copy keeps it
+      if (edits.current !== at) {
+        if (!close) toast.success(t('mail.compose.saved'))
+        return
+      }
+      setDirty(false)
+      forgetCompose()
+      if (close) finish()
+      else toast.success(t('mail.compose.saved'))
+    }
   }
   const tryClose = () => {
     if (busy || inFlight.current) return
@@ -262,6 +337,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     finish()
   }
   const touch = <T,>(set: (v: T) => void) => (v: T) => {
+    edits.current++
     setDirty(true)
     set(v)
   }
@@ -293,6 +369,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
                 className="h-8 border-0 px-0 shadow-none"
                 aria-label={t('mail.compose.from')}
                 value={acc}
+                disabled={busy}
                 onValueChange={touch(setAcc)}
                 options={accounts.map((a) => ({ value: a.id, label: a.name ? `${a.name} <${a.address}>` : a.address }))}
               />
@@ -340,7 +417,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
                   <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{a.filename}</span>
                   <span className="shrink-0 text-muted-foreground">{fmtBytes(a.size)}</span>
-                  <button type="button" aria-label={t('common.remove')} onClick={() => touch(setKept)(kept.filter((x) => x.index !== a.index))} className="text-muted-foreground hover:text-foreground">
+                  <button type="button" aria-label={t('common.remove')} disabled={busy} onClick={() => touch(setKept)(kept.filter((x) => x.index !== a.index))} className="text-muted-foreground hover:text-foreground">
                     <X className="size-3.5" />
                   </button>
                 </span>
@@ -350,7 +427,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
                   <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{f.name}</span>
                   <span className="shrink-0 text-muted-foreground">{fmtBytes(f.size)}</span>
-                  <button type="button" aria-label={t('common.remove')} onClick={() => touch(setFiles)(files.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-foreground">
+                  <button type="button" aria-label={t('common.remove')} disabled={busy} onClick={() => touch(setFiles)(files.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-foreground">
                     <X className="size-3.5" />
                   </button>
                 </span>

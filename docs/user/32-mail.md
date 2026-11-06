@@ -77,7 +77,7 @@ per mailbox per day** (the composer shows what is left). Change the daily cap wi
 ## Agents and your mail
 
 An agent (Settings -> Features -> Agents) sees **no mailbox** until you give it one: on the agent's page, Settings ->
-**E-mail** -> Add a mailbox. It never sees the password: it goes through Harness, which checks every action.
+**E-mail** -> Pick a mailbox, then **Give access**. It never sees the password: it goes through Harness, which checks every action.
 
 - **Rights**: Read, Write drafts, File and move, Mark read / unread and star, Send. Pick only what its job needs.
 - **Only mail from** (optional): `client@example.com`, `*@stripe.com`. The agent then only sees mail from these
