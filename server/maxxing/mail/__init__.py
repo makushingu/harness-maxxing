@@ -273,9 +273,12 @@ def open_smtp(host: str, port: int, tls: str, username: str, password: str) -> s
             s.login(username, password)
         else:                                          # smtplib only sends ASCII: AUTH PLAIN in UTF-8 by hand
             import base64
+            s.ehlo_or_helo_if_needed()
+            if not s.has_extn("auth"):
+                raise smtplib.SMTPNotSupportedError("SMTP AUTH extension not supported by server.")
             tok = base64.b64encode(f"\0{username}\0{password}".encode()).decode()
             code, resp = s.docmd("AUTH", "PLAIN " + tok)
-            if code not in (235, 503):
+            if code != 235:                            # only 235 is a sign-in (a 503 "auth not enabled" is not)
                 raise smtplib.SMTPAuthenticationError(code, resp)
     except smtplib.SMTPException as e:
         with contextlib.suppress(Exception):

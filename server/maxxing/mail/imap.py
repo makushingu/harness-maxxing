@@ -130,14 +130,22 @@ def open_imap(host: str, port: int, tls: str, username: str, password: str) -> i
     except (OSError, imaplib.IMAP4.error) as e:
         raise MailError("unreachable", f"{host}:{port}: {e}") from None
     try:
-        if "AUTH=PLAIN" in m.capabilities and not password.isascii():
+        if username.isascii() and password.isascii():
+            m.login(username, password)
+        elif "AUTH=PLAIN" in m.capabilities:          # LOGIN only takes ASCII: AUTHENTICATE PLAIN carries UTF-8
             m.authenticate("PLAIN", lambda _: f"\0{username}\0{password}".encode())
         else:
-            m.login(username, password)
-    except imaplib.IMAP4.error as e:
+            raise MailError("auth", f"{host} only accepts user names and passwords in plain ASCII (no accents)")
+    except (imaplib.IMAP4.error, UnicodeError, OSError) as e:
         with contextlib.suppress(Exception):
             m.shutdown()
+        if isinstance(e, OSError):
+            raise MailError("connection", f"connection to {host} lost during sign-in: {e}") from None
         raise MailError("auth", f"sign-in refused by {host}: {_text(e)}") from None
+    except MailError:
+        with contextlib.suppress(Exception):
+            m.shutdown()
+        raise
     return m
 
 
