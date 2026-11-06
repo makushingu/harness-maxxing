@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+import pytest
 from conftest import wait_for
 from maxxing import agent_rooms, agents
 
@@ -374,3 +375,16 @@ def test_a_member_removed_during_its_turn_is_not_posted(client, topic):
     agent_rooms.on_turn_end(P, E, "s1", "hello @writer", True, 0.1)
     assert not [m for m in agent_rooms.room(P) if m["author"] == E]
     assert not agent_rooms._read_state(P).get("queue")
+
+
+def test_a_failed_create_does_not_keep_the_name(client, topic, monkeypatch):
+    _setup(client)
+    def boom(*a, **k):
+        raise OSError("disk full")
+    real = agent_rooms._save
+    monkeypatch.setattr(agent_rooms, "_save", boom)
+    with pytest.raises(OSError):
+        agent_rooms.create("acme", "other", {"members": [{"path": W}, {"path": R}]})
+    monkeypatch.setattr(agent_rooms, "_save", real)
+    r = client.post("/api/agent-groups", json={"project": "acme", "name": "other", "members": [{"path": W}, {"path": R}]})
+    assert r.status_code == 200, r.text

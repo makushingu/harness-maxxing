@@ -309,12 +309,16 @@ def create(project: str, name: str, fields: dict | None = None) -> dict:
         folder(path).mkdir(parents=True)
     except FileExistsError:
         raise GroupError(409, "exists", f"Group {name!r} already exists in {project}") from None
-    _write_goal(path, data["name"] or name, text)
-    if data["shared_files"]:
-        files_dir(path).mkdir(exist_ok=True)
-    for ext in ("json", "jsonl"):                       # left by a project deleted before they went to the Trash
-        _state_file(path, ext).unlink(missing_ok=True)
-    _save(path, data)
+    try:
+        _write_goal(path, data["name"] or name, text)
+        if data["shared_files"]:
+            files_dir(path).mkdir(exist_ok=True)
+        for ext in ("json", "jsonl"):                   # left by a project deleted before they went to the Trash
+            _state_file(path, ext).unlink(missing_ok=True)
+        _save(path, data)
+    except BaseException:                               # a half-made folder would keep the name taken (409) for ever
+        shutil.rmtree(folder(path), ignore_errors=True)
+        raise
     agents._git_exclude(folder(path).parent.parent, GROUPS_DIR)
     post(path, "note", "Group created")
     _invalidate(path, tree=True)
