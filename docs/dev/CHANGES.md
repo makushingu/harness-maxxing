@@ -20,6 +20,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   once the account is gone (`_still_there`). `tests/fake_imap.py`: partial `BODY[]<0.N>` and `(UN)DELETED`.
 - `mail.delete_account` calls `agents.drop_mail(acc_id)`: the account leaves every agent's `mail` list (under
   `agents._lock`), so a re-added address (same `_slug` id) has no grant.
+- Agents: `on_turn_end` drops a budget hold only if it was made before the turn's `finished_at`
+  (`_release(path, sid, ended)`): a hold written by the runner for the next queued turn of the same session
+  (mcp_auto continuation, compaction, typed message) stays until that turn ends.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
