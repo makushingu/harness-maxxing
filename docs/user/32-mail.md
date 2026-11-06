@@ -24,7 +24,8 @@ settings** when it only guessed. It signs in to check them before saving.
 The password is kept in **Settings -> Keys** (`MAIL_<ID>_PASSWORD`), never given to sessions. Add as many mailboxes
 as you want and switch from one to the other at the top of the folder list. **Mailbox settings** (the **...** menu)
 changes the name shown to the people you write to, the signature and the servers; **Remove** only removes it from
-Harness, the mailbox and its messages stay at your provider.
+Harness, the mailbox and its messages stay at your provider. The agents lose their rights on it: added again, it
+starts with none.
 
 ## Reading and sorting
 

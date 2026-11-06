@@ -409,6 +409,15 @@ def test_mail_kept_for_a_busy_agent_follows_its_rights_now(client, box, monkeypa
     assert poll.retry_pending() == 0 and config.read_json(poll._pending_file(), default=[]) == []
 
 
+def test_a_removed_mailbox_leaves_no_rights_behind(client, box):
+    _grant(client, rights=["read", "send"], approve_send="never")
+    assert client.delete("/api/mail/accounts/me-example").status_code == 200
+    assert agents.load(A)["mail"] == []
+    mail.add_account({"address": "me@example.com", "imap_host": "imap.example.net", "imap_port": 993,
+                      "imap_tls": "ssl", "smtp_host": "127.0.0.1", "smtp_port": 25, "smtp_tls": "none"}, PW)
+    assert agents.load(A)["mail"] == [] and poll.grants_of("me-example") == []   # added again: no old rights
+
+
 def test_check_interval_and_refresh(client, box, monkeypatch):
     assert client.patch("/api/mail/accounts/me-example", json={}).status_code == 200
     from maxxing.mail import _clean
