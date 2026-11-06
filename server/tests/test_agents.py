@@ -199,6 +199,20 @@ def test_an_agent_turn_has_one_system_note_with_the_owner_note_and_the_subagents
     assert spawn.FOREGROUND_AGENTS in note and agents.OWNER_NOTE in note
 
 
+def test_a_failed_turn_never_reports_the_answer_of_the_turn_before(client, topic):
+    _on(client)
+    _create(client)
+    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()["session"]["id"]
+    wait_idle(client, sid)
+    wait_for(lambda: [m for m in agents.thread(A) if m["kind"] == "result"])
+    first = [m for m in agents.thread(A) if m["kind"] == "result"][-1]["text"]
+    assert first
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "FAIL"})
+    wait_for(lambda: len([m for m in agents.thread(A) if m["kind"] == "result"]) >= 2, timeout=15)
+    res = [m for m in agents.thread(A) if m["kind"] == "result"][-1]
+    assert res["ok"] is False and res["text"] != first and res["text"]
+
+
 def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
     _on(client)
     _create(client)

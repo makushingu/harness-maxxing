@@ -26,6 +26,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Agents: `run_settings` returns the owner note as `system_note` instead of a second `--append-system-prompt`
   in `args`; the runner puts it in the one flag of `spawn.agents_args` (Claude Code keeps only the last flag,
   so agents had lost the foreground-subagents rule and the mcp_auto hint).
+- `service.last_assistant_text(sid, turn_only=True)` stops at the turn's user message; `agents.on_turn_end` uses
+  it for a failed turn, which then reports the session error instead of the previous turn's answer.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
