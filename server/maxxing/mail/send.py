@@ -304,6 +304,8 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
         if ctype == "message/rfc822":                   # a mail inside a mail: embedded as is, never base64 (RFC 2046)
             msg.add_attachment(email.message_from_bytes(data, policy=email.policy.default), filename=_name(name))
             continue
+        if ctype.startswith(("message/", "multipart/")):  # bytes under these types make email raise: sent as a file
+            ctype = "application/octet-stream"
         maintype, _, subtype = ctype.partition("/")
         msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=_name(name))
     return msg, [_bare(a) for a in to + cc + bcc]
