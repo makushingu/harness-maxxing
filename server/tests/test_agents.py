@@ -228,6 +228,21 @@ def test_a_negative_or_too_big_limit_is_refused_and_a_tiny_budget_stays_a_budget
     assert agents.clean({"limits": {"usd_per_day": -1, "runs_per_hour": -3}})["limits"] == agents.clean({})["limits"]
 
 
+def test_the_list_reads_an_agent_thread_again_only_when_it_changed(client, topic, monkeypatch):
+    _on(client)
+    _create(client)
+    agents.post(A, "note", "one")
+    reads = []
+    real = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: (reads.append(self) if self.suffix == ".jsonl"
+                                                                   else None) or real(self, *a, **k))
+    assert client.get("/api/agents").status_code == 200
+    n = len(reads)
+    assert n >= 1 and client.get("/api/agents").status_code == 200 and len(reads) == n          # unchanged: not read again
+    agents.post(A, "note", "two")
+    assert [m["text"] for m in agents.thread(A)][-2:] == ["one", "two"] and len(reads) == n + 1
+
+
 def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
     _on(client)
     _create(client)

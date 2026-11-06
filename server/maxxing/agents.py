@@ -851,10 +851,18 @@ def _invalidate_thread(path: str) -> None:
     bus.invalidate(f"agents:{path}")
 
 
-def thread(path: str, limit: int = 100, before: float | None = None) -> list[dict]:
-    """Messages of the agent's thread, oldest first (the last `limit`, older than `before` when given)."""
+_threads: dict[str, tuple[tuple[int, int], list[dict]]] = {}   # file -> ((mtime_ns, size), messages): the list
+THREADS_CACHED = 200                                           # reads every thread on each call otherwise
+
+
+def _thread_all(path: str) -> list[dict]:
     f = _state_file(path, "jsonl")
     try:
+        st = f.stat()
+        sig = (st.st_mtime_ns, st.st_size)
+        hit = _threads.get(str(f))
+        if hit and hit[0] == sig:
+            return hit[1]
         lines = f.read_text(errors="replace").splitlines()
     except OSError:
         return []
@@ -864,8 +872,20 @@ def thread(path: str, limit: int = 100, before: float | None = None) -> list[dic
             m = json.loads(ln)
         except ValueError:
             continue
-        if isinstance(m, dict) and (before is None or (m.get("at") or 0) < before):
+        if isinstance(m, dict):
             out.append(m)
+    if len(_threads) >= THREADS_CACHED:
+        _threads.clear()
+    _threads[str(f)] = (sig, out)
+    return out
+
+
+def thread(path: str, limit: int = 100, before: float | None = None) -> list[dict]:
+    """Messages of the agent's thread, oldest first (the last `limit`, older than `before` when given). The
+    messages are shared with the cache: read them, never change them."""
+    out = _thread_all(path)
+    if before is not None:
+        out = [m for m in out if (m.get("at") or 0) < before]
     return out[-max(1, min(int(limit), 500)):]
 
 
