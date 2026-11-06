@@ -179,11 +179,22 @@ def test_compose_reply_reply_all_forward(acc, monkeypatch):
 
 
 def test_forwarded_attachments_are_read_from_the_mailbox(acc, smtp, monkeypatch):
-    monkeypatch.setattr(imap, "attachment", lambda acc, folder, uid, i: ("a.pdf", "application/pdf", b"%PDF-1"))
-    send.send(acc, {"to": "bob@example.com", "subject": "Fwd", "text": "x", "forward": {"folder": "INBOX", "uid": 7, "indexes": [3]}})
+    from email.message import EmailMessage
+    orig = EmailMessage()
+    orig.set_content("x")
+    for i in range(8):
+        orig.add_attachment(b"%PDF-" + str(i).encode(), maintype="application", subtype="pdf", filename=f"a{i}.pdf")
+    fetched = []
+    monkeypatch.setattr(imap, "raw_message", lambda acc, folder, uid: fetched.append(uid) or orig.as_bytes())
+    send.send(acc, {"to": "bob@example.com", "subject": "Fwd", "text": "x",
+                    "forward": {"folder": "INBOX", "uid": 7, "indexes": list(range(2, 10))}})
     m = _parsed(smtp.messages[-1]["data"])
     att = list(m.iter_attachments())
-    assert att[0].get_filename() == "a.pdf" and att[0].get_content() == b"%PDF-1"
+    assert [a.get_filename() for a in att] == [f"a{i}.pdf" for i in range(8)] and att[0].get_content() == b"%PDF-0"
+    assert fetched == [7]                                   # one download of the mail, not one per attachment
+    with pytest.raises(MailError) as e:
+        send.build(acc, {"to": "bob@example.com", "forward": {"folder": "INBOX", "uid": 7, "indexes": [1, 99]}})
+    assert e.value.code == "not_found"
 
 
 def test_attachments_over_25_mb_are_refused(acc):

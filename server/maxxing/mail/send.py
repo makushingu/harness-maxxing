@@ -8,7 +8,9 @@ what was shown. Sending is capped per mailbox and per day
 from __future__ import annotations
 
 import contextlib
+import email
 import email.utils
+import logging
 import mimetypes
 import re
 import smtplib
@@ -26,6 +28,8 @@ DEFAULT_PER_DAY = 100
 MODES = ("reply", "replyall", "forward", "draft")
 # SMTP servers that file the sent copy by themselves (an IMAP copy would show the message twice)
 AUTO_SENT = ("gmail.com", "googlemail.com", "office365.com", "outlook.com")
+
+log = logging.getLogger("maxxing.mail")
 
 _count_lock = config.ProcessLock("mail-sent-count")    # the server and `maxxing mail write --send` count together
 
@@ -70,7 +74,14 @@ def _quote(m: dict) -> str:
 
 
 def _fmt(a: dict) -> str:
-    return email.utils.formataddr((a.get("name") or "", a["email"])) if a.get("name") else a["email"]
+    """`Name <addr>` as a person reads it (formataddr would RFC 2047-encode a non-ASCII name: `=?utf-8?q?...?=` in
+    the To field and in a forwarded text). `_addr_list` parses it back and the header is encoded when sent."""
+    name = (a.get("name") or "").strip()
+    if not name:
+        return a["email"]
+    if re.search(r'[()<>\[\]:;@\\,."]', name):
+        name = '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return f"{name} <{a['email']}>"
 
 
 def signature_block(acc: dict) -> str:
@@ -104,18 +115,28 @@ def compose(acc: dict, mode: str, folder: str, uid: int) -> dict:
         return {"to": [], "cc": [], "subject": _subject("Fwd", m["subject"]),
                 "text": signature_block(acc) + "\n".join(head) + "\n\n" + (body or "").strip(),
                 "in_reply_to": "", "references": "", "attachments": m["attachments"]}
-    to = [_fmt(x) for x in (m["reply_to"] or [m["from"]])]
+    if (m["from"]["email"] or "").lower() == me:       # replying to one's own sent message: same recipients
+        first = [x for x in m["to"] if (x["email"] or "").lower() != me] or [m["from"]]    # a note to oneself
+    else:
+        first = m["reply_to"] or [m["from"]]
+    to: list[str] = []
+    seen: set[str] = set()
+    for x in first:
+        if x["email"] and x["email"].lower() not in seen:
+            seen.add(x["email"].lower())
+            to.append(_fmt(x))
+    seen.add(me)
     cc: list[str] = []
     if mode == "replyall":
-        seen = {_bare(a) for a in to} | {me}
         for x in m["to"] + m["cc"]:
             if x["email"] and x["email"].lower() not in seen:
                 seen.add(x["email"].lower())
                 cc.append(_fmt(x))
-    if (m["from"]["email"] or "").lower() == me:       # replying to one's own sent message: same recipients
-        to = [_fmt(x) for x in m["to"]] or to
+    sender = (m["from"]["email"] or "").lower()
+    other = [x["email"] for x in m["reply_to"] if x["email"] and x["email"].lower() != sender]
     return {"to": to, "cc": cc, "subject": _subject("Re", m["subject"]), "text": signature_block(acc) + _quote(m),
-            "in_reply_to": m.get("message_id") or "", "references": refs, "attachments": []}
+            "in_reply_to": m.get("message_id") or "", "references": refs, "attachments": [],
+            "from": m["from"]["email"] or "", "reply_to": other}    # where the answer goes instead of the sender
 
 
 # ---------------------------------------------------------------- daily cap
@@ -187,6 +208,8 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
         msg["To"] = ", ".join(to)
     if cc:
         msg["Cc"] = ", ".join(cc)
+    if bcc:             # kept in the draft and the Sent copy; smtplib's send_message never transmits it
+        msg["Bcc"] = ", ".join(bcc)
     msg["Subject"] = subject
     msg["Date"] = email.utils.formatdate(localtime=True)
     msg["Message-ID"] = email.utils.make_msgid(domain=acc["address"].split("@", 1)[1])
@@ -200,18 +223,41 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     parts: list[tuple[str, str, bytes]] = list(files or [])
     fwd = draft.get("forward") or None
     if fwd and fwd.get("indexes"):
-        for i in fwd["indexes"][:50]:
-            parts.append(imap.attachment(acc, str(fwd.get("folder") or "INBOX"), int(fwd["uid"]), int(i)))
+        parts += _forwarded(acc, str(fwd.get("folder") or "INBOX"), int(fwd["uid"]), [int(i) for i in fwd["indexes"][:50]])
     for name, ctype, data in parts:
         total += len(data)
         if total > MAX_ATTACH:
             raise MailError("too_large", "attachments larger than 25 MB in total")
-        ctype = ctype or mimetypes.guess_type(name)[0] or "application/octet-stream"
+        ctype = (ctype or "").split(";", 1)[0].strip().lower()
+        if not _CTYPE.match(ctype):                     # CR/LF or parameters: not a header we write as given
+            ctype = mimetypes.guess_type(_name(name))[0] or "application/octet-stream"
         maintype, _, subtype = ctype.partition("/")
-        if not subtype:
-            maintype, subtype = "application", "octet-stream"
-        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=(name or "attachment").replace("/", "_")[:200])
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=_name(name))
     return msg, [_bare(a) for a in to + cc + bcc]
+
+
+_CTYPE = re.compile(r"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$")
+
+
+def _name(name: str) -> str:
+    """A file name that fits in a header: one line, no folder part, never `.` / `..` / empty."""
+    n = imap._line(str(name or "")).replace("/", "_").replace("\\", "_").strip()[:200]
+    return n if n.strip(".") else "attachment"
+
+
+def _forwarded(acc: dict, folder: str, uid: int, indexes: list[int]) -> list[tuple[str, str, bytes]]:
+    """The attachments of a forwarded message, from ONE download of it (not one per attachment)."""
+    msg = imap._parse(imap.raw_message(acc, folder, uid))
+    leaves = {i: p for i, p in enumerate(msg.walk()) if not p.is_multipart()}
+    out = []
+    for i in indexes:
+        p = leaves.get(i)
+        if p is None:
+            raise MailError("not_found", "attachment not found")
+        ctype = p.get_content_type()
+        out.append((imap._line(p.get_filename() or "") or f"part-{i}.{ctype.split('/')[-1]}", ctype,
+                    p.get_payload(decode=True) or b""))
+    return out
 
 
 def _auto_sent(acc: dict) -> bool:
@@ -219,10 +265,36 @@ def _auto_sent(acc: dict) -> bool:
     return any(h == d or h.endswith("." + d) for d in AUTO_SENT)
 
 
+class _Watch:
+    """Tells whether the message itself went out: smtplib sends `data`, reads 354, then the message. A failure
+    after that point says nothing about the result (the server may have queued it before the connection broke)."""
+
+    def __init__(self, s: smtplib.SMTP):
+        self.data_cmd = self.body = self.stopped = False
+        real = s.send
+
+        def watch(x):
+            if self.stopped:                            # the QUIT after a failure is not the message
+                pass
+            elif self.data_cmd:
+                self.body = True
+            elif (x if isinstance(x, str) else x.decode("ascii", "replace")).strip().lower() == "data":
+                self.data_cmd = True
+            return real(x)
+        s.send = watch                                  # type: ignore[method-assign]
+
+
+UNKNOWN = ("the connection to the mail server broke after it received the message: it was probably sent. "
+           "Check the Sent folder (or ask the recipient) before sending it again. The draft is kept.")
+
+
 def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = None, contacts: bool = True) -> dict:
     """Send through the SMTP server of the mailbox, file a copy in Sent, flag the replied message, drop the draft
-    it came from. Returns {ok, message_id, sent_folder, recipients}. contacts: the recipients become known
-    contacts (approve_send "new") - only for what the owner sent or allowed, never for an agent's own send."""
+    it came from. Returns {ok, message_id, sent_folder, recipients, to, cc, bcc}. contacts: the recipients become
+    known contacts (approve_send "new") - only for what the owner sent or allowed, never for an agent's own send;
+    the Reply-To of the mail answered never does by itself (it can be anyone's address).
+    MailError "sent_unknown": the connection broke after the message was handed over (it probably left): the
+    daily count is kept, the draft too, and nothing must send it again blindly."""
     from . import open_smtp
     msg, rcpts = build(acc, draft, files)
     if not rcpts:
@@ -231,11 +303,15 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
         raise MailError("limit", f"at most {MAX_RECIPIENTS} recipients per message: for newsletters or bulk sending "
                                  "use a service made for it (Resend...)")
     _take(acc["id"], len(rcpts))
+    w: _Watch | None = None
     try:
         s = open_smtp(acc["smtp_host"], int(acc["smtp_port"]), acc["smtp_tls"], acc["username"], imap._password(acc))
         try:
+            w = _Watch(s)
             refused = s.send_message(msg, to_addrs=rcpts)
         finally:
+            if w is not None:
+                w.stopped = True
             with contextlib.suppress(Exception):
                 s.quit()
     except MailError:
@@ -244,26 +320,81 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
     except smtplib.SMTPRecipientsRefused as e:
         _give_back(acc["id"], len(rcpts))
         raise MailError("refused", "every recipient was refused: " + ", ".join(e.recipients)) from None
-    except smtplib.SMTPException as e:
+    except (smtplib.SMTPServerDisconnected, OSError) as e:     # cut, timeout: before the message = not sent
+        if w is not None and w.body:
+            log.warning("mail %s: %s after the message was sent (%s): result unknown", acc["id"], type(e).__name__, e)
+            raise MailError("sent_unknown", UNKNOWN) from None
+        _give_back(acc["id"], len(rcpts))
+        raise MailError("connection", f"connection to {acc['smtp_host']} lost before the message was sent "
+                                      f"({type(e).__name__}): nothing was sent, you can try again") from None
+    except smtplib.SMTPException as e:                 # an answer of the server: not sent
         _give_back(acc["id"], len(rcpts))
         err = e.smtp_error.decode("utf-8", "replace") if isinstance(getattr(e, "smtp_error", None), bytes) else str(e)
         raise MailError("smtp", f"the mail server refused the message: {err}") from None
+    # the follow-ups never fail the send: the message is gone
+    orig = _original(acc, draft)
     if contacts:
+        skip = set(orig["reply_to"]) if orig else set(rcpts) if _is_reply(draft) else set()
         with contextlib.suppress(Exception):
             from . import store
-            store.add_contacts(acc["id"], rcpts)
+            store.add_contacts(acc["id"], [r for r in rcpts if r not in skip])
     out: dict[str, Any] = {"ok": True, "message_id": msg["Message-ID"], "recipients": len(rcpts),
-                           "refused": sorted(refused or {}), "sent_folder": None}
-    # the follow-ups never fail the send: the message is gone
+                           "refused": sorted(refused or {}), "sent_folder": None,
+                           **{k: _addr_list(draft.get(k)) for k in ("to", "cc", "bcc")}}
     if not _auto_sent(acc):
         with contextlib.suppress(Exception):           # imaplib.IMAP4.error too: the message is gone
             out["sent_folder"] = imap.append(acc, "sent", msg.as_bytes(), "(\\Seen)")
     rep = draft.get("reply") or None
-    if rep and rep.get("uid"):
+    target = (orig["folder"], orig["uid"]) if orig else (str(rep.get("folder") or "INBOX"), int(rep["uid"])) \
+        if rep and rep.get("uid") else None
+    if target:
         with contextlib.suppress(Exception):
-            imap.act(acc, str(rep.get("folder") or "INBOX"), [int(rep["uid"])], "answered")
+            imap.act(acc, target[0], [target[1]], "answered")
     _drop_draft(acc, draft)
     return out
+
+
+def _is_reply(draft: dict) -> bool:
+    return bool((draft.get("reply") or {}).get("uid") or str(draft.get("in_reply_to") or "").strip())
+
+
+def _original(acc: dict, draft: dict) -> dict | None:
+    """The mail a reply answers: {folder, uid, from, reply_to (addresses other than From)}. From `reply` {folder,
+    uid}, else found by its Message-ID (a reply saved as a draft and sent later). None when unknown."""
+    if not _is_reply(draft):
+        return None
+    rep = draft.get("reply") or {}
+    irt = str(draft.get("in_reply_to") or "").strip()
+    try:
+        with imap.session(acc) as m:
+            if rep.get("uid"):
+                folder, uid = str(rep.get("folder") or "INBOX"), int(rep["uid"])
+                imap._select(m, folder, readonly=True)
+            else:
+                if not re.match(r"^<[^<>\s\"\\]+>$", irt):
+                    return None
+                folder, uid = "", 0
+                for f in ("INBOX", imap._folder_of_role(m, "archive")):
+                    if not f:
+                        continue
+                    imap._select(m, f, readonly=True)
+                    typ, data = m.uid("SEARCH", "HEADER", "Message-ID", f'"{irt}"')
+                    found = (data[0] or b"").split() if typ == "OK" and data else []
+                    if found:
+                        folder, uid = f, int(found[-1])
+                        break
+                if not uid:
+                    return None
+            typ, data = m.uid("FETCH", str(uid), "(BODY.PEEK[HEADER.FIELDS (FROM REPLY-TO)])")
+            raw = next((x[1] for x in data or [] if isinstance(x, tuple)), None) if typ == "OK" else None
+    except Exception:  # noqa: BLE001 - the message is gone: a follow-up only
+        return None
+    if raw is None:
+        return None
+    h = email.message_from_bytes(raw)
+    sender = _bare(str(h.get("from") or ""))
+    others = {a.lower() for _, a in email.utils.getaddresses([str(v) for v in h.get_all("reply-to") or []]) if a}
+    return {"folder": folder, "uid": uid, "from": sender, "reply_to": others - {sender}}
 
 
 def _drop_draft(acc: dict, draft: dict) -> None:

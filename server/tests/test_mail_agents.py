@@ -123,6 +123,9 @@ def box(client, topic, smtp, monkeypatch):
     monkeypatch.setattr(imap, "messages", messages)
     monkeypatch.setattr(imap, "act", lambda acc, folder, uids, action, target=None: state["acts"].append((uids, action, target)) or {"ok": True, "moved_to": target})
     monkeypatch.setattr(imap, "append", lambda *a, **k: "Sent")
+    monkeypatch.setattr(send, "_original", lambda acc, draft: {      # the mail a reply answers (no Reply-To here)
+        "folder": "INBOX", "uid": int(draft["reply"]["uid"]), "from": rows[int(draft["reply"]["uid"])]["from"]["email"],
+        "reply_to": set()} if (draft.get("reply") or {}).get("uid") in rows else None)
 
     def append_draft(acc, raw):
         state["drafts"].append(raw)
@@ -326,7 +329,12 @@ def test_the_request_lists_the_forwarded_attachments(client, box, monkeypatch, c
     monkeypatch.setattr(send, "compose", lambda acc, mode, folder, uid: {
         "to": [], "cc": [], "subject": "Fwd: Invoice 12", "text": "\n---------- Forwarded message ----------", "in_reply_to": "",
         "references": "", "attachments": [{"index": 2, "filename": "contract.pdf"}, {"index": 3, "filename": "id.jpg"}]})
-    monkeypatch.setattr(imap, "attachment", lambda acc, folder, uid, i: (f"f{i}", "application/pdf", b"%PDF"))
+    from email.message import EmailMessage
+    orig = EmailMessage()
+    orig.set_content("x")
+    orig.add_attachment(b"%PDF", maintype="application", subtype="pdf", filename="f2")
+    orig.add_attachment(b"%PDF", maintype="application", subtype="pdf", filename="f3")
+    monkeypatch.setattr(imap, "raw_message", lambda acc, folder, uid: orig.as_bytes())
     code, _, err = _cli(capsys, "write", "--forward", "1", "--to", "bob@x.org", "--send", stdin="x", monkeypatch=monkeypatch)
     assert code == 0, err
     [w] = outbox.pending()
