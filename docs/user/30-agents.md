@@ -99,7 +99,8 @@ Or start from a **ready-made agent** (in the creation sheet, or on the empty Age
 
 It fills the steps below: check them, change what you want, create. Each one is set up safely: it may only read,
 learn in its memory and do the few things its role needs (for example `curl` for the sales one), its webhook runs ask
-before anything else, and the keys it suggests are checked only if your Keys vault holds them. The blue note at the
+before anything else, and the keys it suggests are checked only if your Keys vault holds them (the read-only ones
+never suggest a full Stripe key `STRIPE_SECRET_KEY`: store a restricted key as `STRIPE_RESTRICTED_KEY`). The blue note at the
 top says what is left to connect (a webhook address in Shopify, a key, the list of sites). From the command line:
 `maxxing agents templates`, then `maxxing agents create acme/shop/sales --template sales`.
 
