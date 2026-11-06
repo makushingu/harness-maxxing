@@ -3803,7 +3803,22 @@ def _alert_files(ev: dict) -> list[str]:
 
 def _alert_cut(ev: dict) -> bool:
     """Only part of the event fits in the message: no button that acts on it (Open shows it all)."""
-    return len(str(ev.get("body") or "")) > ALERT_BODY
+    return len(_alert_body(ev)) < len(str(ev.get("body") or ""))
+
+
+def _u16(s: str) -> int:
+    return len(s.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def _alert_body(ev: dict) -> str:
+    """The part of the body the message shows: ALERT_BODY characters, less when the rest is long. Telegram's limit
+    of 4096 counts UTF-16 units of the text without its HTML (an emoji counts 2): title, files and resolution in
+    emoji left no room and the alert was refused."""
+    body = str(ev.get("body") or "")[:ALERT_BODY]
+    rest = (2 + _u16(str(ev.get("title") or "")[:300]) + 8 + _u16(", ".join(_alert_files(ev))[:600]) + 4
+            + 1 + _u16(_w("alert_cut")) + 1 + _u16(str(ev.get("resolution") or "")[:200]) + 2)   # icon, ×n, \n…
+    over = _u16(body) - (fmt.LIMIT - rest)
+    return body[:max(0, len(body) - over)] if over > 0 else body     # a character is 1 unit at least
 
 
 def _alert_html(ev: dict) -> str:
@@ -3814,7 +3829,7 @@ def _alert_html(ev: dict) -> str:
     if files:
         html += "\n📎 " + fmt.escape(", ".join(files)[:600])
     if ev.get("body"):
-        html += "\n" + fmt.escape(str(ev["body"])[:ALERT_BODY])
+        html += "\n" + fmt.escape(_alert_body(ev))
         if _alert_cut(ev):
             html += "\n<i>" + fmt.escape(_w("alert_cut")) + "</i>"
     if ev.get("resolved") and ev.get("resolution"):
