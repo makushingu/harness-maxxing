@@ -33,6 +33,7 @@ PRIVATE_NETS = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0
 DOMAIN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")   # = install.sh valid_domain
 HEADER_TIMEOUT = 10.0       # s: a connection on the proxy address must send a whole request head in that time
 MAX_CONNECTIONS = 512       # open at once on the proxy address (each idle one costs memory and a file descriptor)
+MAX_HEAD = 64 * 1024        # bytes: a request head on the proxy address must fit in that (uvicorn's httptools has no cap)
 IP_FREEBIND = 15            # Linux: bind before the interface exists (Docker may start after us)
 IPV6_FREEBIND = 78
 
@@ -138,7 +139,8 @@ class Gate:
 def guarded_protocol(port: int, base: type | None = None) -> type:
     """The HTTP protocol of uvicorn, with two limits on the proxy address only (any container can open connections
     there, before the secret is even read): a request head must arrive within HEADER_TIMEOUT (uvicorn has no such
-    timeout: half-sent requests would stay open forever), and at most MAX_CONNECTIONS at once."""
+    timeout: half-sent requests would stay open forever) and fit in MAX_HEAD bytes, and at most MAX_CONNECTIONS at
+    once."""
     if base is None:
         from uvicorn.protocols.http.auto import AutoHTTPProtocol as base   # noqa: N813
     open_now: set = set()
@@ -146,6 +148,7 @@ def guarded_protocol(port: int, base: type | None = None) -> type:
     class Guarded(base):  # type: ignore[misc, valid-type]
         _mx_timer = None
         _mx_mark: Any = None
+        _mx_head = 0
 
         def connection_made(self, transport: Any) -> None:
             super().connection_made(transport)
@@ -159,10 +162,19 @@ def guarded_protocol(port: int, base: type | None = None) -> type:
             open_now.add(self)
             self._mx_arm()
 
+        def data_received(self, data: bytes) -> None:
+            super().data_received(data)
+            if not getattr(self, "_mx_ours", False) or self.cycle is not self._mx_mark:
+                return                                      # not ours, or the head is complete (a body is not capped)
+            self._mx_head += len(data)
+            if self._mx_head > MAX_HEAD and self.transport and not self.transport.is_closing():
+                self.transport.close()
+
         def _mx_arm(self) -> None:
             if self._mx_timer:
                 self._mx_timer.cancel()
             self._mx_mark = self.cycle
+            self._mx_head = 0
             self._mx_timer = self.loop.call_later(HEADER_TIMEOUT, self._mx_expire)
 
         def _mx_expire(self) -> None:
