@@ -70,6 +70,18 @@ def test_settings(client):
     assert client.put("/api/claude/settings", json={"permission_mode": "yolo"}).status_code == 400
 
 
+def test_a_broken_default_model_is_refused(client):
+    """A NUL or a newline in the model broke every new session; a surrogate was a 500."""
+    client.put("/api/claude/settings", json={"default_model": "claude-opus-5-5"})
+    for bad in ("claude\x00opus", "claude-opus\nx", "claude-\ud800", "a" * 101):
+        r = client.put("/api/claude/settings", content=json.dumps({"default_model": bad}),
+                       headers={"Content-Type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "invalid"
+    assert client.get("/api/claude/status").json()["default_model"] == "claude-opus-5-5"
+    for good in ("", "opus", "claude-sonnet-5-5[1m]", "us.anthropic.claude-opus-5-5:0"):
+        assert client.put("/api/claude/settings", json={"default_model": good}).status_code == 200
+
+
 def test_status_survives_a_hand_edited_number(client):
     """The Settings -> Claude page must load to fix a "300k" typed into config.json (it was a 500)."""
     config.update_config(auto_compact_tokens="300k", smart_resume_tokens=[100000])

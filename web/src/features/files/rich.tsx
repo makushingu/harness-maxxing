@@ -61,6 +61,7 @@ export function guessDelimiter(text: string, name: string): string {
 }
 
 const ROWS_STEP = 500
+const MAX_COLS = 200   // a 2 MB file with 5 000 columns was a million cells at the first render
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 export function CsvView({ content, name, className }: { content: string; name: string; className?: string }) {
@@ -73,7 +74,8 @@ export function CsvView({ content, name, className }: { content: string; name: s
     const all = parseCsv(content, guessDelimiter(content, name)).filter((r) => r.length > 1 || r[0] !== '')
     return { header: all[0] ?? [], rows: all.slice(1) }
   }, [content, name])
-  const cols = Math.max(header.length, ...rows.slice(0, 200).map((r) => r.length))
+  const allCols = Math.max(header.length, ...rows.slice(0, 200).map((r) => r.length))
+  const cols = Math.min(allCols, MAX_COLS)
   const view = React.useMemo(() => {
     const needle = q.trim().toLowerCase()
     let out = needle ? rows.filter((r) => r.some((c) => c.toLowerCase().includes(needle))) : rows
@@ -88,7 +90,8 @@ export function CsvView({ content, name, className }: { content: string; name: s
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)} data-testid="csv-view">
       <div className="flex min-h-10 shrink-0 items-center gap-2 border-b px-3 py-1 text-xs text-muted-foreground">
-        <span className="tabular-nums">{t('viewer.csvSize', { rows: fmtNumber(rows.length, lang), cols })}</span>
+        <span className="tabular-nums">{t('viewer.csvSize', { rows: fmtNumber(rows.length, lang), cols: allCols })}</span>
+        {allCols > cols && <span className="tabular-nums">· {t('viewer.csvColsHidden', { shown: cols })}</span>}
         {q && view.length !== rows.length && <span className="tabular-nums">· {t('viewer.csvMatches', { count: fmtNumber(view.length, lang) })}</span>}
         <div className="relative ml-auto w-48 max-sm:w-36">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
@@ -106,7 +109,7 @@ export function CsvView({ content, name, className }: { content: string; name: s
                     <button
                       type="button"
                       onClick={() => setSort((s) => (s?.col !== i ? { col: i, dir: 1 } : s.dir === 1 ? { col: i, dir: -1 } : null))}
-                      className={cn('flex w-full items-center gap-1 px-2.5 py-1.5 whitespace-nowrap hover:bg-accent pointer-coarse:min-h-10', numeric[i] && 'justify-end')}
+                      className={cn('flex w-full items-center gap-1 px-2.5 py-1.5 whitespace-nowrap hover:bg-accent pointer-coarse:min-h-10 pointer-coarse:min-w-10', numeric[i] && 'justify-end')}
                     >
                       {header[i] ?? ''}
                       {sort?.col === i && (sort.dir === 1 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}

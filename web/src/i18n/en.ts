@@ -1830,6 +1830,7 @@ export const en = {
   'viewer.csvEmpty': 'Empty table',
   'viewer.csvSize': '{rows} rows · {cols} columns',
   'viewer.csvMatches': '{count} matching',
+  'viewer.csvColsHidden': 'first {shown} columns shown',
   'viewer.filter': 'Filter…',
   'viewer.moreRows': 'Show {count} more rows',
   'viewer.htmlError': 'This page cannot be shown here. Open it in a new tab or download it.',
