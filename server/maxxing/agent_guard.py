@@ -44,7 +44,7 @@ APPARMOR_PROFILES = Path("/sys/kernel/security/apparmor/profiles")
 
 # `maxxing` sub-commands a sandboxed agent turn may run (anything else is refused): its own work, nothing that
 # changes the server (a cron or an MCP server would run outside the sandbox).
-CLI_ALLOWED = {
+CLI_ALLOWED = {                        # show/list/feed list are narrowed further (cmd_agents, cmd_feed)
     "feed": {"post", "list"},
     "agents": {"send", "show", "list", "templates"},
     "keys": {"get", "list"},          # filtered by the agent's `keys` (cmd_keys)

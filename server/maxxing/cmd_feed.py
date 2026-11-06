@@ -54,6 +54,22 @@ def _self_trigger(agent: str, source: str) -> str:
     return ""
 
 
+def _list(feed, a) -> dict:
+    """The events of `feed list`. In a sandboxed agent turn: only the sources its feed triggers watch (the feed holds
+    every project's events: mail, sales, the other agents' alerts and requests)."""
+    from . import agent_guard, agents
+    path = agent_guard.sandboxed_turn()
+    if not path:
+        return feed.list_events(a.source, a.unread, None, a.limit)
+    watched = sorted({t["source"] for t in agents.load(path)["triggers"] if t["kind"] == "feed" and t.get("source")})
+    events: list[dict] = []
+    for src in watched if not a.source else [s for s in watched if s == a.source]:
+        events += feed.list_events(src, a.unread, None, a.limit)["events"]
+    events = sorted(events, key=lambda e: e["id"], reverse=True)[:max(1, min(int(a.limit or 20), 200))]
+    sources = [s for s in feed.source_counts() if s["source"] in watched]
+    return {"events": events, "unread": sum(s["unread"] for s in sources), "sources": sources}
+
+
 def _run(a) -> int:
     from . import feed
     from .feed import FeedError
@@ -73,7 +89,7 @@ def _run(a) -> int:
                 print("duplicate - already posted" if ev is None else f"posted #{ev['id']} ({ev['source']})")
             return 0
         if a.feed_cmd == "list":
-            r = feed.list_events(a.source, a.unread, None, a.limit)
+            r = _list(feed, a)
             if a.json:
                 print(json.dumps(r, indent=2, ensure_ascii=False))
                 return 0

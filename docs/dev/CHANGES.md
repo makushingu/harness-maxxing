@@ -55,6 +55,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   agent whose name is taken gets a slug name (`<name>-restored`, `_free_dir_name`), not `<name> (restored)`.
 - `agent_format.parse_md`: YAML block values (`key: >` / `|`, with chomping) are read from their indented lines;
   the description is found in the body with whitespace normalised (an exported wrapped first paragraph is not added twice).
+- Sandboxed agent turn (`agent_guard.sandboxed_turn()`): `maxxing agents show` refuses another agent and drops
+  `webhooks[].url`; `agents list` gives `path` + `display_name` only; `feed list` (`cmd_feed._list`) keeps the sources
+  of the agent's feed triggers (events and `sources`, no `pending`).
 
 ## 2.0.0-alpha.120 - 2026-11-05
 

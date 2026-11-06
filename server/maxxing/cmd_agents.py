@@ -186,6 +186,15 @@ def _print_fire(path: str, r: dict, as_json: bool) -> int:
 def _list(a) -> int:
     from . import agents
     rows = agents.list_agents(with_status=True)
+    from . import agent_guard
+    if agent_guard.sandboxed_turn():                # a sandboxed agent sees who it can hand work to, nothing more
+        rows = [{"path": x["path"], "display_name": x["display_name"]} for x in rows]
+        if a.json:
+            print(json.dumps(rows, indent=2))
+        else:
+            for x in rows:
+                print(f"{x['path']}  {x['display_name']}")
+        return 0
     if a.json:
         print(json.dumps([{k: x.get(k) for k in ("path", "display_name", "enabled", "telegram", "approvals",
                                                   "limits", "triggers", "cost_today", "runs_last_hour")}
@@ -477,6 +486,12 @@ def _handler(a) -> int:
             sys.stdout.write(md)
         return 0
     if a.agents_cmd == "show":
+        from . import agent_guard
+        own = agent_guard.sandboxed_turn()
+        if own and own != path:
+            print("Refused: in a sandboxed agent turn, `maxxing agents show` shows this agent only "
+                  "(`maxxing agents list` gives the others' paths and names).", file=sys.stderr)
+            return 2
         d = agents.get(path)
         try:
             role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8")
@@ -487,7 +502,8 @@ def _handler(a) -> int:
                                                     "writable", "rules", "subagent", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
-                          "webhooks": agents.hooks(path)}, indent=2, ensure_ascii=False))
+                          "webhooks": [{k: v for k, v in h.items() if not own or k != "url"}
+                                       for h in agents.hooks(path)]}, indent=2, ensure_ascii=False))
         return 0
     try:
         if a.agents_cmd == "cron":

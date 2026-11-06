@@ -133,6 +133,39 @@ def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys)
     assert agent_guard.sandboxed_session(sid[:8]) is None
 
 
+def test_a_sandboxed_turn_reads_only_its_own_agent_and_feed(client, topic, mx, monkeypatch, capsys):
+    from maxxing import agent_guard, cli, feed
+    _on(client)
+    _create(client)
+    _create(client, name="other", description="SECRET ROLE")
+    client.patch("/api/agents/acme/blog/writer", json={"triggers": [{"kind": "feed", "source": "shop"}]})
+    assert cli.main(["agents", "webhook", "other", "--json"]) == 0
+    assert cli.main(["agents", "webhook", "writer", "--json"]) == 0
+    feed.post("refund asked", source="shop", level="warning")
+    feed.post("mail from the bank", body="account 1234", source="mail-notice")
+    capsys.readouterr()
+    monkeypatch.setattr(agent_guard, "sandboxed_turn", lambda: A)
+    assert cli.main(["agents", "show", "other"]) == 2
+    assert "this agent only" in capsys.readouterr().err
+    assert cli.main(["agents", "show", "writer"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["webhooks"] and all("url" not in h for h in d["webhooks"])
+    assert cli.main(["agents", "list", "--json"]) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert {r["path"] for r in rows} == {A, "projects/acme/topics/blog/agents/other"}
+    assert all(set(r) == {"path", "display_name"} for r in rows)
+    assert cli.main(["feed", "list", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert [e["title"] for e in r["events"]] == ["refund asked"] and [s["source"] for s in r["sources"]] == ["shop"]
+    assert cli.main(["feed", "list", "--json", "--source", "mail-notice"]) == 0
+    assert json.loads(capsys.readouterr().out)["events"] == []
+    monkeypatch.setattr(agent_guard, "sandboxed_turn", lambda: None)      # the owner sees everything
+    assert cli.main(["agents", "show", "other"]) == 0
+    assert "SECRET ROLE" in capsys.readouterr().out
+    assert cli.main(["feed", "list", "--json"]) == 0
+    assert len(json.loads(capsys.readouterr().out)["events"]) >= 2
+
+
 def test_claude_code_agent_file_export_and_import(client, topic, mx):
     _on(client)
     _create(client, model="sonnet", permission_mode="acceptEdits", allowed_tools=["Read", "Bash(git log:*)"],
