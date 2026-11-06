@@ -218,6 +218,21 @@ def test_read_is_capped_and_json_has_no_inline_images(acc, srv, capsys):
     assert "base64" in out
 
 
+
+def test_read_says_how_many_parts_are_not_listed(acc, srv, capsys):
+    from test_mail_parse import _many
+    import json
+    uid = srv.add("INBOX", _many(1200))
+    code, out, _ = _cli(capsys, "read", str(uid))
+    more = int(out.split(" more parts not listed")[0].rsplit("\n", 1)[-1])
+    assert code == 0 and more > 0 and out.count("\nAttachment ") + more == 1200
+    code, out, _ = _cli(capsys, "read", str(uid), "--json")
+    assert json.loads(out)["attachments_more"] == more
+    few = srv.add("INBOX", _many(3))                     # under the limit: no line, the count is 0
+    code, out, _ = _cli(capsys, "read", str(few))
+    assert code == 0 and "not listed" not in out and out.count("\nAttachment ") == 3
+    assert json.loads(_cli(capsys, "read", str(few), "--json")[1])["attachments_more"] == 0
+
 def test_a_cut_right_after_the_data_command_is_not_sent(acc, smtp, monkeypatch):
     real = send.smtplib.SMTP.getreply
     calls = []

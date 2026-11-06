@@ -3567,6 +3567,8 @@ export const en = {
   'mail.msg.empty': '(empty message)',
   'mail.msg.imagesBlocked': 'Remote images are blocked (they tell the sender you opened the message).',
   'mail.msg.showImages': 'Show images',
+  'mail.msg.moreParts': '{count} more parts not listed',
+  'mail.msg.moreParts#one': '{count} more part not listed',
   'mail.act.archive': 'Archive',
   'mail.act.trash': 'Move to trash',
   'mail.act.deleteForever': 'Delete for good',

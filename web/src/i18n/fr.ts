@@ -3549,6 +3549,8 @@ export const fr: Record<keyof typeof en, string> = {
   'mail.msg.empty': '(message vide)',
   'mail.msg.imagesBlocked': 'Les images distantes sont bloquées (elles signalent à l\'expéditeur que vous avez ouvert le message).',
   'mail.msg.showImages': 'Afficher les images',
+  'mail.msg.moreParts': '{count} autres parties non listées',
+  'mail.msg.moreParts#one': '{count} autre partie non listée',
   'mail.act.archive': 'Archiver',
   'mail.act.trash': 'Mettre à la corbeille',
   'mail.act.deleteForever': 'Supprimer définitivement',
