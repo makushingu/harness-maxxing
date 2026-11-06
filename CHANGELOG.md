@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.123 - 2026-11-06
+
+Fixes:
+- **Sessions**: a message sent while Harness Maxxing first writes a summary stays shown after a reload or in another
+  window, instead of disappearing until its turn.
+- **Installer**: `bash ./install.sh` from a downloaded copy installs that copy again.
+- **Files**: the code editor keeps Windows (CRLF) line breaks, and a CSV preview shows at most 200 columns.
+- **Touch screens**: larger tabs, CSV sort headers and command palette Cancel button.
+- **Behind a proxy in Docker**, **MCP sign-in**, **Claude settings**, **Git blocks** and **chat formatting**: small
+  fixes.
+- **Docs**: how to share an extension with the community, and the risk of installing one.
+
 ## 2.0.0-alpha.118 - 2026-11-05
 
 Fixes:

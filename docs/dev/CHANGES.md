@@ -5,6 +5,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.123 - 2026-11-06
+
+- Released from `main` without the beta-only work (a113-a122: Agents, groups, e-mail, secret files): those numbers
+  stay on `beta`. Holds: `sent_items` in session data (service.py `_sent_preview`, shown by Thread.tsx, counted by
+  Column.tsx `checkSent`), install.sh `SELF_DIR` computed before `cd /`, Radar audit fixes (proxy: 128 places per
+  source address, head size cap, domain with trailing newline; MCP OAuth non-ASCII redirect; default model check;
+  CRLF in the code editor; CSV 200 columns; linear git/infra block and fence parsing; touch targets), pageData
+  `staleTime` function (tsc -b fix).
+
 ## 2.0.0-alpha.118 - 2026-11-05
 
 - Audit of a117 (`proxylisten.py`). `guarded_protocol(port)` = uvicorn's HTTP protocol (httptools or h11) with, on the
