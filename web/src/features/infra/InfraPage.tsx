@@ -439,7 +439,7 @@ function Detail({ r, v, byId, onOpen, projects }: { r: InfraResource; v: InfraVi
             rp.git ? (
               <Button key={i} variant="outline" size="sm" asChild>
                 <Link to={`/git?repo=${encodeURIComponent(rp.git)}`}>
-                  <FolderGit2 /> {rp.github || rp.path?.split('/').pop()}
+                  <FolderGit2 /> {mask(rp.github || rp.path?.split('/').pop() || '')}
                 </Link>
               </Button>
             ) : null,
@@ -520,7 +520,8 @@ export default function InfraPage() {
   const { data: ws } = useWorkspace()
   const [params, setParams] = useSearchParams()
   const openId = params.get('id')
-  const tab = (params.get('tab') as Tab) || (openId ? tabOf((v?.resources.find((r) => r.id === openId)?.kind || 'site') as InfraKind) : 'overview')
+  const asked = params.get('tab') as Tab | null
+  const tab: Tab = (asked && ([...TABS, 'overview', 'problems', 'mail'] as string[]).includes(asked) ? asked : null) || (openId ? tabOf((v?.resources.find((r) => r.id === openId)?.kind || 'site') as InfraKind) : 'overview')
   const [q, setQ] = React.useState('')
   const [project, setProject] = React.useState('_all')
   const [showHidden, setShowHidden] = React.useState(false)
@@ -624,7 +625,7 @@ export default function InfraPage() {
                 <AlertTriangle className="size-4" /> <Sensitive length={20}>{v.error}</Sensitive>
               </p>
             )}
-            {tab !== 'mail' && tab !== 'overview' && tab !== 'servers' && (
+            {tab !== 'mail' && (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative min-w-0 flex-1 sm:max-w-72">
                   <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
