@@ -104,9 +104,10 @@ def _when(ts) -> str:
 
 
 def _html_text(h: str) -> str:
-    h = re.sub(r"(?is)<(style|head|script)\b.*?</\1\s*>", "", h)
+    from .mail.imap import strip_blocks
+    h = strip_blocks(h, ("style", "head", "script"))       # one pass: a lazy regex was quadratic on unclosed tags
     h = re.sub(r"(?i)<br\s*/?>|</p\s*>|</div\s*>|</tr\s*>|</h\d\s*>|</li\s*>", "\n", h)
-    h = re.sub(r"(?s)<[^>]+>", "", h)
+    h = re.sub(r"<[^<>]+>", "", h)
     h = html_lib.unescape(h)
     return re.sub(r"\n{3,}", "\n\n", re.sub(r"[ \t\xa0]+", " ", h)).strip()
 
