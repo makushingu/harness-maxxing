@@ -103,6 +103,57 @@ def _post_agent(row: dict, text: str) -> None:
             agents.post(row["agent"], "note", text, status="mail")
 
 
+def _mark(oid: str, status: str) -> None:
+    """Written as soon as the SMTP server has the message (send.send `on_sent`), outside mail.db: if what follows
+    fails (mail.db locked, the server stops during the Sent copy), `unstick` and `approve` read it and never offer
+    the message again. "sent" or "sent_unknown"."""
+    with contextlib.suppress(OSError):
+        p = _dir(oid)
+        p.mkdir(parents=True, exist_ok=True)
+        (p / "result").write_text(status)
+
+
+def _marked(oid: str) -> str | None:
+    try:
+        v = (_dir(oid) / "result").read_text().strip()
+    except OSError:
+        return None
+    return v if v in ("sent", "sent_unknown") else None
+
+
+def _finish(row: dict, status: str, by: str, done: bool = True) -> None:
+    """The request of a message that went out (or probably did): every step on its own, none can undo the send.
+    The files stay when the row could not be written, so the mark is still there for `unstick`."""
+    oid, data = row["id"], row["data"]
+    sent = status == "sent"
+    note = (f"by {by}" if done else "the mail server had it before the send was interrupted") if sent \
+        else "connection cut after the message was handed over: check the Sent folder"
+    try:
+        store.outbox_set(oid, status, note)
+        saved = True
+    except Exception:  # noqa: BLE001
+        log.exception("mail outbox %s: %s but its row could not be written", oid, status)
+        saved = False
+    resolution = "Sent" if sent else "Probably sent (connection cut): check the Sent folder"
+    if saved:
+        _end(row, resolution)
+    elif row.get("event_id"):                       # at least no Send button left
+        from .. import feed
+        with contextlib.suppress(Exception):
+            feed.update(int(row["event_id"]), resolve=True, resolution=resolution, read=True)
+    if not done:
+        return
+    try:
+        _note_sent(row["account"], row["agent"], data["draft"], "sent",
+                   f"approved ({by})" if sent else f"approved ({by}), result unknown")
+    except Exception:  # noqa: BLE001
+        log.exception("mail outbox %s: note of the sent message", oid)
+    subject = data["draft"].get("subject") or ""
+    _post_agent(row, f"E-mail \"{subject}\" sent (the owner allowed it)." if sent else
+                f"E-mail \"{subject}\": the connection to the mail server broke after it received the message, it "
+                "was probably sent. Do not send it again.")
+
+
 def approve(oid: str, by: str = "web") -> dict:
     """Send the waiting message (once). The draft it came from is dropped by the send."""
     from . import get_account, send
@@ -115,6 +166,10 @@ def approve(oid: str, by: str = "web") -> dict:
         return store.outbox_get(oid) or row
     row = store.outbox_get(oid) or row                  # as claimed: the owner may have just changed the draft
     data = row["data"]
+    done = _marked(oid)
+    if done:                            # it already went out (a row left behind by an older version): never again
+        _finish(row, done, by, done=False)
+        return {**row, "status": done}
     if data.get("changed"):                 # the owner rewrote it on the E-mail page: the agent's copy never goes
         store.outbox_set(oid, "waiting", "changed by the owner")
         raise MailError("changed", "the owner changed this message on the E-mail page: send it from there")
@@ -124,30 +179,27 @@ def approve(oid: str, by: str = "web") -> dict:
         gone = bool(saved.get("uid")) and imap_gone(acc, saved)    # deleted from Drafts (another mail app)
         if not gone:
             res = send.send(acc, {**data["draft"], "draft": saved or None},
-                            _files(oid, data.get("files") or []))     # allowed by the owner: contacts
+                            _files(oid, data.get("files") or []),      # allowed by the owner: contacts
+                            on_sent=lambda status: _mark(oid, status))
     except MailError as e:
         if e.code != "sent_unknown":
             store.outbox_set(oid, "waiting", e.message)                 # surely not sent: try again
             raise
         # handed to the mail server, then the connection broke: probably sent. Never offered again as "Send" (that
         # would send it twice); the draft stays in Drafts for the owner to send by hand after checking
-        store.outbox_set(oid, "sent_unknown", "connection cut after the message was handed over: check the Sent folder")
-        _end(row, "Probably sent (connection cut): check the Sent folder")
-        _note_sent(row["account"], row["agent"], data["draft"], "sent", f"approved ({by}), result unknown")
-        _post_agent(row, f"E-mail \"{data['draft'].get('subject') or ''}\": the connection to the mail server broke "
-                         "after it received the message, it was probably sent. Do not send it again.")
+        _finish(row, "sent_unknown", by)
         raise
     except BaseException as e:
+        if _marked(oid):                    # it went out, then the follow-ups broke (or the thread was stopped)
+            _finish(row, _marked(oid) or "sent", by)
+            raise
         store.outbox_set(oid, "waiting", getattr(e, "message", None) or str(e) or type(e).__name__)  # try again
         raise
     if gone:
         store.outbox_set(oid, "deleted", "the draft was deleted")
         _end(row, "Draft deleted")
         raise MailError("not_found", "the draft was deleted from the mailbox: nothing was sent")
-    _note_sent(row["account"], row["agent"], data["draft"], "sent", f"approved ({by})")
-    store.outbox_set(oid, "sent", f"by {by}")
-    _end(row, "Sent")
-    _post_agent(row, f"E-mail \"{data['draft'].get('subject') or ''}\" sent (the owner allowed it).")
+    _finish(row, "sent", by)
     return {**row, "status": "sent", "result": res}
 
 
@@ -173,10 +225,14 @@ def feed_action(oid: str, action: str, by: str, ev: dict) -> None:
     if action in ("allow", "deny") and not enabled():
         raise feed.FeedError(409, "mail_off", "The E-mail page is switched off (Settings -> Features)")
     try:
-        if action == "allow":
-            approve(oid, by)
-        elif action == "deny":
-            deny(oid, by)
+        if action in ("allow", "deny"):     # IMAP / SMTP work: on the mail pool, like the E-mail page's own calls
+            fn = approve if action == "allow" else deny
+            try:
+                from ..api.mail import run_on_pool
+            except Exception:  # noqa: BLE001 - no web part loaded (a script): in place
+                fn(oid, by)
+            else:
+                run_on_pool(fn, oid, by)
     except MailError as e:                  # shown on the button that was clicked; the request stays open
         raise feed.FeedError(424 if e.code in ("smtp", "unreachable", "tls", "connection", "imap") else 409,
                              e.code, e.message) from None
@@ -240,12 +296,24 @@ STUCK_S = 600
 
 
 def unstick() -> int:
-    """A send cut in the middle (the server stopped): the message waits again, with a note to look in Sent first."""
-    n = 0
+    """A send cut in the middle (the server stopped): the message waits again, with a note to look in Sent first.
+    One the SMTP server had already taken (its `result` mark) ends as sent / sent_unknown instead: never offered
+    again."""
     with store.conn() as c:
-        n = c.execute("UPDATE outbox SET status='waiting', note=? WHERE status='sending' AND done_at<?",
-                      ("interrupted while sending: check the Sent folder before sending it again",
-                       time.time() - STUCK_S)).rowcount
+        stuck = [r[0] for r in c.execute("SELECT id FROM outbox WHERE status='sending' AND done_at<?",
+                                         (time.time() - STUCK_S,))]
+    n = 0
+    for oid in stuck:
+        done = _marked(oid)
+        if done:
+            row = store.outbox_get(oid)
+            if row and row["status"] == "sending":
+                _finish(row, done, "", done=False)
+            continue
+        with store.conn() as c:
+            n += c.execute("UPDATE outbox SET status='waiting', note=? WHERE id=? AND status='sending' AND done_at<?",
+                           ("interrupted while sending: check the Sent folder before sending it again", oid,
+                            time.time() - STUCK_S)).rowcount
     return n
 
 
