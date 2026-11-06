@@ -64,8 +64,12 @@ def queue(acc: dict, agent: str, draft: dict, files: list[tuple[str, str, bytes]
     if len(text) > TEXT_SHOWN:
         text = text[:TEXT_SHOWN] + " [...]"
     body = f"From: {acc['address']}\nTo: {to}\nSubject: {draft.get('subject') or ''}\n"
-    if names:
-        body += f"Attachments: {', '.join(n['name'] for n in names)}\n"
+    fwd = draft.get("forward") or {}
+    fnames = list(fwd.get("names") or [])
+    fnames += [f"part {i}" for i in (fwd.get("indexes") or [])[len(fnames):]]
+    shown = [n["name"] for n in names] + [f"{x} (forwarded)" for x in fnames]
+    if shown:                                       # every file that goes out, the forwarded ones too
+        body += f"Attachments ({len(shown)}): {', '.join(shown)}\n"
     body += f"\n{text}"
     ev = feed.post(f"{_agent_name(agent)} wants to send an e-mail", body, level="warning", source="mail",
                    url=page_url(acc["id"], saved.get("folder"), saved.get("uid")), ref=f"mailsend:{oid}",
@@ -109,14 +113,25 @@ def approve(oid: str, by: str = "web") -> dict:
         return row
     if not store.outbox_claim(oid, "sending"):
         return store.outbox_get(oid) or row
+    row = store.outbox_get(oid) or row                  # as claimed: the owner may have just changed the draft
     data = row["data"]
+    if data.get("changed"):                 # the owner rewrote it on the E-mail page: the agent's copy never goes
+        store.outbox_set(oid, "waiting", "changed by the owner")
+        raise MailError("changed", "the owner changed this message on the E-mail page: send it from there")
+    saved = data.get("saved") or {}
     try:
         acc = get_account(row["account"])
-        draft = {**data["draft"], "draft": data.get("saved") or None}
-        res = send.send(acc, draft, _files(oid, data.get("files") or []))     # allowed by the owner: contacts
+        gone = bool(saved.get("uid")) and imap_gone(acc, saved)    # deleted from Drafts (another mail app)
+        if not gone:
+            res = send.send(acc, {**data["draft"], "draft": saved or None},
+                            _files(oid, data.get("files") or []))     # allowed by the owner: contacts
     except BaseException as e:
         store.outbox_set(oid, "waiting", getattr(e, "message", None) or str(e) or type(e).__name__)  # try again
         raise
+    if gone:
+        store.outbox_set(oid, "deleted", "the draft was deleted")
+        _end(row, "Draft deleted")
+        raise MailError("not_found", "the draft was deleted from the mailbox: nothing was sent")
     _note_sent(row["account"], row["agent"], data["draft"], "sent", f"approved ({by})")
     store.outbox_set(oid, "sent", f"by {by}")
     _end(row, "Sent")
@@ -153,6 +168,29 @@ def feed_action(oid: str, action: str, by: str, ev: dict) -> None:
     except MailError as e:                  # shown on the button that was clicked; the request stays open
         raise feed.FeedError(424 if e.code in ("smtp", "unreachable", "tls", "connection", "imap") else 409,
                              e.code, e.message) from None
+
+
+def imap_gone(acc: dict, saved: dict) -> bool:
+    """True only when the drafts folder answers and the draft is not in it (an IMAP error says nothing)."""
+    from . import imap
+    try:
+        return not imap.has(acc, str(saved.get("folder") or ""), int(saved["uid"]))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def draft_saved(acc_id: str, old: dict, new: dict) -> None:
+    """The owner saved a new version of a waiting draft on the E-mail page: the request follows the new copy (so
+    sending or deleting it there still ends it), and Allow no longer sends the agent's version."""
+    for row in store.outbox_list("waiting", acc_id):
+        saved = row["data"].get("saved") or {}
+        if saved.get("folder") == old.get("folder") and int(saved.get("uid") or 0) == int(old.get("uid") or 0):
+            data = {**row["data"], "saved": {"folder": new.get("folder"), "uid": new.get("uid")}, "changed": True}
+            if store.outbox_data(row["id"], data) and row.get("event_id"):
+                from .. import feed
+                with contextlib.suppress(Exception):
+                    feed.update(int(row["event_id"]), resolve=True, read=True,
+                                resolution="Changed on the E-mail page: send it from there")
 
 
 def draft_done(acc_id: str, folder: str, uid: int, how: str) -> None:

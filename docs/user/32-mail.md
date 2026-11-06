@@ -74,7 +74,9 @@ An agent (Settings -> Features -> Agents) sees **no mailbox** until you give it 
 
 A message waiting for your OK is in the mailbox's Drafts and shows as a card at the top of the list and in
 **Notifications** (and on Telegram when its alerts are on): **Allow** sends it, **Open** shows the draft (change it and
-send it yourself), **Refuse** drops it.
+send it yourself), **Refuse** drops it. The card lists every attachment, the forwarded ones too. Once you save your
+own version of the draft, Allow no longer sends the agent's: send yours from the E-mail page. A draft deleted from the
+mailbox is never sent.
 
 The agent never marks a mail read, unless you give it that right: you still see what is new. Harness notes what it did
 ("seen by Mail sorter at 14:02 · filed in Invoices") next to the mail, on this page only: nothing is written in your

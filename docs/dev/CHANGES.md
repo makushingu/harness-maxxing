@@ -5,6 +5,13 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Mail outbox: `POST /api/mail/{acc}/draft` on a waiting agent draft calls `outbox.draft_saved` (row `saved` moves to
+  the new uid, `data.changed` = true, feed event resolved); `approve` refuses a changed row (`changed`) and ends a row
+  whose draft is gone (`imap.has`, IMAP errors count as present). `store.outbox_data` updates only waiting rows.
+  `maxxing mail write --forward` stores `forward.names`; the request body lists them ("Attachments (n): ...").
+
 ## 2.0.0-alpha.120 - 2026-11-05
 
 - E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch): `maxxing/mail/`
