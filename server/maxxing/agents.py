@@ -867,11 +867,12 @@ def from_trash(box: Path, old_prefix: str, new_prefix: str) -> None:
     try:
         from . import crons
         for cid in (config.read_json(box / "crons.json", {}) or {}).get("jobs") or []:
+            arch = next((x["job"] for x in crons.deleted_jobs() if x["job"]["id"] == cid), None)
+            tp = str((arch or {}).get("topic_path") or "")
+            if tp == old_prefix or tp.startswith(old_prefix + "/"):
+                tp = new_prefix + tp[len(old_prefix):]
             try:
-                j = crons.restore_job(str(cid))
-                tp = j.get("topic_path") or ""
-                if old_prefix != new_prefix and (tp == old_prefix or tp.startswith(old_prefix + "/")):
-                    crons.update_job(j["id"], {"topic_path": new_prefix + tp[len(old_prefix):]})
+                crons.restore_job(str(cid), tp or None)
             except crons.CronError:
                 pass                                    # still there, or no longer in the archive
     except Exception:

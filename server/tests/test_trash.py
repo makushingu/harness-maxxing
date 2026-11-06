@@ -288,13 +288,14 @@ def test_a_new_agent_in_a_recreated_topic_starts_empty_and_the_restored_topic_ge
     assert [m["text"] for m in agents.thread(a)] == ["Agent created"]
     assert agents.telegram_reply_to(a, 101) is None
     item = next(i for i in _items(client) if i["kind"] == "topic")
+    assert client.delete("/api/agents/acme/blog/writer").status_code == 200    # nothing left at the old path
     r = client.post(f"/api/trash/{item['id']}/restore").json()
     assert r["restored_to"] == "projects/acme/topics/blog-restored"
     old = "projects/acme/topics/blog-restored/agents/writer"
     assert "SECRET RESULT OF OLD AGENT" in [m["text"] for m in agents.thread(old)]
     assert agents.telegram_reply_to(old, 101) == "msg_a"
     assert crons.get_job(job["id"])["topic_path"] == old
-    assert [m["text"] for m in agents.thread(a)] == ["Agent created"]
+    assert agents.thread(a) == []
 
 
 def test_a_restored_agent_whose_name_was_taken_comes_back_as_an_agent(client, topic):

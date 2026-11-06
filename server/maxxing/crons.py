@@ -431,8 +431,9 @@ def deleted_jobs() -> list[dict]:
 SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
-def restore_job(cid: str) -> dict:
-    """Put back the most recent archived copy of job `cid`, with its id (CronError if absent or still there)."""
+def restore_job(cid: str, topic_path: str | None = None) -> dict:
+    """Put back the most recent archived copy of job `cid`, with its id (CronError if absent or still there).
+    topic_path: where its folder is now (an agent or topic restored under another name)."""
     with _lock:
         jobs = _load_for_write()
         if any(j["id"] == cid for j in jobs):
@@ -442,6 +443,8 @@ def restore_job(cid: str) -> dict:
         job = next((d["job"] for d in deleted_jobs() if d["job"]["id"] == cid), None)
         if job is None:
             raise CronError(f"no removed job {cid}", "not_found")
+        if topic_path is not None:
+            job = {**job, "topic_path": topic_path}
         jobs.append({**_clean(job), "id": cid, "updated": time.time()})   # checked like a new job
         sync_crontab(jobs)
         _save_raw(jobs)
