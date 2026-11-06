@@ -2,7 +2,10 @@
 
 One pooled connection per account (`session()`): a page view runs 2-3 requests and an IMAP login costs a TLS
 handshake + LOGIN, so the connection is kept for IDLE_S seconds and checked with NOOP before reuse. Every call
-holds the account lock for its whole duration (imaplib is not thread safe).
+holds the account lock for its whole duration (imaplib is not thread safe). A slow or silent server must never hold
+the caller for long: connections time out (CONNECT_S, TIMEOUT_S per operation), the lock is waited for LOCK_WAIT_S at
+most (then `mail_busy`), at most MAX_WAITING callers wait on one account, and a server that just timed out is not
+tried again for DOWN_S (the check of the mailboxes would otherwise wait CONNECT_S for each folder in turn).
 """
 from __future__ import annotations
 
@@ -24,7 +27,11 @@ from typing import Any, Iterator
 
 from . import access
 
-TIMEOUT_S = 25
+CONNECT_S = 15         # TCP + TLS + greeting
+TIMEOUT_S = 25          # each read or write on an open connection
+LOCK_WAIT_S = 30        # another call on the same account: longer than this -> mail_busy
+MAX_WAITING = 2         # callers waiting on one account's lock (more -> mail_busy at once)
+DOWN_S = 60             # a server that timed out is not tried again before this
 IDLE_S = 240            # a pooled connection older than this is closed instead of reused
 CHECK_S = 20            # NOOP before reusing a connection idle for longer than this
 MAX_FETCH = 50 * 1024 * 1024
@@ -35,6 +42,8 @@ imaplib._MAXLINE = 10_000_000   # long LIST/SEARCH lines on big mailboxes
 
 
 class MailError(Exception):
+    timed_out = False       # the server did not answer in time (session() then fails fast for DOWN_S)
+
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
@@ -107,26 +116,37 @@ def open_imap(host: str, port: int, tls: str, username: str, password: str) -> i
     ctx = ssl.create_default_context()
     try:
         if tls == "ssl":
-            m = imaplib.IMAP4_SSL(host, port, ssl_context=ctx, timeout=TIMEOUT_S)
+            m = imaplib.IMAP4_SSL(host, port, ssl_context=ctx, timeout=CONNECT_S)
         else:
-            m = imaplib.IMAP4(host, port, timeout=TIMEOUT_S)
+            m = imaplib.IMAP4(host, port, timeout=CONNECT_S)
             if tls == "starttls":
                 m.starttls(ssl_context=ctx)
+        m.sock.settimeout(TIMEOUT_S)
     except (socket.timeout, TimeoutError):
-        raise MailError("unreachable", f"{host}:{port} does not answer (blocked port or wrong server)") from None
+        e = MailError("unreachable", f"{host}:{port} does not answer (blocked port or wrong server)")
+        e.timed_out = True
+        raise e from None
     except ssl.SSLError as e:
         raise MailError("tls", f"{host}:{port}: TLS error ({e.reason or e})") from None
     except (OSError, imaplib.IMAP4.error) as e:
         raise MailError("unreachable", f"{host}:{port}: {e}") from None
     try:
-        if "AUTH=PLAIN" in m.capabilities and not password.isascii():
+        if username.isascii() and password.isascii():
+            m.login(username, password)
+        elif "AUTH=PLAIN" in m.capabilities:          # LOGIN only takes ASCII: AUTHENTICATE PLAIN carries UTF-8
             m.authenticate("PLAIN", lambda _: f"\0{username}\0{password}".encode())
         else:
-            m.login(username, password)
-    except imaplib.IMAP4.error as e:
+            raise MailError("auth", f"{host} only accepts user names and passwords in plain ASCII (no accents)")
+    except (imaplib.IMAP4.error, UnicodeError, OSError) as e:
         with contextlib.suppress(Exception):
             m.shutdown()
+        if isinstance(e, OSError):
+            raise MailError("connection", f"connection to {host} lost during sign-in: {e}") from None
         raise MailError("auth", f"sign-in refused by {host}: {_text(e)}") from None
+    except MailError:
+        with contextlib.suppress(Exception):
+            m.shutdown()
+        raise
     return m
 
 
@@ -136,6 +156,9 @@ class _Slot:
         self.conn: imaplib.IMAP4 | None = None
         self.used = 0.0
         self.key: tuple = ()
+        self.waiting = 0
+        self.stale = False                      # forget() could not get the lock: close before the next use
+        self.down: tuple[float, str] | None = None   # (until, message): the server timed out a moment ago
 
 
 _slots: dict[str, _Slot] = {}
@@ -157,33 +180,78 @@ def _close(slot: _Slot) -> None:
 def forget(acc_id: str) -> None:
     """Drop the pooled connection (account changed or deleted)."""
     s = _slot(acc_id)
-    with s.lock:
-        _close(s)
+    s.down = None
+    if s.lock.acquire(timeout=LOCK_WAIT_S):
+        try:
+            _close(s)
+            s.stale = False
+        finally:
+            s.lock.release()
+    else:                                       # a call is stuck on it: the next one starts afresh
+        s.stale = True
+
+
+def _busy(acc: dict) -> MailError:
+    return MailError("mail_busy", f"{acc.get('address') or acc['id']} is busy with another request (its mail server is "
+                                  "slow): try again in a moment")
+
+
+def _acquire(s: _Slot, acc: dict) -> None:
+    with _slots_lock:
+        if s.waiting >= MAX_WAITING and s.lock.locked():
+            raise _busy(acc)
+        s.waiting += 1
+    try:
+        got = s.lock.acquire(timeout=LOCK_WAIT_S)
+    finally:
+        with _slots_lock:
+            s.waiting -= 1
+    if not got:
+        raise _busy(acc)
 
 
 @contextlib.contextmanager
 def session(acc: dict) -> Iterator[imaplib.IMAP4]:
     s = _slot(acc["id"])
-    with s.lock:
+    _acquire(s, acc)
+    try:
         key = (acc["imap_host"], acc["imap_port"], acc["imap_tls"], acc["username"], acc.get("password_key"))
         now = time.time()
-        if s.conn is not None and (s.key != key or now - s.used > IDLE_S):
+        if s.down and s.down[0] > now and s.conn is None:
+            raise MailError("unreachable", s.down[1])
+        if s.conn is not None and (s.stale or s.key != key or now - s.used > IDLE_S):
             _close(s)
+        s.stale = False
         if s.conn is not None and now - s.used > CHECK_S:
             try:
                 s.conn.noop()
             except Exception:  # noqa: BLE001 - dead connection: open a new one
                 s.conn = None
         if s.conn is None:
-            s.conn = open_imap(acc["imap_host"], int(acc["imap_port"]), acc["imap_tls"], acc["username"], _password(acc))
+            try:
+                s.conn = open_imap(acc["imap_host"], int(acc["imap_port"]), acc["imap_tls"], acc["username"], _password(acc))
+            except MailError as e:
+                if e.timed_out:
+                    s.down = (time.time() + DOWN_S, e.message)
+                raise
             s.key = key
+            s.down = None
         try:
             yield s.conn
         except (imaplib.IMAP4.abort, OSError) as e:
+            with contextlib.suppress(Exception):
+                s.conn.shutdown()
             s.conn = None
+            if isinstance(e, TimeoutError):
+                s.down = (time.time() + DOWN_S, f"{acc['imap_host']} stopped answering (more than {TIMEOUT_S} s)")
+                err = MailError("unreachable", s.down[1])
+                err.timed_out = True
+                raise err from None
             raise MailError("connection", f"connection to {acc['imap_host']} lost: {e}") from None
         finally:
             s.used = time.time()
+    finally:
+        s.lock.release()
 
 
 def _text(x: Any) -> str:
@@ -266,15 +334,32 @@ def _role(f: dict) -> str | None:
     return None
 
 
+def _roles(fs: list[dict]) -> dict[str, dict]:
+    """role -> its folder: the folder the server flags (special-use \\Sent, \\Drafts...) wins over one only named
+    like it (a "Sent" label listed before Gmail's "[Gmail]/Sent Mail"); then the first of each role."""
+    out: dict[str, dict] = {}
+    for f in fs:
+        if f["raw"].upper() == "INBOX":
+            out.setdefault("inbox", f)
+            continue
+        r = next((ROLE_FLAGS[fl] for fl in f["flags"] if fl in ROLE_FLAGS), None)
+        if r:
+            out.setdefault(r, f)
+    taken = {id(f) for f in out.values()}
+    for f in fs:
+        r = _role(f)
+        if r and r not in out and id(f) not in taken:
+            out[r] = f
+            taken.add(id(f))
+    return out
+
+
 def folders(acc: dict, counts: bool = True) -> list[dict]:
     with session(acc) as m:
         fs = _list_raw(m)
-        seen_roles: set[str] = set()
+        by = {id(f): r for r, f in _roles(fs).items()}
         for f in fs:
-            r = _role(f)
-            f["role"] = r if r and r not in seen_roles else None   # first folder of each role wins
-            if f["role"]:
-                seen_roles.add(f["role"])
+            f["role"] = by.get(id(f))
             f["unread"] = f["total"] = None
             if counts:
                 typ, data = m.status(_q(f["name"]), "(MESSAGES UNSEEN)")
@@ -288,11 +373,8 @@ def folders(acc: dict, counts: bool = True) -> list[dict]:
 
 
 def _folder_of_role(m: imaplib.IMAP4, role: str) -> str | None:
-    fs = _list_raw(m)
-    for f in fs:
-        if _role(f) == role:
-            return f["name"]
-    return None
+    f = _roles(_list_raw(m)).get(role)
+    return f["name"] if f else None
 
 
 def _prefix(m: imaplib.IMAP4) -> tuple[str, str]:
@@ -548,6 +630,40 @@ def with_trust(acc: dict, rows: list[dict], t: set[str] | None = None) -> list[d
 
 SCAN_MAX = 1000         # messages looked at to fill a page when an agent only sees some senders
 
+# Every UID of a folder (`UID SEARCH ALL`: about 590 kB for 100k mails), kept while the folder has the same
+# UIDVALIDITY, UIDNEXT and EXISTS: a mail can only come (UIDNEXT grows) or go (EXISTS drops, or UIDNEXT grows with
+# it), so the same three numbers mean the same UIDs. The page change and the 60 s refresh then ask for nothing.
+ALL_CACHE = 16
+_all_cache: dict[tuple, tuple[tuple, list[int]]] = {}
+_all_lock = threading.Lock()
+
+
+def _folder_state(m: imaplib.IMAP4, exists: int) -> tuple | None:
+    """(UIDVALIDITY, UIDNEXT, EXISTS) of the folder just selected, None when the server leaves one out."""
+    try:
+        validity = int(_text(m.untagged_responses.get("UIDVALIDITY", [b""])[-1]) or 0)
+        nxt = int(_text(m.untagged_responses.get("UIDNEXT", [b""])[-1]) or 0)
+    except (ValueError, TypeError, IndexError):
+        return None
+    return (validity, nxt, exists) if validity and nxt else None
+
+
+def _all_cache_get(acc: dict, folder: str, state: tuple | None) -> list[int] | None:
+    if state is None:
+        return None
+    with _all_lock:
+        got = _all_cache.get((acc["id"], acc.get("imap_host"), acc.get("username"), folder))
+    return got[1] if got and got[0] == state else None
+
+
+def _all_cache_put(acc: dict, folder: str, state: tuple | None, uids: list[int]) -> None:
+    if state is None or len(uids) != state[2]:          # EXISTS and the answer disagree: the folder changed meanwhile
+        return
+    with _all_lock:
+        _all_cache[(acc["id"], acc.get("imap_host"), acc.get("username"), folder)] = (state, uids)
+        while len(_all_cache) > ALL_CACHE:
+            _all_cache.pop(next(iter(_all_cache)))
+
 
 def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, q: str | None = None,
              unread: bool = False, flagged: bool = False, senders: list[str] | None = None) -> dict:
@@ -560,13 +676,18 @@ def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, 
         crit, lit = _search_args(q, unread, flagged)
         if senders:
             crit = [c for c in crit if c != "ALL"] + access.imap_from(senders) or ["ALL"]
-        if lit is not None:
-            m.literal = lit
-            typ, data = m.uid("SEARCH", "CHARSET", "UTF-8", *crit if crit != ["ALL"] else [], "TEXT")
-        else:
-            typ, data = m.uid("SEARCH", *crit)
-        _ok(typ, data, "SEARCH")
-        uids = sorted((int(x) for x in _text(data).split()), reverse=True)
+        state = _folder_state(m, exists)
+        uids = _all_cache_get(acc, folder, state) if crit == ["ALL"] and lit is None else None
+        if uids is None:
+            if lit is not None:
+                m.literal = lit
+                typ, data = m.uid("SEARCH", "CHARSET", "UTF-8", *crit if crit != ["ALL"] else [], "TEXT")
+            else:
+                typ, data = m.uid("SEARCH", *crit)
+            _ok(typ, data, "SEARCH")
+            uids = sorted((int(x) for x in _text(data).split()), reverse=True)
+            if crit == ["ALL"] and lit is None:
+                _all_cache_put(acc, folder, state, uids)
         if not senders:
             total = len(uids)
             rows = with_trust(acc, _fetch_summaries(m, uids[page * size:(page + 1) * size]), t)
@@ -967,16 +1088,41 @@ STORE = {"seen": ("+FLAGS.SILENT", "(\\Seen)"), "unseen": ("-FLAGS.SILENT", "(\\
          "flag": ("+FLAGS.SILENT", "(\\Flagged)"), "unflag": ("-FLAGS.SILENT", "(\\Flagged)")}
 
 
+def _expunge(m: imaplib.IMAP4, uids: str) -> None:
+    """Delete for good the messages `uids` (flagged \\Deleted by the caller) of the selected folder, and only them.
+    Without UIDPLUS, a plain EXPUNGE would also remove what another mail app only marked deleted: those lose the flag
+    for the EXPUNGE, then get it back (a cut connection leaves them unmarked, never erased)."""
+    if "UIDPLUS" in m.capabilities:
+        m.uid("EXPUNGE", uids)
+        return
+    mine = set(_uid_set(uids))
+    typ, data = m.uid("SEARCH", "DELETED")
+    _ok(typ, data, "SEARCH")
+    others = ",".join(str(u) for u in sorted({int(x) for x in _text(data).split()} - mine))
+    if others:
+        _ok(*m.uid("STORE", others, "-FLAGS.SILENT", "(\\Deleted)"), "keep the other deleted mails")
+    try:
+        m.expunge()
+    finally:
+        if others:
+            m.uid("STORE", others, "+FLAGS.SILENT", "(\\Deleted)")
+
+
+def _uid_set(uids: str) -> list[int]:
+    out: list[int] = []
+    for part in uids.split(","):
+        a, _, b = part.partition(":")
+        out += range(int(a), int(b or a) + 1)
+    return out
+
+
 def _move(m: imaplib.IMAP4, uids: str, target: str) -> None:
     if "MOVE" in m.capabilities:
         _ok(*m.uid("MOVE", uids, _q(target)), f"move to {target}")
         return
     _ok(*m.uid("COPY", uids, _q(target)), f"copy to {target}")
     m.uid("STORE", uids, "+FLAGS.SILENT", "(\\Deleted)")
-    if "UIDPLUS" in m.capabilities:
-        m.uid("EXPUNGE", uids)
-    else:
-        m.expunge()
+    _expunge(m, uids)
 
 
 def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None = None) -> dict:
@@ -998,10 +1144,7 @@ def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None
             if not here or _role(here) not in ("trash", "junk"):
                 raise MailError("invalid", "delete for good only works from the trash or the junk folder; use trash")
             m.uid("STORE", us, "+FLAGS.SILENT", "(\\Deleted)")
-            if "UIDPLUS" in m.capabilities:
-                m.uid("EXPUNGE", us)
-            else:
-                m.expunge()
+            _expunge(m, us)
         else:
             if action == "move":
                 if not target:
@@ -1011,6 +1154,8 @@ def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None
                 moved_to = "INBOX"
             else:
                 moved_to = _folder_of_role(m, action)
+                if not moved_to and action == "archive" and "X-GM-EXT-1" in m.capabilities:
+                    moved_to = _folder_of_role(m, "all")    # Gmail: archiving = out of the inbox, still in All Mail
                 if not moved_to:
                     if action != "archive":
                         raise MailError("no_folder", f"this account has no {action} folder")
@@ -1076,7 +1221,4 @@ def drop(acc: dict, folder: str, uid: int) -> None:
             raise MailError("invalid", "only a draft can be dropped")
         _select(m, folder, readonly=False)
         m.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
-        if "UIDPLUS" in m.capabilities:
-            m.uid("EXPUNGE", str(uid))
-        else:
-            m.expunge()
+        _expunge(m, str(int(uid)))
