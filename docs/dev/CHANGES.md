@@ -13,8 +13,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   and `agent_rooms.say(path, text, attachments)`. Uploads: an agent's through `/api/uploads?path=<agent>` (topic_dir
   takes an agent path), a group's through `POST /api/agent-groups/{p}/{g}/uploads` (`agent_rooms.attachments_dir`).
   `service.month_dir` (used by `uploads_dir`) refuses `attachments/` or the month folder as a symbolic link (a
-  sandboxed agent writes its own folder). `agent_guard.locked_paths` adds `<agent>/attachments` (created) to the
-  read-only paths (`Edit(/…/attachments/**)` too), and `TOPIC_LOCKED` gets `attachments` (a sandboxed agent with
+  sandboxed agent writes its own folder). `agent_guard.locked_paths` adds `<agent>/attachments` and `<topic>/attachments`
+  (created; also when `writable` names them: denyWrite wins) to the read-only paths (`Edit(/…/attachments/**)` too), and `TOPIC_LOCKED` gets `attachments` (a sandboxed agent with
   `writable: ["."]` no longer writes the topic's uploads: no swapped file read by the owner's sessions, no link to
   race an upload through). `checked_attachments` refuses an `attachments` folder that is a link; `month_dir` turns an
   OSError (a file in the way, a missing parent) into `400 bad_path`. Thread `run` and group `message` items keep `attachments`; a member gets the files of the owner's
