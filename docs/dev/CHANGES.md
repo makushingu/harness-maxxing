@@ -13,6 +13,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `maxxing mail write --forward` stores `forward.names`; the request body lists them ("Attachments (n): ...").
 - `send._count_lock` is a `config.ProcessLock("mail-sent-count")`: the daily cap is counted under a flock shared
   by the server and `maxxing mail write --send`.
+- Mail check (`mail/poll.py`): the excerpt comes from `imap.excerpt` (`BODY.PEEK[]<0.256 KB>`, text/html of the
+  first bytes) instead of `imap.message` (whole mail with attachments). A folder whose position `at` is older than
+  `STALE_S` (6 h, or 3 intervals) is looked at as a first check. `retry_pending` drops the held mail when Agents is
+  off and re-filters it with the agent's current grant (`watchers` + `_matches`). The check writes and fires nothing
+  once the account is gone (`_still_there`). `tests/fake_imap.py`: partial `BODY[]<0.N>` and `(UN)DELETED`.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 

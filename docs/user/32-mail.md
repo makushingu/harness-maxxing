@@ -102,7 +102,10 @@ of your mailbox). A provider that skips the check on some of its own internal ma
 every), and right away with the **Refresh** button or `maxxing mail refresh`. The page itself always shows the mailbox
 live; the checks start the agents and fill **All mailboxes** (shown when you have two or more). A check takes 200 new
 mails at most, the oldest first: the rest comes with the next one, a minute later. Two checks of a mailbox never run at
-once.
+once. The text an agent gets with each mail is read from the start of the mail only: its attachments are not
+downloaded. A folder nobody looked at for more than 6 hours (its agent's trigger or the E-mail page was off, the
+server was stopped) starts again from its newest mail: what came in meanwhile starts no agent. Mail kept for a busy
+agent only reaches it if its trigger and rights still allow it.
 
 Ready-made agents (New agent): **Mail sorter** (files each new mail, sums up the day every evening), **Mail replies**
 (a draft reply to each customer mail, you send it), **Invoices** (saves the invoices received by mail and files the

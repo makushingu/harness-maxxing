@@ -35,6 +35,7 @@ MAX_NEW = 200               # mails looked at by one check of a folder
 TEXT_MAILS = 10             # mails of one turn given with their text (the others: headers, `maxxing mail read`)
 TEXT_CHARS = 2500
 SNIPPET = 200
+STALE_S = 6 * 3600          # a folder not looked at for longer (trigger or E-mail page off): looked at as new again
 
 
 def interval_min(acc: dict) -> int:
@@ -115,7 +116,7 @@ def _matches(acc: dict, grant: dict, row: dict) -> bool:
 def _body(acc: dict, folder: str, uid: int) -> str:
     from ..cmd_mail import _html_text
     try:
-        m = imap.message(acc, folder, uid, mark_seen=False)
+        m = imap.excerpt(acc, folder, uid)            # the text only: never the attachments of the mail
     except MailError:
         return ""
     return (m.get("text") or (_html_text(m["html"]) if m.get("html") else "") or "").strip()
@@ -204,22 +205,31 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
         folders = ["INBOX"] + sorted({g["trigger"]["folder"] for _, g in watching} - {"INBOX"})
         for folder in folders:
             pos = store.position(acc["id"], folder)
+            known = pos and pos.get("last_uid") is not None
+            # not looked at for a long time (its trigger or the E-mail page was off): a first look again, so the
+            # mail of that time never starts an agent
+            stale = bool(known and pos.get("at") and time.time() - float(pos["at"]) > max(STALE_S, 3 * interval_min(acc) * 60))
             try:
-                res = imap.new_since(acc, folder, pos["last_uid"] if pos and pos.get("last_uid") is not None else None,
-                                     MAX_NEW if pos and pos.get("last_uid") is not None else FIRST_KEEP)
+                res = imap.new_since(acc, folder, pos["last_uid"] if known and not stale else None,
+                                     MAX_NEW if known and not stale else FIRST_KEEP)
             except MailError as e:
+                if not _still_there(acc["id"]):
+                    return out
                 store.set_position(acc["id"], folder, ok=False, error=e.message)
                 if folder == "INBOX":
                     out.update(ok=False, error=e.message)
                 continue
-            first = not pos or pos.get("last_uid") is None or (pos.get("uidvalidity") or 0) != res["uidvalidity"]
-            if first and pos and pos.get("last_uid") is not None:        # UIDVALIDITY changed: positions are void
-                try:
-                    res = imap.new_since(acc, folder, None, FIRST_KEEP)
-                except MailError as e:
-                    store.set_position(acc["id"], folder, ok=False, error=e.message)
-                    continue
+            first = stale or not known or (pos.get("uidvalidity") or 0) != res["uidvalidity"]
+            if known and (pos.get("uidvalidity") or 0) != res["uidvalidity"]:    # UIDVALIDITY changed: positions are void
+                if not stale:
+                    try:
+                        res = imap.new_since(acc, folder, None, FIRST_KEEP)
+                    except MailError as e:
+                        store.set_position(acc["id"], folder, ok=False, error=e.message)
+                        continue
                 store.forget_folder(acc["id"], folder)                     # its UIDs mean other mails now
+            if not _still_there(acc["id"]):
+                return out                                  # removed during the check: nothing written, nobody started
             rows = res["messages"]
             if first:
                 last = max(res["uids"] or [0])
@@ -247,6 +257,15 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
             store.set_position(acc["id"], folder, uidvalidity=res["uidvalidity"], last_uid=last, ok=True)
             out["started"] += started
     return out
+
+
+def _still_there(acc_id: str) -> bool:
+    from . import get_account
+    try:
+        get_account(acc_id)
+        return True
+    except MailError:
+        return False
 
 
 def _sample(acc: dict) -> None:
@@ -328,6 +347,9 @@ def retry_pending() -> int:
         if not rows or not isinstance(rows, list):
             return 0
         config.write_json(f, [])
+    from .. import agents
+    if not rows or not agents.feature_on():
+        return 0                                    # Agents off: the kept mail is dropped, as new mail would be
     n = 0
     for r in rows:
         if time.time() - float(r.get("at") or 0) > 86400 or not r.get("mails"):
@@ -336,9 +358,16 @@ def retry_pending() -> int:
             acc = get_account(str(r["account"]))
         except MailError:
             continue                                # the mailbox is gone
-        mails = [m for m in r["mails"] if isinstance(m, dict) and str(m.get("uid", "")).isdigit()]
+        folder = str(r.get("folder") or "INBOX")
+        # the agent's rights as they are now: trigger still on, this folder, mailbox and senders still allowed
+        grant = next((g for p, g in watchers(acc["id"]) if p == r.get("agent") and g["trigger"]["folder"] == folder), None)
+        if not grant:
+            continue
+        mails = [m for m in r["mails"] if isinstance(m, dict) and str(m.get("uid", "")).isdigit() and _matches(acc, grant, m)]
+        if not mails:
+            continue
         bodies = {int(m["uid"]): str(m["body"]) for m in mails[:TEXT_MAILS] if m.get("body") is not None}
-        n += 1 if _fire(str(r["agent"]), acc, str(r.get("folder") or "INBOX"), mails, bodies,
+        n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies,
                         str(r.get("prompt") or "")) else 0
     return n
 
