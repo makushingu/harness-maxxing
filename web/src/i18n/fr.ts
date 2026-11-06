@@ -2639,6 +2639,7 @@ export const fr: Record<keyof typeof en, string> = {
   'approval.deny': 'Refuser',
   'approval.messagePlaceholder': 'Message pour Claude (facultatif, envoyé avec Refuser)',
   'approval.left': 'refusé dans {time} sans réponse',
+  'approval.clipped': 'Cette demande est trop longue pour être affichée en entier : elle ne peut qu’être refusée. Demandez à l’agent des étapes plus petites.',
   'plan.newLabel': 'Mode plan',
   'plan.newHint': 'Harness explore et propose d’abord un plan ; il ne modifie rien tant que vous ne l’avez pas validé.',
   'plan.hudApprove': 'Valider le plan',

@@ -291,7 +291,8 @@ in the agent's thread (the card then says how it ended: allowed, denied, no answ
 agents that wait). Office views made by an extension only show that it waits; they never answer for you. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread
 when its Telegram option is on, otherwise in **Alerts**): one tap answers it from your phone, and the message then
 says how it ended, wherever you answered. Nobody answers within 30 minutes: the action is denied. Tools you trust
-(for example `Read`) can be allowed in advance in its settings. Above a session's message box, the waiting requests
+(for example `Read`) can be allowed in advance in its settings. A request too long to be shown whole (a huge
+command, more than 100 items) can only be **denied**, everywhere: ask the agent for smaller steps. Above a session's message box, the waiting requests
 take at most 40 % of the screen's height and scroll inside, the one denied soonest on top.
 
 ## Claude Code agent files

@@ -2641,6 +2641,8 @@ class Gateway:
         try:
             if decision == "allow":                        # never offered for a request shown in part only
                 d = await asyncio.to_thread(approvals.get, rid)
+                if d.get("clipped"):
+                    return approvals.CLIPPED_NOTE[:190]
                 if not approvals.summary(str(d.get("tool") or ""), d.get("input"))[1]:
                     return _w("approval_cut")[:190]
             await asyncio.to_thread(approvals.decide, rid, decision, "", "telegram")

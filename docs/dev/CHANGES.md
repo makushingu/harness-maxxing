@@ -58,6 +58,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Sandboxed agent turn (`agent_guard.sandboxed_turn()`): `maxxing agents show` refuses another agent and drops
   `webhooks[].url`; `agents list` gives `path` + `display_name` only; `feed list` (`cmd_feed._list`) keeps the sources
   of the agent's feed triggers (events and `sources`, no `pending`).
+- Approvals: a request whose stored input differs from the real one (`approval_mcp.clip` cut a string, keys or items)
+  gets `clipped: true` (also in `approvals.public`); `approvals.decide(allow)` answers 409 `clipped`, the feed event
+  and Telegram offer Open / Deny only, the card disables Allow. The MCP's timeout now takes `<state>/.approvals.lock`
+  (the flock of `ProcessLock("approvals")`) and writes `timeout` only if the request is still pending.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
