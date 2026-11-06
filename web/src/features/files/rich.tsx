@@ -109,7 +109,7 @@ export function CsvView({ content, name, className }: { content: string; name: s
                     <button
                       type="button"
                       onClick={() => setSort((s) => (s?.col !== i ? { col: i, dir: 1 } : s.dir === 1 ? { col: i, dir: -1 } : null))}
-                      className={cn('flex w-full items-center gap-1 px-2.5 py-1.5 whitespace-nowrap hover:bg-accent pointer-coarse:min-h-10', numeric[i] && 'justify-end')}
+                      className={cn('flex w-full items-center gap-1 px-2.5 py-1.5 whitespace-nowrap hover:bg-accent pointer-coarse:min-h-10 pointer-coarse:min-w-10', numeric[i] && 'justify-end')}
                     >
                       {header[i] ?? ''}
                       {sort?.col === i && (sort.dir === 1 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
