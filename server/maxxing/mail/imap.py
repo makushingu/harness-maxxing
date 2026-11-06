@@ -333,15 +333,32 @@ def _role(f: dict) -> str | None:
     return None
 
 
+def _roles(fs: list[dict]) -> dict[str, dict]:
+    """role -> its folder: the folder the server flags (special-use \\Sent, \\Drafts...) wins over one only named
+    like it (a "Sent" label listed before Gmail's "[Gmail]/Sent Mail"); then the first of each role."""
+    out: dict[str, dict] = {}
+    for f in fs:
+        if f["raw"].upper() == "INBOX":
+            out.setdefault("inbox", f)
+            continue
+        r = next((ROLE_FLAGS[fl] for fl in f["flags"] if fl in ROLE_FLAGS), None)
+        if r:
+            out.setdefault(r, f)
+    taken = {id(f) for f in out.values()}
+    for f in fs:
+        r = _role(f)
+        if r and r not in out and id(f) not in taken:
+            out[r] = f
+            taken.add(id(f))
+    return out
+
+
 def folders(acc: dict, counts: bool = True) -> list[dict]:
     with session(acc) as m:
         fs = _list_raw(m)
-        seen_roles: set[str] = set()
+        by = {id(f): r for r, f in _roles(fs).items()}
         for f in fs:
-            r = _role(f)
-            f["role"] = r if r and r not in seen_roles else None   # first folder of each role wins
-            if f["role"]:
-                seen_roles.add(f["role"])
+            f["role"] = by.get(id(f))
             f["unread"] = f["total"] = None
             if counts:
                 typ, data = m.status(_q(f["name"]), "(MESSAGES UNSEEN)")
@@ -355,11 +372,8 @@ def folders(acc: dict, counts: bool = True) -> list[dict]:
 
 
 def _folder_of_role(m: imaplib.IMAP4, role: str) -> str | None:
-    fs = _list_raw(m)
-    for f in fs:
-        if _role(f) == role:
-            return f["name"]
-    return None
+    f = _roles(_list_raw(m)).get(role)
+    return f["name"] if f else None
 
 
 def _prefix(m: imaplib.IMAP4) -> tuple[str, str]:
@@ -925,6 +939,8 @@ def act(acc: dict, folder: str, uids: list[int], action: str, target: str | None
                 moved_to = "INBOX"
             else:
                 moved_to = _folder_of_role(m, action)
+                if not moved_to and action == "archive" and "X-GM-EXT-1" in m.capabilities:
+                    moved_to = _folder_of_role(m, "all")    # Gmail: archiving = out of the inbox, still in All Mail
                 if not moved_to:
                     if action != "archive":
                         raise MailError("no_folder", f"this account has no {action} folder")
