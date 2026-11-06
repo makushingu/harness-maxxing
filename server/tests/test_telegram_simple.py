@@ -307,3 +307,13 @@ async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypa
     tg.message("do it again", reply_to_message={"message_id": 4242, "from": {"id": 1, "is_bot": True}, "text": "r"})
     await wait_for(lambda: got, what="agent")
     assert got[0] == ("projects/acme/topics/blog/agents/writer", "do it again") and not svc.sent
+
+
+async def test_an_alert_with_a_lone_surrogate_is_still_sent(api, tg, svc):
+    await _link_simple(api, tg)
+    for i, ev in enumerate([{"body": "bad \ud83d end"}, {"body": "see", "attachments": ["a\udc80.png"]}]):
+        n = len(tg.sent())
+        await asyncio.to_thread(gateway.post_alert, {"id": 70 + i, "title": "Job failed", "level": "error",
+                                                     "telegram": "loud", **ev})   # valid JSON, not UTF-8
+        assert len(tg.sent()) > n, ev
+    assert "bad ? end" in _bot("bad", tg)["text"] and "a?.png" in _bot("📎", tg)["text"]
