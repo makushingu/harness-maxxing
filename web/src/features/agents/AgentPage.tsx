@@ -730,20 +730,20 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
   const dir = absTopicDir(ws, a.path)
   if (v === null)
     return (
-      <div className="grid gap-1">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <button
           type="button"
           onClick={() => setV(a.description)}
-          className="group rounded-lg bg-muted/50 px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
+          className="group min-w-0 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
           data-testid="agent-role"
         >
           {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}
           <Pencil className="ml-1 inline size-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
         </button>
         <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="flex-1">{t('agents.panel.roleHint')}</span>
+          <span className="min-w-0 flex-1 break-words">{t('agents.panel.roleHint')}</span>
           {dir && (
-            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="hover:text-foreground hover:underline">
+            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="shrink-0 hover:text-foreground hover:underline">
               CLAUDE.md
             </Link>
           )}
