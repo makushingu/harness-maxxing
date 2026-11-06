@@ -33,6 +33,7 @@ PRIVATE_NETS = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0
 DOMAIN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")   # = install.sh valid_domain
 HEADER_TIMEOUT = 10.0       # s: a connection on the proxy address must send a whole request head in that time
 MAX_CONNECTIONS = 512       # open at once on the proxy address (each idle one costs memory and a file descriptor)
+MAX_PER_SOURCE = 128        # of those, from one source address (one container cannot take every place from the proxy)
 MAX_HEAD = 64 * 1024        # bytes: a request head on the proxy address must fit in that (uvicorn's httptools has no cap)
 IP_FREEBIND = 15            # Linux: bind before the interface exists (Docker may start after us)
 IPV6_FREEBIND = 78
@@ -140,10 +141,10 @@ def guarded_protocol(port: int, base: type | None = None) -> type:
     """The HTTP protocol of uvicorn, with two limits on the proxy address only (any container can open connections
     there, before the secret is even read): a request head must arrive within HEADER_TIMEOUT (uvicorn has no such
     timeout: half-sent requests would stay open forever) and fit in MAX_HEAD bytes, and at most MAX_CONNECTIONS at
-    once."""
+    once, MAX_PER_SOURCE of them from one source address."""
     if base is None:
         from uvicorn.protocols.http.auto import AutoHTTPProtocol as base   # noqa: N813
-    open_now: set = set()
+    open_now: dict = {}                                     # protocol -> source address
 
     class Guarded(base):  # type: ignore[misc, valid-type]
         _mx_timer = None
@@ -156,10 +157,12 @@ def guarded_protocol(port: int, base: type | None = None) -> type:
             self._mx_ours = bool(sock) and sock[1] == port
             if not self._mx_ours:
                 return
-            if len(open_now) >= MAX_CONNECTIONS:
+            peer = transport.get_extra_info("peername")
+            source = peer[0] if peer else None
+            if len(open_now) >= MAX_CONNECTIONS or sum(1 for s in open_now.values() if s == source) >= MAX_PER_SOURCE:
                 transport.close()
                 return
-            open_now.add(self)
+            open_now[self] = source
             self._mx_arm()
 
         def data_received(self, data: bytes) -> None:
@@ -190,7 +193,7 @@ def guarded_protocol(port: int, base: type | None = None) -> type:
             super().handle_websocket_upgrade(*args)
             # the websocket protocol owns the connection from now on (its connection_lost is not ours): it leaves
             # the count; a websocket without the secret is closed by the Gate right away
-            open_now.discard(self)
+            open_now.pop(self, None)
             if self._mx_timer:
                 self._mx_timer.cancel()
                 self._mx_timer = None
@@ -201,7 +204,7 @@ def guarded_protocol(port: int, base: type | None = None) -> type:
                 self._mx_arm()                              # the next request head on a kept-alive connection
 
         def connection_lost(self, exc: Exception | None) -> None:
-            open_now.discard(self)
+            open_now.pop(self, None)
             if self._mx_timer:
                 self._mx_timer.cancel()
             super().connection_lost(exc)

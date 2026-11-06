@@ -325,3 +325,16 @@ def test_a_huge_request_head_is_cut_on_the_proxy_address(guarded, monkeypatch):
         r = c.post(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}, content=b"b" * 100_000)
         assert r.status_code == 200
 
+
+def test_one_source_cannot_take_every_place(guarded, monkeypatch):
+    host, port, _ = guarded
+    monkeypatch.setattr(proxylisten, "MAX_PER_SOURCE", 2, raising=False)           # MAX_CONNECTIONS = 3 here
+    socks = [socket.create_connection((host, port), source_address=("127.0.0.5", 0)) for _ in range(2)]
+    time.sleep(0.2)
+    third = socket.create_connection((host, port), source_address=("127.0.0.5", 0))
+    third.settimeout(0.5)                                             # well before HEADER_TIMEOUT (1 s here)
+    assert third.recv(10) == b""                                      # this source is at its cap
+    with httpx.Client(trust_env=False) as c:                          # the proxy (another address) still gets in
+        assert c.get(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}).status_code == 200
+    for x in socks:
+        x.close()
