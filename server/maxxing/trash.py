@@ -106,11 +106,25 @@ def _kind(item: Path, side: dict) -> str:
     return "folder" if item.is_dir() else "file"
 
 
+def _ws_rel(p: Path, real_root: Path | None = None) -> str:
+    """p relative to the workspace. Sidecars keep the path as written (config.workspace(), which may be a symbolic
+    link: /root/maxxing -> /data/maxxing): tried as written first, then both sides resolved. ValueError: outside."""
+    ws = config.workspace()
+    try:
+        return str(p.relative_to(ws))
+    except ValueError:
+        pass
+    try:
+        return str(p.resolve().relative_to(real_root or ws.resolve()))
+    except OSError as e:
+        raise ValueError(f"{p}: {e}") from None
+
+
 def _rel(original: str, root: Path | None = None) -> str:
     """Workspace-relative display of an original path (root: the resolved workspace, when known)."""
     try:
-        return str(Path(original).relative_to(root or config.workspace().resolve()))
-    except (ValueError, OSError):
+        return _ws_rel(Path(original), root)
+    except ValueError:
         return original
 
 
@@ -330,10 +344,8 @@ def restore(item_id: str) -> dict[str, Any]:
     n = 0
     sess = p.with_name(p.name + ".sessions")
     if sess.is_dir():
-        root = config.workspace().resolve()
         try:
-            old = str(original.relative_to(root))
-            new = str(dest.relative_to(root))
+            old, new = _ws_rel(original), _ws_rel(dest)
         except ValueError:
             old = new = None
         n = _put_sessions(sess, old, new)
@@ -341,22 +353,20 @@ def restore(item_id: str) -> dict[str, Any]:
     if box.is_dir():
         try:
             from . import agents
-            root = config.workspace().resolve()
-            agents.from_trash(box, str(original.relative_to(root)), str(dest.relative_to(root)))
-        except (ValueError, OSError):
-            pass
+            agents.from_trash(box, _ws_rel(original), _ws_rel(dest))
+        except (ValueError, OSError):                       # its crons, thread and state stay in the box
+            log.exception("agents of %s not restored (state left in %s)", dest, box)
     if kind == "project":                                   # its agent groups get their conversations back
         try:
             from . import agent_rooms
-            root = config.workspace().resolve()
-            agent_rooms.restored(str(original.relative_to(root)), str(dest.relative_to(root)))
+            agent_rooms.restored(_ws_rel(original), _ws_rel(dest))
         except (ValueError, OSError):
             log.exception("agent group rooms not restored (%s)", dest)
     if kind in ("project", "topic"):
         try:
-            workspace._changed("restored", kind, str(dest.relative_to(config.workspace().resolve())))  # noqa: SLF001
+            workspace._changed("restored", kind, _ws_rel(dest))  # noqa: SLF001
         except (ValueError, AttributeError):
-            pass
+            log.warning("restored %s: workspace change not announced", dest, exc_info=True)
     bus.invalidate("files", "workspace", "sessions", "trash")
     return {"ok": True, "kind": kind, "restored_to": _rel(str(dest)), "sessions": n}
 
