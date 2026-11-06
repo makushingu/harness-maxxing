@@ -698,6 +698,11 @@ def pump(path: str) -> None:
             if not exists(path):
                 return
             st = _read_state(path)
+            if not agents.feature_on():                 # Agents switched off: no turn starts (and costs) any more
+                if st.get("queue"):
+                    st["queue"] = []
+                    _write_state(path, st)
+                return
             if st.get("current"):
                 if _alive(st["current"]):
                     return
