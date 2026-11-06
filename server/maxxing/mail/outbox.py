@@ -125,6 +125,18 @@ def approve(oid: str, by: str = "web") -> dict:
         if not gone:
             res = send.send(acc, {**data["draft"], "draft": saved or None},
                             _files(oid, data.get("files") or []))     # allowed by the owner: contacts
+    except MailError as e:
+        if e.code != "sent_unknown":
+            store.outbox_set(oid, "waiting", e.message)                 # surely not sent: try again
+            raise
+        # handed to the mail server, then the connection broke: probably sent. Never offered again as "Send" (that
+        # would send it twice); the draft stays in Drafts for the owner to send by hand after checking
+        store.outbox_set(oid, "sent_unknown", "connection cut after the message was handed over: check the Sent folder")
+        _end(row, "Probably sent (connection cut): check the Sent folder")
+        _note_sent(row["account"], row["agent"], data["draft"], "sent", f"approved ({by}), result unknown")
+        _post_agent(row, f"E-mail \"{data['draft'].get('subject') or ''}\": the connection to the mail server broke "
+                         "after it received the message, it was probably sent. Do not send it again.")
+        raise
     except BaseException as e:
         store.outbox_set(oid, "waiting", getattr(e, "message", None) or str(e) or type(e).__name__)  # try again
         raise
