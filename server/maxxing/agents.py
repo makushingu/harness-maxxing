@@ -708,6 +708,18 @@ def update(path: str, fields: dict) -> dict:
     return get(path)
 
 
+def drop_mail(acc_id: str) -> None:
+    """A mailbox of the E-mail page is removed: no agent keeps rights on it (added again, it starts with none)."""
+    hit = [a["path"] for a in list_agents(counts=False) if any(g["account"] == acc_id for g in a.get("mail") or [])]
+    for path in hit:
+        with _lock:
+            cur = load(path)
+            cur["mail"] = [g for g in cur.get("mail") or [] if g.get("account") != acc_id]
+            _save(path, cur)
+    if hit:
+        _invalidate()
+
+
 def delete(path: str) -> None:
     """Agent folder and sessions to the Trash; its cron jobs are deleted, its thread and state removed."""
     from . import workspace
