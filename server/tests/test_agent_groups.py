@@ -346,3 +346,15 @@ def test_a_turn_ending_during_the_delete_leaves_no_state_file(client, topic, mon
     monkeypatch.setattr(agent_rooms, "load", load_then_delete)
     agent_rooms.on_turn_end(P, W, "s1", "late", True, 0.0)
     assert not [e for e in ("json", "jsonl") if agent_rooms._state_file(P, e).exists()]
+
+
+def test_a_group_made_again_does_not_get_an_old_answer(client, topic):
+    _setup(client)
+    P = "projects/acme/groups/team"
+    agent_rooms._write_state(P, {"current": {"path": W, "session": "old", "at": 1, "wave": 1, "origin": "o"},
+                                 "origin": "o", "turns": {"old": {"outside": False}}})
+    assert client.delete(G).status_code == 200
+    r = client.post("/api/agent-groups", json={"project": "acme", "name": "team", "members": [{"path": W}, {"path": R}]})
+    assert r.status_code == 200
+    agent_rooms.on_turn_end(P, W, "old", "ghost answer", True, 0.0)
+    assert not [m for m in agent_rooms.room(P) if m["text"] == "ghost answer"]
