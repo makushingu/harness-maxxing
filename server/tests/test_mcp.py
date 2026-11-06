@@ -158,6 +158,9 @@ def test_oauth_login(env):
     with pytest.raises(mcp.McpError) as e:
         mcp.login_finish(st["login"], "not a url")
     assert e.value.code == "bad_redirect"
+    with pytest.raises(mcp.McpError) as e:
+        mcp.login_finish(st["login"], "http://localhost:4321/callback?code=\ud800")
+    assert e.value.code == "bad_redirect"                                  # refused: was a 500 that closed the attempt
     res = mcp.login_finish(st["login"], "http://localhost:4321/callback?code=abc&state=x", wait=10)
     assert res["ok"]
     mcp.check(wait=True)
