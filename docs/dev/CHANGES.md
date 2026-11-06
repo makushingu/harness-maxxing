@@ -67,6 +67,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Template `sales` no longer suggests `STRIPE_SECRET_KEY` (a full key; `STRIPE_RESTRICTED_KEY` stays).
 - `POST /api/agents` takes `template` (id): the server starts from `agent_templates.fields()` like the CLI's
   `--template` (domains, writable...), the body's fields on top; the creation sheet sends it.
+- Telegram -> agents: `_agent_lane` gathers the pieces of one gesture per `chat:thread|agent` (`AGENT_GATHER` 1.5 s,
+  `MEDIA_GROUP_MAX` cap) into one `_agent_message(msgs, path, texts)` -> one `agents.fire`. `_agent_parts` splits a
+  message into the owner's words (`prompt=`) and outside data (`text=`: forwards, quotes of a message neither the bot
+  nor the owner wrote) -> framed + `MAXXING_AGENT_OUTSIDE`; with outside data `reply_to` is not used (a continued
+  session keeps its own env). `agents.remember_telegram` / `telegram_reply_to` take `chat` (keys `"<chat>:<id>"`; old
+  bare keys are no longer matched). Alerts: body over `ALERT_BODY` (1500) gets the `alert_cut` marker and only
+  `danger` / link buttons (the callback refuses the others too); `ev["attachments"]` (names or {name}) listed.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
