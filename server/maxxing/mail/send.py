@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import email
+import email.policy
 import email.utils
 import logging
 import mimetypes
@@ -231,6 +232,9 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
         ctype = (ctype or "").split(";", 1)[0].strip().lower()
         if not _CTYPE.match(ctype):                     # CR/LF or parameters: not a header we write as given
             ctype = mimetypes.guess_type(_name(name))[0] or "application/octet-stream"
+        if ctype == "message/rfc822":                   # a mail inside a mail: embedded as is, never base64 (RFC 2046)
+            msg.add_attachment(email.message_from_bytes(data, policy=email.policy.default), filename=_name(name))
+            continue
         maintype, _, subtype = ctype.partition("/")
         msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=_name(name))
     return msg, [_bare(a) for a in to + cc + bcc]
@@ -246,18 +250,10 @@ def _name(name: str) -> str:
 
 
 def _forwarded(acc: dict, folder: str, uid: int, indexes: list[int]) -> list[tuple[str, str, bytes]]:
-    """The attachments of a forwarded message, from ONE download of it (not one per attachment)."""
+    """The attachments of a forwarded message, from ONE download of it (not one per attachment), numbered like the
+    reader lists them (`imap.part_at`: a forwarded mail inside it comes as its .eml)."""
     msg = imap._parse(imap.raw_message(acc, folder, uid))
-    leaves = {i: p for i, p in enumerate(msg.walk()) if not p.is_multipart()}
-    out = []
-    for i in indexes:
-        p = leaves.get(i)
-        if p is None:
-            raise MailError("not_found", "attachment not found")
-        ctype = p.get_content_type()
-        out.append((imap._line(p.get_filename() or "") or f"part-{i}.{ctype.split('/')[-1]}", ctype,
-                    p.get_payload(decode=True) or b""))
-    return out
+    return [imap.part_at(msg, i) for i in indexes]
 
 
 def _auto_sent(acc: dict) -> bool:
