@@ -13,11 +13,11 @@ import { cn } from '@/lib/utils'
 import { tDyn, useLang, useT, type TFn } from '@/i18n'
 import {
   Badge, Button, EmptyState, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle,
-  Skeleton, StatusDot, Switch, Textarea,
+  Sensitive, Skeleton, StatusDot, Switch, Textarea, useMask, usePresentation,
 } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { KIND_ICON, STATUS_TONE, locationLabel, providerName, rememberServers, statusText, subtitle } from './shared'
-import { MixBar, PlaceIcon, PlaceTag, ResourceRow, TypeView, placeCounts } from './TypeView'
+import { MixBar, PlaceIcon, PlaceName, PlaceTag, ResourceRow, TypeView, placeCounts } from './TypeView'
 import { placeInfo, placeOf } from './places'
 import { AddDomain, AddServer, ConnectVps, RemoveDomain, ServerSettings } from './ServerConnect'
 import { HowItWorks, ServerCard, SourcesPanel, useHowItWorks } from './Overview'
@@ -151,6 +151,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
   const other = cols.filter((p) => p.tier !== 'own')
   const servers = new Map(items.filter((r) => r.kind === 'server').map((r) => [r.location, r]))
   const nProblems = items.filter(isProblem).length
+  const mask = useMask()
   const grid = { gridTemplateColumns: `8.5rem repeat(${cols.length}, minmax(5.5rem, 1fr)) 4rem` }
   const meterOf = (k: string) => {
     const d = servers.get(k)?.details
@@ -201,7 +202,9 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
               {cols.map((p, i) => (
                 <div key={p.key} className={cn('flex flex-col items-center gap-1 px-1.5 pt-2.5 pb-2 text-center', p.tier === 'own' && 'bg-primary/4', p.tier !== 'own' && i === own.length && 'border-l border-dashed')}>
                   <PlaceIcon p={p} />
-                  <span className="max-w-full truncate text-xs font-semibold">{p.label}</span>
+                  <span className="max-w-full truncate text-xs font-semibold">
+                    <PlaceName p={p} />
+                  </span>
                   {p.tier === 'own' ? meterOf(p.key) : <span className="text-[11px] text-muted-foreground">{p.tier === 'none' ? t('infra.place.noneShort') : (v.sources as Record<string, { connected?: boolean } | undefined>)[p.key]?.connected ? t('infra.place.apiShort') : t('infra.place.notRead')}</span>}
                 </div>
               ))}
@@ -225,7 +228,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
                             onClick={() => onPlace(x, p.key)}
                             className="min-w-11 rounded-lg px-2.5 py-1 text-base font-semibold tabular-nums transition-colors"
                             style={{ color: `color-mix(in oklch, ${p.color} 80%, var(--foreground))`, background: `color-mix(in oklch, ${p.color} 13%, transparent)` }}
-                            title={`${t(`infra.tab.${x}`)} · ${p.label}`}
+                            title={`${t(`infra.tab.${x}`)} · ${p.sensitive ? mask(p.label) : p.label}`}
                           >
                             {n}
                           </button>
@@ -332,7 +335,7 @@ function Details({ r, t, lang }: { r: InfraResource; t: TFn; lang: string }) {
     <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]">
       {rows.map(([k, v], i) => (
         <KV key={i} k={k}>
-          {v}
+          <Sensitive length={12}>{v}</Sensitive>
         </KV>
       ))}
     </dl>
@@ -377,8 +380,10 @@ function AskClaude({ r }: { r: InfraResource }) {
   )
 }
 
-function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<string, InfraResource>; onOpen: (id: string) => void; projects: string[] }) {
+function Detail({ r, v, byId, onOpen, projects }: { r: InfraResource; v: InfraView; byId: Map<string, InfraResource>; onOpen: (id: string) => void; projects: string[] }) {
   const t = useT()
+  const hide = usePresentation()
+  const mask = useMask()
   const lang = useLang()
   const annotate = useInfraAnnotate()
   const [note, setNote] = React.useState(r.note)
@@ -393,13 +398,17 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
       <SheetHeader>
         <SheetTitle className="flex items-center gap-2 pr-8">
           <Icon className="size-4 shrink-0 text-primary" />
-          <span className="truncate">{r.name}</span>
+          <span className="truncate">
+            <Sensitive length={14}>{r.name}</Sensitive>
+          </span>
         </SheetTitle>
         <SheetDescription className="flex flex-wrap items-center gap-2">
           <StatusDot tone={STATUS_TONE[r.status]} />
           <span>{statusText(r, t)}</span>
           <span>·</span>
-          <span>{locationLabel(r.location, t)}</span>
+          <span>
+            <PlaceName p={placeInfo(r.location, v, t)} />
+          </span>
           <span>·</span>
           <span>{tDyn(t, `infra.kind.${r.kind}`, r.kind)}</span>
           {r.declared && <Badge variant="muted">{t('infra.declared')}</Badge>}
@@ -407,7 +416,7 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
       </SheetHeader>
       <SheetBody className="grid content-start gap-4">
         {r.missing && <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-[13px]">{t('infra.missingHint')}</p>}
-        {r.urls.length > 0 && (
+        {r.urls.length > 0 && !hide && (
           <div className="grid gap-1">
             {r.urls.map((u) => {
               const c = (d.checks || []).find((x: { url: string }) => x.url === u)
@@ -454,8 +463,12 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
                     <button type="button" onClick={() => onOpen(l.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-accent/60">
                       <StatusDot tone={STATUS_TONE[l.status]} />
                       <LIcon className="size-3.5 text-muted-foreground" />
-                      <span className="truncate">{l.name}</span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{locationLabel(l.location, t)}</span>
+                      <span className="truncate">
+                        <Sensitive length={12}>{l.name}</Sensitive>
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        <PlaceName p={placeInfo(l.location, v, t)} />
+                      </span>
                     </button>
                   </li>
                 )
@@ -469,7 +482,7 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
             <Select
               value={r.project || '_none'}
               onValueChange={(v) => annotate.mutate({ id: r.id, project: v === '_none' ? '' : v })}
-              options={[{ value: '_none', label: t('infra.noProject') }, ...projects.map((p) => ({ value: p, label: p }))]}
+              options={[{ value: '_none', label: t('infra.noProject') }, ...projects.map((p) => ({ value: p, label: mask(p) }))]}
               className="h-8 w-auto min-w-36 text-xs pointer-coarse:h-10"
               aria-label={t('infra.project')}
             />
@@ -479,7 +492,8 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
             </label>
           </div>
           <Input
-            value={note}
+            value={hide ? mask(note) : note}
+            readOnly={hide}
             onChange={(e) => setNote(e.target.value)}
             onBlur={() => note !== r.note && annotate.mutate({ id: r.id, note })}
             placeholder={t('infra.notePlaceholder')}
@@ -487,7 +501,9 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
           />
         </div>
         <AskClaude key={r.id} r={r} />
-        <p className="font-mono text-[11px] break-all text-muted-foreground">{r.id}</p>
+        <p className="font-mono text-[11px] break-all text-muted-foreground">
+          <Sensitive length={20}>{r.id}</Sensitive>
+        </p>
       </SheetBody>
     </>
   )
@@ -496,6 +512,7 @@ function Detail({ r, byId, onOpen, projects }: { r: InfraResource; byId: Map<str
 export default function InfraPage() {
   const t = useT()
   const lang = useLang()
+  const mask = useMask()
   const { data: settings } = useSettings()
   const on = !!settings?.infra_page
   const { data: v, isLoading, error } = useInfra(on)
@@ -604,7 +621,7 @@ export default function InfraPage() {
             </div>
             {v.error && (
               <p className="flex items-center gap-2 text-[13px] text-destructive">
-                <AlertTriangle className="size-4" /> {v.error}
+                <AlertTriangle className="size-4" /> <Sensitive length={20}>{v.error}</Sensitive>
               </p>
             )}
             {tab !== 'mail' && tab !== 'overview' && tab !== 'servers' && (
@@ -616,7 +633,7 @@ export default function InfraPage() {
                 <Select
                   value={project}
                   onValueChange={setProject}
-                  options={[{ value: '_all', label: t('infra.allProjects') }, ...projects.map((p) => ({ value: p, label: p }))]}
+                  options={[{ value: '_all', label: t('infra.allProjects') }, ...projects.map((p) => ({ value: p, label: mask(p) }))]}
                   className="h-9 w-auto min-w-36"
                   aria-label={t('infra.project')}
                 />
@@ -668,7 +685,7 @@ export default function InfraPage() {
         </div>
       ) : null}
       <Sheet open={!!open} onOpenChange={(o) => !o && set({ id: null })}>
-        <SheetContent className="w-full sm:max-w-lg">{open && <Detail r={open} byId={byId} onOpen={(id) => set({ id, tab: tabOf(byId.get(id)!.kind) })} projects={projects} />}</SheetContent>
+        <SheetContent className="w-full sm:max-w-lg">{open && <Detail r={open} v={v!} byId={byId} onOpen={(id) => set({ id, tab: tabOf(byId.get(id)!.kind) })} projects={projects} />}</SheetContent>
       </Sheet>
     </Page>
   )

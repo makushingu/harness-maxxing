@@ -4,12 +4,17 @@ import * as React from 'react'
 import { ArrowUpRight, Cloud, Server } from 'lucide-react'
 import type { InfraResource, InfraView } from '@/lib/types'
 import { tDyn, useT, type TFn } from '@/i18n'
-import { Badge, StatusDot } from '@/components/ui'
+import { Badge, Sensitive, StatusDot, useMask, usePresentation } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { KIND_ICON, STATUS_TONE, statusText, subtitle } from './shared'
 import { byPlace, otherPlaces, placeInfo, placeOf, type Place } from './places'
 
 const ORDER: Record<string, number> = { down: 0, warn: 1, unknown: 2, ok: 3 }
+
+/** Name of a place; a server name is masked in presentation mode. */
+export function PlaceName({ p }: { p: Place }) {
+  return p.sensitive ? <Sensitive>{p.label}</Sensitive> : <>{p.label}</>
+}
 
 /** Small coloured tag of a place (this server, a VPS, Cloudflare…). */
 export function PlaceTag({ p, className }: { p: Place; className?: string }) {
@@ -19,7 +24,7 @@ export function PlaceTag({ p, className }: { p: Place; className?: string }) {
       style={{ color: `color-mix(in oklch, ${p.color} 80%, var(--foreground))`, background: `color-mix(in oklch, ${p.color} 14%, transparent)` }}
     >
       <p.icon className="size-3" />
-      {p.label}
+      <PlaceName p={p} />
     </span>
   )
 }
@@ -38,6 +43,8 @@ export function PlaceIcon({ p, className }: { p: Place; className?: string }) {
 /** Thin bar split by place, in the place colours. */
 export function MixBar({ parts, className, onPick, current }: { parts: { p: Place; n: number }[]; className?: string; onPick?: (key: string) => void; current?: string | null }) {
   const total = parts.reduce((a, x) => a + x.n, 0) || 1
+  const mask = useMask()
+  const name = (p: Place) => (p.sensitive ? mask(p.label) : p.label)
   return (
     <span className={cn('flex gap-px overflow-hidden rounded-full', className)} aria-hidden={!onPick}>
       {parts.map(({ p, n }) =>
@@ -45,8 +52,8 @@ export function MixBar({ parts, className, onPick, current }: { parts: { p: Plac
           <button
             key={p.key}
             type="button"
-            title={`${p.label}: ${n}`}
-            aria-label={`${p.label}: ${n}`}
+            title={`${name(p)}: ${n}`}
+            aria-label={`${name(p)}: ${n}`}
             onClick={() => onPick(p.key)}
             className={cn('h-full transition-opacity hover:opacity-100', current && current !== p.key ? 'opacity-35' : 'opacity-85')}
             style={{ flex: n / total, background: p.color }}
@@ -63,6 +70,7 @@ export function ResourceRow({ r, byId, v, onOpen }: { r: InfraResource; byId: Ma
   const t = useT()
   const Icon = KIND_ICON[r.kind]
   const also = otherPlaces(r, byId)
+  const masked = usePresentation()
   const bad = r.status === 'down' || r.status === 'warn'
   return (
     <li>
@@ -79,7 +87,9 @@ export function ResourceRow({ r, byId, v, onOpen }: { r: InfraResource; byId: Ma
       >
         <span className="flex min-w-0 items-center gap-2">
           <StatusDot tone={STATUS_TONE[r.status]} label={statusText(r, t)} />
-          <span className="truncate text-[13px] font-medium">{r.name}</span>
+          <span className="truncate text-[13px] font-medium">
+            <Sensitive length={14}>{r.name}</Sensitive>
+          </span>
           {r.kind !== 'site' && r.kind !== 'database' && r.kind !== 'bucket' && r.kind !== 'domain' && (
             <Badge variant="muted" className="shrink-0">
               <Icon className="size-3" /> {tDyn(t, `infra.kind.${r.kind}`, r.kind)}
@@ -93,16 +103,18 @@ export function ResourceRow({ r, byId, v, onOpen }: { r: InfraResource; byId: Ma
           {also.map((l) => (
             <PlaceTag key={l} p={placeInfo(l, v, t)} />
           ))}
-          <span className="truncate">{r.note ? <i>{r.note}</i> : subtitle(r, t)}</span>
+          <span className="truncate">
+            <Sensitive length={18}>{r.note ? <i>{r.note}</i> : subtitle(r, t)}</Sensitive>
+          </span>
         </span>
         <span className="flex items-center justify-end gap-2 max-md:hidden">
           {bad && <span className={cn('text-xs whitespace-nowrap', r.status === 'down' ? 'text-destructive' : 'text-warning')}>{statusText(r, t)}</span>}
           {r.project && (
             <Badge variant="outline" className="max-w-32 truncate">
-              {r.project}
+              <Sensitive>{r.project}</Sensitive>
             </Badge>
           )}
-          {r.urls[0] ? (
+          {r.urls[0] && !masked ? (
             <a
               href={r.urls[0]}
               target="_blank"
@@ -140,7 +152,9 @@ function PlaceGroup({ p, list, byId, v, onOpen, sub }: { p: Place; list: InfraRe
       <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ background: `color-mix(in oklch, ${p.color} 6%, transparent)` }}>
         <PlaceIcon p={p} />
         <div className="grid min-w-0 flex-1">
-          <span className="truncate text-sm font-semibold">{p.label}</span>
+          <span className="truncate text-sm font-semibold">
+            <PlaceName p={p} />
+          </span>
           <span className="truncate text-xs text-muted-foreground">{sub}</span>
         </div>
         {down > 0 && <Badge variant="destructive">{t('infra.nDown', { count: down })}</Badge>}
@@ -172,9 +186,9 @@ function TierTitle({ tier }: { tier: 'own' | 'hosted' }) {
 }
 
 /** Subtitle of a place block: who runs it and how Harness reads it. */
-function placeSub(p: Place, v: InfraView, t: TFn, domains: boolean) {
+function placeSub(p: Place, v: InfraView, t: TFn, domains: boolean, mask: (s: string) => string) {
   if (p.tier === 'none') return t('infra.place.noneSub')
-  if (domains) return t(p.tier === 'own' ? 'infra.place.pointsOwn' : 'infra.place.pointsHosted', { name: p.label })
+  if (domains) return t(p.tier === 'own' ? 'infra.place.pointsOwn' : 'infra.place.pointsHosted', { name: p.sensitive ? mask(p.label) : p.label })
   if (p.key === 'local') return t('infra.place.localSub')
   if (p.tier === 'own') return v.sources.servers?.[p.key]?.ok === false ? t('infra.place.sshDown') : t('infra.place.sshSub')
   return t('infra.place.hostedSub', { name: p.label })
@@ -183,6 +197,7 @@ function placeSub(p: Place, v: InfraView, t: TFn, domains: boolean) {
 export function TypeView({ items, v, byId, at, onAt, onOpen, intro }: { items: InfraResource[]; v: InfraView; byId: Map<string, InfraResource>; at: string | null; onAt: (key: string | null) => void; onOpen: (id: string) => void; intro?: React.ReactNode }) {
   const t = useT()
   const domains = items[0]?.kind === 'domain'
+  const mask = useMask()
   const groups = new Map<string, InfraResource[]>()
   for (const r of items) {
     const k = placeOf(r, byId)
@@ -204,7 +219,7 @@ export function TypeView({ items, v, byId, at, onAt, onOpen, intro }: { items: I
       style={cur === x.p.key ? { borderColor: x.p.color, background: `color-mix(in oklch, ${x.p.color} 14%, transparent)` } : undefined}
     >
       <i className="size-2 rounded-[2px]" style={{ background: x.p.color }} />
-      {x.p.label}
+      <PlaceName p={x.p} />
       <span className="tabular-nums opacity-70">{x.n}</span>
     </button>
   )
@@ -247,7 +262,7 @@ export function TypeView({ items, v, byId, at, onAt, onOpen, intro }: { items: I
         return (
           <React.Fragment key={k}>
             {title}
-            <PlaceGroup p={p} list={groups.get(k)!} byId={byId} v={v} onOpen={onOpen} sub={placeSub(p, v, t, domains)} />
+            <PlaceGroup p={p} list={groups.get(k)!} byId={byId} v={v} onOpen={onOpen} sub={placeSub(p, v, t, domains, mask)} />
           </React.Fragment>
         )
       })}
