@@ -486,9 +486,9 @@ const GroupMessage = React.memo(function GroupMessage({
     )
   if (m.kind === 'pass')
     return (
-      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground" data-kind="pass">
+      <div className="flex min-w-0 items-center justify-center gap-1.5 text-center text-xs text-muted-foreground" data-kind="pass">
         {member && <AgentAvatarIcon avatar={member.avatar} size={16} />}
-        <span>
+        <span className="min-w-0 wrap-anywhere">
           {t('groups.pass', { name: who })} · {when}
         </span>
         {run}
@@ -496,9 +496,9 @@ const GroupMessage = React.memo(function GroupMessage({
     )
   if (m.kind === 'skip')
     return (
-      <div className="flex items-center justify-center gap-1.5 text-center text-xs text-warning" data-kind="skip">
+      <div className="flex min-w-0 items-center justify-center gap-1.5 text-center text-xs text-warning" data-kind="skip">
         {member && <AgentAvatarIcon avatar={member.avatar} size={16} />}
-        <span>
+        <span className="min-w-0 wrap-anywhere">
           {t('groups.skip', { name: who })} <span className="text-muted-foreground">{skipText(t, m)}</span> · {when}
         </span>
       </div>
