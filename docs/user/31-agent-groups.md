@@ -57,7 +57,7 @@ Write a message as in any chat. Who answers depends on the names in it:
 | `@writer draft a post about spring gardening` | the writer |
 | `@writer draft it, then @reviewer check it` | the writer, then the reviewer (in that order) |
 | `@all anything to add?` (or `@everyone`, `@tous`) | every member, in the group's order |
-| `what do you think?` (nobody named) | the lead; without a lead, the last member who spoke (else the first) |
+| `what do you think?` (nobody named) | the lead; without a lead, the last member who spoke (else the first); a deleted member is passed over |
 | `stop @publisher` | nobody: the publisher is **paused** until you name it again |
 
 While you type `@`, the members are suggested with their face (type a few letters of the `@name` or of the name).
