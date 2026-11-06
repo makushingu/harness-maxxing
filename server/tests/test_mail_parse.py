@@ -198,3 +198,15 @@ def test_attachments_past_the_parts_limit_are_counted_not_hidden():
     assert len(m["attachments"]) + m["attachments_more"] == 1200 and m["attachments_more"] > 0
     few = _render(_many(3))
     assert len(few["attachments"]) == 3 and few["attachments_more"] == 0
+
+
+@pytest.mark.parametrize("value", ["," * 60000, '"' * 60000, "a@x.fr, " * 8000], ids=["commas", "quotes", "list"])
+def test_a_huge_address_header_is_cut_before_the_parser(monkeypatch, value):
+    seen = []
+    parsed = imap._parsed
+    monkeypatch.setattr(imap, "_parsed", lambda msg, name, raw: seen.append(len(raw)) or parsed(msg, name, raw))
+    msg = imap._parse(f"From: a@x.fr\r\nTo: {value}\r\nSubject: s\r\n\r\nx\r\n".encode())
+    got = imap._addrs(msg, "to")
+    assert seen and max(seen) <= 4 * 1024                   # the parser is quadratic: never fed more than this
+    if "@" in value:
+        assert 100 <= len(got) <= 600 and got[0]["email"] == "a@x.fr"
