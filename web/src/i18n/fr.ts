@@ -3377,6 +3377,7 @@ export const fr: Record<keyof typeof en, string> = {
   'groups.field.role': 'Rôle de {name}',
   'groups.field.rolePlaceholder': 'Ce qu\'il fait dans ce groupe (facultatif)',
   'groups.field.goneMembers': 'Des membres ont été supprimés : enregistrer les retire du groupe.',
+  'groups.field.goneRemove': 'Retirer',
   'groups.field.lead': 'Meneur',
   'groups.field.leadHint': 'Répond quand vous ne nommez personne.',
   'groups.field.leadNone': 'Personne : le dernier qui a parlé',
