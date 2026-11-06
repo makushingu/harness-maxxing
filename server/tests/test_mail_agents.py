@@ -165,6 +165,9 @@ def _cli(capsys, *argv, stdin: str | None = None, monkeypatch=None) -> tuple[int
 def test_the_mail_setting_names_mailboxes_of_the_page(client, box):
     r = client.patch("/api/agents/acme/blog/writer", json={"mail": [{"account": "nope"}]})
     assert r.status_code == 400 and "bad_mail" in r.text
+    for acc in (["me-example"], {"a": 1}, 3):
+        r = client.patch("/api/agents/acme/blog/writer", json={"mail": [{"account": acc}]})
+        assert r.status_code == 400 and "bad_mail" in r.text            # was a 500 (unhashable list)
     r = client.patch("/api/agents/acme/blog/writer", json={"mail": [{"account": "me-example", "rights": ["fly"]}]})
     assert r.status_code == 400
     g = _grant(client, rights=["read", "send"], approve_send="new")
