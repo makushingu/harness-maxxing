@@ -33,8 +33,8 @@ const subscribeLowlight = (cb: () => void) => {
 }
 const lowlightReady = () => lowlight !== null
 const noHighlight = () => false
-/** A fenced code block with a language somewhere in the text (generous: a false positive only costs a re-render). */
-const FENCE_LANG = /(?:`{3,}|~{3,})[ \t]*[^\s`~]/
+/** A fenced code block with a language somewhere in the text (generous: a false positive only costs a re-render). Exactly 3 marks: a longer run still matches on its last 3, and the test stays linear. */
+const FENCE_LANG = /(?:`{3}|~{3})[ \t]*[^\s`~]/
 
 type HNode = { type: string; tagName?: string; properties?: Record<string, unknown>; children?: HNode[]; value?: string }
 const hText = (n: HNode): string => (n.type === 'text' ? (n.value ?? '') : (n.children ?? []).map(hText).join(''))
