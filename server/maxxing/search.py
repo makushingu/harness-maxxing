@@ -246,51 +246,67 @@ def _index_sessions(con: sqlite3.Connection) -> None:
 
 
 def _index_groups(con: sqlite3.Connection) -> None:
-    """The conversations of the agent groups (<state>/agents/rooms/<p>__<g>.jsonl, at most 2 MB each): a changed
-    room is indexed again whole - a title row (the group's name) and one row per message ("@writer: ...")."""
-    from . import agent_rooms
+    """The conversations of the agent groups (<state>/agents/rooms/<p>__<g>.jsonl, at most 2 MB each), while Agents is
+    on: a title row (the group's name), then one row per message ("@writer: ..."), only the new lines read (as the
+    session logs). A room rewritten (trimmed, a member moved) or a changed group.json is indexed again from the start."""
+    from . import agent_rooms, agents
     known = {k for (k,) in con.execute("SELECT key FROM src WHERE key LIKE 'g:%'")}
     alive = set()
     try:
-        rooms = sorted(config.state_dir("agents", "rooms").glob("*.jsonl"))
+        rooms = sorted(config.state_dir("agents", "rooms").glob("*.jsonl")) if agents.feature_on() else []
     except OSError:
         rooms = []
     for f in rooms:
         parts = f.stem.split("__")
-        if len(parts) != 2:
+        path = agent_rooms.group_path(*parts) if len(parts) == 2 else ""
+        if not path or not agent_rooms.exists(path):
             continue
-        path = agent_rooms.group_path(*parts)
         key = f"g:{path}"
-        if not agent_rooms.exists(path):
-            continue
         alive.add(key)
         stamp = (_stat_key(f), _stat_key(agent_rooms.folder(path) / agent_rooms.GROUP_FILE))
-        if key in known and _seen.get(key) == stamp and None not in stamp:
+        if None in stamp:
+            alive.discard(key)
             continue
-        _drop(con, key)
+        if key in known and _seen.get(key) == stamp:
+            continue
+        _seen.pop(key, None)
         try:
             g = agent_rooms.load(path)
             hs = agent_rooms.handles(g)
-            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
         except Exception:  # noqa: BLE001 - a broken group is skipped, the next refresh tries again
             alive.discard(key)
             continue
-        title = g.get("name") or parts[1]
-        con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                    (key, "group", path, path, title, "", stamp[0][1] if stamp[0] else None))
-        for line in lines:
-            try:
-                m = json.loads(line)
-            except ValueError:
-                continue
-            text = (m.get("text") or "").strip() if isinstance(m, dict) and m.get("kind") == "message" else ""
-            if not text:
-                continue
-            who = "Owner" if m.get("author") == "me" else "@" + hs.get(m.get("author") or "", agent_rooms.slug(m.get("author") or ""))
+        row = con.execute("SELECT sig FROM src WHERE key=?", (key,)).fetchone()
+        sig = json.loads(row[0]) if row else None
+        ino, size = stamp[0][0], stamp[0][2]
+        if sig and (sig.get("ino") != ino or sig.get("offset", 0) > size or sig.get("group") != list(stamp[1])):
+            _drop(con, key)
+            sig = None
+        if sig is None:
+            sig = {"ino": ino, "offset": 0, "group": list(stamp[1])}
             con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                        (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS], m.get("at")))
-        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps({"room": str(f)})))
-        _seen[key] = stamp
+                        (key, "group", path, path, g.get("name") or parts[1], "", stamp[0][1] / 1e9))
+        if sig["offset"] < size:
+            with open(f, "rb") as fh:
+                fh.seek(sig["offset"])
+                chunk = fh.read(READ_CHUNK)
+            end = chunk.rfind(b"\n") + 1                     # complete lines only
+            for line in chunk[:end].decode("utf-8", "replace").splitlines():
+                try:
+                    m = json.loads(line)
+                except ValueError:
+                    continue
+                text = (m.get("text") or "").strip() if isinstance(m, dict) and m.get("kind") == "message" else ""
+                if not text:
+                    continue
+                author = str(m.get("author") or "")
+                who = "Owner" if author == "me" else "@" + hs.get(author, agent_rooms.slug(author))
+                con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS], m.get("at")))
+            sig["offset"] += end
+        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
+        if sig["offset"] >= size:
+            _seen[key] = stamp
     for key in known - alive:
         _drop(con, key)
         _seen.pop(key, None)

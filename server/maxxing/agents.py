@@ -423,6 +423,8 @@ def checked_attachments(base: Path, files: list[str] | None) -> list[str]:
     if len(files) > ATTACH_MAX:
         raise AgentError(400, "too_many_attachments", f"At most {ATTACH_MAX} files a message")
     top = os.path.normpath(str(base / "attachments"))
+    if os.path.islink(top):
+        raise AgentError(400, "bad_attachment", "The attachments folder is a link")
     real = os.path.realpath(top)
     out: list[str] = []
     for f in files:

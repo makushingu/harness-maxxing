@@ -51,6 +51,8 @@ async def search(request: Request, q: str = "", kinds: str = "", limit: int = Qu
     from .. import agents
     if not agents.feature_on():                  # Agents off: no group conversations in the results
         wanted = [k for k in wanted if k != "group"]
+        if not wanted:
+            return {"results": [], "took_ms": 0}
     # The palette aborts a query when the next keystroke comes: its worker thread (shared with the whole API)
     # stops too, instead of ranking for nobody.
     gone = threading.Event()
