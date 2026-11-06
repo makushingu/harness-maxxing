@@ -157,7 +157,8 @@ ENV_GLOBS = (".env", ".env.*", "*/.env", "*/.env.*", "*/*/.env", "*/*/.env.*")
 
 def private_paths(path: str) -> list[str]:
     """What a sandboxed agent never reads in the workspace: the other projects, the other topics of its project, the
-    other agents of its topic, and the `.env` files of its topic (globs, expanded by Claude Code at sandbox start)."""
+    other agents of its topic, the groups of its project it is not a member of (and the kept folders of deleted
+    groups), and the `.env` files of its topic (globs, expanded by Claude Code at sandbox start)."""
     root = config.workspace()
     folder = root / path
     topic = folder.parent.parent
@@ -167,7 +168,23 @@ def private_paths(path: str) -> list[str]:
             out += [str(k) for k in sorted(d.iterdir()) if k.is_dir() and k != keep]
         except OSError:
             pass
+    try:
+        groups = sorted(topic.parent.parent.joinpath("groups").iterdir())
+    except OSError:
+        groups = []
+    out += [str(g) for g in groups if g.is_dir() and not _member(g, path)]
     return out + [f"{topic}/{g}" for g in ENV_GLOBS]
+
+
+def _member(group: Path, path: str) -> bool:
+    """`path` is a member of the group folder (its group.json, read here: agent_rooms is not imported by the runner)."""
+    if group.name.startswith("."):                  # .kept-<name>-<time>: a deleted group's files
+        return False
+    try:
+        d = json.loads((group / "group.json").read_text(encoding="utf-8"))
+        return any(isinstance(m, dict) and m.get("path") == path for m in d.get("members") or [])
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def read_back() -> list[str]:
