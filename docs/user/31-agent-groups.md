@@ -141,6 +141,7 @@ always counts.
 The group says it in a small line: *switched off*, *daily budget reached*, *the turn failed*, or a limit reached.
 Open the member's page for the details (its Activity and its runs). A member whose agent was deleted is shown as
 removed and skipped; in **Edit** it is listed apart with **Remove**, and saving the group drops it in any case.
+A member removed from the group while it speaks: its answer is not posted.
 Deleting the project takes its groups' conversations to the Trash with it: a new project of the same name starts
 clean, and restoring the old one brings them back.
 
