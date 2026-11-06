@@ -133,15 +133,23 @@ def _state_file(path: str, ext: str) -> Path:
 
 
 # ---- agent.json ----------------------------------------------------------------------------------
-def _num(v: Any, default: float, lo: float, hi: float, integer: bool) -> float | int:
+def _num(v: Any, default: float, lo: float, hi: float, integer: bool, strict: str = "") -> float | int:
+    """strict: the field's name; a value that is not a number, above the maximum or negative where 0 = no limit is
+    refused instead of cut. Not strict, a negative value there never turns into "no limit": it takes the default."""
     try:
         n = float(v)
     except (TypeError, ValueError):
-        n = default
+        n = float("nan")
+    if strict and (not math.isfinite(n) or n > hi or (n < lo and lo == 0)):
+        raise AgentError(400, "bad_limit", f"{strict}: a number from {lo:g} to {hi:g}")
     if n != n:                                          # NaN
         n = default
+    if n < lo and lo == 0:
+        n = default
     n = min(max(n, lo), hi)
-    return int(n) if integer else round(n, 4)
+    if integer:
+        return int(n)
+    return max(round(n, 4), 0.01) if n > 0 else 0.0   # a tiny budget is a small budget, never "no budget"
 
 
 def project_color(project: str) -> str:
@@ -402,7 +410,8 @@ def clean(data: Any, strict: bool = False) -> dict:
     """agent.json with every field present and valid. strict: refuse bad values instead of dropping them."""
     d = data if isinstance(data, dict) else {}
     limits_in = d.get("limits") if isinstance(d.get("limits"), dict) else {}
-    limits = {k: _num(limits_in.get(k, dv), dv, lo, hi, isinstance(dv, int)) for k, (dv, lo, hi) in LIMITS.items()}
+    limits = {k: _num(limits_in.get(k, dv), dv, lo, hi, isinstance(dv, int), k if strict and k in limits_in else "")
+              for k, (dv, lo, hi) in LIMITS.items()}
     mode = d.get("permission_mode") or ""
     if mode not in PERMISSION_MODES:
         if strict and mode:
