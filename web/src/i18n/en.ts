@@ -1701,6 +1701,21 @@ export const en = {
   'infra.mail.f.dmarc_inherited_none': 'Once SPF and DKIM pass, switch the record of {parent} to p=quarantine, then p=reject.',
   'infra.mail.p.spf_neutral': 'The SPF record of {domain} does not end with ~all or -all: it says nothing about other senders, so anyone can claim to send mail as @{domain}.',
   'infra.mail.f.spf_neutral': 'End it with ~all (or -all).',
+  // infra mail advice: subdomain DMARC (sp=), invalid parent, SPF redirect/loop, SPF senders
+  'infra.mail.p.dmarc_inherited_sp': 'No DMARC record on {domain}: {parent} sets sp=none for its subdomains, so {domain} gets p=none whatever p= of {parent} says.',
+  'infra.mail.f.dmarc_inherited_sp': 'Once SPF and DKIM pass for {domain}, change sp=none to sp=quarantine, then sp=reject, in the record of {parent}, or give {domain} its own record _dmarc.{domain} with p=quarantine. Do not lower p= of {parent}.',
+  'infra.mail.p.dmarc_inherited_sp_quarantine': 'No DMARC record on {domain}: {parent} sets p={parent_policy} but sp={policy} for its subdomains, so {domain} gets p={policy}.',
+  'infra.mail.f.dmarc_inherited_sp_quarantine': 'To give {domain} p={parent_policy} too, change sp={policy} to sp={parent_policy} (or remove sp=) in the record of {parent}, or give {domain} its own record _dmarc.{domain} with p={parent_policy}. Do not lower p= of {parent}.',
+  'infra.mail.p.dmarc_parent_invalid': 'No DMARC record on {domain}, and the one of {parent} is invalid ({reason}): no DMARC policy applies to {domain}.',
+  'infra.mail.f.dmarc_parent_invalid': 'Fix the record _dmarc.{parent} (one TXT record v=DMARC1 with a p=), or add a TXT record _dmarc.{domain}: {record}',
+  'infra.mail.p.spf_redirect_all': 'The SPF record of {domain} hands over to {target} (redirect=), which ends with +all: anyone may send as @{domain}.',
+  'infra.mail.f.spf_redirect_all': 'End the record of {domain} with ~all instead of redirect=, or fix {target}.',
+  'infra.mail.p.spf_loop': 'The SPF record of {domain} loops: {target} points back to a record already on the chain, and receivers treat that as an error.',
+  'infra.mail.f.spf_loop': 'Remove the include: or redirect= that points back to a record already on the chain.',
+  'infra.mail.p.no_spf_sender': 'No SPF record: anyone can claim to send mail as @{domain}.',
+  'infra.mail.f.no_spf_sender': 'Add a TXT record on {domain} that names every service you send with: start from {record} and add the include: of {sender} (its provider documents it) before ~all.',
+  'infra.mail.p.no_spf_unknown': 'No SPF record: anyone can claim to send mail as @{domain}.',
+  'infra.mail.f.no_spf_unknown': 'Add a TXT record on {domain} that names every service you send mail with. From its MX records alone it would be {record}: add the include: of the service you send with (your mail provider documents it) before ~all, or the mail you send fails SPF.',
 
   // system
   'system.health': 'Health',

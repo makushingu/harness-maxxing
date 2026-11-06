@@ -173,7 +173,8 @@ def test_cloudflare_hostinger_routes_and_dns(org, monkeypatch):
     acme = {p["code"]: p for p in doms["acme.example"]["problems"]}
     assert acme["no_mx"]["level"] == "error"
     assert acme["no_dmarc"]["fix"] == "Add a TXT record _dmarc.acme.example: v=DMARC1; p=none; rua=mailto:me@acme.example"
-    assert acme["no_spf"]["params"]["record"] == "v=spf1 mx ~all"
+    # its mailbox sends through imap.example.net (no known include): said, never offered as a complete record
+    assert acme["no_spf_sender"]["params"] == {"domain": "acme.example", "record": "v=spf1 mx ~all", "sender": "imap.example.net"}
     assert ("quiet.example.net", "MX") not in dns_q                                         # routing off: not a mail domain
 
 
@@ -235,17 +236,117 @@ def test_spf_without_a_real_all_is_flagged():
 
 
 def test_a_subdomain_inherits_the_parent_dmarc_and_is_never_told_p_none(monkeypatch):
-    DNS[("_dmarc.example.org", "TXT")] = txt(["v=DMARC1; p=reject; sp=quarantine"])
+    DNS[("_dmarc.example.org", "TXT")] = txt(["v=DMARC1; p=reject"])
     monkeypatch.setattr(mailinfo.dnsinfo, "_query", lambda c, name, rtype: DNS.get((name, rtype)) or [])
     try:
         facts = mailinfo.dns_facts("blog.example.org")
     finally:
         del DNS[("_dmarc.example.org", "TXT")]
-    assert facts["dmarc"] == [] and facts["dmarc_parent"] == {"domain": "example.org", "records": ["v=DMARC1; p=reject; sp=quarantine"]}
+    assert facts["dmarc"] == [] and facts["dmarc_parent"] == {"domain": "example.org", "records": ["v=DMARC1; p=reject"]}
     probs = mailinfo.problems("blog.example.org", facts, True, False, "x@example.org")
     [d] = [p for p in probs if "dmarc" in p["code"]]
-    assert d["code"] == "dmarc_inherited" and d["params"]["policy"] == "quarantine" and "Do not add a p=none" in d["fix"]
+    assert d["code"] == "dmarc_inherited" and d["params"]["policy"] == "reject" and "Do not add a p=none" in d["fix"]
     assert "no_dmarc" in [p["code"] for p in mailinfo.problems("blog.example.org", {**facts, "dmarc_parent": None}, True, False, "x")]
+
+
+def _inherit(records):
+    facts = {"mx": [{"prio": 10, "host": "mx.example.net"}], "spf": ["v=spf1 mx -all"], "dkim": ["k1"], "dmarc": [],
+             "dmarc_parent": {"domain": "example.com", "records": records}}
+    [d] = [p for p in mailinfo.problems("shop.example.com", facts, True, False, "x@example.com") if "dmarc" in p["code"]]
+    return d
+
+
+def test_parent_sp_decides_the_subdomain_policy_and_the_parent_p_is_never_lowered():
+    for rec in ("v=DMARC1; p=reject; sp=none", "v=DMARC1; p=quarantine; sp=none", "v=DMARC1; p=none; sp=none"):
+        d = _inherit([rec])                     # sp=none: the subdomain gets none whatever p= is
+        assert d["code"] == "dmarc_inherited_sp" and d["params"]["policy"] == "none", rec
+        assert "sp=quarantine" in d["fix"] and "Do not lower p=" in d["fix"] and "p=none record" not in d["fix"]
+    d = _inherit(["v=DMARC1; p=reject; sp=quarantine"])
+    assert d["code"] == "dmarc_inherited_sp_quarantine" and d["params"] == {
+        "domain": "shop.example.com", "parent": "example.com", "policy": "quarantine", "parent_policy": "reject"}
+    assert "change sp=quarantine to sp=reject" in d["fix"] and "p=quarantine, then" not in d["fix"]
+    # old behaviour kept: no sp= (p= applies), or sp= at least as strong as p=
+    assert _inherit(["v=DMARC1; p=none"])["code"] == "dmarc_inherited_none"
+    assert "switch the record of example.com to p=quarantine" in _inherit(["v=DMARC1; p=none"])["fix"]
+    for rec, pol in (("v=DMARC1; p=quarantine", "quarantine"), ("v=DMARC1; p=none; sp=quarantine", "quarantine"),
+                     ("v=DMARC1; p=quarantine; sp=reject", "reject"), ("v=DMARC1; p=reject; sp=reject", "reject")):
+        d = _inherit([rec])
+        assert (d["code"], d["params"]["policy"]) == ("dmarc_inherited", pol), rec
+
+
+def test_an_invalid_parent_dmarc_protects_nothing():
+    for recs, why in ((["v=DMARC1; p=reject", "v=DMARC1; p=none"], "2 × v=DMARC1"),
+                      (["v=DMARC1; rua=mailto:x@example.com"], "p=?"), (["v=DMARC1; p=rejected"], "p=?"),
+                      (["v=DMARC1; p=reject; sp=strict"], "sp=?")):
+        d = _inherit(recs)
+        assert d["code"] == "dmarc_parent_invalid" and d["level"] == "warn" and d["params"]["reason"] == why, recs
+        assert "_dmarc.example.com" in d["fix"] and "_dmarc.shop.example.com" in d["fix"] and "Nothing to add" not in d["fix"]
+
+
+def _spf(zone):
+    dns = {k: txt(*([r] for r in v)) for k, v in zone.items()}
+    import maxxing.infra.dnsinfo as di
+    old = di._query
+    di._query = lambda c, name, rtype: dns.get((name, rtype)) or []
+    try:
+        facts = mailinfo.dns_facts("ex.com")
+    finally:
+        di._query = old
+    facts.update({"mx": [{"prio": 10, "host": "mx.ex.net"}], "dkim": ["k1"], "dmarc": ["v=DMARC1; p=reject"]})
+    return facts, [p["code"] for p in mailinfo.problems("ex.com", facts, True, False, "x@ex.com")]
+
+
+def test_spf_redirect_is_ignored_with_all_loops_are_errors_and_the_redirect_target_all_counts():
+    big = "v=spf1 " + " ".join(f"include:i{i}.net" for i in range(8)) + " -all"
+    # RFC 7208 6.1: redirect= is ignored when the record has an `all`
+    facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 a mx include:x.net -all redirect=big.net"],
+                         ("x.net", "TXT"): ["v=spf1 a mx a mx ~all"], ("big.net", "TXT"): [big]})
+    assert facts["spf_lookups"] == 7 and codes == [] and "spf_redirect" not in facts
+    # negative: without `all` the redirect is followed and counted
+    facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 a mx include:x.net redirect=big.net"],
+                         ("x.net", "TXT"): ["v=spf1 a mx a mx ~all"], ("big.net", "TXT"): [big]})
+    assert facts["spf_lookups"] == 16 and codes == ["spf_lookups"] and facts["spf_redirect_all"] == "-"
+    # loops: back to the domain, or between two includes
+    for zone in ({("ex.com", "TXT"): ["v=spf1 include:a.net -all"], ("a.net", "TXT"): ["v=spf1 include:ex.com ~all"]},
+                 {("ex.com", "TXT"): ["v=spf1 include:a.net -all"], ("a.net", "TXT"): ["v=spf1 include:b.net ~all"],
+                  ("b.net", "TXT"): ["v=spf1 include:a.net ~all"]},
+                 {("ex.com", "TXT"): ["v=spf1 redirect=a.net"], ("a.net", "TXT"): ["v=spf1 redirect=ex.com"]}):
+        facts, codes = _spf(zone)
+        assert "spf_loop" in codes and facts["spf_loop"], zone
+    # negative: the same include reached twice (a diamond) is not a loop
+    facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 include:a.net include:b.net -all"],
+                         ("a.net", "TXT"): ["v=spf1 include:c.net ~all"], ("b.net", "TXT"): ["v=spf1 include:c.net ~all"],
+                         ("c.net", "TXT"): ["v=spf1 a ~all"]})
+    assert codes == [] and not facts["spf_loop"]
+    # the `all` that applies through redirect= (also through a chain of them)
+    for end, want in (("+all", ["spf_redirect_all"]), ("all", ["spf_redirect_all"]), ("?all", ["spf_neutral"]),
+                      ("", ["spf_neutral"]), ("-all", []), ("~all", [])):
+        facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 redirect=_spf.ex.net"],
+                             ("_spf.ex.net", "TXT"): ["v=spf1 redirect=_spf2.ex.net"], ("_spf2.ex.net", "TXT"): [f"v=spf1 a {end}"]})
+        assert codes == want, end
+    # an include ending with +all does not make the domain's record permissive (only its own / redirect `all` counts)
+    facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 include:a.net -all"], ("a.net", "TXT"): ["v=spf1 +all"]})
+    assert codes == []
+    # a redirect target that cannot be read: nothing claimed
+    assert _spf({("ex.com", "TXT"): ["v=spf1 redirect=gone.net"]})[1] == []
+
+
+def test_spf_suggestion_covers_the_mailbox_smtp_server_and_says_when_the_sender_is_unknown():
+    def no_spf(mx, senders=()):
+        facts = {"mx": [{"prio": 10, "host": h} for h in mx], "spf": [], "dkim": ["k1"], "dmarc": ["v=DMARC1; p=reject"]}
+        [p] = [p for p in mailinfo.problems("ex.com", facts, True, False, "x@ex.com", list(senders)) if "spf" in p["code"]]
+        return p["code"], p["params"]["record"], p["params"].get("sender")
+    cf = ["route1.mx.cloudflare.net"]
+    assert no_spf(cf, ["smtp.gmail.com"]) == ("no_spf", "v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all", None)
+    assert no_spf(["mx1.mail.ovh.net"], ["ssl0.ovh.net"]) == ("no_spf", "v=spf1 include:mx.ovh.com ~all", None)
+    assert no_spf(cf, ["mail.ex.com"]) == ("no_spf", "v=spf1 include:_spf.mx.cloudflare.net a:mail.ex.com ~all", None)
+    assert no_spf(cf, ["smtp.odd-host.example"]) == ("no_spf_sender", "v=spf1 include:_spf.mx.cloudflare.net ~all",
+                                                     "smtp.odd-host.example")
+    # nobody known sends: Cloudflare Email Routing only forwards, an unknown MX is a guess
+    assert no_spf(cf)[0] == "no_spf_unknown" and no_spf(["mx.example.net"]) == ("no_spf_unknown", "v=spf1 mx ~all", None)
+    # old behaviour kept: an MX of a provider that also sends, with no mailbox on the E-mail page
+    assert no_spf(["aspmx.l.google.com"]) == ("no_spf", "v=spf1 include:_spf.google.com ~all", None)
+    assert no_spf(["mx1.hostinger.com"]) == ("no_spf", "v=spf1 include:_spf.mail.hostinger.com ~all", None)
 
 
 def test_api_and_cli(client, org, monkeypatch, capsys):  # noqa: F811
