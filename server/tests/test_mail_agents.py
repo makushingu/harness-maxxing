@@ -115,6 +115,7 @@ def box(client, topic, smtp, monkeypatch):
         return {**r, "folder": folder, "cc": [], "reply_to": [], "bcc": [], "in_reply_to": "", "references": "",
                 "text": f"text of {uid}", "html": None, "attachments": [], "remote_images": False}
     monkeypatch.setattr(imap, "message", message)
+    monkeypatch.setattr(imap, "excerpt", lambda acc, folder, uid, limit=0: message(acc, folder, uid, mark_seen=False))
 
     def messages(acc, folder="INBOX", page=0, size=50, q=None, unread=False, flagged=False, senders=None):
         got = [dict(r) for r in rows.values() if access.sender_ok({"senders": senders or []}, r["from"]["email"], r["from_verified"])]
@@ -384,6 +385,28 @@ def test_a_busy_agent_gets_the_mail_later(client, box, monkeypatch):
     marks = {w for w in text.split() if w.startswith("MAIL-")}
     assert len(marks) == 1 and marks.isdisjoint(fired[0]["text"].split())
     assert poll.retry_pending() == 0
+
+
+def test_mail_kept_for_a_busy_agent_follows_its_rights_now(client, box, monkeypatch):
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": False, "reason": "busy"})
+    rows, acc = box["rows"], box["acc"]
+    poll._fire(A, acc, "INBOX", [rows[1], rows[3]], {}, "p")
+    _grant(client, rights=["read"], trigger={"enabled": True}, senders=["*@stripe.com"])   # bob no longer allowed
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    assert poll.retry_pending() == 1
+    assert "UID: 1" in fired[-1]["text"] and "UID: 3" not in fired[-1]["text"]
+    for cut in ({"trigger": {"enabled": False}}, {"rights": ["draft"]}):     # trigger off, or no right to read
+        poll._keep(A, acc["id"], "INBOX", [rows[1]], {}, "p")
+        _grant(client, **{"rights": ["read"], "trigger": {"enabled": True}, **cut})
+        assert poll.retry_pending() == 0
+        _grant(client, rights=["read"], trigger={"enabled": True})
+    poll._keep(A, acc["id"], "INBOX", [rows[1]], {}, "p")
+    c = config.load_config()
+    c["agents_page"] = False                                             # the Agents feature is off
+    config.save_config(c)
+    assert poll.retry_pending() == 0 and config.read_json(poll._pending_file(), default=[]) == []
 
 
 def test_check_interval_and_refresh(client, box, monkeypatch):

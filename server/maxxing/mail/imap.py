@@ -707,6 +707,24 @@ def message(acc: dict, folder: str, uid: int, mark_seen: bool = True) -> dict:
     return with_trust(acc, [_render(_parse(raw), uid, folder, fl)])[0]
 
 
+EXCERPT_BYTES = 256 * 1024
+
+
+def excerpt(acc: dict, folder: str, uid: int, limit: int = EXCERPT_BYTES) -> dict:
+    """{text, html} of a message from its first `limit` bytes only (the check of the mailboxes: the text comes before
+    the attachments, which are never downloaded). Never marks it read."""
+    with session(acc) as m:
+        _select(m, folder, readonly=True)
+        typ, data = m.uid("FETCH", str(int(uid)), f"(BODY.PEEK[]<0.{int(limit)}>)")
+        _ok(typ, data, "FETCH")
+    raw = next((x[1] for x in data if isinstance(x, tuple)), None)
+    if raw is None:
+        raise MailError("not_found", f"message {uid} not found (moved or deleted)")
+    plain, html, _ = _parts(_parse(raw))
+    return {"text": _part_text(plain) if plain is not None else None,
+            "html": _SCRIPT.sub("", _part_text(html)) if html is not None else None}
+
+
 def attachment(acc: dict, folder: str, uid: int, index: int) -> tuple[str, str, bytes]:
     with session(acc) as m:
         _select(m, folder, readonly=True)
