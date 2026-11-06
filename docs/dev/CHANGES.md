@@ -28,6 +28,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   so agents had lost the foreground-subagents rule and the mcp_auto hint).
 - `service.last_assistant_text(sid, turn_only=True)` stops at the turn's user message; `agents.on_turn_end` uses
   it for a failed turn, which then reports the session error instead of the previous turn's answer.
+- Agent limits: `clean(strict=True)` (create/update, API and CLI) refuses a limit that is not a number, above its
+  maximum, or negative where 0 = no limit (400 `bad_limit`); below a non-zero minimum it is still raised to it.
+  Not strict (a hand-edited agent.json), a negative budget / rate takes the default instead of 0; a positive
+  budget never rounds to 0 (floor 0.01).
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
