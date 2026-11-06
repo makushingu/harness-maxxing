@@ -12,7 +12,6 @@ import email.utils
 import mimetypes
 import re
 import smtplib
-import threading
 import time
 from email.message import EmailMessage
 from typing import Any
@@ -28,7 +27,7 @@ MODES = ("reply", "replyall", "forward", "draft")
 # SMTP servers that file the sent copy by themselves (an IMAP copy would show the message twice)
 AUTO_SENT = ("gmail.com", "googlemail.com", "office365.com", "outlook.com")
 
-_count_lock = threading.Lock()
+_count_lock = config.ProcessLock("mail-sent-count")    # the server and `maxxing mail write --send` count together
 
 
 def _addr_list(values: Any) -> list[str]:
