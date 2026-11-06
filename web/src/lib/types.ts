@@ -132,6 +132,8 @@ export type Agent = {
   /** its commands write only in its folder (+ `writable`), cannot read the server's secrets, reach only `domains`;
    *  its runs never use bypass (bypass becomes acceptEdits). New agents: on. */
   sandbox: boolean
+  /** agent.json cannot be read: switched off and sandboxed until the file is fixed (saves refused) */
+  broken?: boolean
   /** hosts its shell commands may reach (sandbox), e.g. api.github.com, *.example.com */
   domains: string[]
   /** folders of the topic it may write in besides its own (`.` = the whole topic) */

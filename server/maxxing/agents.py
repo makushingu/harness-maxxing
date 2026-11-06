@@ -441,14 +441,21 @@ def clean(data: Any, strict: bool = False) -> dict:
 
 
 def _parse_file(f: Path) -> dict:
+    """A missing file = the defaults. A file that cannot be read (a typo in a hand edit) never runs open: the agent
+    is switched off, sandboxed and `broken` (no run, no save over it, an alert) until the file is fixed."""
     try:
-        return clean(json.loads(f.read_text()))
-    except (OSError, ValueError):
+        data = json.loads(f.read_text())
+        if isinstance(data, dict):
+            return clean(data)
+    except FileNotFoundError:
         return clean({})
+    except (OSError, ValueError):
+        pass
+    return {**clean({}), "enabled": False, "sandbox": True, "broken": True}
 
 
 def load(path: str) -> dict:
-    """agent.json of an agent path (defaults when missing or unreadable)."""
+    """agent.json of an agent path (defaults when missing; switched off with `broken` when unreadable)."""
     from . import workspace
     return json.loads(json.dumps(workspace._cached(folder(path) / AGENT_FILE, _parse_file)))
 
@@ -580,7 +587,7 @@ def public(path: str, stats: dict | None = None) -> dict:
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
                 "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
-                "mail", "limits", "triggers", "created")},
+                "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": st.get("unread", 0)}
 
@@ -688,6 +695,12 @@ def _git_exclude(tdir: Path, sub: str = AGENTS_DIR) -> None:
         log.warning("could not exclude the %s folder of %s from its git clone", sub, tdir, exc_info=True)
 
 
+def _not_broken(path: str, a: dict) -> None:
+    if a.get("broken"):
+        raise AgentError(409, "broken", f"{path}/{AGENT_FILE} cannot be read (not valid JSON): fix or replace the "
+                                        "file first, a save now would lose its settings")
+
+
 def update(path: str, fields: dict) -> dict:
     from . import workspace
     if not exists(path):
@@ -697,6 +710,7 @@ def update(path: str, fields: dict) -> dict:
     known = set(clean({}).keys()) - {"version", "created"}
     with _lock:                                         # two PUT at once: both changes are kept
         cur = load(path)
+        _not_broken(path, cur)
         if "limits" in f and isinstance(f["limits"], dict):
             f["limits"] = {**cur["limits"], **f["limits"]}
         if "avatar" in f and isinstance(f["avatar"], dict):
@@ -1416,11 +1430,22 @@ def _turn_alert(path: str, session: dict, ok: bool, text: str) -> None:
 
 
 def check_alerts() -> int:
-    """A slow pass (server): feed triggers whose webhook was deleted. Returns the open alerts it posted."""
+    """A slow pass (server): agent.json files that cannot be read, feed triggers whose webhook was deleted. Returns
+    the open alerts it posted."""
     from . import feed, feedhooks
     hooks = {h.get("id") for h in feedhooks.list_hooks()}
     n = 0
     for a in list_agents(counts=False):
+        ref = _ref(a["path"], "broken")
+        if a["broken"]:
+            if not feed.find(ref):
+                feed.post(f"{a['display_name']}: agent.json cannot be read",
+                          f"{a['path']}/{AGENT_FILE} is not valid JSON (a hand edit?): the agent is switched off and "
+                          "sandboxed until the file is fixed.", "error", ALERT_SOURCE, _page(a["path"]), ref=ref,
+                          agent=a["path"], actions=OPEN)
+                n += 1
+        else:
+            feed.resolve(ref, "Fixed")
         for t in a["triggers"]:
             ref = _ref(a["path"], f"trigger:{t['id']}")
             if t.get("hook_id") and t["hook_id"] not in hooks and a["enabled"] and t.get("enabled", True):
@@ -1686,6 +1711,7 @@ def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list
     from . import feedhooks
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
+    _not_broken(path, load(path))
     base = f"{parse(path)[1]}-{parse(path)[2]}"[:50]
     taken = {h["name"] for h in feedhooks.list_hooks()}
     name, n = base, 1

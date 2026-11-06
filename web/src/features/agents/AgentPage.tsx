@@ -575,6 +575,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4">
       <ProfileHead agent={a} />
 
+      <BrokenBanner agent={a} />
       <SandboxBanner agent={a} />
 
       <PanelSection title={t('agents.panel.role')}>
@@ -678,6 +679,24 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           </SheetBody>
         </SheetContent>
       </Sheet>
+    </div>
+  )
+}
+
+/** agent.json does not parse: the server keeps the agent off and sandboxed, and refuses saves - say so. */
+function BrokenBanner({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  if (!a.broken) return null
+  return (
+    <div role="alert" className="grid gap-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs" data-testid="agent-broken">
+      <span className="flex items-center gap-1.5 font-medium text-destructive">
+        <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.broken.title')}
+      </span>
+      <span>
+        {t('agents.broken.desc', { file: `${a.path}/agent.json` })
+          .split('`')
+          .map((x, i) => (i % 2 ? <code key={i} className="rounded bg-muted px-1 font-mono text-[11px]">{x}</code> : x))}
+      </span>
     </div>
   )
 }
