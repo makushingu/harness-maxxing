@@ -29,13 +29,18 @@ def _configure(p) -> None:
     sub.add_parser("read-all", help="mark every event as read")
 
 
+# sources the product posts to by itself besides feed.BUILTIN: mail (mail/outbox.py, the e-mails waiting for the
+# owner's OK) and infra (sites down, certificates): an agent posting there could pass for them
+PRODUCT_SOURCES = {"mail", "infra"}
+
+
 def _self_trigger(agent: str, source: str) -> str:
     """From an agent's turn: refuse a source its own feed triggers watch (it would start itself again), a webhook's
-    source (only its signed deliveries post there: an agent could pass for them) and a built-in source."""
+    source (only its signed deliveries post there: an agent could pass for them) and a built-in or product source."""
     if not agent:
         return ""
     from . import feed
-    if source in feed.BUILTIN or any(h.get("name") == source for h in feed.settings()["hooks"]):
+    if source in feed.BUILTIN or source in PRODUCT_SOURCES or any(h.get("name") == source for h in feed.settings()["hooks"]):
         return (f"Refused: {source!r} is a webhook or built-in source, only its own deliveries post there. "
                 "Use another --source.")
     try:
