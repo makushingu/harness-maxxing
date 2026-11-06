@@ -19,6 +19,7 @@ AppArmor profile allowing them (`APPARMOR_PROFILE`), or every sandboxed command 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import pwd
 import re
@@ -29,6 +30,8 @@ import time
 from pathlib import Path
 
 from . import config
+
+log = logging.getLogger("maxxing.agent_guard")
 
 APPARMOR_FILE = Path("/etc/apparmor.d/bwrap-maxxing")
 APPARMOR_PROFILE = """# Harness Maxxing: lets bubblewrap (Claude Code sandbox of agents) create user namespaces on Ubuntu 24.04+
@@ -227,21 +230,29 @@ def writable_dirs(path: str, a: dict) -> list[str]:
     """The `writable` folders of a sandboxed agent, as absolute paths. "." (the whole topic) becomes every entry of the
     topic but TOPIC_LOCKED: the sandbox's denyWrite wins over allowWrite, so the topic's `agents/` cannot be denied
     without denying the agent's own folder, and a new folder there would be a new agent. A folder in `agents/` (or one
-    holding it through a link) is never writable."""
+    holding it through a link) is never writable. A link only leads inside the topic: an entry whose target is
+    elsewhere (a git clone's `cfg -> /root/.claude`) is dropped, the sandbox, Write/Edit (--add-dir) and `maxxing mail
+    attachment` would write in the target. An absolute entry is the shared folder of a group (agents.turn_args): it
+    stays in the project's groups/ folder."""
     topic = (config.workspace() / path).parent.parent
     t, agents_dir = topic.resolve(), (topic / "agents").resolve()
+    groups = (topic.parent.parent / "groups").resolve()
     out: list[str] = []
     for w in a.get("writable") or []:
+        base = groups if Path(w).is_absolute() else t
         p = (topic / w).resolve()
         if p == t:
             try:
                 kids = sorted(topic.iterdir())
             except OSError:
                 kids = []
-            todo = [k.resolve() for k in kids if k.name not in TOPIC_LOCKED]
+            todo = [(k, k.resolve()) for k in kids if k.name not in TOPIC_LOCKED]
         else:
-            todo = [p]
-        for q in todo:
+            todo = [(topic / w, p)]
+        for k, q in todo:
+            if base not in q.parents:
+                log.warning("writable %s of agent %s leads outside its topic (%s): dropped", k, path, q)
+                continue
             if q == agents_dir or agents_dir in q.parents or q in agents_dir.parents or q == t:
                 continue
             if str(q) not in out:

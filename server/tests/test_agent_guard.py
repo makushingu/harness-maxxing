@@ -291,6 +291,19 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     assert agents._changed_during(A, "unknown") == []
 
 
+def test_domain_wildcards_name_a_site_not_an_extension(client, topic, mx):
+    from maxxing import agents
+    _on(client)
+    _create(client, domains=["*.example.com"])
+    for d in ("*.com", "*.io", "*.co.uk", "*.github.io"):
+        r = client.patch("/api/agents/acme/blog/writer", json={"domains": [d]})
+        assert r.status_code == 400 and r.json()["error"] == "bad_domain", d
+    ok = ["*.example.com", "*.api.example.co.uk", "api.github.com", "user.github.io", "*.example.io"]
+    assert client.patch("/api/agents/acme/blog/writer", json={"domains": ok}).json()["domains"] == ok
+    # an agent.json written by hand (or imported) loses the wide ones on load
+    assert agents.clean({"domains": ["*.com", "*.example.com", "*.co.uk"]})["domains"] == ["*.example.com"]
+
+
 def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic, mx):
     _on(client)
     _create(client, writable=["."])
@@ -318,6 +331,33 @@ def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic,
     assert argv[argv.index("--add-dir") + 1] == str(t)
     from maxxing import agents
     assert agents.clean({"writable": ["agents", "agents/x", "drafts"]})["writable"] == ["drafts"]
+
+
+def test_writable_links_never_lead_outside_the_topic(client, topic, mx, tmp_path):
+    """A link of the topic (a git clone's `cfg -> /root/.claude`) is not a way out: its target is dropped from the
+    sandbox, from --add-dir and from `maxxing mail attachment`; a link to a folder of the topic still works."""
+    from maxxing import agent_guard, agents, cmd_mail
+    _on(client)
+    _create(client, writable=["."])
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    t = root / "projects/acme/topics/blog"
+    out = tmp_path / "outside"
+    out.mkdir()
+    (t / "cfg").symlink_to(out)                                  # escapes
+    (t / "site").mkdir()
+    (t / "www").symlink_to(t / "site")                           # stays inside: kept (negative case)
+    w = agent_guard.writable_dirs(A, agents.load(A))
+    assert str(out) not in w and f"{t}/site" in w
+    a = {**agents.load(A), "sandbox": True, "writable": ["cfg", "www", "cfg/sub"]}
+    assert agent_guard.writable_dirs(A, a) == [f"{t}/site"]
+    s = agent_guard.settings(A, a)
+    assert str(out) not in s["sandbox"]["filesystem"]["allowWrite"]
+    assert str(out) not in agent_guard.add_dirs(A, a)
+    g = cmd_mail.Guard(A)                                        # the stored agent: writable ["."]
+    import pytest
+    with pytest.raises(cmd_mail.Refused):
+        g.writable(str(out / "x.pdf"))
+    assert g.writable(str(t / "site" / "x.pdf")) == t / "site" / "x.pdf"
 
 
 def test_sandbox_hides_transcripts_logins_and_the_rest_of_the_workspace(client, topic, mx, monkeypatch, tmp_path):

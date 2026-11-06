@@ -581,11 +581,12 @@ def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeyp
     from maxxing import feed, feedhooks
     assert feed.list_events("blog-report", False, None, 1)["events"][0]["hops"] == 1
     feedhooks.create("stripe-b", "generic")
-    for src in ("stripe-b", "security"):                 # a webhook's (or built-in) source: never from an agent
+    for src in ("stripe-b", "security", "agents", "mail", "infra"):   # a webhook's, built-in or product source
         assert cli.main(["feed", "post", "Payment succeeded", "--source", src]) == 2
         assert "only its own deliveries" in capsys.readouterr().err
     monkeypatch.delenv("MAXXING_AGENT")
     assert cli.main(["feed", "post", "from a script", "--source", "shop"]) == 0
+    assert cli.main(["feed", "post", "the owner's script", "--source", "mail"]) == 0     # only agents are refused
 
 
 def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
