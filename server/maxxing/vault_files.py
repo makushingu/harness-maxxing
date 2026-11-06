@@ -9,6 +9,7 @@ exported as the environment variable NAME holding its PATH, never its content (`
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import re
@@ -172,10 +173,11 @@ def delete(name: str) -> bool:
         _sweep(files)
         if name not in files:
             return False
-        if NAME_RE.match(name):
-            (files_dir() / name).unlink(missing_ok=True)
         files.pop(name)
-        config.set_secret("vault_files", files or None)
+        config.set_secret("vault_files", files or None)     # first: a failed save leaves the file and its entry
+        if NAME_RE.match(name):
+            with contextlib.suppress(OSError):              # a file left behind has no entry: the next _sweep
+                (files_dir() / name).unlink(missing_ok=True)
     return True
 
 
