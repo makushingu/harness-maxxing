@@ -249,7 +249,7 @@ def _create(a) -> int:
     if a.role_file:
         try:
             role = open(a.role_file, encoding="utf-8").read().strip()
-        except OSError as e:
+        except (OSError, ValueError) as e:                  # ValueError: not UTF-8 text
             print(f"Cannot read {a.role_file}: {e}", file=sys.stderr)
             return 2
     else:
