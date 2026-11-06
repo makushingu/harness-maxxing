@@ -329,3 +329,20 @@ def test_a_long_room_takes_parallel_messages(client, topic, monkeypatch):
         list(ex.map(lambda i: agent_rooms.post(P, "note", f"{i:03} " + "x" * 10000), range(200)))
     lines = agent_rooms._state_file(P, "jsonl").read_text().splitlines()
     assert lines and all(json.loads(ln)["kind"] == "note" for ln in lines)
+
+
+def test_a_turn_ending_during_the_delete_leaves_no_state_file(client, topic, monkeypatch):
+    _setup(client)
+    P = "projects/acme/groups/team"
+    agent_rooms._write_state(P, {"current": {"path": W, "session": "s1", "at": 1, "wave": 1, "origin": "o"},
+                                 "origin": "o", "turns": {"s1": {"outside": False}}})
+    real = agent_rooms.load
+
+    def load_then_delete(path):                         # the group goes while the turn's end is posted
+        g = real(path)
+        monkeypatch.setattr(agent_rooms, "load", real)
+        agent_rooms.delete(path)
+        return g
+    monkeypatch.setattr(agent_rooms, "load", load_then_delete)
+    agent_rooms.on_turn_end(P, W, "s1", "late", True, 0.0)
+    assert not [e for e in ("json", "jsonl") if agent_rooms._state_file(P, e).exists()]

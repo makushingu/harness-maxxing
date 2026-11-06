@@ -374,20 +374,23 @@ def delete(path: str, keep_files: bool = False) -> None:
     if keep_files and files_dir(path).is_dir():
         dest = d.parent / f".kept-{parse(path)[1]}-{int(time.time())}"
         shutil.move(str(files_dir(path)), str(dest))
-    shutil.rmtree(d, ignore_errors=True)
-    for ext in ("json", "jsonl"):
-        _state_file(path, ext).unlink(missing_ok=True)
+    with _lock:                                         # a turn ending meanwhile must not write its state files back
+        shutil.rmtree(d, ignore_errors=True)
+        for ext in ("json", "jsonl"):
+            _state_file(path, ext).unlink(missing_ok=True)
     _invalidate(path, tree=True)
 
 
 # ---- the conversation --------------------------------------------------------------------------------------
 def post(path: str, kind: str, text: str, author: str = "", **extra: Any) -> dict:
     """Append a message. kind: message (author "me" or a member path), pass, skip (a member could not speak), note,
-    stop. Never raises for a full disk: the caller's turn goes on."""
+    stop. Never raises for a full disk: the caller's turn goes on. A deleted group gets nothing (no file again)."""
     msg = {"id": _secrets.token_hex(6), "at": time.time(), "kind": kind, "author": author,
            "text": (text or "")[:TEXT_MAX], **extra}
     f = _state_file(path, "jsonl")
     with _lock:                                         # the trim rewrites the file: never two at once
+        if not exists(path):
+            return msg
         try:
             with f.open("a") as fh:
                 fh.write(json.dumps(msg, ensure_ascii=False) + "\n")
@@ -464,6 +467,8 @@ def _read_state(path: str) -> dict:
 
 
 def _write_state(path: str, st: dict) -> None:
+    if not exists(path):                                # deleted meanwhile: its state file is not made again
+        return
     config.write_json(_state_file(path, "json"), st)
 
 
@@ -808,9 +813,9 @@ def is_member(path: str, member: str) -> bool:
 
 def on_turn_end(path: str, member: str, sid: str, text: str, ok: bool, cost: float | None) -> None:
     """A member's turn ended: post its answer, queue the members it hands over to, start the next turn."""
-    if not exists(path):
-        return
     with _lock:
+        if not exists(path):
+            return
         st = _read_state(path)
         cur = st.get("current") or {}
         if cur.get("session") != sid:                  # a turn the group no longer waits for (stopped, reset)
