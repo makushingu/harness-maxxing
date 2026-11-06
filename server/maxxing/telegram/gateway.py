@@ -1348,6 +1348,8 @@ class Gateway:
             return
         # a reply to a message of a session or of an agent goes there (any mode, any thread that is not a session's)
         sid = sid_of_thread(tid) if uses_threads() else None
+        if not sid and cmd is None and _replied_id(msg) is None and await self._split_rest(msg, text):
+            return
         to = await asyncio.to_thread(bound, msg["chat"]["id"], _replied_id(msg)) if not sid and _replied_id(msg) else None
         if to and to.get("agent"):
             self._agent_lane(msg, to["agent"], cmd, text)
@@ -1388,6 +1390,26 @@ class Gateway:
         while len(self._edits_told) > 200:
             self._edits_told.pop(next(iter(self._edits_told)))
         await self._reply(msg, _w("edited"), silent=True)
+
+    async def _split_rest(self, msg: dict, text: str) -> bool:
+        """The next part of a long text Telegram split goes where the first part went. Only the first part
+        carries the reply that routed it (Simple mode, or the main chat): without this, the rest of a reply to an
+        agent or a session would ask "Where should this session live?". Same rule as the split texts of
+        `_dispatch`: a plain text from the same chat:thread within PASTE_WAIT / AGENT_GATHER of a part of at
+        least PASTE_MIN characters. Anything else (a short text before it, media, a command, later) routes as usual."""
+        if not text or self._has_media(msg) or msg.get("forum_topic_created"):
+            return False
+        pk, now = self._paste_key(msg), time.monotonic()
+        p = self._pastes.get(pk)
+        if p is not None and p["size"] >= PASTE_MIN and now - p["last"] <= PASTE_WAIT:
+            await self._dispatch(msg, p["path"], p["sid"], text)
+            return True
+        for gk, g in self._agent_pieces.items():
+            if (gk.startswith(f"{pk}|") and len(g["texts"][-1] or "") >= PASTE_MIN and not self._has_media(g["msgs"][-1])
+                    and now - g["last"] <= AGENT_GATHER):
+                self._agent_lane(msg, gk[len(pk) + 1:], None, text)
+                return True
+        return False
 
     def _agent_lane(self, msg: dict, path: str, cmd: str | None, text: str) -> None:
         """An agent's message in its own lane: a download or a transcription never holds the other updates. The
