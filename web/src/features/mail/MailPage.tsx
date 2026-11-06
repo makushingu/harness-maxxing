@@ -10,26 +10,26 @@ import {
 } from 'lucide-react'
 import {
   Button, Checkbox, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Segmented,
-  Select, Sheet, SheetBody, SheetContent, SheetTitle, Skeleton, Tooltip,
+  Select, Sensitive, Sheet, SheetBody, SheetContent, SheetTitle, Skeleton, Tooltip, useMask,
 } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
 import { errorMessage } from '@/lib/api'
 import { toast } from '@/components/ui/toast'
-import type { MailAccount, MailAction, MailComposeMode, MailFolder, MailSummary } from '@/lib/types'
+import type { MailAccount, MailAction, MailComposeMode, MailFolder, MailMessage, MailSummary } from '@/lib/types'
 import {
   fetchMailCompose, mailKeys, useMailAccounts, useMailAction, useMailCreateFolder, useMailDeleteFolder, useMailFolders, useMailList, useMailRefresh, useMailRenameFolder,
   useSettings,
 } from '@/lib/queries'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useMediaQuery } from '@/stores/media'
 import { useLang, useT } from '@/i18n'
 import { AccountDialog } from './AccountDialog'
 import { Compose, signatureBlock, type ComposeInit } from './Compose'
 import { MessageView } from './MessageView'
 import { AllMailboxes } from './AllMailboxes'
 import { OutboxBanner, SeenByAvatars, Verified } from './agents'
-import { depth, folderIcon, folderLabel, leaf, shortDate, who } from './shared'
+import { clean, depth, folderIcon, folderLabel, leaf, shortDate, who } from './shared'
+import { loadCompose, loadFiles, replyOf } from './localDraft'
 
 /** `a` of "All mailboxes" in the URL (a mailbox id always has a dash, never a star). */
 export const ALL = '*'
@@ -50,6 +50,7 @@ function FolderPane({ acc, all, accounts, folders, loading, error, current, onPi
   onEditAccount: () => void
 }) {
   const t = useT()
+  const mask = useMask()
   const create = useMailCreateFolder(acc.id)
   const rename = useMailRenameFolder(acc.id)
   const del = useMailDeleteFolder(acc.id)
@@ -65,11 +66,11 @@ function FolderPane({ acc, all, accounts, folders, loading, error, current, onPi
             aria-label={t('mail.account')}
             value={all ? ALL : acc.id}
             onValueChange={onAccount}
-            options={[{ value: ALL, label: t('mail.all.title') }, ...accounts.map((a) => ({ value: a.id, label: a.label || a.address }))]}
+            options={[{ value: ALL, label: t('mail.all.title') }, ...accounts.map((a) => ({ value: a.id, label: mask(a.label || a.address, 8) }))]}
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate px-1.5 text-[13px] font-medium" title={acc.address}>
-            {acc.label || acc.address}
+          <span className="min-w-0 flex-1 truncate px-1.5 text-[13px] font-medium" title={mask(acc.address, 8)}>
+            <Sensitive length={8}>{acc.label || acc.address}</Sensitive>
           </span>
         )}
         <DropdownMenu>
@@ -139,10 +140,10 @@ function FolderPane({ acc, all, accounts, folders, loading, error, current, onPi
                         active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
                       )}
                       style={{ paddingLeft: 8 + depth(f) * 12 }}
-                      title={f.name}
+                      title={f.role ? f.name : mask(f.name)}
                     >
                       <Icon className="size-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{folderLabel(f, t)}</span>
+                      <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
                       {!!f.unread && f.role !== 'sent' && f.role !== 'trash' && <span className="text-xs font-semibold text-primary tabular-nums">{f.unread}</span>}
                     </button>
                     {!f.role && (
@@ -195,19 +196,29 @@ function Row({ m, selected, checked, onOpen, onCheck }: { m: MailSummary; select
   return (
     <li
       className={cn(
-        'group relative flex cursor-pointer items-start gap-2.5 border-b px-3 py-2.5 transition-colors',
+        'group relative flex cursor-pointer items-start gap-2.5 border-b px-3 py-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         selected ? 'bg-accent' : checked ? 'bg-primary/5' : 'hover:bg-accent/40',
       )}
       onClick={onOpen}
+      // the row opens with Enter / Space too (its checkbox keeps its own keys)
+      tabIndex={0}
+      aria-current={selected || undefined}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+        e.preventDefault()
+        onOpen()
+      }}
       data-testid="mail-row"
     >
       {!m.seen && <span className="absolute top-4 left-1 size-1.5 rounded-full bg-primary" aria-label={t('mail.unread')} />}
       <span onClick={(e) => e.stopPropagation()} className="pt-0.5">
         <Checkbox checked={checked} onCheckedChange={(v) => onCheck(!!v)} aria-label={t('mail.select')} className={cn(!checked && 'opacity-40 group-hover:opacity-100')} />
       </span>
-      <div className="grid min-w-0 flex-1 gap-0.5">
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-0.5">
         <div className="flex items-baseline gap-2">
-          <span className={cn('min-w-0 truncate text-[13px]', !m.seen ? 'font-semibold' : 'text-foreground/90')}>{who(m.from) || t('mail.unknownSender')}</span>
+          <span className={cn('min-w-0 truncate text-[13px]', !m.seen ? 'font-semibold' : 'text-foreground/90')}>
+            <Sensitive length={8}>{who(m.from) ? <bdi>{who(m.from)}</bdi> : t('mail.unknownSender')}</Sensitive>
+          </span>
           <Verified on={m.from_verified} className="self-center" />
           <span className="flex-1" />
           <SeenByAvatars list={m.seen_by} className="self-center" />
@@ -216,10 +227,25 @@ function Row({ m, selected, checked, onOpen, onCheck }: { m: MailSummary; select
           {m.attachments && <Paperclip className="size-3 shrink-0 text-muted-foreground" />}
           <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{shortDate(m.date, lang)}</span>
         </div>
-        <span className={cn('truncate text-[13px]', !m.seen ? 'font-medium' : 'text-muted-foreground')}>{m.subject || t('mail.noSubject')}</span>
+        <span className={cn('truncate text-[13px]', !m.seen ? 'font-medium' : 'text-muted-foreground')}>
+          <Sensitive length={10}>{m.subject ? <bdi>{clean(m.subject)}</bdi> : t('mail.noSubject')}</Sensitive>
+        </span>
       </div>
     </li>
   )
+}
+
+/** Width of an element (0 until it is mounted), followed as it changes. */
+function useWidth(el: HTMLElement | null): number {
+  const [w, setW] = React.useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth))
+  React.useLayoutEffect(() => {
+    if (!el) return
+    setW(el.getBoundingClientRect().width)
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [el])
+  return w
 }
 
 function Setup({ onAdd, off }: { onAdd: () => void; off?: boolean }) {
@@ -262,8 +288,13 @@ export default function MailPage() {
   const [dialog, setDialog] = React.useState<'add' | 'edit' | null>(null)
   const [foldersOpen, setFoldersOpen] = React.useState(false)
   const [compose, setCompose] = React.useState<ComposeInit | null>(null)
-  const wide = useMediaQuery('(min-width: 1024px)')
-  const mid = useMediaQuery('(min-width: 768px)')
+  const mask = useMask()
+  // the panes follow the width the page really has (the sidebar open or not), not the window: three panes leave
+  // the reader at least ~26rem, else one pane beside the folders, else one pane at a time
+  const [box, setBox] = React.useState<HTMLDivElement | null>(null)
+  const width = useWidth(box)
+  const wide = width >= 1000
+  const mid = width >= 700
 
   const folders = useMailFolders(all ? null : acc?.id || null)
   const msgs = useMailList(all ? null : acc?.id || null, folder, page, query, filter)
@@ -282,8 +313,18 @@ export default function MailPage() {
     setPage(0)
     setChecked(new Set())
   }, [acc?.id, folder, query, filter])
+  // another page, or mails gone from the list after a refresh: nothing hidden stays selected for a bulk action
+  React.useEffect(() => setChecked(new Set()), [page])
+  const rows = React.useMemo(() => msgs.data?.messages || [], [msgs.data])
+  React.useEffect(() => {
+    setChecked((s) => {
+      if (!s.size) return s
+      const shown = new Set(rows.map((r) => r.uid))
+      const n = new Set([...s].filter((u) => shown.has(u)))
+      return n.size === s.size ? s : n
+    })
+  }, [rows])
 
-  const rows = msgs.data?.messages || []
   const total = msgs.data?.total || 0
   const pages = Math.max(1, Math.ceil(total / (msgs.data?.size || 50)))
 
@@ -300,7 +341,16 @@ export default function MailPage() {
     action.mutate({ folder, uids, action: a, target }, {
       onSuccess: () => {
         setChecked(new Set())
-        if (!leaves) for (const u of uids) qc.invalidateQueries({ queryKey: mailKeys.message(acc.id, folder, u) })
+        // a flag changed: patch the message already loaded. Loading it again would mark it read on the server,
+        // which undid "Mark as unread" at once.
+        if (!leaves) {
+          const patch: Partial<MailMessage> | null =
+            a === 'seen' ? { seen: true } : a === 'unseen' ? { seen: false } : a === 'flag' ? { flagged: true } : a === 'unflag' ? { flagged: false } : null
+          for (const u of uids) {
+            if (patch) qc.setQueryData<MailMessage>(mailKeys.message(acc.id, folder, u), (m) => (m ? { ...m, ...patch } : m))
+            else qc.invalidateQueries({ queryKey: mailKeys.message(acc.id, folder, u) })
+          }
+        }
       },
     })
   }
@@ -320,7 +370,8 @@ export default function MailPage() {
         text: c.text,
         in_reply_to: c.in_reply_to,
         references: c.references,
-        reply: mode === 'reply' || mode === 'replyall' ? { folder: f, uid: u } : undefined,
+        // a reply saved as a draft: the message it answers was kept in this browser (localDraft.ts)
+        reply: mode === 'reply' || mode === 'replyall' ? { folder: f, uid: u } : mode === 'draft' ? replyOf(accId, { folder: f, uid: u }) : undefined,
         source: c.attachments.length ? { folder: f, uid: u, attachments: c.attachments } : undefined,
         draft: mode === 'draft' ? { folder: f, uid: u } : undefined,
       })
@@ -336,6 +387,12 @@ export default function MailPage() {
       return
     }
     go({ m: m.uid })
+    // already loaded once (then marked unread): it is not loaded again, so mark it read here
+    if (!m.seen && acc && qc.getQueryData(mailKeys.message(acc.id, folder, m.uid))) {
+      qc.setQueryData<MailMessage>(mailKeys.message(acc.id, folder, m.uid), (x) => (x ? { ...x, seen: true } : x))
+      action.mutate({ folder, uids: [m.uid], action: 'seen' })
+      return
+    }
     if (!m.seen && acc) {
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: mailKeys.folders(acc.id) })
@@ -346,6 +403,7 @@ export default function MailPage() {
 
   // The link of a Notification (?account=&folder=&draft=): that mailbox and folder, the draft open in Compose.
   const linked = params.get('account')
+  const restoring = React.useRef(false)
   React.useEffect(() => {
     if (!linked || !accounts.data) return
     const f = params.get('folder') || 'INBOX'
@@ -356,11 +414,29 @@ export default function MailPage() {
       p.set('a', linked)
       p.set('f', f)
       p.delete('m')
-      if (d) void openCompose('draft', f, d, linked)
+      if (d) {
+        restoring.current = true
+        void openCompose('draft', f, d, linked)
+      }
     }
     setParams(p, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked, accounts.data])
+
+  // A message being written when the page was left (reload, Back, a closed tab): it opens again, as it was.
+  React.useEffect(() => {
+    // a Notification link opens its own draft first: the kept message waits for the next visit
+    if (restoring.current || !accounts.data || compose || linked) return
+    restoring.current = true
+    const c = loadCompose()
+    if (!c || !accounts.data.some((a) => a.id === c.acc)) return
+    void loadFiles().then((files) => {
+      const { at: _at, showCc, kept, files: _n, ...init } = c
+      setCompose({ ...init, restored: { showCc, kept, files } })
+      toast.info(t('mail.compose.restored'))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts.data, linked])
 
   // Infra -> E-mail "Add to the E-mail page" (?add=<address>): the add dialog, prefilled
   const [addAddress, setAddAddress] = React.useState('')
@@ -393,7 +469,7 @@ export default function MailPage() {
   const header = (
     <PageHeader
       title={t('mail.title')}
-      description={all ? t('mail.all.title') : acc ? acc.address : t('mail.desc')}
+      description={all ? t('mail.all.title') : acc ? <Sensitive length={10}>{acc.address}</Sensitive> : t('mail.desc')}
       actions={
         acc && (
           <>
@@ -432,6 +508,19 @@ export default function MailPage() {
           <Skeleton className="h-8 w-1/3" />
           <Skeleton className="h-64" />
         </div>
+      </div>
+    )
+  }
+  if (accounts.error && !accounts.data) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {header}
+        <EmptyState
+          tone="error"
+          title={t('mail.accountsError')}
+          description={errorMessage(accounts.error)}
+          action={<Button variant="outline" onClick={() => accounts.refetch()} disabled={accounts.isFetching}>{t('common.retry')}</Button>}
+        />
       </div>
     )
   }
@@ -516,7 +605,7 @@ export default function MailPage() {
                   const Icon = folderIcon(f)
                   return (
                     <DropdownMenuItem key={f.name} onSelect={() => run(sel, 'move', f.name)}>
-                      <Icon /> {t('mail.moveTo', { folder: folderLabel(f, t) })}
+                      <Icon /> {t('mail.moveTo', { folder: f.role ? folderLabel(f, t) : mask(folderLabel(f, t)) })}
                     </DropdownMenuItem>
                   )
                 })}
@@ -608,7 +697,7 @@ export default function MailPage() {
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" ref={setBox}>
       {header}
       <div className="flex min-h-0 flex-1">
         {mid && <aside className="flex w-56 shrink-0 flex-col border-r bg-muted/20">{folderPane}</aside>}
@@ -616,7 +705,7 @@ export default function MailPage() {
           <section className="flex min-w-0 flex-1 flex-col">{allPane}</section>
         ) : wide ? (
           <>
-            <section className="flex w-[22rem] shrink-0 flex-col border-r xl:w-[26rem]">{listPane}</section>
+            <section className={cn('flex shrink-0 flex-col border-r', width >= 1200 ? 'w-[26rem]' : 'w-[22rem]')}>{listPane}</section>
             <section className="flex min-w-0 flex-1 flex-col">{reader}</section>
           </>
         ) : (
@@ -631,7 +720,7 @@ export default function MailPage() {
           </SheetContent>
         </Sheet>
       )}
-      {compose && <Compose key={`${compose.mode}-${compose.reply?.uid || compose.draft?.uid || 'new'}`} init={compose} accounts={list} onClose={() => setCompose(null)} />}
+      {compose && <Compose key={`${compose.mode}-${compose.reply?.uid || compose.draft?.uid || 'new'}-${compose.restored ? 'r' : ''}`} init={compose} accounts={list} onClose={() => setCompose(null)} />}
       <AccountDialog
         open={!!dialog}
         onOpenChange={(o) => { if (!o) { setDialog(null); setAddAddress('') } }}
