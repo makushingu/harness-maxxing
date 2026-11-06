@@ -237,6 +237,19 @@ def test_comments_and_quoted_strings_never_pass_a_sender():
     assert access.authserv_id("spf=pass smtp.mailfrom=x.org") == ""      # no authserv-id
 
 
+def test_deeply_nested_comments_are_stripped_in_one_pass(monkeypatch):
+    import re
+    calls = []
+    sub = re.sub
+    monkeypatch.setattr(access.re, "sub", lambda *a, **k: calls.append(1) or sub(*a, **k))
+    deep = "mx.google.com " + "(" * 3000 + "x" + ")" * 3000 + "; dkim=pass header.d=stripe.com"
+    assert access.authserv_id(deep) == "mx.google.com"
+    assert len(calls) <= 1                  # was one regex pass over the whole header per nesting level
+    assert access.authserv_id(r"a.org (x \) (y) z) ; spf=pass") == "a.org"
+    assert access._cfws_free("a (b") == "a  b" and access._cfws_free("a) b") == "a  b"
+
+
+
 def _samples(auth: str, n: int = 20, days: float = 10, domains: int = 5) -> list:
     now = time.time()
     return [(auth, f"x@d{i % domains}.org", now - i * days * 86400 / n) for i in range(n)]

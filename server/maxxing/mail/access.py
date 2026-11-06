@@ -195,11 +195,25 @@ def _cfws_free(s: str) -> str:
     """The header without its quoted strings and (nested) comments: `dkim=pass (header.d=stripe.com)` or
     `reason="header.from=stripe.com"` never count."""
     s = re.sub(r'"(?:[^"\\]|\\.)*"', '""', s)
-    prev = None
-    while prev != s:
-        prev = s
-        s = re.sub(r"\((?:[^()\\]|\\.)*\)", " ", s)
-    return s.replace("(", " ").replace(")", " ")
+    out: list[str] = []
+    opened: list[int] = []      # where each open comment starts in out: one pass, whatever the nesting depth
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "(":
+            opened.append(len(out))
+            out.append(" ")
+        elif c == ")":
+            if opened:
+                del out[opened.pop():]
+            out.append(" ")
+        elif c == "\\" and opened:
+            out.append(s[i:i + 2])
+            i += 1
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
 
 
 def authserv_id(top: str) -> str:
