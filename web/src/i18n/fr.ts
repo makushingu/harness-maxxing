@@ -1680,6 +1680,12 @@ export const fr: Record<keyof typeof en, string> = {
   'infra.mail.f.dmarc_no_policy': 'Par exemple : {record}',
   'infra.mail.p.dmarc_none': 'Le DMARC de {domain} ne fait qu\'observer (p=none).',
   'infra.mail.f.dmarc_none': 'Quand SPF et DKIM passent pour tous les services qui envoient en votre nom, passez à p=quarantine, puis p=reject.',
+  'infra.mail.p.dmarc_inherited': 'Pas de DMARC sur {domain} : la politique de {parent} s\'applique (p={policy}).',
+  'infra.mail.f.dmarc_inherited': 'Rien à ajouter. N\'ajoutez pas d\'enregistrement p=none ici : il affaiblirait cette politique pour ce domaine.',
+  'infra.mail.p.dmarc_inherited_none': 'Pas de DMARC sur {domain} : la politique de {parent} s\'applique (p=none).',
+  'infra.mail.f.dmarc_inherited_none': 'Quand SPF et DKIM passent, passez l\'enregistrement de {parent} à p=quarantine, puis p=reject.',
+  'infra.mail.p.spf_neutral': 'Le SPF de {domain} ne se termine ni par ~all ni par -all : il ne dit rien des autres expéditeurs, n\'importe qui peut donc prétendre envoyer en @{domain}.',
+  'infra.mail.f.spf_neutral': 'Terminez-le par ~all (ou -all).',
 
   'system.health': 'Santé',
   'system.healthDesc': 'Actualisée toutes les 30 secondes.',

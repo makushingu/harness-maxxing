@@ -369,7 +369,8 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
     if not dmarc and parent.get("records"):
         # p=none here would WEAKEN the parent's policy for this subdomain: never advised
         pol = _policy(parent["records"], sub=True) or "?"
-        out.append(_p("info", "dmarc_inherited", f"No DMARC record on {domain}: the policy of {parent['domain']} "
+        out.append(_p("info", "dmarc_inherited" if pol != "none" else "dmarc_inherited_none",
+                      f"No DMARC record on {domain}: the policy of {parent['domain']} "
                       f"applies (p={pol}).",
                       "Nothing to add. Do not add a p=none record here: it would weaken that policy for this domain."
                       if pol != "none" else f"Once SPF and DKIM pass, switch the record of {parent['domain']} to "

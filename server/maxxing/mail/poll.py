@@ -244,6 +244,8 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
             except MailError as e:
                 if not _still_there(acc["id"]):
                     return out
+                if e.code == "mail_busy":           # held by a page or a send: this folder waits for the next check
+                    continue
                 store.set_position(acc["id"], folder, ok=False, error=e.message)
                 if folder == "INBOX":
                     out.update(ok=False, error=e.message)
