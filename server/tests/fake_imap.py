@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import email
 import email.policy
+import re
 import socketserver
 import threading
 import time
@@ -234,7 +235,10 @@ class FakeIMAP:
                     part += b"\r\n\r\n"
                     h.wfile.write(f"* {seq} FETCH ({head} BODY[HEADER.FIELDS (X)] {{{len(part)}}}\r\n".encode() + part + b")\r\n")
                 elif "BODY.PEEK[]" in items or "BODY[]" in items:
-                    h.wfile.write(f"* {seq} FETCH ({head} BODY[] {{{len(m['raw'])}}}\r\n".encode() + m["raw"] + b")\r\n")
+                    cut = re.search(r"BODY(?:\.PEEK)?\[\]<0\.(\d+)>", items)       # a partial fetch: its first N bytes
+                    raw = m["raw"][:int(cut.group(1))] if cut else m["raw"]
+                    name = "BODY[]<0>" if cut else "BODY[]"
+                    h.wfile.write(f"* {seq} FETCH ({head} {name} {{{len(raw)}}}\r\n".encode() + raw + b")\r\n")
                     if "BODY[]" in items and "PEEK" not in items:
                         m["flags"].add("\\Seen")
                 else:
@@ -368,9 +372,10 @@ def _one(m: dict, uid: int, crit: list, uids: list[int]) -> bool:
     word = _s(c).upper() if not isinstance(c, Quoted) else ""
     if word == "ALL":
         return True
-    if word in ("UNSEEN", "SEEN", "FLAGGED"):
-        flag = {"UNSEEN": "\\Seen", "SEEN": "\\Seen", "FLAGGED": "\\Flagged"}[word]
-        return (flag in m["flags"]) != (word == "UNSEEN")
+    if word in ("UNSEEN", "SEEN", "FLAGGED", "DELETED", "UNDELETED"):
+        flag = {"UNSEEN": "\\Seen", "SEEN": "\\Seen", "FLAGGED": "\\Flagged", "DELETED": "\\Deleted",
+                "UNDELETED": "\\Deleted"}[word]
+        return (flag in m["flags"]) != (word in ("UNSEEN", "UNDELETED"))
     if word == "UID":
         return uid in _set(_s(crit.pop(0)), uids)
     if word == "NOT":

@@ -419,3 +419,52 @@ def test_a_sent_message_never_waits_again(client, acc, monkeypatch, capsys, smtp
     monkeypatch.setattr(imap, "drop", bad)
     assert outbox.approve(w["id"])["status"] == "sent"
     assert len(smtp.messages) == 1 and not outbox.pending()
+
+
+def test_the_check_reads_only_the_start_of_a_mail(client, acc, srv, monkeypatch):
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    poll.poll_account(acc)
+    m = email.message.EmailMessage()
+    m["From"], m["To"], m["Subject"] = "bob@x.org", "me@example.com", "Scan"
+    m.set_content("Here is the scan.")
+    m.add_attachment(os.urandom(3 * 1024 * 1024), maintype="application", subtype="octet-stream", filename="scan.bin")
+    srv.add("INBOX", m.as_bytes())
+    srv.commands.clear()
+    assert poll.poll_account(acc)["started"] == 1
+    assert "Here is the scan." in fired[0]["text"]
+    fetches = [c for c in srv.sent("FETCH") if "BODY" in c.upper() and "HEADER" not in c.upper()]
+    assert fetches and all("<0." in c for c in fetches)                  # the attachment is never downloaded
+
+
+def test_a_folder_not_looked_at_for_long_starts_nobody(client, acc, srv, monkeypatch):
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    poll.poll_account(acc)
+    srv.add("INBOX", _raw("bob@x.org", "while the page was off"))
+    with store.conn() as c:                                              # last looked at a day ago
+        c.execute("UPDATE poll SET at=? WHERE account=?", (time.time() - 86400, acc["id"]))
+    r = poll.poll_account(acc)
+    assert r["started"] == 0 and not fired                               # a first look: where the mailbox is now
+    assert store.position(acc["id"], "INBOX")["last_uid"] == max(srv.folders["INBOX"].messages)
+    srv.add("INBOX", _raw("bob@x.org", "new"))
+    assert poll.poll_account(acc)["started"] == 1
+
+
+def test_a_mailbox_removed_during_its_check_is_left_alone(client, acc, srv, monkeypatch):
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    poll.poll_account(acc)
+    srv.add("INBOX", _raw("bob@x.org", "new"))
+    real = imap.new_since
+
+    def then_removed(*a, **k):
+        res = real(*a, **k)
+        mail.delete_account(acc["id"])
+        return res
+    monkeypatch.setattr(imap, "new_since", then_removed)
+    poll.poll_account(acc)
+    assert not fired and store.position(acc["id"], "INBOX") is None
