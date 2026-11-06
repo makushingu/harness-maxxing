@@ -221,6 +221,15 @@ def test_local_source_detection(tmp_path):
     assert "none" in r.stdout
 
 
+def test_a_relative_path_still_finds_its_source_tree(tmp_path):
+    """bash ./install.sh / bash install.sh: SELF_DIR is resolved before the script's `cd /` (issue #38)."""
+    (tmp_path / "install.sh").write_text(INSTALL.read_text())
+    for path in ("./install.sh", "install.sh"):
+        r = subprocess.run(["bash", "-c", f'MAXXING_INSTALL_LIB=1 source {path}; echo "self=$SELF_DIR"'], cwd=tmp_path,
+                           capture_output=True, text=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
+        assert f"self={tmp_path.resolve()}" in r.stdout, (path, r.stderr)
+
+
 def test_install_from_a_local_copy(tmp_path):
     """Audit 2 §1.1: the code can come from a folder (an unpacked archive) - copied as a git repo without remote."""
     src = tmp_path / "hm"
