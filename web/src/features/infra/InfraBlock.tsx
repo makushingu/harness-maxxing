@@ -19,7 +19,7 @@ export type InfraBlockSpec = { picks: { kind: InfraKind | 'id'; value: string }[
 export function parseInfraBlock(code: string): InfraBlockSpec | null {
   const spec: InfraBlockSpec = { picks: [] }
   for (const line of code.split('\n')) {
-    const m = /^\s*(\w+)\s*:\s*(.+?)\s*$/.exec(line)
+    const m = /^(\w+)\s*:\s*(.+)$/.exec(line.trim())   // trim first: (.+?)\s*$ was quadratic on a long run of spaces
     if (!m) continue
     const k = m[1].toLowerCase()
     const v = m[2]
@@ -31,7 +31,12 @@ export function parseInfraBlock(code: string): InfraBlockSpec | null {
   return spec.picks.length || spec.project || spec.kind || spec.location ? spec : null
 }
 
-const bare = (s: string) => s.toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+const bare = (s: string) => {
+  const v = s.toLowerCase().replace(/^https?:\/\//, '')
+  let end = v.length
+  while (end > 0 && v[end - 1] === '/') end--   // not /\/+$/: quadratic on a long run of slashes
+  return v.slice(0, end)
+}
 
 export function matchInfra(spec: InfraBlockSpec, all: InfraResource[]): InfraResource[] {
   const out: InfraResource[] = []

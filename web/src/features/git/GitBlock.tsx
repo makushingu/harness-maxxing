@@ -21,7 +21,7 @@ export type GitBlockSpec = { repo: string; branches: string[]; limit: number; hi
 export function parseGitBlock(code: string): GitBlockSpec | null {
   const spec: GitBlockSpec = { repo: '', branches: [], limit: 30, highlight: [] }
   for (const line of code.split('\n')) {
-    const m = /^\s*(\w+)\s*:\s*(.*?)\s*$/.exec(line)
+    const m = /^(\w+)\s*:\s*(.*)$/.exec(line.trim())   // trim first: (.*?)\s*$ was quadratic on a long run of spaces
     if (!m) continue
     const [, k, v] = m
     const list = () => v.split(/[,\s]+/).filter(Boolean)
