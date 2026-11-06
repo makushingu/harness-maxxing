@@ -136,7 +136,11 @@ def _hostport(v: str | None, default_port: int) -> tuple[str | None, int]:
     if not v:
         return None, default_port
     host, _, port = v.partition(":")
-    return host, int(port) if port else default_port
+    if not port:
+        return host, default_port
+    if not (port.isascii() and port.isdigit()) or not 1 <= int(port) <= 65535:     # was a Python traceback (h:abc), or h:99999 kept
+        raise Refused(f"{v}: the port must be a number from 1 to 65535 (HOST[:PORT])")
+    return host, int(port)
 
 
 class Refused(Exception):
