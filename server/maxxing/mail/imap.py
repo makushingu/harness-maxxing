@@ -13,6 +13,7 @@ import base64
 import codecs
 import contextlib
 import email
+import email.header
 import email.parser
 import email.policy
 import email.utils
@@ -478,20 +479,79 @@ def _line(s: Any) -> str:
     return _CONTROL.sub(" ", _BIDI.sub("", s))
 
 
-def _addr(v: Any) -> list[dict]:
+HDR_CAP = 16 * 1024          # characters of one header field parsed (the stdlib parser is quadratic: a 1 MB Subject took 11 s)
+ADDR_CAP = 64 * 1024         # an address list (To of a few thousand recipients) is cut at the last comma under this
+# whitespace between two encoded-words is not part of the text (RFC 2047 6.2): "=?utf-8?b?..Dupo?= =?utf-8?b?bnQ=?="
+# is "Dupont"; the stdlib joins them with a space in display names (Subject is right)
+_EW = r"=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?="
+_EW_GAP = re.compile(rf"({_EW})\s+(?={_EW})")
+
+
+def _raw(msg: Any, name: str) -> str | None:
+    """The first `name` header as it came, never parsed (a value the parser rejects, `To: a@[`, raises on `msg[name]`
+    and on `get_all` alike); None when there is none."""
+    name = name.lower()
     try:
+        for k, v in msg.raw_items():
+            if k.lower() == name:
+                return v if isinstance(v, str) else str(v)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _cut(raw: str, cap: int, sep: str = "") -> str:
+    if len(raw) <= cap:
+        return raw
+    raw = raw[:cap]
+    if sep and sep in raw:
+        raw = raw.rsplit(sep, 1)[0]              # no half address
+    return raw
+
+
+def _decoded(raw: str) -> str:
+    """The encoded-words of a raw value decoded without the header parser (the fallback of a header it rejects)."""
+    with contextlib.suppress(Exception):
+        return str(email.header.make_header(email.header.decode_header(raw)))
+    return raw
+
+
+def _parsed(msg: Any, name: str, raw: str) -> Any:
+    policy = getattr(msg, "policy", None) or email.policy.default
+    if not hasattr(policy, "header_factory"):   # compat32 message: a parser of the default policy
+        policy = email.policy.default
+    return policy.header_fetch_parse(name, raw)
+
+
+def _hdr(msg: Any, name: str, parse: bool = True) -> str:
+    """One header on one line, never an error: the first HDR_CAP characters parsed, and when the parser rejects it,
+    the raw value with its encoded-words decoded. parse=False: the raw value unfolded (References: message ids
+    only, a long thread's must neither be parsed nor cut)."""
+    raw = _raw(msg, name)
+    if raw is None:
+        return ""
+    if not parse:
+        return _line(" ".join(raw.split()))
+    raw = _cut(raw, HDR_CAP)
+    try:
+        return _line(str(_parsed(msg, name, raw)))
+    except Exception:  # noqa: BLE001 - a header the parser cannot read
+        return _line(" ".join(_decoded(raw).split()))
+
+
+def _addrs(msg: Any, name: str) -> list[dict]:
+    """The addresses of a From / To / Cc / Reply-To header, never an error: a list the parser rejects comes back as
+    one entry holding the raw text."""
+    raw = _raw(msg, name)
+    if raw is None or not raw.strip():
+        return []
+    raw = _cut(raw, ADDR_CAP, ",")
+    try:
+        v = _parsed(msg, name, _EW_GAP.sub(r"\1", raw))
         return [{"name": _line(a.display_name or ""), "email": _line(a.addr_spec or "")} for a in v.addresses]
     except Exception:  # noqa: BLE001 - malformed header
-        return [{"name": "", "email": _line(str(v or ""))}] if v else []
-
-
-def _hdr(msg: Any, name: str) -> str:
-    try:
-        v = msg[name]
-        return _line(str(v)) if v is not None else ""
-    except Exception:  # noqa: BLE001 - undecodable header
-        raw = msg.get_all(name, failobj=[None])[0] if hasattr(msg, "get_all") else None
-        return _line(str(raw or ""))
+        s = " ".join(_decoded(raw).split())
+        return [{"name": "", "email": _line(s)}] if s else []
 
 
 def _idate(internal: bytes | None) -> float | None:
@@ -538,27 +598,34 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
         if not u:
             continue
         uid = int(u.group(1))
-        msg = parser.parsebytes(item[1])
         fm = _FLAGS.search(meta)
         fl = _flags(fm.group(1) if fm else b"")
         idate = _IDATE.search(meta)
         size = _SIZE.search(meta)
-        ctype = _hdr(msg, "content-type").lower()
-        rows[uid] = {
-            "uid": uid,
-            "from": (_addrs(msg, "from") or [{"name": "", "email": ""}])[0],
-            "to": _addrs(msg, "to"),
-            "subject": _hdr(msg, "subject"),
-            "date": _date(msg, idate.group(1) if idate else None),
+        row = {
+            "uid": uid, "from": {"name": "", "email": ""}, "to": [], "subject": "",
+            "date": _idate(idate.group(1) if idate else None),
             "received": _idate(idate.group(1) if idate else None),     # by the server (Date: is the sender's)
             "seen": "\\seen" in fl,
             "flagged": "\\flagged" in fl,
             "answered": "\\answered" in fl,
             "size": int(size.group(1)) if size else None,
-            "attachments": ctype.startswith("multipart/mixed"),
-            "message_id": _hdr(msg, "message-id").strip(),
-            "auth": access.top_result(msg),          # replaced by from_verified (with_trust)
+            "attachments": False, "message_id": "", "auth": "",
         }
+        try:
+            msg = parser.parsebytes(item[1] if isinstance(item[1], bytes) else b"")
+            row.update({
+                "from": (_addrs(msg, "from") or [{"name": "", "email": ""}])[0],
+                "to": _addrs(msg, "to"),
+                "subject": _hdr(msg, "subject"),
+                "date": _date(msg, idate.group(1) if idate else None),
+                "attachments": _hdr(msg, "content-type").lower().startswith("multipart/mixed"),
+                "message_id": _hdr(msg, "message-id").strip(),
+                "auth": access.top_result(msg),          # replaced by from_verified (with_trust)
+            })
+        except Exception:  # noqa: BLE001 - headers that still cannot be read: the row is listed without them
+            pass
+        rows[uid] = row
     return [rows[u] for u in uids if u in rows]
 
 
@@ -834,10 +901,33 @@ def _is_message(p: Any) -> bool:
     return False
 
 
-def _walk(msg: Any) -> Iterator[tuple[int, Any, bool]]:
+def _subparts(p: Any) -> list:
+    with contextlib.suppress(Exception):
+        subs = p.get_payload() if p.is_multipart() else None
+        if isinstance(subs, list):
+            return [c for c in subs if hasattr(c, "get_content_type")]
+    return []
+
+
+def _left_out(stack: list[tuple[Any, int, bool]]) -> int:
+    """The leaf parts a walk stopped at MAX_PARTS did not reach, counted without reading their headers (the parts
+    are already parsed: only the headers were slow); a mail attached inside counts as one."""
+    n, todo = 0, [(p, d) for p, d, inside in stack if not inside]
+    while todo:
+        p, depth = todo.pop()
+        subs = _subparts(p) if depth < MAX_DEPTH and not (depth > 0 and _is_message(p)) else []
+        if subs:
+            todo.extend((c, depth + 1) for c in subs)
+        else:
+            n += 1
+    return n
+
+
+def _walk(msg: Any, rest: list[int] | None = None) -> Iterator[tuple[int, Any, bool]]:
     """(index, part, inside) in the order of `msg.walk()` (the indexes of the attachments, also in drafts and
     forwards saved before), without recursion, at most MAX_DEPTH levels down and MAX_PARTS parts. inside: the part belongs to a mail
-    attached to this one (message/rfc822), listed as one attachment."""
+    attached to this one (message/rfc822), listed as one attachment. rest: gets the number of leaf parts left out
+    when the walk stops at MAX_PARTS (never silently: the reader says how many are not listed)."""
     stack: list[tuple[Any, int, bool]] = [(msg, 0, False)]
     i = 0
     while stack and i < MAX_PARTS:
@@ -852,6 +942,8 @@ def _walk(msg: Any) -> Iterator[tuple[int, Any, bool]]:
         if isinstance(subs, list):
             child_inside = inside or (depth > 0 and _is_message(p))
             stack.extend((c, depth + 1, child_inside) for c in reversed(subs) if hasattr(c, "get_content_type"))
+    if stack and rest is not None:
+        rest.append(_left_out(stack))
 
 
 def _body_of(msg: Any, kind: str) -> Any:
@@ -868,13 +960,13 @@ def _body_of(msg: Any, kind: str) -> Any:
     return None
 
 
-def _parts(msg: EmailMessage) -> tuple[Any, Any, list[tuple[int, Any]]]:
+def _parts(msg: EmailMessage, rest: list[int] | None = None) -> tuple[Any, Any, list[tuple[int, Any]]]:
     """(plain, html, leaves): leaves are the parts shown as attachments, a forwarded mail (message/rfc822) is one
-    of them (its own parts are not listed)."""
+    of them (its own parts are not listed). rest: see `_walk`."""
     plain = _body_of(msg, "plain")
     html = _body_of(msg, "html")
     leaves = []
-    for i, p, inside in _walk(msg):
+    for i, p, inside in _walk(msg, rest):
         if inside:
             continue
         if i > 0 and _is_message(p):
@@ -917,6 +1009,12 @@ def _eml_bytes(p: Any) -> bytes:
     return b""
 
 
+def _part_name(idx: int, ctype: str) -> str:
+    """The name of an attachment without one: a meeting invite (text/calendar, inside multipart/alternative) opens
+    in a calendar as invite.ics."""
+    return "invite.ics" if ctype == "text/calendar" else f"part-{idx}.{ctype.split('/')[-1]}"
+
+
 def _size(p: Any) -> int:
     """The decoded size of a part from its encoded text (decoding every attachment of a 47 MB mail only to show
     its size took seconds)."""
@@ -937,16 +1035,9 @@ def _size(p: Any) -> int:
         return 0
 
 
-def _addrs(msg: Any, name: str) -> list[dict]:
-    try:
-        v = msg[name]
-    except Exception:  # noqa: BLE001 - a header the parser cannot read
-        return [{"name": "", "email": _hdr(msg, name)}] if _hdr(msg, name) else []
-    return _addr(v) if v else []
-
-
 def _render(msg: EmailMessage, uid: int, folder: str, seen_flags: list[str]) -> dict:
-    plain, html, leaves = _parts(msg)
+    rest: list[int] = []
+    plain, html, leaves = _parts(msg, rest)
     html_s = _part_text(html) if html is not None else None
     cids: dict[str, str] = {}
     inline_total = 0
@@ -971,9 +1062,9 @@ def _render(msg: EmailMessage, uid: int, folder: str, seen_flags: list[str]) -> 
             name = ""
             with contextlib.suppress(Exception):
                 name = _line(p.get_filename() or "")
-            if not name and p.get_content_disposition() != "attachment" and ctype.startswith("text/"):
-                continue                                  # alternative bodies already shown
-            attachments.append({"index": idx, "filename": name or f"part-{idx}.{ctype.split('/')[-1]}",
+            if not name and p.get_content_disposition() != "attachment" and ctype in ("text/plain", "text/html"):
+                continue                                  # alternative bodies already shown (an invite, text/calendar, is listed)
+            attachments.append({"index": idx, "filename": name or _part_name(idx, ctype),
                                 "content_type": ctype, "size": size})
         except Exception:  # noqa: BLE001 - a broken part is left out, the mail still opens
             continue
@@ -991,11 +1082,12 @@ def _render(msg: EmailMessage, uid: int, folder: str, seen_flags: list[str]) -> 
         "subject": _hdr(msg, "subject"),
         "date": _date(msg, None),
         "message_id": _hdr(msg, "message-id"),
-        "references": _hdr(msg, "references"),
+        "references": _hdr(msg, "references", parse=False),
         "text": _part_text(plain) if plain is not None else None,
         "html": html_s,
         "remote_images": bool(html_s and _REMOTE.search(html_s)),
         "attachments": attachments,
+        "attachments_more": sum(rest),          # parts past MAX_PARTS: not listed, not downloadable, not forwarded
         "auth": access.top_result(msg),
         "seen": "\\seen" in seen_flags, "flagged": "\\flagged" in seen_flags, "answered": "\\answered" in seen_flags,
     }
@@ -1068,7 +1160,7 @@ def part_at(msg: Any, index: int) -> tuple[str, str, bytes]:
             name = ""
             with contextlib.suppress(Exception):
                 name = _line(p.get_filename() or "")
-            return name or f"part-{i}.{ctype.split('/')[-1]}", ctype, p.get_payload(decode=True) or b""
+            return name or _part_name(i, ctype), ctype, p.get_payload(decode=True) or b""
         break
     raise MailError("not_found", "attachment not found")
 
