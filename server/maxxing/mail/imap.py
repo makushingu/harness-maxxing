@@ -7,6 +7,7 @@ holds the account lock for its whole duration (imaplib is not thread safe).
 from __future__ import annotations
 
 import base64
+import codecs
 import contextlib
 import email
 import email.parser
@@ -377,12 +378,22 @@ def _select(m: imaplib.IMAP4, folder: str, readonly: bool) -> int:
 
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f\u0080-\u009f\u2028\u2029]")
+# bidi marks, embeddings, overrides and isolates: "PayPal \u202e...", "facture\u202efdp.exe" would show a reversed name
+_BIDI = re.compile(r"[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
 
-def _line(s: str) -> str:
+def _line(s: Any) -> str:
     """A header value on one line: `=?utf-8?q?hi=0AFrom:_x?=` decodes to two lines that would read like Harness's own
-    (the text of an agent's turn, `maxxing mail read`)."""
-    return _CONTROL.sub(" ", s) if s else ""
+    (the text of an agent's turn, `maxxing mail read`). Raw 8-bit bytes (`From: \u00c9lodie <...>`, read as lone
+    surrogates by the parser) are decoded as UTF-8, and the bidi controls are taken out."""
+    if not s:
+        return ""
+    s = str(s)
+    if any("\ud800" <= c <= "\udfff" for c in s):
+        with contextlib.suppress(UnicodeError):
+            s = s.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+        s = s.encode("utf-8", "replace").decode("utf-8")          # any other lone surrogate
+    return _CONTROL.sub(" ", _BIDI.sub("", s))
 
 
 def _addr(v: Any) -> list[dict]:
@@ -453,8 +464,8 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
         ctype = _hdr(msg, "content-type").lower()
         rows[uid] = {
             "uid": uid,
-            "from": (_addr(msg["from"]) or [{"name": "", "email": ""}])[0] if msg["from"] else {"name": "", "email": ""},
-            "to": _addr(msg["to"]) if msg["to"] else [],
+            "from": (_addrs(msg, "from") or [{"name": "", "email": ""}])[0],
+            "to": _addrs(msg, "to"),
             "subject": _hdr(msg, "subject"),
             "date": _date(msg, idate.group(1) if idate else None),
             "received": _idate(idate.group(1) if idate else None),     # by the server (Date: is the sender's)
@@ -605,66 +616,256 @@ def new_since(acc: dict, folder: str, last_uid: int | None, limit: int = 50) -> 
     return {"uidvalidity": validity, "uids": uids, "more": more, "messages": with_trust(acc, rows, t)}
 
 
+# charsets mail clients write that Python does not know, or that mean another one in practice (the WHATWG rules:
+# iso-8859-1 and us-ascii are decoded as windows-1252, which Outlook sends under those names)
+_CHARSETS = {"iso-8859-1": "cp1252", "latin1": "cp1252", "latin-1": "cp1252", "l1": "cp1252", "us-ascii": "cp1252",
+             "ascii": "cp1252", "iso-8859-8-i": "iso-8859-8", "iso-8859-6-i": "iso-8859-6", "windows-874": "cp874",
+             "x-windows-874": "cp874", "gb2312": "gbk", "x-gbk": "gbk", "ks_c_5601-1987": "cp949", "x-sjis": "shift_jis",
+             "x-mac-roman": "mac_roman", "utf8": "utf-8"}
+
+
+def _codec(charset: str | None) -> str | None:
+    name = (charset or "").strip().strip('"\'').lower()
+    if not name:
+        return None
+    name = _CHARSETS.get(name, name)
+    try:
+        return codecs.lookup(name).name
+    except (LookupError, ValueError):
+        return None                                # unknown-8bit, x-bogus...: guessed below
+
+
+def _decode(payload: bytes, charset: str | None) -> str:
+    """Bytes of a text part -> str, never an error: the declared charset when Python knows it (bad bytes replaced),
+    else UTF-8 when the bytes are UTF-8, else windows-1252 (else latin-1, which takes any byte)."""
+    codec = _codec(charset)
+    if codec:
+        with contextlib.suppress(Exception):
+            return payload.decode(codec, "replace")
+    for c in ("utf-8", "cp1252"):
+        with contextlib.suppress(UnicodeDecodeError):
+            return payload.decode(c)
+    return payload.decode("latin-1")
+
+
 def _part_text(part: Any) -> str:
     try:
-        return part.get_content().replace("\r\n", "\n")
-    except Exception:  # noqa: BLE001 - unknown charset or broken encoding
-        payload = part.get_payload(decode=True) or b""
-        return payload.decode(part.get_content_charset() or "utf-8", "replace")
+        payload = part.get_payload(decode=True)
+        if payload is None:                          # a multipart or message part: no text of its own
+            return ""
+        charset = None
+        with contextlib.suppress(Exception):
+            charset = part.get_content_charset()
+        return _decode(payload, charset).replace("\r\n", "\n")
+    except Exception:  # noqa: BLE001 - a broken part shows no text, it never fails the message
+        return ""
 
 
 _CID = re.compile(r"""(["'(])cid:([^"')\s>]+)""", re.I)
 _REMOTE = re.compile(r"""(?:src|background)\s*=\s*["']?\s*https?:|url\(\s*["']?https?:""", re.I)
-_SCRIPT = re.compile(r"<script\b[^>]*>.*?</script\s*>", re.I | re.S)
+_BLOCK_OPEN = {t: re.compile(rf"<{t}\b", re.I) for t in ("script", "style", "head")}
+_BLOCK_CLOSE = {t: re.compile(rf"</{t}\s*>", re.I) for t in ("script", "style", "head")}
+MAX_DEPTH = 40              # MIME parts nested deeper are not looked into (no mail needs it; 1000 levels = RecursionError)
+MAX_PARTS = 1000            # parts of one mail looked at (20,000 empty attachments took seconds of header parsing)
+MAX_INLINE_TOTAL = 8 * 1024 * 1024
+MAX_INLINE_COUNT = 30
+
+
+def strip_blocks(h: str, tags: tuple[str, ...] = ("script",)) -> str:
+    """`h` without its <script> (or other) blocks, in one pass: a block never closed runs to the end, as in a
+    browser. (A lazy `<script.*?</script>` regex rescans the rest of the mail for every unclosed tag: 256 KB of
+    `<script>` took 52 s.)"""
+    for t in tags:
+        out, pos = [], 0
+        while True:
+            m = _BLOCK_OPEN[t].search(h, pos)
+            if not m:
+                out.append(h[pos:])
+                break
+            out.append(h[pos:m.start()])
+            end = _BLOCK_CLOSE[t].search(h, m.end())
+            if not end:
+                break
+            pos = end.end()
+        h = "".join(out)
+    return h
 
 
 def _parse(raw: bytes) -> EmailMessage:
-    return email.message_from_bytes(raw, policy=email.policy.default)  # type: ignore[return-value]
+    """Never an error: a mail the parser cannot read (MIME nested ~1000 levels deep is a RecursionError inside the
+    email package) keeps its headers and shows no body."""
+    try:
+        return email.message_from_bytes(raw, policy=email.policy.default)  # type: ignore[return-value]
+    except Exception:  # noqa: BLE001
+        pass
+    head = raw.split(b"\r\n\r\n", 1)[0] if b"\r\n\r\n" in raw else raw.split(b"\n\n", 1)[0]
+    try:
+        msg = email.parser.BytesHeaderParser(policy=email.policy.default).parsebytes(head + b"\r\n\r\n")
+        del msg["content-type"]                       # no parts to look into
+        return msg  # type: ignore[return-value]
+    except Exception:  # noqa: BLE001
+        return EmailMessage()
+
+
+def _is_message(p: Any) -> bool:
+    with contextlib.suppress(Exception):
+        return p.get_content_maintype() == "message" and p.get_content_subtype() in ("rfc822", "global")
+    return False
+
+
+def _walk(msg: Any) -> Iterator[tuple[int, Any, bool]]:
+    """(index, part, inside) in the order of `msg.walk()` (the indexes of the attachments, also in drafts and
+    forwards saved before), without recursion, at most MAX_DEPTH levels down and MAX_PARTS parts. inside: the part belongs to a mail
+    attached to this one (message/rfc822), listed as one attachment."""
+    stack: list[tuple[Any, int, bool]] = [(msg, 0, False)]
+    i = 0
+    while stack and i < MAX_PARTS:
+        p, depth, inside = stack.pop()
+        yield i, p, inside
+        i += 1
+        if depth >= MAX_DEPTH:
+            continue
+        subs = None
+        with contextlib.suppress(Exception):
+            subs = p.get_payload() if p.is_multipart() else None
+        if isinstance(subs, list):
+            child_inside = inside or (depth > 0 and _is_message(p))
+            stack.extend((c, depth + 1, child_inside) for c in reversed(subs) if hasattr(c, "get_content_type"))
+
+
+def _body_of(msg: Any, kind: str) -> Any:
+    """The text/plain or text/html body like `get_body`, which recurses without limit (RecursionError on a mail
+    nested 1000 levels deep): None when it fails, then the first such part outside attachments."""
+    try:
+        return msg.get_body(preferencelist=(kind,))
+    except Exception:  # noqa: BLE001
+        pass
+    for _, p, inside in _walk(msg):
+        with contextlib.suppress(Exception):
+            if not inside and p.get_content_type() == f"text/{kind}" and not p.is_attachment():
+                return p
+    return None
 
 
 def _parts(msg: EmailMessage) -> tuple[Any, Any, list[tuple[int, Any]]]:
-    plain = html = None
-    with contextlib.suppress(Exception):
-        plain = msg.get_body(preferencelist=("plain",))
-    with contextlib.suppress(Exception):
-        html = msg.get_body(preferencelist=("html",))
-    leaves = [(i, p) for i, p in enumerate(msg.walk()) if not p.is_multipart()]
+    """(plain, html, leaves): leaves are the parts shown as attachments, a forwarded mail (message/rfc822) is one
+    of them (its own parts are not listed)."""
+    plain = _body_of(msg, "plain")
+    html = _body_of(msg, "html")
+    leaves = []
+    for i, p, inside in _walk(msg):
+        if inside:
+            continue
+        if i > 0 and _is_message(p):
+            leaves.append((i, p))
+            continue
+        with contextlib.suppress(Exception):
+            if not p.is_multipart():
+                leaves.append((i, p))
     return plain, html, leaves
+
+
+def _inner(p: Any) -> Any:
+    with contextlib.suppress(Exception):
+        sub = p.get_payload()
+        return sub[0] if isinstance(sub, list) and sub else None
+    return None
+
+
+def _eml_name(p: Any, idx: int) -> str:
+    name = ""
+    with contextlib.suppress(Exception):
+        name = _line(p.get_filename() or "")
+    if not name:
+        inner = _inner(p)
+        subj = _hdr(inner, "subject") if inner is not None else ""
+        name = re.sub(r'[\\/:*?"<>|]+', "_", subj).strip(" .")[:120]
+        name = (name or f"message-{idx}") + ".eml"
+    return name
+
+
+def _eml_bytes(p: Any) -> bytes:
+    inner = _inner(p)
+    if inner is None:
+        return b""
+    try:
+        return inner.as_bytes()
+    except Exception:  # noqa: BLE001 - raw 8-bit headers: written back as they came
+        with contextlib.suppress(Exception):
+            return str(inner).encode("utf-8", "surrogateescape")
+    return b""
+
+
+def _size(p: Any) -> int:
+    """The decoded size of a part from its encoded text (decoding every attachment of a 47 MB mail only to show
+    its size took seconds)."""
+    try:
+        if _is_message(p):
+            return len(_eml_bytes(p))
+        raw = p.get_payload(decode=False)
+        if not isinstance(raw, str):
+            return 0
+        cte = str(p.get("content-transfer-encoding") or "").strip().lower()
+        if cte == "base64":
+            n = len(raw) - sum(raw.count(c) for c in "\r\n \t")
+            return max(0, n * 3 // 4 - raw.rstrip()[-2:].count("="))
+        if cte == "quoted-printable":
+            return len(raw) - 2 * raw.count("=")
+        return len(raw.encode("utf-8", "surrogateescape"))
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _addrs(msg: Any, name: str) -> list[dict]:
+    try:
+        v = msg[name]
+    except Exception:  # noqa: BLE001 - a header the parser cannot read
+        return [{"name": "", "email": _hdr(msg, name)}] if _hdr(msg, name) else []
+    return _addr(v) if v else []
 
 
 def _render(msg: EmailMessage, uid: int, folder: str, seen_flags: list[str]) -> dict:
     plain, html, leaves = _parts(msg)
     html_s = _part_text(html) if html is not None else None
     cids: dict[str, str] = {}
+    inline_total = 0
     attachments = []
     for idx, p in leaves:
         if p is plain or p is html:
             continue
-        ctype = p.get_content_type()
-        cid = (p.get("content-id") or "").strip().strip("<>")
-        payload = None
-        if cid and ctype.startswith("image/") and html_s and ("cid:" + cid) in html_s:
-            payload = p.get_payload(decode=True) or b""
-            if len(payload) <= MAX_INLINE:
+        try:
+            ctype = p.get_content_type()
+            if _is_message(p):
+                attachments.append({"index": idx, "filename": _eml_name(p, idx), "content_type": "message/rfc822",
+                                    "size": _size(p)})
+                continue
+            size = _size(p)
+            cid = str(p.get("content-id") or "").strip().strip("<>")
+            if (cid and ctype.startswith("image/") and html_s and ("cid:" + cid) in html_s and size <= MAX_INLINE
+                    and inline_total + size <= MAX_INLINE_TOTAL and len(cids) < MAX_INLINE_COUNT):
+                payload = p.get_payload(decode=True) or b""     # only the images the mail shows, within a budget
+                inline_total += len(payload)
                 cids[cid] = f"data:{ctype};base64," + base64.b64encode(payload).decode()
                 continue
-        name = _line(p.get_filename() or "")
-        if not name and p.get_content_disposition() != "attachment" and ctype.startswith("text/"):
-            continue                                  # alternative bodies already shown
-        if payload is None:
-            payload = p.get_payload(decode=True) or b""
-        attachments.append({"index": idx, "filename": name or f"part-{idx}.{ctype.split('/')[-1]}",
-                            "content_type": ctype, "size": len(payload)})
+            name = ""
+            with contextlib.suppress(Exception):
+                name = _line(p.get_filename() or "")
+            if not name and p.get_content_disposition() != "attachment" and ctype.startswith("text/"):
+                continue                                  # alternative bodies already shown
+            attachments.append({"index": idx, "filename": name or f"part-{idx}.{ctype.split('/')[-1]}",
+                                "content_type": ctype, "size": size})
+        except Exception:  # noqa: BLE001 - a broken part is left out, the mail still opens
+            continue
     if html_s is not None:
-        html_s = _SCRIPT.sub("", html_s)
+        html_s = strip_blocks(html_s)
         html_s = _CID.sub(lambda mm: mm.group(1) + cids.get(mm.group(2), "about:blank"), html_s)
     return {
         "uid": uid, "folder": folder,
-        "from": (_addr(msg["from"]) or [{"name": "", "email": ""}])[0] if msg["from"] else {"name": "", "email": ""},
-        "to": _addr(msg["to"]) if msg["to"] else [],
-        "cc": _addr(msg["cc"]) if msg["cc"] else [],
-        "reply_to": _addr(msg["reply-to"]) if msg["reply-to"] else [],
-        "bcc": _addr(msg["bcc"]) if msg["bcc"] else [],
+        "from": (_addrs(msg, "from") or [{"name": "", "email": ""}])[0],
+        "to": _addrs(msg, "to"),
+        "cc": _addrs(msg, "cc"),
+        "reply_to": _addrs(msg, "reply-to"),
+        "bcc": _addrs(msg, "bcc"),
         "in_reply_to": _hdr(msg, "in-reply-to"),
         "subject": _hdr(msg, "subject"),
         "date": _date(msg, None),
@@ -720,20 +921,34 @@ def excerpt(acc: dict, folder: str, uid: int, limit: int = EXCERPT_BYTES) -> dic
     raw = next((x[1] for x in data if isinstance(x, tuple)), None)
     if raw is None:
         raise MailError("not_found", f"message {uid} not found (moved or deleted)")
-    plain, html, _ = _parts(_parse(raw))
+    msg = _parse(raw)
+    plain, html = _body_of(msg, "plain"), _body_of(msg, "html")
     return {"text": _part_text(plain) if plain is not None else None,
-            "html": _SCRIPT.sub("", _part_text(html)) if html is not None else None}
+            "html": strip_blocks(_part_text(html)) if html is not None else None}
 
 
 def attachment(acc: dict, folder: str, uid: int, index: int) -> tuple[str, str, bytes]:
     with session(acc) as m:
         _select(m, folder, readonly=True)
         raw, _ = _fetch_raw(m, uid)
-    msg = _parse(raw)
-    for i, p in enumerate(msg.walk()):
-        if i == index and not p.is_multipart():
+    return part_at(_parse(raw), index)
+
+
+def part_at(msg: Any, index: int) -> tuple[str, str, bytes]:
+    """(name, type, bytes) of the attachment number `index` (as listed by `_render`); a forwarded mail comes as
+    its .eml."""
+    for i, p, inside in _walk(msg):
+        if i != index:
+            continue
+        if i > 0 and not inside and _is_message(p):
+            return _eml_name(p, i), "message/rfc822", _eml_bytes(p)
+        if not p.is_multipart():
             ctype = p.get_content_type()
-            return _line(p.get_filename() or "") or f"part-{i}.{ctype.split('/')[-1]}", ctype, p.get_payload(decode=True) or b""
+            name = ""
+            with contextlib.suppress(Exception):
+                name = _line(p.get_filename() or "")
+            return name or f"part-{i}.{ctype.split('/')[-1]}", ctype, p.get_payload(decode=True) or b""
+        break
     raise MailError("not_found", "attachment not found")
 
 
