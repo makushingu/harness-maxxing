@@ -387,10 +387,15 @@ def post(path: str, kind: str, text: str, author: str = "", **extra: Any) -> dic
     msg = {"id": _secrets.token_hex(6), "at": time.time(), "kind": kind, "author": author,
            "text": (text or "")[:TEXT_MAX], **extra}
     f = _state_file(path, "jsonl")
-    with f.open("a") as fh:
-        fh.write(json.dumps(msg, ensure_ascii=False) + "\n")
-    if f.stat().st_size > ROOM_BYTES:
-        _trim(f)
+    with _lock:                                         # the trim rewrites the file: never two at once
+        try:
+            with f.open("a") as fh:
+                fh.write(json.dumps(msg, ensure_ascii=False) + "\n")
+            if f.stat().st_size > ROOM_BYTES:
+                _trim(f)
+        except OSError as e:
+            log.warning("group %s: message not written: %s", path, e)
+            return msg
     from . import bus
     bus.invalidate(f"agent-groups:{path}", "agent-groups")
     return msg

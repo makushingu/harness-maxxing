@@ -318,3 +318,14 @@ def test_project_delete_takes_the_rooms_to_the_trash(client, topic, mx):
     texts = [(m["author"], m["text"]) for m in client.get(f"/api/agent-groups/{pn}/team/messages").json()["messages"]]
     assert (W.replace("projects/acme/", new + "/"), "old answer") in texts
     assert not (Path(client.get("/api/workspace/tree").json()["root"]) / new / "groups/team/.room.jsonl").exists()
+
+
+def test_a_long_room_takes_parallel_messages(client, topic, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    _setup(client)
+    P = "projects/acme/groups/team"
+    monkeypatch.setattr(agent_rooms, "ROOM_BYTES", 64 * 1024)
+    with ThreadPoolExecutor(8) as ex:                   # one post in four rewrites the file (trim)
+        list(ex.map(lambda i: agent_rooms.post(P, "note", f"{i:03} " + "x" * 10000), range(200)))
+    lines = agent_rooms._state_file(P, "jsonl").read_text().splitlines()
+    assert lines and all(json.loads(ln)["kind"] == "note" for ln in lines)
