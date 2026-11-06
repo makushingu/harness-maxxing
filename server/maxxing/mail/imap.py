@@ -605,6 +605,40 @@ def with_trust(acc: dict, rows: list[dict], t: set[str] | None = None) -> list[d
 
 SCAN_MAX = 1000         # messages looked at to fill a page when an agent only sees some senders
 
+# Every UID of a folder (`UID SEARCH ALL`: about 590 kB for 100k mails), kept while the folder has the same
+# UIDVALIDITY, UIDNEXT and EXISTS: a mail can only come (UIDNEXT grows) or go (EXISTS drops, or UIDNEXT grows with
+# it), so the same three numbers mean the same UIDs. The page change and the 60 s refresh then ask for nothing.
+ALL_CACHE = 16
+_all_cache: dict[tuple, tuple[tuple, list[int]]] = {}
+_all_lock = threading.Lock()
+
+
+def _folder_state(m: imaplib.IMAP4, exists: int) -> tuple | None:
+    """(UIDVALIDITY, UIDNEXT, EXISTS) of the folder just selected, None when the server leaves one out."""
+    try:
+        validity = int(_text(m.untagged_responses.get("UIDVALIDITY", [b""])[-1]) or 0)
+        nxt = int(_text(m.untagged_responses.get("UIDNEXT", [b""])[-1]) or 0)
+    except (ValueError, TypeError, IndexError):
+        return None
+    return (validity, nxt, exists) if validity and nxt else None
+
+
+def _all_cache_get(acc: dict, folder: str, state: tuple | None) -> list[int] | None:
+    if state is None:
+        return None
+    with _all_lock:
+        got = _all_cache.get((acc["id"], acc.get("imap_host"), acc.get("username"), folder))
+    return got[1] if got and got[0] == state else None
+
+
+def _all_cache_put(acc: dict, folder: str, state: tuple | None, uids: list[int]) -> None:
+    if state is None or len(uids) != state[2]:          # EXISTS and the answer disagree: the folder changed meanwhile
+        return
+    with _all_lock:
+        _all_cache[(acc["id"], acc.get("imap_host"), acc.get("username"), folder)] = (state, uids)
+        while len(_all_cache) > ALL_CACHE:
+            _all_cache.pop(next(iter(_all_cache)))
+
 
 def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, q: str | None = None,
              unread: bool = False, flagged: bool = False, senders: list[str] | None = None) -> dict:
@@ -617,13 +651,18 @@ def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, 
         crit, lit = _search_args(q, unread, flagged)
         if senders:
             crit = [c for c in crit if c != "ALL"] + access.imap_from(senders) or ["ALL"]
-        if lit is not None:
-            m.literal = lit
-            typ, data = m.uid("SEARCH", "CHARSET", "UTF-8", *crit if crit != ["ALL"] else [], "TEXT")
-        else:
-            typ, data = m.uid("SEARCH", *crit)
-        _ok(typ, data, "SEARCH")
-        uids = sorted((int(x) for x in _text(data).split()), reverse=True)
+        state = _folder_state(m, exists)
+        uids = _all_cache_get(acc, folder, state) if crit == ["ALL"] and lit is None else None
+        if uids is None:
+            if lit is not None:
+                m.literal = lit
+                typ, data = m.uid("SEARCH", "CHARSET", "UTF-8", *crit if crit != ["ALL"] else [], "TEXT")
+            else:
+                typ, data = m.uid("SEARCH", *crit)
+            _ok(typ, data, "SEARCH")
+            uids = sorted((int(x) for x in _text(data).split()), reverse=True)
+            if crit == ["ALL"] and lit is None:
+                _all_cache_put(acc, folder, state, uids)
         if not senders:
             total = len(uids)
             rows = with_trust(acc, _fetch_summaries(m, uids[page * size:(page + 1) * size]), t)
