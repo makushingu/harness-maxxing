@@ -88,6 +88,7 @@ Session = {
   state: "idle"|"running"|"error",
   queue: int,                         // messages waiting
   queue_items: [{text, attachments: int, source: "web"|"telegram"|"cron"|"system", kind, voice?:true}],  // the waiting messages, in order (text cut at 280 chars): the queue stack shows them even when this tab did not queue them
+  sent_items: [{text, attachments: [path], source, voice?:[path], client_ids?}],  // sent but not in the log yet (held at the head while a summary runs first, or its turn starting; text cut at 4000 chars): the thread shows them as sent, also after a reload or in another window
   created, updated, turns, cost_usd,
   model: string,                      // chosen ("" = default)
   real_model: string|null,            // model that actually answered last turn (from the log)
@@ -274,7 +275,7 @@ health problems itself every 60 s (not `cron_failed` nor
 | DELETE | `/api/backup` | – | forget repo + token (`409 busy` while a backup or restore runs) |
 
 ## Settings & secrets
-| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, maxxing_mode:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; Settings -> Support stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
+| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, mail_page:bool, maxxing_mode:bool, memory_max_lines:int, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; Settings -> Support stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
 | PUT | `/api/settings/look` | `{theme:"dark"\|"light"\|"system", accent:"blue"\|"clay"\|"violet"\|"green"\|"amber"\|"rose", tint?:"neutral"\|"tinted"}` | `{ok, look}` · sent by the web app 600 ms after a change of theme / accent / tint (config `look`) · `422` bad value |
 | GET / PUT | `/api/settings/profile` | `{name ≤32, color: "clay"\|"blue"\|"violet"\|"green"\|"amber"\|"rose"\|"teal"\|"zinc", emoji}` | `Profile` (bus `profile`) |
 | GET / PUT | `/api/settings/register` | `{count?, email?, news?, asked?}` (email: valid or `""`) | `RegisterState` `{count, count_blocked, email, news, asked, registered, error, synced_at}` (bus `register`). Optional hello to the authors (`maxxing/register.py`): `count` (default `true`) = anonymous daily signal (cloud id + version + `os`, `arch`, `health` codes), `count_blocked` = `MAXXING_NO_TELEMETRY` / `DO_NOT_TRACK` set in the service environment (counter off whatever `count`); `email` (+ `news`) adds pseudo and language; neither = cloud row archived (kept, never contacted again). An update never turns on the email or the news; 2.0.0a94 turned `count` on once where `asked` was false. |
@@ -394,12 +395,12 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 |---|---|---|---|
 | GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], skin: [..], hair: [..], hair_color: [..], face: [..], accessory: [..]}}` (the pixel-art character's parts; `color` = an accent colour of the UI, unknown or missing values = a stable pick from the agent's name) |
 | GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
-| POST | `/api/agents` | `{topic_path, name, display_name?, description?, ...AgentFields}` | `Agent & Status` · `400 bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
+| POST | `/api/agents` | `{topic_path, name, display_name?, description?, template?, ...AgentFields}` (`template`: a ready-made agent id, its settings under the fields) | `Agent & Status` · `400 bad_template` / `bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
 | GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob], webhooks: [{id, name, kind, url, has_secret}], trigger_stats: {<trigger id>: {events, last_event_at}}}` (cron jobs whose `topic_path` is the agent path; the feed hooks behind its webhook triggers, never their secret; events of each feed trigger's source over the feed retention) · `404` |
 | PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
 | DELETE | `/api/agents/{p}/{t}/{a}` | – | `{ok}`: folder + sessions to the Trash, its cron jobs deleted, its thread, state and Telegram thread dropped · `409 has_running_sessions` |
 | GET | `/api/agents/{p}/{t}/{a}/thread?limit=100&before=<at>` | – | `{messages: [AgentMessage]}` oldest first (the Activity tab) |
-| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?, reply_to?}` | `{started: true, session: Session, continued?: true}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed). `reply_to` = a thread message id: its session goes on with the text (`continued`, no new session; a gone session -> a new one). A new session gets the last 3 results of the thread as framed context |
+| POST | `/api/agents/{p}/{t}/{a}/run` | `{text?, reply_to?, attachments?:[filepath] (≤ 10)}` (`attachments`: uploaded first with `POST /api/uploads?path=<agent path>`, each a regular file under `<agent>/attachments/` with no link below it, else `400 bad_attachment`; files only = the text "See the attached files."; the thread's `run` message keeps `attachments`) | `{started: true, session: Session, continued?: true}` \| `{started: false, reason: "disabled"\|"budget"\|"rate"\|"depth"\|"missing"}` - the text is the user's task (not framed). `reply_to` = a thread message id: its session goes on with the text (`continued`, no new session; a gone session -> a new one). A new session gets the last 3 results of the thread as framed context |
 | POST | `/api/agents/{p}/{t}/{a}/seen` | – | `{ok}`: the thread is read (`thread_unread` 0) and the finished, read runs are archived (`agents.tidy`) |
 | POST | `/api/agents/{p}/{t}/{a}/triggers/{tid}/test` | – | `{event: FeedEvent}`: a sample feed event on the trigger's source (its first level, its `match` words), so the agent starts as for a real one · `404 not_found` |
 | POST | `/api/agents/{p}/{t}/{a}/webhook` | `{kind: "generic"\|"stripe"\|"shopify"\|"github", prompt?, levels?, match?}` | `{agent, hook: FeedHook}`: a feed hook named `<topic>-<agent>` + a feed trigger on its source |
@@ -439,7 +440,7 @@ Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [
 AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
                 trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
                 session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note),
-                reply_to?: message id (run that continued a session)}
+                reply_to?: message id (run that continued a session), attachments?: [filepath] (run)}
 ```
 Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:
 `maxxing agents list | run <agent> [text] [--data] | send <agent> <text> | on <agent> | off <agent> | templates |
@@ -461,6 +462,52 @@ fails before Claude starts. With `rules`: `hooks.PreToolUse` = `<python> -m maxx
 `maxxing-<sid8>` of a session in a sandboxed agent folder (`/proc/self/cgroup`, not an env var the turn could
 change). A session in a topic gets `--agents <json>` with the topic's agents that have `subagent` on
 (`agent_format.subagents`). Tests: `MAXXING_SANDBOX_CHECK=0` skips the availability check.
+
+## Agent groups
+
+In the Agents page (same `agents_page` switch: `404 feature_off` while off). A group = a folder
+`projects/<p>/groups/<g>/` (`CLAUDE.md` = its goal, `group.json`, `files/` = the shared folder) whose members are 2-6
+agents of project `<p>`; only the owner writes to it, its members answer one turn at a time (`agent_rooms.py`, see
+INTERNALS.md#maxxing.agent_rooms).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/agent-groups` | – | `{groups: [Group]}` (every project, sorted by project then folder) |
+| POST | `/api/agent-groups` | `{project, name (folder slug), display_name?, emoji?, goal?, members: [{path, role?}], lead?, shared_files?, trust_members?, limits?}` | `Group` · `400 invalid_name` / `bad_member` (not an agent of the project) / `members` (not 2-6) · `404 not_found` / `unknown_member` · `409 exists` / `too_many` (20 per project) |
+| GET | `/api/agent-groups/{p}/{g}` | – | `Group` · `404 not_found` |
+| PATCH | `/api/agent-groups/{p}/{g}` | the create fields but `project` / `name` (`limits` merged; `goal` rewrites CLAUDE.md; `members` checked like create, except a former member whose agent was deleted: dropped) | `Group` (+ `dropped: [path]` when such members were dropped; members removed: their group session and queued turns dropped) |
+| DELETE | `/api/agent-groups/{p}/{g}?keep_files=` | – | `{ok}`: turn stopped, folder and room deleted; `keep_files=true` moves `files/` to `projects/<p>/groups/.kept-<g>-<unix time>/` first. Members and their sessions stay |
+| GET | `/api/agent-groups/{p}/{g}/messages?limit=200&before=<at>&after=<at>` | – | `{messages: [GroupMessage]}` oldest first (`after`: only the newer ones, how the group page refreshes) |
+| POST | `/api/agent-groups/{p}/{g}/uploads` | multipart `file` (one or more) | `{files:[Upload]}` saved under `<group>/attachments/YYYY-MM/` (as `/api/uploads`: limits, never through a symbolic link: `400 bad_path`) |
+| POST | `/api/agent-groups/{p}/{g}/messages` | `{text, attachments?:[filepath] (≤ 10, from .../uploads, else 400 bad_attachment)}` (≤ 4000; text or files) | `{message: GroupMessage, queued: [agent path]}`: the owner's message (the same text again within 3 s: `{message: <the first>, queued: [], duplicate: true}`, posted once); the members named (`@slug`, `@all`/`@everyone`/`@tous`; none: the lead, else the last member who spoke, else the first not paused) are queued (replacing pending hand-overs) and the first starts unless a turn runs. `stop @slug` pauses that member (a message holding only stops queues nobody); naming a paused member resumes it · `400 empty` |
+| POST | `/api/agent-groups/{p}/{g}/stop` | – | `{ok}`: queue emptied, the running turn stopped (`service.stop`); its answer is still posted, it hands over to nobody |
+| POST | `/api/agent-groups/{p}/{g}/reset` | – | `{ok}`: "New topic" - stop, then every member starts a new session at its next turn |
+| POST | `/api/agent-groups/{p}/{g}/seen` | – | `{ok}`: `unread` 0 |
+| POST | `/api/agent-groups/{p}/{g}/members/{mp}/{mt}/{ma}/pause` | `{paused: bool}` | `Group` · `404 not_member` |
+
+```
+Group = {path: "projects/<p>/groups/<g>", project, name, display_name, emoji, goal (CLAUDE.md description),
+         members: [{path, handle (its @name: the folder name; when two members share it, from the display name, else <topic>-<folder>; stored in group.json), slug (= handle), role, exists, display_name, avatar, enabled, paused, speaking}], lead (member path|""),
+         shared_files: bool (default true), trust_members: bool (default true),
+         limits: {waves: 3 (1-6), replies: 10 (1-30), per_hour: 40 (1-200)}, created,
+         files_path ("projects/<p>/groups/<g>/files" | "" when shared_files is off), busy (a turn runs or is queued),
+         speaking (member path | ""), speaking_session (sid | ""), last_at, unread: 0|1}
+GroupMessage = {id, at, kind: "message"|"pass"|"skip"|"note"|"stop", author: "me"|<member path>|"", text,
+                session? (the member's group session), cost?, reason? (skip: disabled|budget|busy|missing|failed|error),
+                limit? (note: waves|replies|per_hour), reset? (note of New topic),
+                attachments?: [filepath] (the owner's message: sent to the members who answer it the first time they see
+                it - `_origin_files`; its paths are in the text of every turn)}
+```
+Turns: a member keeps one session per group (`state.sessions`), continued with `service.send_message`; a new one is
+`create_session(<agent path>, source "agent", cron true, env {MAXXING_AGENT, MAXXING_AGENT_TRIGGER: "group:<path>",
+MAXXING_AGENT_DEPTH: 0, MAXXING_AGENT_GROUP: <path>})`. The agent's `gate()` applies except `rate` (the group's limits
+replace runs per hour). `run_settings(path, outside, session, group)` adds `files/` to `writable` and makes the turn
+outside (approvals forced unless `trust_outside`) when it is a hand-over and `trust_members` is off. The answer
+(`last_assistant_text`) is posted by `agents.on_turn_end` -> `agent_rooms.on_turn_end`: `PASS` / empty = `pass`; the
+members it names are queued as the next wave. The member's thread gets `run` / `result` lines with `group: <path>`
+(no Telegram message for group turns). Bus topics `agent-groups` and `agent-groups:<path>`. CLI:
+`maxxing agents group list | show <p>/<g> | create <p>/<g> --member A[=role]... | update <p>/<g> ... | say <p>/<g> <text>` (`group` is in
+`agent_guard.AGENT_OWNER_ONLY`: refused in every agent turn).
 
 ## Approvals
 
@@ -519,6 +566,7 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 | POST | `/api/infra/servers/remove` | `{name}` | `{removed}`; `404` |
 | POST | `/api/infra/domains` | `{name}` | `{name}` (normalised: lower case, IDNA, no scheme/path); `400 invalid_domain`. A domain from any registrar, read through RDAP + public DNS |
 | POST | `/api/infra/domains/remove` | `{name}` | `{removed}`; `404` when it was not added by hand |
+| GET | `/api/infra/mail?refresh=1` | – | Infra -> E-mail, view only (`infra/mailinfo.py`; `409 disabled` when the Infra page is off). `{generated_at, cached, mail_page, mailboxes:[{id, address, label, domain, imap_host, imap_port, smtp_host, smtp_port, has_password, last_check:{at, ok, error}\|null}], cloudflare:{connected, key, error?, message?, zones:[{zone, name, routing:{enabled, status}\|null, rules:[{name, enabled, catch_all, from, action: forward\|worker\|drop, to:[address], worker}], error?, missing_permission?}], addresses:[{email, verified, verified_at}], addresses_error?, addresses_fix?, missing_permission_zones?, fix?}, hostinger:{connected, key, error?, orders:[{id, domain, status, plan, seats, expires, mailboxes:[{address, status, catch_all}], aliases:[{address, to, enabled}], forwarders:[{from, to, enabled, confirmed, keep_copy}], catchalls:[{domain, to, enabled, confirmed}], error?}]}, routes:[{domain, address (`*@domain` = catch-all), via: cloudflare\|hostinger, kind: forward\|worker\|drop\|mailbox\|alias\|catchall\|other, enabled, account, worker, to:[{address, verified: bool\|null, account}]}], domains:[{domain, sources:[cloudflare\|hostinger\|mail_page], expects, checked, error, mx:[host], spf:{record, count, lookups}, dkim:[selector], dmarc:{record, count, policy}, problems:[{level: error\|warn\|info, code, text, fix, params}]}]}`. `account` = id of the E-mail page mailbox with that address. Provider calls are GET only, cached 5 min (`<state>/infra/mail.json`), DNS facts 1 h (`<state>/infra/mail-dns.json`, public DoH, `MAXXING_DOH_API`); `refresh=1` skips both. A provider error is in the payload, never a 5xx. Problem codes: `dns_unreachable, no_mail, null_mx, no_mx, mx_not_cloudflare, no_spf, multiple_spf, spf_all, spf_lookups, no_dkim, no_dmarc, multiple_dmarc, dmarc_no_policy, dmarc_none` |
 
 Resource: `{id, kind: server|site|worker|pages|database|bucket|domain, name, location: local|<server>|cloudflare|hostinger|other,
 provider, urls, status: ok|warn|down|unknown, status_detail (http_<code>, unreachable, timeout, tls_invalid, cert_expiring,
@@ -527,6 +575,49 @@ list_failed, file_missing), details, links:[id], project, note, hidden, declared
 `site:<server>:<host><path>`, `db:<server>:<engine>:<container|native>:<db>`, `db:<server>:sqlite:<path>`,
 `db:cloudflare:d1:<name>`, `bucket:<server>:garage:<name>`, `bucket:cloudflare:r2:<name>`, `worker:cloudflare:<name>`,
 `pages:cloudflare:<name>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).
+
+## Mail
+
+E-mail page (`maxxing/mail/`, Settings -> Features -> `mail_page`, off by default): any IMAP/SMTP mailbox, live (no
+copy of the mail on the server). Every route answers `409 disabled` while the page is off. Accounts:
+`<state>/mail/accounts.json` (no secret); each password is the vault key `MAIL_<ID>_PASSWORD`, never exposed to turns.
+Errors `{error, message}`: `400 invalid`, `404 no_account|not_found|no_folder`, `409 exists|no_password`,
+`413 too_large`, `422 refused` (every recipient refused) | `auth` (sign-in refused), `429 limit` (daily cap or more than 20 recipients),
+`424 unreachable|tls|connection|imap|smtp` (the mail server failed; never a 5xx, which a proxy may replace by its own page).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/mail/accounts` | – | `[MailAccount]` `{id, label, address, name, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, signature, password_key, has_password, created, smtp_checked, sent_today, send_per_day}` |
+| POST | `/api/mail/detect` | `{address}` | `{source: known\|mx\|autoconfig\|guess, imap_*, smtp_*, mx}` (known providers, MX of the domain, Thunderbird's directory, else `mail.<domain>`) |
+| POST | `/api/mail/accounts` | `{address, password, label?, name?, username?, imap_host, imap_port, imap_tls: ssl\|starttls\|none, smtp_host, smtp_port, smtp_tls, signature?}` | `{account, test: {imap, smtp, smtp_port, smtp_tls, smtp_changed, smtp_error?}}` (signs in first; SMTP 465 that does not answer -> 587 STARTTLS) |
+| PATCH / DELETE | `/api/mail/accounts/{id}` | PATCH: same fields, all optional (`password` empty = kept) | `{account, test\|null}` / `{ok}` (DELETE removes the password from the vault, never the mailbox) |
+| POST | `/api/mail/accounts/{id}/test` | – | `test` as above |
+| GET / POST / PUT / DELETE | `/api/mail/{id}/folders` | POST `{name, parent?}`, PUT `{name, new_name}`, DELETE `?name=` | GET `[{name, role: inbox\|drafts\|sent\|archive\|junk\|trash\|all\|flagged\|null, delim, unread, total}]` |
+| GET | `/api/mail/{id}/messages?folder=&page=&size=&q=&unread=&flagged=` | – | `{folder, total, exists, page, size, messages: [{uid, from, to, subject, date, seen, flagged, answered, size, attachments}]}` (newest first; `q` = server-side IMAP TEXT search) |
+| GET | `/api/mail/{id}/message?folder=&uid=&seen=1` | – | `{uid, folder, from, to, cc, bcc, reply_to, subject, date, message_id, in_reply_to, references, text, html, remote_images, attachments: [{index, filename, content_type, size}], seen, flagged, answered}` (marks it read unless `seen=0`; `html` without scripts, `cid:` images inlined) |
+| GET | `/api/mail/{id}/attachment?folder=&uid=&index=&inline=` | – | the file (`inline` only for images and PDF; `CSP: sandbox`) |
+| POST | `/api/mail/{id}/actions` | `{folder, uids, action: seen\|unseen\|flag\|unflag\|move\|archive\|trash\|junk\|inbox\|delete, target?}` | `{ok, moved_to}` (`delete` only from trash / junk; an archive folder is created when missing) |
+| GET | `/api/mail/{id}/compose?mode=reply\|replyall\|forward\|draft&folder=&uid=` | – | `{to, cc, bcc?, subject, text, in_reply_to, references, attachments}`: the fields a composer starts with (signature then quote for a reply, forwarded header + body, a draft as saved; never oneself in reply all) |
+| POST | `/api/mail/{id}/send` | multipart: `data` = JSON `MailDraft` `{to, cc, bcc, subject, text, in_reply_to?, references?, reply?: {folder, uid}, forward?: {folder, uid, indexes}, draft?: {folder, uid}}`, `files` (≤ 30, ≤ 25 MB in total with the forwarded ones) | `{ok, message_id, recipients, refused, sent_folder}`: sent through the SMTP of the mailbox (plain text), copy filed in Sent (not for Gmail / Outlook, which do it), `reply` flagged answered, `draft` dropped. Capped: ≤ 20 recipients a message, `mail_send_per_day` (config, default 100) recipients a mailbox a day (`<state>/mail/sent-count.json`; a failed send gives them back) |
+| POST | `/api/mail/{id}/draft` | as `/send` | `{folder, uid}`: filed in Drafts, replacing `draft` |
+| POST | `/api/mail/refresh` | `{account?}` | `[{account, ok, error?, new, started}]`: check the mailbox(es) now (`mail/poll.py`); new mail starts the agents watching it |
+| GET | `/api/mail/all?limit=100&before=` | – | `{messages: [{account, address, folder, uid, message_id, from, from_verified, subject, date, snippet, seen, attachments, seen_by}], checks: {<id>: {at, ok, error}}}`: the newest mail of every mailbox as the checks saw it (cache, not live) |
+| GET | `/api/mail/outbox?account=` | – | `[{id, account, agent, agent_name, avatar, at, to, cc, subject, text, files, draft: {folder, uid}, why, event_id, note}]`: messages written by agents waiting for the owner's OK |
+| POST | `/api/mail/outbox/{id}/send\|deny` | – | `{id, status: sent\|refused}` (once; also the buttons of its Notifications event, ref `mailsend:<id>`) |
+
+Since the agents' e-mail (lot 2): `MailAccount` also has `poll_min` (5\|10\|30\|60 minutes between checks, default 10,
+PATCH-able), `auth_servers` (host names whose `Authentication-Results` are trusted, set by the owner, PATCH-able),
+`sender_check` (`{state: owner|auto|detected|none, server}`: who verifies the senders - the owner's servers, a known
+provider found on nearly all recent mail and hosting the mailbox, a server found but not confirmed (the UI offers to
+trust it = `auth_servers`), or nobody: then no sender is verified), `last_check` (`{at, ok, error}` or null), `agents` (the agents
+that may use it: `{agent, name, avatar, enabled, rights, senders, approve_send, trigger}`) and `waiting` (outbox count).
+List rows and `/message` have `from_verified` (the topmost `Authentication-Results`, written by the mailbox's provider,
+says DMARC / DKIM / SPF passed for the sender's domain), `message_id`, and `seen_by`: `[{agent, at, what, detail, name,
+avatar, exists}]` (`what`: seen, read, draft, filed, archived, replied, sent, marked read...; kept in `<state>/mail/mail.db`,
+never written to the mailbox). An agent's `mail` setting (agent.json, `PATCH /api/agents/...` `{mail: [Grant]}`, 400
+`bad_mail`): `Grant = {account, rights: [read, draft, move, mark, send], senders: ["*@example.com", "bob@example.com"],
+approve_send: always|new|never, trigger: {enabled, folder, subject, senders, prompt} | null}`; enforced by `maxxing mail`
+in the agent's turns (`mail/access.py`, `cmd_mail.Guard`).
 
 ## Team
 
@@ -682,5 +773,5 @@ a day, `search.db` is VACUUMed when more than 25 % of its pages are free (and it
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/search?q=&kinds=session,file,memory,task&limit=30` | – | `{results:[{kind, id (session id / file path / task id), path, title, snippet, at, score}], took_ms}` — every word required, as a prefix from 3 characters, accent-insensitive, BM25 (title x4; a session's title is on its title row only), one result per session/file/task (deduplicated in SQL), only the `RANK_MAX` (5 000) newest matching rows ranked, `cancelled: true` (no results) when the client went away; `snippet` marks matches with `\u0002`…`\u0003` |
+| GET | `/api/search?q=&kinds=session,file,memory,task,group&limit=30` | – | `{results:[{kind, id (session id / file path / task id / group path), path, title, snippet, at, score}], took_ms}` — every word required, as a prefix from 3 characters, accent-insensitive, BM25 (title x4; a session's title is on its title row only), one result per session/file/task (deduplicated in SQL), only the `RANK_MAX` (5 000) newest matching rows ranked, `cancelled: true` (no results) when the client went away; `group` = the conversations of the agent groups (`<state>/agents/rooms/*.jsonl`, a changed room indexed again whole, title row = the group's name, rows `@writer: …`), left out while Agents is off; `snippet` marks matches with `\u0002`…`\u0003` |
 | GET | `/api/search/stats` | – | `{counts:{session, file, memory, task}, bytes, refreshed_at}` |

@@ -44,10 +44,13 @@ APPARMOR_PROFILES = Path("/sys/kernel/security/apparmor/profiles")
 
 # `maxxing` sub-commands a sandboxed agent turn may run (anything else is refused): its own work, nothing that
 # changes the server (a cron or an MCP server would run outside the sandbox).
-CLI_ALLOWED = {
+CLI_ALLOWED = {                        # show/list/feed list are narrowed further (cmd_agents, cmd_feed)
     "feed": {"post", "list"},
     "agents": {"send", "show", "list", "templates"},
     "keys": {"get", "list"},          # filtered by the agent's `keys` (cmd_keys)
+    # filtered by the agent's `mail` (cmd_mail.Guard): its mailboxes, rights and senders
+    "mail": {"accounts", "folders", "list", "read", "attachment", "write", "move", "mkdir", "refresh", "outbox",
+             "archive", "trash", "junk", "inbox", "seen", "unseen", "flag", "unflag"},
     "status": None,                   # None = any
 }
 
@@ -154,7 +157,8 @@ ENV_GLOBS = (".env", ".env.*", "*/.env", "*/.env.*", "*/*/.env", "*/*/.env.*")
 
 def private_paths(path: str) -> list[str]:
     """What a sandboxed agent never reads in the workspace: the other projects, the other topics of its project, the
-    other agents of its topic, and the `.env` files of its topic (globs, expanded by Claude Code at sandbox start)."""
+    other agents of its topic, the groups of its project it is not a member of (and the kept folders of deleted
+    groups), and the `.env` files of its topic (globs, expanded by Claude Code at sandbox start)."""
     root = config.workspace()
     folder = root / path
     topic = folder.parent.parent
@@ -164,7 +168,23 @@ def private_paths(path: str) -> list[str]:
             out += [str(k) for k in sorted(d.iterdir()) if k.is_dir() and k != keep]
         except OSError:
             pass
+    try:
+        groups = sorted(topic.parent.parent.joinpath("groups").iterdir())
+    except OSError:
+        groups = []
+    out += [str(g) for g in groups if g.is_dir() and not _member(g, path)]
     return out + [f"{topic}/{g}" for g in ENV_GLOBS]
+
+
+def _member(group: Path, path: str) -> bool:
+    """`path` is a member of the group folder (its group.json, read here: agent_rooms is not imported by the runner)."""
+    if group.name.startswith("."):                  # .kept-<name>-<time>: a deleted group's files
+        return False
+    try:
+        d = json.loads((group / "group.json").read_text(encoding="utf-8"))
+        return any(isinstance(m, dict) and m.get("path") == path for m in d.get("members") or [])
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def read_back() -> list[str]:
@@ -180,6 +200,17 @@ def locked_paths(path: str) -> list[str]:
     folder = config.workspace() / path
     topic = folder.parent.parent
     out = [str(folder / "agent.json"), str(folder / "CLAUDE.md"), str(folder / ".claude"), str(topic / ".claude")]
+    # the owner's uploads (web page, Telegram): read only, so the agent can neither swap a file it was sent nor turn
+    # the folder into a link that sends the next upload elsewhere (created here: a missing path would be mounted)
+    # (the agent's and its topic's, even when `writable` names them: denyWrite wins over allowWrite)
+    for att in (folder / "attachments", topic / "attachments"):
+        try:
+            if not att.is_symlink():
+                att.mkdir(exist_ok=True)
+            if att.is_dir() and not att.is_symlink():
+                out.append(str(att))
+        except OSError:
+            pass
     # a missing .mcp.json is not locked: the sandbox would mount a placeholder there for the run, which breaks a
     # `git add -A` in a topic that is a clone; a new one is never trusted in a headless run anyway (its servers need
     # an approval)
@@ -187,8 +218,9 @@ def locked_paths(path: str) -> list[str]:
 
 
 # what an agent never writes in its topic, even with `writable: "."`: the other agents (and new ones), the topic's
-# own role and memory (read by every session of the topic), its Claude Code settings
-TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json")
+# own role and memory (read by every session of the topic), its Claude Code settings, the owner's uploads
+# (attachments/: a file swapped there would be read by the owner's sessions, a link would send the next upload away)
+TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json", "attachments")
 
 
 def writable_dirs(path: str, a: dict) -> list[str]:
@@ -228,7 +260,7 @@ def topic_edit_denied(path: str) -> list[str]:
         out += [f"Edit(/{d}/**)" for d in sorted(ag.iterdir()) if d.is_dir() and d.name != folder.name]
     except OSError:
         pass
-    return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / '.claude'}/**)"]
+    return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / d}/**)" for d in (".claude", "attachments")]
 
 
 def mode(requested: str) -> str:
@@ -257,7 +289,7 @@ def settings(path: str, a: dict, approvals: bool = False) -> dict:
                 and not Path(p).name.startswith(".env") else p
             deny += [f"Read(/{g})", f"Edit(/{g})"]
         for p in locked:                                # its settings and role: the owner's, never the agent's
-            deny.append(f"Edit(/{p + '/**' if p.endswith('/.claude') else p})")
+            deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
         deny += [r for r in topic_edit_denied(path) if r not in deny]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does; with approvals it is asked
@@ -397,7 +429,7 @@ def sandboxed_session(sid8: str) -> str | None:
 
 
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
-AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "import", "sandbox-setup"}
+AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "import", "sandbox-setup", "group"}
 
 
 def check_cli(argv: list[str]) -> str | None:

@@ -207,3 +207,32 @@ that builds one with you.
 - What the view sees: your agents' names, roles, states and the start of their last results. As for any extension,
   it is code you trust: do not load scripts from sites you do not trust.
 - If the extension is turned off, deleted or in error, the Office shows Classic (the choice comes back with it).
+
+## 5. Community extensions
+
+Extensions written by other people, kept in their own repositories and maintained by their authors.
+
+> **Not reviewed by the Harness Maxxing maintainers: install them at your own risk.** An extension's `api.py` runs
+> inside the Harness server, with the server's rights (root on a standard install): it can read your files, your
+> keys and your sessions. Read its code first, and install only what comes from someone you trust.
+
+To install one, copy its folder to `/root/maxxing/extensions/<id>/` (for example with `git clone`), then
+**Settings -> Extensions -> Reload**. To remove it, delete the folder (and the skill folder, if it came with one).
+
+| Extension | What it does | Author |
+|---|---|---|
+| *none yet* | | |
+
+To get yours listed, open an issue on GitHub with the link to its repository. Being listed is not a review, and an
+entry that no longer follows these rules is removed:
+
+- a public repository of its own, with its licence, that you maintain;
+- `id`: lowercase letters, digits and dashes, not taken by a stock extension;
+- `name` in English and French (`{"en": "…", "fr": "…"}`), `"api": 1` in the manifest;
+- no key or secret in the code, the page or the session environment: the user types it in **Settings -> Keys** and
+  `api.py` reads it with `ctx.secret()`;
+- anything that changes an outside service (deploy, delete, pay, send) is shown to the user and runs only once they
+  agree;
+- a skill shipped with it: Claude Code does not read skills from extension folders, so the README says to copy it
+  to `/root/maxxing/.claude/skills/<name>/`;
+- a README that says what it does, what it sends where, and how to remove it.

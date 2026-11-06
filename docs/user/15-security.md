@@ -21,7 +21,9 @@ code that runs as root on purpose.
 
 For work that reads outside text by itself (webhooks, e-mails, orders), prefer an [agent](agents#safety): outside
 text is given as data, it sees only the keys you list, can ask for your OK, and new agents run in Claude Code's
-sandbox.
+sandbox. In an [agent group](agent-groups), only you write; what one member says is given to the others as data, and
+the only extra place a member may write is the group's shared folder (turn off "Members trust each other" for groups
+that read outside content: a hand-over then asks for your OK before risky actions).
 
 **What limits it:**
 - **Permission modes, per topic and per job** (the real limit): `bypass` (default, no questions), `acceptEdits`

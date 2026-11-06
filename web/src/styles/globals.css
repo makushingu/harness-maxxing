@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* The committed build is not a source: its Brotli files hold random bytes ("p-9"...) that made every second build differ. */
+@source not '../../dist';
 /* Default interface font only; the other fonts are loaded on demand (lib/fonts.ts loadFont). */
 @import '@fontsource-variable/inter';
 

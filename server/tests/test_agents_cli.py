@@ -124,14 +124,16 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
             d = agents.clean(agent_templates.fields(t), strict=True)        # every field valid as is
             assert d["permission_mode"] == "default" and "Edit(./memory.md)" in d["allowed_tools"]
             assert all(t["avatar"][k] in v for k, v in agents.AVATAR.items())
-            assert bool(t.get("cron")) != bool(t.get("webhook"))
+            assert (t.get("cron") or t.get("webhook") or t.get("mail")) and not (t.get("cron") and t.get("webhook"))
             if t.get("cron"):
                 crons.validate(t["cron"]["schedule"])
     assert agent_templates.get("support", "fr")["name"] == "SAV" and agent_templates.get("support", "de")["name"] == "Customer support"
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
     vault.put("SHOPIFY_TOKEN", "x")
+    vault.put("STRIPE_SECRET_KEY", "x")             # a full key: the read-only templates never take it
     got = client.get("/api/agents/templates?lang=fr").json()["templates"]
     assert [t["id"] for t in got][:2] == ["support", "sales"] and got[0]["keys_present"] == ["SHOPIFY_TOKEN"]
+    assert got[1]["keys_present"] == ["SHOPIFY_TOKEN"]
     # create from a template: its settings, its first trigger, what to connect
     assert cli.main(["agents", "create", "acme/blog/digest", "--template", "sales", "--lang", "fr"]) == 0
     out = capsys.readouterr().out
@@ -146,5 +148,64 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
     r = json.loads(capsys.readouterr().out)
     assert r["webhook"] and agents.load(r["agent"])["approvals"] is True and agents.load(r["agent"])["keys"] == ["SHOPIFY_TOKEN"]
     assert cli.main(["agents", "create", "acme/blog/x", "--template", "nope"]) == 2
+    # the UI sends the template id: the server applies what the CLI gives (domains...), the form's fields on top
+    body = {"topic_path": "projects/acme/topics/blog", "name": "ui-sales", "display_name": "Mine", "template": "sales",
+            "description": "My role", "keys": []}
+    r = client.post("/api/agents", json=body)
+    assert r.status_code == 200, r.text
+    a = agents.load(r.json()["path"])
+    assert a["domains"] == ["api.stripe.com", "*.myshopify.com"] and "Bash(curl:*)" in a["allowed_tools"]
+    assert a["keys"] == [] and agents.get(r.json()["path"])["display_name"] == "Mine"
+    assert client.post("/api/agents", json={**body, "name": "ui-x", "template": "nope"}).status_code == 400
     assert cli.main(["agents", "create", "acme/blog/x"]) == 2
     assert cli.main(["agents", "templates"]) == 0 and "pr-review" in capsys.readouterr().out
+
+
+def test_an_interrupted_create_gives_the_name_back(client, topic, monkeypatch):
+    from maxxing import workspace
+    client.put("/api/settings", json={"agents_page": True})
+    real = workspace._init_level
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(workspace, "_init_level", boom)
+    try:
+        agents.create("projects/acme/topics/blog", "half", {})
+    except OSError:
+        pass
+    assert not agents.folder(agents.agent_path("acme", "blog", "half")).exists()
+    monkeypatch.setattr(workspace, "_init_level", real)
+    assert agents.create("projects/acme/topics/blog", "half", {})["path"].endswith("/half")
+
+
+def test_two_watch_at_once_keep_both_triggers(client, topic, monkeypatch, capsys):
+    import threading
+    client.put("/api/settings", json={"agents_page": True})
+    path = agents.create("projects/acme/topics/blog", "w", {})["path"]
+    real, other = agents.update, []
+
+    def update(p, fields):
+        if not other:                                     # a second `watch` runs while the first one saves
+            other.append(threading.Thread(target=cli.main, args=(["agents", "watch", "w", "--source", "other"],)))
+            other[0].start()
+            other[0].join(1)
+        return real(p, fields)
+    monkeypatch.setattr(agents, "update", update)
+    assert cli.main(["agents", "watch", "w", "--source", "mine"]) == 0
+    other[0].join(5)
+    assert sorted(t.get("source") for t in agents.load(path)["triggers"]) == ["mine", "other"]
+
+
+def test_an_unreadable_role_file_is_a_plain_error(client, topic, tmp_path, capsys):
+    client.put("/api/settings", json={"agents_page": True})
+    f = tmp_path / "r.bin"
+    f.write_bytes(b"\xff\xfe\x00bad")
+    assert cli.main(["agents", "create", "acme/blog/x1", "--role-file", str(f)]) == 2
+    assert "Cannot read" in capsys.readouterr().err
+
+
+def test_an_export_to_an_unwritable_path_is_a_plain_error(client, topic, tmp_path, capsys):
+    client.put("/api/settings", json={"agents_page": True})
+    agents.create("projects/acme/topics/blog", "w", {})
+    assert cli.main(["agents", "export", "w", "-o", str(tmp_path / "nodir" / "o.md")]) == 2
+    assert "Cannot write" in capsys.readouterr().err

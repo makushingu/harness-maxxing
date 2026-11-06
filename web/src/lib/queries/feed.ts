@@ -55,7 +55,7 @@ export function useMarkFeedRead() {
  *  gets the decided event back. Refreshes what the answer changes too (the agent's thread, the waiting requests). */
 export function useFeedAct() {
   return useMut(({ id, action }: { id: number; action: string }) => api.post<{ event: FeedEvent }>(`/api/feed/${id}/act/${encodeURIComponent(action)}`), {
-    invalidate: [qk.feed.all, ['approvals'], ['agents']],
+    invalidate: [qk.feed.all, ['approvals'], ['agents'], ['mail', 'outbox'], ['mail', 'accounts'], ['mail', 'list']],   // mail: an agent's message sent or refused
   })
 }
 export function useDeleteFeedEvent() {

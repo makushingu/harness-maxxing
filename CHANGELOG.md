@@ -10,6 +10,43 @@ New:
   Settings -> Keys, or with `maxxing keys put-file`, and expose its path to your sessions and jobs as an environment
   variable. Files stay on the server, never in the backup, and are never shown or downloadable in the browser.
 
+## 2.0.0-alpha.121 - 2026-11-06
+
+New:
+- **Files for your agents and groups**: attach files to a message to an agent or to an agent group (paperclip, paste
+  or drop, up to 10), as in a session: a photo, a PDF, a brief. The agent reads them; in a group, the members who
+  answer get them. A message can be only files.
+- **Agents in the search**: Ctrl/⌘+K opens any agent or agent group by its name, and finds what was said in the
+  groups' conversations.
+
+## 2.0.0-alpha.120 - 2026-11-05
+
+New:
+- **E-mail** (Settings -> Features, off by default): your mailboxes next to your sessions, from any provider with
+  IMAP and SMTP (Gmail with an app password, OVH, o2switch, Purelymail...). Read, sort, search, flag, archive, move;
+  write, reply, reply all and forward with attachments and your signature; drafts are kept in the mailbox. Messages
+  leave through your mailbox's own server, at most 20 recipients a message and 100 a day: it is a mailbox, not a
+  newsletter tool. In a session, Claude sorts your mail and prepares replies as drafts for you to send
+  (`maxxing mail`).
+- **E-mail for your agents**: give an agent one of your mailboxes, with only the rights it needs (read, write
+  drafts, file, mark, send) and, if you like, only the mail of some senders, checked by your provider so a forged
+  sender stays out. By default every message it wants to send waits for your OK in Notifications (or only the ones to
+  new recipients, or none). It can start on each new mail; it never marks your mail read, and the page shows what it
+  did ("seen by Mail sorter · filed in Invoices"). Ready-made agents: Mail sorter, Mail replies, Invoices. Mailboxes
+  are checked every 10 minutes (or 5, 30, 60), Refresh checks now, and **All mailboxes** shows them together.
+- **Infra -> E-mail**: where each of your addresses goes (Cloudflare Email Routing forwards, Hostinger e-mail plans),
+  whether it ends in the E-mail page, and the DNS health of your mail domains (MX, SPF, DKIM, DMARC) with what to fix.
+  It only reads.
+
+## 2.0.0-alpha.119 - 2026-11-05
+
+New:
+- **Agent groups**: put 2 to 6 agents of a project in one conversation. You write; they answer in turn, read each
+  other and hand work over with `@name` (a writer drafts, a reviewer checks, a publisher puts it online), each `@name`
+  shown with the member's face. Name who answers (`@writer`, `@all`, or nobody: the lead), pause a member with
+  `stop @name`, stop everything with one button. Each member keeps its own memory, budget and sandbox, and the group
+  has a shared folder where all of them can write. Limits stop agents from talking in circles. On the Agents page, next to New agent. [Show me](#show:agent-groups)
+
 ## 2.0.0-alpha.118 - 2026-11-05
 
 Fixes:

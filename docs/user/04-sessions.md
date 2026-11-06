@@ -310,7 +310,8 @@ session first (a note says "Back after 2 h: ...") and your message runs in a fre
 You wait for one summary turn before the reply; every turn after it is much smaller. Messages from scheduled jobs
 never trigger it, nor does a session whose context is mostly what every new thread loads anyway (CLAUDE.md,
 memory): summarizing it would save nothing. Pick Off to keep the full thread whatever the pause. Stop during the
-summary cancels only the summary, your message stays: it runs right after, in the full thread.
+summary cancels only the summary, your message stays: it runs right after, in the full thread. While the summary
+runs, your message stays shown in the thread, also after a reload, in another window or on another device.
 
 **Smart resume** (Settings -> Claude, 100k tokens by default): when you come back to a session whose cache expired
 with at least that much context - or after 5 minutes or more with twice as much - Harness first has Claude summarize
@@ -360,6 +361,8 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 **Ctrl/⌘+K** (or the search bar at the top of the sidebar) is the one search of the app. It finds:
 
 - **sessions**, by their title and by what you and Claude wrote;
+- with Agents on, every **agent** and **agent group** by its name (and its project, topic or members), and what
+  was said in the groups' conversations;
 - **memory** (`memory.md`, `CLAUDE.md`), **tasks** (title, notes, labels) and the **content** of the
   text files of the workspace (markdown, code, config…), plus file and folder **names**. Every `memory.md` /
   `CLAUDE.md` is always found; in a very big workspace each topic gets its fair share of the other files, and

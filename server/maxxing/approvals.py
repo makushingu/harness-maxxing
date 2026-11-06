@@ -86,7 +86,7 @@ def public(d: dict) -> dict:
             "tool": d.get("tool") or "", "input": _redact(d.get("input") if isinstance(d.get("input"), dict) else {}),
             "summary": short(str(d.get("tool") or ""), d.get("input")), "at": d.get("at"),
             "expires": d.get("expires"), "status": d.get("status"), "message": d.get("message") or "",
-            "decided_at": d.get("decided_at")}
+            "decided_at": d.get("decided_at"), "clipped": bool(d.get("clipped"))}
 
 
 _parsed: dict[str, tuple[tuple[int, int, int], dict | None]] = {}   # path -> ((inode, mtime_ns, size), content)
@@ -149,6 +149,8 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web") -> dict:
         d = get(rid)
         if d.get("status") != "pending":
             raise ApprovalError(409, "not_pending", f"This request is already {d.get('status')}")
+        if decision == "allow" and d.get("clipped"):
+            raise ApprovalError(409, "clipped", CLIPPED_NOTE)
         d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),
                  decided_by=by)
         approval_mcp.write_atomic(_file(rid), d)
@@ -210,6 +212,8 @@ def _agent_name(path: str) -> str:
 
 
 CUT_NOTE = "Only part of the request is shown: open it to see all of it before allowing."
+# the request is too long to be kept whole (approval_mcp.clip): Allow would run what nobody can see
+CLIPPED_NOTE = "This request is too long to be shown whole: it can only be denied. Ask the agent for smaller steps."
 
 
 def _feed_new(d: dict) -> bool | None:
@@ -220,9 +224,11 @@ def _feed_new(d: dict) -> bool | None:
         from . import feed
         path = d.get("agent_path") or ""
         text, whole = summary(str(d.get("tool") or ""), d.get("input"))
+        whole = whole and not d.get("clipped")
         acts = ([{"id": "allow", "label": "Allow", "style": "primary"}] if whole else
                 [{"id": "open", "label": "Open", "style": "link"}])
-        return feed.post(f"{_agent_name(path)} is waiting for your OK", text if whole else f"{text}\n{CUT_NOTE}",
+        note = CLIPPED_NOTE if d.get("clipped") else CUT_NOTE
+        return feed.post(f"{_agent_name(path)} is waiting for your OK", text if whole else f"{text}\n{note}",
                   "warning", "agents", _agent_url(path), dedupe=f"approval:{d['id']}", ref=f"approval:{d['id']}",
                   agent=path or None, actions=acts + [{"id": "deny", "label": "Deny", "style": "danger"}]) is not None
     except Exception:  # noqa: BLE001 - the feed is a nicety here

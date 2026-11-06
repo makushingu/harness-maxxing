@@ -4,6 +4,7 @@ Layout of state_dir('trash') (written by workspace.move_to_trash / trash_session
     <stamp>-<label>             the deleted file or folder (a project / topic folder, a file...)
     <stamp>-<label>.json        sidecar {original, at, kind?, title?, path?}
     <stamp>-<label>.sessions/   sessions of a deleted project / topic (<sid>.json + <sid>.log)
+    <stamp>-<label>.agents/     thread and state of the agents it holds + their cron job ids (agents.to_trash)
     <stamp>-session-<slug>/     one deleted session (<sid>.json + <sid>.log), sidecar kind "session"
     backup-restore-<stamp>/     previous versions saved by a backup restore (no sidecar: listed, not
                                 restorable from here - they mirror the workspace tree)
@@ -14,6 +15,7 @@ Item sizes are cached per item, keyed by the (inode, mtime) of the item and of i
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -24,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from . import bus, config
+
+log = logging.getLogger("maxxing.trash")
 
 KEEP_DAYS = 30
 SKIP = {"skills"}                          # internal subfolders (cmd_core keeps old skills there)
@@ -137,7 +141,7 @@ def _side(item: Path) -> dict:
 
 def _is_extra(p: Path) -> bool:
     """A sidecar or a .sessions folder - not a deleted "export.json", which has a sidecar of its own."""
-    return p.name.endswith((".json", ".sessions")) and not p.with_name(p.name + ".json").exists()
+    return p.name.endswith((".json", ".sessions", ".agents")) and not p.with_name(p.name + ".json").exists()
 
 
 def _entries() -> list[Path]:
@@ -319,7 +323,7 @@ def restore(item_id: str) -> dict[str, Any]:
     if kind == "topic" and not original.parent.parent.is_dir() and _project_in_trash(original.parent.parent):
         # restoring it first would make a bare project folder, and the project then come back as "-restored"
         raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
-    dest = _free_dir_name(original) if kind in ("project", "topic") else _free(original)
+    dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
     p.with_name(p.name + ".json").unlink(missing_ok=True)
@@ -333,6 +337,21 @@ def restore(item_id: str) -> dict[str, Any]:
         except ValueError:
             old = new = None
         n = _put_sessions(sess, old, new)
+    box = p.with_name(p.name + ".agents")             # the state of its agents (agents.to_trash)
+    if box.is_dir():
+        try:
+            from . import agents
+            root = config.workspace().resolve()
+            agents.from_trash(box, str(original.relative_to(root)), str(dest.relative_to(root)))
+        except (ValueError, OSError):
+            pass
+    if kind == "project":                                   # its agent groups get their conversations back
+        try:
+            from . import agent_rooms
+            root = config.workspace().resolve()
+            agent_rooms.restored(str(original.relative_to(root)), str(dest.relative_to(root)))
+        except (ValueError, OSError):
+            log.exception("agent group rooms not restored (%s)", dest)
     if kind in ("project", "topic"):
         try:
             workspace._changed("restored", kind, str(dest.relative_to(config.workspace().resolve())))  # noqa: SLF001
@@ -355,6 +374,7 @@ def _remove(p: Path) -> None:
         p.unlink(missing_ok=True)
     p.with_name(p.name + ".json").unlink(missing_ok=True)
     shutil.rmtree(p.with_name(p.name + ".sessions"), ignore_errors=True)
+    shutil.rmtree(p.with_name(p.name + ".agents"), ignore_errors=True)
 
 
 def empty() -> int:

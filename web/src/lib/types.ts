@@ -98,7 +98,7 @@ export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_
 export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source: string; levels: FeedLevel[]; match: string; prompt: string; hook_id?: string }
 export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
 export type AgentThreadKind = 'note' | 'run' | 'result' | 'skip' | 'approval'
-export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string; /** approval / its note: the request id */ approval?: string; /** note of an approval: allow, deny, timeout, expired */ status?: string }
+export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string; /** approval / its note: the request id */ approval?: string; /** note of an approval: allow, deny, timeout, expired */ status?: string; /** run: the files sent with it (absolute paths) */ attachments?: string[] }
 export type AgentRuleTool = 'Bash' | 'Write' | 'Edit' | 'WebFetch' | '*'
 /** "Refuse <tool> when it contains <match>", `reason` shown to Claude. */
 export type AgentRule = { tool: AgentRuleTool; match: string; reason: string }
@@ -132,6 +132,8 @@ export type Agent = {
   /** its commands write only in its folder (+ `writable`), cannot read the server's secrets, reach only `domains`;
    *  its runs never use bypass (bypass becomes acceptEdits). New agents: on. */
   sandbox: boolean
+  /** agent.json cannot be read: switched off and sandboxed until the file is fixed (saves refused) */
+  broken?: boolean
   /** hosts its shell commands may reach (sandbox), e.g. api.github.com, *.example.com */
   domains: string[]
   /** folders of the topic it may write in besides its own (`.` = the whole topic) */
@@ -142,6 +144,8 @@ export type Agent = {
   subagent: boolean
   limits: AgentLimits
   triggers: AgentTrigger[]
+  /** mailboxes of the E-mail page it may use (none by default) */
+  mail?: MailGrant[]
   created: number
   session_count: number
   archived_count: number
@@ -179,15 +183,101 @@ export type AgentTemplate = {
   limits: Partial<AgentLimits>
   cron?: { schedule: string; prompt: string }
   webhook?: { kind: AgentWebhookKind; prompt: string }
+  /** made for a mailbox of the E-mail page: the user picks which one when creating it */
+  mail?: Omit<MailGrantInput, 'account'>
 }
 export type AgentHook = { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean }
 export type AgentDetail = Agent & { crons: Cron[]; webhooks?: AgentHook[]; trigger_stats?: Record<string, { events: number; last_event_at: number | null }> }
 export type AgentsPayload = { agents: Agent[]; avatar: AgentAvatarOptions }
+/** A member of an agent group (an agent of the group's project). `handle` = its @name in the group: its folder name,
+ *  or made from its display name when two members share a folder name (`slug` = the same, older name). */
+export type AgentGroupMember = {
+  path: string
+  handle: string
+  slug: string
+  /** one line: what it does in this group */
+  role: string
+  /** false: the agent was deleted (it no longer speaks) */
+  exists: boolean
+  display_name: string
+  avatar: AgentAvatar
+  enabled: boolean
+  /** "stop @slug" or the pause button: it does not speak until named again */
+  paused: boolean
+  /** its turn is in progress */
+  speaking: boolean
+}
+export type AgentGroupLimits = { waves: number; replies: number; per_hour: number }
+/** An agent group = a folder projects/<p>/groups/<g>/ (CLAUDE.md = its goal, group.json, files/ = the shared folder).
+ *  Only the owner writes; the members answer in turn and hand over with @slug. */
+export type AgentGroup = {
+  /** projects/<p>/groups/<g> */
+  path: string
+  project: string
+  /** folder slug */
+  name: string
+  display_name: string
+  /** "" when none */
+  emoji: string
+  goal: string
+  members: AgentGroupMember[]
+  /** member path ("" = none: the last one who spoke, else the first member) */
+  lead: string
+  shared_files: boolean
+  trust_members: boolean
+  limits: AgentGroupLimits
+  created: number
+  /** projects/<p>/groups/<g>/files, "" when the shared folder is off */
+  files_path: string
+  /** a turn in progress or members waiting their turn */
+  busy: boolean
+  /** the member path speaking now, "" */
+  speaking: string
+  /** the session of the turn in progress, "" */
+  speaking_session: string
+  last_at: number
+  /** 1: a member spoke since the owner last opened the group */
+  unread: number
+}
+/** One line of a group's conversation. kind: message (author "me" or a member path), pass (it had nothing to add),
+ *  skip (a member could not speak: `reason`), note / stop (system lines, author ""). */
+export type AgentGroupMessage = {
+  id: string
+  at: number
+  kind: 'message' | 'pass' | 'skip' | 'note' | 'stop'
+  author: string
+  text: string
+  session?: string
+  cost?: number | null
+  reason?: string
+  /** note: the limit reached (waves, replies, per_hour) */
+  limit?: string
+  /** note: "New topic" (the members start fresh sessions) */
+  reset?: boolean
+  /** the owner's message: the files sent with it (absolute paths) */
+  attachments?: string[]
+}
+export type AgentGroupInput = {
+  /** create only */
+  project?: string
+  /** create only: the folder slug */
+  name?: string
+  display_name?: string
+  emoji?: string
+  goal?: string
+  members?: { path: string; role: string }[]
+  lead?: string
+  shared_files?: boolean
+  trust_members?: boolean
+  limits?: Partial<AgentGroupLimits>
+}
 /** The order and colours picked by hand on the Agents page (GET/PUT /api/agents/layout), the same on every device. */
 export type AgentsLayout = { projects: string[]; colors: Record<string, string>; agents: Record<string, string[]> }
 export type AgentInput = {
   topic_path?: string
   name?: string
+  /** Create only: the ready-made agent it starts from; the server applies its settings (domains, writable...) under the form's. */
+  template?: string
   display_name?: string
   description?: string
   avatar?: Partial<AgentAvatar>
@@ -207,6 +297,7 @@ export type AgentInput = {
   subagent?: boolean
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
+  mail?: MailGrantInput[]
 }
 export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
@@ -218,6 +309,8 @@ export type PatchNameBody = { name?: string; description?: string; /** Projects 
 export type SessionState = 'idle' | 'running' | 'error'
 export type SessionSource = 'web' | 'telegram' | 'cron' | 'agent'
 export type QueueItem = { text: string; attachments: number; source: 'web' | 'telegram' | 'cron' | 'system' | string; kind: string; /** A voice message sent directly (transcribed before its turn). */ voice?: boolean; client_ids?: string[] }
+/** A message sent but not in the log yet (held at the head while a summary runs first, or its turn starting). */
+export type SentItem = { text: string; attachments: string[]; source: string; voice?: string[]; client_ids?: string[] }
 export type Session = {
   id: string
   title: string
@@ -226,6 +319,8 @@ export type Session = {
   queue: number
   /** The waiting messages, in order (text cut at 280 chars), whoever queued them. */
   queue_items?: QueueItem[]
+  /** Messages already sent that the log does not have yet: the thread shows them as sent (text cut at 4000 chars). */
+  sent_items?: SentItem[]
   created: number
   updated: number
   turns: number
@@ -265,13 +360,15 @@ export type Approval = {
   status: 'pending' | 'allow' | 'deny' | 'timeout' | 'expired'
   message: string
   decided_at: number | null
+  /** The input was too long to keep whole: only Deny (the server refuses Allow). */
+  clipped?: boolean
 }
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string }
 export type PatchSessionBody = { title?: string; model?: string; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
 export type SendMessageBody = { text: string; attachments?: string[]; hud?: boolean; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string }
 export type SendMessageResult = { queued: boolean; session: Session }
 export type SessionSearchHit = { id: string; title: string; path: string; snippet: string; at: number }
-export type SearchKind = 'session' | 'file' | 'memory' | 'task'
+export type SearchKind = 'session' | 'file' | 'memory' | 'task' | 'group'
 /** Full-text hit: `snippet` marks the matched words with \u0002 … \u0003. */
 export type SearchHit = { kind: SearchKind; id: string; path: string; title: string; snippet: string; at: number | null; score: number }
 export type SearchResult = { results: SearchHit[]; took_ms: number }
@@ -329,7 +426,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -627,6 +724,8 @@ export type Settings = {
   agents_page?: boolean
   /** Settings -> Features (beta): Maxxing mode on the Sessions page (its switch, meter and Alt+M) */
   maxxing_mode?: boolean
+  /** Settings -> Features: the E-mail page (/mail) and its sidebar entry */
+  mail_page?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
@@ -976,3 +1075,162 @@ export type InfraView = {
   servers: { name: string; label?: string; host: string; user: string; port: number; note: string }[]
   refresh_min?: number
 }
+
+// ---- E-mail page (server/maxxing/mail, docs/dev/API.md#mail)
+export type MailTls = 'ssl' | 'starttls' | 'none'
+export type MailAccount = {
+  id: string
+  label: string
+  address: string
+  name: string
+  username: string
+  imap_host: string
+  imap_port: number
+  imap_tls: MailTls
+  smtp_host: string
+  smtp_port: number
+  smtp_tls: MailTls
+  signature: string
+  password_key: string
+  has_password: boolean
+  created?: number
+  smtp_checked?: number
+  /** recipients sent to today, and the daily cap (`mail_send_per_day`) */
+  sent_today?: number
+  send_per_day?: number
+  /** minutes between two checks for new mail (5, 10, 30 or 60) */
+  poll_min?: MailPollMin
+  last_check?: MailCheck | null
+  /** the agents that may use this mailbox (their grant) */
+  agents?: MailAgentGrant[]
+  /** messages written by agents waiting for the owner's OK */
+  waiting?: number
+  /** servers whose Authentication-Results are trusted (empty = automatic) */
+  auth_servers?: string[]
+  /** who checks the senders: the owner's servers, a known provider, one found but not confirmed, nobody */
+  sender_check?: MailSenderCheck
+}
+export type MailSenderCheck = { state: 'owner' | 'auto' | 'detected' | 'none'; server: string }
+export type MailPollMin = 5 | 10 | 30 | 60
+export type MailCheck = { at: number; ok: boolean; error: string }
+export type MailRight = 'read' | 'draft' | 'move' | 'mark' | 'send'
+export type MailApproveSend = 'always' | 'new' | 'never'
+export type MailTrigger = { enabled: boolean; folder: string; subject: string; senders: string[]; prompt: string }
+/** An agent's access to one mailbox (agent.json `mail`): nothing by default. `senders` empty = all mail; else only
+ *  mail whose sender the provider checked, and the agent writes only to them. */
+export type MailGrant = { account: string; rights: MailRight[]; senders: string[]; approve_send: MailApproveSend; trigger: MailTrigger | null }
+/** A grant as sent (POST / PATCH /api/agents): the server fills the trigger's missing fields. */
+export type MailGrantInput = Omit<MailGrant, 'trigger'> & { trigger: Partial<MailTrigger> | null }
+export type MailAgentGrant = Omit<MailGrant, 'account'> & { agent: string; name: string; avatar: AgentAvatar | null; enabled: boolean }
+/** What an agent did with a message (mail.db, never written to the mailbox), oldest first. */
+export type MailSeenBy = { agent: string; at: number; what: string; detail: string; name: string; avatar: AgentAvatar | null; exists: boolean }
+export type MailRefreshResult = { account: string; ok: boolean; error?: string; new: number; started: number }
+/** GET /api/mail/all: the newest mails of every mailbox, as the last checks saw them. */
+export type MailAllRow = {
+  account: string
+  address: string
+  folder: string
+  uid: number
+  message_id: string
+  from: MailAddress
+  from_verified: boolean
+  subject: string
+  date: number | null
+  snippet: string
+  seen: boolean
+  attachments: boolean
+  seen_by: MailSeenBy[]
+}
+export type MailAll = { messages: MailAllRow[]; checks: Record<string, MailCheck | null> }
+/** A message written by an agent, waiting for the owner's OK (GET /api/mail/outbox). */
+export type MailOutboxItem = {
+  id: string
+  account: string
+  agent: string
+  agent_name: string
+  avatar: AgentAvatar | null
+  at: number
+  to: string[]
+  cc: string[]
+  subject: string
+  text: string
+  files: { name: string; type: string; size: number }[]
+  draft: { folder: string; uid: number } | null
+  why: string
+  event_id: string | null
+  note: string
+}
+export type MailServerSettings = Pick<MailAccount, 'imap_host' | 'imap_port' | 'imap_tls' | 'smtp_host' | 'smtp_port' | 'smtp_tls'>
+export type MailDetect = MailServerSettings & { source: 'known' | 'mx' | 'autoconfig' | 'guess'; mx: string[] }
+export type MailTest = { imap: 'ok' | 'skipped'; smtp: 'ok' | 'error' | 'skipped'; smtp_port?: number; smtp_tls?: MailTls; smtp_changed?: boolean; smtp_error?: string; smtp_code?: string }
+export type MailRole = 'inbox' | 'drafts' | 'sent' | 'archive' | 'junk' | 'trash' | 'all' | 'flagged'
+export type MailFolder = { name: string; role: MailRole | null; delim: string | null; unread: number | null; total: number | null }
+export type MailAddress = { name: string; email: string }
+export type MailSummary = {
+  uid: number
+  from: MailAddress
+  to: MailAddress[]
+  subject: string
+  date: number | null
+  seen: boolean
+  flagged: boolean
+  answered: boolean
+  size: number | null
+  attachments: boolean
+  message_id?: string
+  /** the provider checked the sender's domain (DKIM / SPF / DMARC) */
+  from_verified?: boolean
+  seen_by?: MailSeenBy[]
+}
+export type MailList = { folder: string; total: number; exists: number; page: number; size: number; messages: MailSummary[] }
+export type MailAttachment = { index: number; filename: string; content_type: string; size: number }
+export type MailMessage = {
+  uid: number
+  folder: string
+  from: MailAddress
+  to: MailAddress[]
+  cc: MailAddress[]
+  reply_to: MailAddress[]
+  bcc?: MailAddress[]
+  subject: string
+  date: number | null
+  message_id: string
+  in_reply_to?: string
+  references: string
+  text: string | null
+  html: string | null
+  remote_images: boolean
+  attachments: MailAttachment[]
+  seen: boolean
+  flagged: boolean
+  answered: boolean
+  from_verified?: boolean
+  seen_by?: MailSeenBy[]
+}
+export type MailComposeMode = 'reply' | 'replyall' | 'forward' | 'draft'
+/** Prefilled fields of a reply / forward / draft opened again (GET /api/mail/{acc}/compose). */
+export type MailCompose = {
+  to: string[]
+  cc: string[]
+  bcc?: string[]
+  subject: string
+  text: string
+  in_reply_to: string
+  references: string
+  attachments: MailAttachment[]
+}
+/** The JSON part of POST /api/mail/{acc}/send and /draft. */
+export type MailDraft = {
+  to: string[]
+  cc: string[]
+  bcc: string[]
+  subject: string
+  text: string
+  in_reply_to?: string
+  references?: string
+  reply?: { folder: string; uid: number }
+  forward?: { folder: string; uid: number; indexes: number[] }
+  draft?: { folder: string; uid: number }
+}
+export type MailSent = { ok: boolean; message_id: string; recipients: number; refused: string[]; sent_folder: string | null }
+export type MailAction = 'seen' | 'unseen' | 'flag' | 'unflag' | 'move' | 'archive' | 'trash' | 'junk' | 'inbox' | 'delete'

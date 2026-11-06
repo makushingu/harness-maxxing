@@ -5,7 +5,185 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.121 - 2026-11-06
+
+- Attachments of agents and groups: `agents.checked_attachments(base, files)` (≤ `ATTACH_MAX` 10; each a regular file
+  under `<base>/attachments/`, `realpath` = the lexical path below that folder, so no link below it; the workspace
+  itself may sit behind one) for `POST /api/agents/.../run` (`attachments`, files only = "See the attached files.")
+  and `agent_rooms.say(path, text, attachments)`. Uploads: an agent's through `/api/uploads?path=<agent>` (topic_dir
+  takes an agent path), a group's through `POST /api/agent-groups/{p}/{g}/uploads` (`agent_rooms.attachments_dir`).
+  `service.month_dir` (used by `uploads_dir`) refuses `attachments/` or the month folder as a symbolic link (a
+  sandboxed agent writes its own folder). `agent_guard.locked_paths` adds `<agent>/attachments` and `<topic>/attachments`
+  (created; also when `writable` names them: denyWrite wins) to the read-only paths (`Edit(/…/attachments/**)` too), and `TOPIC_LOCKED` gets `attachments` (a sandboxed agent with
+  `writable: ["."]` no longer writes the topic's uploads: no swapped file read by the owner's sessions, no link to
+  race an upload through). `checked_attachments` refuses an `attachments` folder that is a link; `month_dir` turns an
+  OSError (a file in the way, a missing parent) into `400 bad_path`. Thread `run` and group `message` items keep `attachments`; a member gets the files of the owner's
+  message as session attachments only the first time it sees it (`_origin_files`, by `since`), their paths in the text
+  every time (`_files_note` in the framed history).
+- Search: kind `group` (`search._index_groups`, key `g:<group path>`, with the sessions at every refresh while
+  `agents_page` is on: one stat of the room and of group.json, only the new lines read - sig `{ino, offset, group}`;
+  a rewritten room or a changed group.json starts over; Agents off drops the rows). `api/search` leaves `group` out
+  while Agents is off (only `group` asked: no results). Palette: agents and groups as static commands (`useAgents` /
+  `useAgentGroups`, loaded when the palette opens and Agents is on), `group` hits open the group page.
+
+- Mail outbox: `POST /api/mail/{acc}/draft` on a waiting agent draft calls `outbox.draft_saved` (row `saved` moves to
+  the new uid, `data.changed` = true, feed event resolved); `approve` refuses a changed row (`changed`) and ends a row
+  whose draft is gone (`imap.has`, IMAP errors count as present). `store.outbox_data` updates only waiting rows.
+  `maxxing mail write --forward` stores `forward.names`; the request body lists them ("Attachments (n): ...").
+- `send._count_lock` is a `config.ProcessLock("mail-sent-count")`: the daily cap is counted under a flock shared
+  by the server and `maxxing mail write --send`.
+- Mail check (`mail/poll.py`): the excerpt comes from `imap.excerpt` (`BODY.PEEK[]<0.256 KB>`, text/html of the
+  first bytes) instead of `imap.message` (whole mail with attachments). A folder whose position `at` is older than
+  `STALE_S` (6 h, or 3 intervals) is looked at as a first check. `retry_pending` drops the held mail when Agents is
+  off and re-filters it with the agent's current grant (`watchers` + `_matches`). The check writes and fires nothing
+  once the account is gone (`_still_there`). `tests/fake_imap.py`: partial `BODY[]<0.N>` and `(UN)DELETED`.
+- `mail.delete_account` calls `agents.drop_mail(acc_id)`: the account leaves every agent's `mail` list (under
+  `agents._lock`), so a re-added address (same `_slug` id) has no grant.
+- Agents: `on_turn_end` drops a budget hold only if it was made before the turn's `finished_at`
+  (`_release(path, sid, ended)`): a hold written by the runner for the next queued turn of the same session
+  (mcp_auto continuation, compaction, typed message) stays until that turn ends.
+- Agents: `run_settings` returns the owner note as `system_note` instead of a second `--append-system-prompt`
+  in `args`; the runner puts it in the one flag of `spawn.agents_args` (Claude Code keeps only the last flag,
+  so agents had lost the foreground-subagents rule and the mcp_auto hint).
+- `service.last_assistant_text(sid, turn_only=True)` stops at the turn's user message; `agents.on_turn_end` uses
+  it for a failed turn, which then reports the session error instead of the previous turn's answer.
+- Agent limits: `clean(strict=True)` (create/update, API and CLI) refuses a limit that is not a number, above its
+  maximum, or negative where 0 = no limit (400 `bad_limit`); below a non-zero minimum it is still raised to it.
+  Not strict (a hand-edited agent.json), a negative budget / rate takes the default instead of 0; a positive
+  budget never rounds to 0 (floor 0.01).
+- `agents.Debouncer.add` stops keeping texts once a batch holds `EVENT_MAX` characters (what `frame` sends) and
+  counts the rest in `dropped` (saved in `_feed.json`); `flush_due` numbers events out of the full count and
+  says how many were not shown. A busy agent's batch no longer grows and is rewritten without bound.
+- `agents.thread` parses an agent's thread file once per (mtime_ns, size) (`_threads`, up to 200 files): GET
+  /api/agents no longer re-reads every thread on each call. The cached messages are shared: never change them.
+- Agents: an `agent.json` that exists but does not parse (or is not an object) loads as `enabled: False, sandbox: True,
+  broken: True` (`_parse_file`), shown as `broken` by the API (banner on the agent page), alerted by `check_alerts`
+  (ref `agent:<path>#broken`); `update()` and `add_webhook()` answer 409 `broken` instead of saving defaults over it.
+- Agent webhooks: a feed trigger whose `hook_id` is no longer a feed hook is left out of `_feed_agents()` (scan and
+  backlog), and `maxxing feed post` from an agent turn refuses such a trigger's source. `add_webhook()` re-attaches
+  that dead trigger (same id) instead of appending a second one, refuses 409 `too_many_triggers` before creating the
+  hook, saves under `_lock` (strict clean, hook removed if the save fails), and builds names with
+  `feed.clean_source` (base cut to keep the `-<n>` suffix inside 40 characters).
+- Feed trigger `source` is normalised like `feed.clean_source` (lower case, other characters -> `-`, 40 max) in
+  `_clean_trigger`; strict refuses what cannot be cleaned.
+- `agents.remap()` moves the debouncer's waiting batches (and `_feed.json` `pending`) of the renamed prefix.
+- Agent state in the Trash: `workspace._delete` calls `agents.to_trash(paths, item)` (agent, topic or project
+  delete): `<state>/agents/<key>.json/.jsonl` move to `<item>.agents/` with `crons.json` (ids of their jobs).
+  `trash.restore` calls `agents.from_trash` (keys remapped to the restored path, jobs back via `crons.restore_job`
+  with `topic_path` remapped); `_remove` deletes the box. `agents.create` drops leftover state of its key. A restored
+  agent whose name is taken gets a slug name (`<name>-restored`, `_free_dir_name`), not `<name> (restored)`.
+- `agent_format.parse_md`: YAML block values (`key: >` / `|`, with chomping) are read from their indented lines;
+  the description is found in the body with whitespace normalised (an exported wrapped first paragraph is not added twice).
+- Sandboxed agent turn (`agent_guard.sandboxed_turn()`): `maxxing agents show` refuses another agent and drops
+  `webhooks[].url`; `agents list` gives `path` + `display_name` only; `feed list` (`cmd_feed._list`) keeps the sources
+  of the agent's feed triggers (events and `sources`, no `pending`).
+- Approvals: a request whose stored input differs from the real one (`approval_mcp.clip` cut a string, keys or items)
+  gets `clipped: true` (also in `approvals.public`); `approvals.decide(allow)` answers 409 `clipped`, the feed event
+  and Telegram offer Open / Deny only, the card disables Allow. The MCP's timeout now takes `<state>/.approvals.lock`
+  (the flock of `ProcessLock("approvals")`) and writes `timeout` only if the request is still pending.
+- `agent_guard.private_paths` also hides `projects/<p>/groups/<g>` of the groups the agent is not a member of (read
+  from group.json) and every `groups/.kept-*` folder.
+- Template `sales` no longer suggests `STRIPE_SECRET_KEY` (a full key; `STRIPE_RESTRICTED_KEY` stays).
+- `POST /api/agents` takes `template` (id): the server starts from `agent_templates.fields()` like the CLI's
+  `--template` (domains, writable...), the body's fields on top; the creation sheet sends it.
+- Telegram -> agents: `_agent_lane` gathers the pieces of one gesture per `chat:thread|agent` (`AGENT_GATHER` 1.5 s,
+  `MEDIA_GROUP_MAX` cap) into one `_agent_message(msgs, path, texts)` -> one `agents.fire`. `_agent_parts` splits a
+  message into the owner's words (`prompt=`) and outside data (`text=`: forwards, quotes of a message neither the bot
+  nor the owner wrote) -> framed + `MAXXING_AGENT_OUTSIDE`; with outside data `reply_to` is not used (a continued
+  session keeps its own env). `agents.remember_telegram` / `telegram_reply_to` take `chat` (keys `"<chat>:<id>"`; old
+  bare keys are no longer matched). Alerts: body over `ALERT_BODY` (1500) gets the `alert_cut` marker and only
+  `danger` / link buttons (the callback refuses the others too); `ev["attachments"]` (names or {name}) listed.
+
+- Agent groups (`agent_rooms.py`): `room()` reads the jsonl from the end (`_tail`), so `public()` / the list no
+  longer parse a whole room for its last message; a room past `ROOM_BYTES` (2 MB) is trimmed to half of it (and
+  `ROOM_KEEP` lines), not to 1,000 lines that could stay over the threshold. `GET .../messages?after=<at>`: the
+  group page asks only for the new messages. Group events no longer send `workspace` on the bus (only create,
+  delete, rename: `_invalidate(tree=True)`).
+- Groups: `update` drops former members whose agent is gone (`dropped` in the answer) instead of `unknown_member`;
+  `say` picks the lead / last speaker / first member among live agents only and posts the same owner text once
+  within `SAME_SAY_S`; `remap` rewrites the message authors; a project delete moves `rooms/<p>__<g>.json(l)` into
+  the trashed group folder as `.room.json(l)` (`agent_rooms.deleted_with`), `trash.restore` puts them back
+  (`agent_rooms.restored`, paths swapped and fresh sessions under a `-restored` name); `create` drops stale ones.
+
+## 2.0.0-alpha.120 - 2026-11-05
+
+- E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch): `maxxing/mail/`
+  (`__init__` accounts + detection + SMTP sign-in, `imap.py` live IMAP with one pooled connection per account,
+  `send.py` writing), `api/mail.py` (`/api/mail/*`, docs/dev/API.md#mail), `cmd_mail.py`. Accounts in
+  `<state>/mail/accounts.json`, password = vault `MAIL_<ID>_PASSWORD` (expose false). Writing: plain text,
+  `compose(mode=reply|replyall|forward|draft)` returns the starting fields (signature block then quote), `send()`
+  goes through the account's SMTP (`open_smtp`: AUTH PLAIN by hand for non-ASCII credentials, smtplib only sends
+  ASCII), appends to Sent unless the SMTP host files it (`AUTO_SENT`: gmail, office365, outlook), flags the replied
+  message `\Answered`, drops the draft it came from (`imap.drop`, drafts folder only). Drafts: `imap.append_draft`
+  (APPENDUID, else SEARCH by Message-ID). Caps: `MAX_RECIPIENTS` 20 a message, `mail_send_per_day` (config, default
+  100) recipients a mailbox a day in `<state>/mail/sent-count.json` (given back when the send fails), 25 MB of
+  attachments. `maxxing mail write` saves a draft unless `--send`. Tests `tests/test_mail.py` (+ `tests/fake_smtp.py`;
+  `MAXXING_TEST_IMAP=host:port:user:pw` runs a round trip on a real IMAP server). Mail is never put in the feed.
+
+- E-mail for agents (`maxxing/mail/{access,poll,outbox,store}.py`): agent.json `mail` = `[Grant]` (`access.clean_grants`,
+  called by `agents.clean`; empty by default), enforced in agent turns by `cmd_mail.Guard` (identity from
+  `agent_guard.agent_turn`, never the environment): mailboxes of the grants only, rights read/draft/move/mark/send,
+  `senders` filter = sender seen only when `from_verified` and matching (lists: IMAP `FROM` narrowing + check, up to
+  `imap.SCAN_MAX`), recipients limited to the same patterns, `read` never sets `\Seen`, attachments saved only in the
+  agent folder / `writable_dirs` (not `locked_paths`), `--attach` only from its topic (not `secret_paths` /
+  `private_paths`), `add` refused. `from_verified` (`access.verified`): only the topmost `Authentication-Results`
+  counts, and only when its authserv-id's base domain is trusted (`access.trusted_servers`: the account's IMAP/SMTP
+  hosts + MX + `PROVIDER_ALIASES`, or `auth_servers`); dmarc=pass header.from, or dkim/spf pass aligned with the
+  From domain. `approve_send` always|new|never: `outbox.queue` files a draft, keeps the fields + files in
+  `<state>/mail/outbox/<id>/`, posts a feed event (source `mail`, ref `mailsend:<id>`, actions allow/deny/open,
+  `feed.HANDLERS["mailsend"] = "mail.outbox"`); `approve` claims the row once and sends with `draft` (dropped),
+  `deny` drops the draft, `draft_done` ends it when the owner sends / deletes the draft from the page. "new" =
+  recipients absent from `contacts` (senders seen by the checks, past recipients) and not the replied sender.
+  `<state>/mail/mail.db` (`store.py`, a cache set aside when unreadable): poll positions (UIDVALIDITY, last UID),
+  newest 500 mails per mailbox, contacts, `seen_by` (by Message-ID, else folder#uid, 90 days), outbox. Checks
+  (`poll.py`, server loop in `api/mail.py` every 30 s): mailboxes whose `poll_min` (5/10/30/60, default 10) is over,
+  INBOX + folders watched by triggers; first check of a folder (or new UIDVALIDITY) only notes the position; new
+  mail matching an enabled trigger of an enabled agent (grant senders, trigger senders / subject, not the mailbox's
+  own address) -> one `agents.fire(trigger="mail:<id>", text=..., wait=True)` per agent and check (outside text:
+  approvals forced unless `trust_outside`), busy -> `<state>/mail/pending.json`, retried next tick (a day at most).
+  API: `/api/mail/refresh`, `/all`, `/outbox`, `/outbox/{id}/send|deny`; accounts + `poll_min`, `auth_servers`,
+  `last_check`, `agents`, `waiting`; rows + `from_verified`, `message_id`, `seen_by`. CLI `maxxing mail refresh|outbox`;
+  `maxxing mail` allowed in sandboxed turns (`CLI_ALLOWED`, filtered by Guard). `maxxing agents create --mail
+  MAILBOX`; templates `mail-sort`, `mail-support`, `mail-invoices` (`mail` field, `fields(..., mail_account)`; the UI
+  asks the mailbox). UI: agent settings E-mail section (`AgentMail.tsx`), mail triggers in the agent's triggers,
+  mailbox picker for mail templates, E-mail page: Refresh, last check, All mailboxes, outbox banner, seen-by faces,
+  verified sender, `?account=&folder=&draft=` and `?add=` links. Tests `tests/test_mail_agents.py`.
+
+- E-mail hardening (before beta). `maxxing mail` runs as root outside the agent's sandbox, so: `imap._search_args`
+  turns every control character into a space (a CR/LF inside `UID SEARCH TEXT "..."` sent commands of its own);
+  `Guard.read_file` / `Guard.write_file` check the path of the opened file descriptor (`/proc/self/fd`), never follow
+  a final link (`O_PATH | O_NOFOLLOW` handle checked first, then reopened through `/proc/self/fd`; a new file
+  `O_CREAT | O_EXCL` relative to the checked folder's fd), refuse non-regular files and a second name
+  (`st_nlink > 1`), never create a folder as root (`OUT/` must exist), attachments at most 25 MB (`ATTACH_MAX`).
+  Header values (subject, names, addresses, attachment names) lose their control characters (`imap._line`). Sender checks: `access.authserv_id` /
+  `_cfws_free` (comments and quoted strings never count); `access.detect` (the base domain topping >= 90 % of the 50
+  newest INBOX mails by UID - never the Date: header -, >= 10 mails from >= 3 sender domains, own domain left out;
+  samples = `messages.auth_server` + `messages.received` (INTERNALDATE), `store.auth_samples`, noted by the checks,
+  `poll._sample` fills them on a new mailbox); `access.sender_check` -> `{state: owner|auto|detected|none, server}`
+  (`auto` = `STAMPING` provider hosting the mailbox's IMAP/SMTP servers - not the MX alone; `detected` = one of the
+  mailbox's own IMAP/SMTP/MX base domains, samples spanning >= 7 days, offered to the owner), also in
+  `MailAccount.sender_check`; `imap.trust` = the owner's `auth_servers` bases, or the `auto` server, else nothing.
+  Contacts (approve_send "new") = recipients of what the owner sent from Harness or allowed (`send.send(...,
+  contacts=False)` for an agent's own send); the senders of incoming mail and the replied sender no longer count;
+  mail.db `user_version` 1 empties `contacts` and adds `messages.auth_server`. `mail read` and the check's event text
+  use random markers; mail kept for a busy agent (`pending.json`) keeps the rows (headers + shown texts, 200 at
+  most), the text and its marker are built again when the turn starts. In an agent turn: `outbox` lists its own
+  rows, `-a` resolves among its mailboxes only, `refresh` only asks the server (`poll.request`:
+  `<state>/mail/.refresh-<id>`, due at the next tick; an agent never moves the positions). A new UIDVALIDITY drops the
+  cached mails of the folder. `auth_servers` refuses IP addresses. `cmd_mail` and `outbox.feed_action` refuse when the page is off (409 `mail_off`).
+  Checks: per-mailbox non-blocking lock (thread set + `flock LOCK_NB` on `<state>/mail/.poll-<id>.lock`; busy ->
+  `{skipped: "busy"}`); `imap.new_since` takes the oldest `limit` after `last_uid` (`more` -> `poll._again`, due at the
+  next tick); `pending.json` under `ProcessLock("mail-pending")`, text capped at 60 000 chars. Outbox: any exception
+  of `approve` puts the row back to `waiting`; `outbox.unstick()` (each tick) turns `sending` older than 10 min back
+  to `waiting` with a note; `outbox.forget` ends the waiting rows of a removed mailbox ("Mailbox removed").
+  `store.prune` (daily, from `outbox.tidy`): `seen_by` 90 days, contacts 2 years / 5 000 per mailbox. MX through
+  `dnsinfo.doh_api()`, a failed lookup cached 5 min (`imap._mx_of`). After SMTP accepted a message, its follow-ups
+  (copy in Sent, \Answered, draft dropped) never raise: a sent message never waits again. `/api/mail/accounts`, `seen_by` lookups off the
+  event loop; the trust is computed before the IMAP connection is held; `/refresh` reports any error per mailbox.
+  UI: sender check line + "Trust <server>" in Edit mailbox, warning under an agent's sender list, Notifications
+  decisions refresh the mail queries. Tests `tests/fake_imap.py` (an IMAP server in memory that logs every command)
+  + `tests/test_mail_imap.py`.
+
 
 - Secret files in the Keys vault (issue #29). New module
   `vault_files` (INTERNALS.md): bytes in `STATE/secret-files/<NAME>` (700 / 600, atomic via same-dir temp +
@@ -88,6 +266,31 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Agents bus topics are finer: `agents_layout` (save_layout: the layout query only) and `agents:<path>` (thread
   post, mark_seen, feed event of an agent: list + that agent's detail + thread, `busKeysOf` in keys.ts). The plain
   `agents` topic (create, patch, delete, crons) no longer refetches the templates nor the sandbox check.
+
+## 2.0.0-alpha.119 - 2026-11-05
+
+- Agent groups (`maxxing/agent_rooms.py`, `api/agent_groups.py`, API.md#agent-groups, INTERNALS.md#maxxing.agent_rooms):
+  `projects/<p>/groups/<g>/{CLAUDE.md, group.json, files/}`, room `<state>/agents/rooms/<p>__<g>.{jsonl,json}`.
+  Routes `/api/agent-groups` (prefix apart from `/api/agents/{p}/{t}/{a}`: no clash). Bus `agent-groups`,
+  `agent-groups:<path>`. `group.json` added to `backup.ALWAYS`.
+- `agents.run_settings(path, outside, session, group="")`: the runner passes `MAXXING_AGENT_GROUP` from the session env;
+  a group turn gets the group's `files/` as a writable folder and is outside when it is a hand-over and the group's
+  `trust_members` is off (`agent_rooms.turn_outside`, per session id).
+- `agents.on_turn_end` reads the session meta env (the public session has none) and hands group turns to
+  `agent_rooms.on_turn_end`; their thread `run` / `result` lines carry `group`; no Telegram message for them.
+  `_runs_last_hour` skips `run` lines with `group` (a group's turns are bounded by its own limits).
+- `agents._git_exclude(dir, sub="agents")`: also used for a project's `groups/`.
+- `agent_guard.AGENT_OWNER_ONLY` += `group` (`maxxing agents group ...` refused in every agent turn).
+- CLI `maxxing agents group list|show|create|say` (cmd_agents.py). Fake claude: `REPLY_AS <folder>: <text>` (`AT:` -> `@`).
+- Web: `features/agents/{GroupPage,GroupForm}.tsx`, groups at the top of their project in `AgentsList`, routes
+  `/agents/groups/new` and `/agents/groups/:project/:name`, `lib/queries/agentGroups.ts`, showcase `agent-groups`.
+- Members' `handle` (@name in the group, stored in group.json): folder name, else (same folder name twice) the
+  display name slugified, else `<topic>-<folder>`; kept when a member stays (`update`). CLI `group update`.
+- Web: quick create (tick agents, Create; name made from theirs), "Or set it up with Claude" and "Edit with Claude"
+  (prefilled sessions), "New group with this agent" on the agent page (`/agents/groups/new?with=<agent path>`).
+- `web/src/styles/globals.css`: `@source not '../../dist'` - Tailwind no longer scans the committed build (bytes of
+  its .br files made every other build differ).
+- Docs: `docs/user/31-agent-groups.md`, links from 01, 15, 16, 17, 30, README, help index, skill `maxxing-agents`.
 
 ## 2.0.0-alpha.118 - 2026-11-05
 
