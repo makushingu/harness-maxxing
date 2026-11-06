@@ -842,7 +842,35 @@ def remap(old_prefix: str, new_prefix: str) -> None:
             if po != pn:
                 st.update(sessions={}, since={}, current=None, queue=[], turns={})
             _write_state(path, st)
+            _swap_messages(path, old_prefix, new_prefix)
     _invalidate(tree=True)
+
+
+def _swap_messages(path: str, old: str, new: str) -> None:
+    """The conversation's authors follow a renamed topic / project (else a member reads its own answers as the
+    others', and the page shows them without face or run)."""
+    f = _state_file(path, "jsonl")
+    try:
+        lines = f.read_text(errors="replace").splitlines()
+    except OSError:
+        return
+    out, changed = [], False
+    for ln in lines:
+        try:
+            m = json.loads(ln)
+        except ValueError:
+            out.append(ln)
+            continue
+        if isinstance(m, dict) and isinstance(m.get("author"), str):
+            a = _swap(m["author"], old, new)
+            if a != m["author"]:
+                m["author"], changed = a, True
+                ln = json.dumps(m, ensure_ascii=False)
+        out.append(ln)
+    if changed:
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text("".join(x + "\n" for x in out))
+        tmp.replace(f)
 
 
 def recover() -> int:
