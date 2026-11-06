@@ -437,6 +437,22 @@ def test_held_head_while_a_turn_starts_hides_only_itself():
     assert pub["queue"] == 1 and [i["text"] for i in pub["queue_items"]] == ["next"]
 
 
+def test_message_held_by_a_summary_is_listed_as_sent():
+    """A page reloaded (or another window) while the summary runs first still shows the held message in the
+    thread: the session lists it in `sent_items` (with its files and ids), never a summary or a waiting message."""
+    from maxxing.sessions import service
+    q = [{"text": "sent", "attachments": ["/w/a.png"], "source": "web", "kind": "user", "held": True,
+          "client_ids": ["c1"]},
+         {"text": "next", "attachments": [], "source": "web", "kind": "user"}]
+    pub = service.public({"id": "s1", "state": "running", "pid": 1, "queue": q})
+    assert pub["sent_items"] == [{"text": "sent", "attachments": ["/w/a.png"], "source": "web", "client_ids": ["c1"]}]
+    starting = service.public({"id": "s1", "state": "running", "pid": None, "queue": q[1:]})
+    assert [i["text"] for i in starting["sent_items"]] == ["next"] and starting["queue"] == 0
+    summary = [{"text": "Summarize", "attachments": [], "source": "system", "kind": "compact"}, q[1]]
+    assert service.public({"id": "s1", "state": "running", "pid": None, "queue": summary})["sent_items"] == []
+    assert service.public({"id": "s1", "state": "idle", "queue": q})["sent_items"] == []
+
+
 def test_take_queue_for_editing(client, topic):
     s = client.post("/api/sessions", json={"path": topic, "message": "SLOW long job"}).json()
     sid = s["id"]

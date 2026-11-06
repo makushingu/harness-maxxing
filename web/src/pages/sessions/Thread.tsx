@@ -12,7 +12,7 @@ import { Button, EmptyState, Skeleton, Spinner, toast } from '@/components/ui'
 import { errorMessage } from '@/lib/api'
 import { hideMessage } from '@/lib/queries'
 import { reducedMotion } from '@/lib/presence'
-import type { Session } from '@/lib/types'
+import type { SentItem, Session } from '@/lib/types'
 import { ItemRow, UserMessage } from './Items'
 import { onThreadDragEnd, onThreadDragStart } from './contentDrag'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
@@ -29,6 +29,7 @@ const STEP = 30
 const PIN_PX = 48
 /** Rows at the bottom of a freshly opened thread that cascade in (the rest is off-screen anyway). */
 const INTRO_ROWS = 8
+const NO_SENT: SentItem[] = []
 
 export type ThreadHandle = { scrollToBottom: (smooth?: boolean) => void }
 
@@ -232,6 +233,10 @@ export const Thread = React.forwardRef<ThreadHandle, {
 
   const running = session?.state === 'running'
   const optimistic = pending.filter((p) => !p.queued)
+  // Sent but not in the log yet (held behind a summary, or starting), from another tab or before a reload: this
+  // tab has no bubble of its own for it, the server's copy is shown instead.
+  const sentItems = session?.sent_items
+  const serverSent = optimistic.length || !running ? NO_SENT : sentItems || NO_SENT
 
   // Deleting an unanswered message: its rows slide out, then the thread drops them; "Undo" in the toast.
   const sid = session?.id
@@ -334,6 +339,9 @@ export const Thread = React.forwardRef<ThreadHandle, {
               })}
               {optimistic.map((p) => (
                 <UserMessage key={p.lid} text={p.text} attachments={p.attachments} voice={p.voice || undefined} pending />
+              ))}
+              {serverSent.map((p, i) => (
+                <UserMessage key={`sent${i}`} text={p.text} attachments={p.attachments} source={p.source} voice={p.voice} pending />
               ))}
               {running && <RunningRow session={session!} log={log} />}
               {log.deleted && <p className="text-center text-xs text-muted-foreground">{t('sessions.deleted')}</p>}
