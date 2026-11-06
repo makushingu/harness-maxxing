@@ -51,6 +51,12 @@
 # =============================================================================================
 set -euo pipefail
 umask 077                     # everything the installer creates is private unless it says otherwise (chmod)
+# a script run from a source tree (bash ./install.sh in an unpacked archive or a clone) installs that tree;
+# resolved before the `cd /` below, or a relative ./install.sh would no longer be found
+SELF_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+  SELF_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P || true)
+fi
 cd /                          # never run from a directory another user controls
 unset BASH_ENV ENV CDPATH PYTHONPATH PYTHONHOME PYTHONSTARTUP LD_PRELOAD LD_LIBRARY_PATH NODE_OPTIONS GIT_DIR GIT_WORK_TREE \
   GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT 2>/dev/null || true
@@ -67,11 +73,6 @@ LICENSED=0          # 1 = an install from before 2.0.0a87 still on signed archiv
 # Versions, URLs and sha256 of uv, Claude Code, Node.js, Caddy's key... are in server/maxxing/deps.toml (the same
 # manifest `maxxing deps` reads): `dep` below reads it from the code once it is here, and every download goes through
 # fetch_verified (HTTPS, private work folder, sha256 checked before anything runs or is extracted).
-# a script run from a source tree (bash ./install.sh in an unpacked archive or a clone) installs that tree
-SELF_DIR=""
-if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-  SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P || true)
-fi
 INSTALL_DIR="${INSTALL_DIR:-/opt/claude-maxxing}"
 WORKSPACE="${WORKSPACE:-/root/maxxing}"
 STATE_DIR="${STATE_DIR:-/var/lib/claude-maxxing}"
