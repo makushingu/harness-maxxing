@@ -21,6 +21,13 @@ export function slugify(label: string): string {
 
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
 
+/** A `?next=` target we may navigate to: a same-site path only. A backslash or a control
+ *  character after the slash ('/\evil', '/<tab>/evil') is read as another host by the
+ *  browser and makes react-router throw, so those fall back to '/'. */
+export function safeNext(next: string | null | undefined): string {
+  return next && /^\/(?![/\\])[^\x00-\x1f\\]*$/.test(next) ? next : '/'
+}
+
 export function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
