@@ -212,6 +212,17 @@ def test_delete_removes_the_file_and_the_entry(mx):
     assert vault_files.list_files() == [] and "vault_files" not in config.load_secrets()
 
 
+def test_a_failed_metadata_save_on_delete_keeps_the_file(mx, monkeypatch):
+    vault_files.put("KEEP_ME", b"precious")
+    def boom(*a, **k):
+        raise OSError("disk full")
+    with monkeypatch.context() as m:
+        m.setattr(config, "set_secret", boom)
+        with pytest.raises(OSError):
+            vault_files.delete("KEEP_ME")
+    assert vault_files.read("KEEP_ME") == b"precious" and [f["name"] for f in vault_files.list_files()] == ["KEEP_ME"]
+
+
 def test_protect_secrets_denies_the_folder(mx):
     rules = spawn.deny_rules({"protect_secrets": True})
     assert f"Read(/{mx['state']}/secret-files/**)" in rules and f"Edit(/{mx['state']}/secret-files/**)" in rules
