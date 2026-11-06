@@ -480,7 +480,8 @@ def _line(s: Any) -> str:
 
 
 HDR_CAP = 16 * 1024          # characters of one header field parsed (the stdlib parser is quadratic: a 1 MB Subject took 11 s)
-ADDR_CAP = 64 * 1024         # an address list (To of a few thousand recipients) is cut at the last comma under this
+ADDR_CAP = 4 * 1024          # an address list (about a hundred recipients) is cut at the last comma under this: the
+                             # address parser is quadratic (64 KB of commas took 18 s, on every list of the folder)
 # whitespace between two encoded-words is not part of the text (RFC 2047 6.2): "=?utf-8?b?..Dupo?= =?utf-8?b?bnQ=?="
 # is "Dupont"; the stdlib joins them with a space in display names (Subject is right)
 _EW = r"=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?="
