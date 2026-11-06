@@ -64,6 +64,9 @@ def _load() -> list[dict]:
     return [a for a in rows or [] if isinstance(a, dict) and a.get("id")]
 
 
+_lock = config.ProcessLock("mail-accounts")    # accounts.json: also written by `maxxing mail` in other processes
+
+
 def _save(rows: list[dict]) -> None:
     p = _path()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -321,19 +324,23 @@ def add_account(data: dict, password: str, skip_test: bool = False) -> tuple[dic
     acc = _clean(data)
     if not password:
         raise MailError("invalid", "the password is required")
-    rows = _load()
-    if any(a.get("address") == acc["address"] for a in rows):
+    if any(a.get("address") == acc["address"] for a in _load()):
         raise MailError("exists", f"{acc['address']} is already there")
+    # the sign-in test (up to a minute) runs outside the lock; the file is read again before it is written
     result = {"imap": "skipped", "smtp": "skipped"} if skip_test else test(acc, password)
     if result.get("smtp") == "ok":
         acc["smtp_port"], acc["smtp_tls"] = result["smtp_port"], result["smtp_tls"]
         acc["smtp_checked"] = time.time()
-    acc["id"] = _slug(acc["address"], {a["id"] for a in rows})
-    acc["password_key"] = password_key(acc["id"])
-    acc["created"] = time.time()
-    vault.put(acc["password_key"], password, note=f"E-mail page: password of {acc['address']}", expose=False)
-    rows.append(acc)
-    _save(rows)
+    with _lock:
+        rows = _load()
+        if any(a.get("address") == acc["address"] for a in rows):
+            raise MailError("exists", f"{acc['address']} is already there")
+        acc["id"] = _slug(acc["address"], {a["id"] for a in rows})
+        acc["password_key"] = password_key(acc["id"])
+        acc["created"] = time.time()
+        vault.put(acc["password_key"], password, note=f"E-mail page: password of {acc['address']}", expose=False)
+        rows.append(acc)
+        _save(rows)
     return acc, result
 
 
@@ -352,12 +359,16 @@ def update_account(acc_id: str, data: dict, password: str | None = None) -> tupl
         pw = password or vault.get(cur.get("password_key") or "") or ""
         result = test(new, pw)
         if result.get("smtp") == "ok":
-            new["smtp_port"], new["smtp_tls"] = result["smtp_port"], result["smtp_tls"]
-            new["smtp_checked"] = time.time()
-    if password:
-        vault.put(new["password_key"], password, note=f"E-mail page: password of {new['address']}", expose=False)
-    rows = [new if a["id"] == acc_id else a for a in rows]
-    _save(rows)
+            changes.update(smtp_port=result["smtp_port"], smtp_tls=result["smtp_tls"], smtp_checked=time.time())
+    with _lock:                                     # read again: another change may have landed during the test
+        rows = _load()
+        cur2 = next((a for a in rows if a["id"] == acc_id), None)
+        if not cur2:
+            raise MailError("no_account", f"no mailbox {acc_id}")
+        new = {**cur2, **changes}
+        if password:
+            vault.put(new["password_key"], password, note=f"E-mail page: password of {new['address']}", expose=False)
+        _save([new if a["id"] == acc_id else a for a in rows])
     imap.forget(acc_id)
     return new, result
 
@@ -365,11 +376,12 @@ def update_account(acc_id: str, data: dict, password: str | None = None) -> tupl
 def delete_account(acc_id: str) -> None:
     from .. import vault
     from . import imap
-    rows = _load()
-    cur = next((a for a in rows if a["id"] == acc_id), None)
-    if not cur:
-        raise MailError("no_account", f"no mailbox {acc_id}")
-    _save([a for a in rows if a["id"] != acc_id])
+    with _lock:
+        rows = _load()
+        cur = next((a for a in rows if a["id"] == acc_id), None)
+        if not cur:
+            raise MailError("no_account", f"no mailbox {acc_id}")
+        _save([a for a in rows if a["id"] != acc_id])
     if cur.get("password_key"):
         vault.delete(cur["password_key"])
     imap.forget(acc_id)
