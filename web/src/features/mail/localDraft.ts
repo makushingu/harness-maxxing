@@ -4,10 +4,17 @@
 // - for a reply saved as a draft, the message it answers (`mx-mail-replies`): the draft holds no trace of it, and
 //   sending it later must still flag that message "answered".
 // Signing out clears both (lib/drafts.ts forgetAllDrafts).
+// The tab whose dialog holds the message says so every few seconds (`mx-mail-compose-live`): another tab opened
+// meanwhile does not open the same message again (it could be sent twice). A crashed tab stops saying it: its message
+// opens again a few seconds later.
 import type { MailAttachment } from '@/lib/types'
 import type { ComposeInit } from './Compose'
 
 const KEY = 'mx-mail-compose'
+const LIVE = 'mx-mail-compose-live'
+const LIVE_MS = 5_000
+// one id per page load: a reload of the same tab gives the hold up on pagehide, so the message opens again at once
+const TAB = Math.random().toString(36).slice(2) + Date.now().toString(36)
 const REPLIES = 'mx-mail-replies'
 const DB = 'mx-mail'
 const MAX_AGE = 30 * 86400_000
@@ -15,6 +22,44 @@ const MAX_REPLIES = 200
 
 /** The message being written: a ComposeInit with what the user changed, plus what only the open dialog had. */
 export type LocalCompose = ComposeInit & { at: number; showCc: boolean; kept: MailAttachment[]; files: number }
+
+/** Another tab holds the message being written right now (its dialog is open). */
+export function composeHeldElsewhere(): boolean {
+  try {
+    const v = JSON.parse(localStorage.getItem(LIVE) || 'null') as { tab?: string; at?: number } | null
+    return !!v && v.tab !== TAB && Date.now() - (v.at || 0) < LIVE_MS * 3
+  } catch {
+    return false
+  }
+}
+/** This tab's dialog holds the message: refreshed while it is open; returns the function that gives it up. */
+export function holdCompose(): () => void {
+  const beat = () => {
+    try {
+      localStorage.setItem(LIVE, JSON.stringify({ tab: TAB, at: Date.now() }))
+    } catch {
+      /* private mode */
+    }
+  }
+  const release = () => {
+    try {
+      const v = JSON.parse(localStorage.getItem(LIVE) || 'null') as { tab?: string } | null
+      if (v?.tab === TAB) localStorage.removeItem(LIVE)
+    } catch {
+      /* private mode */
+    }
+  }
+  beat()
+  const id = window.setInterval(beat, LIVE_MS)
+  window.addEventListener('pagehide', release)
+  window.addEventListener('pageshow', beat)
+  return () => {
+    window.clearInterval(id)
+    window.removeEventListener('pagehide', release)
+    window.removeEventListener('pageshow', beat)
+    release()
+  }
+}
 
 export function loadCompose(): LocalCompose | null {
   try {

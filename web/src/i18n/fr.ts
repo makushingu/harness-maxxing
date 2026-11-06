@@ -3491,6 +3491,7 @@ export const fr: Record<keyof typeof en, string> = {
   'mail.compose.saveDraft': "Enregistrer le brouillon",
   'mail.compose.saving': "Enregistrement…",
   'mail.compose.saved': "Brouillon enregistré",
+  'mail.compose.unreadDraft': "Les pièces jointes du brouillon enregistré ne peuvent pas encore être lues. Réessayez dans un instant.",
   'mail.compose.sent': "Message envoyé",
   'mail.compose.sentPartly': "Message envoyé, mais refusé pour : {list}",
   'mail.compose.discard': "Fermer sans envoyer",

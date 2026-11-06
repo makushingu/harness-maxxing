@@ -29,7 +29,7 @@ import { MessageView } from './MessageView'
 import { AllMailboxes } from './AllMailboxes'
 import { OutboxBanner, SeenByAvatars, Verified } from './agents'
 import { clean, depth, folderIcon, folderLabel, leaf, shortDate, who } from './shared'
-import { loadCompose, loadFiles, replyOf } from './localDraft'
+import { composeHeldElsewhere, loadCompose, loadFiles, replyOf } from './localDraft'
 
 /** `a` of "All mailboxes" in the URL (a mailbox id always has a dash, never a star). */
 export const ALL = '*'
@@ -429,9 +429,12 @@ export default function MailPage() {
     if (restoring.current || !accounts.data || compose || linked) return
     restoring.current = true
     const c = loadCompose()
-    if (!c || !accounts.data.some((a) => a.id === c.acc)) return
+    // still being written in another tab: opening it here too could send it twice
+    if (!c || !accounts.data.some((a) => a.id === c.acc) || composeHeldElsewhere()) return
     void loadFiles().then((files) => {
       const { at: _at, showCc, kept, files: _n, ...init } = c
+      // a copy kept before `replyAcc` existed cannot tell which mailbox its reply is in: no "answered" flag then
+      if (!init.replyAcc) init.reply = undefined
       setCompose({ ...init, restored: { showCc, kept, files } })
       toast.info(t('mail.compose.restored'))
     })

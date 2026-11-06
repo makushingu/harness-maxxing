@@ -35,6 +35,7 @@ import {
   StatusDot,
   Switch,
   Tooltip,
+  useMask,
 } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
@@ -213,13 +214,14 @@ function ViewMenu({ view, custom, onChange }: { view: OfficeView; custom: { id: 
 /** A project of the Classic view: its header (colour, name, count, "..."), dragged to move the whole section. */
 function ProjectSection({ project: p, count: n, index, layout, children }: { project: string; count: number; index: number; layout: AgentsLayoutApi; children: React.ReactNode }) {
   const t = useT()
+  const mask = useMask()
   const dnd = useReorder({ kind: 'project', id: p, project: p, index }, (x) => layout.moveProject(x, p))
   return (
     <section {...dnd.target} className={cn('relative grid grid-cols-[minmax(0,1fr)] gap-3 rounded-xl', dnd.dragging && 'opacity-50')} aria-label={p} data-testid="agents-project" data-project={p}>
       <DropBar side={dnd.side} className="inset-x-0 h-1" />
       <h2 {...dnd.source} className={cn('group/head flex min-w-0 items-center gap-2 px-0.5 text-[13px] font-semibold', dnd.on && 'cursor-grab active:cursor-grabbing')} title={dnd.on ? t('agents.layout.dragProject') : undefined} data-testid="agents-project-head">
         <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: OUTFIT[layout.colorOf(p)] }} data-testid="agents-project-dot" />
-        <span className="min-w-0 truncate" title={p}>
+        <span className="min-w-0 truncate" title={mask(p, 8)}>
           <Sensitive length={8}>{p}</Sensitive>
         </span>
         <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">{t('agents.overview.count', { count: n })}</span>
