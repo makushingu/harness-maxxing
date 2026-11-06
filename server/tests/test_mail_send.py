@@ -79,6 +79,18 @@ def test_reply_to_is_shown_never_sent_to_blindly_and_never_a_contact(acc, srv, s
     assert store.unknown(acc["id"], ["bob@x.org"]) == []
 
 
+def test_a_reply_to_the_parser_rejects_is_checked_address_by_address(acc, srv, smtp, capsys, monkeypatch):
+    # the raw fallback keeps the whole header as one entry: its last address alone is the sender's domain
+    uid = srv.add("INBOX", _raw("Accountant <acct@firm.com>", "Invoice", "Pay it").replace(
+        b"Subject:", b"Reply-To: pay@attacker.example,x@[,boss@firm.com\r\nSubject:", 1))
+    code, _, _ = _cli(capsys, "write", "--reply", str(uid), "--send", stdin="Yes", monkeypatch=monkeypatch)
+    assert code == 1 and not smtp.messages
+    # a Reply-To on the sender's own domain still goes without --to
+    ok = srv.add("INBOX", _raw("Accountant <acct@firm.com>", "Invoice", "Pay it", reply_to="billing@firm.com"))
+    code, out, _ = _cli(capsys, "write", "--reply", str(ok), "--send", stdin="Yes", monkeypatch=monkeypatch)
+    assert code == 0 and len(smtp.messages) == 1
+
+
 # ---------------------------------------------------------------- a send cut in the middle
 
 class _Cut(list):
