@@ -213,6 +213,21 @@ def test_a_failed_turn_never_reports_the_answer_of_the_turn_before(client, topic
     assert res["ok"] is False and res["text"] != first and res["text"]
 
 
+def test_a_negative_or_too_big_limit_is_refused_and_a_tiny_budget_stays_a_budget(client, topic):
+    _on(client)
+    _create(client)
+    for bad in ({"usd_per_day": -1}, {"runs_per_hour": -3}, {"usd_per_day": 5000}, {"timeout_s": 10 ** 6}):
+        r = client.patch("/api/agents/acme/blog/writer", json={"limits": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_limit", (bad, r.text)
+    assert agents.load(A)["limits"]["usd_per_day"] == 2.0 and agents.load(A)["limits"]["runs_per_hour"] == 6
+    r = client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0.00001, "timeout_s": 10}})
+    assert r.json()["limits"]["usd_per_day"] == 0.01 and r.json()["limits"]["timeout_s"] == 60   # min: cut as before
+    with pytest.raises(agents.AgentError):
+        agents.create("projects/acme/topics/blog", "other", {"limits": {"usd_per_day": -1}})
+    # a file edited by hand: a negative budget or rate takes the default, never "no limit"
+    assert agents.clean({"limits": {"usd_per_day": -1, "runs_per_hour": -3}})["limits"] == agents.clean({})["limits"]
+
+
 def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
     _on(client)
     _create(client)
