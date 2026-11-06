@@ -61,12 +61,41 @@ export function holdCompose(): () => void {
   }
 }
 
+const strings = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string')
+const attachments = (v: unknown) =>
+  Array.isArray(v) &&
+  v.every((a) => !!a && typeof a === 'object' && typeof a.size === 'number' && typeof a.filename === 'string')
+const place = (v: unknown) => v === undefined || (!!v && typeof v === 'object' && typeof (v as { uid?: unknown }).uid === 'number')
+
+/** The kept message, or null; a copy of another shape (written by hand, an older build, cut by a full storage) is
+ *  dropped: opened as is it would break the page on every visit. */
 export function loadCompose(): LocalCompose | null {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null') as LocalCompose | null
-    if (!v || typeof v !== 'object' || typeof v.acc !== 'string' || Date.now() - (v.at || 0) > MAX_AGE) return null
+    if (!v) return null
+    const ok =
+      typeof v === 'object' &&
+      typeof v.acc === 'string' &&
+      typeof v.mode === 'string' &&
+      strings(v.to) &&
+      strings(v.cc) &&
+      strings(v.bcc) &&
+      typeof v.subject === 'string' &&
+      typeof v.text === 'string' &&
+      attachments(v.kept) &&
+      place(v.reply) &&
+      place(v.draft) &&
+      place(v.source) &&
+      (v.source === undefined || attachments(v.source.attachments))
+    if (!ok) localStorage.removeItem(KEY)
+    if (!ok || Date.now() - (v.at || 0) > MAX_AGE) return null
     return v
   } catch {
+    try {
+      localStorage.removeItem(KEY) /* not JSON */
+    } catch {
+      /* private mode */
+    }
     return null
   }
 }
