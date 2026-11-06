@@ -386,6 +386,9 @@ def _one(m: dict, uid: int, crit: list, uids: list[int]) -> bool:
         return a or b
     if word in ("TEXT", "BODY"):
         return _s(crit.pop(0)).lower() in _text(m)
+    if word == "HEADER":
+        name = _s(crit.pop(0))
+        return _s(crit.pop(0)).lower() in _header(m, name)
     if word in ("FROM", "TO", "SUBJECT"):
         return _s(crit.pop(0)).lower() in _header(m, word)
     raise ValueError(f"unknown search key {c!r}")
