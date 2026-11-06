@@ -15,6 +15,7 @@ Item sizes are cached per item, keyed by the (inode, mtime) of the item and of i
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -25,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from . import bus, config
+
+log = logging.getLogger("maxxing.trash")
 
 KEEP_DAYS = 30
 SKIP = {"skills"}                          # internal subfolders (cmd_core keeps old skills there)
@@ -342,6 +345,13 @@ def restore(item_id: str) -> dict[str, Any]:
             agents.from_trash(box, str(original.relative_to(root)), str(dest.relative_to(root)))
         except (ValueError, OSError):
             pass
+    if kind == "project":                                   # its agent groups get their conversations back
+        try:
+            from . import agent_rooms
+            root = config.workspace().resolve()
+            agent_rooms.restored(str(original.relative_to(root)), str(dest.relative_to(root)))
+        except (ValueError, OSError):
+            log.exception("agent group rooms not restored (%s)", dest)
     if kind in ("project", "topic"):
         try:
             workspace._changed("restored", kind, str(dest.relative_to(config.workspace().resolve())))  # noqa: SLF001
