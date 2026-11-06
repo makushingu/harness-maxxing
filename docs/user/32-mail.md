@@ -35,6 +35,7 @@ Folders on the left, messages in the middle, the open message on the right (one 
   filters the list.
 - Tick messages to **archive**, **trash**, mark **read / unread**, **flag**, mark as **junk** or **move** them
   several at once. **Delete for good** only works from the trash or the junk folder.
+  On Gmail, **archive** takes the mail out of the inbox: it stays in All Mail, as in Gmail itself.
 - Create, rename or delete your own folders from the **...** menus.
 - An HTML message is shown in a sealed frame: no script runs and **remote images are blocked** (they tell the
   sender you opened it) until you click **Show images**.
