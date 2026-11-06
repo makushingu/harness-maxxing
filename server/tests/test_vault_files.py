@@ -437,3 +437,21 @@ def test_an_agent_turn_cannot_use_the_file_commands(mx, monkeypatch, capsys):
         assert run(monkeypatch, *argv, stdin=b"other") == 1, argv
     assert "TOP-SECRET-BYTES" not in capsys.readouterr().out
     assert vault_files.read("AGENT_FILE") == b"TOP-SECRET-BYTES"
+
+
+def test_an_agent_turn_lists_only_its_own_text_keys(mx, monkeypatch, capsys):
+    from maxxing import agents
+    vault.put("MINE", "v1", note="its key")
+    vault.put("OWNER_STRIPE_LIVE", "v2", note="Stripe live key of client Acme")
+    vault_files.put("GCP_SA", b"{}", note="prod GCP", expose=True)
+    monkeypatch.setenv("MAXXING_AGENT", "acme/blog/help")
+    monkeypatch.setattr(agents, "exists", lambda p: True)
+    monkeypatch.setattr(agents, "load", lambda p: {"keys": ["MINE", "GCP_SA"]})
+    for argv in (("list",), ("list", "--json")):
+        assert run(monkeypatch, *argv) == 0
+        out = capsys.readouterr().out
+        assert "MINE" in out and "OWNER_STRIPE_LIVE" not in out and "Acme" not in out and "GCP_SA" not in out, argv
+    monkeypatch.delenv("MAXXING_AGENT")                  # the owner still sees everything
+    assert run(monkeypatch, "list") == 0
+    out = capsys.readouterr().out
+    assert "MINE" in out and "OWNER_STRIPE_LIVE" in out and "GCP_SA" in out
