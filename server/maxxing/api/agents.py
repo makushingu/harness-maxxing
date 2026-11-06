@@ -105,7 +105,8 @@ def _fields(body: AgentIn) -> dict:
     if f.get("mail"):
         from .. import mail
         have = {a["id"] for a in mail.list_accounts()}
-        bad = [g.get("account") for g in f["mail"] if isinstance(g, dict) and g.get("account") not in have]
+        accs = [str(g.get("account") or "").strip().lower() for g in f["mail"] if isinstance(g, dict)]
+        bad = [a for a in accs if a not in have]
         if bad:
             raise HTTPException(400, detail={"error": "bad_mail", "message": f"No mailbox {bad[0]!r} on the E-mail page"})
     if body.display_name is not None:
