@@ -47,7 +47,10 @@ async def shutdown() -> None:
 
 @router.get("")
 async def search(request: Request, q: str = "", kinds: str = "", limit: int = Query(30, ge=1, le=100)):
-    wanted = [k for k in kinds.split(",") if k] or None
+    wanted = [k for k in kinds.split(",") if k] or list(engine.KINDS)
+    from .. import agents
+    if not agents.feature_on():                  # Agents off: no group conversations in the results
+        wanted = [k for k in wanted if k != "group"]
     # The palette aborts a query when the next keystroke comes: its worker thread (shared with the whole API)
     # stops too, instead of ranking for nobody.
     gone = threading.Event()

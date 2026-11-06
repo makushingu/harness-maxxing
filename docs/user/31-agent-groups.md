@@ -44,6 +44,7 @@ projects/acme/
     CLAUDE.md     the goal of the group
     group.json    its members, options and limits
     files/        the shared folder
+    attachments/  the files you attach to your messages
   topics/blog/agents/writer/
   topics/seo/agents/reviewer/
 ```
@@ -59,6 +60,10 @@ Write a message as in any chat. Who answers depends on the names in it:
 | `@all anything to add?` (or `@everyone`, `@tous`) | every member, in the group's order |
 | `what do you think?` (nobody named) | the lead; without a lead, the last member who spoke (else the first); a deleted member is passed over |
 | `stop @publisher` | nobody: the publisher is **paused** until you name it again |
+
+**Files.** The paperclip, a paste or a drop attaches up to 10 files to your message. They are saved in the group's
+`attachments/` folder, which every member reads (and none writes); the members who answer that message get them
+(images in front of them), the others see their paths in the conversation.
 
 While you type `@`, the members are suggested with their face (type a few letters of the `@name` or of the name).
 In the conversation every `@name` shows as a small badge with the member's face and name, and the line **To:** above

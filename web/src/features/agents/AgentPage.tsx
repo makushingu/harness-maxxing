@@ -33,6 +33,8 @@ import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ThreadApprovalBody, useThreadApprovals } from './approvals'
+import { AttachButton, AttachList, useAttachments } from './attach'
+import { AttachmentStrip } from '@/pages/sessions/Items'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -381,6 +383,7 @@ function ThreadMessage({
       return (
         <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
           {quote}
+          {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
           <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
             <p className="whitespace-pre-wrap break-words">
               <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
@@ -401,6 +404,11 @@ function ThreadMessage({
           <p className="line-clamp-4 whitespace-pre-wrap break-words text-muted-foreground">
             <Sensitive block>{m.text}</Sensitive>
           </p>
+        )}
+        {!!m.attachments?.length && (
+          <div className="flex">
+            <AttachmentStrip paths={m.attachments} />
+          </div>
         )}
       </div>
     )
@@ -469,32 +477,40 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
   const t = useT()
   const run = useRunAgent()
   const [text, setText] = React.useState('')
+  const files = useAttachments(a.path)
   const input = React.useRef<HTMLTextAreaElement>(null)
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
   }, [replyTo])
+  const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
   const submit = () => {
     const v = text.trim()
-    if (!v || !a.enabled || run.isPending) return
+    if (!canSend || !a.enabled || run.isPending) return
+    const kept = files.atts
     setText('')
+    files.restore([])
+    const back = () => {
+      setText(v)
+      files.restore(kept)
+    }
     run.mutate(
-      { path: a.path, text: v, reply_to: replyTo?.id },
+      { path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths },
       {
         onSuccess: (r) => {
           if (r.started) onCancelReply()
           else {
-            setText(v)
+            back()
             toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
           }
         },
         // The reply target stays with the text, so sending again still goes on with the same session.
-        onError: () => setText(v),
+        onError: back,
       },
     )
   }
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50">
+      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
         {replyTo && (
           <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
             <Reply className="size-3.5 shrink-0 text-primary" />
@@ -510,10 +526,14 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
         {!a.enabled ? (
           <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('agents.conv.paused')}</p>
         ) : (
+          <>
+          <AttachList atts={files.atts} onRemove={files.remove} />
           <div className="flex items-end gap-1">
+            <AttachButton onFiles={files.add} />
             <Textarea
               ref={input}
               value={text}
+              onPaste={files.onPaste}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -530,10 +550,11 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!text.trim()} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
+            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
           </div>
+          </>
         )}
       </div>
     </div>

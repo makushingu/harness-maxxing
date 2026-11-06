@@ -125,6 +125,9 @@ The page is a **conversation** with the agent, like a contact in a chat app:
   works, a "working…" bubble links to the live session; when it waits for your OK, the bubble says so.
 - **Writing to it** (the box at the bottom) starts a **new session**; it gets its last results as context, so "and the
   second point?" makes sense.
+- **Files**: the paperclip, a paste or a drop attaches up to 10 files to your message (a photo, a PDF, a brief), as in
+  a session. They are saved in the agent's folder, under `attachments/`, and the agent reads them; with the sandbox
+  that folder is read only for the agent. A message can be only files.
 - **Reply** on a result goes on with **that result's session**: same context, nothing to explain again. A reply in its
   Telegram thread to one of its results does the same.
 - The **schedule, webhook and notification runs stay separate**: each one is a new session of its own.
