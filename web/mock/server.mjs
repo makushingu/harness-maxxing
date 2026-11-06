@@ -170,7 +170,7 @@ function buildState(scenario) {
     st.secretFiles = [
       ['ANDROID_KEYSTORE', 'release.jks', 2764, 'Play Store upload key', true],
       ['GCP_SERVICE_ACCOUNT', 'sa-acme-prod.json', 2381, 'Reporting service account (acme)', false],
-    ].map(([name, filename, size, note, expose], i) => ({ name, filename, size, note, expose, sha256: crypto.createHash('sha256').update(name).digest('hex'), updated: t - (i * 5 + 3) * DAY }))
+    ].map(([name, filename, size, note, expose], i) => ({ name, filename, size, note, expose, sha256: crypto.createHash('sha256').update(name).digest('hex').slice(0, 12), updated: t - (i * 5 + 3) * DAY }))
     st.secrets = SECRET_SEED.map(([name, note, expose, value], i) => ({ name, note, expose, value, updated: t - (i * 9 + 2) * DAY }))
   } else if (scenario === 'onboarding' || scenario === 'setup') {
     st.layout.hidden = ['claude-usage']
@@ -1793,10 +1793,14 @@ R('DELETE', '/api/secrets/:name', ({ params }) => {
 })
 
 R('GET', '/api/secret-files', () => S.secretFiles)
-R('PUT', '/api/secret-files/:name', ({ params, q, rawBody }) => {
+R('PUT', '/api/secret-files/:name', ({ params, q, req, rawBody }) => {
+  // same refusals as the server (api/secret_files.py, vault.NAME_RE)
   const name = decodeURIComponent(params.name)
-  if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name)) fail(400, 'invalid_name', 'invalid name')
-  if (rawBody.length > 1024 * 1024) fail(400, 'invalid_value', 'file too large')
+  const ct = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase()
+  if (ct && ct !== 'application/octet-stream') fail(415, 'unsupported_media_type', 'send the file as application/octet-stream')
+  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(name)) fail(400, 'invalid_name', 'invalid name')
+  if (rawBody.length > 1024 * 1024) fail(413, 'too_large', 'file too large (1 MiB at most)')
+  if (/[\x00-\x1f\x7f]/.test(q.get('note') || '')) fail(400, 'invalid_note', 'note must be valid text')
   if (S.secrets.some((x) => x.name === name)) fail(409, 'name_taken', 'name used by a key')
   let f = S.secretFiles.find((x) => x.name === name)
   if (f && q.get('create') === '1') fail(409, 'exists', 'file exists')
@@ -1805,7 +1809,7 @@ R('PUT', '/api/secret-files/:name', ({ params, q, rawBody }) => {
     f = { name, filename: '', size: 0, note: '', expose: false, sha256: '', updated: now() }
     S.secretFiles.push(f)
   }
-  if (rawBody.length) Object.assign(f, { size: rawBody.length, sha256: crypto.createHash('sha256').update(rawBody).digest('hex'), filename: q.get('filename') || f.filename })
+  if (rawBody.length) Object.assign(f, { size: rawBody.length, sha256: crypto.createHash('sha256').update(rawBody).digest('hex').slice(0, 12), filename: q.get('filename') || f.filename })
   else if (q.get('filename')) f.filename = q.get('filename')
   if (q.has('note')) f.note = q.get('note')
   if (q.has('expose')) f.expose = q.get('expose') === '1' || q.get('expose') === 'true'
@@ -1966,7 +1970,8 @@ async function handleApi(req, res, url) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     rawBody = await readBody(req)
     const ct = req.headers['content-type'] || ''
-    if (rawBody.length && !ct.startsWith('multipart/') && !ct.startsWith('application/octet-stream')) {
+    // secret files take a raw body (any other type is refused by the route itself, 415)
+    if (rawBody.length && !ct.startsWith('multipart/') && !ct.startsWith('application/octet-stream') && !p.startsWith('/api/secret-files/')) {
       try { body = JSON.parse(rawBody.toString('utf8')) } catch { return sendJson(res, 400, { error: 'bad_json', message: 'Request body is not valid JSON' }) }
       if (body === null || typeof body !== 'object') body = {}
     }

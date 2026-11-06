@@ -59,7 +59,7 @@ AUTHOR = ("Harness Maxxing", "backup@localhost")
 
 # Directories never descended into, files never copied (matched on the base name, case-insensitive).
 PRUNE_DIRS = {".git", "node_modules", "attachments", ".venv", "venv", "__pycache__", ".cache", ".trash",
-              ".ssh", ".gnupg", "secret-files", META_DIR}   # secret-files: the Keys vault files
+              ".ssh", ".gnupg", META_DIR}
 DENY_FILES = [r"secrets\.json", r"keys\.json", r"\.env", r".*\.env", r"\.env\..*", r".*\.pem", r".*\.key",
               r".*\.p12", r".*\.pfx", r"id_(rsa|dsa|ecdsa|ed25519).*", r".*credentials.*", r".*\.log",
               r".*\.jsonl", r".*\.sqlite3?", r".*\.db", r"\.netrc", r"\.git-credentials", r".*\.kdbx"]
@@ -452,9 +452,11 @@ def collect(root: Path | None = None, include: list[str] | None = None) -> dict[
     out: dict[str, Path] = {}
     if not root.is_dir():
         return out
+    from .vault_files import files_dir
+    vault_dir = files_dir().resolve()        # the Keys vault files, should the state dir sit inside the workspace
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames[:] = sorted(d for d in dirnames if d.lower() not in _PRUNE        # git refuses .GIT too
-                             and not (Path(dirpath) / d).is_symlink())
+                             and not (Path(dirpath) / d).is_symlink() and Path(dirpath, d) != vault_dir)
         base = Path(dirpath)
         for fn in sorted(filenames):
             p = base / fn
