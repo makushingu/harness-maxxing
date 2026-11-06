@@ -23,6 +23,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Agents: `on_turn_end` drops a budget hold only if it was made before the turn's `finished_at`
   (`_release(path, sid, ended)`): a hold written by the runner for the next queued turn of the same session
   (mcp_auto continuation, compaction, typed message) stays until that turn ends.
+- Agents: `run_settings` returns the owner note as `system_note` instead of a second `--append-system-prompt`
+  in `args`; the runner puts it in the one flag of `spawn.agents_args` (Claude Code keeps only the last flag,
+  so agents had lost the foreground-subagents rule and the mcp_auto hint).
 
 ## 2.0.0-alpha.120 - 2026-11-05
 

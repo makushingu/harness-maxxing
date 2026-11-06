@@ -471,11 +471,11 @@ OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep
 
 
 def run_settings(path: str, outside: bool = False, session: str | None = None, group: str = "") -> dict:
-    """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
+    """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys, system_note} of a turn in an agent folder ({} elsewhere).
     args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
     agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
     risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
-    its turns see. session: the session whose turn starts now - the budget cap it gets is held for it until the turn
+    its turns see. system_note: goes into the turn's one `--append-system-prompt` (spawn.agents_args). session: the session whose turn starts now - the budget cap it gets is held for it until the turn
     ends, so turns running side by side never get the same money twice. group: the agent group whose session this
     is (MAXXING_AGENT_GROUP, agent_rooms.py): its shared folder is writable, a hand-over is outside text unless the
     group trusts its members."""
@@ -502,12 +502,11 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
         args += ["--max-budget-usd", f"{left:.2f}"]
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
-    args += ["--append-system-prompt", OWNER_NOTE]
     forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a, approvals=a["approvals"] or forced),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
-            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"]}
+            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"], "system_note": OWNER_NOTE}
 
 
 def continue_in_sessions(path: str, sid: str) -> dict:
