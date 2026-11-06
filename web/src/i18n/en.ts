@@ -3509,6 +3509,7 @@ export const en = {
   'mail.compose.saveDraft': "Save the draft",
   'mail.compose.saving': "Saving…",
   'mail.compose.saved': "Draft saved",
+  'mail.compose.unreadDraft': "The attachments of the saved draft cannot be read yet. Try again in a moment.",
   'mail.compose.sent': "Message sent",
   'mail.compose.sentPartly': "Message sent, but refused for: {list}",
   'mail.compose.discard': "Close without sending",
