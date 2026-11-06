@@ -35,6 +35,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `agents.Debouncer.add` stops keeping texts once a batch holds `EVENT_MAX` characters (what `frame` sends) and
   counts the rest in `dropped` (saved in `_feed.json`); `flush_due` numbers events out of the full count and
   says how many were not shown. A busy agent's batch no longer grows and is rewritten without bound.
+- `agents.thread` parses an agent's thread file once per (mtime_ns, size) (`_threads`, up to 200 files): GET
+  /api/agents no longer re-reads every thread on each call. The cached messages are shared: never change them.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
