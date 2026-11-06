@@ -7,6 +7,21 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.122 - 2026-11-06
 
+- Final Agents + E-mail audit of 06/11 fixed on beta (no version of its own): `imap._raw` reads headers the parser
+  rejects (`_hdr`/`_addrs` never raise, a bad row is listed without them), headers cut at 16 KB / address lists 64 KB
+  before parsing, adjacent encoded-words joined, text/calendar listed as `invite.ics`, `attachments_more`; mail turn
+  text built inside `agents.EVENT_MAX` (headers of every mail first, then bodies in what is left, only those fetched).
+  send: any SMTP answer = refused (count given back), `sent_unknown` only for a cut after the final ".", body written
+  in 64 kB pieces with a per-write timeout, a confirmed send leaves a `result` mark so unstick never re-offers it,
+  approvals on the mail pool (`api.mail.run_on_pool`), IDN domains as `xn--`, UTF-8 local parts need SMTPUTF8, forward
+  over 50 attachments refused, quoted original cut at 200,000 chars. Agents: `writable` stays inside the topic once
+  resolved, `*.` wildcards need two labels (shared suffixes refused), `keys list` in an agent turn = its own text keys,
+  sources `mail` / `infra` reserved, `mail attachment` never overwrites (`name (2).ext`, `--force`, reserved names),
+  BrokenPipe exits 141, trash restore through a symlinked workspace, `write --reply --send` checks every Reply-To
+  address. Telegram: the rest of a long reply split by Telegram follows its first part (`_split_rest`). Infra: sp=
+  weaker than p=, invalid parent DMARC, SPF `redirect=` ignored with `all`, loops, the mailbox's SMTP server in the
+  SPF suggestion. Web: nothing typed during a draft save is lost, Send waits for the new draft, answered target tied
+  to its mailbox, one tab per kept message, presentation mode masks the Agents project tooltip.
 - E-mail audit of 06/11 fixed on beta (no version of its own): parsing never raises (`imap._parse`, `_walk` iterative,
   40 levels / 1000 parts, charset fallback alias -> utf-8 -> cp1252 -> latin-1, iso-8859-1 read as cp1252, bidi stripped
   in `_line` and names, message/rfc822 listed as `<Subject>.eml` via `part_at`, linear `strip_blocks`, inline images
