@@ -149,6 +149,8 @@ export type CodeEditorProps = {
 
 const sizeTheme = (z: number) => EditorView.theme({ '&.cm-editor': { fontSize: `${12.5 * z}px` } })
 const isMarkdown = (name: string) => /\.(md|markdown|mdx)$/i.test(name)
+/** The line break of a text (its first one), '' when it has none. CodeMirror keeps \n inside. */
+const eolOf = (text: string) => { const m = /\r\n?|\n/.exec(text); return m ? m[0] : '' }
 
 export default function CodeEditor({ value, filename, readOnly, onChange, onSave, wrap, className, label, autoFocus, zoom = 1, memory }: CodeEditorProps) {
   const host = React.useRef<HTMLDivElement>(null)
@@ -157,6 +159,9 @@ export default function CodeEditor({ value, filename, readOnly, onChange, onSave
   cbs.current = { onChange, onSave }
   const comps = React.useRef({ lang: new Compartment(), ro: new Compartment(), wrap: new Compartment(), size: new Compartment() })
   const restored = React.useRef(false)
+  // A CRLF file stays CRLF: it is neither marked changed on open nor rewritten in LF on save.
+  const eol = React.useRef(eolOf(value) || '\n')
+  const text = (v: { state: EditorState }) => v.state.doc.sliceString(0, undefined, eol.current)
 
   /** First line shown at the top of the scroller. */
   const topLine = (v: EditorView) => v.state.doc.lineAt(v.lineBlockAtHeight(v.scrollDOM.getBoundingClientRect().top - v.documentTop).from).number
@@ -234,7 +239,7 @@ export default function CodeEditor({ value, filename, readOnly, onChange, onSave
         c.size.of(zoom === 1 ? [] : sizeTheme(zoom)),
         EditorView.contentAttributes.of({ 'aria-label': label || filename, spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) cbs.current.onChange?.(u.state.doc.toString())
+          if (u.docChanged) cbs.current.onChange?.(text(u))
         }),
       ],
     })
@@ -296,11 +301,12 @@ export default function CodeEditor({ value, filename, readOnly, onChange, onSave
   React.useEffect(() => {
     const v = view.current
     if (!v) return
-    const cur = v.state.doc.toString()
+    eol.current = eolOf(value) || eol.current
+    const cur = text(v)
     if (cur === value) return
-    const head = Math.min(v.state.selection.main.head, value.length)
+    const head = Math.min(v.state.selection.main.head, value.replace(/\r\n?/g, '\n').length)
     const top = v.scrollDOM.scrollTop
-    v.dispatch({ changes: { from: 0, to: cur.length, insert: value }, selection: { anchor: head } })
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value }, selection: { anchor: head } })
     if (!cur) restore(v)
     else v.scrollDOM.scrollTop = top
     // eslint-disable-next-line react-hooks/exhaustive-deps
