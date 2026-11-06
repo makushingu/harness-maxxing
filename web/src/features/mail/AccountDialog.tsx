@@ -182,7 +182,7 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
 
           <button
             type="button"
-            className="flex items-center gap-1.5 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 text-left text-sm font-medium text-muted-foreground hover:text-foreground pointer-coarse:min-h-10"
             onClick={() => setServers((s) => !s)}
             aria-expanded={servers}
           >
