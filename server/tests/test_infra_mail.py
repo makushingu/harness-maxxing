@@ -225,6 +225,29 @@ def test_problem_rules():
     assert next(p for p in google if p["code"] == "no_spf")["params"]["record"] == "v=spf1 include:_spf.google.com ~all"
 
 
+def test_spf_without_a_real_all_is_flagged():
+    base = {"mx": [{"prio": 10, "host": "mx.example.net"}], "dkim": ["google"], "dmarc": ["v=DMARC1; p=reject"], "spf_lookups": 1}
+    codes = {r: [p["code"] for p in mailinfo.problems("ex.com", {**base, "spf": [r]}, True, False, "x@ex.com")]
+             for r in ("v=spf1 +ALL", "v=spf1 ALL", "v=spf1 ?all", "v=spf1 a mx", "v=spf1 -ALL", "v=spf1 mx ~all",
+                       "v=spf1 redirect=_spf.ex.net")}
+    assert codes == {"v=spf1 +ALL": ["spf_all"], "v=spf1 ALL": ["spf_all"], "v=spf1 ?all": ["spf_neutral"],
+                     "v=spf1 a mx": ["spf_neutral"], "v=spf1 -ALL": [], "v=spf1 mx ~all": [], "v=spf1 redirect=_spf.ex.net": []}
+
+
+def test_a_subdomain_inherits_the_parent_dmarc_and_is_never_told_p_none(monkeypatch):
+    DNS[("_dmarc.example.org", "TXT")] = txt(["v=DMARC1; p=reject; sp=quarantine"])
+    monkeypatch.setattr(mailinfo.dnsinfo, "_query", lambda c, name, rtype: DNS.get((name, rtype)) or [])
+    try:
+        facts = mailinfo.dns_facts("blog.example.org")
+    finally:
+        del DNS[("_dmarc.example.org", "TXT")]
+    assert facts["dmarc"] == [] and facts["dmarc_parent"] == {"domain": "example.org", "records": ["v=DMARC1; p=reject; sp=quarantine"]}
+    probs = mailinfo.problems("blog.example.org", facts, True, False, "x@example.org")
+    [d] = [p for p in probs if "dmarc" in p["code"]]
+    assert d["code"] == "dmarc_inherited" and d["params"]["policy"] == "quarantine" and "Do not add a p=none" in d["fix"]
+    assert "no_dmarc" in [p["code"] for p in mailinfo.problems("blog.example.org", {**facts, "dmarc_parent": None}, True, False, "x")]
+
+
 def test_api_and_cli(client, org, monkeypatch, capsys):  # noqa: F811
     from maxxing import cli
     servers, *_ = setup(monkeypatch)
