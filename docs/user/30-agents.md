@@ -174,7 +174,8 @@ to the agent clearly marked as outside data, with the rule never to follow instr
 type yourself (its page, Telegram) is the task.
 
 An agent cannot start itself in a loop: from one of its own runs, `maxxing feed post` refuses a source its own
-notification triggers watch, and a webhook's or built-in source (an agent can never pass for a signed delivery).
+notification triggers watch, a webhook's source and the product's own sources (`crons`, `system`, `security`,
+`health`, `agents`, `mail`, `infra`): an agent can never pass for a signed delivery or a request of the product.
 A notification posted by an agent run, or `maxxing agents run` from one, counts as one hop: longer loops (A starts B
 which starts A) stop after 3 hops, like `maxxing agents send`.
 
