@@ -38,8 +38,14 @@ export function depth(f: MailFolder): number {
   return Math.max(0, Math.min(4, n))
 }
 
-export const who = (a: MailAddress | undefined) => (a ? a.name || a.email : '')
-export const whoFull = (a: MailAddress) => (a.name ? `${a.name} <${a.email}>` : a.email)
+// Bidi controls (U+202E "right-to-left override"...) turn "moc.lapyap@" into "@paypal.com" on screen and
+// "facture\u202Efdp.exe" into "facture exe.pdf"; other control characters can hide the end of a name. Dropped from
+// whatever a sender wrote before it is shown (the text itself still renders in its own direction inside <bdi>).
+const CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g
+export const clean = (s: string | null | undefined) => (s || '').replace(CONTROLS, '')
+
+export const who = (a: MailAddress | undefined) => (a ? clean(a.name) || clean(a.email) : '')
+export const whoFull = (a: MailAddress) => (a.name ? `${clean(a.name)} <${clean(a.email)}>` : clean(a.email))
 
 /** "14:32" today, "12 oct." this year, "12/10/2025" before. */
 export function shortDate(ts: number | null, lang: string): string {
