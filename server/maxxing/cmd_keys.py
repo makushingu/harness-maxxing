@@ -5,7 +5,8 @@
     printf %s "$V" | maxxing keys set NAME [--note TEXT] [--no-expose]
     maxxing keys delete NAME
     maxxing keys put-file NAME PATH|-     store a secret FILE (keystore, JSON, certificate; 1 byte to 1 MiB)
-    maxxing keys get-file NAME [--output PATH] [--force]     its bytes on stdout, or in a new file of mode 600
+    maxxing keys get-file NAME [--output PATH] [--force]     its bytes on stdout (text only on a terminal), or in
+                                          a new file of mode 600
     maxxing keys delete-file NAME
 
 `set` reads the value from stdin (never from the command line, which `ps` shows). A new key is exposed
@@ -34,14 +35,23 @@ def _configure(p) -> None:
     s.add_argument("--no-expose", action="store_true", help="keep it out of the environment of sessions and jobs")
     d = sub.add_parser("delete", help="remove a key")
     d.add_argument("name")
-    pf = sub.add_parser("put-file", help="create or update a secret file; PATH, or - for stdin")
-    pf.add_argument("name")
-    pf.add_argument("path")
-    pf.add_argument("--note")
-    pf.add_argument("--no-expose", action="store_true", help="keep its path out of the environment of sessions and jobs")
-    gf = sub.add_parser("get-file", help="write a secret file to stdout, or to --output")
+    pf = sub.add_parser(
+        "put-file", help="store a secret file (keystore, service-account JSON, certificate), 1 byte to 1 MiB",
+        description="Store the bytes of PATH (or of stdin with -) in the Keys vault as NAME; an existing NAME is "
+                    "replaced and keeps its note and its exposure. The file is kept in the state folder (mode 600), "
+                    "never in the backup. A new file is exposed: every later Claude turn and shell job gets the "
+                    "environment variable NAME holding the file's PATH (never its content).")
+    pf.add_argument("name", help="capital letters, digits and _, starting with a letter (like a text key)")
+    pf.add_argument("path", help="the file to store, or - to read it from stdin (1 MiB at most)")
+    pf.add_argument("--note", help="a short note shown in Settings -> Keys (200 characters at most)")
+    pf.add_argument("--no-expose", action="store_true",
+                    help="do not export NAME (the file's path) to sessions and jobs; read it with get-file only")
+    gf = sub.add_parser("get-file", help="write a secret file to stdout, or to --output",
+                        description="Write the bytes of the secret file NAME to stdout, or to a new file with "
+                                    "--output. On a terminal only text is printed: redirect the output or use "
+                                    "--output for a binary file.")
     gf.add_argument("name")
-    gf.add_argument("--output", metavar="PATH", help="a new file of mode 600 instead of stdout")
+    gf.add_argument("-o", "--output", metavar="PATH", help="a new file of mode 600 instead of stdout")
     gf.add_argument("--force", action="store_true", help="with --output: overwrite an existing path")
     df = sub.add_parser("delete-file", help="remove a secret file")
     df.add_argument("name")
@@ -53,6 +63,55 @@ def _read_input(path: str, limit: int) -> bytes:
         return sys.stdin.buffer.read(limit + 1)
     with open(path, "rb") as f:
         return f.read(limit + 1)
+
+
+def _printable(data: bytes) -> bool:
+    """UTF-8 text without control characters other than tab and line breaks: safe to print on a terminal."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return not any((c < " " and c not in "\t\n\r") or "\x7f" <= c <= "\x9f" for c in text)
+
+
+def _save(data: bytes, output: str, force: bool) -> int:
+    """`data` into a temp file of output's folder (mode 600), then renamed to output: never a half-written file.
+    Without `force` an existing output (a link included) is kept."""
+    import tempfile
+    folder = os.path.dirname(os.path.abspath(output))
+    try:
+        fd, tmp = tempfile.mkstemp(prefix=".maxxing-keys-", suffix=".tmp", dir=folder)
+    except OSError as e:
+        print(f"{output}: {e.strerror or e}", file=sys.stderr)
+        return 1
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        if not force:
+            try:
+                os.link(tmp, output)               # fails if output exists: no overwrite, no race
+                return 0
+            except FileExistsError:
+                raise
+            except OSError:                        # no hard links on this file system: check, then rename
+                if os.path.lexists(output):
+                    raise FileExistsError(output) from None
+        os.replace(tmp, output)
+    except FileExistsError:
+        print(f"{output}: already exists (--force to overwrite)", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"{output}: {e.strerror or e}", file=sys.stderr)
+        return 1
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    return 0
 
 
 def _files(a) -> int:
@@ -75,27 +134,25 @@ def _files(a) -> int:
     if a.action == "get-file":
         data = vault_files.read(a.name)
         if data is None:
-            print(f"{a.name}: no such file (Settings -> Keys)", file=sys.stderr)
+            hint = " (it is a text key: maxxing keys get)" if vault.get(a.name) is not None else " (Settings -> Keys)"
+            print(f"{a.name}: no such file{hint}", file=sys.stderr)
             return 1
-        if not a.output:
+        if a.output:
+            return _save(data, a.output, a.force)
+        if sys.stdout.isatty() and not _printable(data):
+            print(f"{a.name}: binary content, not printed on a terminal: use -o FILE or redirect the output "
+                  f"(> FILE)", file=sys.stderr)
+            return 2
+        try:
             sys.stdout.buffer.write(data)
             sys.stdout.buffer.flush()
-            return 0
-        flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | (os.O_TRUNC if a.force else os.O_EXCL)
-        try:
-            fd = os.open(a.output, flags, 0o600)
-        except FileExistsError:
-            print(f"{a.output}: already exists (--force to overwrite)", file=sys.stderr)
-            return 1
-        except OSError as e:
-            print(f"{a.output}: {e.strerror or e}", file=sys.stderr)
-            return 1
-        with os.fdopen(fd, "wb") as f:
-            os.fchmod(f.fileno(), 0o600)
-            f.write(data)
+        except BrokenPipeError:                    # `| head`: the reader is gone; no traceback, like cat
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())   # the flush at exit fails quietly too
+            return 141
         return 0
     if not vault_files.delete(a.name):
-        print(f"{a.name}: no such file", file=sys.stderr)
+        hint = " (it is a text key: maxxing keys delete)" if vault.get(a.name) is not None else ""
+        print(f"{a.name}: no such file{hint}", file=sys.stderr)
         return 1
     print(f"{a.name} deleted")
     return 0
@@ -128,7 +185,11 @@ def _handler(a) -> int:
     if a.action == "get":
         v = vault.get(a.name)
         if v is None:
-            print(f"{a.name}: no such key (Settings -> Keys)", file=sys.stderr)
+            if vault_files.exists(a.name):
+                print(f"{a.name}: is a secret file, not a text key: maxxing keys get-file {a.name} -o FILE",
+                      file=sys.stderr)
+            else:
+                print(f"{a.name}: no such key (Settings -> Keys)", file=sys.stderr)
             return 1
         print(v, end="" if v.endswith("\n") else "\n")
         return 0
@@ -149,7 +210,10 @@ def _handler(a) -> int:
         print(f"{a.name} {'updated' if existed else 'created'}")
         return 0
     if not vault.delete(a.name):
-        print(f"{a.name}: no such key", file=sys.stderr)
+        if vault_files.exists(a.name):
+            print(f"{a.name}: is a secret file, not a text key: maxxing keys delete-file {a.name}", file=sys.stderr)
+        else:
+            print(f"{a.name}: no such key", file=sys.stderr)
         return 1
     print(f"{a.name} deleted")
     return 0

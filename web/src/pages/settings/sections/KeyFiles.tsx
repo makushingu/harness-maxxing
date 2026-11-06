@@ -1,8 +1,8 @@
 import * as React from 'react'
-import { FileKey, KeyRound, MoreHorizontal, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { FileKey, KeyRound, MoreHorizontal, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { useDeleteSecretFile, usePutSecretFile, useSecretFiles } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
-import { fmtBytes, fmtRelative } from '@/lib/format'
+import { fmtRelative } from '@/lib/format'
 import type { SecretFile } from '@/lib/types'
 import { useLang, useT } from '@/i18n'
 import {
@@ -32,16 +32,31 @@ import {
 import { Callout } from '@/features/common'
 import { SettingsCard } from './ui'
 
-const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
-/** Same cap as the server (the global body limit). */
+/** Same rule as the server (vault.NAME_RE). */
+const NAME_RE = /^[A-Z][A-Z0-9_]{1,63}$/
+/** Same cap as the server: 1 MiB. */
 const MAX_BYTES = 1024 * 1024
 
-type Errors = { name?: string; file?: string; form?: string }
+/** Binary units, like the 1 MiB limit the texts give (French: Kio / Mio). */
+function fmtSize(n: number | null | undefined, lang: string): string {
+  if (n == null || !isFinite(n)) return '–'
+  const u = lang === 'fr' ? ['o', 'Kio', 'Mio'] : ['B', 'KiB', 'MiB']
+  let i = 0
+  let v = n
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024
+    i++
+  }
+  const num = v >= 10 || i === 0 ? String(Math.round(v)) : v.toFixed(1)
+  return `${lang === 'fr' ? num.replace('.', ',') : num} ${u[i]}`
+}
+
+type Errors = { name?: string; file?: string; note?: string; form?: string }
 
 /** Server error code -> translated text (the server's message is English only). */
 function useFileError() {
   const t = useT()
-  return (err: unknown): { field: 'name' | 'file' | 'form'; text: string } => {
+  return (err: unknown): { field: keyof Errors; text: string } => {
     if (isApiError(err)) {
       switch (err.code) {
         case 'invalid_name':
@@ -57,6 +72,10 @@ function useFileError() {
         case 'too_large':
         case 'invalid_value':
           return { field: 'file', text: t('keyfiles.err.tooLarge') }
+        case 'invalid_note':
+          return { field: 'note', text: t('keyfiles.err.invalidNote') }
+        case 'unsupported_media_type':
+          return { field: 'form', text: t('keyfiles.err.unsupportedType') }
       }
     }
     return { field: 'form', text: errorMessage(err) }
@@ -65,8 +84,11 @@ function useFileError() {
 
 function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChange: (o: boolean) => void; editing: SecretFile | null }) {
   const t = useT()
-  const put = usePutSecretFile()
+  const lang = useLang()
+  // the dialog shows its errors itself (no toast on top)
+  const put = usePutSecretFile({ errorToast: false })
   const describe = useFileError()
+  const fileId = React.useId()
   const { data: existing } = useSecretFiles()
   const [name, setName] = React.useState('')
   const [file, setFile] = React.useState<File | null>(null)
@@ -84,6 +106,8 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
   }, [open, editing])
   const pick = (f: File | null) => {
     setFile(f)
+    // the same file can be picked again after a clear
+    if (!f && input.current) input.current.value = ''
     if (f && f.size > MAX_BYTES) setErrors((e) => ({ ...e, file: t('keyfiles.err.tooLarge') }))
     else setErrors((e) => ({ ...e, file: undefined }))
   }
@@ -91,7 +115,7 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
     e.preventDefault()
     const errs: Errors = {}
     const n = name.trim()
-    if (!NAME_RE.test(n)) errs.name = t('keys.nameInvalid')
+    if (!NAME_RE.test(n)) errs.name = t('keyfiles.err.invalidName')
     else if (!editing && existing?.some((s) => s.name === n)) errs.name = t('keyfiles.err.exists')
     if (!editing && !file) errs.file = t('keyfiles.err.fileRequired')
     else if (file && file.size === 0) errs.file = t('keyfiles.err.empty')
@@ -124,16 +148,37 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
           <FormField label={t('keys.name')} error={errors.name} hint={t('keyfiles.nameHint')}>
             <Input value={name} onChange={(e) => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))} disabled={!!editing} className="font-mono" placeholder="ANDROID_KEYSTORE" autoComplete="off" spellCheck={false} autoFocus={!editing} />
           </FormField>
-          <FormField label={t('keyfiles.file')} error={errors.file} hint={editing ? t('keyfiles.fileKeep', { filename: editing.filename || editing.name }) : t('keyfiles.fileHint')}>
+          {/* the label names the visible button (the real file input is hidden and out of the tab order) */}
+          <div className="grid gap-2">
+            <Label htmlFor={fileId}>{t('keyfiles.file')}</Label>
             <div className="flex min-w-0 items-center gap-2">
-              <input ref={input} type="file" className="hidden" onChange={(e) => pick(e.target.files?.[0] ?? null)} aria-label={t('keyfiles.file')} />
-              <Button variant="outline" onClick={() => input.current?.click()}>
+              <input ref={input} type="file" className="hidden" tabIndex={-1} aria-hidden onChange={(e) => pick(e.target.files?.[0] ?? null)} />
+              <Button
+                id={fileId}
+                variant="outline"
+                className="shrink-0"
+                onClick={() => input.current?.click()}
+                aria-describedby={`${fileId}-msg`}
+                aria-invalid={errors.file ? true : undefined}
+              >
                 <Upload /> {t(file || editing ? 'keyfiles.replace' : 'keyfiles.choose')}
               </Button>
-              <span className="min-w-0 truncate text-[13px] text-muted-foreground">{file ? `${file.name} · ${fmtBytes(file.size)}` : t('keyfiles.noneChosen')}</span>
+              <span className="min-w-0 truncate text-[13px] text-muted-foreground">
+                {file ? `${file.name} · ${fmtSize(file.size, lang)}` : t('keyfiles.noneChosen')}
+              </span>
+              {file && (
+                <Tooltip content={t(editing ? 'keyfiles.keepCurrent' : 'keyfiles.clear')}>
+                  <Button variant="ghost" size="icon-sm" className="shrink-0" onClick={() => pick(null)} aria-label={t(editing ? 'keyfiles.keepCurrent' : 'keyfiles.clear')}>
+                    <X />
+                  </Button>
+                </Tooltip>
+              )}
             </div>
-          </FormField>
-          <FormField label={t('keys.note')}>
+            <p id={`${fileId}-msg`} className={errors.file ? 'text-[13px] leading-snug text-destructive' : 'text-[13px] leading-snug text-muted-foreground'} role={errors.file ? 'alert' : undefined}>
+              {errors.file || (editing ? t('keyfiles.fileKeep', { filename: editing.filename || editing.name }) : t('keyfiles.fileHint'))}
+            </p>
+          </div>
+          <FormField label={t('keys.note')} error={errors.note}>
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('keys.notePlaceholder')} autoComplete="off" maxLength={200} />
           </FormField>
           <Label className="items-start justify-between gap-4 rounded-lg border p-3 leading-snug font-normal">
@@ -176,11 +221,14 @@ function FileRow({ f, onEdit }: { f: SecretFile; onEdit: () => void }) {
         <FileKey className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="grid min-w-0 flex-1 gap-0.5 text-xs">
           <span className="truncate font-mono" title={f.filename}>{f.filename || '–'}</span>
-          <span className="text-muted-foreground">{fmtBytes(f.size)}</span>
+          <span className="text-muted-foreground">{fmtSize(f.size, lang)}</span>
         </span>
-        <code className="shrink-0 rounded-md bg-muted/60 px-2 py-1 font-mono text-xs" title={`SHA-256 ${f.sha256}`}>
-          {f.sha256.slice(0, 12)}
-        </code>
+        {f.sha256 && (
+          // the server gives the start of the SHA-256 only (12 hex characters): shown as is
+          <code className="shrink-0 rounded-md bg-muted/60 px-2 py-1 font-mono text-xs" title="SHA-256">
+            {f.sha256}
+          </code>
+        )}
       </div>
       <Tooltip content={t('keyfiles.exposeTip', { name: f.name })}>
         <span className="flex items-center gap-2 max-md:hidden">
