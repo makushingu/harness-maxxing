@@ -198,6 +198,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
       agent = await create.mutateAsync({
         topic_path: `projects/${f.project}/topics/${f.topic}`,
         name: slug,
+        ...(tpl && { template: tpl.id }),
         display_name: f.display.trim(),
         description: f.role.trim(),
         avatar: f.avatar,

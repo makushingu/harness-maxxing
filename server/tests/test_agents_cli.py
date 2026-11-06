@@ -148,5 +148,14 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
     r = json.loads(capsys.readouterr().out)
     assert r["webhook"] and agents.load(r["agent"])["approvals"] is True and agents.load(r["agent"])["keys"] == ["SHOPIFY_TOKEN"]
     assert cli.main(["agents", "create", "acme/blog/x", "--template", "nope"]) == 2
+    # the UI sends the template id: the server applies what the CLI gives (domains...), the form's fields on top
+    body = {"topic_path": "projects/acme/topics/blog", "name": "ui-sales", "display_name": "Mine", "template": "sales",
+            "description": "My role", "keys": []}
+    r = client.post("/api/agents", json=body)
+    assert r.status_code == 200, r.text
+    a = agents.load(r.json()["path"])
+    assert a["domains"] == ["api.stripe.com", "*.myshopify.com"] and "Bash(curl:*)" in a["allowed_tools"]
+    assert a["keys"] == [] and agents.get(r.json()["path"])["display_name"] == "Mine"
+    assert client.post("/api/agents", json={**body, "name": "ui-x", "template": "nope"}).status_code == 400
     assert cli.main(["agents", "create", "acme/blog/x"]) == 2
     assert cli.main(["agents", "templates"]) == 0 and "pr-review" in capsys.readouterr().out

@@ -65,6 +65,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `agent_guard.private_paths` also hides `projects/<p>/groups/<g>` of the groups the agent is not a member of (read
   from group.json) and every `groups/.kept-*` folder.
 - Template `sales` no longer suggests `STRIPE_SECRET_KEY` (a full key; `STRIPE_RESTRICTED_KEY` stays).
+- `POST /api/agents` takes `template` (id): the server starts from `agent_templates.fields()` like the CLI's
+  `--template` (domains, writable...), the body's fields on top; the creation sheet sends it.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 

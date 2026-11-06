@@ -77,6 +77,7 @@ class ImportIn(BaseModel):
 class AgentIn(BaseModel):
     topic_path: Optional[str] = None          # create only
     name: Optional[str] = None                # create only: the folder slug
+    template: Optional[str] = Field(default=None, max_length=64)   # create only: a ready-made agent, under the fields
     display_name: Optional[str] = None
     description: Optional[str] = None         # the role (CLAUDE.md)
     avatar: Optional[Avatar] = None
@@ -100,7 +101,7 @@ class AgentIn(BaseModel):
 
 
 def _fields(body: AgentIn) -> dict:
-    f = body.model_dump(exclude_none=True, exclude={"topic_path", "name", "display_name"})
+    f = body.model_dump(exclude_none=True, exclude={"topic_path", "name", "display_name", "template"})
     if f.get("mail"):
         from .. import mail
         have = {a["id"] for a in mail.list_accounts()}
@@ -196,8 +197,15 @@ def create_agent(body: AgentIn):
     _on()
     if not body.topic_path or not body.name:
         raise HTTPException(400, detail={"error": "missing", "message": "topic_path and name are required"})
+    fields = _fields(body)
+    if body.template:                           # what the CLI's --template gives (domains, writable...), the form on top
+        from .. import agent_templates, config, vault
+        tpl = agent_templates.get(body.template, config.load_config().get("language") or "en")
+        if tpl is None:
+            raise HTTPException(400, detail={"error": "bad_template", "message": f"No template {body.template!r}"})
+        fields = {**agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]), **fields}
     try:
-        return agents.create(body.topic_path, body.name, _fields(body))
+        return agents.create(body.topic_path, body.name, fields)
     except agents.AgentError as e:
         raise _bad(e) from None
 
