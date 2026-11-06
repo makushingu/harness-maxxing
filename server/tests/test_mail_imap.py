@@ -249,6 +249,12 @@ def test_deeply_nested_comments_are_stripped_in_one_pass(monkeypatch):
     assert access._cfws_free("a (b") == "a  b" and access._cfws_free("a) b") == "a  b"
 
 
+def test_the_imap_search_never_misses_a_sender_the_patterns_allow():
+    assert access.imap_from(["*@*.stripe.com"]) == ['FROM "stripe.com"']     # x@mail.stripe.com contains it
+    assert access.imap_from(["*@str?pe.com"]) == ['FROM "pe.com"']
+    assert access.imap_from(["*@stripe.*", "a@b.com"]) == []                  # no fixed part: no narrowing
+    assert access.imap_from(["*@stripe.com", "a@b.com"]) == ['(OR FROM "a@b.com" (FROM "@stripe.com"))']
+
 
 def _samples(auth: str, n: int = 20, days: float = 10, domains: int = 5) -> list:
     now = time.time()

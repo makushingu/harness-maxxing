@@ -118,18 +118,19 @@ def recipients_ok(grant: dict, rcpts: list[str]) -> list[str]:
 def imap_from(patterns: list[str]) -> list[str]:
     """IMAP SEARCH criteria narrowing a folder to the senders (server-side substring; checked again after)."""
     terms = []
+    wild = re.compile(r"[*?[]")
     for p in patterns:
         local, _, domain = p.partition("@")
-        if "*" in domain or "?" in domain:
-            frag = domain.split("*")[-1].split("?")[-1].lstrip(".")
-            terms.append("@" + frag if frag else "")
-        elif "*" in local or "?" in local:
-            terms.append("@" + domain)
+        if wild.search(domain):
+            # only the fixed tail after the last wildcard, without "@": '*.stripe.com' must find x@mail.stripe.com
+            terms.append(re.split(r"[*?\]]", domain)[-1].lstrip("."))
+        elif wild.search(local):
+            terms.append("@" + domain if domain else "")
         else:
             terms.append(p)
-    terms = [t for t in dict.fromkeys(terms) if t and t != "@"]
-    if not terms or len(terms) > 20:
+    if not all(terms) or len(set(terms)) > 20:      # a pattern with no fixed part: no narrowing at all
         return []
+    terms = list(dict.fromkeys(terms))
     q = lambda s: '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'  # noqa: E731
     crit = f"FROM {q(terms[0])}"
     for t in terms[1:]:
