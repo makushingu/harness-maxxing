@@ -417,7 +417,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
                   <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{a.filename}</span>
                   <span className="shrink-0 text-muted-foreground">{fmtBytes(a.size)}</span>
-                  <button type="button" aria-label={t('common.remove')} disabled={busy} onClick={() => touch(setKept)(kept.filter((x) => x.index !== a.index))} className="text-muted-foreground hover:text-foreground">
+                  <button type="button" aria-label={t('common.remove')} disabled={busy} onClick={() => touch(setKept)(kept.filter((x) => x.index !== a.index))} className="relative text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-['']">
                     <X className="size-3.5" />
                   </button>
                 </span>
@@ -427,7 +427,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
                   <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{f.name}</span>
                   <span className="shrink-0 text-muted-foreground">{fmtBytes(f.size)}</span>
-                  <button type="button" aria-label={t('common.remove')} disabled={busy} onClick={() => touch(setFiles)(files.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-foreground">
+                  <button type="button" aria-label={t('common.remove')} disabled={busy} onClick={() => touch(setFiles)(files.filter((_, j) => j !== i))} className="relative text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-['']">
                     <X className="size-3.5" />
                   </button>
                 </span>
