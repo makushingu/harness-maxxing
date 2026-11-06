@@ -1373,6 +1373,11 @@ def month_dir(top: Path) -> Path:
     for x in (top, d):
         if x.is_symlink():
             raise SessionError(400, "bad_path", f"{x.name} is a symbolic link")
-        x.mkdir(exist_ok=True)
+        try:
+            x.mkdir(exist_ok=True)
+        except OSError as e:
+            raise SessionError(400, "bad_path", f"Cannot create {x.name}: {e.strerror or e}") from None
+        if not x.is_dir():
+            raise SessionError(400, "bad_path", f"{x.name} is not a folder")
     return d
 

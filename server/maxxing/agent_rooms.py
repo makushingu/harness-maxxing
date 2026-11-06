@@ -617,8 +617,8 @@ def _files_note(m: dict) -> str:
 
 
 def _origin_files(path: str, me: str, st: dict) -> list[str]:
-    """The files of the owner's message this turn answers, sent along (images in front of the member) the first time
-    the member sees that message; later turns only get their paths in the text."""
+    """The files of the owner's message this turn answers, sent as the turn's attachments the first time the member
+    sees that message; later turns only get their paths in the text."""
     since = float((st.get("since") or {}).get(me) or 0)
     m = next((x for x in reversed(room(path, 300)) if x.get("id") == st.get("origin")), None)
     if not m or float(m.get("at") or 0) <= since:
