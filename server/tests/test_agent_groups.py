@@ -219,3 +219,18 @@ def test_cli_update(client, topic, mx, capsys):
     g = agent_rooms.get("projects/acme/groups/team")
     assert g["goal"] == "New goal" and g["lead"] == R and not g["trust_members"]
     assert [(m["handle"], m["role"]) for m in g["members"]] == [("reviewer", "checks"), ("writer", "")]
+
+
+def test_a_group_folder_is_readable_by_its_members_only(client, topic):
+    from maxxing import agent_guard, config
+    _setup(client)
+    r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "outsider",
+                                         "display_name": "Outsider"})
+    assert r.status_code == 200, r.text
+    groups = config.workspace() / "projects/acme/groups"
+    (groups / ".kept-old-1700000000/files").mkdir(parents=True)
+    team, kept = str(groups / "team"), str(groups / ".kept-old-1700000000")
+    for member in (W, R):
+        assert team not in agent_guard.private_paths(member) and kept in agent_guard.private_paths(member)
+    hidden = agent_guard.private_paths("projects/acme/topics/blog/agents/outsider")
+    assert team in hidden and kept in hidden

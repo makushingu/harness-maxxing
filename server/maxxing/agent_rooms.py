@@ -7,7 +7,7 @@ to each other with @mentions.
         files/        the shared folder (option `shared_files`): every member writes there during the group's turns
 
 *Group path* = "projects/<p>/groups/<g>". The members are agents of the same project: a sandboxed agent reads only its
-own topic, and the project's `groups/` folder is the one place all of them see.
+own topic, and its group's folder (`groups/<g>/`) is the one place the members see (agent_guard.private_paths).
 
 Who speaks (owner's message -> queue of members, one turn at a time per group):
     - the members named with @slug, in that order; @all / @everyone: every member, in list order;

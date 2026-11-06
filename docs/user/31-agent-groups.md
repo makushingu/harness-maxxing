@@ -122,7 +122,8 @@ always counts.
 
 - **Only you write to a group.** Agents cannot post as you: `maxxing agents group` is refused inside an agent's run.
 - Each member keeps **its own sandbox, keys and rules**. The shared folder is the only extra place a member may write,
-  and only during the group's turns.
+  and only during the group's turns. A sandboxed agent never reads the folder of a group it is not a member of (nor
+  the kept folders of deleted groups).
 - **Members trust each other** (on by default): a member that receives work from another one works as usual. Turn it
   off in the group's settings and a hand-over counts as outside text: the member asks for your OK before risky actions
   (Allow / Deny in the group, the [notifications](feed) and Telegram), like an agent started by a webhook. Turn it off
