@@ -174,7 +174,8 @@ to the agent clearly marked as outside data, with the rule never to follow instr
 type yourself (its page, Telegram) is the task.
 
 An agent cannot start itself in a loop: from one of its own runs, `maxxing feed post` refuses a source its own
-notification triggers watch, and a webhook's or built-in source (an agent can never pass for a signed delivery).
+notification triggers watch, a webhook's source and the product's own sources (`crons`, `system`, `security`,
+`health`, `agents`, `mail`, `infra`): an agent can never pass for a signed delivery or a request of the product.
 A notification posted by an agent run, or `maxxing agents run` from one, counts as one hop: longer loops (A starts B
 which starts A) stop after 3 hops, like `maxxing agents send`.
 
@@ -248,8 +249,8 @@ until you switch it on):
   and the transcripts of your sessions, other command-line logins (`~/.config`, `~/.local/share`, cloud tools), nor
   the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
   topic. Claude's own Read / Edit tools are refused there too;
-- they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). The same domains
-  are allowed for its web page reads;
+- they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). A wildcard names a
+  site: `*.com`, `*.co.uk` or `*.github.io` are refused. The same domains are allowed for its web page reads;
 - its commands run without asking, inside these walls; with **ask before risky actions** on (or in a run started
   from outside) they ask like any other action, `maxxing` included, unless an allowed tool covers them;
 - it never runs in **bypass** mode (the sandbox would not hold the domain list): **bypass** becomes **accept
