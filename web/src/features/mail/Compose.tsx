@@ -302,7 +302,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
             label={t('mail.to')}
             extra={
               !showCc && (
-                <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => touch(setShowCc)(true)}>
+                <button type="button" className="relative text-xs text-muted-foreground hover:text-foreground before:absolute before:-inset-3 before:content-['']" onClick={() => touch(setShowCc)(true)}>
                   {t('mail.compose.ccBcc')}
                 </button>
               )
