@@ -131,6 +131,61 @@ def test_an_attachment_never_lands_through_a_link(client, acc, srv, monkeypatch,
     assert open(f"{d}/a.bin", "rb").read() == b"PAYLOAD"
 
 
+def _with_file(srv, name: str, data: bytes) -> int:
+    m = email.message.EmailMessage()
+    m["From"], m["To"], m["Subject"] = "bob@x.org", "me@example.com", "File"
+    m.set_content("see file")
+    m.add_attachment(data, maintype="application", subtype="pdf", filename=name)
+    return srv.add("INBOX", m.as_bytes())
+
+
+def test_the_owner_saving_an_attachment_never_replaces_a_file(client, acc, srv, monkeypatch, capsys, tmp_path):
+    u1, u2 = _with_file(srv, "facture.pdf", b"one"), _with_file(srv, "facture.pdf", b"two")
+    out = tmp_path / "out"
+    for uid in (u1, u2):
+        code, o, err = _cli(capsys, "attachment", str(uid), "2", f"{out}/")
+        assert code == 0, err
+    assert (out / "facture.pdf").read_bytes() == b"one" and (out / "facture (2).pdf").read_bytes() == b"two"
+    assert f"{out}/facture (2).pdf (3 bytes)" in o                       # the real path written
+    code, _, err = _cli(capsys, "attachment", str(u2), "2", f"{out}/facture.pdf")     # a file that exists
+    assert code == 1 and "--force" in err and (out / "facture.pdf").read_bytes() == b"one"
+    assert _cli(capsys, "attachment", str(u2), "2", f"{out}/facture.pdf", "--force")[0] == 0
+    assert (out / "facture.pdf").read_bytes() == b"two"
+    assert _cli(capsys, "attachment", str(u1), "2", f"{out}/new.pdf")[0] == 0         # a new file: as before
+    assert (out / "new.pdf").read_bytes() == b"one"
+    # the sender's name: no folder, no hidden file, never a file a session reads by itself
+    for bad, safe in (("../../CLAUDE.md", "attachment-CLAUDE.md"), (".env", "env"), ("a\x01b.pdf", "a b.pdf")):
+        code, _, err = _cli(capsys, "attachment", str(_with_file(srv, bad, b"x")), "2", f"{out}/")
+        assert code == 0 and (out / safe).read_bytes() == b"x", (bad, err)
+    assert not (tmp_path / "CLAUDE.md").exists() and not (out / ".env").exists()
+    # a folder that cannot be made or a file that is missing: a clean error, no traceback
+    for dest in ("/proc/x/", f"{tmp_path}/missing/x.pdf"):
+        code, _, err = _cli(capsys, "attachment", str(u1), "2", dest)
+        assert code == 1 and err.startswith("mail: ") and "Traceback" not in err, (dest, err)
+    code, _, err = _cli(capsys, "write", "--to", "ann@y.org", "--attach", f"{tmp_path}/nope.pdf", stdin="hi",
+                        monkeypatch=monkeypatch)
+    assert code == 1 and err.startswith("mail: ") and "nope.pdf" in err, err
+
+
+def test_an_agent_saving_an_attachment_never_replaces_a_file(client, acc, srv, monkeypatch, capsys):
+    u1, u2 = _with_file(srv, "facture.pdf", b"one"), _with_file(srv, "facture.pdf", b"two")
+    _grant(client, rights=["read"])
+    _as_agent(monkeypatch)
+    d = _agent_dir()
+    for uid in (u1, u2):
+        code, _, err = _cli(capsys, "attachment", str(uid), "2", f"{d}/")
+        assert code == 0, err
+    assert open(f"{d}/facture.pdf", "rb").read() == b"one" and open(f"{d}/facture (2).pdf", "rb").read() == b"two"
+    code, _, err = _cli(capsys, "attachment", str(u2), "2", f"{d}/facture.pdf")
+    assert code == 1 and "--force" in err and open(f"{d}/facture.pdf", "rb").read() == b"one"
+    assert _cli(capsys, "attachment", str(u2), "2", f"{d}/facture.pdf", "--force")[0] == 0
+    assert open(f"{d}/facture.pdf", "rb").read() == b"two"
+    code, _, err = _cli(capsys, "attachment", str(_with_file(srv, "CLAUDE.md", b"obey")), "2", f"{d}/")
+    assert code == 0 and open(f"{d}/attachment-CLAUDE.md", "rb").read() == b"obey", err
+    code, _, err = _cli(capsys, "attachment", str(u1), "2", f"{d}/missing/x.pdf")
+    assert code == 1 and err.startswith("mail: "), err
+
+
 def cmd_guard():
     from maxxing import cmd_mail
     return cmd_mail.Guard(A)
