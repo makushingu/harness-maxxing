@@ -295,3 +295,26 @@ def test_group_events_leave_the_workspace_tree_alone(client, topic, mx, monkeypa
     assert sent and not any("workspace" in t for t in sent)
 
 
+def test_project_delete_takes_the_rooms_to_the_trash(client, topic, mx):
+    _setup(client)
+    path = "projects/acme/groups/team"
+    client.post(f"{G}/messages", json={"text": "@writer old secret\nREPLY_AS writer: old answer"})
+    _idle(client, 1)
+    assert client.delete("/api/workspace/projects/acme").status_code == 200
+    assert not agent_rooms._state_file(path, "jsonl").exists() and not agent_rooms._state_file(path, "json").exists()
+    # the same project and group made again start clean
+    assert client.post("/api/workspace/projects", json={"name": "acme"}).status_code == 200
+    assert client.post("/api/workspace/projects/acme/topics", json={"name": "blog"}).status_code == 200
+    _setup(client)
+    assert [m["text"] for m in _msgs(client)] == ["Group created"]
+    # the old project comes back next to it, with its conversation, its members following its new name
+    it = next(i for i in client.get("/api/trash").json()["items"] if i["kind"] == "project")
+    r = client.post(f"/api/trash/{it['id']}/restore").json()
+    new = r["restored_to"]
+    assert new.startswith("projects/acme-")
+    pn = new.split("/")[1]
+    old = client.get(f"/api/agent-groups/{pn}/team").json()
+    assert [m["path"] for m in old["members"]] == [W.replace("projects/acme/", new + "/"), R.replace("projects/acme/", new + "/")]
+    texts = [(m["author"], m["text"]) for m in client.get(f"/api/agent-groups/{pn}/team/messages").json()["messages"]]
+    assert (W.replace("projects/acme/", new + "/"), "old answer") in texts
+    assert not (Path(client.get("/api/workspace/tree").json()["root"]) / new / "groups/team/.room.jsonl").exists()

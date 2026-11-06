@@ -80,6 +80,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `ROOM_KEEP` lines), not to 1,000 lines that could stay over the threshold. `GET .../messages?after=<at>`: the
   group page asks only for the new messages. Group events no longer send `workspace` on the bus (only create,
   delete, rename: `_invalidate(tree=True)`).
+- Groups: `update` drops former members whose agent is gone (`dropped` in the answer) instead of `unknown_member`;
+  `say` picks the lead / last speaker / first member among live agents only and posts the same owner text once
+  within `SAME_SAY_S`; `remap` rewrites the message authors; a project delete moves `rooms/<p>__<g>.json(l)` into
+  the trashed group folder as `.room.json(l)` (`agent_rooms.deleted_with`), `trash.restore` puts them back
+  (`agent_rooms.restored`, paths swapped and fresh sessions under a `-restored` name); `create` drops stale ones.
+
 ## 2.0.0-alpha.120 - 2026-11-05
 
 - E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch): `maxxing/mail/`
