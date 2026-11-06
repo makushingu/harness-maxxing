@@ -120,8 +120,7 @@ downloaded. A folder nobody looked at for more than 6 hours (its agent's trigger
 server was stopped) starts again from its newest mail: what came in meanwhile starts no agent. A mail Harness cannot
 read (an unknown charset, a broken structure) never stops the check: the agent gets its headers without its text,
 the other mails still start their agents, and a restart during a check never starts an agent twice with the same
-mails. Mail kept
-for a busy agent only reaches it if its trigger and rights still allow it.
+mails. Mail kept for a busy agent only reaches it if its trigger and rights still allow it.
 
 Ready-made agents (New agent): **Mail sorter** (files each new mail, sums up the day every evening), **Mail replies**
 (a draft reply to each customer mail, you send it), **Invoices** (saves the invoices received by mail and files the

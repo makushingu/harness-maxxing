@@ -7,6 +7,22 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.122 - 2026-11-06
 
+- E-mail audit of 06/11 fixed on beta (no version of its own): parsing never raises (`imap._parse`, `_walk` iterative,
+  40 levels / 1000 parts, charset fallback alias -> utf-8 -> cp1252 -> latin-1, iso-8859-1 read as cp1252, bidi stripped
+  in `_line` and names, message/rfc822 listed as `<Subject>.eml` via `part_at`, linear `strip_blocks`, inline images
+  capped 3 MB / 8 MB / 30); poll writes turns to `pending.json` and the position before starting agents, errors mail by
+  mail, `retry_pending` one by one, `mail_busy` folders wait for the next check; mail work on its own pool
+  (`api/mail.py` `MAIL_THREADS` 8), per-account lock 30 s / 2 waiters -> 503 `mail_busy` + Retry-After, IMAP timeouts
+  15 s connect / 25 s I/O, `DOWN_S` 60 s fast-fail, UID list cached on UIDVALIDITY/UIDNEXT/EXISTS, one `_expunge`
+  (UID EXPUNGE or flags saved and restored), special-use roles first, Gmail archive to \All, inline PDF without CSP
+  sandbox, accounts.json under `mail-accounts` lock, UTF-8 AUTHENTICATE PLAIN, SMTP AUTH needs 235; send: `sent_unknown`
+  (409) after DATA, Bcc kept in draft + Sent copy, decoded names in reply/forward, one download per forward (`part_at`,
+  rfc822 embedded, never base64), names/types sanitised, reply-all dedupe, a Reply-To other than From never becomes a
+  contact, CLI `read` shows Reply-To + caps at 20k (`--max`, `--full`), Infra `dmarc_inherited(_none)`, `spf_neutral`;
+  web: drafts keep attachments, one send at a time, autosave (localStorage + IndexedDB for files), `<bdi>`,
+  presentation mode, narrow toolbar "…" menu, keyboard rows, accounts error screen. Tests: test_mail_parse.py,
+  test_mail_connection.py, test_mail_send.py (+ agents/infra).
+
 - Secret files in the Keys vault (issue #29). New module
   `vault_files` (INTERNALS.md): bytes in `STATE/secret-files/<NAME>` (700 / 600, atomic via same-dir temp +
   `os.replace`), metadata in secrets.json `vault_files` `{filename, size, sha256, note, expose, updated}`. 1 byte to

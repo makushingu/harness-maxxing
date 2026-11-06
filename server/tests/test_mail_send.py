@@ -239,3 +239,23 @@ def test_a_cut_right_after_the_data_command_is_not_sent(acc, smtp, monkeypatch):
     with pytest.raises(MailError) as e:
         send.send(acc, {"to": ["a@x.org"], "subject": "s", "text": "t"})
     assert e.value.code == "connection" and send.sent_today(acc["id"]) == 0
+
+
+def test_forwarding_a_mail_with_a_mail_attached_keeps_both(acc, srv, smtp):
+    inner = _p(_raw("x@y.org", "Inner", "inside"))
+    outer = email.message.EmailMessage()
+    outer["From"], outer["To"], outer["Subject"] = "a@x.org", "me@example.com", "Outer"
+    outer.set_content("see attached")
+    outer.add_attachment(inner, filename="Inner.eml")
+    outer.add_attachment(b"%PDF-1.4 x", maintype="application", subtype="pdf", filename="f.pdf")
+    uid = srv.add("INBOX", outer.as_bytes())
+    fw = send.compose(acc, "forward", "INBOX", uid)
+    idx = [a["index"] for a in fw["attachments"]]
+    assert len(idx) == 2
+    send.send(acc, {**fw, "to": ["b@x.org"], "forward": {"folder": "INBOX", "uid": uid, "indexes": idx}})
+    got = _p(smtp.messages[-1]["data"])
+    parts = {p.get_filename(): p for p in got.iter_attachments()}
+    assert set(parts) == {"Inner.eml", "f.pdf"}
+    assert parts["Inner.eml"].get_content_type() == "message/rfc822"
+    assert (parts["Inner.eml"]["Content-Transfer-Encoding"] or "7bit").lower() != "base64"
+    assert parts["f.pdf"].get_content() == b"%PDF-1.4 x"
