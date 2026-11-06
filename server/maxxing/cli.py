@@ -108,7 +108,29 @@ def main(argv: list[str] | None = None) -> int:
             configure(s)
         s.set_defaults(fn=handler)
     a = p.parse_args(argv)
-    return a.fn(a) or 0
+    try:
+        return a.fn(a) or 0
+    except BrokenPipeError:
+        if not _stdout_gone():
+            raise                                   # a pipe of the command itself (a socket, a child): a real error
+        return 141                                  # `| head`: the reader is gone; no traceback, like cat
+
+
+def _stdout_gone() -> bool:
+    """After a BrokenPipeError: True when it is stdout's reader that left (the write end of a pipe without reader
+    polls POLLERR); stdout then points at /dev/null so the flush at exit stays quiet."""
+    import os
+    import select
+    try:
+        fd = sys.stdout.fileno()
+        po = select.poll()
+        po.register(fd, 0)
+        if not any(ev & select.POLLERR for _, ev in po.poll(0)):
+            return False
+        os.dup2(os.open(os.devnull, os.O_WRONLY), fd)
+    except (OSError, ValueError):                   # closed or replaced stdout (no fd): not a reader that left
+        return False
+    return True
 
 
 def _load_plugins() -> None:

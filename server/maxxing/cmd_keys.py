@@ -159,9 +159,16 @@ def _files(a) -> int:
 
 
 def _handler(a) -> int:
-    from . import vault, vault_files
+    from . import agent_guard, vault, vault_files
+    agent = agent_guard.agent_turn()["path"]        # from the turn's own session, not its (changeable) environment
     if a.action == "list":
-        rows = [{**r, "kind": "text"} for r in vault.list_secrets()] + [{**r, "kind": "file"} for r in vault_files.list_files()]
+        if agent:                                   # an agent sees its own text keys only, never a file (like get)
+            from . import agents
+            mine = set(agents.load(agent)["keys"] if agents.exists(agent) else [])
+            rows = [{**r, "kind": "text"} for r in vault.list_secrets() if r["name"] in mine]
+        else:
+            rows = [{**r, "kind": "text"} for r in vault.list_secrets()] + \
+                [{**r, "kind": "file"} for r in vault_files.list_files()]
         rows.sort(key=lambda r: r["name"])
         if a.json:
             fields = {"text": ("name", "note", "expose", "updated"),
@@ -170,8 +177,6 @@ def _handler(a) -> int:
         for r in [] if a.json else rows:
             print(f"{r['name']:<40} {'env' if r['expose'] else '   '} {'file' if r['kind'] == 'file' else '    '}  {r['note']}")
         return 0
-    from . import agent_guard
-    agent = agent_guard.agent_turn()["path"]        # from the turn's own session, not its (changeable) environment
     if agent and a.action in ("get", "set", "delete", "put-file", "get-file", "delete-file"):
         # a turn of an agent: only its own keys, read-only; never a file (those never reach an agent). A speed bump against injected orders (the real limit is
         # its permission mode and approvals), so a message saying "run maxxing keys get" gets nothing.

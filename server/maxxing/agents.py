@@ -88,6 +88,12 @@ MAX_DOMAINS = 50
 MAX_RULES = 20
 RULE_TOOLS = ("Bash", "Write", "Edit", "WebFetch", "*")   # `rules`: the tool a rule watches (* = any tool)
 DOMAIN_RE = re.compile(r"^(\*\.)?[a-z0-9]([a-z0-9-]{0,62}\.)*[a-z0-9-]{1,63}\Z")
+# a wildcard covers a site, never a whole extension: "*.com" or "*.co.uk" (or a host where anyone gets a name) would
+# open most of the internet to the agent's sandbox
+WILDCARD_TOO_WIDE = {"co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp",
+                     "co.in", "co.za", "co.kr", "com.br", "com.cn", "com.mx", "com.tr", "com.ar", "com.sg", "com.hk",
+                     "github.io", "gitlab.io", "pages.dev", "workers.dev", "vercel.app", "netlify.app",
+                     "herokuapp.com", "web.app", "firebaseapp.com", "ngrok.io", "ngrok-free.app"}
 
 
 class AgentError(Exception):
@@ -331,6 +337,10 @@ def _clean_domains(v: Any, strict: bool = False) -> list[str]:
         if not DOMAIN_RE.match(d) or len(d) > 253:
             if strict:
                 raise AgentError(400, "bad_domain", f"Not a host name: {d!r}")
+            continue
+        if d.startswith("*.") and ("." not in d[2:] or d[2:] in WILDCARD_TOO_WIDE):
+            if strict:
+                raise AgentError(400, "bad_domain", f"Too wide a wildcard, name a site (*.example.com): {d!r}")
             continue
         if d not in out:
             out.append(d)
