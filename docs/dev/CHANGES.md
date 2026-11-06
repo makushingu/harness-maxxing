@@ -37,6 +37,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   says how many were not shown. A busy agent's batch no longer grows and is rewritten without bound.
 - `agents.thread` parses an agent's thread file once per (mtime_ns, size) (`_threads`, up to 200 files): GET
   /api/agents no longer re-reads every thread on each call. The cached messages are shared: never change them.
+- Agents: an `agent.json` that exists but does not parse (or is not an object) loads as `enabled: False, sandbox: True,
+  broken: True` (`_parse_file`), shown as `broken` by the API (banner on the agent page), alerted by `check_alerts`
+  (ref `agent:<path>#broken`); `update()` and `add_webhook()` answer 409 `broken` instead of saving defaults over it.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 

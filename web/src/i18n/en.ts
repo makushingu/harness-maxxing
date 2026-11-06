@@ -3266,6 +3266,8 @@ export const en = {
   'agents.sandbox.missingTitle': 'The sandbox cannot run on this server: its runs stop.',
   'agents.sandbox.missingDesc': 'Run `maxxing agents sandbox-setup` as root (or ask in system/harness), or turn the sandbox off.',
   'agents.sandbox.missingList': 'Missing: {list}',
+  'agents.broken.title': 'Its agent.json cannot be read: the agent is switched off and sandboxed.',
+  'agents.broken.desc': 'Fix the JSON of `{file}` (a hand edit?). Its settings cannot be saved until then.',
   'agents.list.remove': 'Remove {name}',
   'agents.rules.title': 'Rules',
   'agents.rules.desc': 'Refuse an action when it contains a text; the reason is shown to Claude. 20 at most.',
