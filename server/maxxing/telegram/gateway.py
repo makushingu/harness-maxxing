@@ -1043,6 +1043,11 @@ class Gateway:
             await self._edit_markup(msg, None)
             return _w("cb_done")
         try:
+            now = await asyncio.to_thread(feed.get, int(aid))
+            act = next((a for a in (now or {}).get("actions") or [] if isinstance(a, dict) and a.get("id") == action), {})
+            if now and _alert_cut(now) and act.get("style") != "danger":
+                await asyncio.to_thread(_alert_update_sync, now)          # a message sent before the cut rule
+                return _w("alert_cut")[:190]
             ev = await asyncio.to_thread(feed.act, int(aid), action, by="telegram")
         except Exception as e:  # noqa: BLE001 - FeedError (bad action, gone), ApprovalError (unknown request)
             await self._edit_markup(msg, None)
@@ -3701,12 +3706,35 @@ def _feed_alerts() -> bool:
         return False
 
 
+ALERT_BODY = 1500
+
+
+def _alert_files(ev: dict) -> list[str]:
+    """Names of the files an event carries (`attachments`: names or {name}), when its body does not list them."""
+    items = ev.get("attachments")
+    names = [str(a.get("name") if isinstance(a, dict) else a or "")[:120] for a in
+             (items if isinstance(items, list) else [])]
+    names = [n for n in names if n and n != "None"]
+    body = str(ev.get("body") or "")[:ALERT_BODY]
+    return [] if all(n in body for n in names) else names
+
+
+def _alert_cut(ev: dict) -> bool:
+    """Only part of the event fits in the message: no button that acts on it (Open shows it all)."""
+    return len(str(ev.get("body") or "")) > ALERT_BODY
+
+
 def _alert_html(ev: dict) -> str:
     count = f" ×{ev['count']}" if int(ev.get("count") or 1) > 1 else ""
     html = (f"{ALERT_ICON.get(str(ev.get('level')), 'ℹ️')} <b>{fmt.escape(str(ev.get('title') or '')[:300])}"
             f"</b>{count}")
+    files = _alert_files(ev)
+    if files:
+        html += "\n📎 " + fmt.escape(", ".join(files)[:600])
     if ev.get("body"):
-        html += "\n" + fmt.escape(str(ev["body"])[:1500])
+        html += "\n" + fmt.escape(str(ev["body"])[:ALERT_BODY])
+        if _alert_cut(ev):
+            html += "\n<i>" + fmt.escape(_w("alert_cut")) + "</i>"
     if ev.get("resolved") and ev.get("resolution"):
         html += f"\n<i>{fmt.escape(str(ev['resolution'])[:200])}</i>"
     return html
@@ -3729,6 +3757,8 @@ def _alert_markup(ev: dict) -> dict | None:
             continue
         if act["id"] == "seen" and ev.get("read"):
             continue                                       # already seen (on the web)
+        if _alert_cut(ev) and act.get("style") != "danger":
+            continue                                       # shown in part only: Send / Allow from the UI (Refuse stays)
         data = f"al:{ev['id']}:{act['id']}"
         if len(data.encode()) <= 64:
             row.append({"text": str(act.get("label") or act["id"])[:40], "callback_data": data})
