@@ -378,7 +378,14 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     tid = t.get("id") if isinstance(t.get("id"), str) and re.fullmatch(r"t_[a-f0-9]{6,16}", t["id"]) else \
         "t_" + _secrets.token_hex(4)
     levels = [lv for lv in t.get("levels") or [] if lv in FEED_LEVELS] if isinstance(t.get("levels"), list) else []
-    source = str(t.get("source") or "").strip()[:64]
+    source = str(t.get("source") or "").strip()
+    if source:                                  # as the feed stores it (feed.clean_source): "Shopify" -> "shopify"
+        from . import feed
+        source = re.sub(r"[^a-z0-9_.-]+", "-", source.lower()).strip("-.")[:40]
+        if not feed.SOURCE_RE.match(source):
+            if strict:
+                raise AgentError(400, "bad_trigger", "Source: letters, digits, - _ . (max 40)")
+            source = ""
     if strict and not source:
         raise AgentError(400, "bad_trigger", "A feed trigger needs the source of the events (a webhook name...)")
     if strict and source == ALERT_SOURCE:
@@ -1636,7 +1643,16 @@ def scan_feed() -> int:
 
 
 def _feed_agents() -> list[dict]:
-    return [a for a in list_agents(counts=False) if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
+    """Enabled agents with their feed triggers. A trigger whose webhook was deleted is left out: its source is a free
+    name now, anyone could post there (check_alerts says it lost its webhook)."""
+    from . import feed
+    live = {h.get("id") for h in feed.settings()["hooks"]}
+    out = []
+    for a in list_agents(counts=False):
+        ts = [t for t in a["triggers"] if t["kind"] == "feed" and (not t.get("hook_id") or t["hook_id"] in live)]
+        if a["enabled"] and ts:
+            out.append({**a, "triggers": ts})
+    return out
 
 
 def pause_feed() -> None:
@@ -1707,25 +1723,41 @@ def flush_due() -> int:
 # ---- webhooks made for an agent: a feed hook + a feed trigger on its source ----------------------------
 def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list[str] | None = None,
                 match: str = "") -> dict:
-    """Create a feed hook named after the agent and a feed trigger on it -> {agent, hook}."""
-    from . import feedhooks
+    """Create a feed hook named after the agent and a feed trigger on it -> {agent, hook}. A trigger whose webhook
+    was deleted gets the new one (never a second trigger on the same events)."""
+    from . import feed, feedhooks
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
-    _not_broken(path, load(path))
-    base = f"{parse(path)[1]}-{parse(path)[2]}"[:50]
-    taken = {h["name"] for h in feedhooks.list_hooks()}
-    name, n = base, 1
-    while name in taken:
-        n += 1
-        name = f"{base}-{n}"
-    try:
-        hook = feedhooks.create(name, kind)
-    except Exception as e:                              # FeedError: bad kind...
-        raise AgentError(getattr(e, "status", 400), getattr(e, "code", "bad_hook"), str(e)) from None
-    a = load(path)
-    a["triggers"].append({"kind": "feed", "source": hook["name"], "levels": levels or [], "match": match,
-                          "prompt": prompt, "hook_id": hook["id"]})
-    _save(path, a)
+    with _lock:                                         # a PATCH of the agent at the same moment keeps both changes
+        a = load(path)
+        _not_broken(path, a)
+        hooks_now = feed.settings()["hooks"]
+        live = {h.get("id") for h in hooks_now}
+        dead = next((t for t in a["triggers"] if t.get("hook_id") and t["hook_id"] not in live), None)
+        if not dead and len(a["triggers"]) >= MAX_TRIGGERS:
+            raise AgentError(409, "too_many_triggers", f"At most {MAX_TRIGGERS} triggers: remove one first")
+        base = feed.clean_source(f"{parse(path)[1]}-{parse(path)[2]}")     # 40 characters at most
+        taken = {h.get("name") for h in hooks_now}
+        name, n = base, 1
+        while name in taken:
+            n += 1
+            name = f"{base[:40 - len(str(n)) - 1].rstrip('-.')}-{n}"       # the base is cut, never the suffix
+        try:
+            hook = feedhooks.create(name, kind)
+        except Exception as e:                          # FeedError: bad kind...
+            raise AgentError(getattr(e, "status", 400), getattr(e, "code", "bad_hook"), str(e)) from None
+        t = {"kind": "feed", "source": hook["name"], "levels": levels or [], "match": match, "prompt": prompt,
+             "hook_id": hook["id"]}
+        if dead:
+            dead.update({**t, "levels": levels or dead.get("levels") or [], "match": match or dead.get("match") or "",
+                         "prompt": prompt or dead.get("prompt") or ""})
+        else:
+            a["triggers"].append(t)
+        try:
+            _save(path, clean(a, strict=True))
+        except Exception:
+            feedhooks.remove(hook["id"])
+            raise
     _invalidate()
     return {"agent": get(path), "hook": hook}
 

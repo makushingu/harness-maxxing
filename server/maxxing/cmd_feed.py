@@ -40,6 +40,10 @@ def _self_trigger(agent: str, source: str) -> str:
                 "Use another --source.")
     try:
         from . import agents
+        if any(t.get("hook_id") and t.get("source") == source             # a deleted webhook's trigger still waits
+               for x in agents.list_agents(counts=False) for t in x["triggers"]):
+            return (f"Refused: {source!r} is a webhook or built-in source, only its own deliveries post there. "
+                    "Use another --source.")
         if not agents.exists(agent):
             return ""
         if any(t["kind"] == "feed" and t.get("source") == source for t in agents.load(agent)["triggers"]):

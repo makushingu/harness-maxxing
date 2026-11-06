@@ -40,6 +40,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Agents: an `agent.json` that exists but does not parse (or is not an object) loads as `enabled: False, sandbox: True,
   broken: True` (`_parse_file`), shown as `broken` by the API (banner on the agent page), alerted by `check_alerts`
   (ref `agent:<path>#broken`); `update()` and `add_webhook()` answer 409 `broken` instead of saving defaults over it.
+- Agent webhooks: a feed trigger whose `hook_id` is no longer a feed hook is left out of `_feed_agents()` (scan and
+  backlog), and `maxxing feed post` from an agent turn refuses such a trigger's source. `add_webhook()` re-attaches
+  that dead trigger (same id) instead of appending a second one, refuses 409 `too_many_triggers` before creating the
+  hook, saves under `_lock` (strict clean, hook removed if the save fails), and builds names with
+  `feed.clean_source` (base cut to keep the `-<n>` suffix inside 40 characters).
+- Feed trigger `source` is normalised like `feed.clean_source` (lower case, other characters -> `-`, 40 max) in
+  `_clean_trigger`; strict refuses what cannot be cleaned.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
