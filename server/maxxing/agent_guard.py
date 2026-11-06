@@ -202,14 +202,15 @@ def locked_paths(path: str) -> list[str]:
     out = [str(folder / "agent.json"), str(folder / "CLAUDE.md"), str(folder / ".claude"), str(topic / ".claude")]
     # the owner's uploads (web page, Telegram): read only, so the agent can neither swap a file it was sent nor turn
     # the folder into a link that sends the next upload elsewhere (created here: a missing path would be mounted)
-    att = folder / "attachments"
-    try:
-        if not att.is_symlink():
-            att.mkdir(exist_ok=True)
-        if att.is_dir() and not att.is_symlink():
-            out.append(str(att))
-    except OSError:
-        pass
+    # (the agent's and its topic's, even when `writable` names them: denyWrite wins over allowWrite)
+    for att in (folder / "attachments", topic / "attachments"):
+        try:
+            if not att.is_symlink():
+                att.mkdir(exist_ok=True)
+            if att.is_dir() and not att.is_symlink():
+                out.append(str(att))
+        except OSError:
+            pass
     # a missing .mcp.json is not locked: the sandbox would mount a placeholder there for the run, which breaks a
     # `git add -A` in a topic that is a clone; a new one is never trusted in a headless run anyway (its servers need
     # an approval)

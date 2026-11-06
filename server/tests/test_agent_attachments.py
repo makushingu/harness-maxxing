@@ -88,6 +88,8 @@ def test_sandbox_keeps_attachments_read_only(client, topic, mx):
     assert str(topic_dir / "attachments") not in st["sandbox"]["filesystem"]["allowWrite"]
     assert f"Edit(/{att}/**)" in st["permissions"]["deny"]
     assert f"Edit(/{topic_dir / 'attachments'}/**)" in st["permissions"]["deny"]
+    named = agent_guard.settings(A, {**a, "writable": ["attachments", "attachments/2026-11"]})
+    assert str(topic_dir / "attachments") in named["sandbox"]["filesystem"]["denyWrite"]
 
 
 def test_a_link_or_a_file_in_place_of_the_folder(client, topic, mx, tmp_path):
