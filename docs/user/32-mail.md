@@ -38,6 +38,8 @@ Folders on the left, messages in the middle, the open message on the right (one 
 - Create, rename or delete your own folders from the **...** menus.
 - An HTML message is shown in a sealed frame: no script runs and **remote images are blocked** (they tell the
   sender you opened it) until you click **Show images**.
+- A mail forwarded as an attachment shows as a `.eml` attachment (named after its subject). The images of a very
+  big mail are shown up to 8 MB; the others are listed as attachments.
 
 ## Writing
 
@@ -105,8 +107,11 @@ live; the checks start the agents and fill **All mailboxes** (shown when you hav
 mails at most, the oldest first: the rest comes with the next one, a minute later. Two checks of a mailbox never run at
 once. The text an agent gets with each mail is read from the start of the mail only: its attachments are not
 downloaded. A folder nobody looked at for more than 6 hours (its agent's trigger or the E-mail page was off, the
-server was stopped) starts again from its newest mail: what came in meanwhile starts no agent. Mail kept for a busy
-agent only reaches it if its trigger and rights still allow it.
+server was stopped) starts again from its newest mail: what came in meanwhile starts no agent. A mail Harness cannot
+read (an unknown charset, a broken structure) never stops the check: the agent gets its headers without its text,
+the other mails still start their agents, and a restart during a check never starts an agent twice with the same
+mails. Mail kept
+for a busy agent only reaches it if its trigger and rights still allow it.
 
 Ready-made agents (New agent): **Mail sorter** (files each new mail, sums up the day every evening), **Mail replies**
 (a draft reply to each customer mail, you send it), **Invoices** (saves the invoices received by mail and files the
