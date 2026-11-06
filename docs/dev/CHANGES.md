@@ -64,6 +64,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (the flock of `ProcessLock("approvals")`) and writes `timeout` only if the request is still pending.
 - `agent_guard.private_paths` also hides `projects/<p>/groups/<g>` of the groups the agent is not a member of (read
   from group.json) and every `groups/.kept-*` folder.
+- Template `sales` no longer suggests `STRIPE_SECRET_KEY` (a full key; `STRIPE_RESTRICTED_KEY` stays).
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
