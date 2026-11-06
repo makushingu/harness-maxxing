@@ -743,7 +743,7 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
         <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <span className="min-w-0 flex-1 break-words">{t('agents.panel.roleHint')}</span>
           {dir && (
-            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="shrink-0 hover:text-foreground hover:underline">
+            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="shrink-0 hover:text-foreground hover:underline pointer-coarse:-my-3 pointer-coarse:py-3">
               CLAUDE.md
             </Link>
           )}
