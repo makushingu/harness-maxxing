@@ -2,9 +2,9 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { Command as Cmdk } from 'cmdk'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun } from 'lucide-react'
+import { Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
-import { AGENT_PATH_RE, agentRunRoute, useDocs, useLogout, useWorkspace } from '@/lib/queries'
+import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, useAgentGroups, useAgents, useDocs, useLogout, useSettings, useWorkspace } from '@/lib/queries'
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
 import { useUI, resolveTheme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,11 @@ export function CommandPalette() {
   const tutorialPath = TUTORIAL_PATHS.find((tp) => ws?.projects.some((p) => p.topics.some((x) => x.path === tp))) || null
   const { data: docs } = useDocs()
   const install = useInstallMode()
+  // Agents on: every agent and every group can be opened from here (lists loaded once the palette opens)
+  const { data: st } = useSettings()
+  const agentsOn = !!st?.agents_page
+  const { data: agentList } = useAgents(open && agentsOn)
+  const { data: groupList } = useAgentGroups(open && agentsOn)
 
   React.useEffect(() => {
     if (!open) setQ('')
@@ -64,15 +69,19 @@ export function CommandPalette() {
     // One full-text search (sessions, memory, tasks, file contents: /api/search) + file and folder NAMES
     // (/api/files/search: also finds images, folders, binaries). Content hits come first; a name hit for a
     // file already found by its content is dropped.
-    const GROUP: Record<SearchHit['kind'], string> = { session: t('palette.sessions'), memory: t('palette.memory'), task: t('palette.tasks'), file: fileGroup }
-    const ICON = { session: MessagesSquare, memory: Brain, task: ListChecks, file: FileText }
+    const GROUP: Record<SearchHit['kind'], string> = { session: t('palette.sessions'), memory: t('palette.memory'), task: t('palette.tasks'), file: fileGroup, group: t('palette.groups') }
+    const ICON = { session: MessagesSquare, memory: Brain, task: ListChecks, file: FileText, group: UsersRound }
+    const groupHref = (path: string) => {
+      const m = GROUP_PATH_RE.exec(path)
+      return m ? groupRoute({ project: m[1], name: m[2] }) : '/agents'
+    }
     const content = api
       .get<SearchResult>('/api/search', { q: dq, limit: 24 }, { signal: ctrl.signal })
       .then((r) =>
         r.results.map<Command>((h) => ({
           id: `${h.kind}:${h.id}`,
           title: h.title,
-          hint: h.kind === 'task' ? undefined : h.path,
+          hint: h.kind === 'task' || h.kind === 'group' ? undefined : h.path,
           detail: h.snippet,
           group: GROUP[h.kind],
           icon: ICON[h.kind],
@@ -85,7 +94,9 @@ export function CommandPalette() {
                   : `/sessions?path=${encodeURIComponent(h.path)}&session=${h.id}`
                 : h.kind === 'task'
                   ? `/tasks?task=${encodeURIComponent(h.id)}`
-                  : `/files?path=${encodeURIComponent(h.path)}`,
+                  : h.kind === 'group'
+                    ? groupHref(h.path)
+                    : `/files?path=${encodeURIComponent(h.path)}`,
             ),
         })),
       )
@@ -201,10 +212,32 @@ export function CommandPalette() {
           perform: ({ navigate }) => navigate(`/sessions?path=${encodeURIComponent(tp.path)}&new=1`),
         })
       }
+    for (const a of agentsOn ? agentList?.agents || [] : [])
+      list.push({
+        id: `agent:${a.path}`,
+        title: a.display_name,
+        hint: `${a.project} / ${a.topic}`,
+        group: t('palette.agents'),
+        icon: Bot,
+        sensitive: true,
+        keywords: [a.name, a.project, a.topic, a.description].filter(Boolean),
+        perform: ({ navigate }) => navigate(agentRoute(a)),
+      })
+    for (const g of agentsOn ? groupList || [] : [])
+      list.push({
+        id: `group:${g.path}`,
+        title: `${g.emoji ? `${g.emoji} ` : ''}${g.display_name}`,
+        hint: g.project,
+        group: t('palette.groups'),
+        icon: UsersRound,
+        sensitive: true,
+        keywords: [g.name, g.project, ...g.members.map((m) => m.display_name)].filter(Boolean),
+        perform: ({ navigate }) => navigate(groupRoute(g)),
+      })
     for (const d of docs || [])
       list.push({ id: `doc:${d.slug}`, title: d.title, hint: d.section, group: docsG, icon: BookOpen, perform: ({ navigate }) => navigate(`/docs/${d.slug}`) })
     return list
-  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems])
+  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList])
 
   const pageCmds = Object.values(sources).flat()
   const all = [...pageCmds, ...staticCmds]
@@ -234,7 +267,7 @@ export function CommandPalette() {
                 className="h-13 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground max-md:h-14 max-md:text-base"
               />
               {loading && <Spinner className="text-muted-foreground" />}
-              <button type="button" onClick={close} className="text-sm text-muted-foreground md:hidden">
+              <button type="button" onClick={close} className="text-sm text-muted-foreground md:hidden pointer-coarse:min-h-11 pointer-coarse:px-2">
                 {t('common.cancel')}
               </button>
               <Kbd className="max-md:hidden">Esc</Kbd>

@@ -53,6 +53,7 @@ export const routes: RouteObject[] = [
           { path: 'agents/*', lazy: page(() => import('./features/agents/AgentsLayout'), ['agents', 'tasks', 'files']) },
           { path: 'team', lazy: page(() => import('./features/team/TeamPage'), ['team']) },
           { path: 'infra', lazy: page(() => import('./features/infra/InfraPage'), ['infra']) },
+          { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
           { path: 'settings/docs', element: <Navigate to="/docs" replace /> },

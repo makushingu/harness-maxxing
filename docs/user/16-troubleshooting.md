@@ -146,6 +146,11 @@ app's HTML is never cached, a reload is enough.
 or runs per hour reached, sandbox not available on the server, a trigger without its webhook. From a terminal:
 `maxxing agents show <agent>`. See [Agents](agents#limits).
 
+**A member of an agent group did not answer.** The group says why in a small line (switched off, daily budget, the
+turn failed, a limit of the group reached); a paused member is dimmed at the top of the group (click it to resume).
+The group stops after 3 hand-overs or 10 answers for one message, and 40 answers an hour: write again to go on, or
+raise the limits in its settings. See [Agent groups](agent-groups).
+
 **Tailscale URL stops working after a reboot.** If the Tailscale IP changed, re-run the installer
 with `ACCESS=tailscale` (or `maxxing init --bind <ip> --public-url http://<ip>:8787` and restart).
 

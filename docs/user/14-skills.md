@@ -21,6 +21,7 @@ installer used other paths than the defaults; `maxxing init` (run by every updat
 | `maxxing-cron` | you want something to happen on a schedule |
 | `maxxing-tasks` | you talk about your tasks or the board |
 | `maxxing-feed` | you say "notify me when…", or want sales, orders, deployments, e-mails or a script's results reported (webhooks, `maxxing feed post`) |
+| `maxxing-mail` | you talk about your inbox, mail to answer or sort, drafts, or want an agent to handle a mailbox |
 | `maxxing-mcp` | you want Claude to use a service through MCP ("connect the Google Ads MCP"), an MCP tool is missing or needs a sign-in |
 | `maxxing-extension` | you want a dashboard widget (Card, or HTML: a game, a canvas) or a custom page |
 | `maxxing-customize` | you want to change the product itself, or an update reports that your customizations need adapting |

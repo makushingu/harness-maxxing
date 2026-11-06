@@ -49,7 +49,8 @@ log = logging.getLogger("maxxing.backup")
 REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
 TOKEN_RE = re.compile(r"\A[\x21-\x7e]{1,255}\Z")   # printable ASCII: it goes into an HTTP header
 ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*.patch", "projects/*/.maxxing.json",
-          "projects/*/topics/*/.maxxing.json", "projects/.order.json", "projects/*/topics/*/agents/*/agent.json"]
+          "projects/*/topics/*/.maxxing.json", "projects/.order.json", "projects/*/topics/*/agents/*/agent.json",
+          "projects/*/groups/*/group.json"]
 META_DIR = "_maxxing"
 CRON_NAME = "Memory backup"
 MAX_FILE = 5 * 1024 * 1024
@@ -99,7 +100,7 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
 
 # Config keys restored from a backup (paths, network and Telegram ids are server-specific).
 RESTORABLE_CONFIG = ("timezone", "language", "default_model", "permission_mode", "dashboard", "extensions",
-                     "usage_widget", "git_page", "infra_page", "team_page", "agents_page", "maxxing_mode")
+                     "usage_widget", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "maxxing_mode")
 
 
 class BackupError(Exception):

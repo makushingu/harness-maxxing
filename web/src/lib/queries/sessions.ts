@@ -60,6 +60,7 @@ export function useSetSessionCache() {
     const prev = qc.getQueryData<Session>(qk.sessions.one(s.id))
     // queue_items is a new array on every payload: keep the cached one while it says the same (no re-render)
     if (prev?.queue_items && s.queue_items && JSON.stringify(prev.queue_items) === JSON.stringify(s.queue_items)) s = { ...s, queue_items: prev.queue_items }
+    if (prev?.sent_items && s.sent_items && JSON.stringify(prev.sent_items) === JSON.stringify(s.sent_items)) s = { ...s, sent_items: prev.sent_items }
     qc.setQueryData(qk.sessions.one(s.id), s)
     const now = Date.now()
     const ticking = !!prev && (Object.keys(s) as (keyof Session)[]).every((k) => prev[k] === s[k] || TICKING.has(k))
@@ -233,16 +234,18 @@ export function fetchBefore(id: string, before: number, limit = 200, signal?: Ab
   return api.get<SessionEventsBackPage>(`/api/sessions/${seg(id)}/events`, { before, limit }, { signal })
 }
 
-/** Upload one attachment with progress (XHR: fetch has no upload progress). Resolves to the saved file. */
+/** Upload one attachment with progress (XHR: fetch has no upload progress). Resolves to the saved file.
+ *  `url`: another upload route (an agent group's `/api/agent-groups/<p>/<g>/uploads`). */
 export function uploadAttachment(
   topicPath: string,
   file: File,
   onProgress?: (loaded: number, total: number) => void,
   signal?: AbortSignal,
+  url?: string,
 ): Promise<UploadResult['files'][number]> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `/api/uploads?path=${encodeURIComponent(topicPath)}`)
+    xhr.open('POST', url || `/api/uploads?path=${encodeURIComponent(topicPath)}`)
     xhr.setRequestHeader('X-Maxxing', '1')
     xhr.withCredentials = true
     xhr.upload.onprogress = (e) => onProgress?.(e.loaded, e.total || file.size)

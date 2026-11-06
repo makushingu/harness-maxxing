@@ -13,6 +13,8 @@
   maxxing agents export <agent> [-o FILE]    the agent as a Claude Code agent file (.claude/agents/<name>.md)
   maxxing agents import FILE --topic <p>/<t> create an agent from a Claude Code agent file
   maxxing agents sandbox-setup               install what the sandbox needs (root): bubblewrap, socat, AppArmor
+  maxxing agents group list|show|create|update|say  agent groups (agent_rooms.py): a conversation of the owner with
+                                             2-6 agents of one project (owner only: refused in agent turns)
 
 <agent> = projects/<p>/topics/<t>/agents/<a>, <p>/<t>/<a>, or just <a> when only one agent has that name.
 Works without the server: fire() only writes files and starts the turn's unit; the server's session watcher
@@ -65,6 +67,8 @@ def _configure(p) -> None:
                                                  "(e.g. api.github.com,*.example.com; default: none)")
     s.add_argument("--writable", default="", help="folders of the topic it may write in besides its own, comma-"
                                                   "separated (. = the whole topic)")
+    s.add_argument("--mail", default="", metavar="MAILBOX", help="a mailbox of the E-mail page it may use (id or "
+                   "address): read + drafts, or what a mail template says (`maxxing mail accounts`)")
     s.add_argument("--no-sandbox", action="store_true", help="no sandbox: its commands reach the whole server")
     s.add_argument("--trust-outside", action="store_true",
                    help="runs started by outside events (webhooks, feed, other agents) do not ask first: risky")
@@ -82,6 +86,38 @@ def _configure(p) -> None:
     s.add_argument("--topic", required=True, help="<project>/<topic> where it lives")
     s.add_argument("--name", default="", help="folder name (default: from the file)")
     sub.add_parser("sandbox-setup", help="install what the agents' sandbox needs (root): bubblewrap, socat, AppArmor")
+    s = sub.add_parser("group", help="agent groups: the owner talks to 2-6 agents of one project")
+    gs = s.add_subparsers(dest="group_cmd", required=True)
+    g = gs.add_parser("list", help="list the groups")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("show", help="a group: members, goal, options and its last messages (JSON)")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("--messages", type=int, default=20)
+    g = gs.add_parser("create", help="create a group in a project")
+    g.add_argument("group", help="<project>/<group> (group = 1-48 lowercase letters, digits, dashes)")
+    g.add_argument("--member", action="append", required=True,
+                   help="an agent of the project: <agent> or <agent>=<its role in the group> (2 to 6 times)")
+    g.add_argument("--name", default="", help="display name (default: the folder name)")
+    g.add_argument("--emoji", default="")
+    g.add_argument("--goal", default="", help="what the group is for (its CLAUDE.md)")
+    g.add_argument("--lead", default="", help="the member who answers when the message names nobody")
+    g.add_argument("--no-shared-files", action="store_true", help="no shared folder")
+    g.add_argument("--ask-on-handover", action="store_true",
+                   help="a hand-over between members asks before risky tools (members do not trust each other)")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("update", help="change a group: name, emoji, goal, members, lead, options")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("--member", action="append", help="replaces the members: <agent> or <agent>=<role> (2 to 6 times)")
+    g.add_argument("--name")
+    g.add_argument("--emoji")
+    g.add_argument("--goal", help="what the group is for (its CLAUDE.md)")
+    g.add_argument("--lead", help="a member, or \"\" for none")
+    g.add_argument("--shared-files", choices=("on", "off"))
+    g.add_argument("--trust-members", choices=("on", "off"), help="off: a hand-over asks before risky tools")
+    g.add_argument("--json", action="store_true")
+    g = gs.add_parser("say", help="write to the group as the owner (the members answer in turn)")
+    g.add_argument("group", help="<project>/<group>")
+    g.add_argument("text", nargs="+")
     s = sub.add_parser("cron", help="add a schedule to an agent")
     s.add_argument("agent")
     s.add_argument("--schedule", required=True, help='5-field cron, server time zone, e.g. "0 8 * * 1"')
@@ -150,6 +186,15 @@ def _print_fire(path: str, r: dict, as_json: bool) -> int:
 def _list(a) -> int:
     from . import agents
     rows = agents.list_agents(with_status=True)
+    from . import agent_guard
+    if agent_guard.sandboxed_turn():                # a sandboxed agent sees who it can hand work to, nothing more
+        rows = [{"path": x["path"], "display_name": x["display_name"]} for x in rows]
+        if a.json:
+            print(json.dumps(rows, indent=2))
+        else:
+            for x in rows:
+                print(f"{x['path']}  {x['display_name']}")
+        return 0
     if a.json:
         print(json.dumps([{k: x.get(k) for k in ("path", "display_name", "enabled", "telegram", "approvals",
                                                   "limits", "triggers", "cost_today", "runs_last_hour")}
@@ -204,7 +249,7 @@ def _create(a) -> int:
     if a.role_file:
         try:
             role = open(a.role_file, encoding="utf-8").read().strip()
-        except OSError as e:
+        except (OSError, ValueError) as e:                  # ValueError: not UTF-8 text
             print(f"Cannot read {a.role_file}: {e}", file=sys.stderr)
             return 2
     else:
@@ -224,6 +269,23 @@ def _create(a) -> int:
     fields = {"avatar": {**{k: random.choice(list(v)) for k, v in agents.AVATAR.items()},
                          "color": agents.project_color(project)}, "permission_mode": "",
               **(agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]) if tpl else {})}
+    if a.mail:
+        from . import mail
+        from .mail.imap import MailError
+        try:
+            acc_id = mail.get_account(a.mail)["id"]
+        except MailError as e:
+            print(e.message, file=sys.stderr)
+            return 2
+        tm = (tpl or {}).get("mail") or {}
+        fields["mail"] = [{"account": acc_id, "rights": tm.get("rights") or ["read", "draft"],
+                           "approve_send": tm.get("approve_send") or "always", "senders": tm.get("senders") or [],
+                           "trigger": tm.get("trigger") or {"enabled": True, "folder": "INBOX", "prompt": ""}}]
+        if not tpl:
+            fields.setdefault("allowed_tools", [])
+    elif tpl and tpl.get("mail"):
+        print("This template is made for a mailbox: add --mail MAILBOX (`maxxing mail accounts`)", file=sys.stderr)
+        return 2
     fields.update({"name": a.name or fields.get("name") or name, "model": a.model, "telegram": a.telegram,
                    "enabled": not a.off, "trust_outside": a.trust_outside,
                    "approvals": a.approvals or bool(fields.get("approvals")),
@@ -314,6 +376,82 @@ def _import(a) -> int:
     return 0
 
 
+def _group_path(ref: str) -> str:
+    from . import agent_rooms
+    r = (ref or "").strip().strip("/")
+    path = r if agent_rooms.parse(r) else (agent_rooms.group_path(*r.split("/")) if r.count("/") == 1 else "")
+    if not path or not agent_rooms.exists(path):
+        raise ValueError(f"Group not found: {ref!r} (see `maxxing agents group list`)")
+    return path
+
+
+def _group(a) -> int:
+    from . import agent_rooms, agents
+    try:
+        if a.group_cmd == "list":
+            rows = agent_rooms.list_groups()
+            if a.json:
+                print(json.dumps(rows, indent=2, ensure_ascii=False))
+            elif not rows:
+                print("No group yet.")
+            for x in [] if a.json else rows:
+                print(f"{x['path']}  {x['emoji']} {x['display_name']}  "
+                      + " ".join("@" + m["slug"] + (" (paused)" if m["paused"] else "") for m in x["members"])
+                      + ("  speaking" if x["busy"] else ""))
+            return 0
+        if a.group_cmd == "create":
+            if a.group.count("/") != 1:
+                print("Give <project>/<group>", file=sys.stderr)
+                return 2
+            project, name = a.group.split("/")
+            members = []
+            for m in a.member:
+                ref, _, role = m.partition("=")
+                members.append({"path": resolve(ref), "role": role.strip()})
+            lead = resolve(a.lead) if a.lead else ""
+            g = agent_rooms.create(project, name, {"name": a.name, "emoji": a.emoji, "goal": a.goal, "lead": lead,
+                                                    "members": members, "shared_files": not a.no_shared_files,
+                                                    "trust_members": not a.ask_on_handover})
+            print(json.dumps({"group": g["path"]}) if a.json else f"group created: {g['path']}")
+            return 0
+        path = _group_path(a.group)
+        if a.group_cmd == "show":
+            print(json.dumps({**agent_rooms.get(path), "messages": agent_rooms.room(path, max(1, a.messages))},
+                             indent=2, ensure_ascii=False))
+            return 0
+        if a.group_cmd == "update":
+            f: dict = {}
+            for k in ("name", "emoji", "goal"):
+                if getattr(a, k) is not None:
+                    f[k] = getattr(a, k)
+            if a.member:
+                f["members"] = [{"path": resolve(m.partition("=")[0]), "role": m.partition("=")[2].strip()}
+                                for m in a.member]
+            if a.lead is not None:
+                f["lead"] = resolve(a.lead) if a.lead else ""
+            if a.shared_files:
+                f["shared_files"] = a.shared_files == "on"
+            if a.trust_members:
+                f["trust_members"] = a.trust_members == "on"
+            g = agent_rooms.update(path, f)
+            print(json.dumps({"group": g["path"]}) if a.json else f"group updated: {g['path']} - members "
+                  + " ".join("@" + m["handle"] for m in g["members"]))
+            return 0
+        if a.group_cmd == "say":
+            r = agent_rooms.say(path, " ".join(a.text))
+            hs = agent_rooms.handles(agent_rooms.load(path))
+            print("sent; " + ("next: " + ", ".join("@" + hs.get(p, agent_rooms.slug(p)) for p in r["queued"])
+                              if r["queued"] else "nobody answers (all named members are paused)"))
+            return 0
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except agents.AgentError as e:
+        print(e.message, file=sys.stderr)
+        return 2
+    return 2
+
+
 def _handler(a) -> int:
     from . import agents
     if a.agents_cmd == "list":
@@ -326,6 +464,8 @@ def _handler(a) -> int:
         return _sandbox_setup()
     if a.agents_cmd == "import":
         return _import(a)
+    if a.agents_cmd == "group":
+        return _group(a)
     try:
         path = resolve(a.agent)
     except ValueError as e:
@@ -339,13 +479,23 @@ def _handler(a) -> int:
         from . import agent_format
         md = agent_format.export_md(path)
         if a.output:
-            with open(a.output, "w", encoding="utf-8") as f:
-                f.write(md)
+            try:
+                with open(a.output, "w", encoding="utf-8") as f:
+                    f.write(md)
+            except OSError as e:
+                print(f"Cannot write {a.output}: {e}", file=sys.stderr)
+                return 2
             print(f"written {a.output}")
         else:
             sys.stdout.write(md)
         return 0
     if a.agents_cmd == "show":
+        from . import agent_guard
+        own = agent_guard.sandboxed_turn()
+        if own and own != path:
+            print("Refused: in a sandboxed agent turn, `maxxing agents show` shows this agent only "
+                  "(`maxxing agents list` gives the others' paths and names).", file=sys.stderr)
+            return 2
         d = agents.get(path)
         try:
             role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8")
@@ -356,7 +506,8 @@ def _handler(a) -> int:
                                                     "writable", "rules", "subagent", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
-                          "webhooks": agents.hooks(path)}, indent=2, ensure_ascii=False))
+                          "webhooks": [{k: v for k, v in h.items() if not own or k != "url"}
+                                       for h in agents.hooks(path)]}, indent=2, ensure_ascii=False))
         return 0
     try:
         if a.agents_cmd == "cron":
@@ -374,10 +525,8 @@ def _handler(a) -> int:
                           "deliveries until then).", file=sys.stderr)
             return 0
         if a.agents_cmd == "watch":
-            d = agents.load(path)
-            d["triggers"].append({"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
-                                  "match": a.match, "prompt": a.prompt})
-            agents.update(path, {"triggers": d["triggers"]})
+            agents.add_trigger(path, {"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
+                                      "match": a.match, "prompt": a.prompt})
             print(json.dumps({"agent": path}) if a.json else f"{path} now watches the feed source {a.source.strip()}")
             return 0
     except agents.AgentError as e:

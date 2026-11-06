@@ -215,12 +215,14 @@ function ProjectSection({ project: p, count: n, index, layout, children }: { pro
   const t = useT()
   const dnd = useReorder({ kind: 'project', id: p, project: p, index }, (x) => layout.moveProject(x, p))
   return (
-    <section {...dnd.target} className={cn('relative grid gap-3 rounded-xl', dnd.dragging && 'opacity-50')} aria-label={p} data-testid="agents-project" data-project={p}>
+    <section {...dnd.target} className={cn('relative grid grid-cols-[minmax(0,1fr)] gap-3 rounded-xl', dnd.dragging && 'opacity-50')} aria-label={p} data-testid="agents-project" data-project={p}>
       <DropBar side={dnd.side} className="inset-x-0 h-1" />
-      <h2 {...dnd.source} className={cn('group/head flex items-center gap-2 px-0.5 text-[13px] font-semibold', dnd.on && 'cursor-grab active:cursor-grabbing')} title={dnd.on ? t('agents.layout.dragProject') : undefined} data-testid="agents-project-head">
+      <h2 {...dnd.source} className={cn('group/head flex min-w-0 items-center gap-2 px-0.5 text-[13px] font-semibold', dnd.on && 'cursor-grab active:cursor-grabbing')} title={dnd.on ? t('agents.layout.dragProject') : undefined} data-testid="agents-project-head">
         <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: OUTFIT[layout.colorOf(p)] }} data-testid="agents-project-dot" />
-        <Sensitive length={8}>{p}</Sensitive>
-        <span className="text-xs font-normal text-muted-foreground tabular-nums">{t('agents.overview.count', { count: n })}</span>
+        <span className="min-w-0 truncate" title={p}>
+          <Sensitive length={8}>{p}</Sensitive>
+        </span>
+        <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">{t('agents.overview.count', { count: n })}</span>
         <ProjectMenu project={p} layout={layout} among={layout.projects} className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100" />
       </h2>
       {children}

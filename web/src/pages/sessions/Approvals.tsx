@@ -65,6 +65,7 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
         <Sensitive block>
           <ToolInput name={a.tool} input={a.input} diff={diff} display={null} />
         </Sensitive>
+        {a.clipped && <p className="text-xs text-warning">{t('approval.clipped')}</p>}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Input
             value={message}
@@ -81,7 +82,7 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
             <Button size="sm" variant="outline" onClick={() => send('deny')} loading={choice === 'deny'} disabled={decide.isPending}>
               <X className="size-3.5" /> {t('approval.deny')}
             </Button>
-            <Button size="sm" onClick={() => send('allow')} loading={choice === 'allow'} disabled={decide.isPending}>
+            <Button size="sm" onClick={() => send('allow')} loading={choice === 'allow'} disabled={decide.isPending || a.clipped}>
               <Check className="size-3.5" /> {t('approval.allow')}
             </Button>
           </span>

@@ -46,7 +46,7 @@ from . import config
 log = logging.getLogger("maxxing.search")
 
 SCHEMA_VERSION = "2"                 # 2: session title on the title row only (see _migrate)
-KINDS = ("session", "file", "memory", "task")
+KINDS = ("session", "file", "memory", "task", "group")   # group: the conversations of the agent groups
 TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".org", ".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
             ".css", ".scss", ".html", ".htm", ".vue", ".svelte", ".astro", ".php", ".rb", ".go", ".rs", ".java",
             ".kt", ".swift", ".c", ".h", ".cpp", ".cs", ".sh", ".bash", ".zsh", ".sql", ".yaml", ".yml", ".toml",
@@ -239,6 +239,73 @@ def _index_sessions(con: sqlite3.Connection) -> None:
             con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, new))
         # all read - or only a cut last line left (a runner killed mid-write): skipped until something changes
         if sig["offset"] >= size or read_all:
+            _seen[key] = stamp
+    for key in known - alive:
+        _drop(con, key)
+        _seen.pop(key, None)
+
+
+def _index_groups(con: sqlite3.Connection) -> None:
+    """The conversations of the agent groups (<state>/agents/rooms/<p>__<g>.jsonl, at most 2 MB each), while Agents is
+    on: a title row (the group's name), then one row per message ("@writer: ..."), only the new lines read (as the
+    session logs). A room rewritten (trimmed, a member moved) or a changed group.json is indexed again from the start."""
+    from . import agent_rooms, agents
+    known = {k for (k,) in con.execute("SELECT key FROM src WHERE key LIKE 'g:%'")}
+    alive = set()
+    try:
+        rooms = sorted(config.state_dir("agents", "rooms").glob("*.jsonl")) if agents.feature_on() else []
+    except OSError:
+        rooms = []
+    for f in rooms:
+        parts = f.stem.split("__")
+        path = agent_rooms.group_path(*parts) if len(parts) == 2 else ""
+        if not path or not agent_rooms.exists(path):
+            continue
+        key = f"g:{path}"
+        alive.add(key)
+        stamp = (_stat_key(f), _stat_key(agent_rooms.folder(path) / agent_rooms.GROUP_FILE))
+        if None in stamp:
+            alive.discard(key)
+            continue
+        if key in known and _seen.get(key) == stamp:
+            continue
+        _seen.pop(key, None)
+        try:
+            g = agent_rooms.load(path)
+            hs = agent_rooms.handles(g)
+        except Exception:  # noqa: BLE001 - a broken group is skipped, the next refresh tries again
+            alive.discard(key)
+            continue
+        row = con.execute("SELECT sig FROM src WHERE key=?", (key,)).fetchone()
+        sig = json.loads(row[0]) if row else None
+        ino, size = stamp[0][0], stamp[0][2]
+        if sig and (sig.get("ino") != ino or sig.get("offset", 0) > size or sig.get("group") != list(stamp[1])):
+            _drop(con, key)
+            sig = None
+        if sig is None:
+            sig = {"ino": ino, "offset": 0, "group": list(stamp[1])}
+            con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+                        (key, "group", path, path, g.get("name") or parts[1], "", stamp[0][1] / 1e9))
+        if sig["offset"] < size:
+            with open(f, "rb") as fh:
+                fh.seek(sig["offset"])
+                chunk = fh.read(READ_CHUNK)
+            end = chunk.rfind(b"\n") + 1                     # complete lines only
+            for line in chunk[:end].decode("utf-8", "replace").splitlines():
+                try:
+                    m = json.loads(line)
+                except ValueError:
+                    continue
+                text = (m.get("text") or "").strip() if isinstance(m, dict) and m.get("kind") == "message" else ""
+                if not text:
+                    continue
+                author = str(m.get("author") or "")
+                who = "Owner" if author == "me" else "@" + hs.get(author, agent_rooms.slug(author))
+                con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS], m.get("at")))
+            sig["offset"] += end
+        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
+        if sig["offset"] >= size:
             _seen[key] = stamp
     for key in known - alive:
         _drop(con, key)
@@ -457,6 +524,7 @@ def refresh(full: bool = True, deep: bool | None = True) -> None:
         try:
             before = con.total_changes
             _index_sessions(con)
+            _index_groups(con)
             _state["sessions_at"] = time.time()
             if full:
                 walk = deep if deep is not None else time.time() - _state["files_at"] >= FILES_EVERY_S
@@ -614,7 +682,7 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
                     SELECT kind, ref, path, title, at, snip, MIN(score) AS best FROM hits
                     GROUP BY kind, ref ORDER BY best LIMIT ?""",
                 (match, floor, *wanted, limit)).fetchall()
-            untitled = [f"s:{r[1]}" for r in rows if r[0] == "session" and not r[3]]
+            untitled = [f"{r[0][0]}:{r[1]}" for r in rows if r[0] in ("session", "group") and not r[3]]
             titles = dict(con.execute(
                 f"SELECT ref, title FROM items WHERE body='' AND src IN ({','.join('?' * len(untitled))})",
                 untitled).fetchall()) if untitled else {}
@@ -629,7 +697,7 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
     out = []
     for kind, ref, path, title, at, snip, score in rows:
         title = title or titles.get(ref) or "Untitled"       # a message row: the title of its session
-        if not snip.strip() and kind == "session":
+        if not snip.strip() and kind in ("session", "group"):
             snip = title
         out.append({"kind": kind, "id": ref, "path": path, "title": title, "snippet": snip, "at": at,
                     "score": round(-score, 3)})

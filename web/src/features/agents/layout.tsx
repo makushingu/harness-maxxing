@@ -200,7 +200,7 @@ export function ProjectMenu({ project, layout, among, className }: { project: st
           type="button"
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'relative grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring before:absolute before:-inset-1.5 before:content-[""] data-[state=open]:bg-accent data-[state=open]:text-foreground',
+            'relative grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring before:absolute before:-inset-1.5 before:content-[""] pointer-coarse:before:-inset-2.5 data-[state=open]:bg-accent data-[state=open]:text-foreground',
             className,
           )}
           aria-label={t('agents.layout.menu', { project })}
