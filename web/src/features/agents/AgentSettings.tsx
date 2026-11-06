@@ -87,7 +87,7 @@ function SectionNav({ titles }: { titles: Record<SectionId, string> }) {
           onClick={() => go(id)}
           aria-current={current === id ? 'true' : undefined}
           className={cn(
-            'h-7 shrink-0 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-9',
+            'h-7 shrink-0 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-10 pointer-coarse:h-10',
             current === id && 'bg-secondary text-foreground',
           )}
         >
