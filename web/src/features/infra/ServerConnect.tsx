@@ -74,7 +74,7 @@ export function ServerSettings({ r }: { r: InfraResource }) {
   const mask = useMask()
   const save = () => !hide && label.trim() && label.trim() !== r.name && rename.mutate({ name, label: label.trim() })
   const disconnect = async () => {
-    if (await confirm({ title: t('infra.srv.removeTitle', { name: r.name }), description: t('infra.srv.removeDesc'), destructive: true, confirmText: t('infra.srv.remove') }))
+    if (await confirm({ title: t('infra.srv.removeTitle', { name: mask(r.name) }), description: t('infra.srv.removeDesc'), destructive: true, confirmText: t('infra.srv.remove') }))
       remove.mutate({ name })
   }
   return (
