@@ -103,7 +103,13 @@ export function saveCompose(c: Omit<LocalCompose, 'at'>) {
   try {
     localStorage.setItem(KEY, JSON.stringify({ ...c, at: Date.now() }))
   } catch {
-    /* private mode, full storage: the dialog still works, only the copy is missing */
+    // private mode, full storage: the dialog still works, only the copy is missing. An older copy must not stay:
+    // opened after a reload it would pass for the message as it was last written
+    try {
+      localStorage.removeItem(KEY)
+    } catch {
+      /* private mode */
+    }
   }
 }
 export function forgetCompose() {
