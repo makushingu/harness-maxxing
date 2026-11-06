@@ -317,8 +317,14 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
   const seen = useGroupSeen()
   const box = React.useRef<HTMLDivElement>(null)
   const msgs = React.useMemo(() => data || [], [data])
-  const byPath = React.useMemo(() => new Map(g.members.map((m) => [m.path, m])), [g.members])
-  const names = useMentionMap(g.members)
+  // The members as the messages draw them: a new list only when one of them looks different, not each time who
+  // speaks changes (else every answer's Markdown is drawn again at each turn start and end).
+  const look = g.members.map((m) => JSON.stringify([m.path, m.handle, m.display_name, m.role, m.avatar])).join('\n')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const members = React.useMemo(() => g.members, [look])
+  const byPath = React.useMemo(() => new Map(members.map((m) => [m.path, m])), [members])
+  const names = useMentionMap(members)
+  const chips = React.useMemo(() => mentionComponents(names), [names])
   const said = msgs.some((m) => m.kind === 'message')
   const last = msgs[msgs.length - 1]?.id
   // Newest at the bottom: follow it when a message arrives (unless the user scrolled up to read).
@@ -354,7 +360,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
             <>
               {!said && <HowItWorks group={g} />}
               {msgs.map((m) => (
-                <GroupMessage key={m.id} m={m} member={byPath.get(m.author)} root={ws?.root} names={names} />
+                <GroupMessage key={m.id} m={m} member={byPath.get(m.author)} root={ws?.root} names={names} chips={chips} />
               ))}
             </>
           )}
@@ -448,10 +454,11 @@ function skipText(t: TFn, m: AgentGroupMessage): string {
   return m.text.replace(/^@[a-z0-9-]+:\s*/i, '')
 }
 
-function GroupMessage({ m, member, root, names }: { m: AgentGroupMessage; member?: AgentGroupMember; root?: string; names: MentionMap }) {
+const GroupMessage = React.memo(function GroupMessage({
+  m, member, root, names, chips,
+}: { m: AgentGroupMessage; member?: AgentGroupMember; root?: string; names: MentionMap; chips: ReturnType<typeof mentionComponents> }) {
   const t = useT()
   const lang = useLang()
-  const chips = React.useMemo(() => mentionComponents(names), [names])
   const [open, setOpen] = React.useState(false)
   const when = (
     <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
@@ -542,7 +549,7 @@ function GroupMessage({ m, member, root, names }: { m: AgentGroupMessage; member
       </div>
     </div>
   )
-}
+})
 
 /* ---------------------------------------------------------------- The box */
 export type ComposerApi = { mention: (slug: string) => void }
