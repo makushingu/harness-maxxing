@@ -1657,6 +1657,7 @@ export const fr: Record<keyof typeof en, string> = {
   'viewer.csvEmpty': 'Tableau vide',
   'viewer.csvSize': '{rows} lignes · {cols} colonnes',
   'viewer.csvMatches': '{count} correspondantes',
+  'viewer.csvColsHidden': '{shown} premières colonnes affichées',
   'viewer.filter': 'Filtrer…',
   'viewer.moreRows': 'Afficher {count} lignes de plus',
   'viewer.htmlError': 'Cette page ne peut pas être affichée ici. Ouvrez-la dans un nouvel onglet ou téléchargez-la.',
