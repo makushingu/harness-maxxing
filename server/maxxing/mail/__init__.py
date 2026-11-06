@@ -371,6 +371,9 @@ def delete_account(acc_id: str) -> None:
         vault.delete(cur["password_key"])
     imap.forget(acc_id)
     with contextlib.suppress(Exception):
+        from .. import agents
+        agents.drop_mail(acc_id)            # the same address added again gets the same id: never its old rights
+    with contextlib.suppress(Exception):
         from . import outbox
         outbox.forget(acc_id)               # its waiting messages end ("Mailbox removed"), before their rows go
     with contextlib.suppress(Exception):

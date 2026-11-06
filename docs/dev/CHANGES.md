@@ -18,6 +18,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `STALE_S` (6 h, or 3 intervals) is looked at as a first check. `retry_pending` drops the held mail when Agents is
   off and re-filters it with the agent's current grant (`watchers` + `_matches`). The check writes and fires nothing
   once the account is gone (`_still_there`). `tests/fake_imap.py`: partial `BODY[]<0.N>` and `(UN)DELETED`.
+- `mail.delete_account` calls `agents.drop_mail(acc_id)`: the account leaves every agent's `mail` list (under
+  `agents._lock`), so a re-added address (same `_slug` id) has no grant.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
