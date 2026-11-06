@@ -27,7 +27,8 @@ def test_storage_permissions_and_binary_round_trip(mx):
     assert mode(d) == "700" and mode(d / "ANDROID_KEYSTORE") == "600"
     assert (d / "ANDROID_KEYSTORE").read_bytes() == BLOB and vault_files.read("ANDROID_KEYSTORE") == BLOB
     meta = config.load_secrets()["vault_files"]["ANDROID_KEYSTORE"]
-    assert meta["sha256"] == hashlib.sha256(BLOB).hexdigest() and meta["size"] == len(BLOB)
+    assert meta["sha256"] == hashlib.sha256(BLOB).hexdigest() and meta["size"] == len(BLOB)   # full one stored
+    assert vault_files.list_files()[0]["sha256"] == hashlib.sha256(BLOB).hexdigest()[:12]      # short one shown
     assert meta["filename"] == "upload.p12" and meta["note"] == "release" and meta["expose"] is False
     assert "content" not in meta and not [p for p in d.iterdir() if p.name.endswith(".tmp")]
 
@@ -56,6 +57,60 @@ def test_a_failed_save_of_a_new_file_leaves_no_orphan(mx, monkeypatch):
     with pytest.raises(OSError):
         vault_files.put("NEW_FILE", b"data")
     assert not (mx["state"] / "secret-files" / "NEW_FILE").exists()
+
+
+def test_a_failed_metadata_save_keeps_the_old_bytes_with_the_old_entry(mx, monkeypatch):
+    vault_files.put("KEPT_FILE", b"old bytes", note="v1")
+    before = config.load_secrets()["vault_files"]["KEPT_FILE"]
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+    with monkeypatch.context() as m:
+        m.setattr(config, "set_secret", boom)
+        with pytest.raises(OSError):
+            vault_files.put("KEPT_FILE", b"new bytes, longer", note="v2")
+    d = mx["state"] / "secret-files"
+    assert (d / "KEPT_FILE").read_bytes() == b"old bytes"
+    assert config.load_secrets()["vault_files"]["KEPT_FILE"] == before
+    assert before["sha256"] == hashlib.sha256(b"old bytes").hexdigest() and before["size"] == 9
+    assert sorted(p.name for p in d.iterdir()) == ["KEPT_FILE"]                     # no temp file left
+
+
+def test_a_failed_rename_restores_the_entry(mx, monkeypatch):
+    vault_files.put("SWAP_FILE", b"old")
+    before = config.load_secrets()["vault_files"]["SWAP_FILE"]
+
+    def boom(*a, **k):
+        raise OSError("rename failed")
+    with monkeypatch.context() as m:
+        m.setattr(vault_files.os, "replace", boom)
+        with pytest.raises(OSError):
+            vault_files.put("SWAP_FILE", b"new")
+    assert vault_files.read("SWAP_FILE") == b"old"
+    assert config.load_secrets()["vault_files"]["SWAP_FILE"] == before
+
+
+def test_crash_leftovers_are_swept_but_never_a_stored_file(mx):
+    vault_files.put("REAL_FILE", b"keep me")
+    d = mx["state"] / "secret-files"
+    old_tmp, new_tmp, orphan = d / ".REAL_FILE.abc.tmp", d / ".OTHER.def.tmp", d / "ORPHAN_FILE"
+    for p in (old_tmp, new_tmp, orphan):
+        p.write_bytes(b"left over")
+    past = __import__("time").time() - vault_files.STALE_TMP_S - 60
+    os.utime(old_tmp, (past, past))
+    os.utime(orphan, (past, past))
+    (d / "sub").mkdir()
+    vault_files.list_files()                                    # listing alone changes nothing
+    assert orphan.exists()
+    vault_files.put("OTHER_FILE", b"x")
+    names = sorted(p.name for p in d.iterdir())
+    assert names == [".OTHER.def.tmp", "OTHER_FILE", "REAL_FILE", "sub"]       # a recent temp may be a live write
+    assert vault_files.read("REAL_FILE") == b"keep me"
+    new_tmp.write_bytes(b"x")
+    os.utime(new_tmp, (past, past))
+    orphan.write_bytes(b"again")
+    assert vault_files.delete("NOT_THERE") is False                              # delete sweeps as well
+    assert sorted(p.name for p in d.iterdir()) == ["OTHER_FILE", "REAL_FILE", "sub"]
 
 
 def test_filename_is_display_only_and_sanitized(mx):
@@ -167,13 +222,23 @@ def test_the_backup_never_holds_the_files_or_their_metadata(mx):
     ws = mx["ws"]
     (ws / "memory.md").write_text("- note\n")
     vault_files.put("BACKUP_FILE", b"TOP-SECRET-BYTES", filename="store.jks", expose=True)
-    (ws / "secret-files").mkdir()                                # a copy under the workspace is pruned as well
-    (ws / "secret-files" / "STRAY.txt").write_text("TOP-SECRET-BYTES")
+    (ws / "projects" / "acme" / "secret-files").mkdir(parents=True)   # a workspace folder of that name is not special
+    (ws / "projects" / "acme" / "secret-files" / "memory.md").write_text("- kept\n")
     snap = backup.snapshot()
-    assert "memory.md" in snap
-    assert not any("secret-files" in rel or "BACKUP_FILE" in rel for rel in snap)
+    assert "memory.md" in snap and "projects/acme/secret-files/memory.md" in snap
+    assert not any("BACKUP_FILE" in rel for rel in snap)
     assert b"TOP-SECRET-BYTES" not in b"".join(snap.values()) and b"vault_files" not in b"".join(snap.values())
-    assert backup.denied("projects/acme/secret-files/STRAY.txt") and backup.scan(snap) == []
+    assert not backup.denied("projects/acme/secret-files/memory.md") and backup.scan(snap) == []
+
+
+def test_the_backup_skips_the_vault_folder_even_inside_the_workspace(mx, monkeypatch):
+    inner = mx["ws"] / "state"
+    monkeypatch.setattr(vault_files, "files_dir", lambda: inner / "secret-files")
+    vault_files.put("INNER_FILE", b"TOP-SECRET-BYTES")
+    (inner / "secret-files" / "memory.md").write_text("TOP-SECRET-BYTES")      # would match ALWAYS otherwise
+    (inner / "memory.md").write_text("- state note\n")
+    snap = backup.collect()
+    assert "state/memory.md" in snap and not any("secret-files" in rel for rel in snap)
 
 
 # ---- API -----------------------------------------------------------------------------------
@@ -184,7 +249,7 @@ def test_api_put_list_update_delete(client, mx):
     assert r.status_code == 200 and r.json() == {"ok": True}
     row = client.get("/api/secret-files").json()[0]
     assert row["name"] == "GCP_SA" and row["filename"] == "sa.p12" and row["note"] == "ci" and row["expose"] is True
-    assert row["size"] == len(BLOB) and row["sha256"] == hashlib.sha256(BLOB).hexdigest()
+    assert row["size"] == len(BLOB) and row["sha256"] == hashlib.sha256(BLOB).hexdigest()[:12]
     assert vault_files.read("GCP_SA") == BLOB
     assert client.put("/api/secret-files/GCP_SA", params={"expose": "false"}).status_code == 200   # metadata only
     assert vault_files.read("GCP_SA") == BLOB and client.get("/api/secret-files").json()[0]["expose"] is False
@@ -208,6 +273,26 @@ def test_api_errors(client, mx):
     r = client.put("/api/secrets/ONE_MIB", json={"value": "v"})
     assert r.status_code == 409 and r.json()["error"] == "name_taken"
     assert client.get("/api/secrets").json()[0]["name"] == "TEXT_KEY" and len(client.get("/api/secrets").json()) == 1
+
+
+def test_api_refuses_other_content_types_and_streams_the_size_check(client, mx, monkeypatch):
+    big = b"x" * (vault_files.MAX_SIZE + 1)
+    r = client.put("/api/secret-files/MULTI_PART", files={"file": ("a.bin", big)})
+    assert r.status_code == 415 and r.json()["error"] == "unsupported_media_type"
+    r = client.put("/api/secret-files/JSON_BODY", json={"x": 1})
+    assert r.status_code == 415 and r.json()["error"] == "unsupported_media_type"
+    r = client.put("/api/secret-files/WITH_PARAM", content=b"ok",
+                   headers={"content-type": "application/octet-stream; charset=binary"})
+    assert r.status_code == 200 and vault_files.read("WITH_PARAM") == b"ok"
+    assert not vault_files.exists("MULTI_PART") and not vault_files.exists("JSON_BODY")
+
+    def chunks():                                   # no Content-Length (chunked): counted while it streams
+        for _ in range(4):
+            yield b"y" * (vault_files.MAX_SIZE // 2)
+    from maxxing import bodylimit
+    monkeypatch.setattr(bodylimit, "DEFAULT_MAX", 64 * vault_files.MAX_SIZE)      # the route's own limit, not the cap
+    r = client.put("/api/secret-files/CHUNKED", content=chunks(), headers={"content-type": "application/octet-stream"})
+    assert r.status_code == 413 and r.json()["error"] == "too_large" and not vault_files.exists("CHUNKED")
 
 
 def test_api_needs_auth_and_csrf_and_has_no_content_endpoint(client, mx):
@@ -253,7 +338,7 @@ def test_cli_put_get_list_delete(mx, monkeypatch, capsysbinary):
     assert rows["TEXT_KEY"]["kind"] == "text" and "sha256" not in rows["TEXT_KEY"]
     assert rows["ANDROID_KEYSTORE"]["kind"] == "file" and rows["ANDROID_KEYSTORE"]["size"] == 9
     assert rows["ANDROID_KEYSTORE"]["filename"] == "upload.p12"
-    assert rows["ANDROID_KEYSTORE"]["sha256"] == hashlib.sha256(b"new bytes").hexdigest()
+    assert rows["ANDROID_KEYSTORE"]["sha256"] == hashlib.sha256(b"new bytes").hexdigest()[:12]
     assert run(monkeypatch, "get-file", "ANDROID_KEYSTORE") == 0
     assert capsysbinary.readouterr().out == b"new bytes"
     assert run(monkeypatch, "delete-file", "ANDROID_KEYSTORE") == 0
@@ -271,6 +356,64 @@ def test_cli_get_file_output_is_private_and_never_overwrites_by_default(mx, monk
     dest.chmod(0o644)
     assert run(monkeypatch, "get-file", "OUT_FILE", "--output", str(dest), "--force") == 0
     assert dest.read_bytes() == BLOB and mode(dest) == "600"
+
+
+def test_cli_get_file_on_a_terminal_prints_text_only(mx, monkeypatch, capsysbinary):
+    vault_files.put("BIN_FILE", BLOB)
+    vault_files.put("TXT_FILE", b'{"type": "service_account"}\n')
+    vault_files.put("ESC_FILE", b"text \x1b]0;title\x07")
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    assert run(monkeypatch, "get-file", "BIN_FILE") == 2 and run(monkeypatch, "get-file", "ESC_FILE") == 2
+    out = capsysbinary.readouterr()
+    assert out.out == b"" and b"-o FILE" in out.err
+    assert run(monkeypatch, "get-file", "TXT_FILE") == 0
+    assert capsysbinary.readouterr().out == b'{"type": "service_account"}\n'
+
+
+def test_cli_get_file_into_a_closed_pipe_is_quiet(mx, monkeypatch, capsys):
+    vault_files.put("PIPE_FILE", BLOB)
+
+    class Closed(io.BytesIO):
+        def write(self, b):
+            raise BrokenPipeError(32, "Broken pipe")
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    fake = io.TextIOWrapper(Closed())
+    fake.fileno = lambda: devnull                     # dup2 target, not the test's real stdout
+    monkeypatch.setattr("sys.stdout", fake)
+    monkeypatch.setattr(fake, "isatty", lambda: False)
+    try:
+        assert run(monkeypatch, "get-file", "PIPE_FILE") == 141
+    finally:
+        os.close(devnull)
+
+
+def test_cli_get_file_output_leaves_no_partial_file(mx, monkeypatch):
+    vault_files.put("PART_FILE", BLOB)
+    dest = mx["tmp"] / "out" / "part.bin"
+    dest.parent.mkdir()
+    real = os.fsync
+
+    def boom(fd):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(os, "fsync", boom)
+    assert run(monkeypatch, "get-file", "PART_FILE", "-o", str(dest)) == 1
+    monkeypatch.setattr(os, "fsync", real)
+    assert list(dest.parent.iterdir()) == []
+    link = mx["tmp"] / "out" / "link"
+    link.symlink_to(mx["tmp"] / "out" / "target")
+    assert run(monkeypatch, "get-file", "PART_FILE", "-o", str(link)) == 1          # a dangling link is kept too
+    assert link.is_symlink() and not (mx["tmp"] / "out" / "target").exists()
+
+
+def test_cli_get_and_delete_of_a_file_name_point_to_the_file_commands(mx, monkeypatch, capsys):
+    vault_files.put("ONLY_FILE", b"x")
+    vault.put("ONLY_TEXT", "v")
+    assert run(monkeypatch, "get", "ONLY_FILE") == 1 and "get-file ONLY_FILE" in capsys.readouterr().err
+    assert run(monkeypatch, "delete", "ONLY_FILE") == 1 and "delete-file ONLY_FILE" in capsys.readouterr().err
+    assert vault_files.exists("ONLY_FILE")
+    assert run(monkeypatch, "get-file", "ONLY_TEXT") == 1 and "keys get" in capsys.readouterr().err
+    assert run(monkeypatch, "delete-file", "ONLY_TEXT") == 1 and "keys delete" in capsys.readouterr().err
+    assert run(monkeypatch, "get", "NOTHING_HERE") == 1 and "no such key" in capsys.readouterr().err
 
 
 def test_cli_put_file_refusals(mx, monkeypatch):

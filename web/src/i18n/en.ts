@@ -1287,7 +1287,7 @@ export const en = {
   'keyfiles.empty': 'No files yet',
   'keyfiles.emptyDesc': 'Store a keystore, a service-account JSON or a certificate here instead of in a project folder.',
   'keyfiles.safety': 'Safe storage: files stay out of the backup, of Git and of memory files, and nothing in this page can read them back. It is not isolation from a session: sessions run as the same user as the server, so a session that is given the path can read the file.',
-  'keyfiles.err.invalidName': 'Letters, digits and underscores, starting with a letter (64 characters at most).',
+  'keyfiles.err.invalidName': 'Capital letters, digits and underscores, starting with a letter (2 to 64 characters).',
   'keyfiles.err.reservedName': 'This name is reserved by the system: choose another one.',
   'keyfiles.err.nameTaken': 'This name is already used by a text key: choose another one.',
   'keyfiles.err.nameTakenKey': 'This name is already used by a file: choose another one.',
@@ -1295,6 +1295,10 @@ export const en = {
   'keyfiles.err.fileRequired': 'Choose a file.',
   'keyfiles.err.empty': 'This file is empty.',
   'keyfiles.err.tooLarge': 'This file is too large: 1 MiB at most.',
+  'keyfiles.err.invalidNote': 'The description holds characters that cannot be stored (control characters): remove them.',
+  'keyfiles.err.unsupportedType': 'The server refused the upload format. Reload the page and try again.',
+  'keyfiles.clear': 'Remove the chosen file',
+  'keyfiles.keepCurrent': 'Keep the current file',
 
   // extensions
   'ext.installed': 'Installed extensions',

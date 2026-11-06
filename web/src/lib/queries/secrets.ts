@@ -27,8 +27,9 @@ export function useDeleteSecret() {
 export function useSecretFiles() {
   return useQuery({ queryKey: qk.secretFiles, queryFn: () => api.get<SecretFile[]>('/api/secret-files') })
 }
-/** Raw-body upload; without `file` (empty body) only the note / switch change and the stored file is kept. */
-export function usePutSecretFile() {
+/** Raw-body upload; without `file` (empty body) only the note / switch change and the stored file is kept.
+ *  `errorToast: false` for a form that shows the error itself. */
+export function usePutSecretFile({ errorToast = true }: { errorToast?: boolean } = {}) {
   return useMut(
     ({ name, file, ...q }: SecretFilePutBody & { name: string }) =>
       request<Ok>(`/api/secret-files/${seg(name)}`, {
@@ -40,6 +41,7 @@ export function usePutSecretFile() {
       optimistic: ({ name, file, ...b }) =>
         file ? [] : [{ key: qk.secretFiles, update: (l: SecretFile[]) => l.map((x) => (x.name === name ? { ...x, ...b } : x)) }],
       invalidate: [qk.secretFiles],
+      errorToast,
     },
   )
 }
