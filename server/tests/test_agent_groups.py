@@ -183,7 +183,8 @@ def test_rename_topic_and_project_follow(client, topic, mx):
     assert r.status_code == 200, r.text
     g = client.get("/api/agent-groups/zeta/team").json()
     assert g["members"][0]["path"] == "projects/zeta/topics/news/agents/writer"
-    assert [m["text"] for m in client.get("/api/agent-groups/zeta/team/messages").json()["messages"]][-1] == "hello"
+    msgs = client.get("/api/agent-groups/zeta/team/messages").json()["messages"]
+    assert msgs[-1]["text"] == "hello" and msgs[-1]["author"] == "projects/zeta/topics/news/agents/writer"
     assert agent_rooms._read_state("projects/zeta/groups/team")["sessions"] == {}
 
 
