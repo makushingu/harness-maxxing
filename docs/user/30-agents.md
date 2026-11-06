@@ -246,8 +246,9 @@ until you switch it on):
   from outside) they ask like any other action, `maxxing` included, unless an allowed tool covers them;
 - it never runs in **bypass** mode (the sandbox would not hold the domain list): **bypass** becomes **accept
   edits**;
-- inside its runs, `maxxing` only does the agent's own work: `feed post|list`, `agents send|show|list|templates`,
-  `keys get|list` (its keys only), `status`. Anything that changes the server (a schedule, an MCP server, an update…)
+- inside its runs, `maxxing` only does the agent's own work: `feed post|list` (it lists only the sources its feed
+  triggers watch), `agents send|show|list|templates` (`show` for itself only, without webhook URLs; `list` gives the
+  agents' paths and names only), `keys get|list` (its keys only), `status`. Anything that changes the server (a schedule, an MCP server, an update…)
   is refused.
 - it **never changes itself**: its settings (`agent.json`: triggers, limits, keys, sandbox...), its role
   (`CLAUDE.md`) and the Claude Code project files of its folder and topic (`.claude/`, an existing `.mcp.json`) are read-only in
