@@ -163,8 +163,12 @@ nothing is created or changed at your providers.
 - **DNS health** of every domain that receives mail: MX, SPF (one record, under 10 lookups), DKIM (looked up on a few
   common selectors), DMARC (its policy), each problem with what to change, for example "No DMARC record: add a TXT
   record `_dmarc.example.com` `v=DMARC1; p=none; rua=mailto:you@example.com`". A subdomain without its own record
-  follows the policy of its parent domain: Harness says so and never suggests `p=none` there (it would weaken it).
-  An SPF record must end with `~all` or `-all`: `+all`, `?all` or no `all` at all are flagged. The report address is always on the
+  follows the policy of its parent domain (its `sp=` when it has one): Harness says so, never suggests `p=none` there
+  (it would weaken it) and never suggests lowering the parent's `p=`. An invalid parent record (two records, no `p=`)
+  protects nothing, and Harness says so. An SPF record must end with `~all` or `-all` (its own, or the one of its
+  `redirect=` target): `+all`, `?all` or no `all` at all are flagged, and so is an `include:` loop. The suggested SPF
+  record covers the SMTP server of your mailboxes on that domain; when the sending service is not known, Harness says
+  which `include:` to add instead of offering a record built from the MX alone. The report address is always on the
   same domain (one of your mailboxes there, else `dmarc@<domain>`): reports sent to another domain never arrive.
 
 Providers are read again after 5 minutes, the DNS after an hour; **Refresh** reads everything now.
