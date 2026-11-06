@@ -11,6 +11,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   the new uid, `data.changed` = true, feed event resolved); `approve` refuses a changed row (`changed`) and ends a row
   whose draft is gone (`imap.has`, IMAP errors count as present). `store.outbox_data` updates only waiting rows.
   `maxxing mail write --forward` stores `forward.names`; the request body lists them ("Attachments (n): ...").
+- `send._count_lock` is a `config.ProcessLock("mail-sent-count")`: the daily cap is counted under a flock shared
+  by the server and `maxxing mail write --send`.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
