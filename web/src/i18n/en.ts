@@ -1695,6 +1695,12 @@ export const en = {
   'infra.mail.f.dmarc_no_policy': 'Use for example: {record}',
   'infra.mail.p.dmarc_none': 'DMARC on {domain} only watches (p=none).',
   'infra.mail.f.dmarc_none': 'Once SPF and DKIM pass for every service that sends as you, switch to p=quarantine, then p=reject.',
+  'infra.mail.p.dmarc_inherited': 'No DMARC record on {domain}: the policy of {parent} applies (p={policy}).',
+  'infra.mail.f.dmarc_inherited': 'Nothing to add. Do not add a p=none record here: it would weaken that policy for this domain.',
+  'infra.mail.p.dmarc_inherited_none': 'No DMARC record on {domain}: the policy of {parent} applies (p=none).',
+  'infra.mail.f.dmarc_inherited_none': 'Once SPF and DKIM pass, switch the record of {parent} to p=quarantine, then p=reject.',
+  'infra.mail.p.spf_neutral': 'The SPF record of {domain} does not end with ~all or -all: it says nothing about other senders, so anyone can claim to send mail as @{domain}.',
+  'infra.mail.f.spf_neutral': 'End it with ~all (or -all).',
 
   // system
   'system.health': 'Health',
