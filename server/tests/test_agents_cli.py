@@ -194,3 +194,11 @@ def test_two_watch_at_once_keep_both_triggers(client, topic, monkeypatch, capsys
     assert cli.main(["agents", "watch", "w", "--source", "mine"]) == 0
     other[0].join(5)
     assert sorted(t.get("source") for t in agents.load(path)["triggers"]) == ["mine", "other"]
+
+
+def test_an_unreadable_role_file_is_a_plain_error(client, topic, tmp_path, capsys):
+    client.put("/api/settings", json={"agents_page": True})
+    f = tmp_path / "r.bin"
+    f.write_bytes(b"\xff\xfe\x00bad")
+    assert cli.main(["agents", "create", "acme/blog/x1", "--role-file", str(f)]) == 2
+    assert "Cannot read" in capsys.readouterr().err
