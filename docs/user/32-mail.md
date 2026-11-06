@@ -51,12 +51,15 @@ Folders on the left, messages in the middle, the open message on the right (one 
 - The paperclip attaches files (25 MB in total). A forward keeps the original attachments; remove the ones you do
   not want.
 - **Save the draft** files it in the Drafts folder of the mailbox (so you find it in your phone's mail app too).
-  Open a message of the Drafts folder to go on writing it. `Ctrl+Enter` sends.
+  Open a message of the Drafts folder to go on writing it, attachments included. `Ctrl+Enter` sends.
+- What you type is also kept in this browser as you go: after a reload, a closed tab or Back, the message opens again
+  the next time you come to the E-mail page (signing out clears it).
 - The message leaves through the SMTP server of your mailbox, never from this server. A copy goes to Sent (Gmail
   and Outlook file it themselves), Bcc included (the Bcc stays in the draft and the Sent copy, never in what the
   recipients get). A reply marks the original as answered, also when you send it later from Drafts.
 - If the connection to the mail server breaks after it received the message, Harness says it was **probably sent**
-  instead of offering to send it again: check the Sent folder (or ask the recipient) first. The draft is kept.
+  instead of offering to send it again: check the Sent folder (or ask the recipient) first. The draft is kept, and the
+  composer asks before a second try.
 - Replying to a mail whose **Reply-To** is not its sender sends the answer to the Reply-To address. That address
   never becomes a known contact by itself, so agents with "new recipients wait for my OK" still ask before writing
   to it.

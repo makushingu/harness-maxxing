@@ -195,14 +195,14 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
           {servers && (
             <div className="grid gap-3 rounded-lg border p-3">
               <p className="text-xs font-medium text-muted-foreground">{t('mail.acc.incoming')}</p>
-              <div className="grid grid-cols-[1fr_5.5rem_8rem] gap-2">
-                <Input aria-label="IMAP" value={f.imap_host} onChange={(e) => set('imap_host', e.target.value)} placeholder="imap.example.com" required />
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8rem]">
+                <Input aria-label="IMAP" className="max-sm:col-span-2" value={f.imap_host} onChange={(e) => set('imap_host', e.target.value)} placeholder="imap.example.com" required />
                 <Input aria-label={t('mail.acc.port')} inputMode="numeric" value={f.imap_port} onChange={(e) => set('imap_port', e.target.value)} />
                 <Select aria-label={t('mail.acc.security')} value={f.imap_tls} onValueChange={(v) => set('imap_tls', v as MailTls)} options={tlsOptions} />
               </div>
               <p className="text-xs font-medium text-muted-foreground">{t('mail.acc.outgoing')}</p>
-              <div className="grid grid-cols-[1fr_5.5rem_8rem] gap-2">
-                <Input aria-label="SMTP" value={f.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="smtp.example.com" required />
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8rem]">
+                <Input aria-label="SMTP" className="max-sm:col-span-2" value={f.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="smtp.example.com" required />
                 <Input aria-label={t('mail.acc.port')} inputMode="numeric" value={f.smtp_port} onChange={(e) => set('smtp_port', e.target.value)} />
                 <Select aria-label={t('mail.acc.security')} value={f.smtp_tls} onValueChange={(v) => set('smtp_tls', v as MailTls)} options={tlsOptions} />
               </div>

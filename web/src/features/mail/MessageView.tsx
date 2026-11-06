@@ -3,10 +3,11 @@
 // a click on "Show images".
 import * as React from 'react'
 import {
-  Archive, ArrowLeft, Download, Flag, FolderInput, Forward, ImageOff, Inbox, MailOpen, Paperclip, Pencil, Reply, ReplyAll, ShieldAlert, Trash2,
+  Archive, ArrowLeft, Download, Flag, FolderInput, Forward, ImageOff, Inbox, MailOpen, MoreHorizontal, Paperclip, Pencil, Reply, ReplyAll, ShieldAlert, Trash2,
 } from 'lucide-react'
 import {
-  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Skeleton, Tooltip,
+  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Sensitive, Skeleton, Tooltip, useMask,
+  usePresentation,
 } from '@/components/ui'
 import { errorMessage } from '@/lib/api'
 import { fmtBytes, fmtDate } from '@/lib/format'
@@ -15,7 +16,7 @@ import { mailAttachmentUrl, useMailMessage } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { SeenByLine, Verified } from './agents'
-import { avatarTone, folderIcon, folderLabel, initials, whoFull } from './shared'
+import { avatarTone, clean, folderIcon, folderLabel, initials, whoFull } from './shared'
 
 function srcdoc(html: string, images: boolean): string {
   const csp = `default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:${images ? ' https: http:' : ''}; media-src data:`
@@ -48,6 +49,8 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
   const lang = useLang()
   const { data: m, isLoading, error } = useMailMessage(acc, folder, uid)
   const [images, setImages] = React.useState(false)
+  const presenting = usePresentation()
+  const mask = useMask()
   React.useEffect(() => setImages(false), [uid, folder, acc])
 
   if (isLoading) {
@@ -65,103 +68,138 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
   const inJunk = currentRole === 'junk'
   const moveTargets = folders.filter((f) => f.name !== folder)
 
+  const junkAction: MailAction = inTrash || inJunk ? 'inbox' : 'junk'
+  const junkLabel = inTrash || inJunk ? t('mail.act.inbox') : t('mail.act.junk')
+  const flagAction: MailAction = m.flagged ? 'unflag' : 'flag'
+  const flagLabel = m.flagged ? t('mail.act.unflag') : t('mail.act.flag')
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-0.5 border-b px-2 py-1.5">
-        {onBack && (
-          <Button variant="ghost" size="icon-sm" onClick={onBack} aria-label={t('common.back')}>
-            <ArrowLeft />
-          </Button>
-        )}
-        {currentRole === 'drafts' ? (
-          <Button size="sm" variant="outline" className="mr-1" onClick={() => onCompose('draft')} data-testid="mail-edit-draft">
-            <Pencil /> {t('mail.compose.editDraft')}
-          </Button>
-        ) : (
-          <>
-            <IconAction label={t('mail.compose.reply')} onClick={() => onCompose('reply')}>
-              <Reply />
-            </IconAction>
-            {m.to.length + m.cc.length > 1 && (
-              <IconAction label={t('mail.compose.replyAll')} onClick={() => onCompose('replyall')}>
-                <ReplyAll />
+      {/* a narrow reader (phone, three panes on a small laptop) keeps the main actions and puts the rest under "…" */}
+      <div className="@container shrink-0 border-b">
+        <div className="flex items-center gap-0.5 px-2 py-1.5">
+          {onBack && (
+            <Button variant="ghost" size="icon-sm" onClick={onBack} aria-label={t('common.back')}>
+              <ArrowLeft />
+            </Button>
+          )}
+          {currentRole === 'drafts' ? (
+            <Button size="sm" variant="outline" className="mr-1" onClick={() => onCompose('draft')} data-testid="mail-edit-draft">
+              <Pencil /> {t('mail.compose.editDraft')}
+            </Button>
+          ) : (
+            <>
+              <IconAction label={t('mail.compose.reply')} onClick={() => onCompose('reply')}>
+                <Reply />
               </IconAction>
-            )}
-            <IconAction label={t('mail.compose.forward')} onClick={() => onCompose('forward')}>
-              <Forward />
+              {m.to.length + m.cc.length > 1 && (
+                <IconAction label={t('mail.compose.replyAll')} onClick={() => onCompose('replyall')}>
+                  <ReplyAll />
+                </IconAction>
+              )}
+              <IconAction label={t('mail.compose.forward')} onClick={() => onCompose('forward')}>
+                <Forward />
+              </IconAction>
+            </>
+          )}
+          <span className="mx-1 h-5 w-px shrink-0 bg-border" />
+          {currentRole !== 'archive' && (
+            <IconAction label={t('mail.act.archive')} onClick={() => onAction('archive')}>
+              <Archive />
             </IconAction>
-          </>
-        )}
-        <span className="mx-1 h-5 w-px bg-border" />
-        {currentRole !== 'archive' && (
-          <IconAction label={t('mail.act.archive')} onClick={() => onAction('archive')}>
-            <Archive />
+          )}
+          <IconAction label={inTrash || inJunk ? t('mail.act.deleteForever') : t('mail.act.trash')} onClick={() => onAction(inTrash || inJunk ? 'delete' : 'trash')}>
+            <Trash2 className={cn((inTrash || inJunk) && 'text-destructive')} />
           </IconAction>
-        )}
-        {inTrash || inJunk ? (
-          <IconAction label={t('mail.act.inbox')} onClick={() => onAction('inbox')}>
-            <Inbox />
-          </IconAction>
-        ) : (
-          <IconAction label={t('mail.act.junk')} onClick={() => onAction('junk')}>
-            <ShieldAlert />
-          </IconAction>
-        )}
-        <IconAction label={inTrash || inJunk ? t('mail.act.deleteForever') : t('mail.act.trash')} onClick={() => onAction(inTrash || inJunk ? 'delete' : 'trash')}>
-          <Trash2 className={cn((inTrash || inJunk) && 'text-destructive')} />
-        </IconAction>
-        <span className="mx-1 h-5 w-px bg-border" />
-        <IconAction label={t('mail.act.unread')} onClick={() => onAction('unseen')}>
-          <MailOpen />
-        </IconAction>
-        <IconAction label={m.flagged ? t('mail.act.unflag') : t('mail.act.flag')} onClick={() => onAction(m.flagged ? 'unflag' : 'flag')}>
-          <Flag className={cn(m.flagged && 'fill-amber-400 text-amber-500')} />
-        </IconAction>
-        <DropdownMenu>
-          <Tooltip content={t('mail.act.move')}>
+          <div className="hidden items-center gap-0.5 @[26rem]:flex">
+            <IconAction label={junkLabel} onClick={() => onAction(junkAction)}>
+              {inTrash || inJunk ? <Inbox /> : <ShieldAlert />}
+            </IconAction>
+            <span className="mx-1 h-5 w-px shrink-0 bg-border" />
+            <IconAction label={t('mail.act.unread')} onClick={() => onAction('unseen')}>
+              <MailOpen />
+            </IconAction>
+            <IconAction label={flagLabel} onClick={() => onAction(flagAction)}>
+              <Flag className={cn(m.flagged && 'fill-amber-400 text-amber-500')} />
+            </IconAction>
+            <DropdownMenu>
+              <Tooltip content={t('mail.act.move')}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label={t('mail.act.move')}>
+                    <FolderInput />
+                  </Button>
+                </DropdownMenuTrigger>
+              </Tooltip>
+              <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                {moveTargets.map((f) => {
+                  const Icon = folderIcon(f)
+                  return (
+                    <DropdownMenuItem key={f.name} onSelect={() => onAction('move', f.name)}>
+                      <Icon /> {f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t('mail.act.move')}>
-                <FolderInput />
+              <Button variant="ghost" size="icon-sm" aria-label={t('mail.more')} className="@[26rem]:hidden" data-testid="mail-msg-more">
+                <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
-          </Tooltip>
-          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-            {moveTargets.map((f) => {
-              const Icon = folderIcon(f)
-              return (
-                <DropdownMenuItem key={f.name} onSelect={() => onAction('move', f.name)}>
-                  <Icon /> {folderLabel(f, t)}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <DropdownMenuContent align="end" className="max-h-96 overflow-y-auto">
+              <DropdownMenuItem onSelect={() => onAction(junkAction)}>
+                {inTrash || inJunk ? <Inbox /> : <ShieldAlert />} {junkLabel}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction('unseen')}>
+                <MailOpen /> {t('mail.act.unread')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction(flagAction)}>
+                <Flag /> {flagLabel}
+              </DropdownMenuItem>
+              {moveTargets.length > 0 && <DropdownMenuSeparator />}
+              {moveTargets.map((f) => {
+                const Icon = folderIcon(f)
+                return (
+                  <DropdownMenuItem key={f.name} onSelect={() => onAction('move', f.name)}>
+                    <Icon /> {t('mail.moveTo', { folder: f.role ? folderLabel(f, t) : mask(folderLabel(f, t)) })}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="grid gap-3 px-5 pt-4 pb-3">
-          <h2 className="text-lg leading-snug font-semibold break-words">{m.subject || t('mail.noSubject')}</h2>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 px-5 pt-4 pb-3">
+          <h2 className="text-lg leading-snug font-semibold break-words">
+            <Sensitive length={14}>{m.subject ? <bdi>{clean(m.subject)}</bdi> : t('mail.noSubject')}</Sensitive>
+          </h2>
           <div className="flex items-start gap-3">
-            <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold', avatarTone(m.from))}>{initials(m.from)}</span>
-            <div className="grid min-w-0 flex-1 gap-0.5 text-[13px]">
+            <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold', avatarTone(m.from))}>{presenting ? '•' : initials(m.from)}</span>
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-0.5 text-[13px]">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate font-medium">
-                    {m.from.name || m.from.email}
-                    {m.from.name && <span className="ml-1.5 font-normal text-muted-foreground">{m.from.email}</span>}
-                  </span>
+                  <Sensitive length={12}>
+                    <span className="truncate font-medium" title={whoFull(m.from)}>
+                      <bdi>{clean(m.from.name) || clean(m.from.email)}</bdi>
+                      {m.from.name && <span className="ml-1.5 font-normal text-muted-foreground"><bdi>{clean(m.from.email)}</bdi></span>}
+                    </span>
+                  </Sensitive>
                   <Verified on={m.from_verified} />
                 </span>
                 {m.date && <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(m.date, lang)}</span>}
               </div>
               {!!m.to.length && (
                 <span className="truncate text-muted-foreground">
-                  {t('mail.to')} {m.to.map(whoFull).join(', ')}
+                  {t('mail.to')} <Sensitive length={10}>{m.to.map((x, i) => <React.Fragment key={i}>{i > 0 && ', '}<bdi>{whoFull(x)}</bdi></React.Fragment>)}</Sensitive>
                 </span>
               )}
               {!!m.cc.length && (
                 <span className="truncate text-muted-foreground">
-                  {t('mail.cc')} {m.cc.map(whoFull).join(', ')}
+                  {t('mail.cc')} <Sensitive length={10}>{m.cc.map((x, i) => <React.Fragment key={i}>{i > 0 && ', '}<bdi>{whoFull(x)}</bdi></React.Fragment>)}</Sensitive>
                 </span>
               )}
             </div>
@@ -177,11 +215,13 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
                     href={mailAttachmentUrl(acc, folder, uid, a.index, viewable)}
                     target={viewable ? '_blank' : undefined}
                     rel="noopener noreferrer"
-                    download={viewable ? undefined : a.filename}
+                    download={viewable ? undefined : clean(a.filename) || 'attachment'}
                     className="flex max-w-64 items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 text-xs hover:bg-accent/60"
                   >
                     <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{a.filename}</span>
+                    <span className="min-w-0 truncate" title={presenting ? undefined : clean(a.filename)}>
+                      <Sensitive length={8}><bdi>{clean(a.filename)}</bdi></Sensitive>
+                    </span>
                     <span className="shrink-0 text-muted-foreground">{fmtBytes(a.size)}</span>
                     {!viewable && <Download className="size-3.5 shrink-0 text-muted-foreground" />}
                   </a>
@@ -199,11 +239,13 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
             </div>
           )}
         </div>
-        {m.html ? (
+        {presenting ? (
+          <Sensitive block className="mx-5 mb-6 min-h-40">{null}</Sensitive>
+        ) : m.html ? (
           <div className="mx-3 mb-3 flex min-h-[24rem] flex-1 overflow-hidden rounded-lg border bg-white">
             <iframe
               key={`${uid}-${images}`}
-              title={m.subject || 'message'}
+              title={clean(m.subject) || 'message'}
               sandbox="allow-popups allow-popups-to-escape-sandbox"
               referrerPolicy="no-referrer"
               srcDoc={srcdoc(m.html, images)}
