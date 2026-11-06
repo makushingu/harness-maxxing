@@ -317,3 +317,15 @@ async def test_an_alert_with_a_lone_surrogate_is_still_sent(api, tg, svc):
                                                      "telegram": "loud", **ev})   # valid JSON, not UTF-8
         assert len(tg.sent()) > n, ev
     assert "bad ? end" in _bot("bad", tg)["text"] and "a?.png" in _bot("📎", tg)["text"]
+
+
+def test_an_alert_in_emoji_fits_in_one_telegram_message():
+    import html
+    from maxxing.telegram import format as fmt
+    ev = {"id": 1, "title": "😀" * 300, "body": "😀" * 1500, "attachments": ["😀" * 100 + str(i) for i in range(5)],
+          "resolved": True, "resolution": "😀" * 200, "level": "error"}
+    shown = html.unescape(fmt.strip_tags(gateway._alert_html(ev)))
+    assert len(shown.encode("utf-16-le")) // 2 <= 4096                  # Telegram counts UTF-16 units: an emoji is 2
+    assert "(cut, open it to see all)" in shown and gateway._alert_cut(ev)
+    short = {**ev, "title": "Done", "attachments": [], "resolution": "ok", "body": "😀" * 1500}
+    assert not gateway._alert_cut(short) and gateway._alert_html(short).count("😀") == 1500
