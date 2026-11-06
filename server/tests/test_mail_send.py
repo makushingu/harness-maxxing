@@ -316,3 +316,11 @@ def test_a_line_separator_in_reply_headers_is_left_out(acc):
     assert msg["In-Reply-To"] == "<i@x>" and msg["References"] == "<i@x>"
     msg.as_bytes()
 
+
+@pytest.mark.parametrize("ctype", ["message/delivery-status", "message/partial", "message/external-body",
+                                   "multipart/mixed"])
+def test_an_attachment_of_a_message_or_multipart_type_goes_as_a_file(acc, ctype):
+    msg, _ = send.build(acc, {"to": "a@x.org", "text": "x"}, [("report.txt", ctype, b"Status: 5.0.0\r\n")])
+    (part,) = msg.iter_attachments()
+    assert part.get_content_type() == "application/octet-stream" and part.get_content() == b"Status: 5.0.0\r\n"
+    assert b"report.txt" in msg.as_bytes()
