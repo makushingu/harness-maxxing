@@ -37,6 +37,9 @@ import { GroupForm, claudeTopic } from './GroupForm'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
 import { MentionChip, mentionComponents, mentionNodes, namedIn, useMentionMap, type MentionMap } from './mentions'
+import { AttachButton, AttachList, useAttachments } from './attach'
+import { AttachmentStrip } from '@/pages/sessions/Items'
+import { groupUrl } from '@/lib/queries'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -503,11 +506,14 @@ const GroupMessage = React.memo(function GroupMessage({
   if (m.author === 'me')
     return (
       <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="mine">
-        <div className="min-w-0 rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
-          <p className="whitespace-pre-wrap break-words">
-            <Sensitive block>{mentionNodes(m.text, names, 'primary')}</Sensitive>
-          </p>
-        </div>
+        {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
+        {m.text && (
+          <div className="min-w-0 rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
+            <p className="whitespace-pre-wrap break-words">
+              <Sensitive block>{mentionNodes(m.text, names, 'primary')}</Sensitive>
+            </p>
+          </div>
+        )}
         <span className="flex justify-end text-[11px] text-muted-foreground">{when}</span>
       </div>
     )
@@ -572,6 +578,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const touch = useCompact()
   const say = useGroupSay()
   const [text, setText] = React.useState('')
+  const files = useAttachments(g.path, groupUrl(g.path, '/uploads'))
   const [caret, setCaret] = React.useState(0)
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
@@ -627,12 +634,23 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   React.useImperativeHandle(ref, () => ({ mention: (slug: string) => insert(slug) }))
   const pick = (p: MentionPick) => at && insert(p.slug, at.start, caret)
 
+  const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
   const submit = () => {
     const v = text.trim()
-    if (!v || !ready || say.isPending) return
+    if (!canSend || !ready || say.isPending) return
+    const kept = files.atts
     setText('')
     setCaret(0)
-    say.mutate({ path: g.path, text: v }, { onError: () => setText(v) })
+    files.restore([])
+    say.mutate(
+      { path: g.path, text: v, attachments: files.paths },
+      {
+        onError: () => {
+          setText(v)
+          files.restore(kept)
+        },
+      },
+    )
   }
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
@@ -662,7 +680,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
 
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50">
+      <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(ready ? files.dropProps : {})}>
         {popup && (
           <div role="listbox" aria-label={t('groups.mention.title')} className="absolute inset-x-0 bottom-full z-20 mb-1.5 grid max-h-64 gap-0.5 overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg" data-testid="group-mention-list">
             {picks.map((p, i) => (
@@ -702,10 +720,13 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               ))}
             </div>
           )}
+          <AttachList atts={files.atts} onRemove={files.remove} />
           <div className="flex items-end gap-1">
+            <AttachButton onFiles={files.add} />
             <Textarea
               ref={input}
               value={text}
+              onPaste={files.onPaste}
               onChange={(e) => {
                 setText(e.target.value)
                 setCaret(e.target.selectionStart ?? e.target.value.length)
@@ -725,7 +746,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="group-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!text.trim()} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
+            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
               <Send />
             </Button>
           </div>

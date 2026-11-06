@@ -98,7 +98,7 @@ export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_
 export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source: string; levels: FeedLevel[]; match: string; prompt: string; hook_id?: string }
 export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
 export type AgentThreadKind = 'note' | 'run' | 'result' | 'skip' | 'approval'
-export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string; /** approval / its note: the request id */ approval?: string; /** note of an approval: allow, deny, timeout, expired */ status?: string }
+export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string; /** approval / its note: the request id */ approval?: string; /** note of an approval: allow, deny, timeout, expired */ status?: string; /** run: the files sent with it (absolute paths) */ attachments?: string[] }
 export type AgentRuleTool = 'Bash' | 'Write' | 'Edit' | 'WebFetch' | '*'
 /** "Refuse <tool> when it contains <match>", `reason` shown to Claude. */
 export type AgentRule = { tool: AgentRuleTool; match: string; reason: string }
@@ -254,6 +254,8 @@ export type AgentGroupMessage = {
   limit?: string
   /** note: "New topic" (the members start fresh sessions) */
   reset?: boolean
+  /** the owner's message: the files sent with it (absolute paths) */
+  attachments?: string[]
 }
 export type AgentGroupInput = {
   /** create only */
@@ -366,7 +368,7 @@ export type PatchSessionBody = { title?: string; model?: string; archived?: bool
 export type SendMessageBody = { text: string; attachments?: string[]; hud?: boolean; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string }
 export type SendMessageResult = { queued: boolean; session: Session }
 export type SessionSearchHit = { id: string; title: string; path: string; snippet: string; at: number }
-export type SearchKind = 'session' | 'file' | 'memory' | 'task'
+export type SearchKind = 'session' | 'file' | 'memory' | 'task' | 'group'
 /** Full-text hit: `snippet` marks the matched words with \u0002 … \u0003. */
 export type SearchHit = { kind: SearchKind; id: string; path: string; title: string; snippet: string; at: number | null; score: number }
 export type SearchResult = { results: SearchHit[]; took_ms: number }

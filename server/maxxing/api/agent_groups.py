@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from .. import agent_rooms, agents
@@ -80,7 +80,8 @@ def _fields(body: GroupIn) -> dict:
 
 
 class SayIn(BaseModel):
-    text: str = Field(max_length=agent_rooms.TEXT_MAX)
+    text: str = Field("", max_length=agent_rooms.TEXT_MAX)
+    attachments: list[str] = Field(default_factory=list, max_length=agents.ATTACH_MAX)   # from .../uploads
 
 
 class PauseIn(BaseModel):
@@ -141,9 +142,23 @@ def group_messages(project: str, name: str, limit: int = Query(200, ge=1, le=100
 def group_say(project: str, name: str, body: SayIn):
     _on()
     try:
-        return agent_rooms.say(_get(project, name), body.text)
+        return agent_rooms.say(_get(project, name), body.text, body.attachments)
     except agents.AgentError as e:
         raise _bad(e) from None
+
+
+@router.post("/{project}/{name}/uploads")
+async def group_uploads(project: str, name: str, file: list[UploadFile] = File(...)):
+    """Files for the next message of the owner, saved under <group>/attachments/YYYY-MM/ (read by every member)."""
+    _on()
+    from ..sessions.service import SessionError
+    from .sessions import save_uploads
+    path = _get(project, name)
+    try:
+        folder = await asyncio.to_thread(agent_rooms.attachments_dir, path)
+    except SessionError as e:
+        raise HTTPException(e.status, detail={"error": e.code, "message": str(e)}) from None
+    return {"files": await asyncio.to_thread(save_uploads, file, folder)}
 
 
 @router.post("/{project}/{name}/stop")

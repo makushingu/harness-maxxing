@@ -234,16 +234,18 @@ export function fetchBefore(id: string, before: number, limit = 200, signal?: Ab
   return api.get<SessionEventsBackPage>(`/api/sessions/${seg(id)}/events`, { before, limit }, { signal })
 }
 
-/** Upload one attachment with progress (XHR: fetch has no upload progress). Resolves to the saved file. */
+/** Upload one attachment with progress (XHR: fetch has no upload progress). Resolves to the saved file.
+ *  `url`: another upload route (an agent group's `/api/agent-groups/<p>/<g>/uploads`). */
 export function uploadAttachment(
   topicPath: string,
   file: File,
   onProgress?: (loaded: number, total: number) => void,
   signal?: AbortSignal,
+  url?: string,
 ): Promise<UploadResult['files'][number]> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `/api/uploads?path=${encodeURIComponent(topicPath)}`)
+    xhr.open('POST', url || `/api/uploads?path=${encodeURIComponent(topicPath)}`)
     xhr.setRequestHeader('X-Maxxing', '1')
     xhr.withCredentials = true
     xhr.upload.onprogress = (e) => onProgress?.(e.loaded, e.total || file.size)

@@ -5,7 +5,22 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.121 - 2026-11-06
+
+- Attachments of agents and groups: `agents.checked_attachments(base, files)` (≤ `ATTACH_MAX` 10; each a regular file
+  under `<base>/attachments/`, `realpath` = the lexical path below that folder, so no link below it; the workspace
+  itself may sit behind one) for `POST /api/agents/.../run` (`attachments`, files only = "See the attached files.")
+  and `agent_rooms.say(path, text, attachments)`. Uploads: an agent's through `/api/uploads?path=<agent>` (topic_dir
+  takes an agent path), a group's through `POST /api/agent-groups/{p}/{g}/uploads` (`agent_rooms.attachments_dir`).
+  `service.month_dir` (used by `uploads_dir`) refuses `attachments/` or the month folder as a symbolic link (a
+  sandboxed agent writes its own folder). `agent_guard.locked_paths` adds `<agent>/attachments` (created) to the
+  read-only paths. Thread `run` and group `message` items keep `attachments`; a member gets the files of the owner's
+  message as session attachments only the first time it sees it (`_origin_files`, by `since`), their paths in the text
+  every time (`_files_note` in the framed history).
+- Search: kind `group` (`search._index_groups`, key `g:<group path>`, with the sessions at every refresh: one stat of
+  the room and of group.json; a changed room is dropped and indexed again whole, at most 2 MB). `api/search` leaves
+  `group` out while `agents_page` is off. Palette: agents and groups as static commands (`useAgents` /
+  `useAgentGroups`, loaded when the palette opens and Agents is on), `group` hits open the group page.
 
 - Mail outbox: `POST /api/mail/{acc}/draft` on a waiting agent draft calls `outbox.draft_saved` (row `saved` moves to
   the new uid, `data.changed` = true, feed event resolved); `approve` refuses a changed row (`changed`) and ends a row

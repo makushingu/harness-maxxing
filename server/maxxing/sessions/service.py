@@ -1358,11 +1358,21 @@ def wait_turn(sid: str, timeout_s: float) -> dict:
 
 
 def uploads_dir(path: str) -> Path:
-    """<topic>/attachments/YYYY-MM/ (created)."""
+    """<topic>/attachments/YYYY-MM/ (created). Also the folder of an agent (<agent>/attachments/). Never through a
+    symbolic link: an agent that writes its own folder cannot send the owner's uploads elsewhere."""
     try:
-        d = workspace.topic_dir(path) / "attachments" / time.strftime("%Y-%m")
+        base = workspace.topic_dir(path)
     except ValueError as e:
         raise SessionError(400, "bad_path", str(e)) from None
-    d.mkdir(parents=True, exist_ok=True)
+    return month_dir(base / "attachments")
+
+
+def month_dir(top: Path) -> Path:
+    """<top>/YYYY-MM/ (created), refused when <top> or the month folder is a symbolic link."""
+    d = top / time.strftime("%Y-%m")
+    for x in (top, d):
+        if x.is_symlink():
+            raise SessionError(400, "bad_path", f"{x.name} is a symbolic link")
+        x.mkdir(exist_ok=True)
     return d
 

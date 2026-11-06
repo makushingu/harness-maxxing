@@ -121,6 +121,7 @@ def _fields(body: AgentIn) -> dict:
 class RunIn(BaseModel):
     text: Optional[str] = None
     reply_to: Optional[str] = None       # a thread message: its session goes on (no new session)
+    attachments: list[str] = Field(default_factory=list, max_length=agents.ATTACH_MAX)  # under <agent>/attachments/
 
 
 class WebhookIn(BaseModel):
@@ -279,8 +280,15 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
     if not agents.exists(path):
         raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
     text = (body.text or "").strip()
+    try:
+        files = agents.checked_attachments(agents.folder(path), body.attachments)
+    except agents.AgentError as e:
+        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
+    if files and not text:
+        text = "See the attached files."
     try:                       # typed by the user: an instruction, not outside data (no markers)
-        return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None)
+        return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None,
+                           attachments=files or None)
     except Exception as e:     # SessionError (bad model...)
         raise HTTPException(getattr(e, "status", 500),
                             detail={"error": getattr(e, "code", "run_failed"), "message": str(e)}) from None
