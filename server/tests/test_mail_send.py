@@ -298,3 +298,21 @@ def test_an_address_the_parser_rejects_is_refused_not_dropped(acc, field, value)
     msg, rcpts = send.build(acc, {"to": "a@x.org, ", "cc": ", b@x.org,", "text": "t"})      # stray commas are fine
     assert rcpts == ["a@x.org", "b@x.org"]
 
+
+@pytest.mark.parametrize("draft", [{"subject": "a\u2028b"}, {"subject": "a\ud800"}, {"subject": "a\x0bb"},
+                                   {"subject": "a\x85b"}, {"text": "x\ud800"}, {"to": "Ann\u2029 <a@x.org>"},
+                                   {"to": "\ud800 <a@x.org>"}], ids=["u2028", "surrogate", "vt", "nel", "text",
+                                                                     "name-sep", "name-surrogate"])
+def test_a_line_separator_or_surrogate_is_refused_not_a_500(acc, draft):
+    with pytest.raises(MailError) as e:
+        send.build(acc, {"to": "a@x.org", "text": "t"} | draft)
+    assert e.value.code == "invalid"
+
+
+def test_a_line_separator_in_reply_headers_is_left_out(acc):
+    msg, _ = send.build(acc, {"to": "a@x.org", "text": "t", "in_reply_to": "<a\u2028b@x>", "references": "<r@x>"})
+    assert msg["In-Reply-To"] is None
+    msg, _ = send.build(acc, {"to": "a@x.org", "text": "t", "in_reply_to": "<i@x>", "references": "<r\ud800@x>"})
+    assert msg["In-Reply-To"] == "<i@x>" and msg["References"] == "<i@x>"
+    msg.as_bytes()
+
