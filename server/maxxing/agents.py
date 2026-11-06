@@ -1412,11 +1412,11 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     if not is_agent_path(path) or session.get("source") != "agent" or not exists(path):
         return
     from .sessions import service
-    try:
-        text = service.last_assistant_text(session["id"]) or ""
+    ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
+    try:                                # a failed turn: its own text only, never the answer of the turn before
+        text = service.last_assistant_text(session["id"], turn_only=not ok) or ""
     except Exception:
         text = ""
-    ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
     if not ok and not text:
         text = str(session.get("error") or "The turn failed")
     cost = None
