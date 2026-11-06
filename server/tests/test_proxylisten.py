@@ -306,3 +306,22 @@ def test_installer_goes_on_without_docker0_under_set_e(tmp_path):
               'ip() { return 1; }; mx() { return 0; }; proxy_snippet; echo REACHED')
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
     assert "REACHED" in r.stdout and "docker0" in r.stdout + r.stderr
+
+
+def test_a_huge_request_head_is_cut_on_the_proxy_address(guarded, monkeypatch):
+    host, port, main_port = guarded
+    monkeypatch.setattr(proxylisten, "MAX_HEAD", 4096, raising=False)
+    big = socket.create_connection((host, port))
+    big.settimeout(0.5)                                               # well before HEADER_TIMEOUT (1 s here)
+    try:
+        big.sendall(b"GET / HTTP/1.1\r\nHost: x\r\nX-Maxxing-Proxy: s\r\nX-Pad: " + b"a" * 200_000)
+    except OSError:
+        pass                                                          # cut while sending: what we want
+    try:
+        assert big.recv(10) == b""
+    except ConnectionResetError:
+        pass
+    with httpx.Client(trust_env=False) as c:                          # a normal head, and a big body, still pass
+        r = c.post(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}, content=b"b" * 100_000)
+        assert r.status_code == 200
+
