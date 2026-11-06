@@ -300,8 +300,8 @@ async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypa
     await _link_simple(api, tg)
     got: list = []
 
-    async def fake(self, msg, path, cmd, text):
-        got.append((path, text))
+    async def fake(self, msgs, path, texts):
+        got.append((path, *texts))
     monkeypatch.setattr(gateway.Gateway, "_agent_message", fake)
     gateway.bind_messages(555, [4242], {"agent": "projects/acme/topics/blog/agents/writer"})
     tg.message("do it again", reply_to_message={"message_id": 4242, "from": {"id": 1, "is_bot": True}, "text": "r"})
