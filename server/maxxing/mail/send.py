@@ -259,11 +259,13 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     indexes}} + uploaded files [(name, type, bytes)]. Returns (message, every recipient address)."""
     to, cc, bcc = (_addr_list(draft.get(k)) for k in ("to", "cc", "bcc"))
     subject = str(draft.get("subject") or "").strip()[:500]
-    if any(c in subject for c in "\r\n\0"):
+    if _bad_header(subject):
         raise MailError("invalid", "invalid subject")
     text = str(draft.get("text") or "")
     if len(text) > MAX_TEXT:
         raise MailError("too_large", f"message text too long (at most {MAX_TEXT:,} characters)")
+    if not _utf8(text):
+        raise MailError("invalid", "invalid character in the message text")
     text = text.replace("\r\n", "\n")
     # a non-ASCII address (before the @): headers in UTF-8 (RFC 6532), the only valid form; the default policy would
     # RFC 2047-encode the address itself, which no server reads. Sending it needs SMTPUTF8 (`send`)
@@ -279,10 +281,10 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     msg["Date"] = email.utils.formatdate(localtime=True)
     msg["Message-ID"] = email.utils.make_msgid(domain=acc["address"].split("@", 1)[1])
     irt = str(draft.get("in_reply_to") or "").strip()
-    if irt and not any(c in irt for c in "\r\n\0"):
+    if irt and not _bad_header(irt):
         msg["In-Reply-To"] = irt
         refs = str(draft.get("references") or "").strip()
-        msg["References"] = refs if refs and not any(c in refs for c in "\r\n\0") else irt
+        msg["References"] = refs if refs and not _bad_header(refs) else irt
     msg.set_content(text)
     total = 0
     parts: list[tuple[str, str, bytes]] = list(files or [])
