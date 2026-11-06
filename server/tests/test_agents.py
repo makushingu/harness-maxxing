@@ -304,6 +304,24 @@ def test_cron_trigger_goes_through_the_agent(client, topic, monkeypatch):
     assert client.get("/api/workspace/tree").json()["projects"][0]["topics"][0]["agents"] == []
 
 
+def test_events_waiting_for_a_busy_agent_keep_only_what_its_turn_reads(monkeypatch, mx):
+    from maxxing import agents
+    d = agents.Debouncer()
+    for i in range(500):
+        d.add(A, "t_1", f"order {i} " + "x" * 490, "feed", 0)
+    p = d.pending[(A, "t_1")]
+    assert sum(len(t) for t in p["texts"]) < agents.EVENT_MAX + 600 and len(p["texts"]) + p["dropped"] == 500
+    back = agents.Debouncer()
+    back.load(d.dump())                                  # kept through a restart
+    assert back.pending[(A, "t_1")]["dropped"] == p["dropped"]
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append(k) or {"started": True})
+    monkeypatch.setattr(agents, "debouncer", back)
+    assert agents.flush_due() == 1
+    text = fired[0]["text"]
+    assert text.startswith(f"({p['dropped']} more events came after these") and f"Event 1/500:" in text
+
+
 def test_feed_trigger_with_debounce(client, topic, monkeypatch):
     from maxxing import agents, feed
     _on(client)

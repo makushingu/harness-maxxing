@@ -1506,7 +1506,10 @@ class Debouncer:
         k = (path, tid)
         p = self.pending.setdefault(k, {"texts": [], "first": time.time(), "source": source, "prompt": prompt,
                                         "depth": 0})
-        p["texts"].append(text)
+        if sum(len(t) for t in p["texts"]) < EVENT_MAX:   # the turn reads the first EVENT_MAX characters only
+            p["texts"].append(text)
+        else:                                       # a busy agent: the rest is counted, not kept
+            p["dropped"] = int(p.get("dropped") or 0) + 1
         p["depth"] = max(p["depth"], depth)      # an event posted from an agent run: one hop of that chain
         p["due"] = p["first"] + max(0.0, debounce_s)
 
@@ -1527,7 +1530,8 @@ class Debouncer:
                 self.pending.setdefault(k, {"texts": [str(t) for t in r["texts"]], "first": float(r["first"]),
                                             "due": float(r["due"]), "source": str(r.get("source") or "feed"),
                                             "prompt": str(r.get("prompt") or ""),
-                                            "depth": max(0, int(r.get("depth") or 0))})
+                                            "depth": max(0, int(r.get("depth") or 0)),
+                                            "dropped": max(0, int(r.get("dropped") or 0))})
             except (KeyError, TypeError, ValueError):
                 continue
 
@@ -1635,9 +1639,11 @@ def flush_due() -> int:
     if due:                                             # saved first: a crash mid-way never starts them twice
         _save_feed_pos(f, int(st.get("last_id") or 0))
     for path, tid, p in due:
-        texts = p["texts"]
-        text = texts[0] if len(texts) == 1 else "\n\n---\n\n".join(
-            f"Event {i + 1}/{len(texts)}:\n{t}" for i, t in enumerate(texts))
+        texts, dropped = p["texts"], int(p.get("dropped") or 0)
+        text = texts[0] if len(texts) == 1 and not dropped else "\n\n---\n\n".join(
+            f"Event {i + 1}/{len(texts) + dropped}:\n{t}" for i, t in enumerate(texts))
+        if dropped:
+            text = f"({dropped} more events came after these: not shown)\n\n{text}"
         trig = "telegram" if tid == "telegram" else f"feed:{tid}"
         try:
             r = fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"],
