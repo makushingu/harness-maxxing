@@ -195,7 +195,9 @@ What needs you lands in the **Notifications** (dashboard panel, `/feed`, and Tel
 - a run failed (repeats fold into one notification, *×3*; the next good run ends it, and a failure after that is a new notification);
 - its daily budget or its runs per hour are reached (its triggers are skipped; raise the limit on its page, or it
   starts again tomorrow / next hour);
-- its sandbox cannot run on the server, or a trigger lost its webhook.
+- its sandbox cannot run on the server, or a trigger lost its webhook;
+- its `agent.json` cannot be read (a typo in a hand edit): it is switched off and sandboxed, and its page refuses to
+  save over the file, until you fix the JSON.
 
 An agent can also ask for a human itself: in its role, tell it to run
 `maxxing feed post "Need your eyes on order 1042" --source orders --level warning` when something needs you.

@@ -705,3 +705,27 @@ def test_two_updates_at_once_keep_both_changes(client, topic, monkeypatch):
     t.join()
     d = real(A)
     assert d["model"] == "sonnet" and d["telegram"] is True
+
+
+def test_an_unreadable_agent_json_switches_the_agent_off_and_is_never_saved_over(client, topic):
+    from maxxing import feed
+    _on(client)
+    _create(client, approvals=True, domains=["api.github.com"])
+    f = agents.folder(A) / agents.AGENT_FILE
+    bad = f.read_text().rstrip().rstrip("}") + ',}'           # a trailing comma from a hand edit
+    f.write_text(bad)
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["broken"] is True and a["enabled"] is False and a["sandbox"] is True
+    assert agents.run_settings(A)["sandbox"] is True
+    assert agents.fire(A, trigger="manual", prompt="NOTOOL hi") == {"started": False, "reason": "disabled"}
+    r = client.patch("/api/agents/acme/blog/writer", json={"display_name": "W2"})
+    assert r.status_code == 409 and "cannot be read" in r.text
+    assert client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"}).status_code == 409
+    assert f.read_text() == bad                                # the owner's settings are still there to fix
+    agents.check_alerts()
+    ev = feed.find(agents._ref(A, "broken"))
+    assert ev and "cannot be read" in ev["title"]
+    f.write_text(bad[:-2] + "}")
+    assert client.get("/api/agents/acme/blog/writer").json()["broken"] is False
+    agents.check_alerts()
+    assert feed.find(agents._ref(A, "broken")) is None

@@ -3248,6 +3248,8 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.sandbox.missingTitle': 'Le bac à sable ne peut pas tourner sur ce serveur : ses exécutions s\'arrêtent.',
   'agents.sandbox.missingDesc': 'Lancez `maxxing agents sandbox-setup` en root (ou demandez dans system/harness), ou désactivez le bac à sable.',
   'agents.sandbox.missingList': 'Manquant : {list}',
+  'agents.broken.title': 'Son agent.json est illisible : l\'agent est désactivé et mis en bac à sable.',
+  'agents.broken.desc': 'Corrigez le JSON de `{file}` (une modification à la main ?). Ses réglages ne peuvent pas être enregistrés d\'ici là.',
   'agents.list.remove': 'Retirer {name}',
   'agents.rules.title': 'Règles',
   'agents.rules.desc': 'Refuser une action quand elle contient un texte ; la raison est montrée à Claude. 20 au plus.',
