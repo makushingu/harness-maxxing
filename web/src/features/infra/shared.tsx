@@ -19,7 +19,7 @@ export const LOCATION_ICON = (loc: string): LucideIcon =>
   loc === 'cloudflare' || (PLATFORMS as readonly string[]).includes(loc) ? Cloud : loc === 'hostinger' ? HardDrive : Server
 
 /** Display name of a provider id (registrar, DNS, host, platform) from server/maxxing/infra (dnsinfo, platforms). */
-const PROVIDER_NAMES: Record<string, string> = {
+export const PROVIDER_NAMES: Record<string, string> = {
   cloudflare: 'Cloudflare', hostinger: 'Hostinger', ovh: 'OVHcloud', gandi: 'Gandi', namecheap: 'Namecheap', godaddy: 'GoDaddy',
   ionos: 'IONOS', aws: 'AWS', google: 'Google', vercel: 'Vercel', netlify: 'Netlify', porkbun: 'Porkbun', wix: 'Wix',
   o2switch: 'o2switch', infomaniak: 'Infomaniak', digitalocean: 'DigitalOcean', hetzner: 'Hetzner', 'name.com': 'Name.com',
