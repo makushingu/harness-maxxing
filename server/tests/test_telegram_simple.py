@@ -309,6 +309,57 @@ async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypa
     assert got[0] == ("projects/acme/topics/blog/agents/writer", "do it again") and not svc.sent
 
 
+async def test_a_long_reply_to_an_agent_split_by_telegram_is_one_run(api, tg, svc, monkeypatch):
+    """Only the first part of a split text carries the reply: the rest goes to the same agent run."""
+    await _link_simple(api, tg)
+    got: list = []
+
+    async def fake(self, msgs, path, texts):
+        got.append((path, list(texts)))
+    monkeypatch.setattr(gateway.Gateway, "_agent_message", fake)
+    agent = "projects/acme/topics/blog/agents/writer"
+    gateway.bind_messages(555, [4242], {"agent": agent})
+    part1, part2, part3 = "a" * 4096, "b" * 4096, "and publish it on Friday"
+    tg.message(part1, reply_to_message={"message_id": 4242, "from": {"id": 1, "is_bot": True}, "text": "r"})
+    tg.message(part2)
+    tg.message(part3)
+    await wait_for(lambda: got, what="agent")
+    await asyncio.sleep(gateway.AGENT_GATHER + 0.5)
+    assert got == [(agent, [part1, part2, part3])]
+    assert not svc.sent and not svc.sessions
+    assert not [p for p in tg.sent() if "Where should" in (p.get("text") or "")]
+    # a new short message a few seconds later is not a part: it asks where it goes, as before
+    tg.message("a new idea")
+    await wait_for(lambda: any("Where should" in (p.get("text") or "") for p in tg.sent()), what="where?")
+    assert len(got) == 1
+
+
+async def test_a_long_reply_to_a_session_split_by_telegram_is_one_turn(api, tg, svc):
+    await _link_simple(api, tg)
+    sid, _ = await _start(tg, svc)
+    svc.finish(sid, "Here is the plan")
+    await wait_for(lambda: any(p.get("text") == "Here is the plan" for p in tg.sent()), what="answer")
+    ans = _bot("Here is the plan", tg)
+    answer_mid = max(int(k.split(":")[1]) for k, v in gateway._msgs_all().items() if v.get("sid") == sid)
+    asked = len([p for p in tg.sent() if "Where should" in (p.get("text") or "")])
+    part1, part2 = "a" * 4096, "b" * 900
+    tg.message(part1, **_reply_to(ans, answer_mid))
+    tg.message(part2)
+    await wait_for(lambda: len(svc.sent) == 2, what="merged turn")
+    await asyncio.sleep(gateway.PASTE_WAIT + 0.5)
+    assert svc.sent[1]["sid"] == sid and svc.sent[1]["text"] == f"{part1}\n{part2}" and len(svc.sent) == 2
+    assert len([p for p in tg.sent() if "Where should" in (p.get("text") or "")]) == asked
+    # a short text after a short reply is never taken as a part
+    svc.finish(sid, "Second answer")
+    await wait_for(lambda: any(p.get("text") == "Second answer" for p in tg.sent()), what="answer 2")
+    tg.message("ok", **_reply_to(ans, answer_mid))
+    tg.message("something else")
+    await wait_for(lambda: len([p for p in tg.sent() if "Where should" in (p.get("text") or "")]) == asked + 1,
+                   what="where? for the new message")
+    await wait_for(lambda: len(svc.sent) == 3, what="short reply")
+    assert svc.sent[2]["text"] == "ok"
+
+
 async def test_an_alert_with_a_lone_surrogate_is_still_sent(api, tg, svc):
     await _link_simple(api, tg)
     for i, ev in enumerate([{"body": "bad \ud83d end"}, {"body": "see", "attachments": ["a\udc80.png"]}]):
