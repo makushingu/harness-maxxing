@@ -162,6 +162,20 @@ def test_claude_code_agent_file_export_and_import(client, topic, mx):
                                                    "markdown": "no front matter"}).status_code == 400
 
 
+def test_a_wrapped_first_paragraph_and_a_yaml_block_description_import_once():
+    from maxxing import agent_format
+    md = ("---\nname: writer\ndescription: You write the weekly post for the blog.\n---\n\n"
+          "You write the weekly post\nfor the blog.\n\nKeep it short.\n")
+    assert agent_format.parse_md(md)["description"] == "You write the weekly post\nfor the blog.\n\nKeep it short."
+    for style, want in ((">", "Reviews pull requests carefully."), ("|-", "Reviews pull requests\ncarefully.")):
+        md = (f"---\nname: reviewer\ndescription: {style}\n  Reviews pull requests\n  carefully.\ntools: Read\n---\n"
+              "You are a senior reviewer.\n")
+        p = agent_format.parse_md(md)
+        assert p["description"] == f"{want}\n\nYou are a senior reviewer." and p["fields"]["allowed_tools"] == ["Read"]
+    md = "---\nname: last\ndescription: >\n  At the end\n  of the block.\n---\nBody.\n"
+    assert agent_format.parse_md(md)["description"] == "At the end of the block.\n\nBody."
+
+
 def test_agents_as_subagents_of_their_topic(client, topic, mx):
     _on(client)
     _create(client, allowed_tools=["Read"])
