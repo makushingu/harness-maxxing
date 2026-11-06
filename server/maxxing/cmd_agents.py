@@ -521,10 +521,8 @@ def _handler(a) -> int:
                           "deliveries until then).", file=sys.stderr)
             return 0
         if a.agents_cmd == "watch":
-            d = agents.load(path)
-            d["triggers"].append({"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
-                                  "match": a.match, "prompt": a.prompt})
-            agents.update(path, {"triggers": d["triggers"]})
+            agents.add_trigger(path, {"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
+                                      "match": a.match, "prompt": a.prompt})
             print(json.dumps({"agent": path}) if a.json else f"{path} now watches the feed source {a.source.strip()}")
             return 0
     except agents.AgentError as e:
