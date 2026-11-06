@@ -62,6 +62,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   gets `clipped: true` (also in `approvals.public`); `approvals.decide(allow)` answers 409 `clipped`, the feed event
   and Telegram offer Open / Deny only, the card disables Allow. The MCP's timeout now takes `<state>/.approvals.lock`
   (the flock of `ProcessLock("approvals")`) and writes `timeout` only if the request is still pending.
+- `agent_guard.private_paths` also hides `projects/<p>/groups/<g>` of the groups the agent is not a member of (read
+  from group.json) and every `groups/.kept-*` folder.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
