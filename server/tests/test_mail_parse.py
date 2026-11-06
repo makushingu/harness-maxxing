@@ -127,3 +127,13 @@ def test_a_big_mail_inlines_its_images_within_a_budget():
 def test_a_broken_base64_part_shows_no_text_but_opens():
     m = _render(_text("text/plain; charset=utf-8", b"@@@not base64 ===", cte="base64"))
     assert isinstance(m["text"], str)
+
+
+def test_a_bad_port_in_mail_add_is_refused():
+    import pytest
+    from maxxing.cmd_mail import Refused, _hostport
+    assert _hostport("imap.example.com:143", 993) == ("imap.example.com", 143)
+    assert _hostport("imap.example.com", 993) == ("imap.example.com", 993)
+    for bad in ("h:abc", "h:99999", "h:0", "h:-1", "h:１"):
+        with pytest.raises(Refused):
+            _hostport(bad, 993)
