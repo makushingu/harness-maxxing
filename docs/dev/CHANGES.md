@@ -75,6 +75,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   bare keys are no longer matched). Alerts: body over `ALERT_BODY` (1500) gets the `alert_cut` marker and only
   `danger` / link buttons (the callback refuses the others too); `ev["attachments"]` (names or {name}) listed.
 
+- Agent groups (`agent_rooms.py`): `room()` reads the jsonl from the end (`_tail`), so `public()` / the list no
+  longer parse a whole room for its last message; a room past `ROOM_BYTES` (2 MB) is trimmed to half of it (and
+  `ROOM_KEEP` lines), not to 1,000 lines that could stay over the threshold. `GET .../messages?after=<at>`: the
+  group page asks only for the new messages. Group events no longer send `workspace` on the bus (only create,
+  delete, rename: `_invalidate(tree=True)`).
 ## 2.0.0-alpha.120 - 2026-11-05
 
 - E-mail page (`mail_page`, off by default; picked from the 2.0.0a68-era branch): `maxxing/mail/`

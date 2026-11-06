@@ -132,9 +132,9 @@ def delete_group(project: str, name: str, keep_files: bool = Query(False)):
 
 @router.get("/{project}/{name}/messages")
 def group_messages(project: str, name: str, limit: int = Query(200, ge=1, le=1000),
-                   before: Optional[float] = Query(None)):
+                   before: Optional[float] = Query(None), after: Optional[float] = Query(None)):
     _on()
-    return {"messages": agent_rooms.room(_get(project, name), limit, before)}
+    return {"messages": agent_rooms.room(_get(project, name), limit, before, after)}
 
 
 @router.post("/{project}/{name}/messages")
