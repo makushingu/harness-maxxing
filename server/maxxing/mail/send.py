@@ -262,35 +262,67 @@ def _auto_sent(acc: dict) -> bool:
 
 
 class _Watch:
-    """Tells whether the message itself went out: smtplib sends `data`, reads 354, then the message. A failure
-    after that point says nothing about the result (the server may have queued it before the connection broke)."""
+    """Tells whether the message itself went out: smtplib sends `data`, reads 354, then the whole message with its
+    final "." in ONE `send`. `body` is True only once that write is complete: a failure after it says nothing about
+    the result (the server may have queued it before the connection broke); a failure during it means the server
+    never got the end of the message, so it was not sent.
+
+    The message is written in chunks, each with the socket timeout: Python's timeout covers a whole `sendall`, so a
+    25 MB attachment on a slow uplink timed out after 15 s although bytes kept flowing. The answer to the final "."
+    then gets DATA_REPLY_S (a server may scan a big message before it answers)."""
 
     def __init__(self, s: smtplib.SMTP):
-        self.data_cmd = self.body = self.stopped = False
+        self.data_cmd = self.writing = self.body = self.stopped = False
         real = s.send
 
         def watch(x):
-            if self.stopped:                            # the QUIT after a failure is not the message
-                pass
-            elif self.data_cmd:
-                self.body = True
-            elif (x if isinstance(x, str) else x.decode("ascii", "replace")).strip().lower() == "data":
+            if self.stopped or self.body:               # the QUIT / RSET after the message is not the message
+                return real(x)
+            if self.data_cmd:
+                return self._write(s, x)
+            if (x if isinstance(x, str) else x.decode("ascii", "replace")).strip().lower() == "data":
                 self.data_cmd = True
             return real(x)
         s.send = watch                                  # type: ignore[method-assign]
 
+    def _write(self, s: smtplib.SMTP, x) -> None:
+        data = x.encode(s.command_encoding) if isinstance(x, str) else bytes(x)
+        sock = s.sock
+        if sock is None:
+            raise smtplib.SMTPServerDisconnected("please run connect() first")
+        self.writing = True
+        try:
+            view = memoryview(data)
+            for i in range(0, len(data), WRITE_CHUNK):
+                sock.sendall(view[i:i + WRITE_CHUNK])
+        except OSError as e:
+            s.close()
+            raise smtplib.SMTPServerDisconnected(f"{type(e).__name__} while sending the message: {e}") from None
+        self.body = True                                # all of it, final "." included, is with the server
+        with contextlib.suppress(OSError):
+            from . import SMTP_TIMEOUT_S
+            sock.settimeout(max(SMTP_TIMEOUT_S, DATA_REPLY_S))
+
+
+WRITE_CHUNK = 64 * 1024     # each chunk gets the socket timeout: a stall, not a slow line, fails the send
+DATA_REPLY_S = 60           # wait for the answer to the end of the message (RFC 5321 suggests up to 10 min)
 
 UNKNOWN = ("the connection to the mail server broke after it received the message: it was probably sent. "
            "Check the Sent folder (or ask the recipient) before sending it again. The draft is kept.")
 
 
-def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = None, contacts: bool = True) -> dict:
+def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = None, contacts: bool = True,
+         on_sent=None) -> dict:
     """Send through the SMTP server of the mailbox, file a copy in Sent, flag the replied message, drop the draft
     it came from. Returns {ok, message_id, sent_folder, recipients, to, cc, bcc}. contacts: the recipients become
     known contacts (approve_send "new") - only for what the owner sent or allowed, never for an agent's own send;
     the Reply-To of the mail answered never does by itself (it can be anyone's address).
-    MailError "sent_unknown": the connection broke after the message was handed over (it probably left): the
-    daily count is kept, the draft too, and nothing must send it again blindly."""
+    on_sent(status): called as soon as the SMTP server has the message ("sent", or "sent_unknown" just before that
+    error), before the slow follow-ups (Sent copy...): the outbox records it there.
+    MailError "sent_unknown": the connection broke or timed out after the whole message was handed over (it
+    probably left): the daily count is kept, the draft too, and nothing must send it again blindly. Any answer of
+    the server (554 spam, 552 too large, 5xx on MAIL / RCPT) and any failure while the message was still being
+    written are "not sent": the count is given back."""
     from . import open_smtp
     msg, rcpts = build(acc, draft, files)
     if not rcpts:
@@ -300,6 +332,22 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
                                  "use a service made for it (Resend...)")
     _take(acc["id"], len(rcpts))
     w: _Watch | None = None
+
+    def cut(e: BaseException) -> MailError:
+        """A disconnect or timeout: after the whole message = unknown (count kept), else nothing was sent."""
+        if w is not None and w.body:
+            log.warning("mail %s: %s after the message was sent (%s): result unknown", acc["id"], type(e).__name__, e)
+            if on_sent:
+                with contextlib.suppress(Exception):
+                    on_sent("sent_unknown")
+            return MailError("sent_unknown", UNKNOWN)
+        _give_back(acc["id"], len(rcpts))
+        if w is not None and w.writing:
+            return MailError("connection", f"the connection to {acc['smtp_host']} broke or stalled while the message "
+                                           f"was being sent ({e}): the server never got all of it, nothing was sent. "
+                                           "You can try again (large attachments need a steady connection)")
+        return MailError("connection", f"connection to {acc['smtp_host']} lost before the message was sent "
+                                       f"({type(e).__name__}): nothing was sent, you can try again")
     try:
         s = open_smtp(acc["smtp_host"], int(acc["smtp_port"]), acc["smtp_tls"], acc["username"], imap._password(acc))
         try:
@@ -310,23 +358,32 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
                 w.stopped = True
             with contextlib.suppress(Exception):
                 s.quit()
+    # order matters: every smtplib error is an OSError (SMTPException subclasses it), so the server's answers come
+    # before the disconnect / timeout branches
     except MailError:
         _give_back(acc["id"], len(rcpts))
         raise
     except smtplib.SMTPRecipientsRefused as e:
         _give_back(acc["id"], len(rcpts))
         raise MailError("refused", "every recipient was refused: " + ", ".join(e.recipients)) from None
-    except (smtplib.SMTPServerDisconnected, OSError) as e:     # cut, timeout: before the message = not sent
-        if w is not None and w.body:
-            log.warning("mail %s: %s after the message was sent (%s): result unknown", acc["id"], type(e).__name__, e)
-            raise MailError("sent_unknown", UNKNOWN) from None
+    except smtplib.SMTPServerDisconnected as e:
+        raise cut(e) from None
+    except smtplib.SMTPNotSupportedError as e:         # raised before MAIL FROM: nothing went out
         _give_back(acc["id"], len(rcpts))
-        raise MailError("connection", f"connection to {acc['smtp_host']} lost before the message was sent "
-                                      f"({type(e).__name__}): nothing was sent, you can try again") from None
-    except smtplib.SMTPException as e:                 # an answer of the server: not sent
+        if not all(a.isascii() for a in rcpts):
+            raise MailError("smtp", "this mail server does not accept addresses with non-ASCII characters before "
+                                    "the @ (no SMTPUTF8 support): nothing was sent") from None
+        raise MailError("smtp", f"the mail server refused the message: {e}") from None
+    except smtplib.SMTPException as e:                 # an answer of the server (SMTPResponseException...): not sent
         _give_back(acc["id"], len(rcpts))
         err = e.smtp_error.decode("utf-8", "replace") if isinstance(getattr(e, "smtp_error", None), bytes) else str(e)
-        raise MailError("smtp", f"the mail server refused the message: {err}") from None
+        code = getattr(e, "smtp_code", None)
+        raise MailError("smtp", f"the mail server refused the message: {f'{code} ' if code else ''}{err}") from None
+    except OSError as e:                               # a socket error smtplib did not wrap (timeout, reset)
+        raise cut(e) from None
+    if on_sent:
+        with contextlib.suppress(Exception):
+            on_sent("sent")
     # the follow-ups never fail the send: the message is gone
     orig = _original(acc, draft)
     if contacts:
