@@ -828,7 +828,11 @@ def on_turn_end(path: str, member: str, sid: str, text: str, ok: bool, cost: flo
             mine = True
         g = load(path)
         t = (text or "").strip()
-        if not ok:
+        # a turn of an older group of that name (deleted, made again): not posted
+        stray = not mine and sid not in (st.get("turns") or {})
+        if stray:
+            pass
+        elif not ok:
             post(path, "skip", f"@{handles(g).get(member, slug(member))}: the turn failed - {t[:300]}", author=member, reason="failed",
                  session=sid)
         elif not t or t.strip("*_ .").upper() in PASS_WORDS:
