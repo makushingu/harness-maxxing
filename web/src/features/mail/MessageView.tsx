@@ -229,6 +229,7 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
               })}
             </div>
           )}
+          {!!m.attachments_more && <p className="text-xs text-muted-foreground">{t('mail.msg.moreParts', { count: m.attachments_more })}</p>}
           {m.html && m.remote_images && !images && (
             <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
               <ImageOff className="size-4 shrink-0" />

@@ -1201,6 +1201,8 @@ export type MailMessage = {
   html: string | null
   remote_images: boolean
   attachments: MailAttachment[]
+  /** Parts past the server's limit: not listed, not downloadable. */
+  attachments_more?: number
   seen: boolean
   flagged: boolean
   answered: boolean
