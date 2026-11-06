@@ -291,6 +291,19 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     assert agents._changed_during(A, "unknown") == []
 
 
+def test_domain_wildcards_name_a_site_not_an_extension(client, topic, mx):
+    from maxxing import agents
+    _on(client)
+    _create(client, domains=["*.example.com"])
+    for d in ("*.com", "*.io", "*.co.uk", "*.github.io"):
+        r = client.patch("/api/agents/acme/blog/writer", json={"domains": [d]})
+        assert r.status_code == 400 and r.json()["error"] == "bad_domain", d
+    ok = ["*.example.com", "*.api.example.co.uk", "api.github.com", "user.github.io", "*.example.io"]
+    assert client.patch("/api/agents/acme/blog/writer", json={"domains": ok}).json()["domains"] == ok
+    # an agent.json written by hand (or imported) loses the wide ones on load
+    assert agents.clean({"domains": ["*.com", "*.example.com", "*.co.uk"]})["domains"] == ["*.example.com"]
+
+
 def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic, mx):
     _on(client)
     _create(client, writable=["."])
