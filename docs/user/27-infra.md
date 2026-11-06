@@ -162,7 +162,8 @@ nothing is created or changed at your providers.
   else with **Add to the E-mail page**.
 - **DNS health** of every domain that receives mail: MX, SPF (one record, under 10 lookups), DKIM (looked up on a few
   common selectors), DMARC (its policy), each problem with what to change, for example "No DMARC record: add a TXT
-  record `_dmarc.example.com` `v=DMARC1; p=none; rua=mailto:you@example.com`".
+  record `_dmarc.example.com` `v=DMARC1; p=none; rua=mailto:you@example.com`". The report address is always on the
+  same domain (one of your mailboxes there, else `dmarc@<domain>`): reports sent to another domain never arrive.
 
 Providers are read again after 5 minutes, the DNS after an hour; **Refresh** reads everything now.
 

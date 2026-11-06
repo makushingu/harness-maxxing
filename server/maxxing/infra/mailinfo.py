@@ -454,10 +454,11 @@ def view(refresh: bool = False) -> dict:
     for b in boxes:
         if b.get("address"):
             rua_of.setdefault(b["domain"], b["address"])
-    first = next((b["address"] for b in boxes if b.get("address")), None)
-    for d in wanted:
-        if d not in rua_of and first:
-            rua_of[d] = first
+    for d in wanted:                # reports only reach a mailbox of the same domain (or a parent): else dmarc@<domain>
+        if d not in rua_of:
+            parent = next((a for bd, a in rua_of.items() if d.endswith("." + bd)), None)
+            if parent:
+                rua_of[d] = parent
     return {"generated_at": prov.get("at"), "cached": cached, "mail_page": mail.enabled(),
             "mailboxes": boxes, "cloudflare": cf, "hostinger": hs, "routes": routes(boxes, cf, hs),
             "domains": domains_health(wanted, refresh, rua_of)}
