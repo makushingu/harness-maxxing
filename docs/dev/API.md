@@ -88,6 +88,7 @@ Session = {
   state: "idle"|"running"|"error",
   queue: int,                         // messages waiting
   queue_items: [{text, attachments: int, source: "web"|"telegram"|"cron"|"system", kind, voice?:true}],  // the waiting messages, in order (text cut at 280 chars): the queue stack shows them even when this tab did not queue them
+  sent_items: [{text, attachments: [path], source, voice?:[path], client_ids?}],  // sent but not in the log yet (held at the head while a summary runs first, or its turn starting; text cut at 4000 chars): the thread shows them as sent, also after a reload or in another window
   created, updated, turns, cost_usd,
   model: string,                      // chosen ("" = default)
   real_model: string|null,            // model that actually answered last turn (from the log)

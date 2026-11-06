@@ -307,6 +307,8 @@ export type PatchNameBody = { name?: string; description?: string; /** Projects 
 export type SessionState = 'idle' | 'running' | 'error'
 export type SessionSource = 'web' | 'telegram' | 'cron' | 'agent'
 export type QueueItem = { text: string; attachments: number; source: 'web' | 'telegram' | 'cron' | 'system' | string; kind: string; /** A voice message sent directly (transcribed before its turn). */ voice?: boolean; client_ids?: string[] }
+/** A message sent but not in the log yet (held at the head while a summary runs first, or its turn starting). */
+export type SentItem = { text: string; attachments: string[]; source: string; voice?: string[]; client_ids?: string[] }
 export type Session = {
   id: string
   title: string
@@ -315,6 +317,8 @@ export type Session = {
   queue: number
   /** The waiting messages, in order (text cut at 280 chars), whoever queued them. */
   queue_items?: QueueItem[]
+  /** Messages already sent that the log does not have yet: the thread shows them as sent (text cut at 4000 chars). */
+  sent_items?: SentItem[]
   created: number
   updated: number
   turns: number
