@@ -485,7 +485,7 @@ def test_deleting_the_topic_drops_its_agents_jobs_thread_and_place(client, topic
     assert crons.get_job(job["id"]) is None and A not in gateway.agent_threads()
     lay = agents.load_layout()
     assert lay["agents"] == {} and lay["projects"] == ["acme"] and lay["colors"] == {"acme": "clay"}
-    assert agents.thread(A)                              # the Activity stays for a restore from the Trash
+    assert agents.thread(A) == []                        # the Activity went to the Trash with the topic
 
 
 def _results(client) -> list[dict]:
@@ -807,6 +807,7 @@ def test_events_waiting_in_the_window_follow_a_topic_rename(client, topic, monke
     _on(client)
     _create(client)
     fired = _feed_trigger(client, monkeypatch, debounce_s=60)
+    agents.debouncer.pending.clear()                     # batches left by other tests
     agents.scan_feed()
     feed.post("order 5", source="shop")
     assert agents.scan_feed() == 1 and agents.flush_due() == 0

@@ -337,3 +337,5 @@ thread. Renaming the topic or the project takes its agents along (sessions, sche
 be grouped into a run).
 Deleting the topic or the project does the same for every agent inside: its schedule jobs (kept in the schedules'
 archive, `maxxing cron deleted`) and its Telegram thread go with it.
+Its Activity goes to the Trash with it, so a new agent of the same name starts empty; restoring it (or its topic or
+project) brings back its Activity and its schedules, as `<name>-restored` when the name is taken now.

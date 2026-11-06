@@ -48,6 +48,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Feed trigger `source` is normalised like `feed.clean_source` (lower case, other characters -> `-`, 40 max) in
   `_clean_trigger`; strict refuses what cannot be cleaned.
 - `agents.remap()` moves the debouncer's waiting batches (and `_feed.json` `pending`) of the renamed prefix.
+- Agent state in the Trash: `workspace._delete` calls `agents.to_trash(paths, item)` (agent, topic or project
+  delete): `<state>/agents/<key>.json/.jsonl` move to `<item>.agents/` with `crons.json` (ids of their jobs).
+  `trash.restore` calls `agents.from_trash` (keys remapped to the restored path, jobs back via `crons.restore_job`
+  with `topic_path` remapped); `_remove` deletes the box. `agents.create` drops leftover state of its key. A restored
+  agent whose name is taken gets a slug name (`<name>-restored`, `_free_dir_name`), not `<name> (restored)`.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 
