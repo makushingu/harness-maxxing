@@ -359,6 +359,8 @@ def update(path: str, fields: dict) -> dict:
             for p in gone:
                 (st.get("sessions") or {}).pop(p, None)
             st["queue"] = [q for q in st.get("queue") or [] if q.get("path") not in gone]
+            if (st.get("current") or {}).get("path") in gone:   # its answer is not posted (on_turn_end)
+                st["current"] = None
             _write_state(path, st)
     _invalidate(path)
     return {**get(path), **({"dropped": dropped} if dropped else {})}
@@ -828,10 +830,10 @@ def on_turn_end(path: str, member: str, sid: str, text: str, ok: bool, cost: flo
             mine = True
         g = load(path)
         t = (text or "").strip()
-        # a turn of an older group of that name (deleted, made again): not posted
-        stray = not mine and sid not in (st.get("turns") or {})
+        # removed from the group since, or a turn of an older group of that name (deleted, made again): not posted
+        stray = member not in [m["path"] for m in g["members"]] or (not mine and sid not in (st.get("turns") or {}))
         if stray:
-            pass
+            mine = False
         elif not ok:
             post(path, "skip", f"@{handles(g).get(member, slug(member))}: the turn failed - {t[:300]}", author=member, reason="failed",
                  session=sid)

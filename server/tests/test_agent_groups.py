@@ -358,3 +358,19 @@ def test_a_group_made_again_does_not_get_an_old_answer(client, topic):
     assert r.status_code == 200
     agent_rooms.on_turn_end(P, W, "old", "ghost answer", True, 0.0)
     assert not [m for m in agent_rooms.room(P) if m["text"] == "ghost answer"]
+
+
+def test_a_member_removed_during_its_turn_is_not_posted(client, topic):
+    _setup(client)
+    P = "projects/acme/groups/team"
+    r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "editor", "sandbox": False})
+    assert r.status_code == 200
+    E = "projects/acme/topics/blog/agents/editor"
+    assert client.patch(G, json={"members": [{"path": W}, {"path": R}, {"path": E}]}).status_code == 200
+    agent_rooms._write_state(P, {"current": {"path": E, "session": "s1", "at": 1, "wave": 1, "origin": "o"},
+                                 "origin": "o", "queue": [], "turns": {"s1": {"outside": False}}})
+    assert client.patch(G, json={"members": [{"path": W}, {"path": R}]}).status_code == 200
+    assert agent_rooms._read_state(P)["current"] is None
+    agent_rooms.on_turn_end(P, E, "s1", "hello @writer", True, 0.1)
+    assert not [m for m in agent_rooms.room(P) if m["author"] == E]
+    assert not agent_rooms._read_state(P).get("queue")
