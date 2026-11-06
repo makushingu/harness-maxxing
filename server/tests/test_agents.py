@@ -729,3 +729,74 @@ def test_an_unreadable_agent_json_switches_the_agent_off_and_is_never_saved_over
     assert client.get("/api/agents/acme/blog/writer").json()["broken"] is False
     agents.check_alerts()
     assert feed.find(agents._ref(A, "broken")) is None
+
+
+def test_a_deleted_webhook_trigger_never_fires_and_making_it_again_reuses_the_trigger(client, topic, monkeypatch, capsys):
+    from maxxing import cli, feed, feedhooks
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"debounce_s": 0}})
+    hook = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"}).json()["hook"]
+    fired: list = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append((path, k)) or {"started": True})
+    agents.scan_feed()
+    feedhooks.remove(hook["id"])
+    monkeypatch.setenv("MAXXING_AGENT", "projects/acme/topics/blog/agents/other")
+    assert cli.main(["feed", "post", "Order", "--source", "blog-writer"]) == 2      # no forged delivery
+    assert "only its own deliveries" in capsys.readouterr().err
+    monkeypatch.delenv("MAXXING_AGENT")
+    feed.post("Order", source="blog-writer")             # anyone else posting on the freed name
+    assert agents.scan_feed() == 0 and agents.flush_due() == 0 and fired == []
+    assert agents.check_alerts() == 1
+    tid = agents.load(A)["triggers"][0]["id"]
+    r = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"})
+    assert r.status_code == 200, r.text
+    ts = r.json()["agent"]["triggers"]
+    assert len(ts) == 1 and ts[0]["id"] == tid and ts[0]["hook_id"] == r.json()["hook"]["id"]
+    feed.post("Real order", source="blog-writer")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1 and len(fired) == 1
+    agents.check_alerts()
+    assert feed.find(agents._ref(A, f"trigger:{tid}")) is None
+
+
+def test_a_webhook_past_the_trigger_limit_is_refused_before_its_hook_is_made(client, topic):
+    from maxxing import feedhooks
+    _on(client)
+    _create(client)
+    ts = [{"kind": "feed", "source": f"s{i}"} for i in range(agents.MAX_TRIGGERS)]
+    assert client.patch("/api/agents/acme/blog/writer", json={"triggers": ts}).status_code == 200
+    r = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"})
+    assert r.status_code == 409 and "At most" in r.text
+    assert feedhooks.list_hooks() == [] and len(agents.load(A)["triggers"]) == agents.MAX_TRIGGERS
+
+
+def test_webhook_names_of_long_agents_stay_unique(client, topic):
+    from maxxing import feedhooks
+    _on(client)
+    assert client.post("/api/workspace/projects/acme/topics", json={"name": "customer-support-france"}).status_code == 200
+    tp = "projects/acme/topics/customer-support-france"
+    for n in ("refund-handler-2026", "refund-handler-2027"):
+        assert client.post("/api/agents", json={"topic_path": tp, "name": n}).status_code == 200
+    names = []
+    for n in ("refund-handler-2026", "refund-handler-2026", "refund-handler-2027"):
+        r = client.post(f"/api/agents/acme/customer-support-france/{n}/webhook", json={"kind": "generic"})
+        assert r.status_code == 200, r.text
+        names.append(r.json()["hook"]["name"])
+    assert len(set(names)) == 3 and all(len(x) <= 40 for x in names)
+    assert sorted(h["name"] for h in feedhooks.list_hooks()) == sorted(names)
+
+
+def test_a_trigger_source_is_stored_as_the_feed_writes_it(client, topic, monkeypatch):
+    from maxxing import feed
+    _on(client)
+    _create(client)
+    r = client.patch("/api/agents/acme/blog/writer", json={"limits": {"debounce_s": 0},
+                     "triggers": [{"kind": "feed", "source": "Shopify Orders"}]})
+    assert r.json()["triggers"][0]["source"] == "shopify-orders"
+    assert client.patch("/api/agents/acme/blog/writer",
+                        json={"triggers": [{"kind": "feed", "source": "!!"}]}).status_code == 400
+    fired: list = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append((path, k)) or {"started": True})
+    agents.scan_feed()
+    feed.post("Order 1", source="Shopify Orders")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1

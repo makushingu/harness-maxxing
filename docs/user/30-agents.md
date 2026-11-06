@@ -158,7 +158,7 @@ only the agents waiting for your OK or with something to read.
 | **By hand** | a message in its page, or `maxxing agents run <agent> "task"` |
 | **Schedule** | at the times you choose (same editor as [Crons](crons); the job is also listed on the Crons page) |
 | **Webhook** | a service calls its address (Stripe, Shopify, GitHub or any JSON): the agent gets the event. It is a [feed](feed) webhook made for the agent, so the event also shows in your notifications |
-| **Notification** | a new event of the [feed](feed) from a source you pick, optionally only some levels (warning, error...) or only events containing a word |
+| **Notification** | a new event of the [feed](feed) from a source you pick (written as the feed writes it: `Shopify` -> `shopify`), optionally only some levels (warning, error...) or only events containing a word |
 | **Telegram** | a message you write in the agent's Telegram thread (option below) |
 | **Another agent** | an agent hands it work from its own session (`maxxing agents send`) |
 
@@ -195,7 +195,8 @@ What needs you lands in the **Notifications** (dashboard panel, `/feed`, and Tel
 - a run failed (repeats fold into one notification, *×3*; the next good run ends it, and a failure after that is a new notification);
 - its daily budget or its runs per hour are reached (its triggers are skipped; raise the limit on its page, or it
   starts again tomorrow / next hour);
-- its sandbox cannot run on the server, or a trigger lost its webhook;
+- its sandbox cannot run on the server, or a trigger lost its webhook (it no longer starts the agent; **Add webhook**
+  on its page gives that same trigger a new address);
 - its `agent.json` cannot be read (a typo in a hand edit): it is switched off and sandboxed, and its page refuses to
   save over the file, until you fix the JSON.
 
