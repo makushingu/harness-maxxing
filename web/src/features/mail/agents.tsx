@@ -152,7 +152,7 @@ export function OutboxBanner({ acc, onEdit }: { acc: string; onEdit: (draft: { f
         {open ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
       </button>
       {open && (
-        <ul className="grid max-h-[50vh] gap-2 overflow-y-auto px-3 pb-3">
+        <ul className="grid max-h-[50vh] grid-cols-[minmax(0,1fr)] gap-2 overflow-y-auto px-3 pb-3">
           {items.map((x) => (
             <OutboxItem key={x.id} item={x} onEdit={onEdit} />
           ))}
@@ -169,7 +169,7 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
   const busy = act.isPending ? act.variables?.action : null
   const to = [...x.to, ...x.cc]
   return (
-    <li className="grid gap-1.5 rounded-lg border bg-card p-2.5 text-[13px]" data-testid="mail-outbox-item">
+    <li className="grid grid-cols-[minmax(0,1fr)] gap-1.5 rounded-lg border bg-card p-2.5 text-[13px]" data-testid="mail-outbox-item">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <AgentAvatarIcon avatar={x.avatar} size={16} />
         <span className="min-w-0 flex-1 truncate">
@@ -185,7 +185,7 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           <Sensitive length={10}>{x.subject || t('mail.noSubject')}</Sensitive>
         </span>
         {x.text && (
-          <p className="line-clamp-3 text-xs whitespace-pre-line text-muted-foreground">
+          <p className="line-clamp-3 text-xs break-words whitespace-pre-line text-muted-foreground">
             <Sensitive block>{x.text}</Sensitive>
           </p>
         )}
@@ -204,7 +204,7 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
         </div>
       )}
       {x.why && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs break-words text-muted-foreground">
           {t('mail.outbox.why')} <Sensitive length={10}>{x.why}</Sensitive>
         </p>
       )}
