@@ -30,6 +30,7 @@ from __future__ import annotations
 import html as html_lib
 import json
 import re
+from email.utils import getaddresses
 import secrets
 import sys
 import time
@@ -648,7 +649,9 @@ def _write(a, acc: dict, out, guard: Guard | None = None, g: dict | None = None)
             note = (f"the mail answered asks for replies to {', '.join(c['reply_to'])} (Reply-To), not to its sender; "
                     "a reply goes there")
             sender = send._bare(c["from"]).rsplit("@", 1)[-1]
-            if a.send and any(x.rsplit("@", 1)[-1].lower() != sender for x in c["reply_to"]):
+            # every address of each entry: a raw entry the parser rejected can hold several ("evil@x.com,boss@[sender]")
+            rt = [e for _n, e in getaddresses(c["reply_to"])]
+            if a.send and (not rt or any("@" not in e or e.rsplit("@", 1)[-1].lower() != sender for e in rt)):
                 # never sent blindly to another domain than the sender's: the address may not be the sender's at all
                 raise Refused(f"{note} (another domain than the sender's). Check that address, then pass it with --to to send (or --to the sender's "
                               "address), or save a draft without --send")
