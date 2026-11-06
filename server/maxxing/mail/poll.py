@@ -7,8 +7,9 @@ mail trigger matches: every mail of one check for one agent goes into ONE turn, 
 text: approvals forced unless the agent trusts outside events). The page itself always reads the mailbox live.
 
 The first check of a folder (or after its UIDVALIDITY changed) only notes where the mailbox is: old mail never
-starts an agent. Turns refused because the agent's budget is held by a run in progress wait in
-<state>/mail/pending.json and are tried again by the next tick.
+starts an agent. The turns of a check are written in <state>/mail/pending.json and the position saved before
+any agent starts (a restart in the middle neither starts one twice nor loses a turn); a turn refused because the
+agent's budget is held by a run in progress stays there and is tried again by the next tick.
 """
 from __future__ import annotations
 
@@ -117,9 +118,37 @@ def _body(acc: dict, folder: str, uid: int) -> str:
     from ..cmd_mail import _html_text
     try:
         m = imap.excerpt(acc, folder, uid)            # the text only: never the attachments of the mail
+        return (m.get("text") or (_html_text(m["html"]) if m.get("html") else "") or "").strip()
     except MailError:
         return ""
-    return (m.get("text") or (_html_text(m["html"]) if m.get("html") else "") or "").strip()
+    except Exception:  # noqa: BLE001 - one mail that cannot be read never stops the check
+        log.exception("mail: text of %s/%s uid %s unreadable", acc.get("id"), folder, uid)
+        return ""
+
+
+def _hits(acc: dict, grant: dict, rows: list[dict]) -> list[dict]:
+    out = []
+    for r in rows:
+        try:
+            if _matches(acc, grant, r):
+                out.append(r)
+        except Exception:  # noqa: BLE001 - a mail with odd headers is left out, the others go on
+            log.exception("mail: uid %s of %s not matched", r.get("uid"), acc.get("id"))
+    return out
+
+
+def _remember(acc_id: str, folder: str, rows: list[dict], snippets: dict[int, str]) -> None:
+    """Never an error: when the rows cannot be written together, one by one (the bad one is left out)."""
+    try:
+        store.remember(acc_id, folder, rows, snippets)
+        return
+    except Exception:  # noqa: BLE001
+        log.exception("mail: headers of %s/%s not kept, one by one", acc_id, folder)
+    for r in rows:
+        try:
+            store.remember(acc_id, folder, [r], snippets)
+        except Exception:  # noqa: BLE001
+            log.warning("mail: uid %s of %s/%s left out", r.get("uid"), acc_id, folder)
 
 
 def _who(f: dict) -> str:
@@ -240,22 +269,26 @@ def poll_account(acc: dict, fire: bool = True) -> dict:
                     log.info("mail: %s/%s has more than %d new mails, the rest comes with the next check",
                              acc["id"], folder, MAX_NEW)
             bodies: dict[int, str] = {}
-            started = 0
+            turns: list[tuple[str, dict, list[dict]]] = []
             if not first and rows:
                 out["new"] += len(rows)
                 for path, grant in watching:
                     if grant["trigger"]["folder"] != folder:
                         continue
-                    hit = [r for r in rows if _matches(acc, grant, r)]
+                    hit = _hits(acc, grant, rows)
                     if not hit:
                         continue
                     for r in hit[:TEXT_MAILS]:
                         if int(r["uid"]) not in bodies:
                             bodies[int(r["uid"])] = _body(acc, folder, int(r["uid"]))
-                    started += _start(acc, folder, path, grant, hit, bodies)
-            store.remember(acc["id"], folder, rows, {u: b[:SNIPPET] for u, b in bodies.items()})
+                    turns.append((path, grant, hit))
+            _remember(acc["id"], folder, rows, {u: b[:SNIPPET] for u, b in bodies.items()})
+            # the turns are written down (pending.json) and the position moved BEFORE any agent starts: a restart
+            # in the middle never starts an agent twice with the same mails, and never loses the turns not started
+            queued = {_queue(acc, folder, path, grant, hit, bodies) for path, grant, hit in turns} - {None}
             store.set_position(acc["id"], folder, uidvalidity=res["uidvalidity"], last_uid=last, ok=True)
-            out["started"] += started
+            if queued:
+                out["started"] += _drain(queued)
     return out
 
 
@@ -276,19 +309,35 @@ def _sample(acc: dict) -> None:
         if len(store.auth_samples(acc["id"])) >= access.DETECT_MIN:
             return
         res = imap.new_since(acc, "INBOX", None, store.AUTH_SAMPLES)
-        store.remember(acc["id"], "INBOX", res["messages"])
+        _remember(acc["id"], "INBOX", res["messages"], {})
     except MailError:
         pass
+    except Exception:  # noqa: BLE001
+        log.exception("mail: samples of %s not kept", acc.get("id"))
 
 
-def _start(acc: dict, folder: str, path: str, grant: dict, rows: list[dict], bodies: dict[int, str]) -> int:
+def _queue(acc: dict, folder: str, path: str, grant: dict, rows: list[dict], bodies: dict[int, str]) -> tuple | None:
+    """Writes the turn of these mails for this agent in pending.json (started by `_drain` right after) and notes
+    them "seen" -> its key, None when there is nothing to start. Mails the agent already got (a check that ran up
+    to here and was cut before saving its position) are left out."""
     from .. import agents
-    if not agents.feature_on():
-        return 0
-    prompt = grant["trigger"].get("prompt") or DEFAULT_PROMPT.format(acc=acc["id"], folder=folder)
-    for r in rows:
-        store.note(acc["id"], store.mkey(r.get("message_id"), folder, r["uid"]), path, "seen")
-    return 1 if _fire(path, acc, folder, rows, bodies, prompt) else 0
+    try:
+        if not agents.feature_on():
+            return None
+        keys = {int(r["uid"]): store.mkey(r.get("message_id"), folder, r["uid"]) for r in rows}
+        had = store.seen_by(acc["id"], list(keys.values()))
+        rows = [r for r in rows if not any(n["agent"] == path and n["what"] == "seen" for n in had.get(keys[int(r["uid"])], []))]
+        if not rows:
+            return None
+        prompt = grant["trigger"].get("prompt") or DEFAULT_PROMPT.format(acc=acc["id"], folder=folder)
+        shown = {u: b for u, b in bodies.items() if u in {int(r["uid"]) for r in rows[:TEXT_MAILS]}}
+        _keep(path, acc["id"], folder, rows, shown, prompt)
+        for r in rows:
+            store.note(acc["id"], keys[int(r["uid"])], path, "seen")
+        return (path, acc["id"], folder)
+    except Exception:  # noqa: BLE001 - this agent's turn is lost, the check goes on
+        log.exception("mail: turn of %s not kept", path)
+        return None
 
 
 def _fire(path: str, acc: dict, folder: str, rows: list[dict], bodies: dict[int, str], prompt: str) -> bool:
@@ -330,7 +379,10 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
         for r in rows:
             if (r.get("agent"), r.get("account"), r.get("folder")) == (path, acc_id, folder):
                 known = {int(m["uid"]) for m in r.get("mails") or []}
-                r["mails"] = ((r.get("mails") or []) + [m for m in mails if int(m["uid"]) not in known])[-PENDING_MAILS:]
+                add = [m for m in mails if int(m["uid"]) not in known]
+                r["mails"] = ((r.get("mails") or []) + add)[-PENDING_MAILS:]
+                if add:
+                    r["at"] = time.time()           # the day's limit counts from the newest mail
                 break
         else:
             rows.append({"agent": path, "account": acc_id, "folder": folder, "mails": mails[-PENDING_MAILS:],
@@ -340,35 +392,62 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
 
 
 def retry_pending() -> int:
-    from . import get_account
+    """The turns kept for agents that were busy: each one is started again (a busy one comes back)."""
+    return _drain(None)
+
+
+def _claim(keys: set | None, done: set) -> dict | None:
+    """Takes the next turn of pending.json out (one only, under the lock: a restart while the others start loses
+    none of them)."""
     f = _pending_file()
-    with _pending_lock:                     # taken out under the lock, started outside it (a busy one comes back)
+    with _pending_lock:
         rows = config.read_json(f, default=[]) or []
-        if not rows or not isinstance(rows, list):
-            return 0
-        config.write_json(f, [])
+        if not isinstance(rows, list):
+            rows = []
+        for i, r in enumerate(rows):
+            if not isinstance(r, dict):
+                continue
+            k = (r.get("agent"), r.get("account"), r.get("folder"))
+            if k in done or (keys is not None and k not in keys):
+                continue
+            del rows[i]
+            config.write_json(f, rows)
+            done.add(k)
+            return r
+    return None
+
+
+def _drain(keys: set | None) -> int:
+    """Starts the kept turns (all of them, or those of `keys` = (agent, mailbox, folder)) -> how many started."""
+    from . import get_account
     from .. import agents
-    if not rows or not agents.feature_on():
-        return 0                                    # Agents off: the kept mail is dropped, as new mail would be
     n = 0
-    for r in rows:
-        if time.time() - float(r.get("at") or 0) > 86400 or not r.get("mails"):
-            continue                                # a day late: not worth a turn
+    done: set = set()
+    grants: dict[str, list] = {}
+    while (r := _claim(keys, done)) is not None:
         try:
-            acc = get_account(str(r["account"]))
-        except MailError:
-            continue                                # the mailbox is gone
-        folder = str(r.get("folder") or "INBOX")
-        # the agent's rights as they are now: trigger still on, this folder, mailbox and senders still allowed
-        grant = next((g for p, g in watchers(acc["id"]) if p == r.get("agent") and g["trigger"]["folder"] == folder), None)
-        if not grant:
-            continue
-        mails = [m for m in r["mails"] if isinstance(m, dict) and str(m.get("uid", "")).isdigit() and _matches(acc, grant, m)]
-        if not mails:
-            continue
-        bodies = {int(m["uid"]): str(m["body"]) for m in mails[:TEXT_MAILS] if m.get("body") is not None}
-        n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies,
-                        str(r.get("prompt") or "")) else 0
+            if not agents.feature_on():
+                continue                            # Agents off: the kept mail is dropped, as new mail would be
+            if time.time() - float(r.get("at") or 0) > 86400 or not r.get("mails"):
+                continue                            # a day late: not worth a turn
+            try:
+                acc = get_account(str(r["account"]))
+            except MailError:
+                continue                            # the mailbox is gone
+            folder = str(r.get("folder") or "INBOX")
+            # the agent's rights as they are now: trigger still on, this folder, mailbox and senders still allowed
+            if acc["id"] not in grants:
+                grants[acc["id"]] = watchers(acc["id"])
+            grant = next((g for p, g in grants[acc["id"]] if p == r.get("agent") and g["trigger"]["folder"] == folder), None)
+            if not grant:
+                continue
+            mails = _hits(acc, grant, [m for m in r["mails"] if isinstance(m, dict) and str(m.get("uid", "")).isdigit()])
+            if not mails:
+                continue
+            bodies = {int(m["uid"]): str(m["body"]) for m in mails[:TEXT_MAILS] if m.get("body") is not None}
+            n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies, str(r.get("prompt") or "")) else 0
+        except Exception:  # noqa: BLE001 - one broken turn never stops the others
+            log.exception("mail: kept turn of %s not started", r.get("agent"))
     return n
 
 
