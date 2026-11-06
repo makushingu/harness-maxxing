@@ -33,7 +33,7 @@ export function EmptyState({
           <Icon className={compact ? 'size-5' : 'size-6'} strokeWidth={1.6} />
         </div>
       )}
-      <div className="grid max-w-sm gap-1">
+      <div className="grid w-full min-w-0 max-w-sm gap-1 [overflow-wrap:anywhere]">
         <h3 className={cn('font-semibold tracking-tight', compact ? 'text-sm' : 'text-base')}>{title}</h3>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
