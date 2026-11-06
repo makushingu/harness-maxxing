@@ -800,3 +800,22 @@ def test_a_trigger_source_is_stored_as_the_feed_writes_it(client, topic, monkeyp
     agents.scan_feed()
     feed.post("Order 1", source="Shopify Orders")
     assert agents.scan_feed() == 1 and agents.flush_due() == 1
+
+
+def test_events_waiting_in_the_window_follow_a_topic_rename(client, topic, monkeypatch):
+    from maxxing import feed
+    _on(client)
+    _create(client)
+    fired = _feed_trigger(client, monkeypatch, debounce_s=60)
+    agents.scan_feed()
+    feed.post("order 5", source="shop")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 0
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"}).status_code == 200
+    new = "projects/acme/topics/news/agents/writer"
+    assert [k[0] for k in agents.debouncer.pending] == [new]
+    agents.debouncer.pending.clear()                     # and after a restart, from _feed.json
+    agents._feed_loaded.clear()
+    agents.scan_feed()
+    for p in agents.debouncer.pending.values():
+        p["due"] = 0
+    assert agents.flush_due() == 1 and fired[0][0] == new and "order 5" in fired[0][1]["text"]
