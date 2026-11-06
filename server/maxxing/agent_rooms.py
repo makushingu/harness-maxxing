@@ -500,8 +500,9 @@ def say(path: str, text: str) -> dict:
             last = next((m["author"] for m in reversed(room(path, 200))
                          if m.get("kind") == "message" and m.get("author") not in ("", "me")), "")
             ids = [m["path"] for m in members]
-            pick = next((p for p in (g["lead"], last) if p in ids and p not in paused), "") or \
-                next((p for p in ids if p not in paused), "")
+            live = [p for p in ids if agents.exists(p)]        # a deleted lead / last speaker: the next member
+            pick = next((p for p in (g["lead"], last) if p in live and p not in paused), "") or \
+                next((p for p in live + ids if p not in paused), "")
             named = [pick] if pick else []
         named = [p for p in named if p not in paused]
         st["paused"] = paused
