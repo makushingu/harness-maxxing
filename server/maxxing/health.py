@@ -354,7 +354,7 @@ def sync_feed() -> int:
                 n += 1
         elif i["seen"] and not ev["read"]:
             feed.update(ev["id"], read=True)
-        elif ev["title"] != i["text"]:
+        elif ev["title"] != " ".join((feed._utf8(i["text"]) or "").split())[:feed.TITLE_MAX]:   # as feed stores it
             feed.update(ev["id"], title=i["text"], notify=False)
     for ev in feed.open_events(FEED_SOURCE):
         if ev.get("ref") and ev["ref"] not in live:

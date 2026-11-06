@@ -240,3 +240,18 @@ def test_health_issues_in_the_feed(client, mx, monkeypatch):
     issues.clear()
     health.sync_feed()
     assert feed.find("health:d1", open_only=False)["resolution"] == "Fixed"
+
+
+def test_a_long_health_issue_is_not_rewritten_every_pass(client, mx, monkeypatch):
+    from maxxing import config, health
+    text = "Claude sign-in expired -\nsign in again  (" + "x" * 300 + ")"   # stored cut to 200, spaces folded
+    monkeypatch.setattr(health, "collect", lambda force=False: {"issues": [
+        {"level": "error", "code": "claude_auth", "text": text, "id": "a1", "seen": False}]})
+    config.update_config(health_feed=True)
+    assert health.sync_feed() == 1
+    writes: list = []
+    real = feed.update
+    monkeypatch.setattr(feed, "update", lambda *a, **k: writes.append(k) or real(*a, **k))
+    health.sync_feed()
+    health.sync_feed()
+    assert writes == []                                     # same issue: feed.db untouched, no tab refetches
