@@ -317,3 +317,33 @@ def test_a_restored_agent_whose_name_was_taken_comes_back_as_an_agent(client, to
     assert crons.get_job(job["id"])["topic_path"] == new
     assert agents.run_settings(new)["sandbox"] is True
     assert [m["text"] for m in agents.thread(a)] == ["Agent created"]
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_an_agent_comes_back_with_its_crons_and_thread_even_through_a_linked_workspace(client, topic, mx, linked):
+    """The workspace may sit behind a symbolic link (/root/maxxing -> /data/maxxing): the restore still brings back
+    the agent's cron jobs and thread and empties its .agents box (negative case: a plain workspace, as before)."""
+    from maxxing import agents, config, crons
+    A = "projects/acme/topics/blog/agents/writer"
+    if linked:
+        link = mx["tmp"] / "wslink"
+        link.symlink_to(mx["ws"])
+        cfg = config.load_config()
+        cfg["workspace"] = str(link)
+        config.save_config(cfg)
+        assert config.workspace() == link
+    assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
+    assert client.post("/api/agents", json={"topic_path": topic, "name": "writer"}).status_code == 200
+    job = client.post("/api/agents/acme/blog/writer/crons", json={"schedule": "0 9 * * *", "prompt": "NOTOOL x"}).json()
+    agents.post(A, "note", "hello thread")
+    assert client.delete("/api/agents/acme/blog/writer").status_code == 200
+    assert crons.get_job(job["id"]) is None
+    it = next(i for i in _items(client) if i["kind"] == "agent")
+    assert it["original"] == f"{topic}/agents/writer"                    # shown relative, not as a full path
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200
+    assert crons.get_job(job["id"]) is not None
+    assert "hello thread" in [m["text"] for m in agents.thread(A)]
+    assert not [p.name for p in config.state_dir("trash").iterdir() if p.name.endswith(".agents")]
