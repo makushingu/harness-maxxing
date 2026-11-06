@@ -127,6 +127,22 @@ def test_the_daily_cap_counts_recipients_and_gives_back_on_failure(acc, smtp):
     assert send.sent_today(acc["id"]) == 2
 
 
+def test_the_daily_cap_is_counted_under_a_lock_shared_with_other_processes(acc):
+    import fcntl
+    import threading
+    _on(mail_send_per_day=3)
+    fd = os.open(config.STATE / ".mail-sent-count.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)                     # another process (`maxxing mail write --send`) is counting
+    t = threading.Thread(target=send._take, args=(acc["id"], 2))
+    t.start()
+    t.join(0.3)
+    assert t.is_alive() and send.sent_today(acc["id"]) == 0      # waits for it instead of reading a stale count
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)
+    t.join(5)
+    assert send.sent_today(acc["id"]) == 2
+
+
 def test_every_recipient_refused_is_an_error(acc, smtp):
     with pytest.raises(MailError) as e:
         send.send(acc, {"to": "nobody@example.com", "subject": "s", "text": "x"})
