@@ -234,3 +234,32 @@ def test_a_group_folder_is_readable_by_its_members_only(client, topic):
         assert team not in agent_guard.private_paths(member) and kept in agent_guard.private_paths(member)
     hidden = agent_guard.private_paths("projects/acme/topics/blog/agents/outsider")
     assert team in hidden and kept in hidden
+
+
+def test_room_trimmed_by_size_and_read_from_the_end(client, topic, mx, monkeypatch):
+    _setup(client)
+    path = "projects/acme/groups/team"
+    monkeypatch.setattr(agent_rooms, "ROOM_BYTES", 20_000)
+    for i in range(200):
+        agent_rooms.post(path, "message", f"answer {i} " + "x" * 300, author=W)
+    f = agent_rooms._state_file(path, "jsonl")
+    assert f.stat().st_size <= 20_000
+    msgs = agent_rooms.room(path, 1000)
+    assert msgs[-1]["text"].startswith("answer 199 ") and len(msgs) < 60
+    assert [m["text"][:10] for m in agent_rooms.room(path, 2)] == ["answer 198", "answer 199"]
+    at = msgs[-3]["at"]
+    assert [m["id"] for m in client.get(f"{G}/messages", params={"after": at}).json()["messages"]] == \
+        [m["id"] for m in msgs[-2:]]
+    assert agent_rooms.room(path, 5, before=msgs[-1]["at"])[-1]["id"] == msgs[-2]["id"]
+
+
+def test_group_events_leave_the_workspace_tree_alone(client, topic, mx, monkeypatch):
+    from maxxing import bus
+    _setup(client)
+    sent: list = []
+    monkeypatch.setattr(bus, "invalidate", lambda *t: sent.append(t))
+    agent_rooms.mark_seen("projects/acme/groups/team")
+    agent_rooms.post("projects/acme/groups/team", "note", "x")
+    assert sent and not any("workspace" in t for t in sent)
+
+

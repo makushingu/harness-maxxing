@@ -51,6 +51,7 @@ MAX_PER_PROJECT = 20
 NAME_MAX, ROLE_MAX, GOAL_MAX = 60, 120, 4000
 LIMITS = {"waves": (3, 1, 6), "replies": (10, 1, 30), "per_hour": (40, 1, 200)}   # name: (default, min, max)
 ROOM_KEEP = 1000                # messages kept in a room
+ROOM_BYTES = 2 * 1024 * 1024    # a room file past this size is trimmed back to half of it (and ROOM_KEEP messages)
 TEXT_MAX = 4000                 # characters of a message kept in the room
 DELTA_MAX = 12000               # characters of "what was said since your last turn" sent to a member
 PASS_WORDS = ("PASS", "[PASS]")
@@ -280,9 +281,10 @@ def get(path: str) -> dict:
     return public(path)
 
 
-def _invalidate(path: str | None = None) -> None:
+def _invalidate(path: str | None = None, tree: bool = False) -> None:
+    """tree: a group folder came or went (create, delete, a project renamed): the workspace tree changed too."""
     from . import bus
-    bus.invalidate("agent-groups", *( [f"agent-groups:{path}"] if path else []), "workspace")
+    bus.invalidate("agent-groups", *( [f"agent-groups:{path}"] if path else []), *(["workspace"] if tree else []))
 
 
 # ---- create / update / delete ----------------------------------------------------------------------------
@@ -312,7 +314,7 @@ def create(project: str, name: str, fields: dict | None = None) -> dict:
     _save(path, data)
     agents._git_exclude(folder(path).parent.parent, GROUPS_DIR)
     post(path, "note", "Group created")
-    _invalidate(path)
+    _invalidate(path, tree=True)
     return get(path)
 
 
@@ -361,7 +363,7 @@ def delete(path: str, keep_files: bool = False) -> None:
     shutil.rmtree(d, ignore_errors=True)
     for ext in ("json", "jsonl"):
         _state_file(path, ext).unlink(missing_ok=True)
-    _invalidate(path)
+    _invalidate(path, tree=True)
 
 
 # ---- the conversation --------------------------------------------------------------------------------------
@@ -373,31 +375,69 @@ def post(path: str, kind: str, text: str, author: str = "", **extra: Any) -> dic
     f = _state_file(path, "jsonl")
     with f.open("a") as fh:
         fh.write(json.dumps(msg, ensure_ascii=False) + "\n")
-    if f.stat().st_size > ROOM_KEEP * 2 * 1024:
-        lines = f.read_text(errors="replace").splitlines()[-ROOM_KEEP:]
-        tmp = f.with_suffix(".tmp")
-        tmp.write_text("\n".join(lines) + "\n")
-        tmp.replace(f)
+    if f.stat().st_size > ROOM_BYTES:
+        _trim(f)
     from . import bus
     bus.invalidate(f"agent-groups:{path}", "agent-groups")
     return msg
 
 
-def room(path: str, limit: int = 200, before: float | None = None) -> list[dict]:
+def _trim(f: Path) -> None:
+    """Keep the newest messages: at most ROOM_KEEP, in half of ROOM_BYTES (a trim then frees room for many posts)."""
+    keep, size = [], 0
+    for ln in _tail(f):
+        size += len(ln.encode()) + 1
+        if size > ROOM_BYTES // 2 or len(keep) >= ROOM_KEEP:
+            break
+        keep.append(ln)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text("".join(x + "\n" for x in reversed(keep)))
+    tmp.replace(f)
+
+
+def _tail(f: Path, block: int = 64 * 1024):
+    """The lines of f, newest first, read from the end (a long room is never read whole for its last messages)."""
+    with f.open("rb") as fh:
+        pos = fh.seek(0, 2)
+        rest = b""
+        while pos > 0:
+            n = min(block, pos)
+            pos -= n
+            fh.seek(pos)
+            chunk = fh.read(n) + rest
+            lines = chunk.split(b"\n")
+            rest = lines.pop(0)                         # maybe cut: completed by the next block
+            for ln in reversed(lines):
+                if ln.strip():
+                    yield ln.decode(errors="replace")
+        if rest.strip():
+            yield rest.decode(errors="replace")
+
+
+def room(path: str, limit: int = 200, before: float | None = None, after: float | None = None) -> list[dict]:
+    """The last `limit` messages (before / after: only those older / newer than that time), oldest first."""
     f = _state_file(path, "jsonl")
+    limit = max(1, min(int(limit), 1000))
+    out: list[dict] = []
     try:
-        lines = f.read_text(errors="replace").splitlines()
+        for ln in _tail(f):
+            try:
+                m = json.loads(ln)
+            except ValueError:
+                continue
+            if not isinstance(m, dict):
+                continue
+            at = m.get("at") or 0
+            if after is not None and at <= after:
+                break
+            if before is None or at < before:
+                out.append(m)
+                if len(out) >= limit:
+                    break
     except OSError:
         return []
-    out = []
-    for ln in lines:
-        try:
-            m = json.loads(ln)
-        except ValueError:
-            continue
-        if isinstance(m, dict) and (before is None or (m.get("at") or 0) < before):
-            out.append(m)
-    return out[-max(1, min(int(limit), 1000)):]
+    out.reverse()
+    return out
 
 
 def _read_state(path: str) -> dict:
@@ -786,7 +826,7 @@ def remap(old_prefix: str, new_prefix: str) -> None:
             if po != pn:
                 st.update(sessions={}, since={}, current=None, queue=[], turns={})
             _write_state(path, st)
-    _invalidate()
+    _invalidate(tree=True)
 
 
 def recover() -> int:

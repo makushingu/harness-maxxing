@@ -31,10 +31,20 @@ export function useAgentGroups(enabled = true) {
 export function useAgentGroup(path: string | null) {
   return useQuery({ queryKey: groupKeys.one(path || ''), queryFn: () => api.get<AgentGroup>(groupUrl(path!)), enabled: !!path })
 }
+/** The last `limit` messages; once held, a refresh asks only for the ones after the last (`after`) and adds them. */
 export function useGroupMessages(path: string | null, limit = 300) {
+  const qc = useQueryClient()
   return useQuery({
     queryKey: groupKeys.messages(path || ''),
-    queryFn: () => api.get<{ messages: AgentGroupMessage[] }>(groupUrl(path!, '/messages'), { limit }).then((r) => r.messages),
+    queryFn: async () => {
+      const held = qc.getQueryData<AgentGroupMessage[]>(groupKeys.messages(path!))
+      const after = held?.length ? held[held.length - 1].at : undefined
+      const r = await api.get<{ messages: AgentGroupMessage[] }>(groupUrl(path!, '/messages'), after != null ? { limit, after } : { limit })
+      if (!held || after == null) return r.messages
+      if (!r.messages.length) return held
+      const ids = new Set(held.map((m) => m.id))
+      return [...held, ...r.messages.filter((m) => !ids.has(m.id))].slice(-limit)
+    },
     enabled: !!path,
   })
 }
