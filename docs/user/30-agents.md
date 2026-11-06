@@ -333,6 +333,7 @@ text as outside data instead of a task (an e-mail, a script's output). See the [
 ## Delete or move
 
 Deleting an agent moves its folder and sessions to the [Trash](files), deletes its schedule jobs and its Telegram
-thread. Renaming the topic or the project takes its agents along (sessions, schedules, Telegram thread).
+thread. Renaming the topic or the project takes its agents along (sessions, schedules, Telegram thread, events waiting to
+be grouped into a run).
 Deleting the topic or the project does the same for every agent inside: its schedule jobs (kept in the schedules'
 archive, `maxxing cron deleted`) and its Telegram thread go with it.
