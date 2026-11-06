@@ -3395,6 +3395,7 @@ export const en = {
   'groups.field.role': 'Role of {name}',
   'groups.field.rolePlaceholder': 'Its part in this group (optional)',
   'groups.field.goneMembers': 'Some members were deleted: saving removes them from the group.',
+  'groups.field.goneRemove': 'Remove',
   'groups.field.lead': 'Lead',
   'groups.field.leadHint': 'Answers when you name nobody.',
   'groups.field.leadNone': 'Nobody: the last one who spoke',

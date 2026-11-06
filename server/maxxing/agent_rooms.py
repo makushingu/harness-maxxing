@@ -325,10 +325,21 @@ def update(path: str, fields: dict) -> dict:
     f = dict(fields or {})
     cur = load(path)
     text = f.pop("goal", None)
+    dropped: list[str] = []
     if isinstance(f.get("members"), list):              # a member that stays keeps its @name
         old = handles(cur)
         f["members"] = [{**m, "handle": m.get("handle") or old.get(m.get("path") or "", "")} if isinstance(m, dict)
                         else m for m in f["members"]]
+        # a member whose agent was deleted since is dropped on save, not a refusal (else the group can no longer
+        # be edited at all); an agent that was never a member must exist
+        keep = []
+        for m in f["members"]:
+            p = str((m.get("path") if isinstance(m, dict) else m) or "").strip("/")
+            if p in old and not agents.exists(p):
+                dropped.append(p)
+            else:
+                keep.append(m)
+        f["members"] = keep
     merged = {**cur, **{k: v for k, v in f.items() if v is not None}}
     if isinstance(f.get("limits"), dict):
         merged["limits"] = {**cur["limits"], **{k: v for k, v in f["limits"].items() if v is not None}}
@@ -347,7 +358,7 @@ def update(path: str, fields: dict) -> dict:
             st["queue"] = [q for q in st.get("queue") or [] if q.get("path") not in gone]
             _write_state(path, st)
     _invalidate(path)
-    return get(path)
+    return {**get(path), **({"dropped": dropped} if dropped else {})}
 
 
 def delete(path: str, keep_files: bool = False) -> None:
