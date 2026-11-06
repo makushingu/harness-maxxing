@@ -187,6 +187,18 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
     wait_for(lambda: not agents._read_state(A).get("held"))                            # released at its own end
 
 
+def test_an_agent_turn_has_one_system_note_with_the_owner_note_and_the_subagents_rule(client, topic):
+    from maxxing.sessions import spawn
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert argv.count("--append-system-prompt") == 1        # Claude Code keeps only the last of several
+    note = argv[argv.index("--append-system-prompt") + 1]
+    assert spawn.FOREGROUND_AGENTS in note and agents.OWNER_NOTE in note
+
+
 def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
     _on(client)
     _create(client)

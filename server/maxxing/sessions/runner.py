@@ -295,7 +295,7 @@ class Runner:
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"))
-        base += spawn.agents_args(cfg, mcp_plan.hint)
+        base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), mcp_plan.hint) if x))
         if not agent:                                   # a topic's agents with `subagent` on: callable from its sessions
             from maxxing import agent_format
             base += agent_format.subagents_args(meta.get("path") or "")
