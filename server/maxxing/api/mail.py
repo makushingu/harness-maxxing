@@ -11,6 +11,7 @@ import functools
 import json
 import logging
 import re
+import threading
 import time
 from typing import Literal, Optional
 from urllib.parse import quote
@@ -36,7 +37,19 @@ STATUS = {"no_account": 404, "not_found": 404, "no_folder": 404, "exists": 409, 
           "sent_unknown": 409}      # handed to the SMTP server, then the connection broke: probably sent, never resend blindly
 
 MAIL_THREADS = 8        # one stuck account holds at most 1 + imap.MAX_WAITING of them
-_pool = concurrent.futures.ThreadPoolExecutor(MAIL_THREADS, thread_name_prefix="mail")
+_on_pool = threading.local()
+_pool = concurrent.futures.ThreadPoolExecutor(MAIL_THREADS, thread_name_prefix="mail",
+                                              initializer=lambda: setattr(_on_pool, "yes", True))
+
+
+def run_on_pool(fn, *args, **kw):
+    """From a thread outside the mail pool (an approval clicked in the feed or on Telegram): run fn on the mail pool
+    and wait for it, so its IMAP / SMTP work counts in the mail pool's limit like the E-mail page's own calls (the
+    caller only waits). Already on the mail pool: runs in place (waiting on itself could fill the pool)."""
+    if getattr(_on_pool, "yes", False):
+        return fn(*args, **kw)
+    ctx = contextvars.copy_context()
+    return _pool.submit(ctx.run, functools.partial(fn, *args, **kw)).result()
 
 
 async def _in_pool(fn, *args, **kw):
