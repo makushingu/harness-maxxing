@@ -35,7 +35,8 @@ maxxing mail outbox                                    # agents' messages waitin
 
 ## Giving an agent a mailbox
 
-Nothing by default. On the agent's page: Settings -> E-mail -> Add a mailbox, or at creation:
+Nothing by default. On the agent's page: Settings -> E-mail -> "Pick a mailbox", then "Give access" ("Add a
+mailbox" is the E-mail page button that creates a new IMAP account, not this), or at creation:
 `maxxing agents create acme/shop/sorter --template mail-sort --mail contact@example.com` (templates `mail-sort`,
 `mail-support`, `mail-invoices`; `maxxing agents templates`). Ask at most:
 1. which mailbox, and what the agent should do with it (-> rights: read, draft, move, mark, send - the fewest);
