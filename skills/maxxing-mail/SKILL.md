@@ -15,7 +15,7 @@ maxxing mail accounts                                  # id, address, servers
 maxxing mail list --unread -n 20 [-a ACCOUNT] [-f FOLDER] [-s TEXT]
 maxxing mail read UID [--keep-unread] [--max N | --full]   # body capped at 20,000 characters by default
 maxxing mail archive|trash|junk|seen|flag UID...      # or: move UID... --to FOLDER, mkdir NAME
-maxxing mail attachment UID INDEX out/                # INDEX from `read`
+maxxing mail attachment UID INDEX out/                # INDEX from `read`; never replaces a file (name (2).pdf)
 echo "Thanks, Monday works." | maxxing mail write --reply UID     # a DRAFT, sent by the user from the page
 maxxing mail write --to a@example.com -s "Subject" --attach file.pdf < body.txt [--send]
 maxxing mail refresh                                   # check now (starts the agents watching the mailbox)
