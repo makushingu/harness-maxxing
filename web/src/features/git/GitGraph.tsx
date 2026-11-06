@@ -80,6 +80,26 @@ export function layout(commits: GitCommit[]): { rows: Row[]; width: number } {
   return { rows, width }
 }
 
+/** Lines passing by, joined into one vertical run per lane: one path per run instead of one per lane and row
+ * (300 open branches were 45 000 paths). `from`/`to` are row indexes, `to` included. */
+export function passRuns(rows: Row[]): { lane: number; color: number; from: number; to: number }[] {
+  const runs: { lane: number; color: number; from: number; to: number }[] = []
+  const open = new Map<number, { lane: number; color: number; from: number; to: number }>()
+  rows.forEach((row, i) => {
+    for (const e of row.edges) {
+      if (e.kind !== 'pass') continue
+      const run = open.get(e.from)
+      if (run && run.to === i - 1 && run.color === e.lane) run.to = i
+      else {
+        const next = { lane: e.from, color: e.lane, from: i, to: i }
+        open.set(e.from, next)
+        runs.push(next)
+      }
+    }
+  })
+  return runs
+}
+
 const curve = (x1: number, y1: number, x2: number, y2: number) => {
   if (x1 === x2) return `M${x1} ${y1}V${y2}`
   const m = (y1 + y2) / 2
@@ -222,6 +242,7 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
   })
   const rowH = useMediaQuery('(pointer: coarse)') ? ROW_TOUCH : ROW_MOUSE
   const { rows, width } = React.useMemo(() => layout(commits), [commits])
+  const runs = React.useMemo(() => passRuns(rows), [rows])
   const box = React.useRef<HTMLDivElement>(null)
   const [boxW, setBoxW] = React.useState(0)
   React.useLayoutEffect(() => {
@@ -273,6 +294,9 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
         </DropdownMenuContent>
       </DropdownMenu>
       <svg width={w} height={h} className="pointer-events-none absolute top-0 left-0" aria-hidden="true">
+        {runs.map((r) => (
+          <path key={`p${r.lane}-${r.from}`} d={`M${x(r.lane)} ${r.from * rowH}V${(r.to + 1) * rowH}`} stroke={color(r.color)} strokeWidth={2} fill="none" strokeLinecap="round" />
+        ))}
         {rows.map((row, i) => {
           const top = i * rowH
           const mid = top + rowH / 2
@@ -280,12 +304,8 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
           return (
             <g key={row.commit.sha}>
               {row.edges.map((e, k) => {
-                const d =
-                  e.kind === 'pass'
-                    ? curve(x(e.from), top, x(e.to), bottom)
-                    : e.kind === 'in'
-                      ? curve(x(e.from), top, x(e.to), mid)
-                      : curve(x(e.from), mid, x(e.to), bottom)
+                if (e.kind === 'pass') return null
+                const d = e.kind === 'in' ? curve(x(e.from), top, x(e.to), mid) : curve(x(e.from), mid, x(e.to), bottom)
                 return <path key={k} d={d} stroke={color(e.lane)} strokeWidth={2} fill="none" strokeLinecap="round" />
               })}
             </g>

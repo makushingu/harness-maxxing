@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import shutil
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -205,6 +206,9 @@ async def test():
     return await asyncio.to_thread(run_test)
 
 
+MODEL_RE = re.compile(r"[A-Za-z0-9._:\[\]/@-]{1,100}")
+
+
 class SettingsIn(BaseModel):
     default_model: str | None = None
     permission_mode: str | None = None
@@ -222,7 +226,11 @@ class SettingsIn(BaseModel):
 async def settings(body: SettingsIn):
     changes: dict = {}
     if body.default_model is not None:
-        changes["default_model"] = body.default_model.strip()
+        model = body.default_model.strip()
+        if model and not MODEL_RE.fullmatch(model):     # a NUL or a newline here broke every new session
+            raise HTTPException(400, detail={"error": "invalid",
+                                             "message": "default_model: a model id such as claude-opus-5-5"})
+        changes["default_model"] = model
     if body.permission_mode is not None:
         if body.permission_mode not in PERMISSION_MODES:
             raise HTTPException(400, detail={"error": "invalid",
