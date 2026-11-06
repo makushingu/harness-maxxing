@@ -191,7 +191,7 @@ function placeSub(p: Place, v: InfraView, t: TFn, domains: boolean, mask: (s: st
   if (domains) return t(p.tier === 'own' ? 'infra.place.pointsOwn' : 'infra.place.pointsHosted', { name: p.sensitive ? mask(p.label) : p.label })
   if (p.key === 'local') return t('infra.place.localSub')
   if (p.tier === 'own') return v.sources.servers?.[p.key]?.ok === false ? t('infra.place.sshDown') : t('infra.place.sshSub')
-  return t('infra.place.hostedSub', { name: p.label })
+  return t('infra.place.hostedSub', { name: p.sensitive ? mask(p.label) : p.label })
 }
 
 export function TypeView({ items, v, byId, at, onAt, onOpen, intro }: { items: InfraResource[]; v: InfraView; byId: Map<string, InfraResource>; at: string | null; onAt: (key: string | null) => void; onOpen: (id: string) => void; intro?: React.ReactNode }) {
