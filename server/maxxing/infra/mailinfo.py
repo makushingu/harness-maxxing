@@ -249,28 +249,50 @@ def _txt(c: httpx.Client, name: str) -> list[str]:
     return out
 
 
-def _spf_lookups(c: httpx.Client, record: str, budget: list[int], seen: set[str], depth: int = 0) -> int:
-    """DNS lookups an SPF check costs (RFC 7208 limit: 10), following include:/redirect= up to the budget."""
-    n = 0
-    for term in record.split()[1:]:
-        t = term.lstrip("+-~?").lower()
-        target = t[8:] if t.startswith("include:") else t[9:] if t.startswith("redirect=") else None
-        if target is not None:
-            n += 1
-            if depth < 4 and target not in seen and budget[0] > 0:
-                seen.add(target)
-                budget[0] -= 1
-                sub = next((x for x in _txt(c, target) if x.lower().startswith("v=spf1")), None)
-                if sub:
-                    n += _spf_lookups(c, sub, budget, seen, depth + 1)
+def _spf_walk(c: httpx.Client, record: str, st: dict, path: tuple[str, ...], depth: int = 0) -> tuple[int, str | None]:
+    """(DNS lookups an SPF check costs (RFC 7208 limit: 10), qualifier of the `all` that ends the evaluation), following
+    include:/redirect= up to st["budget"] queries. The qualifier is "" when the chain has no `all` at all, None when
+    unknown (a target not read). redirect= is ignored when the record has an `all` (RFC 7208 6.1). A target already on
+    the path (a loop: a permerror for receivers) is noted in st["loop"] and not followed."""
+    terms = record.split()[1:]
+    has_all = any(t.lstrip("+-~?").lower() == "all" for t in terms)
+    n, qual, redirect = 0, "", None
+
+    def follow(target: str) -> tuple[int, str | None]:
+        if target in path:
+            st["loop"] = st.get("loop") or target
+            return 0, None
+        if depth >= 4 or target in st["seen"] or st["budget"] <= 0:
+            return 0, None
+        st["seen"].add(target)
+        st["budget"] -= 1
+        sub = next((x for x in _txt(c, target) if x.lower().startswith("v=spf1")), None)
+        return _spf_walk(c, sub, st, path + (target,), depth + 1) if sub else (0, None)
+
+    for term in terms:
+        t = term.lower()
+        q = t[0] if t[:1] in "+-~?" else "+"
+        t = t[1:] if t[:1] in "+-~?" else t
+        if t == "all":
+            qual = qual or q                    # evaluation stops at the first `all`
+        elif t.startswith("include:"):
+            n += 1 + follow(t[8:])[0]
+        elif t.startswith("redirect="):
+            if not has_all:
+                redirect = t[9:]
         elif t in ("a", "mx", "ptr") or t.startswith(("a:", "a/", "mx:", "mx/", "ptr:", "exists:")):
             n += 1
-    return n
+    if redirect:
+        sub_n, qual = follow(redirect)
+        n += 1 + sub_n
+        if depth == 0:                          # only the top record's redirect= decides its `all`
+            st["redirect"] = redirect
+    return n, qual
 
 
 def dns_facts(domain: str) -> dict:
-    """{mx: [{prio, host}], spf: [records], spf_lookups, dmarc: [records], dkim: [selectors found], checked} or
-    {error, checked}."""
+    """{mx: [{prio, host}], spf: [records], spf_lookups, spf_loop, spf_redirect, spf_redirect_all, dmarc: [records],
+    dmarc_parent, dkim: [selectors found], checked} or {error, checked}."""
     out: dict[str, Any] = {"checked": int(time.time())}
     try:
         with httpx.Client(timeout=8) as c:
@@ -281,7 +303,13 @@ def dns_facts(domain: str) -> dict:
                     mx.append({"prio": int(prio) if prio.isdigit() else 0, "host": host.strip().rstrip(".").lower()})
             out["mx"] = sorted(mx, key=lambda m: (m["prio"], m["host"]))
             out["spf"] = [t for t in _txt(c, domain) if t.lower().startswith("v=spf1")]
-            out["spf_lookups"] = _spf_lookups(c, out["spf"][0], [SPF_MAX_QUERIES], {domain}) if len(out["spf"]) == 1 else None
+            out["spf_lookups"] = None
+            if len(out["spf"]) == 1:
+                st: dict[str, Any] = {"budget": SPF_MAX_QUERIES, "seen": {domain}}
+                out["spf_lookups"], qual = _spf_walk(c, out["spf"][0], st, (domain,))
+                out["spf_loop"] = st.get("loop")                # include:/redirect= target already on the chain
+                if st.get("redirect"):          # the `all` that applies comes from the redirect= target
+                    out["spf_redirect"], out["spf_redirect_all"] = st["redirect"], qual
             out["dmarc"] = [t for t in _txt(c, f"_dmarc.{domain}") if t.lower().startswith("v=dmarc1")]
             if not out["dmarc"]:        # a subdomain without its own record: receivers apply the parent's (RFC 7489)
                 labels = domain.split(".")
@@ -298,26 +326,62 @@ def dns_facts(domain: str) -> dict:
     return out
 
 
-def _spf_suggestion(mx_hosts: list[str]) -> str:
+# provider host suffix -> the SPF include that covers what it sends (MX hosts and mailbox SMTP servers)
+SPF_INCLUDES = (("mx.cloudflare.net", "_spf.mx.cloudflare.net"), ("google.com", "_spf.google.com"),
+                ("googlemail.com", "_spf.google.com"), ("gmail.com", "_spf.google.com"),
+                ("outlook.com", "spf.protection.outlook.com"), ("office365.com", "spf.protection.outlook.com"),
+                ("hostinger.com", "_spf.mail.hostinger.com"), ("ovh.net", "mx.ovh.com"), ("zoho.eu", "zoho.eu"),
+                ("zoho.com", "zoho.com"), ("migadu.com", "spf.migadu.com"), ("fastmail.com", "spf.messagingengine.com"),
+                ("purelymail.com", "_spf.purelymail.com"))
+NO_SEND_MX = ("_spf.mx.cloudflare.net",)    # Email Routing only forwards: it never sends the owner's own mail
+
+
+def _spf_include(host: str) -> str | None:
+    h = host.lower().rstrip(".")
+    if "hostinger" in h:
+        return "_spf.mail.hostinger.com"
+    return next((inc for suf, inc in SPF_INCLUDES if h == suf or h.endswith("." + suf)), None)
+
+
+def _spf_suggestion(domain: str, mx_hosts: list[str], senders: list[str] = ()) -> tuple[str, str, str]:
+    """(record, code, unknown sender) for a domain without SPF. senders = SMTP servers of the domain's E-mail page
+    mailboxes. code "no_spf": the record covers every known sender; "no_spf_sender": a mailbox sends through a server
+    no include is known for (named in the 3rd item); "no_spf_unknown": nobody known sends (no mailbox, MX of a provider
+    that does not send, or an unknown MX): the record is only a start."""
+    inc: list[str] = []
+    terms: list[str] = []
     for h in mx_hosts:
-        if h.endswith("mx.cloudflare.net"):
-            return "v=spf1 include:_spf.mx.cloudflare.net ~all"
-        if h.endswith("google.com") or h.endswith("googlemail.com"):
-            return "v=spf1 include:_spf.google.com ~all"
-        if h.endswith("outlook.com"):
-            return "v=spf1 include:spf.protection.outlook.com ~all"
-        if "hostinger" in h:
-            return "v=spf1 include:_spf.mail.hostinger.com ~all"
-    return "v=spf1 mx ~all"
+        i = _spf_include(h)
+        if i and i not in inc:
+            inc.append(i)
+    sends = [i for i in inc if i not in NO_SEND_MX]
+    unknown = ""
+    for h in dict.fromkeys(x.lower().rstrip(".") for x in senders if x):
+        i = _spf_include(h)
+        if i:
+            if i not in inc:
+                inc.append(i)
+        elif h == domain or h.endswith("." + domain):       # the domain's own server
+            terms.append(f"a:{h}")
+        else:
+            unknown = unknown or h
+    terms = [f"include:{i}" for i in inc] + terms
+    record = "v=spf1 " + " ".join(terms or ["mx"]) + " ~all"
+    if unknown:
+        return record, "no_spf_sender", unknown
+    if any(senders) or sends:
+        return record, "no_spf", ""
+    return record, "no_spf_unknown", ""
 
 
 def _p(level: str, code: str, text: str, fix: str = "", **params) -> dict:
     return {"level": level, "code": code, "text": text, "fix": fix, "params": params}
 
 
-def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str) -> list[dict]:
+def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str, senders: list[str] = ()) -> list[dict]:
     """What is wrong with a domain's mail DNS, in plain words, each with what to do. `expects`: the domain should
-    receive mail (routing on, a mailbox, a Hostinger plan); `cf_routing`: Cloudflare Email Routing is on."""
+    receive mail (routing on, a mailbox, a Hostinger plan); `cf_routing`: Cloudflare Email Routing is on; `senders`:
+    SMTP servers of the domain's E-mail page mailboxes."""
     if facts.get("error"):
         return [_p("warn", "dns_unreachable", f"Public DNS did not answer for {domain} ({facts['error']}).",
                    "Try Refresh in a minute.", domain=domain, error=facts["error"])]
@@ -340,22 +404,44 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
                       "In Cloudflare → Email → Email Routing → Settings, let Cloudflare fix the DNS records (and remove the other MX).",
                       domain=domain, hosts=", ".join(real)))
     spf = facts.get("spf") or []
-    suggestion = _spf_suggestion(real)
     if not spf:
-        out.append(_p("warn", "no_spf", f"No SPF record: anyone can claim to send mail as @{domain}.",
-                      f"Add a TXT record on {domain}: {suggestion}", domain=domain, record=suggestion))
+        suggestion, code, sender = _spf_suggestion(domain, real, senders)
+        fix = {"no_spf": f"Add a TXT record on {domain}: {suggestion}",
+               "no_spf_sender": f"Add a TXT record on {domain} that names every service you send with: start from "
+                                f"{suggestion} and add the include: of {sender} (its provider documents it) before ~all.",
+               "no_spf_unknown": f"Add a TXT record on {domain} that names every service you send mail with. From its MX "
+                                 f"records alone it would be {suggestion}: add the include: of the service you send with "
+                                 "(your mail provider documents it) before ~all, or the mail you send fails SPF."}[code]
+        out.append(_p("warn", code, f"No SPF record: anyone can claim to send mail as @{domain}.", fix,
+                      domain=domain, record=suggestion, **({"sender": sender} if sender else {})))
     elif len(spf) > 1:
         out.append(_p("error", "multiple_spf", f"{len(spf)} SPF records on {domain}: receivers treat that as an error.",
                       "Merge them into one TXT record that starts with v=spf1.", domain=domain, count=len(spf)))
     else:
         rec = spf[0].lower()            # SPF terms are case-insensitive (RFC 7208)
-        if re.search(r"(^|\s)\+?all(\s|$)", rec):
+        own_all = re.search(r"(^|\s)[+?~-]?all(\s|$)", rec)
+        target = facts.get("spf_redirect") if not own_all else None
+        if target and facts.get("spf_redirect_all") == "+":
+            out.append(_p("error", "spf_redirect_all", f"The SPF record of {domain} hands over to {target} (redirect=), "
+                          f"which ends with +all: anyone may send as @{domain}.",
+                          f"End the record of {domain} with ~all instead of redirect=, or fix {target}.",
+                          domain=domain, target=target))
+        elif target and facts.get("spf_redirect_all") in ("?", ""):
+            out.append(_p("warn", "spf_neutral", f"The SPF record of {domain} does not end with ~all or -all: it says "
+                          f"nothing about other senders, so anyone can claim to send mail as @{domain}.",
+                          "End it with ~all (or -all).", domain=domain))
+        elif re.search(r"(^|\s)\+?all(\s|$)", rec):
             out.append(_p("error", "spf_all", f"The SPF record of {domain} ends with +all: anyone may send as @{domain}.",
                           "End it with ~all (or -all).", domain=domain))
         elif re.search(r"(^|\s)\?all(\s|$)", rec) or not re.search(r"(^|\s)[~-]all(\s|$)|(^|\s)redirect=", rec):
             out.append(_p("warn", "spf_neutral", f"The SPF record of {domain} does not end with ~all or -all: it says "
                           f"nothing about other senders, so anyone can claim to send mail as @{domain}.",
                           "End it with ~all (or -all).", domain=domain))
+        if facts.get("spf_loop"):
+            out.append(_p("error", "spf_loop", f"The SPF record of {domain} loops: {facts['spf_loop']} points back to a "
+                          "record already on the chain, and receivers treat that as an error.",
+                          "Remove the include: or redirect= that points back to a record already on the chain.",
+                          domain=domain, target=facts["spf_loop"]))
         if (facts.get("spf_lookups") or 0) > 10:
             out.append(_p("error", "spf_lookups", f"The SPF record of {domain} needs about {facts['spf_lookups']} DNS lookups (limit 10).",
                           "Remove the include: of services you no longer send with.", domain=domain, count=facts["spf_lookups"]))
@@ -367,14 +453,37 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
     record = f"v=DMARC1; p=none; rua=mailto:{rua}"
     parent = facts.get("dmarc_parent") or {}
     if not dmarc and parent.get("records"):
-        # p=none here would WEAKEN the parent's policy for this subdomain: never advised
-        pol = _policy(parent["records"], sub=True) or "?"
-        out.append(_p("info", "dmarc_inherited" if pol != "none" else "dmarc_inherited_none",
-                      f"No DMARC record on {domain}: the policy of {parent['domain']} "
-                      f"applies (p={pol}).",
-                      "Nothing to add. Do not add a p=none record here: it would weaken that policy for this domain."
-                      if pol != "none" else f"Once SPF and DKIM pass, switch the record of {parent['domain']} to "
-                      "p=quarantine, then p=reject.", domain=domain, parent=parent["domain"], policy=pol))
+        # p=none here would WEAKEN the parent's policy for this subdomain: never advised. Nor is lowering the parent's p=.
+        prec = parent["records"]
+        p_pol, sp_pol = _policy(prec), _sp(prec)
+        pol = sp_pol or p_pol
+        pd = parent["domain"]
+        if len(prec) != 1 or p_pol not in RANK or (sp_pol is not None and sp_pol not in RANK):
+            # several records, no p= or an unknown value: receivers apply no DMARC policy at all (RFC 7489 6.6.3)
+            why = f"{len(prec)} × v=DMARC1" if len(prec) != 1 else "p=?" if p_pol not in RANK else "sp=?"
+            out.append(_p("warn", "dmarc_parent_invalid", f"No DMARC record on {domain}, and the one of {pd} is invalid "
+                          f"({why}): no DMARC policy applies to {domain}.",
+                          f"Fix the record _dmarc.{pd} (one TXT record v=DMARC1 with a p=), or add a TXT record "
+                          f"_dmarc.{domain}: {record}", domain=domain, parent=pd, reason=why, record=record))
+        elif sp_pol == "none":
+            # the subdomain gets sp=, not p=: the advice is about sp= (changing p= would change nothing here)
+            out.append(_p("info", "dmarc_inherited_sp", f"No DMARC record on {domain}: {pd} sets sp=none for its "
+                          f"subdomains, so {domain} gets p=none whatever p= of {pd} says.",
+                          f"Once SPF and DKIM pass for {domain}, change sp=none to sp=quarantine, then sp=reject, in the "
+                          f"record of {pd}, or give {domain} its own record _dmarc.{domain} with p=quarantine. Do not "
+                          f"lower p= of {pd}.", domain=domain, parent=pd, policy=sp_pol, parent_policy=p_pol))
+        elif sp_pol and RANK[sp_pol] < RANK[p_pol]:     # p=reject; sp=quarantine
+            out.append(_p("info", "dmarc_inherited_sp_quarantine", f"No DMARC record on {domain}: {pd} sets "
+                          f"p={p_pol} but sp={sp_pol} for its subdomains, so {domain} gets p={sp_pol}.",
+                          f"To give {domain} p={p_pol} too, change sp={sp_pol} to sp={p_pol} (or remove sp=) in the "
+                          f"record of {pd}, or give {domain} its own record _dmarc.{domain} with p={p_pol}. Do not lower "
+                          f"p= of {pd}.", domain=domain, parent=pd, policy=sp_pol, parent_policy=p_pol))
+        else:
+            out.append(_p("info", "dmarc_inherited" if pol != "none" else "dmarc_inherited_none",
+                          f"No DMARC record on {domain}: the policy of {pd} applies (p={pol}).",
+                          "Nothing to add. Do not add a p=none record here: it would weaken that policy for this domain."
+                          if pol != "none" else f"Once SPF and DKIM pass, switch the record of {pd} to "
+                          "p=quarantine, then p=reject.", domain=domain, parent=pd, policy=pol))
     elif not dmarc:
         out.append(_p("warn", "no_dmarc", f"No DMARC record on {domain}.",
                       f"Add a TXT record _dmarc.{domain}: {record}", domain=domain, record=record))
@@ -393,18 +502,27 @@ def problems(domain: str, facts: dict, expects: bool, cf_routing: bool, rua: str
     return out
 
 
-def _policy(dmarc: list[str], sub: bool = False) -> str | None:
-    """p= of the one record; sub: the policy it sets for subdomains (sp=, else p=)."""
-    if len(dmarc) != 1:
-        return None
-    rec = dmarc[0].lower()
-    m = re.search(r"(?:^|;)\s*sp\s*=\s*([a-z]+)", rec) if sub else None
-    m = m or re.search(r"(?:^|;)\s*p\s*=\s*([a-z]+)", rec)
+RANK = {"none": 0, "quarantine": 1, "reject": 2}       # DMARC policies, weakest first
+
+
+def _sp(dmarc: list[str]) -> str | None:
+    """sp= of the one record (the policy it sets for subdomains), None when absent."""
+    m = re.search(r"(?:^|;)\s*sp\s*=\s*([a-z]+)", dmarc[0].lower()) if len(dmarc) == 1 else None
     return m.group(1) if m else None
 
 
-def domains_health(wanted: dict[str, dict], refresh: bool = False, rua_of: dict[str, str] | None = None) -> list[dict]:
-    """wanted: {domain: {"expects": bool, "cf_routing": bool, "sources": [..]}} -> one health line per domain."""
+def _policy(dmarc: list[str]) -> str | None:
+    """p= of the one record."""
+    if len(dmarc) != 1:
+        return None
+    m = re.search(r"(?:^|;)\s*p\s*=\s*([a-z]+)", dmarc[0].lower())
+    return m.group(1) if m else None
+
+
+def domains_health(wanted: dict[str, dict], refresh: bool = False, rua_of: dict[str, str] | None = None,
+                   smtp_of: dict[str, list[str]] | None = None) -> list[dict]:
+    """wanted: {domain: {"expects": bool, "cf_routing": bool, "sources": [..]}} -> one health line per domain.
+    smtp_of: {domain: SMTP servers of its E-mail page mailboxes} (what the SPF suggestion must cover)."""
     cache = config.read_json(_dns_path(), {}) or {}
     if not isinstance(cache, dict):
         cache = {}
@@ -430,7 +548,7 @@ def domains_health(wanted: dict[str, dict], refresh: bool = False, rua_of: dict[
                               "policy": _policy(f.get("dmarc") or []),
                               "parent": (f.get("dmarc_parent") or {}).get("domain")},     # inherited from it
                     "problems": problems(d, f, bool(w.get("expects")), bool(w.get("cf_routing")),
-                                         (rua_of or {}).get(d) or f"dmarc@{d}")})
+                                         (rua_of or {}).get(d) or f"dmarc@{d}", (smtp_of or {}).get(d) or [])})
     return out
 
 
@@ -479,9 +597,12 @@ def view(refresh: bool = False) -> dict:
     for b in boxes:
         want(b.get("domain"), "mail_page", True)
     rua_of: dict[str, str] = {}
+    smtp_of: dict[str, list[str]] = {}
     for b in boxes:
         if b.get("address"):
             rua_of.setdefault(b["domain"], b["address"])
+            if b.get("smtp_host"):
+                smtp_of.setdefault(b["domain"], []).append(str(b["smtp_host"]))
     for d in wanted:                # reports only reach a mailbox of the same domain (or a parent): else dmarc@<domain>
         if d not in rua_of:
             parent = next((a for bd, a in rua_of.items() if d.endswith("." + bd)), None)
@@ -489,4 +610,4 @@ def view(refresh: bool = False) -> dict:
                 rua_of[d] = parent
     return {"generated_at": prov.get("at"), "cached": cached, "mail_page": mail.enabled(),
             "mailboxes": boxes, "cloudflare": cf, "hostinger": hs, "routes": routes(boxes, cf, hs),
-            "domains": domains_health(wanted, refresh, rua_of)}
+            "domains": domains_health(wanted, refresh, rua_of, smtp_of)}
