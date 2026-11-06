@@ -664,6 +664,8 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     except FileExistsError:                             # created by a request at the same moment
         raise AgentError(409, "exists", f"Agent {name!r} already exists in {project}/{topic}") from None
     workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
+    for ext in ("json", "jsonl"):                       # an older agent of that name left its thread: not this one's
+        _state_file(path, ext).unlink(missing_ok=True)
     _save(path, data)
     _git_exclude(tdir)
     if data["sandbox"]:
@@ -750,7 +752,8 @@ def drop_mail(acc_id: str) -> None:
 
 
 def delete(path: str) -> None:
-    """Agent folder and sessions to the Trash; its cron jobs are deleted, its thread and state removed."""
+    """Agent folder and sessions to the Trash with its thread and state (to_trash); its cron jobs are deleted (back
+    with a restore)."""
     from . import workspace
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
@@ -799,7 +802,7 @@ def under(prefix: str) -> list[str]:
 
 def deleted_with(prefix: str, paths: list[str]) -> None:
     """A project or topic went to the Trash with these agents: their cron jobs and Telegram threads go, their place
-    on the Agents page too (their thread and state stay: a restore from the Trash brings them back)."""
+    on the Agents page too (their thread, state and job ids went to the Trash item first: to_trash)."""
     _drop_triggers(paths)
     try:
         f = _layout_file()
@@ -817,6 +820,65 @@ def deleted_with(prefix: str, paths: list[str]) -> None:
         log.exception("agents layout not cleaned (%s)", prefix)
     if paths:
         _invalidate()
+
+
+TRASH_SUFFIX = ".agents"                               # <trash item>.agents/: the state of the agents it holds
+
+
+def to_trash(paths: list[str], item: Path) -> None:
+    """Agents going to the Trash in `item` (themselves, or with their topic / project): their thread and state
+    (<key>.json/.jsonl: results, Telegram replies...) go along, with the ids of their cron jobs, so a new agent of
+    the same name starts empty and a restore (from_trash) brings them back. Call before their jobs are dropped."""
+    if not paths:
+        return
+    box = item.with_name(item.name + TRASH_SUFFIX)
+    try:
+        box.mkdir(exist_ok=True)
+        for path in paths:
+            for ext in ("json", "jsonl"):
+                f = _state_file(path, ext)
+                if f.exists():
+                    f.rename(box / f.name)
+            _invalidate_thread(path)
+        jobs = []
+        try:
+            from . import crons
+            jobs = [j["id"] for j in crons.list_jobs() if j.get("topic_path") in paths]
+        except Exception:
+            log.exception("cron jobs of %s not listed for the Trash", paths)
+        config.write_json(box / "crons.json", {"jobs": jobs})
+    except OSError:
+        log.exception("agent state not moved to the Trash (%s)", item)
+
+
+def from_trash(box: Path, old_prefix: str, new_prefix: str) -> None:
+    """A Trash item came back as `new_prefix` (was `old_prefix`): its agents get their thread, state and cron jobs."""
+    d = config.state_dir("agents")
+    for f in sorted(box.glob("*__*__*.json*")):
+        key, _, ext = f.name.partition(".")
+        p = parse("projects/{}/topics/{}/agents/{}".format(*key.split("__"))) if key.count("__") == 2 else None
+        old = agent_path(*p) if p else ""
+        if not old or not (old == old_prefix or old.startswith(old_prefix + "/")) or ext not in ("json", "jsonl"):
+            continue
+        new = new_prefix + old[len(old_prefix):]
+        if is_agent_path(new) and not _state_file(new, ext).exists():
+            f.rename(d / f"{_key(new)}.{ext}")
+            _invalidate_thread(new)
+    try:
+        from . import crons
+        for cid in (config.read_json(box / "crons.json", {}) or {}).get("jobs") or []:
+            try:
+                j = crons.restore_job(str(cid))
+                tp = j.get("topic_path") or ""
+                if old_prefix != new_prefix and (tp == old_prefix or tp.startswith(old_prefix + "/")):
+                    crons.update_job(j["id"], {"topic_path": new_prefix + tp[len(old_prefix):]})
+            except crons.CronError:
+                pass                                    # still there, or no longer in the archive
+    except Exception:
+        log.exception("agent cron jobs not restored (%s)", new_prefix)
+    import shutil
+    shutil.rmtree(box, ignore_errors=True)
+    _invalidate()
 
 
 def remap(old_prefix: str, new_prefix: str) -> None:
