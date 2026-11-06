@@ -31,7 +31,8 @@ STATUS = {"no_account": 404, "not_found": 404, "no_folder": 404, "exists": 409, 
           # the mail server failed, not ours: 424, never a 5xx (a proxy such as Cloudflare may hide a 502 body);
           # mail_busy: 503 + Retry-After, the mailbox is held by another request (Cloudflare passes a 503 through)
           "smtp": 424, "unreachable": 424, "tls": 424, "connection": 424, "imap": 424,
-          "mail_busy": 503}
+          "mail_busy": 503,
+          "sent_unknown": 409}      # handed to the SMTP server, then the connection broke: probably sent, never resend blindly
 
 MAIL_THREADS = 8        # one stuck account holds at most 1 + imap.MAX_WAITING of them
 _pool = concurrent.futures.ThreadPoolExecutor(MAIL_THREADS, thread_name_prefix="mail")
