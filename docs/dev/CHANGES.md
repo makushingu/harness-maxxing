@@ -47,6 +47,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `feed.clean_source` (base cut to keep the `-<n>` suffix inside 40 characters).
 - Feed trigger `source` is normalised like `feed.clean_source` (lower case, other characters -> `-`, 40 max) in
   `_clean_trigger`; strict refuses what cannot be cleaned.
+- `agents.remap()` moves the debouncer's waiting batches (and `_feed.json` `pending`) of the renamed prefix.
 
 ## 2.0.0-alpha.120 - 2026-11-05
 

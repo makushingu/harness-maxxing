@@ -831,6 +831,15 @@ def remap(old_prefix: str, new_prefix: str) -> None:
     for f in d.iterdir():
         if f.name.startswith(old_k + "__"):
             f.rename(d / (new_k + f.name[len(old_k):]))
+    try:                                                # events waiting in the grouping delay (or busy) follow too
+        ff, st = _read_feed_state()
+        moved = [k for k in debouncer.pending if k[0].startswith(old_prefix + "/")]
+        for k in moved:
+            debouncer.pending[(new_prefix + k[0][len(old_prefix):], k[1])] = debouncer.pending.pop(k)
+        if moved:
+            config.write_json(ff, {**st, "pending": debouncer.dump()})
+    except Exception:
+        log.exception("agent feed batches not moved (%s -> %s)", old_prefix, new_prefix)
     try:                                                # the agents' cron jobs follow (topic crons do not, yet)
         from . import crons
         for j in crons.list_jobs():
