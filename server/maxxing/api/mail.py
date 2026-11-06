@@ -236,9 +236,12 @@ async def get_attachment(acc_id: str, uid: int, index: int, folder: str = "INBOX
     # only images and PDF open in the browser; everything else downloads (an HTML attachment never renders here)
     safe_inline = inline and (ctype.startswith("image/") and ctype != "image/svg+xml" or ctype == "application/pdf")
     disp = "inline" if safe_inline else "attachment"
-    return Response(data, media_type=ctype if safe_inline else "application/octet-stream", headers={
-        "Content-Disposition": f"{disp}; filename*=UTF-8''{quote(name)}",
-        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"})
+    headers = {"Content-Disposition": f"{disp}; filename*=UTF-8''{quote(name)}", "X-Content-Type-Options": "nosniff"}
+    if not (safe_inline and ctype == "application/pdf"):
+        # PDF shown inline goes without it: Chrome's PDF viewer does not load under `sandbox` (as api/files.py), and a
+        # PDF cannot run script with the UI session; HTML, SVG and the rest never come here as their own type
+        headers["Content-Security-Policy"] = "sandbox"
+    return Response(data, media_type=ctype if safe_inline else "application/octet-stream", headers=headers)
 
 
 @router.post("/{acc_id}/actions")
