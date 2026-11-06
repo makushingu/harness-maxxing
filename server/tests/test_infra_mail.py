@@ -169,6 +169,7 @@ def test_cloudflare_hostinger_routes_and_dns(org, monkeypatch):
     assert [p["code"] for p in shop["problems"]] == ["dmarc_none"]
     blog = {p["code"]: p for p in doms["blog.example.org"]["problems"]}
     assert blog["multiple_spf"]["level"] == "error" and "no_dmarc" in blog and "no_dkim" in blog
+    assert blog["no_dmarc"]["fix"].endswith("rua=mailto:dmarc@blog.example.org")          # never a mailbox of another domain
     acme = {p["code"]: p for p in doms["acme.example"]["problems"]}
     assert acme["no_mx"]["level"] == "error"
     assert acme["no_dmarc"]["fix"] == "Add a TXT record _dmarc.acme.example: v=DMARC1; p=none; rua=mailto:me@acme.example"
