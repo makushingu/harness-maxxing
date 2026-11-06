@@ -168,6 +168,81 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
             wait_idle(client, r["session"]["id"])
 
 
+def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic, monkeypatch):
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "1.5")
+    sid = agents.fire(A, trigger="manual", prompt="NOTOOL a")["session"]["id"]
+    wait_for(lambda: (store.read(sid) or {}).get("state") == "running")
+    with store.edit(sid) as m:                     # a 2nd turn queued while the 1st runs (mcp_auto, a compaction...)
+        m["queue"] = (m.get("queue") or []) + [{"text": "NOTOOL second", "attachments": [], "source": "system"}]
+    wait_for(lambda: (store.read(sid) or {}).get("turns", 0) >= 1, timeout=10)
+    wait_for(lambda: any(m["kind"] == "result" for m in agents.thread(A)), timeout=5)   # turn 1's end was handled
+    assert (store.read(sid) or {}).get("state") == "running"                            # turn 2 runs
+    assert sid in (agents._read_state(A).get("held") or {})
+    assert agents.fire(A, trigger="manual", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
+    wait_idle(client, sid, timeout=20)
+    wait_for(lambda: not agents._read_state(A).get("held"))                            # released at its own end
+
+
+def test_an_agent_turn_has_one_system_note_with_the_owner_note_and_the_subagents_rule(client, topic):
+    from maxxing.sessions import spawn
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert argv.count("--append-system-prompt") == 1        # Claude Code keeps only the last of several
+    note = argv[argv.index("--append-system-prompt") + 1]
+    assert spawn.FOREGROUND_AGENTS in note and agents.OWNER_NOTE in note
+
+
+def test_a_failed_turn_never_reports_the_answer_of_the_turn_before(client, topic):
+    _on(client)
+    _create(client)
+    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()["session"]["id"]
+    wait_idle(client, sid)
+    wait_for(lambda: [m for m in agents.thread(A) if m["kind"] == "result"])
+    first = [m for m in agents.thread(A) if m["kind"] == "result"][-1]["text"]
+    assert first
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "FAIL"})
+    wait_for(lambda: len([m for m in agents.thread(A) if m["kind"] == "result"]) >= 2, timeout=15)
+    res = [m for m in agents.thread(A) if m["kind"] == "result"][-1]
+    assert res["ok"] is False and res["text"] != first and res["text"]
+
+
+def test_a_negative_or_too_big_limit_is_refused_and_a_tiny_budget_stays_a_budget(client, topic):
+    _on(client)
+    _create(client)
+    for bad in ({"usd_per_day": -1}, {"runs_per_hour": -3}, {"usd_per_day": 5000}, {"timeout_s": 10 ** 6}):
+        r = client.patch("/api/agents/acme/blog/writer", json={"limits": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_limit", (bad, r.text)
+    assert agents.load(A)["limits"]["usd_per_day"] == 2.0 and agents.load(A)["limits"]["runs_per_hour"] == 6
+    r = client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0.00001, "timeout_s": 10}})
+    assert r.json()["limits"]["usd_per_day"] == 0.01 and r.json()["limits"]["timeout_s"] == 60   # min: cut as before
+    with pytest.raises(agents.AgentError):
+        agents.create("projects/acme/topics/blog", "other", {"limits": {"usd_per_day": -1}})
+    # a file edited by hand: a negative budget or rate takes the default, never "no limit"
+    assert agents.clean({"limits": {"usd_per_day": -1, "runs_per_hour": -3}})["limits"] == agents.clean({})["limits"]
+
+
+def test_the_list_reads_an_agent_thread_again_only_when_it_changed(client, topic, monkeypatch):
+    _on(client)
+    _create(client)
+    agents.post(A, "note", "one")
+    reads = []
+    real = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: (reads.append(self) if self.suffix == ".jsonl"
+                                                                   else None) or real(self, *a, **k))
+    assert client.get("/api/agents").status_code == 200
+    n = len(reads)
+    assert n >= 1 and client.get("/api/agents").status_code == 200 and len(reads) == n          # unchanged: not read again
+    agents.post(A, "note", "two")
+    assert [m["text"] for m in agents.thread(A)][-2:] == ["one", "two"] and len(reads) == n + 1
+
+
 def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
     _on(client)
     _create(client)
@@ -242,6 +317,24 @@ def test_cron_trigger_goes_through_the_agent(client, topic, monkeypatch):
     assert client.delete("/api/agents/acme/blog/writer").status_code == 200
     assert crons.get_job(job["id"]) is None
     assert client.get("/api/workspace/tree").json()["projects"][0]["topics"][0]["agents"] == []
+
+
+def test_events_waiting_for_a_busy_agent_keep_only_what_its_turn_reads(monkeypatch, mx):
+    from maxxing import agents
+    d = agents.Debouncer()
+    for i in range(500):
+        d.add(A, "t_1", f"order {i} " + "x" * 490, "feed", 0)
+    p = d.pending[(A, "t_1")]
+    assert sum(len(t) for t in p["texts"]) < agents.EVENT_MAX + 600 and len(p["texts"]) + p["dropped"] == 500
+    back = agents.Debouncer()
+    back.load(d.dump())                                  # kept through a restart
+    assert back.pending[(A, "t_1")]["dropped"] == p["dropped"]
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append(k) or {"started": True})
+    monkeypatch.setattr(agents, "debouncer", back)
+    assert agents.flush_due() == 1
+    text = fired[0]["text"]
+    assert text.startswith(f"({p['dropped']} more events came after these") and f"Event 1/500:" in text
 
 
 def test_feed_trigger_with_debounce(client, topic, monkeypatch):
@@ -392,7 +485,7 @@ def test_deleting_the_topic_drops_its_agents_jobs_thread_and_place(client, topic
     assert crons.get_job(job["id"]) is None and A not in gateway.agent_threads()
     lay = agents.load_layout()
     assert lay["agents"] == {} and lay["projects"] == ["acme"] and lay["colors"] == {"acme": "clay"}
-    assert agents.thread(A)                              # the Activity stays for a restore from the Trash
+    assert agents.thread(A) == []                        # the Activity went to the Trash with the topic
 
 
 def _results(client) -> list[dict]:
@@ -471,6 +564,9 @@ def test_telegram_reply_maps_to_the_result(client, topic):
     agents.remember_telegram(A, [103], "msg_b")
     assert agents.telegram_reply_to(A, 102) == "msg_a" and agents.telegram_reply_to(A, "103") == "msg_b"
     assert agents.telegram_reply_to(A, 999) is None
+    agents.remember_telegram(A, [7], "msg_c", chat=555)
+    assert agents.telegram_reply_to(A, 7, 555) == "msg_c"
+    assert agents.telegram_reply_to(A, 7, 556) is None and agents.telegram_reply_to(A, 7) is None   # another chat
 
 
 def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeypatch, capsys):
@@ -612,3 +708,118 @@ def test_two_updates_at_once_keep_both_changes(client, topic, monkeypatch):
     t.join()
     d = real(A)
     assert d["model"] == "sonnet" and d["telegram"] is True
+
+
+def test_an_unreadable_agent_json_switches_the_agent_off_and_is_never_saved_over(client, topic):
+    from maxxing import feed
+    _on(client)
+    _create(client, approvals=True, domains=["api.github.com"])
+    f = agents.folder(A) / agents.AGENT_FILE
+    bad = f.read_text().rstrip().rstrip("}") + ',}'           # a trailing comma from a hand edit
+    f.write_text(bad)
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["broken"] is True and a["enabled"] is False and a["sandbox"] is True
+    assert agents.run_settings(A)["sandbox"] is True
+    assert agents.fire(A, trigger="manual", prompt="NOTOOL hi") == {"started": False, "reason": "disabled"}
+    r = client.patch("/api/agents/acme/blog/writer", json={"display_name": "W2"})
+    assert r.status_code == 409 and "cannot be read" in r.text
+    assert client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"}).status_code == 409
+    assert f.read_text() == bad                                # the owner's settings are still there to fix
+    agents.check_alerts()
+    ev = feed.find(agents._ref(A, "broken"))
+    assert ev and "cannot be read" in ev["title"]
+    f.write_text(bad[:-2] + "}")
+    assert client.get("/api/agents/acme/blog/writer").json()["broken"] is False
+    agents.check_alerts()
+    assert feed.find(agents._ref(A, "broken")) is None
+
+
+def test_a_deleted_webhook_trigger_never_fires_and_making_it_again_reuses_the_trigger(client, topic, monkeypatch, capsys):
+    from maxxing import cli, feed, feedhooks
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"debounce_s": 0}})
+    hook = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"}).json()["hook"]
+    fired: list = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append((path, k)) or {"started": True})
+    agents.scan_feed()
+    feedhooks.remove(hook["id"])
+    monkeypatch.setenv("MAXXING_AGENT", "projects/acme/topics/blog/agents/other")
+    assert cli.main(["feed", "post", "Order", "--source", "blog-writer"]) == 2      # no forged delivery
+    assert "only its own deliveries" in capsys.readouterr().err
+    monkeypatch.delenv("MAXXING_AGENT")
+    feed.post("Order", source="blog-writer")             # anyone else posting on the freed name
+    assert agents.scan_feed() == 0 and agents.flush_due() == 0 and fired == []
+    assert agents.check_alerts() == 1
+    tid = agents.load(A)["triggers"][0]["id"]
+    r = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"})
+    assert r.status_code == 200, r.text
+    ts = r.json()["agent"]["triggers"]
+    assert len(ts) == 1 and ts[0]["id"] == tid and ts[0]["hook_id"] == r.json()["hook"]["id"]
+    feed.post("Real order", source="blog-writer")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1 and len(fired) == 1
+    agents.check_alerts()
+    assert feed.find(agents._ref(A, f"trigger:{tid}")) is None
+
+
+def test_a_webhook_past_the_trigger_limit_is_refused_before_its_hook_is_made(client, topic):
+    from maxxing import feedhooks
+    _on(client)
+    _create(client)
+    ts = [{"kind": "feed", "source": f"s{i}"} for i in range(agents.MAX_TRIGGERS)]
+    assert client.patch("/api/agents/acme/blog/writer", json={"triggers": ts}).status_code == 200
+    r = client.post("/api/agents/acme/blog/writer/webhook", json={"kind": "generic"})
+    assert r.status_code == 409 and "At most" in r.text
+    assert feedhooks.list_hooks() == [] and len(agents.load(A)["triggers"]) == agents.MAX_TRIGGERS
+
+
+def test_webhook_names_of_long_agents_stay_unique(client, topic):
+    from maxxing import feedhooks
+    _on(client)
+    assert client.post("/api/workspace/projects/acme/topics", json={"name": "customer-support-france"}).status_code == 200
+    tp = "projects/acme/topics/customer-support-france"
+    for n in ("refund-handler-2026", "refund-handler-2027"):
+        assert client.post("/api/agents", json={"topic_path": tp, "name": n}).status_code == 200
+    names = []
+    for n in ("refund-handler-2026", "refund-handler-2026", "refund-handler-2027"):
+        r = client.post(f"/api/agents/acme/customer-support-france/{n}/webhook", json={"kind": "generic"})
+        assert r.status_code == 200, r.text
+        names.append(r.json()["hook"]["name"])
+    assert len(set(names)) == 3 and all(len(x) <= 40 for x in names)
+    assert sorted(h["name"] for h in feedhooks.list_hooks()) == sorted(names)
+
+
+def test_a_trigger_source_is_stored_as_the_feed_writes_it(client, topic, monkeypatch):
+    from maxxing import feed
+    _on(client)
+    _create(client)
+    r = client.patch("/api/agents/acme/blog/writer", json={"limits": {"debounce_s": 0},
+                     "triggers": [{"kind": "feed", "source": "Shopify Orders"}]})
+    assert r.json()["triggers"][0]["source"] == "shopify-orders"
+    assert client.patch("/api/agents/acme/blog/writer",
+                        json={"triggers": [{"kind": "feed", "source": "!!"}]}).status_code == 400
+    fired: list = []
+    monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append((path, k)) or {"started": True})
+    agents.scan_feed()
+    feed.post("Order 1", source="Shopify Orders")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 1
+
+
+def test_events_waiting_in_the_window_follow_a_topic_rename(client, topic, monkeypatch):
+    from maxxing import feed
+    _on(client)
+    _create(client)
+    fired = _feed_trigger(client, monkeypatch, debounce_s=60)
+    agents.debouncer.pending.clear()                     # batches left by other tests
+    agents.scan_feed()
+    feed.post("order 5", source="shop")
+    assert agents.scan_feed() == 1 and agents.flush_due() == 0
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"}).status_code == 200
+    new = "projects/acme/topics/news/agents/writer"
+    assert [k[0] for k in agents.debouncer.pending] == [new]
+    agents.debouncer.pending.clear()                     # and after a restart, from _feed.json
+    agents._feed_loaded.clear()
+    agents.scan_feed()
+    for p in agents.debouncer.pending.values():
+        p["due"] = 0
+    assert agents.flush_due() == 1 and fired[0][0] == new and "order 5" in fired[0][1]["text"]

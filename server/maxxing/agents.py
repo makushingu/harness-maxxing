@@ -29,8 +29,11 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
 import secrets as _secrets
+import shutil
+import stat
 import time
 from pathlib import Path
 from typing import Any
@@ -133,15 +136,23 @@ def _state_file(path: str, ext: str) -> Path:
 
 
 # ---- agent.json ----------------------------------------------------------------------------------
-def _num(v: Any, default: float, lo: float, hi: float, integer: bool) -> float | int:
+def _num(v: Any, default: float, lo: float, hi: float, integer: bool, strict: str = "") -> float | int:
+    """strict: the field's name; a value that is not a number, above the maximum or negative where 0 = no limit is
+    refused instead of cut. Not strict, a negative value there never turns into "no limit": it takes the default."""
     try:
         n = float(v)
     except (TypeError, ValueError):
-        n = default
+        n = float("nan")
+    if strict and (not math.isfinite(n) or n > hi or (n < lo and lo == 0)):
+        raise AgentError(400, "bad_limit", f"{strict}: a number from {lo:g} to {hi:g}")
     if n != n:                                          # NaN
         n = default
+    if n < lo and lo == 0:
+        n = default
     n = min(max(n, lo), hi)
-    return int(n) if integer else round(n, 4)
+    if integer:
+        return int(n)
+    return max(round(n, 4), 0.01) if n > 0 else 0.0   # a tiny budget is a small budget, never "no budget"
 
 
 def project_color(project: str) -> str:
@@ -370,7 +381,14 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     tid = t.get("id") if isinstance(t.get("id"), str) and re.fullmatch(r"t_[a-f0-9]{6,16}", t["id"]) else \
         "t_" + _secrets.token_hex(4)
     levels = [lv for lv in t.get("levels") or [] if lv in FEED_LEVELS] if isinstance(t.get("levels"), list) else []
-    source = str(t.get("source") or "").strip()[:64]
+    source = str(t.get("source") or "").strip()
+    if source:                                  # as the feed stores it (feed.clean_source): "Shopify" -> "shopify"
+        from . import feed
+        source = re.sub(r"[^a-z0-9_.-]+", "-", source.lower()).strip("-.")[:40]
+        if not feed.SOURCE_RE.match(source):
+            if strict:
+                raise AgentError(400, "bad_trigger", "Source: letters, digits, - _ . (max 40)")
+            source = ""
     if strict and not source:
         raise AgentError(400, "bad_trigger", "A feed trigger needs the source of the events (a webhook name...)")
     if strict and source == ALERT_SOURCE:
@@ -384,6 +402,50 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     return out
 
 
+def _clean_mail(v: Any, strict: bool) -> list[dict]:
+    """The mailboxes of the E-mail page the agent may use, and how (mail/access.py). None by default."""
+    from .mail import access
+    try:
+        return access.clean_grants(v, strict)
+    except access.AccessError as e:
+        raise AgentError(400, "bad_mail", str(e)) from None
+
+
+ATTACH_MAX = 10   # files attached to one message (web page of an agent or of a group)
+
+
+def checked_attachments(base: Path, files: list[str] | None) -> list[str]:
+    """The files the owner attached to a message -> their absolute paths. Each one must be a regular file under
+    <base>/attachments/ (where the upload of the page put it; Telegram too), with no symbolic link below that folder:
+    a message only hands the agent a file uploaded for it, in a folder its sandbox reads."""
+    if not files:
+        return []
+    if len(files) > ATTACH_MAX:
+        raise AgentError(400, "too_many_attachments", f"At most {ATTACH_MAX} files a message")
+    top = os.path.normpath(str(base / "attachments"))
+    if os.path.islink(top):
+        raise AgentError(400, "bad_attachment", "The attachments folder is a link")
+    real = os.path.realpath(top)
+    out: list[str] = []
+    for f in files:
+        p = str(f or "")
+        name = os.path.basename(p)
+        rel = os.path.relpath(p, top) if os.path.isabs(p) and "\0" not in p else ".."
+        # under attachments/ and no symbolic link below it (the workspace itself may sit behind one)
+        if os.path.normpath(p) != p or rel == ".." or rel.startswith("../") or \
+                os.path.realpath(p) != os.path.join(real, rel):
+            raise AgentError(400, "bad_attachment", f"Attachment outside this folder: {name}")
+        try:
+            st = os.lstat(p)
+        except OSError:
+            raise AgentError(400, "bad_attachment", f"Attachment not found: {name}") from None
+        if not stat.S_ISREG(st.st_mode):
+            raise AgentError(400, "bad_attachment", f"Not a file: {name}")
+        if p not in out:
+            out.append(p)
+    return out
+
+
 def _utf8(s: str) -> str:
     """A lone surrogate (\\ud800 is valid JSON) as "?": UTF-8 cannot store it."""
     return s.encode("utf-8", "replace").decode("utf-8")
@@ -393,7 +455,8 @@ def clean(data: Any, strict: bool = False) -> dict:
     """agent.json with every field present and valid. strict: refuse bad values instead of dropping them."""
     d = data if isinstance(data, dict) else {}
     limits_in = d.get("limits") if isinstance(d.get("limits"), dict) else {}
-    limits = {k: _num(limits_in.get(k, dv), dv, lo, hi, isinstance(dv, int)) for k, (dv, lo, hi) in LIMITS.items()}
+    limits = {k: _num(limits_in.get(k, dv), dv, lo, hi, isinstance(dv, int), k if strict and k in limits_in else "")
+              for k, (dv, lo, hi) in LIMITS.items()}
     mode = d.get("permission_mode") or ""
     if mode not in PERMISSION_MODES:
         if strict and mode:
@@ -417,20 +480,27 @@ def clean(data: Any, strict: bool = False) -> dict:
             # sandbox: off for agents made before it existed (no field), on for new ones (create())
             "sandbox": bool(d.get("sandbox")), "domains": _clean_domains(d.get("domains"), strict),
             "writable": _clean_writable(d.get("writable"), strict), "rules": _clean_rules(d.get("rules"), strict),
-            "subagent": bool(d.get("subagent")),
+            "subagent": bool(d.get("subagent")), "mail": _clean_mail(d.get("mail"), strict),
             "limits": limits, "triggers": triggers,
             "created": c if isinstance(c := d.get("created"), (int, float)) and math.isfinite(c) else time.time()}
 
 
 def _parse_file(f: Path) -> dict:
+    """A missing file = the defaults. A file that cannot be read (a typo in a hand edit) never runs open: the agent
+    is switched off, sandboxed and `broken` (no run, no save over it, an alert) until the file is fixed."""
     try:
-        return clean(json.loads(f.read_text()))
-    except (OSError, ValueError):
+        data = json.loads(f.read_text())
+        if isinstance(data, dict):
+            return clean(data)
+    except FileNotFoundError:
         return clean({})
+    except (OSError, ValueError):
+        pass
+    return {**clean({}), "enabled": False, "sandbox": True, "broken": True}
 
 
 def load(path: str) -> dict:
-    """agent.json of an agent path (defaults when missing or unreadable)."""
+    """agent.json of an agent path (defaults when missing; switched off with `broken` when unreadable)."""
     from . import workspace
     return json.loads(json.dumps(workspace._cached(folder(path) / AGENT_FILE, _parse_file)))
 
@@ -461,16 +531,23 @@ OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep
               "(what and why); the owner applies it.")
 
 
-def run_settings(path: str, outside: bool = False, session: str | None = None) -> dict:
-    """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys} of a turn in an agent folder ({} elsewhere).
+def run_settings(path: str, outside: bool = False, session: str | None = None, group: str = "") -> dict:
+    """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys, system_note} of a turn in an agent folder ({} elsewhere).
     args = extra claude flags (tool lists, `--max-budget-usd` = what is left of the daily budget). outside: the session was started by text from outside (a webhook, a feed event, another
     agent, `run --data`: MAXXING_AGENT_OUTSIDE, set by fire), which may carry injected orders; it always asks before
     risky tools unless the agent trusts outside events (`trust_outside`). keys: the only vault entries
-    its turns see. session: the session whose turn starts now - the budget cap it gets is held for it until the turn
-    ends, so turns running side by side never get the same money twice."""
+    its turns see. system_note: goes into the turn's one `--append-system-prompt` (spawn.agents_args). session: the session whose turn starts now - the budget cap it gets is held for it until the turn
+    ends, so turns running side by side never get the same money twice. group: the agent group whose session this
+    is (MAXXING_AGENT_GROUP, agent_rooms.py): its shared folder is writable, a hand-over is outside text unless the
+    group trusts its members."""
     if not exists(path):
         return {}
     a = load(path)
+    if group:
+        from . import agent_rooms
+        if agent_rooms.is_member(group, path):
+            a = {**a, "writable": list(a["writable"]) + agent_rooms.turn_writable(group)}
+            outside = outside or bool(session and agent_rooms.turn_outside(group, session))
     args: list[str] = []
     if a["allowed_tools"]:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
@@ -486,12 +563,11 @@ def run_settings(path: str, outside: bool = False, session: str | None = None) -
         args += ["--max-budget-usd", f"{left:.2f}"]
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
-    args += ["--append-system-prompt", OWNER_NOTE]
     forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a, approvals=a["approvals"] or forced),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
-            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"]}
+            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"], "system_note": OWNER_NOTE}
 
 
 def continue_in_sessions(path: str, sid: str) -> dict:
@@ -556,7 +632,7 @@ def public(path: str, stats: dict | None = None) -> dict:
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
                 "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
-                "limits", "triggers", "created")},
+                "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": st.get("unread", 0)}
 
@@ -625,9 +701,15 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
         folder(path).mkdir(parents=True)
     except FileExistsError:                             # created by a request at the same moment
         raise AgentError(409, "exists", f"Agent {name!r} already exists in {project}/{topic}") from None
-    workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
-    _save(path, data)
-    _git_exclude(tdir)
+    try:
+        workspace._init_level(folder(path), "agent", str(data.get("name") or name), description)
+        for ext in ("json", "jsonl"):                   # an older agent of that name left its thread: not this one's
+            _state_file(path, ext).unlink(missing_ok=True)
+        _save(path, data)
+        _git_exclude(tdir)
+    except BaseException:                               # a half-made folder would keep the name taken
+        shutil.rmtree(folder(path), ignore_errors=True)
+        raise
     if data["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()
@@ -636,9 +718,10 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     return get(path)
 
 
-def _git_exclude(tdir: Path) -> None:
+def _git_exclude(tdir: Path, sub: str = AGENTS_DIR) -> None:
     """A topic that is (or sits in) a git clone - a blog, an app - must not commit its agents: their folder goes to
-    the clone's local `.git/info/exclude` (never to a tracked .gitignore). Best effort."""
+    the clone's local `.git/info/exclude` (never to a tracked .gitignore). Best effort. sub: the folder to keep out
+    (`groups` for a project's agent groups, agent_rooms.py)."""
     try:
         root = _ws().resolve()
         d = tdir.resolve()
@@ -651,7 +734,7 @@ def _git_exclude(tdir: Path) -> None:
                     g = (g / (g / "commondir").read_text().strip()).resolve()
             if g and g.is_dir():
                 rel = tdir.resolve().relative_to(d).as_posix()
-                pattern = "/agents/" if rel == "." else f"/{rel}/agents/"
+                pattern = f"/{sub}/" if rel == "." else f"/{rel}/{sub}/"
                 ex = g / "info" / "exclude"
                 text = ex.read_text(errors="replace") if ex.is_file() else ""
                 if pattern not in text.splitlines():
@@ -660,7 +743,13 @@ def _git_exclude(tdir: Path) -> None:
                 return
             d = d.parent
     except OSError:
-        log.warning("could not exclude the agents folder of %s from its git clone", tdir, exc_info=True)
+        log.warning("could not exclude the %s folder of %s from its git clone", sub, tdir, exc_info=True)
+
+
+def _not_broken(path: str, a: dict) -> None:
+    if a.get("broken"):
+        raise AgentError(409, "broken", f"{path}/{AGENT_FILE} cannot be read (not valid JSON): fix or replace the "
+                                        "file first, a save now would lose its settings")
 
 
 def update(path: str, fields: dict) -> dict:
@@ -672,6 +761,7 @@ def update(path: str, fields: dict) -> dict:
     known = set(clean({}).keys()) - {"version", "created"}
     with _lock:                                         # two PUT at once: both changes are kept
         cur = load(path)
+        _not_broken(path, cur)
         if "limits" in f and isinstance(f["limits"], dict):
             f["limits"] = {**cur["limits"], **f["limits"]}
         if "avatar" in f and isinstance(f["avatar"], dict):
@@ -691,8 +781,21 @@ def update(path: str, fields: dict) -> dict:
     return get(path)
 
 
+def drop_mail(acc_id: str) -> None:
+    """A mailbox of the E-mail page is removed: no agent keeps rights on it (added again, it starts with none)."""
+    hit = [a["path"] for a in list_agents(counts=False) if any(g["account"] == acc_id for g in a.get("mail") or [])]
+    for path in hit:
+        with _lock:
+            cur = load(path)
+            cur["mail"] = [g for g in cur.get("mail") or [] if g.get("account") != acc_id]
+            _save(path, cur)
+    if hit:
+        _invalidate()
+
+
 def delete(path: str) -> None:
-    """Agent folder and sessions to the Trash; its cron jobs are deleted, its thread and state removed."""
+    """Agent folder and sessions to the Trash with its thread and state (to_trash); its cron jobs are deleted (back
+    with a restore)."""
     from . import workspace
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
@@ -741,7 +844,7 @@ def under(prefix: str) -> list[str]:
 
 def deleted_with(prefix: str, paths: list[str]) -> None:
     """A project or topic went to the Trash with these agents: their cron jobs and Telegram threads go, their place
-    on the Agents page too (their thread and state stay: a restore from the Trash brings them back)."""
+    on the Agents page too (their thread, state and job ids went to the Trash item first: to_trash)."""
     _drop_triggers(paths)
     try:
         f = _layout_file()
@@ -761,6 +864,66 @@ def deleted_with(prefix: str, paths: list[str]) -> None:
         _invalidate()
 
 
+TRASH_SUFFIX = ".agents"                               # <trash item>.agents/: the state of the agents it holds
+
+
+def to_trash(paths: list[str], item: Path) -> None:
+    """Agents going to the Trash in `item` (themselves, or with their topic / project): their thread and state
+    (<key>.json/.jsonl: results, Telegram replies...) go along, with the ids of their cron jobs, so a new agent of
+    the same name starts empty and a restore (from_trash) brings them back. Call before their jobs are dropped."""
+    if not paths:
+        return
+    box = item.with_name(item.name + TRASH_SUFFIX)
+    try:
+        box.mkdir(exist_ok=True)
+        for path in paths:
+            for ext in ("json", "jsonl"):
+                f = _state_file(path, ext)
+                if f.exists():
+                    f.rename(box / f.name)
+            _invalidate_thread(path)
+        jobs = []
+        try:
+            from . import crons
+            jobs = [j["id"] for j in crons.list_jobs() if j.get("topic_path") in paths]
+        except Exception:
+            log.exception("cron jobs of %s not listed for the Trash", paths)
+        config.write_json(box / "crons.json", {"jobs": jobs})
+    except OSError:
+        log.exception("agent state not moved to the Trash (%s)", item)
+
+
+def from_trash(box: Path, old_prefix: str, new_prefix: str) -> None:
+    """A Trash item came back as `new_prefix` (was `old_prefix`): its agents get their thread, state and cron jobs."""
+    d = config.state_dir("agents")
+    for f in sorted(box.glob("*__*__*.json*")):
+        key, _, ext = f.name.partition(".")
+        p = parse("projects/{}/topics/{}/agents/{}".format(*key.split("__"))) if key.count("__") == 2 else None
+        old = agent_path(*p) if p else ""
+        if not old or not (old == old_prefix or old.startswith(old_prefix + "/")) or ext not in ("json", "jsonl"):
+            continue
+        new = new_prefix + old[len(old_prefix):]
+        if is_agent_path(new) and not _state_file(new, ext).exists():
+            f.rename(d / f"{_key(new)}.{ext}")
+            _invalidate_thread(new)
+    try:
+        from . import crons
+        for cid in (config.read_json(box / "crons.json", {}) or {}).get("jobs") or []:
+            arch = next((x["job"] for x in crons.deleted_jobs() if x["job"]["id"] == cid), None)
+            tp = str((arch or {}).get("topic_path") or "")
+            if tp == old_prefix or tp.startswith(old_prefix + "/"):
+                tp = new_prefix + tp[len(old_prefix):]
+            try:
+                crons.restore_job(str(cid), tp or None)
+            except crons.CronError:
+                pass                                    # still there, or no longer in the archive
+    except Exception:
+        log.exception("agent cron jobs not restored (%s)", new_prefix)
+    import shutil
+    shutil.rmtree(box, ignore_errors=True)
+    _invalidate()
+
+
 def remap(old_prefix: str, new_prefix: str) -> None:
     """A topic or project was renamed: move the state files of its agents."""
     try:
@@ -773,6 +936,15 @@ def remap(old_prefix: str, new_prefix: str) -> None:
     for f in d.iterdir():
         if f.name.startswith(old_k + "__"):
             f.rename(d / (new_k + f.name[len(old_k):]))
+    try:                                                # events waiting in the grouping delay (or busy) follow too
+        ff, st = _read_feed_state()
+        moved = [k for k in debouncer.pending if k[0].startswith(old_prefix + "/")]
+        for k in moved:
+            debouncer.pending[(new_prefix + k[0][len(old_prefix):], k[1])] = debouncer.pending.pop(k)
+        if moved:
+            config.write_json(ff, {**st, "pending": debouncer.dump()})
+    except Exception:
+        log.exception("agent feed batches not moved (%s -> %s)", old_prefix, new_prefix)
     try:                                                # the agents' cron jobs follow (topic crons do not, yet)
         from . import crons
         for j in crons.list_jobs():
@@ -781,6 +953,11 @@ def remap(old_prefix: str, new_prefix: str) -> None:
                 crons.update_job(j["id"], {"topic_path": new_prefix + tp[len(old_prefix):]})
     except Exception:
         log.exception("agent cron jobs not moved (%s -> %s)", old_prefix, new_prefix)
+    try:                                                # agent groups: members' paths, a project's room files
+        from . import agent_rooms
+        agent_rooms.remap(old_prefix, new_prefix)
+    except Exception:
+        log.exception("agent groups not moved (%s -> %s)", old_prefix, new_prefix)
 
 
 # ---- the agent's thread (Activity) ------------------------------------------------------------------
@@ -809,10 +986,18 @@ def _invalidate_thread(path: str) -> None:
     bus.invalidate(f"agents:{path}")
 
 
-def thread(path: str, limit: int = 100, before: float | None = None) -> list[dict]:
-    """Messages of the agent's thread, oldest first (the last `limit`, older than `before` when given)."""
+_threads: dict[str, tuple[tuple[int, int], list[dict]]] = {}   # file -> ((mtime_ns, size), messages): the list
+THREADS_CACHED = 200                                           # reads every thread on each call otherwise
+
+
+def _thread_all(path: str) -> list[dict]:
     f = _state_file(path, "jsonl")
     try:
+        st = f.stat()
+        sig = (st.st_mtime_ns, st.st_size)
+        hit = _threads.get(str(f))
+        if hit and hit[0] == sig:
+            return hit[1]
         lines = f.read_text(errors="replace").splitlines()
     except OSError:
         return []
@@ -822,8 +1007,20 @@ def thread(path: str, limit: int = 100, before: float | None = None) -> list[dic
             m = json.loads(ln)
         except ValueError:
             continue
-        if isinstance(m, dict) and (before is None or (m.get("at") or 0) < before):
+        if isinstance(m, dict):
             out.append(m)
+    if len(_threads) >= THREADS_CACHED:
+        _threads.clear()
+    _threads[str(f)] = (sig, out)
+    return out
+
+
+def thread(path: str, limit: int = 100, before: float | None = None) -> list[dict]:
+    """Messages of the agent's thread, oldest first (the last `limit`, older than `before` when given). The
+    messages are shared with the cache: read them, never change them."""
+    out = _thread_all(path)
+    if before is not None:
+        out = [m for m in out if (m.get("at") or 0) < before]
     return out[-max(1, min(int(limit), 500)):]
 
 
@@ -957,8 +1154,8 @@ def day_cost(path: str, when: float | None = None, metas: list[dict] | None = No
 
 def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
     cutoff = time.time() - 3600
-    return sum(1 for m in (thread(path, 500) if msgs is None else msgs)
-               if m.get("kind") == "run" and (m.get("at") or 0) > cutoff)
+    return sum(1 for m in (thread(path, 500) if msgs is None else msgs)    # a group's turns: the group's limits
+               if m.get("kind") == "run" and not m.get("group") and (m.get("at") or 0) > cutoff)
 
 
 def status(path: str, metas: list[dict] | None = None) -> dict:
@@ -993,20 +1190,25 @@ def _alert_count(path: str) -> int:
 TG_KEEP = 200
 
 
-def remember_telegram(path: str, telegram_ids: list, thread_msg: str) -> None:
+def _tg_key(telegram_id: Any, chat: Any) -> str:
+    # message ids restart in every chat: keyed by chat, so a bot linked to another chat never continues old runs
+    return f"{chat}:{telegram_id}" if chat is not None else str(telegram_id)
+
+
+def remember_telegram(path: str, telegram_ids: list, thread_msg: str, chat: Any = None) -> None:
     """Telegram messages that carry a thread message: replying to one of them continues its session."""
     with _lock:
         st = _read_state(path)
         m = st.get("telegram_msgs") if isinstance(st.get("telegram_msgs"), dict) else {}
         for t in telegram_ids:
-            m[str(t)] = thread_msg
+            m[_tg_key(t, chat)] = thread_msg
         st["telegram_msgs"] = dict(list(m.items())[-TG_KEEP:])
         _write_state(path, st)
 
 
-def telegram_reply_to(path: str, telegram_id: Any) -> str | None:
+def telegram_reply_to(path: str, telegram_id: Any, chat: Any = None) -> str | None:
     m = _read_state(path).get("telegram_msgs")
-    return m.get(str(telegram_id)) if isinstance(m, dict) else None
+    return m.get(_tg_key(telegram_id, chat)) if isinstance(m, dict) else None
 
 
 def mark_seen(path: str) -> None:
@@ -1143,10 +1345,13 @@ def _hold(path: str, st: dict, sid: str, usd: float) -> None:
     _write_state(path, st)
 
 
-def _release(path: str, sid: str) -> None:
+def _release(path: str, sid: str, ended: float) -> None:
+    """Drops the session's hold if it was made before its turn ended at `ended`: a hold made later belongs to the
+    next turn of the same session (its queue: mcp_auto, a compaction, a message typed while it ran)."""
     with _lock:
         st = _read_state(path)
-        if isinstance(st.get("held"), dict) and sid in st["held"]:
+        h = st["held"].get(sid) if isinstance(st.get("held"), dict) else None
+        if h is not None and float((h or {}).get("at") or 0) <= ended:
             st["held"].pop(sid)
             _write_state(path, st)
 
@@ -1249,7 +1454,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
         _hold_left(path, a, sid)
         _snapshot(path, sid)
         post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=sid,
-             reply_to=reply_to)
+             reply_to=reply_to, **({"attachments": list(attachments)} if attachments else {}))
         return {"started": True, "continued": True, "session": r["session"]}
     if trigger in CONVERSATIONAL or trigger.startswith("agent:"):
         ctx = context(path)
@@ -1265,7 +1470,8 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                permission_mode=a["permission_mode"])
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
-    post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"])
+    post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"],
+         **({"attachments": list(attachments)} if attachments else {}))
     return {"started": True, "session": s}
 
 
@@ -1351,11 +1557,22 @@ def _turn_alert(path: str, session: dict, ok: bool, text: str) -> None:
 
 
 def check_alerts() -> int:
-    """A slow pass (server): feed triggers whose webhook was deleted. Returns the open alerts it posted."""
+    """A slow pass (server): agent.json files that cannot be read, feed triggers whose webhook was deleted. Returns
+    the open alerts it posted."""
     from . import feed, feedhooks
     hooks = {h.get("id") for h in feedhooks.list_hooks()}
     n = 0
     for a in list_agents(counts=False):
+        ref = _ref(a["path"], "broken")
+        if a["broken"]:
+            if not feed.find(ref):
+                feed.post(f"{a['display_name']}: agent.json cannot be read",
+                          f"{a['path']}/{AGENT_FILE} is not valid JSON (a hand edit?): the agent is switched off and "
+                          "sandboxed until the file is fixed.", "error", ALERT_SOURCE, _page(a["path"]), ref=ref,
+                          agent=a["path"], actions=OPEN)
+                n += 1
+        else:
+            feed.resolve(ref, "Fixed")
         for t in a["triggers"]:
             ref = _ref(a["path"], f"trigger:{t['id']}")
             if t.get("hook_id") and t["hook_id"] not in hooks and a["enabled"] and t.get("enabled", True):
@@ -1376,11 +1593,11 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     if not is_agent_path(path) or session.get("source") != "agent" or not exists(path):
         return
     from .sessions import service
-    try:
-        text = service.last_assistant_text(session["id"]) or ""
+    ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
+    try:                                # a failed turn: its own text only, never the answer of the turn before
+        text = service.last_assistant_text(session["id"], turn_only=not ok) or ""
     except Exception:
         text = ""
-    ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
     if not ok and not text:
         text = str(session.get("error") or "The turn failed")
     cost = None
@@ -1389,8 +1606,20 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             if isinstance(result.get(k), (int, float)):
                 cost = round(float(result[k]), 4)
                 break
-    _release(path, session["id"])
-    msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost)
+    from .sessions import store
+    meta = store.read(session["id"]) or {}
+    ended = meta.get("finished_at")
+    if not isinstance(ended, (int, float)):
+        ended = 0.0 if meta.get("state") == "running" or meta.get("queue") else time.time()
+    _release(path, session["id"], float(ended))
+    group = str((meta.get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
+    msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost, **({"group": group} if group else {}))
+    if group:
+        try:
+            from . import agent_rooms
+            agent_rooms.on_turn_end(group, path, session["id"], text, ok, cost)
+        except Exception:  # noqa: BLE001
+            log.exception("agent %s: group %s turn end", path, group)
     try:
         _turn_alert(path, session, ok, text)
     except Exception:  # noqa: BLE001 - the feed is a nicety here
@@ -1402,7 +1631,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                                "the agent page.", status="changed", session=session["id"], files=changed)
     except Exception:  # noqa: BLE001
         log.exception("agent %s: changed files check", path)
-    if load(path)["telegram"]:
+    if load(path)["telegram"] and not group:          # a group's answers are read in the group
         try:
             from .telegram import gateway
             gateway.notify_agent(path, text, ok=ok, thread_msg=msg["id"])
@@ -1449,7 +1678,10 @@ class Debouncer:
         k = (path, tid)
         p = self.pending.setdefault(k, {"texts": [], "first": time.time(), "source": source, "prompt": prompt,
                                         "depth": 0})
-        p["texts"].append(text)
+        if sum(len(t) for t in p["texts"]) < EVENT_MAX:   # the turn reads the first EVENT_MAX characters only
+            p["texts"].append(text)
+        else:                                       # a busy agent: the rest is counted, not kept
+            p["dropped"] = int(p.get("dropped") or 0) + 1
         p["depth"] = max(p["depth"], depth)      # an event posted from an agent run: one hop of that chain
         p["due"] = p["first"] + max(0.0, debounce_s)
 
@@ -1470,7 +1702,8 @@ class Debouncer:
                 self.pending.setdefault(k, {"texts": [str(t) for t in r["texts"]], "first": float(r["first"]),
                                             "due": float(r["due"]), "source": str(r.get("source") or "feed"),
                                             "prompt": str(r.get("prompt") or ""),
-                                            "depth": max(0, int(r.get("depth") or 0))})
+                                            "depth": max(0, int(r.get("depth") or 0)),
+                                            "dropped": max(0, int(r.get("dropped") or 0))})
             except (KeyError, TypeError, ValueError):
                 continue
 
@@ -1530,7 +1763,16 @@ def scan_feed() -> int:
 
 
 def _feed_agents() -> list[dict]:
-    return [a for a in list_agents(counts=False) if a["enabled"] and any(t["kind"] == "feed" for t in a["triggers"])]
+    """Enabled agents with their feed triggers. A trigger whose webhook was deleted is left out: its source is a free
+    name now, anyone could post there (check_alerts says it lost its webhook)."""
+    from . import feed
+    live = {h.get("id") for h in feed.settings()["hooks"]}
+    out = []
+    for a in list_agents(counts=False):
+        ts = [t for t in a["triggers"] if t["kind"] == "feed" and (not t.get("hook_id") or t["hook_id"] in live)]
+        if a["enabled"] and ts:
+            out.append({**a, "triggers": ts})
+    return out
 
 
 def pause_feed() -> None:
@@ -1578,9 +1820,11 @@ def flush_due() -> int:
     if due:                                             # saved first: a crash mid-way never starts them twice
         _save_feed_pos(f, int(st.get("last_id") or 0))
     for path, tid, p in due:
-        texts = p["texts"]
-        text = texts[0] if len(texts) == 1 else "\n\n---\n\n".join(
-            f"Event {i + 1}/{len(texts)}:\n{t}" for i, t in enumerate(texts))
+        texts, dropped = p["texts"], int(p.get("dropped") or 0)
+        text = texts[0] if len(texts) == 1 and not dropped else "\n\n---\n\n".join(
+            f"Event {i + 1}/{len(texts) + dropped}:\n{t}" for i, t in enumerate(texts))
+        if dropped:
+            text = f"({dropped} more events came after these: not shown)\n\n{text}"
         trig = "telegram" if tid == "telegram" else f"feed:{tid}"
         try:
             r = fire(path, trigger=trig, text=text, prompt=p.get("prompt") or "", source=p["source"],
@@ -1599,29 +1843,54 @@ def flush_due() -> int:
 # ---- webhooks made for an agent: a feed hook + a feed trigger on its source ----------------------------
 def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list[str] | None = None,
                 match: str = "") -> dict:
-    """Create a feed hook named after the agent and a feed trigger on it -> {agent, hook}."""
-    from . import feedhooks
+    """Create a feed hook named after the agent and a feed trigger on it -> {agent, hook}. A trigger whose webhook
+    was deleted gets the new one (never a second trigger on the same events)."""
+    from . import feed, feedhooks
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
-    base = f"{parse(path)[1]}-{parse(path)[2]}"[:50]
-    taken = {h["name"] for h in feedhooks.list_hooks()}
-    name, n = base, 1
-    while name in taken:
-        n += 1
-        name = f"{base}-{n}"
-    try:
-        hook = feedhooks.create(name, kind)
-    except Exception as e:                              # FeedError: bad kind...
-        raise AgentError(getattr(e, "status", 400), getattr(e, "code", "bad_hook"), str(e)) from None
-    a = load(path)
-    a["triggers"].append({"kind": "feed", "source": hook["name"], "levels": levels or [], "match": match,
-                          "prompt": prompt, "hook_id": hook["id"]})
-    _save(path, a)
+    with _lock:                                         # a PATCH of the agent at the same moment keeps both changes
+        a = load(path)
+        _not_broken(path, a)
+        hooks_now = feed.settings()["hooks"]
+        live = {h.get("id") for h in hooks_now}
+        dead = next((t for t in a["triggers"] if t.get("hook_id") and t["hook_id"] not in live), None)
+        if not dead and len(a["triggers"]) >= MAX_TRIGGERS:
+            raise AgentError(409, "too_many_triggers", f"At most {MAX_TRIGGERS} triggers: remove one first")
+        base = feed.clean_source(f"{parse(path)[1]}-{parse(path)[2]}")     # 40 characters at most
+        taken = {h.get("name") for h in hooks_now}
+        name, n = base, 1
+        while name in taken:
+            n += 1
+            name = f"{base[:40 - len(str(n)) - 1].rstrip('-.')}-{n}"       # the base is cut, never the suffix
+        try:
+            hook = feedhooks.create(name, kind)
+        except Exception as e:                          # FeedError: bad kind...
+            raise AgentError(getattr(e, "status", 400), getattr(e, "code", "bad_hook"), str(e)) from None
+        t = {"kind": "feed", "source": hook["name"], "levels": levels or [], "match": match, "prompt": prompt,
+             "hook_id": hook["id"]}
+        if dead:
+            dead.update({**t, "levels": levels or dead.get("levels") or [], "match": match or dead.get("match") or "",
+                         "prompt": prompt or dead.get("prompt") or ""})
+        else:
+            a["triggers"].append(t)
+        try:
+            _save(path, clean(a, strict=True))
+        except Exception:
+            feedhooks.remove(hook["id"])
+            raise
     _invalidate()
     return {"agent": get(path), "hook": hook}
 
 
 # ---- cron triggers ----------------------------------------------------------------------------------
+def add_trigger(path: str, trigger: dict) -> dict:
+    """Append one trigger: read and saved under the lock, so a trigger added at the same moment is kept."""
+    if not exists(path):
+        raise AgentError(404, "not_found", f"Agent {path!r} not found")
+    with _lock:
+        return update(path, {"triggers": [*load(path)["triggers"], trigger]})
+
+
 def add_cron(path: str, schedule: str = "", prompt: str = "", name: str = "", enabled: bool = True) -> dict:
     """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too) -> the job."""
     from . import bus, crons

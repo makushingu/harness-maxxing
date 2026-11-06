@@ -1,15 +1,17 @@
 // The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name, its
 // topic, a status dot and its unread count, always grouped by project (order and colour of layout.tsx: drag a project
 // header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: the search field,
-// a small "+" (New agent) beside it, then `nav` (the Office entry of AgentsLayout), then the state filter (All / waiting for you / to read
-// / running / active / off, with counts; empty states hidden) and the ?topic= chip.
+// a small "+" (New agent) and "New group" beside it, then `nav` (the Office entry of AgentsLayout), then the state filter (All /
+// waiting for you / to read / running / active / off, with counts; empty states hidden) and the ?topic= chip.
+// The groups of a project (agent_rooms: the owner talks to several of its agents) come first in its section: the search
+// finds them by name, the chips To read / Running keep the unread / busy ones, the other chips hide them.
 // On a phone it is the whole page at /agents; an agent then opens full screen.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
-import { Bot, Plus, Search, TriangleAlert, X } from 'lucide-react'
+import { Bot, Plus, Search, TriangleAlert, UsersRound, X } from 'lucide-react'
 import { useT, type TFn } from '@/i18n'
-import { agentRoute, useAgents, useWorkspace } from '@/lib/queries'
-import type { Agent } from '@/lib/types'
+import { agentRoute, groupRoute, newGroupRoute, useAgentGroups, useAgents, useWorkspace } from '@/lib/queries'
+import type { Agent, AgentGroup } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button, CountBadge, EmptyState, Input, Sensitive, Skeleton, StatusDot, useMask, type DotTone } from '@/components/ui'
@@ -49,6 +51,7 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
   const touch = useCompact()
   const { data, isLoading, error, refetch } = useAgents()
   const { data: ws } = useWorkspace()
+  const { data: allGroups } = useAgentGroups()
   const [params, setParams] = useSearchParams()
   const [filter, setFilter] = React.useState<StateFilter | null>(null)
   const [q, setQ] = React.useState('')
@@ -74,11 +77,31 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
     return g ? matching.filter((a) => g.has(agentState(a))) : matching
   }, [matching, filter])
 
+  // The groups follow the same narrowing: the topic (one of their members is in it), the search, then the chips.
+  const rooms = React.useMemo(() => {
+    const g = filter === null || filter === 'unread' || filter === 'running' ? allGroups || [] : []
+    return g
+      .filter((x) => !topic || x.members.some((m) => m.path.startsWith(`projects/${topic.replace('/', '/topics/')}/`)))
+      .filter((x) => !ql || [x.display_name, x.name, x.project, x.goal].some((v) => (v || '').toLowerCase().includes(ql)))
+      .filter((x) => (filter === 'unread' ? x.unread > 0 : filter === 'running' ? x.busy : true))
+      .sort((a, b) => (b.last_at || b.created) - (a.last_at || a.created))
+  }, [allGroups, filter, topic, ql])
+
   const layout = useAgentsLayout()
-  const groups = React.useMemo(
-    () => layout.group(shown).map(({ project: p, agents }) => ({ id: p, label: mask(p, 8), emoji: ws?.projects.find((x) => x.name === p)?.emoji || '', agents })),
-    [shown, ws, mask, layout],
-  )
+  const groups = React.useMemo(() => {
+    const byProject = layout.group(shown)
+    // A project whose agents are all filtered out still shows its groups (in the layout order, else at the end).
+    const extra = [...new Set(rooms.map((r) => r.project))].filter((p) => !byProject.some((x) => x.project === p))
+    const rank = (p: string) => (layout.projects.includes(p) ? layout.projects.indexOf(p) : 1e9)
+    const all = [...byProject, ...extra.map((p) => ({ project: p, agents: [] as Agent[] }))].sort((a, b) => rank(a.project) - rank(b.project))
+    return all.map(({ project: p, agents }) => ({
+      id: p,
+      label: mask(p, 8),
+      emoji: ws?.projects.find((x) => x.name === p)?.emoji || '',
+      agents,
+      rooms: rooms.filter((r) => r.project === p),
+    }))
+  }, [shown, rooms, ws, mask, layout])
   const shownProjects = groups.map((g) => g.id)
 
   return (
@@ -110,6 +133,18 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
           data-testid="agent-new-side"
         >
           <Plus className={touch ? 'size-5' : undefined} />
+        </Button>
+        <Button
+          asChild
+          variant="ghost"
+          size="icon-sm"
+          className={cn('shrink-0 text-muted-foreground hover:text-foreground', touch ? 'size-11 rounded-xl' : 'size-8')}
+          data-testid="group-new-side"
+          data-tour="group-new"
+        >
+          <Link to={newGroupRoute(topic.split('/')[0] || undefined)} aria-label={t('groups.new')} title={t('groups.new')}>
+            <UsersRound className={touch ? 'size-5' : undefined} />
+          </Link>
         </Button>
         </div>
       </div>
@@ -183,6 +218,9 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
                 </>
               }
             >
+              {g.rooms.map((r) => (
+                <GroupRow key={r.path} group={r} />
+              ))}
               {g.agents.map((a, j) => (
                 <AgentRow key={a.path} agent={a} index={j} layout={layout} />
               ))}
@@ -232,6 +270,76 @@ const DOT: Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error' | 
   failed: { tone: 'error' },
   active: { tone: 'ok' },
   off: { tone: 'idle' },
+}
+
+/** A group of the project: its emoji, its name, its members' faces (stacked), "X is writing…" while one speaks. */
+function GroupRow({ group: g }: { group: AgentGroup }) {
+  const t = useT()
+  const location = useLocation()
+  const to = groupRoute(g)
+  const active = !!useMatch({ path: to })
+  const speaker = g.members.find((m) => m.path === g.speaking)
+  const unread = g.unread > 0
+  return (
+    <Link
+      role="listitem"
+      to={{ pathname: to, search: location.search }}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
+        active && 'bg-accent hover:bg-accent',
+      )}
+      data-testid="groups-row"
+      data-path={g.path}
+    >
+      <span className="relative shrink-0">
+        <GroupFace group={g} size={32} />
+        {g.busy && (
+          <span className="absolute -right-0.5 -bottom-0.5 grid size-3 place-items-center rounded-full bg-background">
+            <StatusDot tone="running" pulse className="size-2" label={t('groups.busy')} />
+          </span>
+        )}
+      </span>
+      <span className="grid min-w-0 flex-1">
+        <span className={cn('truncate text-sm', unread ? 'font-semibold' : 'font-medium')}>
+          <Sensitive length={8}>{g.display_name}</Sensitive>
+        </span>
+        {speaker ? (
+          <span className="truncate text-xs text-primary">{t('groups.writing', { name: speaker.display_name })}</span>
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <MemberStack members={g.members} />
+            <span className="truncate">{t('groups.members', { count: g.members.length })}</span>
+          </span>
+        )}
+      </span>
+      <span className="flex shrink-0 items-center gap-1 empty:hidden">
+        <CountBadge count={g.unread} title={t('groups.unread')} />
+      </span>
+    </Link>
+  )
+}
+
+/** The face of a group: its emoji on a tile (the size of an agent's face), else its members' initial look. */
+export function GroupFace({ group: g, size = 32 }: { group: Pick<AgentGroup, 'emoji' | 'display_name'>; size?: number }) {
+  return (
+    <span className="grid shrink-0 place-items-center rounded-lg bg-muted" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }} aria-hidden>
+      {g.emoji || <UsersRound className="size-1/2 text-muted-foreground" />}
+    </span>
+  )
+}
+
+/** The faces of the members, overlapping (4 at most, then nothing: the count says the rest). */
+export function MemberStack({ members, size = 16 }: { members: AgentGroup['members']; size?: number }) {
+  return (
+    <span className="flex shrink-0 -space-x-1" aria-hidden>
+      {members.slice(0, 4).map((m) => (
+        <span key={m.path} className={cn('rounded-[5px] bg-background ring-1 ring-background', (m.paused || !m.exists) && 'opacity-50')}>
+          <AgentAvatarIcon avatar={m.avatar} size={size} />
+        </span>
+      ))}
+    </span>
+  )
 }
 
 function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; layout: AgentsLayoutApi }) {

@@ -4,6 +4,7 @@ them on this server (skill `maxxing-infra`, page Infra).
     maxxing infra status                         sources and problems of the last snapshot
     maxxing infra list [--kind K] [--json]       resources (site, worker, pages, database, bucket, domain, server)
     maxxing infra refresh                        gather everything now (takes 10-60 s)
+    maxxing infra mail [--refresh] [--json]      e-mail: mailboxes, Cloudflare Email Routing, Hostinger, DNS health
     maxxing infra site add NAME (--dir DIR | --port PORT) [--host HOST] [--dns] [--project P] [--keep-prefix]
     maxxing infra site remove NAME | site list | reserved
     maxxing infra db install | db create NAME [--project P] | db sqlite PATH [--project P] | db backup
@@ -36,6 +37,9 @@ def _configure(p) -> None:
     ls.add_argument("--json", action="store_true")
     sub.add_parser("refresh", help="gather everything now")
     sub.add_parser("reserved", help="names a path site cannot take")
+    ml = sub.add_parser("mail", help="e-mail (view only): mailboxes, forwards, DNS health of the mail domains")
+    ml.add_argument("--refresh", action="store_true", help="skip the cache (providers 5 min, DNS 1 h)")
+    ml.add_argument("--json", action="store_true")
 
     site = sub.add_parser("site", help="sites served by Caddy on this server").add_subparsers(dest="sub", required=True)
     a = site.add_parser("add")
@@ -166,6 +170,14 @@ def _handler(a) -> int:
         if a.action == "reserved":
             print(" ".join(caddy.reserved()))
             return 0
+        if a.action == "mail":
+            from .infra import mailinfo
+            v = mailinfo.view(a.refresh)
+            if a.json:
+                _print(v)
+            else:
+                _mail_summary(v)
+            return 0
         if a.action == "site":
             if a.sub == "list":
                 for s in caddy.list_sites():
@@ -265,6 +277,48 @@ def _handler(a) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     return 2
+
+
+def _mail_summary(v: dict) -> None:
+    import time
+    print(f"E-mail (providers read {int((time.time() - (v.get('generated_at') or time.time())) / 60)} min ago"
+          + ("" if v.get("mail_page") else "; E-mail page off") + ")")
+    print(f"Mailboxes of the E-mail page: {len(v['mailboxes'])}")
+    for b in v["mailboxes"]:
+        lc = b.get("last_check") or {}
+        state = "not checked yet" if not lc else ("ok" if lc.get("ok") else "ERROR " + (lc.get("error") or ""))
+        print(f"  {b['address']:<40} {b.get('imap_host') or ''}  {state}")
+    cf, hs = v["cloudflare"], v["hostinger"]
+    if not cf.get("connected"):
+        print("Cloudflare: not connected (no key in Settings -> Keys)")
+    elif cf.get("error"):
+        print(f"Cloudflare: {cf['error']} {cf.get('message') or ''}")
+    else:
+        on = [z for z in cf["zones"] if (z.get("routing") or {}).get("enabled")]
+        print(f"Cloudflare Email Routing: {len(on)} zone(s) on, {len(cf['zones'])} visible")
+        if cf.get("missing_permission_zones"):
+            print(f"  {cf['missing_permission_zones']} zone(s) unreadable: {cf['fix']}")
+        if cf.get("addresses_fix"):
+            print(f"  destination addresses unreadable: {cf['addresses_fix']}")
+    if not hs.get("connected"):
+        print("Hostinger: not connected")
+    elif hs.get("error"):
+        print(f"Hostinger: {hs['error']} {hs.get('message') or ''}")
+    else:
+        print(f"Hostinger Email: {len(hs['orders'])} plan(s)" if hs["orders"] else "Hostinger: no Hostinger e-mail plan")
+    for r in v["routes"]:
+        to = ", ".join(t["address"] + (" (in the E-mail page)" if t.get("account") else "")
+                       + (" (not verified)" if t.get("verified") is False else "") for t in r["to"])
+        extra = f" -> {to}" if to else (f" -> worker {r['worker']}" if r.get("worker") else "")
+        print(f"  {r['address']:<40} {r['via']:<10} {r['kind']}{extra}{'' if r['enabled'] else '  (off)'}")
+    print("DNS health:")
+    for d in v["domains"]:
+        bad = [p for p in d["problems"] if p["level"] in ("error", "warn")]
+        print(f"  {d['domain']:<40} {'ok' if not bad else f'{len(bad)} problem(s)'}")
+        for p in d["problems"]:
+            if p["level"] == "info" and p["code"] == "no_mail":
+                continue
+            print(f"    {p['level'].upper():<5} {p['text']}" + (f"\n          fix: {p['fix']}" if p["fix"] else ""))
 
 
 def _public_ipv4() -> str | None:

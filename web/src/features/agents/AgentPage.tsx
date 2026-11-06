@@ -8,9 +8,9 @@
 //   of its topic configures it: an agent cannot change its own role or settings).
 // Opening the page marks its results as read (POST /seen). Its runs open in place (RunView), never in Sessions.
 import * as React from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -28,11 +28,13 @@ import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
-import { AgentSettings } from './AgentSettings'
+import { AgentSettings, type SectionId } from './AgentSettings'
 import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ThreadApprovalBody, useThreadApprovals } from './approvals'
+import { AttachButton, AttachList, useAttachments } from './attach'
+import { AttachmentStrip } from '@/pages/sessions/Items'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -41,10 +43,13 @@ const FOLD_CHARS = 700
 /** Who wrote a run: the user (a message) or something else (an event, a schedule, another agent). */
 const isMine = (m: AgentMessage) => m.trigger === 'manual' || m.trigger === 'telegram' || m.source === 'manual' || m.source === 'telegram'
 
-export default function AgentPage() {
+/** `at`: the agent when the route's names say something else (an agent of a project called "groups", whose address
+ *  looks like a group's: AgentsLayout hands it over). */
+export default function AgentPage({ at }: { at?: { project: string; topic: string; name: string } } = {}) {
   const t = useT()
   const on = useAgentsOn()
-  const { project = '', topic = '', name = '' } = useParams()
+  const params = useParams()
+  const { project = '', topic = '', name = '' } = at || params
   const path = `projects/${project}/topics/${topic}/agents/${name}`
   const { data: a, isLoading, error, refetch } = useAgent(on === false ? null : path)
   // The profile can sit on the right of the conversation when there is room next to the list of agents: shown by
@@ -57,6 +62,16 @@ export default function AgentPage() {
   const touch = useCompact()
   const [profile, setProfile] = React.useState(false)
   const openProfile = () => (dockable ? setDocked(!wide) : setProfile(true))
+  // ?settings=<section> (a link from the E-mail page): the profile opens, then its settings on that section
+  const [search] = useSearchParams()
+  const wantSettings = !!search.get('settings') && !!a
+  React.useEffect(() => {
+    if (wantSettings && !wide) {
+      if (dockable) setDocked(true)
+      else setProfile(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantSettings])
   // On a phone the agent is full screen: back to the list (on a computer the list stays on the left).
   const back = touch ? (
     <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
@@ -258,7 +273,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
         aria-live="polite"
         data-testid="agent-thread"
       >
-        <div className="mx-auto grid max-w-3xl content-start gap-3 px-4 py-5 md:px-8">
+        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
           {isLoading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
           ) : error ? (
@@ -298,8 +313,8 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
   return (
     <div className="flex items-start gap-2" data-kind="working">
       <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div className={cn('grid gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
-        <span className="flex items-center gap-2 text-muted-foreground">
+      <div className={cn('grid min-w-0 gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
+        <span className="flex items-center gap-2 text-muted-foreground wrap-anywhere">
           {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
           {waiting ? t('agents.conv.waiting', { name: a.display_name }) : t('agents.conv.working', { name: a.display_name })}
         </span>
@@ -366,8 +381,9 @@ function ThreadMessage({
   if (m.kind === 'run') {
     if (isMine(m))
       return (
-        <div className="ml-auto grid w-fit max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
+        <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
           {quote}
+          {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
           <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
             <p className="whitespace-pre-wrap break-words">
               <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
@@ -381,13 +397,18 @@ function ThreadMessage({
     return (
       <div className="grid gap-1 rounded-xl border border-dashed px-3 py-2 text-sm sm:ml-9" data-kind="run">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
+          <span className="min-w-0 font-medium text-foreground wrap-anywhere">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
           {when}
         </div>
         {m.text && (
           <p className="line-clamp-4 whitespace-pre-wrap break-words text-muted-foreground">
             <Sensitive block>{m.text}</Sensitive>
           </p>
+        )}
+        {!!m.attachments?.length && (
+          <div className="flex">
+            <AttachmentStrip paths={m.attachments} />
+          </div>
         )}
       </div>
     )
@@ -400,7 +421,7 @@ function ThreadMessage({
       <AgentAvatarIcon avatar={a.avatar} size={32} />
       <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          <span className="font-medium">
+          <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{a.display_name}</Sensitive>
           </span>
           {m.kind === 'approval' ? (
@@ -456,32 +477,40 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
   const t = useT()
   const run = useRunAgent()
   const [text, setText] = React.useState('')
+  const files = useAttachments(a.path)
   const input = React.useRef<HTMLTextAreaElement>(null)
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
   }, [replyTo])
+  const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
   const submit = () => {
     const v = text.trim()
-    if (!v || !a.enabled || run.isPending) return
+    if (!canSend || !a.enabled || run.isPending) return
+    const kept = files.atts
     setText('')
+    files.restore([])
+    const back = () => {
+      setText(v)
+      files.restore(kept)
+    }
     run.mutate(
-      { path: a.path, text: v, reply_to: replyTo?.id },
+      { path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths },
       {
         onSuccess: (r) => {
           if (r.started) onCancelReply()
           else {
-            setText(v)
+            back()
             toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
           }
         },
         // The reply target stays with the text, so sending again still goes on with the same session.
-        onError: () => setText(v),
+        onError: back,
       },
     )
   }
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50">
+      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
         {replyTo && (
           <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
             <Reply className="size-3.5 shrink-0 text-primary" />
@@ -497,10 +526,14 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
         {!a.enabled ? (
           <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('agents.conv.paused')}</p>
         ) : (
+          <>
+          <AttachList atts={files.atts} onRemove={files.remove} />
           <div className="flex items-end gap-1">
+            <AttachButton onFiles={files.add} />
             <Textarea
               ref={input}
               value={text}
+              onPaste={files.onPaste}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -517,10 +550,11 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!text.trim()} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
+            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
           </div>
+          </>
         )}
       </div>
     </div>
@@ -542,7 +576,18 @@ function PanelSection({ title, action, children }: { title: string; action?: Rea
 
 function Profile({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
-  const [advanced, setAdvanced] = React.useState(false)
+  // the settings sheet: closed, open, or open on a section
+  const [advanced, setAdvanced] = React.useState<boolean | SectionId>(false)
+  const [params, setParams] = useSearchParams()
+  const want = params.get('settings')
+  React.useEffect(() => {
+    if (!want) return
+    setAdvanced(want === 'mail' ? 'mail' : true)
+    const p = new URLSearchParams(params)
+    p.delete('settings')
+    setParams(p, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [want])
   const [memory, setMemory] = React.useState(false)
   const lim = a.limits
   const spent = a.cost_today || 0
@@ -551,6 +596,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4">
       <ProfileHead agent={a} />
 
+      <BrokenBanner agent={a} />
       <SandboxBanner agent={a} />
 
       <PanelSection title={t('agents.panel.role')}>
@@ -559,7 +605,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
 
       <PanelSection title={t('agents.panel.when')}>
         <p className="text-xs text-muted-foreground">{t('agents.when.manual')}</p>
-        <AgentTriggers agent={a} />
+        <AgentTriggers agent={a} onMailSettings={() => setAdvanced('mail')} />
         <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground" data-testid="agent-self-locked">
           <Lock className="mt-px size-3 shrink-0" /> {t('agents.edit.selfLocked')}
         </p>
@@ -615,6 +661,17 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
 
       <div className="grid gap-2">
         <EditWithClaude agent={a} variant="row" />
+        <Link
+          to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
+          className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent"
+          data-testid="agent-new-group"
+        >
+          <UsersRound className="size-4 shrink-0 text-muted-foreground" />
+          <span className="grid min-w-0 flex-1">
+            <span className="text-sm">{t('groups.withAgent')}</span>
+            <span className="truncate text-xs text-muted-foreground">{t('groups.withAgentDesc')}</span>
+          </span>
+        </Link>
         <button type="button" onClick={() => setAdvanced(true)} className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent" data-testid="agent-advanced">
           <Settings2 className="size-4 shrink-0 text-muted-foreground" />
           <span className="grid min-w-0 flex-1">
@@ -623,13 +680,13 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           </span>
         </button>
       </div>
-      <Sheet open={advanced} onOpenChange={setAdvanced}>
+      <Sheet open={!!advanced} onOpenChange={setAdvanced}>
         <SheetContent side="right" className="md:w-[520px]">
           <SheetHeader>
             <SheetTitle>{t('agents.panel.advanced')}</SheetTitle>
           </SheetHeader>
           <SheetBody>
-            <AgentSettings agent={a} />
+            <AgentSettings agent={a} section={typeof advanced === 'string' ? advanced : undefined} />
           </SheetBody>
         </SheetContent>
       </Sheet>
@@ -643,6 +700,24 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           </SheetBody>
         </SheetContent>
       </Sheet>
+    </div>
+  )
+}
+
+/** agent.json does not parse: the server keeps the agent off and sandboxed, and refuses saves - say so. */
+function BrokenBanner({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  if (!a.broken) return null
+  return (
+    <div role="alert" className="grid gap-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs" data-testid="agent-broken">
+      <span className="flex items-center gap-1.5 font-medium text-destructive">
+        <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.broken.title')}
+      </span>
+      <span>
+        {t('agents.broken.desc', { file: `${a.path}/agent.json` })
+          .split('`')
+          .map((x, i) => (i % 2 ? <code key={i} className="rounded bg-muted px-1 font-mono text-[11px]">{x}</code> : x))}
+      </span>
     </div>
   )
 }
@@ -676,20 +751,20 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
   const dir = absTopicDir(ws, a.path)
   if (v === null)
     return (
-      <div className="grid gap-1">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <button
           type="button"
           onClick={() => setV(a.description)}
-          className="group rounded-lg bg-muted/50 px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
+          className="group min-w-0 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
           data-testid="agent-role"
         >
           {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}
           <Pencil className="ml-1 inline size-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
         </button>
         <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="flex-1">{t('agents.panel.roleHint')}</span>
+          <span className="min-w-0 flex-1 break-words">{t('agents.panel.roleHint')}</span>
           {dir && (
-            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="hover:text-foreground hover:underline">
+            <Link to={filesUrl(`${dir}/CLAUDE.md`)} className="shrink-0 hover:text-foreground hover:underline pointer-coarse:-my-3 pointer-coarse:py-3">
               CLAUDE.md
             </Link>
           )}

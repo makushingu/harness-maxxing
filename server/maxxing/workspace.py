@@ -556,12 +556,19 @@ def _remap_telegram(old: str, new: str) -> None:
 def _delete(prefix: str, kind: str) -> None:
     sessions = _ensure_idle(prefix)
     from . import agents
-    inside = agents.under(prefix) if kind in ("project", "topic") else []
+    inside = agents.under(prefix) if kind in ("project", "topic") else [prefix] if kind == "agent" else []
     dest = move_to_trash(root() / prefix, label=f"{kind}-{prefix.rsplit('/', 1)[-1]}", kind=kind)
     from .sessions import service
     service.trash_sessions([s["id"] for s in sessions], dest.parent / (dest.name + ".sessions"))
+    agents.to_trash(inside, dest)                   # their thread and state go with them (back with a restore)
     if kind in ("project", "topic"):                # its agents' cron jobs and Telegram threads go too
         agents.deleted_with(prefix, inside)
+    if kind == "project":                           # its agent groups' conversations go to the Trash with it
+        from . import agent_rooms
+        try:
+            agent_rooms.deleted_with(prefix.split("/")[1], dest)
+        except OSError:
+            log.exception("agent group rooms not moved (%s)", prefix)
     _changed("deleted", kind, prefix)
 
 

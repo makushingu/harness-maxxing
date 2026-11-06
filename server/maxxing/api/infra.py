@@ -59,6 +59,14 @@ async def get_infra():
     return await asyncio.to_thread(infra.view)
 
 
+@router.get("/mail")
+async def get_mail(refresh: bool = False):
+    """Infra -> E-mail, view only (infra/mailinfo.py): provider errors are in the payload, never a 5xx."""
+    _need_on()
+    from ..infra import mailinfo
+    return await asyncio.to_thread(mailinfo.view, refresh)
+
+
 @router.post("/refresh")
 async def refresh():
     _need_on()

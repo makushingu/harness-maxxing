@@ -274,8 +274,9 @@ class Runner:
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
         from maxxing import agents                      # an agent folder: its model and tool lists
-        agent = agents.run_settings(meta.get("path") or "", (meta.get("env") or {}).get("MAXXING_AGENT_OUTSIDE") == "1",
-                                    session=self.sid)
+        env = meta.get("env") or {}
+        agent = agents.run_settings(meta.get("path") or "", env.get("MAXXING_AGENT_OUTSIDE") == "1",
+                                    session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         if agent.get("sandbox"):                        # Claude Code's sandbox; never bypass (domains not enforced)
@@ -294,7 +295,7 @@ class Runner:
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"))
-        base += spawn.agents_args(cfg, mcp_plan.hint)
+        base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), mcp_plan.hint) if x))
         if not agent:                                   # a topic's agents with `subagent` on: callable from its sessions
             from maxxing import agent_format
             base += agent_format.subagents_args(meta.get("path") or "")

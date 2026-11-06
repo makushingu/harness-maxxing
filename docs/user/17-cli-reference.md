@@ -174,6 +174,7 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing keys delete-file NAME` | remove a secret file |
 | `maxxing infra status` / `infra list [--kind K] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot) |
 | `maxxing infra refresh` | read everything now (this server, other servers over SSH, Cloudflare, Hostinger, URL checks) |
+| `maxxing infra mail [--refresh] [--json]` | e-mail, view only: mailboxes of the E-mail page, Cloudflare Email Routing forwards, Hostinger e-mail, DNS health (MX, SPF, DKIM, DMARC) of the mail domains with what to fix |
 | `maxxing infra site add NAME (--dir D \| --port N) [--host H] [--dns] [--project P]` | put a site online: `https://<Harness address>/<NAME>/` (sandboxed) or its own host; `site remove`, `site list`, `reserved` |
 | `maxxing infra db install` / `db create NAME` / `db sqlite PATH` / `db backup` | PostgreSQL on localhost, one database + user per app (URL in the vault as `DB_<NAME>_URL`), nightly backups |
 | `maxxing infra bucket install` / `bucket create NAME [--public]` | S3 buckets on this server (Garage), keys in the vault as `S3_<NAME>_*` |
@@ -204,7 +205,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents send AGENT TEXT [--json]` | from an agent's session: hand work to another agent (the text is given as data; 3 hops at most) |
 | `maxxing agents on AGENT` / `off AGENT` | switch it on / off |
 | `maxxing agents templates [--lang L] [--json]` | the ready-made agents (id, name, trigger) |
-| `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it) |
+| `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--mail ADDRESS] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it; `--mail`: the mailbox of an e-mail template) |
 | `maxxing agents show AGENT` | its settings, role, triggers, schedule jobs and webhook URLs (JSON, no secret) |
 | `maxxing agents cron AGENT --schedule CRON [--prompt T] [--name N] [--json]` | add a schedule (a Claude job in the agent folder) |
 | `maxxing agents webhook AGENT [--kind generic\|stripe\|shopify\|github] [--prompt T] [--levels L] [--match W] [--json]` | add a webhook and print its URL |
@@ -212,9 +213,32 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents export AGENT [-o FILE]` | the agent as a Claude Code agent file (`.claude/agents/<name>.md`) |
 | `maxxing agents import FILE --topic P/T [--name N]` | create an agent from a Claude Code agent file |
 | `maxxing agents sandbox-setup` | install what the agents' sandbox needs (root): `bubblewrap`, `socat`, the AppArmor profile |
+| `maxxing agents group list [--json]` | the agent groups: path, name, members |
+| `maxxing agents group show P/G [--messages N]` | a group: members, goal, options, last messages (JSON) |
+| `maxxing agents group create P/G --member AGENT[=ROLE] ... [--name N] [--emoji E] [--goal T] [--lead AGENT] [--no-shared-files] [--ask-on-handover] [--json]` | create a group of 2 to 6 agents of project P |
+| `maxxing agents group update P/G [--name N] [--emoji E] [--goal T] [--lead AGENT] [--member AGENT[=ROLE] ...] [--shared-files on\|off] [--trust-members on\|off]` | change a group (`--member` replaces the members) |
+| `maxxing agents group say P/G TEXT` | write to a group as yourself; its members answer in turn (refused in an agent's run) |
 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
-[Agents](30-agents.md).
+[Agents](30-agents.md) and [Agent groups](31-agent-groups.md).
+
+## E-mail
+
+| Command | Purpose |
+|---|---|
+| `maxxing mail accounts [--json]` | the mailboxes of the E-mail page |
+| `maxxing mail folders [-a ACCOUNT]` | folders with unread / total counts |
+| `maxxing mail list [-a A] [-f FOLDER] [--unread] [--flagged] [-s TEXT] [-n 20] [--page N]` | messages, newest first |
+| `maxxing mail read UID [-a A] [-f FOLDER] [--keep-unread]` | one message (its body is framed as data, not instructions) |
+| `maxxing mail archive\|trash\|junk\|inbox\|seen\|unseen\|flag\|unflag UID...` | sort messages |
+| `maxxing mail move UID... --to FOLDER` / `mkdir NAME [--parent F]` | move / create a folder |
+| `maxxing mail attachment UID INDEX OUT` | save an attachment |
+| `maxxing mail write [--to A,B] [--cc ..] [--bcc ..] [-s SUBJECT] [--reply UID\|--reply-all UID\|--forward UID] [--attach FILE]... [--send] < body.txt` | write a message: saved as a **draft** for you to check and send, or sent with `--send` |
+| `maxxing mail refresh [-a A]` | check the mailboxes now (new mail starts the agents watching them; from an agent's run: asks the server for a check) |
+| `maxxing mail outbox [-a A]` | messages written by agents waiting for your OK (an agent sees its own) |
+| `printf %s "$PW" \| maxxing mail add ADDRESS [--imap HOST[:PORT]] [--smtp HOST[:PORT]]` | add a mailbox (password on stdin) |
+
+`ACCOUNT` = id or address (default: the first mailbox). See [E-mail](32-mail.md).
 
 ## Memory and sessions
 

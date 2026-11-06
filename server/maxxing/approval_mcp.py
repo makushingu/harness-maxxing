@@ -6,7 +6,8 @@ A turn of an agent with `approvals: true` runs `claude -p --permission-mode defa
 --permission-prompt-tool mcp__maxxing-approval__approve`: when a tool is not pre-allowed, Claude Code calls our
 `approve` tool with {tool_name, input, tool_use_id} and waits. We write a pending request
 
-    <state>/approvals/<id>.json   {id, session, agent_path, tool, input (clipped), at, status: "pending", expires}
+    <state>/approvals/<id>.json   {id, session, agent_path, tool, input (clipped), at, status: "pending", expires,
+                                   clipped (true when the input shown is not all of it: Allow is refused)}
 
 and poll it every POLL_S until the server (maxxing.approvals, the user's Allow / Deny) sets `status` to "allow" or
 "deny", or until the timeout (MAXXING_APPROVAL_TIMEOUT, seconds) -> status "timeout" and a deny. The answer is the
@@ -19,6 +20,8 @@ runner in the MCP config): MAXXING_APPROVAL_DIR, MAXXING_SESSION, MAXXING_AGENT_
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import secrets
@@ -109,6 +112,32 @@ def expire(folder: Path, session: str | None = None, ids: set[str] | None = None
 
 
 # ---- the tool -------------------------------------------------------------------------------------
+@contextlib.contextmanager
+def _state_lock(folder: Path, wait: float = 5.0):
+    """The flock of the server's `config.ProcessLock("approvals")` (<state>/.approvals.lock, next to the folder),
+    at most `wait` seconds (then without it)."""
+    try:
+        fd = os.open(folder.parent / ".approvals.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        yield
+        return
+    try:
+        end = time.monotonic() + wait
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= end:
+                    break
+                time.sleep(0.02)
+            except OSError:
+                break
+        yield
+    finally:
+        os.close(fd)                                # closing drops the flock
+
+
 def _folder() -> Path:
     d = Path(os.environ.get("MAXXING_APPROVAL_DIR") or "approvals")
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -133,6 +162,8 @@ def ask(args: dict, poll_s: float = POLL_S) -> dict:
            "agent_path": os.environ.get("MAXXING_AGENT_PATH") or "", "tool": tool, "input": clip(tool_input),
            "tool_use_id": str(args.get("tool_use_id") or "")[:200], "at": now, "expires": now + timeout,
            "status": "pending"}
+    if req["input"] != tool_input:          # what Allow would run is not all shown: it can only be denied
+        req["clipped"] = True
     f = folder / f"{rid}.json"
     with _mine_lock:
         _mine.add(rid)
@@ -150,11 +181,12 @@ def ask(args: dict, poll_s: float = POLL_S) -> dict:
             if st in ("timeout", "expired") or not d:
                 return {"behavior": "deny", "message": "No answer in time: the action was not allowed."}
             if time.time() >= now + timeout:
-                d.update(status="timeout", decided_at=time.time())
-                cur = read(f) or {}
-                if cur.get("status") == "pending":     # the user did not answer meanwhile
-                    write_atomic(f, d)
-                    return {"behavior": "deny", "message": "No answer in time: the action was not allowed."}
+                with _state_lock(folder):              # the server's lock (approvals.decide): one answer wins
+                    cur = read(f) or {}
+                    if cur.get("status") == "pending":     # the user did not answer meanwhile
+                        write_atomic(f, {**cur, "status": "timeout", "decided_at": time.time()})
+                        return {"behavior": "deny", "message": "No answer in time: the action was not allowed."}
+                # answered at the last second: the next poll returns that answer
     finally:
         with _mine_lock:
             _mine.discard(rid)

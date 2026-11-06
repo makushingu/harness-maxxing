@@ -111,6 +111,31 @@ def _queue_preview(m: dict) -> list[dict]:
     return out
 
 
+SENT_PREVIEW_CHARS = 4000
+
+
+def _sent_preview(m: dict) -> list[dict]:
+    """Messages sent but not in the log yet: the one held at the head while a summary runs first (smart resume,
+    idle compaction), or the head while its turn starts. The thread shows them as sent, also in a tab or on a
+    device that did not send them (a reloaded page, another window): else they vanish until their turn starts."""
+    q = m.get("queue") or []
+    if not isinstance(q, list) or m.get("state") != "running":
+        return []
+    out = []
+    for i, x in enumerate(q):
+        if not isinstance(x, dict) or not (x.get("held") or (i == 0 and not m.get("pid"))):
+            continue
+        if (x.get("source") or "web") == "system":     # a summary waiting to start: not a message
+            continue
+        att = x.get("attachments")
+        out.append({"text": str(x.get("text") or "")[:SENT_PREVIEW_CHARS],
+                    "attachments": [str(a) for a in att] if isinstance(att, list) else [],
+                    "source": str(x.get("source") or "web"),
+                    **({"voice": _voice_paths(x)} if _voice_paths(x) else {}),
+                    **({"client_ids": [str(c) for c in x["client_ids"]]} if isinstance(x.get("client_ids"), list) else {})})
+    return out
+
+
 def _num(v: object) -> float:
     """A number from a session file that may have been edited by hand (string, null, junk -> 0)."""
     try:
@@ -124,7 +149,7 @@ def public(meta: dict) -> dict:
     m = _effective(meta)
     finished, seen = _num(m.get("finished_at")), _num(m.get("seen_at"))
     return {"id": m["id"], "title": m.get("title") or "Untitled", "path": m.get("path") or "",
-            "state": m.get("state") or "idle", "queue": _waiting(m), "queue_items": _queue_preview(m),
+            "state": m.get("state") or "idle", "queue": _waiting(m), "queue_items": _queue_preview(m), "sent_items": _sent_preview(m),
             "created": m.get("created"), "updated": m.get("updated") or m.get("created"),
             "turns": int(_num(m.get("turns"))), "cost_usd": round(_num(m.get("cost_usd")), 4),
             "model": m.get("model") or "", "real_model": m.get("real_model") or None,
@@ -923,10 +948,13 @@ def _tail_events(sid: str, nbytes: int = 512 * 1024) -> list[dict]:
     return normalize.normalize_lines(lines)
 
 
-def last_assistant_text(sid: str) -> str:
+def last_assistant_text(sid: str, turn_only: bool = False) -> str:
+    """turn_only: from the last turn only ("" if it wrote nothing, never the answer of the turn before)."""
     for ev in reversed(_tail_events(sid)):
         if ev["type"] == "assistant":
             return ev["text"]
+        if turn_only and ev["type"] == "user":
+            return ""
     return ""
 
 
@@ -1330,11 +1358,26 @@ def wait_turn(sid: str, timeout_s: float) -> dict:
 
 
 def uploads_dir(path: str) -> Path:
-    """<topic>/attachments/YYYY-MM/ (created)."""
+    """<topic>/attachments/YYYY-MM/ (created). Also the folder of an agent (<agent>/attachments/). Never through a
+    symbolic link: an agent that writes its own folder cannot send the owner's uploads elsewhere."""
     try:
-        d = workspace.topic_dir(path) / "attachments" / time.strftime("%Y-%m")
+        base = workspace.topic_dir(path)
     except ValueError as e:
         raise SessionError(400, "bad_path", str(e)) from None
-    d.mkdir(parents=True, exist_ok=True)
+    return month_dir(base / "attachments")
+
+
+def month_dir(top: Path) -> Path:
+    """<top>/YYYY-MM/ (created), refused when <top> or the month folder is a symbolic link."""
+    d = top / time.strftime("%Y-%m")
+    for x in (top, d):
+        if x.is_symlink():
+            raise SessionError(400, "bad_path", f"{x.name} is a symbolic link")
+        try:
+            x.mkdir(exist_ok=True)
+        except OSError as e:
+            raise SessionError(400, "bad_path", f"Cannot create {x.name}: {e.strerror or e}") from None
+        if not x.is_dir():
+            raise SessionError(400, "bad_path", f"{x.name} is not a folder")
     return d
 

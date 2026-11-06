@@ -86,7 +86,19 @@ def parse_md(text: str) -> dict:
         raise ValueError("Not a Claude Code agent file: it starts with a --- block (name, description...)")
     head: dict[str, object] = {}
     key = None
+    block: list[str] | None = None                      # the lines of a `key: >` or `key: |` value
+    fold = False
+
+    def end_block() -> None:                            # folded (>) = one line, literal (|) keeps its lines
+        head[str(key)] = " ".join(x for x in block if x) if fold else "\n".join(block or []).strip()
+
     for ln in m.group(1).splitlines():
+        if block is not None:
+            if not ln.strip() or ln[:1] in (" ", "\t"):
+                block.append(ln.strip())
+                continue
+            end_block()
+            block = None
         if not ln.strip() or ln.lstrip().startswith("#"):
             continue
         item = re.match(r"^\s+-\s*(.*)$", ln)
@@ -99,10 +111,15 @@ def parse_md(text: str) -> dict:
             key = None
             continue
         key, val = kv.group(1), kv.group(2).strip()
+        if re.fullmatch(r"[>|][+-]?", val):            # a YAML block: the indented lines below
+            block, fold = [], val[0] == ">"
+            continue
         if val.startswith("[") and val.endswith("]"):
             head[key] = [_unquote(x) for x in val[1:-1].split(",") if x.strip()]
         else:
             head[key] = _unquote(val) if val else []
+    if block is not None:
+        end_block()
     name = str(head.get("name") or "").strip()
     if not name:
         raise ValueError("The agent file has no name")
@@ -125,7 +142,7 @@ def parse_md(text: str) -> dict:
     mode = str(head.get("permissionMode") or "").strip()
     if mode in MODES_IN:
         fields["permission_mode"] = MODES_IN[mode]
-    role = body if not desc or desc in body else f"{desc}\n\n{body}".strip()
+    role = body if not desc or " ".join(desc.split()) in " ".join(body.split()) else f"{desc}\n\n{body}".strip()
     return {"name": slug, "description": role or desc, "fields": fields,
             "ignored": sorted(k for k in head if k not in KNOWN)}
 

@@ -110,6 +110,20 @@ export function FeaturesSection() {
             <SettingRow label={t('features.maxxing')} description={t('features.maxxingDesc')} htmlFor="ft-maxxing">
               <Switch id="ft-maxxing" checked={!!s.maxxing_mode} onCheckedChange={(v) => save.mutate({ maxxing_mode: v })} />
             </SettingRow>
+            <SettingRow
+              label={t('features.mail')}
+              description={
+                <>
+                  {t('features.mailDesc')}{' '}
+                  <Link to="/settings/keys" className="text-primary hover:underline">
+                    {t('settings.keys')}
+                  </Link>
+                </>
+              }
+              htmlFor="ft-mail"
+            >
+              <Switch id="ft-mail" checked={!!s.mail_page} onCheckedChange={(v) => save.mutate({ mail_page: v })} />
+            </SettingRow>
             <SettingRow label={t('settings.presentationDefault')} description={t('settings.presentationDefaultDesc')} htmlFor="ft-pres">
               <Switch id="ft-pres" checked={!!s.presentation_default} onCheckedChange={(v) => save.mutate({ presentation_default: v })} />
             </SettingRow>

@@ -255,6 +255,32 @@ async def test_an_alert_answered_while_it_was_sent_loses_its_buttons(api, tg, sv
     assert f"al:{ev['id']}" not in gateway._notes()
 
 
+async def test_an_alert_cut_on_telegram_says_so_and_cannot_be_sent_from_there(api, tg, svc, monkeypatch):
+    await _link_simple(api, tg)
+    from maxxing import feed
+    acted: list = []
+    real = feed.act
+    monkeypatch.setattr(feed, "act", lambda eid, action, by="web": acted.append(action) or real(eid, action, by))
+    body = "From: me@x\nTo: you@y\nSubject: Contract\n\n" + "word " * 400 + "the end [...]"
+    ev = feed.post("Writer wants to send an e-mail", body, "warning", "mail", "/mail", notify=False, ref="mailsend:o_1",
+                   actions=[{"id": "allow", "label": "Send", "style": "primary"},
+                            {"id": "deny", "label": "Refuse", "style": "danger"},
+                            {"id": "open", "label": "Open", "style": "link"}])
+    gateway.post_alert({**ev, "telegram": "loud", "attachments": [{"name": "contract.pdf"}, "id-scan.jpg"]})
+    p = _bot("Writer wants to send", tg)
+    assert "(cut, open it to see all)" in p["text"] and "📎 contract.pdf, id-scan.jpg" in p["text"]
+    assert [b["callback_data"] for b in p["reply_markup"]["inline_keyboard"][0]] == [f"al:{ev['id']}:deny"]
+    # a Send button of a message posted before: refused, nothing sent
+    tg.callback(f"al:{ev['id']}:allow", message_id=gateway._notes()[f"al:{ev['id']}"][1])
+    await wait_for(lambda: any(q.get("text") == "…(cut, open it to see all)" for q in tg.sent("answerCallbackQuery")),
+                   what="refused")
+    assert acted == [] and feed.get(ev["id"])["resolved"] is None
+    # short enough: whole, Send stays
+    short = feed.post("Writer wants to send an e-mail", "To: you@y\n\nHello", "warning", "mail", notify=False,
+                      ref="mailsend:o_2", actions=[{"id": "allow", "label": "Send", "style": "primary"}])
+    assert "cut" not in gateway._alert_html(short) and gateway._alert_markup(short)
+
+
 def test_message_map_keeps_the_newest_and_takes_in_the_old_file(mx_state, monkeypatch):
     import time
     old = gateway._msgs_path().with_name("messages.json")
@@ -274,8 +300,8 @@ async def test_reply_to_an_agent_message_in_the_main_chat(api, tg, svc, monkeypa
     await _link_simple(api, tg)
     got: list = []
 
-    async def fake(self, msg, path, cmd, text):
-        got.append((path, text))
+    async def fake(self, msgs, path, texts):
+        got.append((path, *texts))
     monkeypatch.setattr(gateway.Gateway, "_agent_message", fake)
     gateway.bind_messages(555, [4242], {"agent": "projects/acme/topics/blog/agents/writer"})
     tg.message("do it again", reply_to_message={"message_id": 4242, "from": {"id": 1, "is_bot": True}, "text": "r"})

@@ -77,6 +77,7 @@ class ImportIn(BaseModel):
 class AgentIn(BaseModel):
     topic_path: Optional[str] = None          # create only
     name: Optional[str] = None                # create only: the folder slug
+    template: Optional[str] = Field(default=None, max_length=64)   # create only: a ready-made agent, under the fields
     display_name: Optional[str] = None
     description: Optional[str] = None         # the role (CLAUDE.md)
     avatar: Optional[Avatar] = None
@@ -96,10 +97,17 @@ class AgentIn(BaseModel):
     writable: Optional[list[str]] = Field(default=None, max_length=20)
     rules: Optional[list[Rule]] = Field(default=None, max_length=20)
     subagent: Optional[bool] = None
+    mail: Optional[list[dict]] = Field(default=None, max_length=10)    # mailboxes of the E-mail page (mail/access.py)
 
 
 def _fields(body: AgentIn) -> dict:
-    f = body.model_dump(exclude_none=True, exclude={"topic_path", "name", "display_name"})
+    f = body.model_dump(exclude_none=True, exclude={"topic_path", "name", "display_name", "template"})
+    if f.get("mail"):
+        from .. import mail
+        have = {a["id"] for a in mail.list_accounts()}
+        bad = [g.get("account") for g in f["mail"] if isinstance(g, dict) and g.get("account") not in have]
+        if bad:
+            raise HTTPException(400, detail={"error": "bad_mail", "message": f"No mailbox {bad[0]!r} on the E-mail page"})
     if body.display_name is not None:
         f["name"] = body.display_name
     for k in ("avatar", "limits"):
@@ -113,6 +121,7 @@ def _fields(body: AgentIn) -> dict:
 class RunIn(BaseModel):
     text: Optional[str] = None
     reply_to: Optional[str] = None       # a thread message: its session goes on (no new session)
+    attachments: list[str] = Field(default_factory=list, max_length=agents.ATTACH_MAX)  # under <agent>/attachments/
 
 
 class WebhookIn(BaseModel):
@@ -189,8 +198,15 @@ def create_agent(body: AgentIn):
     _on()
     if not body.topic_path or not body.name:
         raise HTTPException(400, detail={"error": "missing", "message": "topic_path and name are required"})
+    fields = _fields(body)
+    if body.template:                           # what the CLI's --template gives (domains, writable...), the form on top
+        from .. import agent_templates, config, vault
+        tpl = agent_templates.get(body.template, config.load_config().get("language") or "en")
+        if tpl is None:
+            raise HTTPException(400, detail={"error": "bad_template", "message": f"No template {body.template!r}"})
+        fields = {**agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]), **fields}
     try:
-        return agents.create(body.topic_path, body.name, _fields(body))
+        return agents.create(body.topic_path, body.name, fields)
     except agents.AgentError as e:
         raise _bad(e) from None
 
@@ -264,8 +280,15 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
     if not agents.exists(path):
         raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
     text = (body.text or "").strip()
+    try:
+        files = agents.checked_attachments(agents.folder(path), body.attachments)
+    except agents.AgentError as e:
+        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
+    if files and not text:
+        text = "See the attached files."
     try:                       # typed by the user: an instruction, not outside data (no markers)
-        return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None)
+        return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None,
+                           attachments=files or None)
     except Exception as e:     # SessionError (bad model...)
         raise HTTPException(getattr(e, "status", 500),
                             detail={"error": getattr(e, "code", "run_failed"), "message": str(e)}) from None

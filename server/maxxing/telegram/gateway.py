@@ -191,6 +191,7 @@ MEDIA_GROUP_WAIT = 1.5           # an album is complete when no item came for th
 MEDIA_GROUP_MAX = 6.0            # ...or this long after its first item
 PASTE_MIN = 3500                 # a text this long may be the first part of a longer one Telegram split
 PASTE_WAIT = 1.5                 # the next part comes within this delay
+AGENT_GATHER = 1.5               # pieces of one gesture for an agent (album, split text, forward + comment): one run
 QUOTE_CHARS = 500                # quoted part of a replied-to message given to Claude
 NOTIFY_PREVIEW = 300
 THREAD_DAYS = 30               # default of config.telegram.thread_days
@@ -768,6 +769,28 @@ def _with_context(msg: dict, text: str) -> str:
     return "\n".join(head) + ("\n\n" + text if text else "")
 
 
+_FORWARD = ("forward_origin", "forward_from", "forward_from_chat", "forward_sender_name")
+
+
+def _forwarded(msg: dict) -> bool:
+    return any(msg.get(k) for k in _FORWARD)
+
+
+def _agent_parts(msg: dict, text: str) -> tuple[str, str]:
+    """A message for an agent -> (the owner's own words, what someone else wrote): a forward, or the quote of a
+    message neither the bot nor the owner wrote, is handed over as data from outside, never as the owner's order."""
+    bare = {k: v for k, v in msg.items() if k not in ("reply_to_message", "quote")}
+    if _forwarded(msg):
+        return "", _with_context(bare, text)
+    rep = msg.get("reply_to_message")
+    if isinstance(rep, dict) and _replied_id(msg) is not None:
+        by = (rep.get("from") or {})
+        if _forwarded(rep) or not (by.get("is_bot") or by.get("id") == (msg.get("from") or {}).get("id")):
+            quoted = {k: msg.get(k) for k in ("message_id", "message_thread_id", "reply_to_message", "quote")}
+            return _with_context(bare, text), _with_context(quoted, "")
+    return _with_context(msg, text), ""
+
+
 def resolve_model(arg: str, models: list[tuple[str, str]] | None = None) -> str | None:
     """`/model <arg>` -> a model id ("" = default), or None when it matches nothing. Accepts an id, a label
     ("Opus 5.5", any case) or a family alias ("opus", "sonnet", "haiku", "fable": the newest known)."""
@@ -862,6 +885,7 @@ class Gateway:
         self._groups: dict[str, list[dict]] = {}          # media_group_id -> messages
         self._group_seen: dict[str, tuple[float, float]] = {}   # media_group_id -> (first, last) arrival
         self._pastes: dict[str, dict] = {}                # chat:thread -> long text split by Telegram, being merged
+        self._agent_pieces: dict[str, dict] = {}          # chat:thread|agent -> messages gathered into one run
         self._edits_told: dict[str, None] = {}            # chat:message of edits already answered (bounded)
         self._sync_lock: asyncio.Lock | None = None
         self._sync_handle: asyncio.TimerHandle | None = None
@@ -1043,6 +1067,11 @@ class Gateway:
             await self._edit_markup(msg, None)
             return _w("cb_done")
         try:
+            now = await asyncio.to_thread(feed.get, int(aid))
+            act = next((a for a in (now or {}).get("actions") or [] if isinstance(a, dict) and a.get("id") == action), {})
+            if now and _alert_cut(now) and act.get("style") != "danger":
+                await asyncio.to_thread(_alert_update_sync, now)          # a message sent before the cut rule
+                return _w("alert_cut")[:190]
             ev = await asyncio.to_thread(feed.act, int(aid), action, by="telegram")
         except Exception as e:  # noqa: BLE001 - FeedError (bad action, gone), ApprovalError (unknown request)
             await self._edit_markup(msg, None)
@@ -1361,47 +1390,105 @@ class Gateway:
         await self._reply(msg, _w("edited"), silent=True)
 
     def _agent_lane(self, msg: dict, path: str, cmd: str | None, text: str) -> None:
-        """An agent's message in its own lane: a download or a transcription never holds the other updates."""
-        self._lane(f"agent:{path}", lambda: self._agent_message(msg, path, cmd, text), "agent", msg)
+        """An agent's message in its own lane: a download or a transcription never holds the other updates. The
+        pieces of one gesture (an album, a long text Telegram split, a forward and its comment) start one run."""
+        key = f"agent:{path}"
+        if cmd and cmd != "start":
+            self._lane(key, lambda: self._agent_command(msg, path), "agent", msg)
+            return
+        gk = f"{self._paste_key(msg)}|{path}"
+        now = time.monotonic()
+        g = self._agent_pieces.get(gk)
+        if g is None:
+            g = self._agent_pieces[gk] = {"msgs": [], "texts": [], "marks": [], "first": now}
+            self.spawn(self._agent_gather(gk, key, path), "agent-gather")
+        g["msgs"].append(msg)
+        g["texts"].append(text)
+        g["marks"].append(self._inflight_add(msg, "voice" if self._is_voice(msg) else "message"))
+        g["last"] = now
 
-    async def _agent_message(self, msg: dict, path: str, cmd: str | None, text: str) -> None:
-        """A message in an agent's thread (or a reply to one of its messages) starts the agent: the user's words
-        are its task (not framed as data)."""
+    async def _agent_gather(self, gk: str, key: str, path: str) -> None:
+        """Wait until no piece came for AGENT_GATHER (MEDIA_GROUP_MAX at most), then one run in the agent's lane."""
+        while True:
+            g = self._agent_pieces.get(gk)
+            if g is None:
+                return
+            delay = min(g["last"] + AGENT_GATHER, g["first"] + MEDIA_GROUP_MAX) - time.monotonic()
+            if delay <= 0:
+                break
+            await asyncio.sleep(delay)
+        g = self._agent_pieces.pop(gk)
+
+        async def run() -> None:
+            try:
+                await self._agent_message(g["msgs"], path, g["texts"])
+            except asyncio.CancelledError:                  # stopping: told at the next start
+                raise
+            except BaseException:
+                for m in g["marks"]:
+                    self._inflight_drop(m)
+                raise
+            for m in g["marks"]:
+                self._inflight_drop(m)
+        self._lane(key, run, "agent")
+
+    async def _agent_command(self, msg: dict, path: str) -> None:
+        name = await asyncio.to_thread(_agent_display, path)
+        await self._reply(msg, _w("agent_command", name=name), silent=True)
+
+    async def _agent_message(self, msgs: list[dict], path: str, texts: list[str]) -> None:
+        """Messages in an agent's thread (or replies to one of its messages) start the agent: the user's own words
+        are its task (not framed as data); a forward or a quote of someone else is data from outside."""
         from .. import agents
         name = await asyncio.to_thread(_agent_display, path)
-        if cmd and cmd != "start":
-            await self._reply(msg, _w("agent_command", name=name), silent=True)
-            return
         saved: list[str] = []
-        if self._is_voice(msg):
-            heard = await self._hear(msg, path, text)
-            if heard is None:
-                return
-            saved, text = heard
-        elif self._has_media(msg):
-            try:
-                saved = await self._download(msg, path)
-            except (TelegramError, OSError, ValueError) as e:
-                await self._reply(msg, _w("save_failed", error=getattr(e, "description", e)))
-                if not text:
-                    return
-        text = _with_context(msg, text) if text else \
-            f"(sent from Telegram: {', '.join(os.path.basename(a) for a in saved)})"
-        rep = (msg.get("reply_to_message") or {}).get("message_id")
-        reply_to = await asyncio.to_thread(agents.telegram_reply_to, path, rep) if rep else None
+        own: list[str] = []
+        outside: list[str] = []
+        for msg, text in zip(msgs, texts):
+            files: list[str] = []
+            if self._is_voice(msg):
+                heard = await self._hear(msg, path, text)
+                if heard is None:
+                    continue
+                files, text = heard
+            elif self._has_media(msg):
+                try:
+                    files = await self._download(msg, path)
+                except (TelegramError, OSError, ValueError) as e:
+                    await self._reply(msg, _w("save_failed", error=getattr(e, "description", e)))
+                    if not text:
+                        continue
+            saved += files
+            mine, theirs = _agent_parts(msg, text)          # a forwarded photo alone is outside too
+            own += [mine] if mine else []
+            outside += [theirs] if theirs else []
+        if not (saved or own or outside):
+            return
+        first = msgs[0]
+        prompt = "\n".join(own)
+        if not prompt and not outside:
+            prompt = f"(sent from Telegram: {', '.join(os.path.basename(a) for a in saved)})"
+        reply_to = None
+        for msg in msgs if not outside else []:     # outside data starts its own run (guarded as outside)
+            rep = (msg.get("reply_to_message") or {}).get("message_id")
+            reply_to = await asyncio.to_thread(agents.telegram_reply_to, path, rep, msg["chat"].get("id")) \
+                if rep else None
+            if reply_to:
+                break
         try:
-            res = await asyncio.to_thread(agents.fire, path, trigger="telegram", prompt=text, source="telegram",
+            res = await asyncio.to_thread(agents.fire, path, trigger="telegram", prompt=prompt,
+                                          text="\n\n".join(outside), source="telegram",
                                           attachments=saved or None, reply_to=reply_to)
         except Exception as e:  # noqa: BLE001
             log.exception("agent fire from Telegram failed")
-            await self._reply(msg, f"⚠️ {e}")
+            await self._reply(first, f"⚠️ {e}")
             return
         if res.get("started"):
-            await self._reply(msg, _w("agent_started", name=name), silent=True, bind={"agent": path})
+            await self._reply(first, _w("agent_started", name=name), silent=True, bind={"agent": path})
         else:
             reasons = AGENT_REASONS.get(_lang()) or AGENT_REASONS["en"]
             r = res.get("reason") or ""
-            await self._reply(msg, _w("agent_skipped", name=name, reason=reasons.get(r, r)), silent=True)
+            await self._reply(first, _w("agent_skipped", name=name, reason=reasons.get(r, r)), silent=True)
 
     async def _open_session(self, sid: str) -> dict | None:
         """The session of a thread (un-archived when the user writes in its thread); None if gone."""
@@ -2641,6 +2728,8 @@ class Gateway:
         try:
             if decision == "allow":                        # never offered for a request shown in part only
                 d = await asyncio.to_thread(approvals.get, rid)
+                if d.get("clipped"):
+                    return approvals.CLIPPED_NOTE[:190]
                 if not approvals.summary(str(d.get("tool") or ""), d.get("input"))[1]:
                     return _w("approval_cut")[:190]
             await asyncio.to_thread(approvals.decide, rid, decision, "", "telegram")
@@ -3585,7 +3674,7 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str 
     if thread_msg and sent:                            # a reply to these messages goes on with that session
         try:
             from .. import agents
-            agents.remember_telegram(path, sent, thread_msg)
+            agents.remember_telegram(path, sent, thread_msg, chat)
         except Exception:  # noqa: BLE001
             log.exception("agent Telegram mapping")
     return ok
@@ -3699,12 +3788,35 @@ def _feed_alerts() -> bool:
         return False
 
 
+ALERT_BODY = 1500
+
+
+def _alert_files(ev: dict) -> list[str]:
+    """Names of the files an event carries (`attachments`: names or {name}), when its body does not list them."""
+    items = ev.get("attachments")
+    names = [str(a.get("name") if isinstance(a, dict) else a or "")[:120] for a in
+             (items if isinstance(items, list) else [])]
+    names = [n for n in names if n and n != "None"]
+    body = str(ev.get("body") or "")[:ALERT_BODY]
+    return [] if all(n in body for n in names) else names
+
+
+def _alert_cut(ev: dict) -> bool:
+    """Only part of the event fits in the message: no button that acts on it (Open shows it all)."""
+    return len(str(ev.get("body") or "")) > ALERT_BODY
+
+
 def _alert_html(ev: dict) -> str:
     count = f" ×{ev['count']}" if int(ev.get("count") or 1) > 1 else ""
     html = (f"{ALERT_ICON.get(str(ev.get('level')), 'ℹ️')} <b>{fmt.escape(str(ev.get('title') or '')[:300])}"
             f"</b>{count}")
+    files = _alert_files(ev)
+    if files:
+        html += "\n📎 " + fmt.escape(", ".join(files)[:600])
     if ev.get("body"):
-        html += "\n" + fmt.escape(str(ev["body"])[:1500])
+        html += "\n" + fmt.escape(str(ev["body"])[:ALERT_BODY])
+        if _alert_cut(ev):
+            html += "\n<i>" + fmt.escape(_w("alert_cut")) + "</i>"
     if ev.get("resolved") and ev.get("resolution"):
         html += f"\n<i>{fmt.escape(str(ev['resolution'])[:200])}</i>"
     return html
@@ -3727,6 +3839,8 @@ def _alert_markup(ev: dict) -> dict | None:
             continue
         if act["id"] == "seen" and ev.get("read"):
             continue                                       # already seen (on the web)
+        if _alert_cut(ev) and act.get("style") != "danger":
+            continue                                       # shown in part only: Send / Allow from the UI (Refuse stays)
         data = f"al:{ev['id']}:{act['id']}"
         if len(data.encode()) <= 64:
             row.append({"text": str(act.get("label") or act["id"])[:40], "callback_data": data})
