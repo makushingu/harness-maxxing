@@ -266,3 +266,53 @@ def test_restore_never_writes_outside_the_workspace(client, topic, mx):
     sc.write_text(json.dumps({**json.loads(sc.read_text()), "path": "../../outside"}))
     r = client.post(f"/api/trash/{item['id']}/restore")
     assert r.status_code == 200 and r.json()["restored_to"] == "", r.text
+
+
+def _agent(client, name="writer"):
+    assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
+    r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": name})
+    assert r.status_code == 200, r.text
+    return f"projects/acme/topics/blog/agents/{name}"
+
+
+def test_a_new_agent_in_a_recreated_topic_starts_empty_and_the_restored_topic_gets_its_thread(client, topic):
+    from maxxing import agents, crons
+    a = _agent(client)
+    agents.post(a, "result", "SECRET RESULT OF OLD AGENT")
+    agents.remember_telegram(a, [101], "msg_a")
+    job = client.post("/api/agents/acme/blog/writer/crons", json={"prompt": "NOTOOL x"}).json()
+    assert client.delete("/api/workspace/projects/acme/topics/blog").status_code == 200
+    assert crons.get_job(job["id"]) is None
+    client.post("/api/workspace/projects/acme/topics", json={"name": "blog"})
+    _agent(client)
+    assert [m["text"] for m in agents.thread(a)] == ["Agent created"]
+    assert agents.telegram_reply_to(a, 101) is None
+    item = next(i for i in _items(client) if i["kind"] == "topic")
+    r = client.post(f"/api/trash/{item['id']}/restore").json()
+    assert r["restored_to"] == "projects/acme/topics/blog-restored"
+    old = "projects/acme/topics/blog-restored/agents/writer"
+    assert "SECRET RESULT OF OLD AGENT" in [m["text"] for m in agents.thread(old)]
+    assert agents.telegram_reply_to(old, 101) == "msg_a"
+    assert crons.get_job(job["id"])["topic_path"] == old
+    assert [m["text"] for m in agents.thread(a)] == ["Agent created"]
+
+
+def test_a_restored_agent_whose_name_was_taken_comes_back_as_an_agent(client, topic):
+    from maxxing import agents, crons
+    a = _agent(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    wait_idle(client, run["session"]["id"])
+    job = client.post("/api/agents/acme/blog/writer/crons", json={"prompt": "NOTOOL x"}).json()
+    assert client.delete("/api/agents/acme/blog/writer").status_code == 200
+    _agent(client)
+    item = next(i for i in _items(client) if i["kind"] == "agent")
+    assert not [i for i in _items(client) if i["name"].endswith(".agents")]   # the state box is not an item
+    r = client.post(f"/api/trash/{item['id']}/restore").json()
+    new = "projects/acme/topics/blog/agents/writer-restored"
+    assert r["restored_to"] == new
+    assert sorted(agents.names("acme", "blog")) == ["writer", "writer-restored"]
+    assert client.get(f"/api/sessions/{run['session']['id']}").json()["path"] == new
+    assert any(m["kind"] == "run" for m in agents.thread(new))
+    assert crons.get_job(job["id"])["topic_path"] == new
+    assert agents.run_settings(new)["sandbox"] is True
+    assert [m["text"] for m in agents.thread(a)] == ["Agent created"]
