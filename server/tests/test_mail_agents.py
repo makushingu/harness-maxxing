@@ -580,3 +580,16 @@ def test_real_imap_check_and_senders(mx, monkeypatch):
         for u in data[0].split():
             m.uid("STORE", u, "+FLAGS.SILENT", "(\\Deleted)")
         m.expunge()
+
+
+def test_the_mailbox_list_reads_the_agents_once(client, box, monkeypatch):
+    for i in range(3):
+        mail.add_account({"address": f"other{i}@example.com", "imap_host": "imap.example.net", "imap_port": 993,
+                          "imap_tls": "ssl", "smtp_host": "127.0.0.1", "smtp_port": 25, "smtp_tls": "none"}, PW)
+    _grant(client, rights=["read"])
+    calls = []
+    real = agents.list_agents
+    monkeypatch.setattr(agents, "list_agents", lambda *a, **k: calls.append(1) or real(*a, **k))
+    accs = client.get("/api/mail/accounts").json()
+    assert len(accs) == 4 and len(calls) == 1
+    assert [x["agent"] for x in accs[0]["agents"]] == [A] and all(not x["agents"] for x in accs[1:])
