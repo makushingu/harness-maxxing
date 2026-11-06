@@ -468,3 +468,65 @@ def test_a_mailbox_removed_during_its_check_is_left_alone(client, acc, srv, monk
     monkeypatch.setattr(imap, "new_since", then_removed)
     poll.poll_account(acc)
     assert not fired and store.position(acc["id"], "INBOX") is None
+
+
+# ---------------------------------------------------------------- headers the parser rejects
+
+@pytest.mark.parametrize("name", ["From", "To", "Cc", "Reply-To", "Sender"])
+def test_an_address_the_parser_rejects_never_breaks_the_list_the_reader_or_the_check(client, acc, srv, monkeypatch, name):
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    srv.add("INBOX", _raw("ok@x.org", "Before"))
+    assert poll.poll_account(acc)["ok"]                                 # first check: where the mailbox is
+    heads = {"From": "bob@x.org", "To": "me@example.com", name: "a@["}   # `msg[name]` raises AttributeError here
+    bad = srv.add("INBOX", ("".join(f"{k}: {v}\r\n" for k, v in heads.items())
+                            + "Subject: odd\r\nMessage-ID: <odd@x.org>\r\n\r\nodd body\r\n").encode())
+    later = srv.add("INBOX", _raw("later@x.org", "After"))
+    r = client.get(f"/api/mail/{acc['id']}/messages?folder=INBOX")
+    assert r.status_code == 200, r.text
+    assert {m["uid"] for m in r.json()["messages"]} >= {bad, later}
+    m = client.get(f"/api/mail/{acc['id']}/message?uid={bad}&folder=INBOX")
+    assert m.status_code == 200, m.text
+    m = m.json()
+    assert m["subject"] == "odd" and "odd body" in m["text"]
+    if name in ("From", "To", "Cc", "Reply-To"):                        # shown as it came, never an error
+        key = {"From": "from", "To": "to", "Cc": "cc", "Reply-To": "reply_to"}[name]
+        got = m[key] if isinstance(m[key], list) else [m[key]]
+        assert got == [{"name": "", "email": "a@["}]
+    res = poll.poll_account(acc)
+    assert res["ok"] and res["new"] == 2 and store.position(acc["id"], "INBOX")["last_uid"] == later
+    assert f"UID: {later}" in fired[0]["text"] and (name == "From" or f"UID: {bad}" in fired[0]["text"])
+
+
+def test_good_addresses_read_as_before(client, acc, srv):
+    """The negative case: ordinary From / To / Cc / Reply-To come out exactly as the parser reads them."""
+    m = email.message.EmailMessage()
+    m["From"] = '"Martin, Élodie" <e@x.fr>'
+    m["To"] = "me@example.com, Bob <bob@y.org>"
+    m["Cc"] = "undisclosed-recipients:;"
+    m["Reply-To"] = "=?utf-8?q?Caf=C3=A9?= <cafe@x.fr>"
+    m["Subject"], m["Message-ID"] = "Plain", "<plain@x.fr>"
+    m.set_content("hello")
+    uid = srv.add("INBOX", m.as_bytes())
+    r = imap.message(acc, "INBOX", uid, mark_seen=False)
+    assert r["from"] == {"name": "Martin, Élodie", "email": "e@x.fr"}
+    assert r["to"] == [{"name": "", "email": "me@example.com"}, {"name": "Bob", "email": "bob@y.org"}]
+    assert r["cc"] == [] and r["reply_to"] == [{"name": "Café", "email": "cafe@x.fr"}]
+    assert r["message_id"] == "<plain@x.fr>"
+    row = imap.messages(acc, "INBOX")["messages"][0]
+    assert row["from"] == r["from"] and row["to"] == r["to"] and row["subject"] == "Plain"
+
+
+def test_a_huge_subject_is_cut_before_it_is_parsed(client, acc, srv):
+    big = b"word " * 200_000                                             # 1 MB: the parser took 11 s a list
+    uid = srv.add("INBOX", b"From: a@x.fr\r\nTo: me@example.com\r\nSubject: " + big + b"\r\nMessage-ID: <big@x.fr>\r\n"
+                  b"References: " + b" ".join(b"<r%d@x.fr>" % i for i in range(3000)) + b"\r\n\r\nhi\r\n")
+    t = time.monotonic()
+    row = imap.messages(acc, "INBOX")["messages"][0]
+    m = imap.message(acc, "INBOX", uid, mark_seen=False)
+    assert time.monotonic() - t < 3
+    assert row["subject"].startswith("word word") and len(row["subject"]) <= imap.HDR_CAP
+    assert m["subject"] == row["subject"] and m["message_id"] == "<big@x.fr>"
+    refs = m["references"].split()                                       # message ids: never parsed nor cut
+    assert len(refs) == 3000 and refs[0] == "<r0@x.fr>" and refs[-1] == "<r2999@x.fr>"

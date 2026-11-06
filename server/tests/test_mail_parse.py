@@ -137,3 +137,64 @@ def test_a_bad_port_in_mail_add_is_refused():
     for bad in ("h:abc", "h:99999", "h:0", "h:-1", "h:１"):
         with pytest.raises(Refused):
             _hostport(bad, 993)
+
+
+def test_a_name_split_across_encoded_words_is_joined():
+    raw = (b"From: =?utf-8?B?SmVhbi1DaHJpc3RvcGhlIER1cG8=?=\r\n =?utf-8?B?bnQ=?= <jc@x.fr>\r\n"
+           b"To: =?utf-8?q?Ann?= =?utf-8?q?_Lee?= <a@x.fr>, =?utf-8?q?B?= Smith <b@x.fr>\r\n"
+           b"Subject: =?utf-8?B?SmVhbi1DaHJpc3RvcGhlIER1cG8=?=\r\n =?utf-8?B?bnQ=?=\r\n\r\nhi\r\n")
+    m = _render(raw)
+    assert m["from"] == {"name": "Jean-Christophe Dupont", "email": "jc@x.fr"}      # was "Dupo nt"
+    assert m["subject"] == "Jean-Christophe Dupont"
+    # the space of "=?q?_Lee?=" is the text's; an encoded-word next to a plain word keeps its space
+    assert m["to"] == [{"name": "Ann Lee", "email": "a@x.fr"}, {"name": "B Smith", "email": "b@x.fr"}]
+    plain = _render(b"From: Jean Dupont <jc@x.fr>\r\nTo: \"a =?x?= b\" <q@x.fr>\r\n\r\nhi\r\n")
+    assert plain["from"]["name"] == "Jean Dupont" and plain["to"][0]["email"] == "q@x.fr"
+
+
+@pytest.mark.parametrize("raw", [b"To: a@[\r\n", b"From: a@[\r\n", b"Cc: a@[\r\n", b"Reply-To: <a@[>\r\n"])
+def test_an_address_header_the_parser_rejects_comes_as_it_is(raw):
+    msg = imap._parse(raw + b"Subject: s\r\n\r\nbody\r\n")
+    name = raw.split(b":")[0].decode()
+    assert imap._hdr(msg, name) == raw.split(b": ", 1)[1].strip().decode()   # any case of the name
+    got = imap._addrs(msg, name.lower())
+    assert got == [{"name": "", "email": raw.split(b": ", 1)[1].strip().decode()}]
+    m = imap._render(msg, 1, "INBOX", [])
+    assert m["subject"] == "s" and "body" in m["text"]
+    head = email.parser.BytesHeaderParser(policy=email.policy.default).parsebytes(raw + b"\r\n")
+    assert imap._addrs(head, name.lower()) == got                              # the list rows' parser too
+
+
+def test_a_header_with_encoded_words_the_parser_rejects_is_still_decoded():
+    msg = imap._parse(b"To: =?utf-8?q?Caf=C3=A9?= a@[\r\n\r\nx\r\n")
+    assert imap._hdr(msg, "to") == "Café a@["
+
+
+def test_a_meeting_invite_is_listed_and_downloadable():
+    raw = (b"From: a@x.fr\r\nSubject: Meeting\r\nMIME-Version: 1.0\r\n"
+           b"Content-Type: multipart/alternative; boundary=b\r\n\r\n"
+           b"--b\r\nContent-Type: text/plain\r\n\r\nMeeting at 10\r\n"
+           b"--b\r\nContent-Type: text/html\r\n\r\n<p>Meeting at 10</p>\r\n"
+           b"--b\r\nContent-Type: text/calendar; method=REQUEST; charset=utf-8\r\n\r\nBEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"
+           b"--b--\r\n")
+    m = _render(raw)
+    assert "Meeting at 10" in m["text"] and "Meeting at 10" in m["html"]
+    assert [(a["filename"], a["content_type"]) for a in m["attachments"]] == [("invite.ics", "text/calendar")]
+    name, ctype, data = imap.part_at(imap._parse(raw), m["attachments"][0]["index"])
+    assert (name, ctype) == ("invite.ics", "text/calendar") and data.startswith(b"BEGIN:VCALENDAR")
+
+
+def _many(n: int) -> bytes:
+    m = email.message.EmailMessage()
+    m["From"], m["Subject"] = "a@x.fr", "many"
+    m.set_content("see attached")
+    for i in range(n):
+        m.add_attachment(b"x", maintype="application", subtype="octet-stream", filename=f"f{i}.bin")
+    return m.as_bytes()
+
+
+def test_attachments_past_the_parts_limit_are_counted_not_hidden():
+    m = _render(_many(1200))
+    assert len(m["attachments"]) + m["attachments_more"] == 1200 and m["attachments_more"] > 0
+    few = _render(_many(3))
+    assert len(few["attachments"]) == 3 and few["attachments_more"] == 0
