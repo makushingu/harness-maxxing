@@ -1148,20 +1148,25 @@ def _alert_count(path: str) -> int:
 TG_KEEP = 200
 
 
-def remember_telegram(path: str, telegram_ids: list, thread_msg: str) -> None:
+def _tg_key(telegram_id: Any, chat: Any) -> str:
+    # message ids restart in every chat: keyed by chat, so a bot linked to another chat never continues old runs
+    return f"{chat}:{telegram_id}" if chat is not None else str(telegram_id)
+
+
+def remember_telegram(path: str, telegram_ids: list, thread_msg: str, chat: Any = None) -> None:
     """Telegram messages that carry a thread message: replying to one of them continues its session."""
     with _lock:
         st = _read_state(path)
         m = st.get("telegram_msgs") if isinstance(st.get("telegram_msgs"), dict) else {}
         for t in telegram_ids:
-            m[str(t)] = thread_msg
+            m[_tg_key(t, chat)] = thread_msg
         st["telegram_msgs"] = dict(list(m.items())[-TG_KEEP:])
         _write_state(path, st)
 
 
-def telegram_reply_to(path: str, telegram_id: Any) -> str | None:
+def telegram_reply_to(path: str, telegram_id: Any, chat: Any = None) -> str | None:
     m = _read_state(path).get("telegram_msgs")
-    return m.get(str(telegram_id)) if isinstance(m, dict) else None
+    return m.get(_tg_key(telegram_id, chat)) if isinstance(m, dict) else None
 
 
 def mark_seen(path: str) -> None:

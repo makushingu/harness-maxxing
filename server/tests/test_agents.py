@@ -564,6 +564,9 @@ def test_telegram_reply_maps_to_the_result(client, topic):
     agents.remember_telegram(A, [103], "msg_b")
     assert agents.telegram_reply_to(A, 102) == "msg_a" and agents.telegram_reply_to(A, "103") == "msg_b"
     assert agents.telegram_reply_to(A, 999) is None
+    agents.remember_telegram(A, [7], "msg_c", chat=555)
+    assert agents.telegram_reply_to(A, 7, 555) == "msg_c"
+    assert agents.telegram_reply_to(A, 7, 556) is None and agents.telegram_reply_to(A, 7) is None   # another chat
 
 
 def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeypatch, capsys):
