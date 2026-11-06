@@ -479,8 +479,12 @@ def _handler(a) -> int:
         from . import agent_format
         md = agent_format.export_md(path)
         if a.output:
-            with open(a.output, "w", encoding="utf-8") as f:
-                f.write(md)
+            try:
+                with open(a.output, "w", encoding="utf-8") as f:
+                    f.write(md)
+            except OSError as e:
+                print(f"Cannot write {a.output}: {e}", file=sys.stderr)
+                return 2
             print(f"written {a.output}")
         else:
             sys.stdout.write(md)
