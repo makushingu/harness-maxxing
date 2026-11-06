@@ -286,3 +286,13 @@ def test_a_pdf_opens_in_the_browser_and_html_stays_sandboxed(client, acc, srv):
     assert html.headers["content-type"] == "application/octet-stream" and html.headers["content-security-policy"] == "sandbox"
     dl = client.get(f"/api/mail/{acc['id']}/attachment", params={"uid": uid, "index": idx["application/pdf"]})
     assert dl.headers["content-security-policy"] == "sandbox" and dl.headers["content-disposition"].startswith("attachment")
+
+
+def test_an_8bit_attachment_type_downloads_instead_of_a_500(client, acc, srv):
+    """`image/\\xe9` read as image/\\ufffd passed as an image, then the header could not be encoded (500)."""
+    uid = srv.add("INBOX", b"From: a@b.co\r\nTo: me@example.com\r\nSubject: x\r\nContent-Type: multipart/mixed; boundary=B"
+                  b"\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nhi\r\n--B\r\nContent-Type: image/\xe9; name=a.png\r\n\r\nxx"
+                  b"\r\n--B--\r\n")
+    r = client.get(f"/api/mail/{acc['id']}/attachment", params={"uid": uid, "index": 2, "inline": 1})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/octet-stream"
+    assert r.headers["content-disposition"].startswith("attachment")
