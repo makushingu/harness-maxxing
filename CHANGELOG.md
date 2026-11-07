@@ -3,6 +3,20 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.128 - 2026-11-07
+
+New:
+- **Scheduled jobs catch up**: a daily or weekly job missed while the server was off runs once when it is back (only
+  the most recent missed run of the last 24 hours). On by default; switch it off per job (**Catch up a missed run**).
+- **Automatic retries**: a Claude job stopped by a temporary error (Claude overloaded, network, usage limit) tries
+  again by itself, at most 3 times; after a usage limit it waits for the limit to reset. A shell job can be retried
+  too (**Retries after a failure**). Telegram only gets the final outcome.
+- **One-time jobs**: pick **Once** and a date in the editor; the job runs at that minute, then turns itself off (or
+  deletes itself).
+- **Nothing to report**: a job that reports every run may answer `[SILENT]` when nothing changed: no Telegram
+  message, the run shows "Nothing to report".
+- **Pinch to zoom** on phones and tablets: images, diagrams and text in the file viewer.
+
 ## 2.0.0-alpha.127 - 2026-11-07
 
 New:
