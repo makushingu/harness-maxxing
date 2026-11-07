@@ -253,7 +253,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
   )
 }
 
-function KV({ k, children }: { k: string; children: React.ReactNode }) {
+function KV({ k, children }: { k: React.ReactNode; children: React.ReactNode }) {
   return (
     <>
       <dt className="text-muted-foreground">{k}</dt>
@@ -264,8 +264,8 @@ function KV({ k, children }: { k: string; children: React.ReactNode }) {
 
 function Details({ r, t, lang }: { r: InfraResource; t: TFn; lang: string }) {
   const d = r.details
-  const rows: [string, React.ReactNode][] = []
-  const add = (k: string, v: React.ReactNode) => v !== undefined && v !== null && v !== '' && rows.push([k, v])
+  const rows: [React.ReactNode, React.ReactNode][] = []
+  const add = (k: React.ReactNode, v: React.ReactNode) => v !== undefined && v !== null && v !== '' && rows.push([k, v])
   if (r.kind === 'site') {
     add(t('infra.d.type'), tDyn(t, `infra.siteKind.${d.kind}`, d.kind))
     add(t('infra.d.target'), (d.upstreams || []).join(', ') || d.root || d.redirect)
@@ -297,7 +297,7 @@ function Details({ r, t, lang }: { r: InfraResource; t: TFn; lang: string }) {
     add(t('infra.d.ns'), (d.name_servers || []).join(', '))
     add(t('infra.d.hostedBy'), providerName(d.hosted_by, t))
     if (d.unused_zone) add(t('infra.d.unusedZone'), <span className="text-muted-foreground">{t('infra.unusedZone', { name: providerName(d.unused_zone, t) })}</span>)
-    if (d.www_hosted_by && d.www_hosted_by !== d.hosted_by) add(`www.${r.name}`, providerName(d.www_hosted_by, t))
+    if (d.www_hosted_by && d.www_hosted_by !== d.hosted_by) add(<>www.<Sensitive>{r.name}</Sensitive></>, providerName(d.www_hosted_by, t))
     if (d.dns_error) add('DNS', <span className="text-warning">{tDyn(t, `infra.why.${d.dns_error}`, d.dns_error)}</span>)
     if (d.records?.length)
       add(
