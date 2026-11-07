@@ -46,9 +46,9 @@ function Candidate({ c }: { c: NonNullable<PcStatus['candidate']> }) {
   const answer = usePcConfirm()
   const os = c.os === 'windows' ? 'Windows' : c.os === 'darwin' ? 'Mac' : 'Linux'
   return (
-    <Callout tone="warning" title={t('pc.candidateTitle', { name: c.name })} className="mb-4 mx-unfold">
+    <Callout tone="warning" title={<span className="[overflow-wrap:anywhere]">{t('pc.candidateTitle', { name: c.name })}</span>} className="mb-4 mx-unfold">
       <p>{t('pc.candidateDesc', { os })}</p>
-      {c.ip && <p className="mt-1 text-xs text-muted-foreground">{t('pc.candidateFrom', { ip: c.ip, time: new Date(c.created * 1000).toLocaleTimeString() })}</p>}
+      {c.ip && <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{t('pc.candidateFrom', { ip: c.ip, time: new Date(c.created * 1000).toLocaleTimeString() })}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           size="sm"
@@ -189,11 +189,11 @@ function Paired({ s, onReinstall }: { s: PcStatus; onReinstall: () => void }) {
   const tone = !s.online ? 'idle' : s.browser_running ? 'ok' : 'info'
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
-      <dl className="grid gap-4 text-sm sm:grid-cols-3">
-        <div className="grid gap-1">
+      <dl className="grid grid-cols-[minmax(0,1fr)] gap-4 text-sm sm:grid-cols-3">
+        <div className="grid min-w-0 gap-1">
           <dt className="text-[13px] text-muted-foreground">{t('pc.computer')}</dt>
-          <dd className="flex items-center gap-2 font-medium">
-            <StatusDot tone={tone as 'ok'} pulse={s.browser_running} /> {dev.name}
+          <dd className="flex min-w-0 items-center gap-2 font-medium">
+            <StatusDot tone={tone as 'ok'} pulse={s.browser_running} /> <span className="min-w-0 [overflow-wrap:anywhere]">{dev.name}</span>
           </dd>
         </div>
         <div className="grid gap-1">

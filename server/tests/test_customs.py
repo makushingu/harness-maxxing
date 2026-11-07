@@ -333,3 +333,47 @@ def test_listing_the_customizations_runs_one_git_log_whatever_their_number(code,
     assert [c["files"] for c in items] == [[f"server/maxxing/extra{i}.py"] for i in range(3)]
     assert all(c["why"].startswith("line one") for c in items)
     assert calls.count("diff-tree") == 0 and calls.count("log") == 1
+
+
+def test_an_update_that_fails_before_the_code_moves_is_not_resumed_by_the_next_one(code, monkeypatch, capsys):
+    clone, work = code["clone"], code["work"]
+    _upstream_release(work, "1.1.0", extra="feature.txt")
+    real, realc = cmd_core._git, customs.git
+    monkeypatch.setattr(cmd_core, "_git", lambda *a, **k: (1, "fatal: Unable to create index.lock")
+                        if a[:1] in (("merge",), ("reset",)) else real(*a, **k))
+    monkeypatch.setattr(customs, "git", lambda *a, **k: (1, "locked") if a[:1] == ("rebase",) else realc(*a, **k))
+    assert run_cli("update", "--no-restart") == 1
+    assert not (clone / "feature.txt").exists()          # the code did not move
+    assert not (config.STATE / cmd_core.IN_PROGRESS).exists()
+    monkeypatch.setattr(cmd_core, "_git", real)
+    monkeypatch.setattr(customs, "git", realc)
+    _upstream_release(work, "1.2.0", extra="f2.txt")
+    capsys.readouterr()
+    run_cli("update", "--no-restart")
+    assert "the last update was interrupted" not in capsys.readouterr().out
+
+
+def test_a_second_update_cannot_run_during_the_first_one(code, monkeypatch, capsys):
+    from maxxing import auto_update
+    _upstream_release(code["work"], "1.1.0", extra="feature.txt")
+    inner = []
+
+    def sync():
+        if not inner:
+            inner.append(run_cli("update", "--no-restart"))
+            inner.append(auto_update._update_running())
+        return True, ""
+    monkeypatch.setattr(cmd_core, "_sync_deps", sync)
+    assert run_cli("update", "--no-restart") == 0
+    assert inner == [1, True]
+    assert "another update is running" in capsys.readouterr().out
+    assert cmd_core.update_lock() is not None          # released at the end
+
+
+@pytest.mark.parametrize("title, why", [("Raise\0 the limit", ""), ("Raise \ud800", ""), ("Raise", "x\udfff")],
+                         ids=["nul", "surrogate-title", "surrogate-why"])
+def test_a_title_or_reason_with_a_nul_or_lone_surrogate_is_a_clean_error(code, title, why):
+    (code["clone"] / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    with pytest.raises(customs.CustomError, match="plain text"):
+        customs.save(title, why)
+    assert customs.list_customs() == []

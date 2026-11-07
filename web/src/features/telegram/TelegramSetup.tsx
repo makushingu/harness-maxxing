@@ -315,12 +315,12 @@ export function TelegramErrors({ status }: { status: TelegramStatus }) {
     <div className="grid gap-2">
       {poll && (
         <Callout tone="error" className="mx-unfold" title={t('telegram.pollErrorTitle')}>
-          {status.poll_error_code === 'conflict' ? t('telegram.err.conflict') : poll}
+          <span className="[overflow-wrap:anywhere]">{status.poll_error_code === 'conflict' ? t('telegram.err.conflict') : poll}</span>
         </Callout>
       )}
       {status.sync_error && (
         <Callout tone="warning" className="mx-unfold" title={t('telegram.syncErrorTitle')}>
-          {status.sync_error}
+          <span className="[overflow-wrap:anywhere]">{status.sync_error}</span>
         </Callout>
       )}
     </div>

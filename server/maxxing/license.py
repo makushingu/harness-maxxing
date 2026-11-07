@@ -84,10 +84,12 @@ def _post(path: str, body: dict, timeout: float = 25) -> dict:
     except urllib.error.HTTPError as e:
         try:
             j = json.loads(e.read() or b"{}")
-        except ValueError:
+        except (ValueError, RecursionError):
             j = {}
         j = j if isinstance(j, dict) else {}
         raise LicenseError(j.get("message") or f"license server answered HTTP {e.code}", j.get("error") or f"http_{e.code}", j) from None
+    except RecursionError:                              # JSON nested too deep: not an answer
+        raise LicenseError("the license server sent an answer this version does not read", "bad_answer") from None
     except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
         raise LicenseError(f"cannot reach the license server ({API}): {e}", "network") from None
     if not isinstance(out, dict):
