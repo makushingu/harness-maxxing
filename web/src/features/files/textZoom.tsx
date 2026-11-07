@@ -1,16 +1,24 @@
-// Text zoom control (− 100 % +, Ctrl/⌘ + wheel or a trackpad pinch over the text) and the markdown reader that keeps
-// the reading position: same place after a zoom, a switch Preview / Edit / Split, or when the file is opened again.
+// Text zoom control (− 100 % +, Ctrl/⌘ + wheel, a trackpad or two-finger pinch over the text) and the markdown
+// reader that keeps the reading position: same place after a zoom, a switch Preview / Edit / Split, or when the file is opened again.
 import * as React from 'react'
 import { Minus, Plus, Type } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useMediaQuery } from '@/stores/media'
 import { Button, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { useTouchZoom } from '@/lib/touch-zoom'
 import { MarkdownView } from './viewers'
 import { fromHeading, getReadPos, headingAt, setReadPos, useTextZoom, type ReadPos } from './readPos'
 
-/** Ctrl/⌘ + wheel (a trackpad pinch sends the same) over `ref` zooms the text instead of the whole page. */
+/** Ctrl/⌘ + wheel (a trackpad pinch sends the same) or a two-finger pinch on a touch screen over `ref` zooms the
+ *  text instead of the whole page. One finger still scrolls natively. */
 export function useCtrlWheelZoom(ref: React.RefObject<HTMLElement | null>) {
+  const from = React.useRef(1)
+  useTouchZoom(ref, {
+    pinchStart: () => void (from.current = useTextZoom.getState().zoom),
+    // The size snaps to the steps of − / + (setZoom picks the nearest) as the fingers spread or close.
+    pinch: (scale) => useTextZoom.getState().setZoom(from.current * scale),
+  })
   React.useEffect(() => {
     const el = ref.current
     if (!el) return

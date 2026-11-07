@@ -14,7 +14,10 @@ export const useTextZoom = create<ZoomState>()(
   persist(
     (set, get) => ({
       zoom: 1,
-      setZoom: (z) => set({ zoom: nearest(z) }),
+      setZoom: (z) => {
+        const n = nearest(z)
+        if (n !== get().zoom) set({ zoom: n })
+      },
       step: (dir) => {
         const i = TEXT_ZOOMS.indexOf(nearest(get().zoom) as (typeof TEXT_ZOOMS)[number])
         set({ zoom: TEXT_ZOOMS[Math.max(0, Math.min(TEXT_ZOOMS.length - 1, i + dir))] })

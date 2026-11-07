@@ -40,7 +40,7 @@ Almost every file opens in a preview. Thumbnails (images, videos, first page of 
 **Text size and where you were.** Markdown (rendered or source), code and text files have **− 100% +** in the
 toolbar (on the Files page of a smaller window, or on a phone, the **T** button opens it): the text gets larger or
 smaller and the passage you are reading stays in place; click the percentage to go back to 100%. Ctrl/⌘ + wheel
-(or a trackpad pinch) over the text does the same. The size is kept in this browser. Each text file also remembers
+or a pinch (trackpad, or two fingers on a phone or tablet) over the text does the same. The size is kept in this browser. Each text file also remembers
 where you were: switching **Preview**, **Edit** and **Split**, or opening the file again (even after a reload),
 brings you back to the same passage.
 
@@ -70,7 +70,9 @@ pictures. The **fullscreen** button opens the file viewer (see below) on the fil
 - **Images** appear at once (thumbnail first, then a light version of large pictures); the full
   original loads quietly right after, so zooming (+, -, 0, double-click, the mouse wheel) stays
   instant. The wheel zooms by 5 % around the pointer (Shift + wheel scrolls); a zoomed image is moved by
-  dragging it (the hand).
+  dragging it (the hand). On a touch screen, pinch with two fingers to zoom around them (and move the picture
+  while pinching), drag a zoomed picture with one finger, double-tap to switch between fitted and 100 %; the page
+  itself never zooms.
 - **Videos and audio** play in the built-in player; click it, then: Space or K play/pause, ←/→ 5 s, J/L 10 s, ↑/↓
   volume, M mute, F full screen, 0-9 jump to 0-90 %, < / > slower / faster; the speed and quality buttons open
   the device's own list (the system picker on a phone, never cut off, also in full screen), speeds 0.5× to 4×;
@@ -98,7 +100,8 @@ phone).
 - **← / →**, the arrows in its bar, or a **swipe** on a phone: previous / next file **of the
   conversation**, in reading order. The next ones are preloaded.
 - A **diagram** of an answer opens here too: fitted to the window, **+ / -** or the wheel (5 % per notch) to zoom, drag to move
-  around, double-click to switch between fitted and enlarged, **Source** for its code.
+  around, double-click to switch between fitted and enlarged (on a touch screen: pinch, one finger to move, double
+  tap), **Source** for its code.
 - A **folder** opens as a grid with thumbnails; click a file to open it, then ← / → browse that folder.
   **Parent folder** goes one level up. Several files can be selected, downloaded or deleted there too (see
   [Select several files](#select-several-files)).
