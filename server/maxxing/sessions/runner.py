@@ -293,9 +293,10 @@ class Runner:
             mode = "default"
             approval = approval_args(self.sid, str(meta.get("path") or ""), agent.get("approval_timeout_s"))
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
+        hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("source") == "cron" else "") if x)
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"))
-        base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), mcp_plan.hint) if x))
+        base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))
         if not agent:                                   # a topic's agents with `subagent` on: callable from its sessions
             from maxxing import agent_format
             base += agent_format.subagents_args(meta.get("path") or "")
