@@ -7,6 +7,11 @@ The **Tasks** page shows your tasks by project, as a kanban board (To do / Doing
 calendar or a list. It is stored in a plain JSON file in your workspace, `tasks.json`, so Claude can read
 and update it too.
 
+Tasks is optional: switch it on or off in **Settings -> Features -> Tasks**. It is off on a new install and
+stays on for installs that already had it. Off hides the **Tasks** entry of the sidebar (and its shortcut) and
+the dashboard widget; nothing is deleted: `tasks.json` stays in the workspace, Claude can still read and change it
+(skill `maxxing-tasks`), and everything is back as it was when you switch it on again.
+
 ## Projects
 
 Every project of your workspace (the ones in **Sessions**) is also a task project: it appears by itself when

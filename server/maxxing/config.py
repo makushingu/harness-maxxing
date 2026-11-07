@@ -79,6 +79,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "health_feed": False,              # server health problems also in the Notifications feed (`maxxing init`: on when new)
     "agents_page": False,              # Settings -> Features: the Agents page (lasting roles of a topic, with triggers)
     "team_page": False,                # Settings -> Features: the Team page (chats between people) and its sidebar entry
+    "tasks_page": False,               # Settings -> Features: the Tasks page, its sidebar entry and dashboard widget
+                                       # (`maxxing init`: on for installs made before Tasks became optional)
     "git_page": False,                 # Settings -> Features: the Git & GitHub page and its sidebar entry
     "infra_page": False,               # Settings -> Features: the Infra page (sites, databases, buckets, domains, servers)
     "infra_refresh_min": 15,

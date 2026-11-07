@@ -5,6 +5,19 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.129 - 2026-11-07
+
+- Config `tasks_page` (default `False`, settings API, `RESTORABLE_CONFIG`). `maxxing init` writes it once when
+  absent: `True` when the install state shows an older install (`version` / `initialized` / `default_crons`, same
+  test as `health_feed`), `False` on a new one. A config without the key (code updated without `init`) reads as off.
+- Off: the built-in widget `tasks` is not `available()`; `NavItem.setting` filters the `/tasks` entry out of
+  `useNav()` (sidebar, tab bar, palette, `g t`) while it keeps its place in `NAV` (shown while settings load);
+  the onboarding Done step shows a "Features" card instead of the Tasks one; the guided-tour step `tasks` is split
+  into `tasks` (target `nav-tasks`, skipped when missing) and `crons`.
+- Untouched: `/api/tasks`, `tasks.json`, workspace project sync, search indexing of tasks, the `/tasks` route
+  (palette search hits still open it), the `maxxing-tasks` skill, the default job "Morning tasks" (created off).
+- Workspace template: tutorial lesson 3 says where to switch Tasks on (upgrade note for existing workspaces).
+
 ## 2.0.0-alpha.128 - 2026-11-07
 
 - Released from `main` ("Urgent fixes" path). Crons: catch-up of the last missed slot (24 h, not for jobs more

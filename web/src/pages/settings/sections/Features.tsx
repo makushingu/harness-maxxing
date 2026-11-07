@@ -73,6 +73,9 @@ export function FeaturesSection() {
             <SettingRow label={t('settings.usageWidget')} description={t('settings.usageWidgetDesc')} htmlFor="ft-usage">
               <Switch id="ft-usage" checked={!!s.usage_widget} onCheckedChange={(v) => save.mutate({ usage_widget: v })} />
             </SettingRow>
+            <SettingRow label={t('features.tasks')} description={t('features.tasksDesc')} htmlFor="ft-tasks">
+              <Switch id="ft-tasks" checked={!!s.tasks_page} onCheckedChange={(v) => save.mutate({ tasks_page: v })} />
+            </SettingRow>
             <SettingRow
               label={t('features.git')}
               description={

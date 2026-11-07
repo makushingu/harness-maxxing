@@ -12,6 +12,7 @@ from maxxing import config, crons, health
 @pytest.fixture
 def fakes(monkeypatch):
     """Fake sessions service + Telegram gateway (owned by other modules)."""
+    config.update_config(tasks_page=True)                  # the Tasks widget comes with the Tasks page (off when new)
     now = time.time()
     svc = types.ModuleType("maxxing.sessions.service")
     svc.list_sessions = lambda path=None, archived=None: [
@@ -35,7 +36,7 @@ def fakes(monkeypatch):
 def _show_all():
     """Every built-in visible (the default layout hides some)."""
     from maxxing import widgets
-    config.update_config(dashboard={"order": [b.id for b in widgets.BUILTINS], "hidden": []})
+    config.update_config(dashboard={"order": [b.id for b in widgets.BUILTINS], "hidden": []}, tasks_page=True)
 
 
 def _by_id(client, q=""):
@@ -362,3 +363,10 @@ def test_a_card_with_a_lone_surrogate_fails_alone(client, org, fakes):
     assert r.status_code == 200
     widgets = _by_id(client)
     assert widgets["surr"]["error"] and widgets["fine"]["card"] is not None
+
+
+def test_the_tasks_widget_follows_the_tasks_page(client, org, fakes):
+    config.update_config(tasks_page=False)
+    assert "tasks" not in _by_id(client)
+    config.update_config(tasks_page=True)
+    assert "tasks" in _by_id(client)
