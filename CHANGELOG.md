@@ -3,6 +3,28 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.126 - 2026-11-07
+
+Everything tested since 2.0.0-alpha.113 arrives for everyone. Agents and E-mail are off until you switch them on
+(Settings -> Features). The details are in the entries 2.0.0-alpha.113 to 2.0.0-alpha.122 (Settings -> Updates).
+
+New:
+- **Agents**: lasting helpers that work by themselves inside a topic (a blog writer, an order watcher, a support
+  helper), started by a schedule, a webhook, a notification, Telegram or another agent, with a daily budget. They
+  ask before risky actions (Allow / Deny on the page, in the Notifications or on Telegram), run in a sandbox, see
+  only the keys you give them, and take files you attach. **Agent groups** put 2 to 6 of them in one conversation.
+- **E-mail**: your mailboxes next to your sessions (any IMAP / SMTP provider), and a mailbox for an agent with only
+  the rights it needs; what it sends waits for your OK by default. **Infra -> E-mail** shows where each address goes.
+- **Notifications you can act on**: an agent's request, a failed run or a server problem lands there with its buttons.
+- **Telegram modes**: Simple (one chat; reply to a message to continue its session), one thread per session, or
+  threads with the web conversations. Your install keeps its current layout.
+- **Secret files** in Settings -> Keys: a keystore, a service-account JSON or a certificate, never in the backup.
+- **A clearer Infra page**, grouped by type and by place (see 2.0.0-alpha.125).
+
+Fixes:
+- **Docs**: the help index lists the Telegram modes, secret files, the Infra e-mail tab and e-mail for agents; a
+  broken link of the Telegram page.
+
 ## 2.0.0-alpha.125 - 2026-11-07
 
 New:
