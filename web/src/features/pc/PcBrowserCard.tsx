@@ -46,9 +46,9 @@ function Candidate({ c }: { c: NonNullable<PcStatus['candidate']> }) {
   const answer = usePcConfirm()
   const os = c.os === 'windows' ? 'Windows' : c.os === 'darwin' ? 'Mac' : 'Linux'
   return (
-    <Callout tone="warning" title={t('pc.candidateTitle', { name: c.name })} className="mb-4 mx-unfold">
+    <Callout tone="warning" title={<span className="[overflow-wrap:anywhere]">{t('pc.candidateTitle', { name: c.name })}</span>} className="mb-4 mx-unfold">
       <p>{t('pc.candidateDesc', { os })}</p>
-      {c.ip && <p className="mt-1 text-xs text-muted-foreground">{t('pc.candidateFrom', { ip: c.ip, time: new Date(c.created * 1000).toLocaleTimeString() })}</p>}
+      {c.ip && <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{t('pc.candidateFrom', { ip: c.ip, time: new Date(c.created * 1000).toLocaleTimeString() })}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           size="sm"
