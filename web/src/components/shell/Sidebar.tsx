@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { NavLink } from 'react-router'
-import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
+import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search, Settings } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -11,7 +11,7 @@ import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, Kbd, MOD, Tooltip } from '@/components/ui'
 import { navTourId, useNav, type NavItem } from './nav'
 import { Logo } from './Logo'
-import { HealthIndicator } from './HealthIndicator'
+import { HealthIndicator, HealthMeters } from './HealthIndicator'
 import { UsageIndicator } from './UsageIndicator'
 import { UpdateIndicator } from './UpdateIndicator'
 import { SidebarExtensions } from './SidebarExtensions'
@@ -192,7 +192,6 @@ export function Sidebar() {
     )
   }
   const main = nav.filter((n) => n.group === 'main')
-  const end = nav.filter((n) => n.group !== 'main')
   const drag = useDragOrder(
     main.map((n) => n.to),
     (order) => saveSettings.mutate({ sidebar_order: order }),
@@ -258,7 +257,7 @@ export function Sidebar() {
         </Tooltip>
       </div>
 
-      {/* The pages (drag to reorder), the extension pages, then Settings (one scroll when the window is short). */}
+      {/* The pages (drag to reorder), then the extension pages (one scroll when the window is short); Settings is an icon at the bottom. */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
           {drag.order.map((to) => {
@@ -267,7 +266,6 @@ export function Sidebar() {
           })}
         </nav>
         <SidebarExtensions collapsed={collapsed} />
-        <div className={block('border-t border-sidebar-border')}>{end.map((item) => navItem(item, nav.indexOf(item)))}</div>
       </div>
 
       <div className="flex-1" />
@@ -275,12 +273,16 @@ export function Sidebar() {
       <div className={cn('grid gap-1 border-t border-sidebar-border p-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'px-2.5')}>
         <UpdateIndicator collapsed={collapsed} />
         <HealthIndicator collapsed={collapsed} />
+        {!collapsed && <HealthMeters />}
         <UsageIndicator collapsed={collapsed} />
+        <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
+          <FeedbackButton collapsed={collapsed} />
+          <HelpMenu collapsed={collapsed} />
+        </div>
         <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
           <PresentationToggle />
           <ThemeToggle collapsed={collapsed} />
-          <FeedbackButton collapsed={collapsed} />
-          <HelpMenu collapsed={collapsed} />
+          <SettingsLink collapsed={collapsed} />
           <DonateLink />
         </div>
       </div>
@@ -311,8 +313,35 @@ function FeedbackButton({ collapsed }: { collapsed: boolean }) {
   const open = useFeedbackDialog((s) => s.setOpen)
   return (
     <Tooltip content={t('shell.feedbackHint')} side={collapsed ? 'right' : 'top'}>
-      <Button variant="ghost" size="icon-sm" className="size-8" onClick={() => open(true)} aria-label={t('shell.feedback')}>
-        <MessageSquareText />
+      {collapsed ? (
+        <Button variant="ghost" size="icon-sm" className="size-8" onClick={() => open(true)} aria-label={t('shell.feedback')}>
+          <MessageSquareText />
+        </Button>
+      ) : (
+        <Button variant="ghost" size="sm" className="h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground" onClick={() => open(true)}>
+          <MessageSquareText /> <span className="truncate">{t('shell.feedback')}</span>
+        </Button>
+      )}
+    </Tooltip>
+  )
+}
+
+/** Settings: an icon next to the eye and the theme (out of the page list), highlighted on /settings. */
+function SettingsLink({ collapsed }: { collapsed: boolean }) {
+  const t = useT()
+  const prefetchLink = usePrefetchLink()
+  return (
+    <Tooltip content={<>{t('nav.settings')} <Kbd className="border-background/20 bg-background/15 text-background">G ,</Kbd></>} side={collapsed ? 'right' : 'top'}>
+      <Button asChild variant="ghost" size="icon-sm" className="size-8">
+        <NavLink
+          to="/settings"
+          {...prefetchLink('/settings')}
+          data-tour="nav-settings"
+          aria-label={t('nav.settings')}
+          className={({ isActive }) => cn(isActive && 'bg-accent text-primary')}
+        >
+          <Settings />
+        </NavLink>
       </Button>
     </Tooltip>
   )

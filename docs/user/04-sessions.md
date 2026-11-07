@@ -41,7 +41,7 @@ stopped.
   waits for your answer. Click the **Tabs** button again: your columns come back exactly as they were. On a phone, the same
   button sits in the session's header; the chips show under the top bar, and a sideways swipe on the session
   shows the previous or next one.
-- Fold the sidebar with the button at its bottom; fold the session tree with the button at its top left
+- Fold the sidebar with the button at its top, next to the logo (`Ctrl+\`); fold the session tree with the button at its top left
   (a slim rail stays to unfold it).
 - On a phone or a tablet (the *touch layout*), one session fills the screen and the app opens on the last one.
   **☰** at the top left opens all your sessions: a search field, **New session** (in the topic of the session on

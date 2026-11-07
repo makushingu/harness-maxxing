@@ -78,9 +78,15 @@ export function HelpMenu({ collapsed }: { collapsed?: boolean }) {
     <DropdownMenu>
       <Tooltip content={collapsed ? t('help.title') : null} side="right">
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="size-8" aria-label={t('help.title')}>
-            <CircleHelp />
-          </Button>
+          {collapsed ? (
+            <Button variant="ghost" size="icon-sm" className="size-8" aria-label={t('help.title')}>
+              <CircleHelp />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" className="h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground">
+              <CircleHelp /> <span className="truncate">{t('help.title')}</span>
+            </Button>
+          )}
         </DropdownMenuTrigger>
       </Tooltip>
       <DropdownMenuContent side="top" align="start" className="w-56">

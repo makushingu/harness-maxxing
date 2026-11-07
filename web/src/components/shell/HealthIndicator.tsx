@@ -21,7 +21,7 @@ export function healthTone(h: Health | undefined): 'ok' | 'warn' | 'error' | 'id
 }
 
 /** Health summary used by the sidebar popover and the mobile menu. */
-export function HealthSummary({ compact }: { compact?: boolean }) {
+export function HealthSummary({ compact, metrics = true }: { compact?: boolean; metrics?: boolean }) {
   const t = useT()
   const { data: h, isError } = useHealth()
   const mark = useMarkHealthSeen()
@@ -66,9 +66,13 @@ export function HealthSummary({ compact }: { compact?: boolean }) {
         </ul>
       )}
       <div className={cn('grid gap-2.5 border-t pt-3', compact && 'text-[13px]')}>
-        <Metric label={t('health.cpu')} value={`${Math.round(h.cpu_pct)}%`} pct={h.cpu_pct} />
-        <Metric label={t('health.memory')} value={`${fmtBytes(memUsed)} / ${fmtBytes(h.mem.total)}`} pct={memPct} />
-        <Metric label={t('health.disk')} value={`${fmtBytes(h.disk.total - h.disk.free)} / ${fmtBytes(h.disk.total)}`} pct={h.disk.pct} />
+        {metrics && (
+          <>
+            <Metric label={t('health.cpu')} value={`${Math.round(h.cpu_pct)}%`} pct={h.cpu_pct} />
+            <Metric label={t('health.memory')} value={`${fmtBytes(memUsed)} / ${fmtBytes(h.mem.total)}`} pct={memPct} />
+            <Metric label={t('health.disk')} value={`${fmtBytes(h.disk.total - h.disk.free)} / ${fmtBytes(h.disk.total)}`} pct={h.disk.pct} />
+          </>
+        )}
         <div className="flex justify-between text-[13px] text-muted-foreground">
           <span>{t('health.uptime')}</span>
           <Sensitive length={4}>
@@ -80,8 +84,38 @@ export function HealthSummary({ compact }: { compact?: boolean }) {
   )
 }
 
+const meterTone = (pct: number) => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
+
+/** CPU, memory and disk in one line under the health status (expanded sidebar); details in the popover. */
+export function HealthMeters() {
+  const t = useT()
+  const { data: h } = useHealth()
+  if (!h) return null
+  const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
+  const rows = [
+    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct },
+    { key: 'mem', label: t('health.memory'), pct: mem },
+    { key: 'disk', label: t('health.disk'), pct: h.disk.pct },
+  ]
+  return (
+    <div className="grid grid-cols-3 gap-2.5 px-2.5 py-1.5" data-testid="sidebar-meters">
+      {rows.map((r) => (
+        <div key={r.key} className="grid min-w-0 gap-1">
+          <div className="flex justify-between gap-1 text-[11px] leading-none text-muted-foreground">
+            <span className="truncate">{r.label}</span>
+            <Sensitive length={3}>
+              <span className="tabular-nums">{Math.round(r.pct)}%</span>
+            </Sensitive>
+          </div>
+          <ProgressBar value={r.pct} tone={meterTone(r.pct)} label={r.label} className="h-1" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Metric({ label, value, pct }: { label: string; value: string; pct: number }) {
-  const tone = pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined
+  const tone = meterTone(pct)
   return (
     <div className="grid gap-1">
       <div className="flex justify-between text-[13px]">
@@ -95,6 +129,7 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
   )
 }
 
+/** The health status line; click for the message (issues, uptime; with the meters when the sidebar is folded). */
 export function HealthIndicator({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
   const { data: h } = useHealth()
@@ -118,7 +153,7 @@ export function HealthIndicator({ collapsed }: { collapsed?: boolean }) {
         </PopoverTrigger>
       </Tooltip>
       <PopoverContent side="right" align="end" className="w-80">
-        <HealthSummary />
+        <HealthSummary metrics={collapsed} />
         <Link to="/settings/system" className="mt-3 block text-[13px] font-medium text-primary hover:underline">
           {t('health.details')}
         </Link>
