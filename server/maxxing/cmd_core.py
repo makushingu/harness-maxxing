@@ -1827,9 +1827,20 @@ def cmd_update(a) -> int:
     if a.rollback:
         return _update_rollback(a)
     rc = _update_code(a)
-    if rc != 1:                                        # done, or back on the old code: nothing left to resume
+    if rc != 1 or _code_not_moved():                   # done, or back on the old code: nothing left to resume
         (config.STATE / IN_PROGRESS).unlink(missing_ok=True)
     return rc
+
+
+def _code_not_moved() -> bool:
+    """A failed update that stopped before the code moved (a merge that cannot run, an index.lock...): the next
+    update starts afresh instead of "resuming" from this stale point."""
+    try:
+        d = json.loads((config.STATE / IN_PROGRESS).read_text())
+    except (OSError, ValueError):
+        return False
+    return (isinstance(d, dict) and d.get("commit") == _rev("HEAD")
+            and (d.get("branch") or _current_branch()) == _current_branch())
 
 
 def _update_code(a) -> int:
