@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { NavLink } from 'react-router'
-import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search, Settings } from 'lucide-react'
+import { MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search, Settings } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -20,8 +20,6 @@ import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
 import { HelpMenu, PresentationToggle, ThemeToggle } from './UserMenu'
 import { useFeedbackDialog } from './feedback-store'
-import { donationUrl, useDonationShown } from '@/features/donation/Donation'
-import { useLang } from '@/i18n'
 
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
 function useSessionBadge() {
@@ -280,30 +278,12 @@ export function Sidebar() {
           <HelpMenu collapsed={collapsed} />
         </div>
         <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
+          <SettingsLink collapsed={collapsed} />
           <PresentationToggle />
           <ThemeToggle collapsed={collapsed} />
-          <SettingsLink collapsed={collapsed} />
-          <DonateLink />
         </div>
       </div>
     </aside>
-  )
-}
-
-/** Donate (features/donation): a small icon next to the eye, the theme and the account, in the accent colour; the
- *  donation page of the website in a new tab; hidden with `donation_hidden`. */
-function DonateLink() {
-  const t = useT()
-  const lang = useLang()
-  if (!useDonationShown()) return null
-  return (
-    <Tooltip content={<>{t('donation.donate')} · {t('settings.support.desc')}</>} side="right">
-      <Button asChild variant="ghost" size="icon-sm" className="size-8 text-primary hover:bg-primary/10 hover:text-primary">
-        <a href={donationUrl(lang)} target="_blank" rel="noopener" aria-label={t('donation.donate')} data-testid="sidebar-donate">
-          <HandHeart />
-        </a>
-      </Button>
-    </Tooltip>
   )
 }
 
@@ -326,21 +306,27 @@ function FeedbackButton({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-/** Settings: an icon next to the eye and the theme (out of the page list), highlighted on /settings. */
+/** Settings: a labelled button under Feedback and Help (an icon when folded), highlighted on /settings. */
 function SettingsLink({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const prefetchLink = usePrefetchLink()
   return (
     <Tooltip content={<>{t('nav.settings')} <Kbd className="border-background/20 bg-background/15 text-background">G ,</Kbd></>} side={collapsed ? 'right' : 'top'}>
-      <Button asChild variant="ghost" size="icon-sm" className="size-8">
+      <Button
+        asChild
+        variant="ghost"
+        size={collapsed ? 'icon-sm' : 'sm'}
+        className={collapsed ? 'size-8' : 'h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground'}
+      >
         <NavLink
           to="/settings"
           {...prefetchLink('/settings')}
           data-tour="nav-settings"
           aria-label={t('nav.settings')}
-          className={({ isActive }) => cn(isActive && 'bg-accent text-primary')}
+          className={({ isActive }) => cn(isActive && 'bg-accent text-foreground')}
         >
           <Settings />
+          {!collapsed && <span className="truncate">{t('nav.settings')}</span>}
         </NavLink>
       </Button>
     </Tooltip>

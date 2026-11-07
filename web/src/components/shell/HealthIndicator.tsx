@@ -86,7 +86,7 @@ export function HealthSummary({ compact, metrics = true }: { compact?: boolean; 
 
 const meterTone = (pct: number) => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
 
-/** CPU, memory and disk in one line under the health status (expanded sidebar); details in the popover. */
+/** CPU, RAM and disk as figures on one line under the health status (expanded sidebar); the bars are in Settings -> System. */
 export function HealthMeters() {
   const t = useT()
   const { data: h } = useHealth()
@@ -98,18 +98,18 @@ export function HealthMeters() {
     { key: 'disk', label: t('health.disk'), pct: h.disk.pct },
   ]
   return (
-    <div className="grid grid-cols-3 gap-2.5 px-2.5 py-1.5" data-testid="sidebar-meters">
-      {rows.map((r) => (
-        <div key={r.key} className="grid min-w-0 gap-1">
-          <div className="flex justify-between gap-1 text-[11px] leading-none text-muted-foreground">
-            <span className="truncate">{r.label}</span>
+    <div className="flex justify-between gap-2 px-2.5 py-0.5 text-[11px] text-muted-foreground" data-testid="sidebar-meters">
+      {rows.map((r) => {
+        const tone = meterTone(r.pct)
+        return (
+          <span key={r.key} className="truncate">
+            {r.label}{' '}
             <Sensitive length={3}>
-              <span className="tabular-nums">{Math.round(r.pct)}%</span>
+              <span className={cn('tabular-nums text-foreground', tone === 'error' ? 'text-destructive' : tone === 'warn' && 'text-warning')}>{Math.round(r.pct)}%</span>
             </Sensitive>
-          </div>
-          <ProgressBar value={r.pct} tone={meterTone(r.pct)} label={r.label} className="h-1" />
-        </div>
-      ))}
+          </span>
+        )
+      })}
     </div>
   )
 }
