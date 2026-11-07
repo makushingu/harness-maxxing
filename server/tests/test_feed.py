@@ -80,6 +80,8 @@ def test_webhooks_signatures_and_parsing(client, mx):
         assert "/api/hooks/" in hooks[kind]["url"] and hooks[kind]["has_secret"] == bool(secret)
     assert client.post("/api/feed/hooks", json={"name": "my-stripe", "kind": "stripe"}).status_code == 409
     assert client.post("/api/feed/hooks", json={"name": "crons", "kind": "generic"}).status_code == 409
+    for name in ("mail", "infra", "agents"):             # sources the product posts to by itself
+        assert client.post("/api/feed/hooks", json={"name": name, "kind": "generic"}).status_code == 409
     assert client.post("/api/feed/hooks", json={"name": "x", "kind": "paypal"}).status_code == 400
     path = {k: "/api/hooks/" + h["url"].rsplit("/", 1)[-1] for k, h in hooks.items()}
 
