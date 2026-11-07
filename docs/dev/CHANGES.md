@@ -5,6 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.126 - 2026-11-07
+
+- Release preparation for `main` / `stable` (beta a113-a125 go out together). `upgrade_notes(old, new)`
+  (`cmd_core.py`) keeps `old < v <= new`: an install at a123/a124 would skip the notes of a113-a122, so
+  `docs/upgrade/2.0.0a126.md` gathers their steps (global CLAUDE.md rows, help index rows, Telegram modes, sandbox,
+  `health_feed`), each checked first so a re-run changes nothing. Same reason for the CHANGELOG summary at the top:
+  "What's new" shows only the entries above the last version seen. Telegram: `gateway.mode()` picks `simple` for a
+  chat without any thread at the first start; the note offers `threads` back. Help template rows 09/11/27/32
+  updated; 09-telegram heading renamed (`#threads-one-per-open-session`: the docs site slug of "Threads = open
+  sessions" differed from GitHub's).
+
 ## 2.0.0-alpha.125 - 2026-11-07
 
 - Infra page redesign, front end only (no API change): `features/infra/places.ts` (place of a resource: `location`;
