@@ -91,6 +91,9 @@
   font: inherit; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-textarea) { height: auto; min-height: 80px; padding: 8px 12px; line-height: 1.5; resize: vertical; }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-select) { appearance: auto; }
+/* the native list does not follow the page theme: light text on its white background otherwise */
+:where(.mx-ext, [data-mx-kit]) :where(.ui-select option, .ui-select optgroup) { background: var(--popover, var(--background)); color: var(--popover-foreground, var(--foreground)); }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-select option:disabled) { color: var(--muted-foreground); }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-input::placeholder, .ui-textarea::placeholder) { color: var(--muted-foreground); }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-input:focus-visible, .ui-select:focus-visible, .ui-textarea:focus-visible) { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 25%, transparent); }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-check) { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); }
