@@ -760,13 +760,22 @@ def _safe_rel(name: str) -> str | None:
     return p.as_posix()
 
 
+def _utf8(rel: str) -> bool:
+    """A name that is not UTF-8 (never written by a backup) would break the restore half-way: skipped."""
+    try:
+        rel.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _extract(wc: Path, rev: str) -> dict[str, bytes]:
     data = git("archive", "--format=tar", rev, cwd=wc).stdout
     out: dict[str, bytes] = {}
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         for m in tf.getmembers():
             rel = _safe_rel(m.name)
-            if not m.isfile() or rel is None:
+            if not m.isfile() or rel is None or not _utf8(rel):
                 continue
             f = tf.extractfile(m)
             if f is not None:

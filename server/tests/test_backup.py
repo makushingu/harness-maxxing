@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -600,3 +601,29 @@ def test_a_lock_left_by_a_killed_git_does_not_block_the_next_runs(gh, ws):
     assert r["ok"], r
     assert not (gd / "index.lock").exists() and not (gd / "refs/heads/main.lock").exists()
     assert backup.restore()["ok"]
+
+
+def _push_extra(gh_bare: Path, tmp: Path, files: dict[bytes, bytes]) -> None:
+    """A commit pushed to the backup repository by someone else (names as raw bytes)."""
+    subprocess.run(["git", "clone", "-q", str(gh_bare), str(tmp)], check=True)
+    for name, data in files.items():
+        p = os.path.join(os.fsencode(tmp), name)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "wb") as f:
+            f.write(data)
+    git = ["git", "-C", str(tmp), "-c", "user.name=x", "-c", "user.email=x@x"]
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "extra"], check=True)
+    subprocess.run([*git, "push", "-q", "origin", "main"], check=True)
+
+
+def test_a_file_name_that_is_not_utf8_is_skipped_by_the_restore(gh, ws, mx_state):
+    bare = gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    _push_extra(bare, mx_state / "pusher", {b"weird\xff.sh": b"echo hi\n", b"memory.md": b"- pushed fact\n"})
+    _in_use()
+    r = backup.restore()
+    assert r["ok"], r
+    assert (ws / "memory.md").read_text() == "- pushed fact\n"
+    assert not any(b"weird" in os.fsencode(p.name) for p in ws.iterdir())
