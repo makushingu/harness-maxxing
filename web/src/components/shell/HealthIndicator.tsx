@@ -1,12 +1,12 @@
 import { Link } from 'react-router'
-import { AlertTriangle, Check, CheckCircle2, CircleAlert, Info, Undo2 } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, CircleAlert, Info, SlidersHorizontal, Undo2 } from 'lucide-react'
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import type { Health } from '@/lib/types'
-import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, StatusDot, Tooltip } from '@/components/ui'
-import { usePlanUsage, UsageLines } from './UsageIndicator'
+import { Button, Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, StatusDot, Tooltip } from '@/components/ui'
+import { UsageLines } from './UsageIndicator'
 import { PresentationToggle, ThemeToggle } from './UserMenu'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
@@ -26,7 +26,6 @@ export function healthTone(h: Health | undefined): 'ok' | 'warn' | 'error' | 'id
 export function HealthSummary({ compact, metrics = true }: { compact?: boolean; metrics?: boolean }) {
   const t = useT()
   const { data: h, isError } = useHealth()
-  const mark = useMarkHealthSeen()
   if (isError) return <p className="text-sm text-destructive">{t('health.unavailable')}</p>
   if (!h)
     return (
@@ -45,9 +44,33 @@ export function HealthSummary({ compact, metrics = true }: { compact?: boolean; 
         {tone === 'ok' ? <CheckCircle2 className="size-4 text-success" /> : <AlertTriangle className={cn('size-4', tone === 'error' ? 'text-destructive' : 'text-warning')} />}
         <span className="text-sm font-semibold">{tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })}</span>
       </div>
-      {h.issues.length > 0 && (
+      {h.issues.length > 0 && <IssueList issues={h.issues} />}
+      <div className={cn('grid gap-2.5 border-t pt-3', compact && 'text-[13px]')}>
+        {metrics && (
+          <>
+            <Metric label={t('health.cpu')} value={`${Math.round(h.cpu_pct)}%`} pct={h.cpu_pct} />
+            <Metric label={t('health.memory')} value={`${fmtBytes(memUsed)} / ${fmtBytes(h.mem.total)}`} pct={memPct} />
+            <Metric label={t('health.disk')} value={`${fmtBytes(h.disk.total - h.disk.free)} / ${fmtBytes(h.disk.total)}`} pct={h.disk.pct} />
+          </>
+        )}
+        <div className="flex justify-between text-[13px] text-muted-foreground">
+          <span>{t('health.uptime')}</span>
+          <Sensitive length={4}>
+            <span className="text-foreground tabular-nums">{fmtDuration(h.uptime_s)}</span>
+          </Sensitive>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** The health issues, each with its Seen toggle (the popover of the sidebar, Settings -> System). */
+function IssueList({ issues }: { issues: Health['issues'] }) {
+  const t = useT()
+  const mark = useMarkHealthSeen()
+  return (
         <ul className="grid gap-1.5">
-          {h.issues.map((i) => (
+          {issues.map((i) => (
             <li key={i.id || i.code} className={cn('group flex items-start gap-2 text-[13px]', i.seen && 'text-muted-foreground')}>
               {i.seen ? <Check className="mt-0.5 size-3.5 shrink-0" /> : i.level === 'error' ? <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : i.level === 'warn' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" /> : <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />}
               <span className="min-w-0 flex-1">{i.text}</span>
@@ -66,23 +89,6 @@ export function HealthSummary({ compact, metrics = true }: { compact?: boolean; 
             </li>
           ))}
         </ul>
-      )}
-      <div className={cn('grid gap-2.5 border-t pt-3', compact && 'text-[13px]')}>
-        {metrics && (
-          <>
-            <Metric label={t('health.cpu')} value={`${Math.round(h.cpu_pct)}%`} pct={h.cpu_pct} />
-            <Metric label={t('health.memory')} value={`${fmtBytes(memUsed)} / ${fmtBytes(h.mem.total)}`} pct={memPct} />
-            <Metric label={t('health.disk')} value={`${fmtBytes(h.disk.total - h.disk.free)} / ${fmtBytes(h.disk.total)}`} pct={h.disk.pct} />
-          </>
-        )}
-        <div className="flex justify-between text-[13px] text-muted-foreground">
-          <span>{t('health.uptime')}</span>
-          <Sensitive length={4}>
-            <span className="text-foreground tabular-nums">{fmtDuration(h.uptime_s)}</span>
-          </Sensitive>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -131,49 +137,74 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
   )
 }
 
-/** The sidebar's status footer: health, CPU / RAM / disk, Claude plan usage - one block that opens the details
- *  (issues, uptime, plan resets); the eye and the theme as two small icons beside it. Folded: the dot, the thin
- *  usage bars and the two icons, the meters move into the details. */
-export function StatusFooter({ collapsed }: { collapsed?: boolean }) {
+/** The sidebar's status footer (and the touch menu's status card): the health line (a click shows the issues, or
+ *  "nothing to report"), CPU / RAM / disk (-> Settings -> System), the Claude plan (-> Settings -> Stats), then the
+ *  eye, the theme and General settings. Folded: the dot, the thin plan bars and the three icons. */
+export function StatusFooter({ collapsed, touch }: { collapsed?: boolean; touch?: boolean }) {
   const t = useT()
   const { data: h } = useHealth()
-  const usage = usePlanUsage()
   const tone = healthTone(h)
   const label = !h ? t('health.checking') : tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })
+  const area = cn(
+    'rounded-md px-2.5 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+    touch && 'py-2.5 active:bg-accent',
+  )
   return (
-    <div className={cn('relative border-t border-sidebar-border px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'grid justify-items-center gap-1 px-2.5')}>
+    <div
+      className={cn(
+        'grid gap-1',
+        !touch && 'border-t border-sidebar-border px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]',
+        collapsed && 'justify-items-center px-2.5',
+      )}
+    >
       <Popover>
         <Tooltip content={collapsed ? label : null} side="right">
           <PopoverTrigger
-            data-tour="health"
+            data-tour={touch ? undefined : 'health'}
             aria-label={label}
-            className={cn(
-              'grid w-full gap-3 rounded-md px-2.5 py-2.5 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
-              collapsed && 'justify-items-center px-0',
-            )}
+            className={cn(area, 'flex w-full items-center gap-2.5 text-left text-sm text-muted-foreground hover:text-foreground data-[state=open]:bg-accent', touch && 'text-[15px] text-foreground', collapsed && 'size-9 justify-center px-0')}
           >
-            <span className={cn('flex min-w-0 items-center gap-2.5 text-sm text-muted-foreground', !collapsed && 'pr-16')}>
-              <span className="flex size-4 shrink-0 items-center justify-center">
-                <StatusDot tone={tone} pulse={tone === 'error'} />
-              </span>
-              {!collapsed && <span className="truncate">{label}</span>}
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              <StatusDot tone={tone} pulse={tone === 'error'} />
             </span>
-            {!collapsed && <HealthMeters />}
-            <UsageLines collapsed={collapsed} />
+            {!collapsed && <span className="truncate">{label}</span>}
           </PopoverTrigger>
         </Tooltip>
-        <PopoverContent side="right" align="end" className="w-80">
-          <HealthSummary metrics={collapsed} />
-          {usage && <div className="mt-3 border-t pt-3">{usage.details}</div>}
-          <Link to="/settings/system" className="mt-3 block text-[13px] font-medium text-primary hover:underline">
-            {t('health.details')}
-          </Link>
+        <PopoverContent side={touch ? 'top' : 'right'} align={touch ? 'center' : 'end'} className="w-72">
+          <HealthIssues />
         </PopoverContent>
       </Popover>
-      <div className={cn('flex items-center', collapsed ? 'flex-col gap-1' : 'absolute top-[17px] right-4')}>
+      {!collapsed && (
+        <Link to="/settings/system" className={area} title={t('health.details')}>
+          <HealthMeters />
+        </Link>
+      )}
+      <UsageLines collapsed={collapsed} visible={touch} className={cn(area, collapsed && 'flex size-9 items-center justify-center px-0')} />
+      <div className={cn('flex items-center gap-1 pt-1', collapsed ? 'flex-col' : 'px-1')}>
         <PresentationToggle />
         <ThemeToggle collapsed={collapsed} />
+        <Tooltip content={`${t('nav.settings')} · ${t('settings.general')}`} side={collapsed ? 'right' : 'top'}>
+          <Button asChild variant="ghost" size="icon-sm" className="size-8">
+            <Link to="/settings/general" aria-label={`${t('nav.settings')} · ${t('settings.general')}`}>
+              <SlidersHorizontal />
+            </Link>
+          </Button>
+        </Tooltip>
       </div>
     </div>
   )
+}
+
+/** What the health line opens: the issues, or "nothing to report". */
+function HealthIssues() {
+  const t = useT()
+  const { data: h } = useHealth()
+  if (!h) return <Skeleton className="h-4 w-32" />
+  if (!h.issues.length)
+    return (
+      <p className="flex items-center gap-2 text-sm">
+        <CheckCircle2 className="size-4 text-success" /> {t('health.nothing')}
+      </p>
+    )
+  return <IssueList issues={h.issues} />
 }

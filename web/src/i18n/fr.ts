@@ -448,6 +448,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.tree.archived': 'Archivées ({count})',
 
   'health.allGood': 'Tout fonctionne',
+  'health.nothing': 'Rien à signaler',
   'health.checking': 'Vérification…',
   'health.cpu': 'CPU',
   'health.details': 'Détails système',
@@ -1301,6 +1302,7 @@ export const fr: Record<keyof typeof en, string> = {
   'ext.open': 'Ouvrir la page',
   'ext.sidebar': 'Dans la barre latérale',
   'ext.hubTitle': 'Extensions',
+  'ext.allPages': 'Toutes les pages',
   'ext.foldPins': 'Masquer les pages épinglées',
   'ext.unfoldPins': 'Afficher les pages épinglées',
   'ext.hubDesc': 'Les pages ajoutées par vos extensions. Épinglez-en une pour lui donner sa propre entrée dans la barre latérale.',

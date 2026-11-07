@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { useUsage } from '@/lib/queries'
 import { useIsMobile } from '@/stores/media'
 import { fmtDate, fmtRelative } from '@/lib/format'
@@ -42,24 +43,30 @@ export function usePlanUsage(visible?: boolean) {
 const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)))
 const tone = (w: { pct: number }) => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
 
-/** One line per window in the sidebar's status footer: "Claude · Week ▁▁▁ 38 %" (folded: the thin bars only). */
-export function UsageLines({ collapsed }: { collapsed?: boolean }) {
-  const p = usePlanUsage()
+/** The plan in the sidebar's status footer: "Claude · Week   38 %" over a full-width bar, a link to Settings -> Stats
+ *  (folded: the thin bars only). */
+export function UsageLines({ collapsed, className, visible }: { collapsed?: boolean; className?: string; visible?: boolean }) {
+  const t = useT()
+  const p = usePlanUsage(visible)
   if (!p) return null
   return (
-    <>
-      {p.rows.map((r) =>
-        collapsed ? (
-          <ProgressBar key={r.key} value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 w-8" />
-        ) : (
-          <div key={r.key} className="flex items-center gap-2.5 text-xs leading-none text-muted-foreground">
-            <span className="shrink-0">Claude · {r.label}</span>
-            <ProgressBar value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1.5 flex-1" />
-            <span className="shrink-0 text-foreground tabular-nums">{used(r.w)}%</span>
-          </div>
-        ),
-      )}
-    </>
+    <Tooltip content={collapsed ? p.details : null} side="right">
+      <Link to="/settings/stats" className={cn('grid gap-2.5', className)} aria-label={p.title}>
+        {p.rows.map((r) =>
+          collapsed ? (
+            <ProgressBar key={r.key} value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 w-8" />
+          ) : (
+            <span key={r.key} className="grid gap-1.5">
+              <span className="flex justify-between text-xs leading-none text-muted-foreground">
+                <span>Claude · {r.label}</span>
+                <span className="text-foreground tabular-nums">{t('usage.used', { pct: used(r.w) })}</span>
+              </span>
+              <ProgressBar value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1.5" />
+            </span>
+          ),
+        )}
+      </Link>
+    </Tooltip>
   )
 }
 
