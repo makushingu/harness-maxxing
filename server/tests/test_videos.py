@@ -187,3 +187,34 @@ def test_a_hung_ffmpeg_is_killed_at_the_deadline(tmp_path, monkeypatch, body):
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
     assert not dest.with_suffix(".part.mp4").exists()
+
+
+def test_an_unreadable_video_is_probed_once_and_simultaneous_probes_share_one(tmp_path, monkeypatch):
+    """probe() kept only successes: ffprobe ran at every opening of a broken video, and once per simultaneous caller."""
+    import threading
+    import time
+    from maxxing import videos
+    runs = []
+    real = videos.subprocess.run
+
+    def run(cmd, *a, **k):
+        if "ffprobe" in str(cmd[0]):
+            runs.append(cmd[-1])
+            time.sleep(0.2)
+        return real(cmd, *a, **k)
+    monkeypatch.setattr(videos.subprocess, "run", run)
+    monkeypatch.setattr(videos, "_probes", {})
+    bad = tmp_path / "bad.mp4"
+    bad.write_bytes(os.urandom(3000))
+    for _ in range(5):
+        with pytest.raises(videos.VideoError):
+            videos.probe(bad)
+    assert runs == [str(bad)]
+    other = tmp_path / "other.mp4"
+    other.write_bytes(os.urandom(2000))
+    ts = [threading.Thread(target=lambda: pytest.raises(videos.VideoError, videos.probe, other)) for _ in range(8)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert runs.count(str(other)) == 1
