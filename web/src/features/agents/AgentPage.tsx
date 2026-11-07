@@ -118,7 +118,7 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
         leading={
           <div className="flex items-center gap-2">
             {back}
-            <button type="button" onClick={() => !wide && openProfile()} className={cn('relative shrink-0', wide && 'cursor-default')} aria-label={t('agents.panel.open')}>
+            <button type="button" onClick={() => !wide && openProfile()} className={cn('relative shrink-0 before:absolute before:-inset-1 before:content-[""]', wide && 'cursor-default')} aria-label={t('agents.panel.open')}>
               <AgentAvatarIcon avatar={a.avatar} size={32} />
               {running && <StatusDot tone="running" pulse label={t('agents.runningNow')} className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background sm:hidden" />}
             </button>
