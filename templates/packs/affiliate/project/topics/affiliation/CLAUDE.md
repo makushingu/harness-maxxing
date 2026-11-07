@@ -54,7 +54,7 @@ air fryer page", "how much did we earn per program last month?". Link changes go
 ## Automations
 
 - "Broken affiliate links" (Wednesday 07:00): crawls the site, lists broken, redirected and
-  out-of-stock affiliate links by page with a suggested fix. Created disabled, enable it on the
-  Crons page or ask here.
+  out-of-stock affiliate links by page with a suggested fix. Created disabled, enable it in Settings ->
+  Crons or ask here.
 - Many broken links on a money page can go to the feed with
   `maxxing feed post "Best X page: 4 dead links" --level warning --source affiliate`.

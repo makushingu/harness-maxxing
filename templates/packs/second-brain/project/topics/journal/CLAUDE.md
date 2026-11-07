@@ -52,6 +52,6 @@ Your daily notes, typed or spoken from the phone: "today: shipped the report, sl
 ## Automations
 
 - "Weekly journal review" (Sunday 18:00, this topic): summarizes the week's entries into the review file and
-  sends a short summary. Created disabled, enable it on the Crons page or ask here.
+  sends a short summary. Created disabled, enable it in Settings -> Crons or ask here.
 - Possible additions on request (`maxxing-cron` skill): an evening reminder "anything to note
   today?", a monthly look-back on the 1st.

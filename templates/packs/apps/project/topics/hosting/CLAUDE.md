@@ -52,6 +52,6 @@ Servers, domains and deploys for all apps: "deploy app-1 to app.example.com", "w
 ## Automations
 
 - "Uptime check" (every 15 minutes): checks each URL under Monitoring in `memory.md`, posts to the feed
-  only when something fails. Created disabled, enable it on the Crons page or ask here.
+  only when something fails. Created disabled, enable it in Settings -> Crons or ask here.
 - Backups and certificate renewals run on the server itself (cron/systemd timers or Caddy); a daily
   backup report job can be added with the `maxxing-cron` skill.

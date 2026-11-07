@@ -62,7 +62,7 @@ changes until it is verified - and, once linked, **Link another chat** replaces 
 
 Cron reports arrive in *Crons* (the main chat in Simple): a Claude job's answer is shown from its beginning, formatted like a normal reply
 (bold, lists, code; tables become one bullet per row), split over several messages and cut after about 12,000
-characters (the whole answer stays on the Crons page). A command job shows the end of its output, where errors
+characters (the whole answer stays in Settings -> Crons). A command job shows the end of its output, where errors
 are. Successful reports arrive silently; failures ring.
 
 ## Threads: one per open session

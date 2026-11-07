@@ -3,8 +3,9 @@ section: Using Harness Maxxing
 ---
 # Scheduled jobs (Crons)
 
-The **Crons** page runs things on a schedule: a **shell command** or a **Harness prompt** in a
-topic. Each run is recorded (status, duration, output) and can be reported on Telegram.
+**Settings -> Crons** runs things on a schedule: a **shell command** or a **Harness prompt** in a
+topic. Each run is recorded (status, duration, output) and can be reported on Telegram. (Crons used to be a
+page of the sidebar; old links to `/crons` open Settings -> Crons.)
 
 ## Creating a job
 
@@ -107,14 +108,14 @@ maxxing init --timezone Europe/Paris && systemctl restart claude-maxxing
 
 - **Memory compaction** – daily 05:00, Claude job using the `memory-compaction` skill (created at
   installation, turned on when you finish the onboarding with Claude signed in - so it never fails before
-  Claude is connected; if you skipped that step, enable it on the Crons page; you can edit, disable or delete it).
+  Claude is connected; if you skipped that step, enable it in Settings -> Crons; you can edit, disable or delete it).
 - **Memory backup** – created when you configure the [Backup](backup) (default 04:40).
 - **Check for updates** – Mondays 09:00, shell job `maxxing update --check --notify`: when a new
   version exists, a Telegram message tells you to open the topic `system/harness` (`system/update` on servers installed before 2.0.0a33) and say "update".
   It never updates by itself. On a server with neither a git remote nor a license (a local copy) it is created
   disabled (nothing to check); `maxxing update --check` then says "updates unavailable (no git remote)".
 - **Morning tasks** (disabled) – daily 08:00, Claude job in `general/inbox` (`system/tasks` before 2.0.0a33):
-  overdue and today's tasks, sent on Telegram. Enable it on the Crons page.
+  overdue and today's tasks, sent on Telegram. Enable it in Settings -> Crons.
 - **Renewal reminder** – created when you ask for subscription reminders (Mondays 09:30, in the topic that keeps
   `accounts.md`); servers installed before 2.0.0a33 have it disabled in `system/accounts`.
 - [Starter projects](starter-projects) add their own jobs, created disabled.

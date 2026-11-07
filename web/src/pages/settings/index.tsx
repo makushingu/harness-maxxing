@@ -28,6 +28,9 @@ import { StatsSection } from './sections/Stats'
 import { MemorySection } from './sections/Memory'
 import { UpdatesSection } from './sections/Updates'
 
+// The crons section is a whole page (list, history, editor): its own chunk, loaded when it opens.
+const CronsSection = React.lazy(() => import('@/pages/crons'))
+
 const COMPONENTS: Record<Exclude<SettingsSectionId, 'docs'>, React.ComponentType> = {
   general: GeneralSection,
   profile: ProfileSection,
@@ -50,6 +53,7 @@ const COMPONENTS: Record<Exclude<SettingsSectionId, 'docs'>, React.ComponentType
   trash: TrashSection,
   system: SystemSection,
   updates: UpdatesSection,
+  crons: CronsSection,
 }
 
 export default function SettingsPage() {
@@ -141,7 +145,9 @@ export default function SettingsPage() {
             <h2 className="text-xl font-semibold tracking-tight">{t(meta.label)}</h2>
             <p className="text-sm text-muted-foreground">{t(meta.description)}</p>
           </div>
-          <Cmp />
+          <React.Suspense fallback={null}>
+            <Cmp />
+          </React.Suspense>
         </div>
       </div>
     </div>

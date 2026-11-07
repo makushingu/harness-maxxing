@@ -200,7 +200,7 @@ def test_day_timeline(client, org, fakes):
     lanes = {l["name"]: l for l in tl["lanes"]}
     assert "Off" not in lanes                                         # disabled, never ran today
     h = lanes["Hourly"]
-    assert h["dense"] is False and h["color"] and h["href"] == f"/crons?job={hourly['id']}"
+    assert h["dense"] is False and h["color"] and h["href"] == f"/settings/crons?job={hourly['id']}"
     states = [e["state"] for e in h["events"]]
     assert states[0] == "ok" and set(states[1:]) <= {"planned"}
     assert all(tl["start"] <= e["at"] < tl["end"] for e in h["events"])

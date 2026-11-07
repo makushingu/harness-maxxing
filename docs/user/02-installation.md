@@ -93,7 +93,7 @@ maxxing deps clean     # old versions, leftovers, oversized logs (also every Sun
 maxxing deps check     # known vulnerabilities (osv.dev; also every Monday, with a notification)
 ```
 
-On an installation made before 2.0.0-alpha.70, the two weekly jobs are created **turned off** (Crons page: turn them
+On an installation made before 2.0.0-alpha.70, the two weekly jobs are created **turned off** (Settings -> Crons: turn them
 on if you want them), and `maxxing update` keeps a working server Python and a `uv` it did not install where they are
 (`maxxing deps update python` / `uv` moves them). Node.js is never linked into `/usr/local/bin` when the server
 already has its own `node`: Harness Maxxing uses its copy, your programs keep theirs.

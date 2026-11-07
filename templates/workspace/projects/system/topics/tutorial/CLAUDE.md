@@ -82,7 +82,7 @@ that runs by itself (shell command or Claude prompt) with a Telegram report.
    for tomorrow, high priority". Create it with the `maxxing-tasks` skill (or check the one created
    in inbox); the user sees it appear on the board without reloading. Then mark both tutorial tasks
    done at their request.
-3. **A harmless scheduled job** - the user opens **Crons** -> "New job": name "Tutorial echo",
+3. **A harmless scheduled job** - the user opens **Settings -> Crons** -> "New job": name "Tutorial echo",
    type Shell, command `echo "hello from cron"`, schedule `0 9 * * *` (look at the preview of the
    next runs), notify "always". Then "Run now" and open the run history: the output shows the echo.
    Check with `maxxing cron list`. (If they prefer, create it for them with the `maxxing-cron`
@@ -90,7 +90,7 @@ that runs by itself (shell command or Claude prompt) with a Telegram report.
    "Memory compaction".
 4. **Clean up** - the user deletes the "Tutorial echo" job (job menu -> Delete). Verify with
    `maxxing cron list` that it is gone. Tell them the "Morning tasks" job (overdue and today's
-   tasks on Telegram, in general/inbox) is ready to enable on the Crons page, and that asking in
+   tasks on Telegram, in general/inbox) is ready to enable in Settings -> Crons, and that asking in
    general/inbox "remind me of my subscription renewals" sets up a weekly renewal reminder.
 
 Wrap-up: recap in two lines, then offer lesson 4.

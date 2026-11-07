@@ -1,8 +1,9 @@
-// Crons page (/crons?job=<id>): managed jobs, run now, history, editor, external crontab lines.
+// Settings -> Crons (/settings/crons?job=<id>; /crons redirects here): managed jobs, run now, history, editor,
+// external crontab lines. Loaded lazily by the settings page.
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { ArrowUpRight, CalendarClock, Clock, Copy, History, MoreHorizontal, Pencil, Play, Plus, Trash2 } from 'lucide-react'
-import { Page, Section } from '@/components/shell/Page'
+import { Section } from '@/components/shell/Page'
 import { useLang, useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
@@ -42,7 +43,7 @@ const agentPage = (path: string) => {
   return m ? `/agents/${m[1]}/${m[2]}/${m[3]}` : null
 }
 
-export default function CronsPage() {
+export default function CronsSection() {
   const t = useT()
   const [params, setParams] = useSearchParams()
   const jobId = params.get('job')
@@ -83,17 +84,14 @@ export default function CronsPage() {
   const jobs = q.data?.jobs ?? []
   const external = q.data?.external ?? []
   return (
-    <Page
-      title={t('nav.crons')}
-      description={t('crons.description')}
-      actions={
-        <Button onClick={() => setSeed({ mode: 'new' })} aria-label={t('crons.new')}>
-          <Plus />
-          <span className="max-sm:hidden">{t('crons.new')}</span>
-        </Button>
-      }
-    >
+    <>
       <div className="grid gap-8">
+        <div className="-mt-2 flex justify-end">
+          <Button onClick={() => setSeed({ mode: 'new' })}>
+            <Plus />
+            {t('crons.new')}
+          </Button>
+        </div>
         {q.isError && !q.data ? (
           <EmptyState
             tone="error"
@@ -177,7 +175,7 @@ export default function CronsPage() {
           openJob(job.id)
         }}
       />
-    </Page>
+    </>
   )
 }
 

@@ -1,5 +1,5 @@
 // Primary navigation — single source for the sidebar, the mobile tab bar, the palette and shortcuts.
-import { Bot, Clock, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
+import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 import { useSettings } from '@/lib/queries'
 
@@ -26,7 +26,6 @@ export const NAV: NavItem[] = [
   { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's' },
   { to: '/files', label: 'nav.files', icon: FolderOpen, key: 'f' },
   { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page' },   // optional, keeps its place
-  { to: '/crons', label: 'nav.crons', icon: Clock, key: 'c' },
   { to: '/settings', label: 'nav.settings', icon: Settings, key: ',' },
 ]
 
