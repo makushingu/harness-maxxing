@@ -423,7 +423,8 @@ export function BlockView({ block }: { block: Block }) {
         </div>
       )
     case 'progress': {
-      const pct = block.max ? (block.value / block.max) * 100 : 0
+      const ratio = Number(block.max) ? (Number(block.value) / Number(block.max)) * 100 : 0
+      const pct = Number.isFinite(ratio) ? ratio : 0
       return (
         <div className="grid gap-1.5">
           <div className="flex justify-between gap-3 text-sm">
