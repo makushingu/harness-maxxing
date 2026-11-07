@@ -546,6 +546,13 @@ manifest() { # remember what the installer changed on this server (read by maxxi
 }
 our_unit_active() { systemctl is-active -q "$SERVICE" 2>/dev/null; }
 
+free_port() { # the first port from $1 that nothing listens on (fails past 65535)
+  local p=$1
+  while listeners | awk -v p="$p" '$2==p {f=1} END {exit !f}'; do
+    p=$((p + 1)); [ "$p" -le 65535 ] || return 1
+  done
+  echo "$p"
+}
 listeners() { # "addr port process" for every listening TCP socket
   command -v ss >/dev/null 2>&1 || return 0
   ss -ltnpH 2>/dev/null | awk '{
@@ -634,8 +641,8 @@ detect_server() {
 
   # port of the web server: another program already on it -> the next free one
   if [ ! -d "$INSTALL_DIR/.git" ] && ! our_unit_active; then
-    local p=$PORT
-    while listeners | awk -v p="$p" '$2==p {f=1} END {exit !f}'; do p=$((p + 1)); done
+    local p
+    p=$(free_port "$PORT") || die "no free port between $PORT and 65535: choose one with PORT="
     PORT_MOVED_FROM=""
     [ "$p" = "$PORT" ] || { PORT_MOVED_FROM=$PORT; PORT=$p; }
   fi
