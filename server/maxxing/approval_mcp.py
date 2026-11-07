@@ -250,7 +250,7 @@ def main() -> int:
             continue
         try:
             msg = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):            # RecursionError: JSON nested too deep (the loop went down)
             _send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}})
             continue
         out = handle(msg)
