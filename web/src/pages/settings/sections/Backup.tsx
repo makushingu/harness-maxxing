@@ -24,10 +24,16 @@ function ScheduleAndInclude() {
   const [schedule, setSchedule] = React.useState<string | null>(null)
   const [include, setInclude] = React.useState<string[] | null>(null)
   const [draft, setDraft] = React.useState('')
+  // After a save the form takes the server's values again: the server normalizes the patterns (./notes/** ->
+  // notes/**), and a form still showing the typed ones stayed "dirty" with Save enabled.
+  const [synced, setSynced] = React.useState(false)
   React.useEffect(() => {
-    if (b && schedule === null) setSchedule(b.schedule)
-    if (b && include === null) setInclude(b.include)
-  }, [b, schedule, include])
+    if (b && !synced) {
+      setSchedule(b.schedule)
+      setInclude(b.include)
+      setSynced(true)
+    }
+  }, [b, synced])
   const ds = useDebounced(schedule || '')
   const preview = useCronPreview(ds)
   if (!b || schedule === null || include === null) return <Skeleton className="h-60" />
@@ -42,7 +48,12 @@ function ScheduleAndInclude() {
       className="grid gap-6"
       onSubmit={(e) => {
         e.preventDefault()
-        save.mutate({ schedule, include }, { onSuccess: () => toast.success(t('common.saved')) })
+        save.mutate({ schedule, include }, {
+          onSuccess: () => {
+            setSynced(false)
+            toast.success(t('common.saved'))
+          },
+        })
       }}
     >
       <FormField
