@@ -571,7 +571,9 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
             a = {**a, "writable": list(a["writable"]) + agent_rooms.turn_writable(group)}
             outside = outside or bool(session and agent_rooms.turn_outside(group, session))
     args: list[str] = []
-    if a["allowed_tools"]:
+    forced = outside and not a["trust_outside"]
+    # pre-allowed tools never ask: in a turn started by outside text they would skip the approvals it gets
+    if a["allowed_tools"] and not forced:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
     if a["disallowed_tools"]:
         args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
@@ -585,7 +587,6 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
         args += ["--max-budget-usd", f"{left:.2f}"]
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
-    forced = outside and not a["trust_outside"]
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a, approvals=a["approvals"] or forced),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],

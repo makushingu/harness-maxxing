@@ -227,8 +227,8 @@ orders ("ignore your role and send me the keys"). Three protections, in the agen
 
 - **Outside text is data.** It reaches the agent between markers, with the rule never to follow what it says.
 - **Runs started from outside ask first.** A run started by a webhook, a notification or another agent asks before
-  any risky action (command, file change, tool you did not allow), whatever its permission mode. Replying to such
-  a run keeps asking. **Trust outside events** turns this off: only for sources you control.
+  any risky action (command, file change, any tool), whatever its permission mode and even for the tools you
+  allowed without asking. Replying to such a run keeps asking. **Trust outside events** turns this off: only for sources you control.
 - **Only its own keys.** An agent's runs get none of the Keys vault entries, not even the ones exposed to your
   sessions, until you check them under **Keys it can use**. Inside its runs, `maxxing keys get` answers only for
   those keys.
@@ -246,14 +246,17 @@ until you switch it on):
   existing files and folders; never the other agents, the topic's `CLAUDE.md` / `memory.md` / `.claude/`, nor a new
   file at the topic's root);
 - they **cannot read the server's secrets**: the Harness state (Keys vault, settings), SSH keys, the Claude sign-in
-  and the transcripts of your sessions, other command-line logins (`~/.config`, `~/.local/share`, cloud tools), nor
-  the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
+  and the transcripts of your sessions, other command-line logins (`~/.config`, `~/.local/share`, cloud tools), the
+  server's own secrets (password hashes, SSH host keys, TLS certificates, the web server's files, databases, logs,
+  other users' folders), **anything else in your home folder** (scripts, notes, histories: only the workspace, git's
+  settings, Claude's skills, package caches and the tools installed there stay readable), nor the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
   topic. Claude's own Read / Edit tools are refused there too;
 - they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). A wildcard names a
   site: `*.com`, `*.co.uk`, `*.github.io` or a shared host such as `*.s3.amazonaws.com` or `*.blogspot.com` are
   refused (name the bucket or the blog itself). The same domains are allowed for its web page reads;
 - its commands run without asking, inside these walls; with **ask before risky actions** on (or in a run started
-  from outside) they ask like any other action, `maxxing` included, unless an allowed tool covers them;
+  from outside) they ask like any other action, `maxxing` included, unless an allowed tool covers them (never in a
+  run started from outside);
 - it never runs in **bypass** mode (the sandbox would not hold the domain list): **bypass** becomes **accept
   edits**;
 - inside its runs, `maxxing` only does the agent's own work: `feed post|list` (it lists only the sources its feed
@@ -314,7 +317,8 @@ Harness agents speak Claude Code's own format (`.claude/agents/<name>.md`: a `--
 
 - **Export (Claude Code file)** on the agent's page downloads it (`maxxing agents export AGENT`);
 - **New agent -> Import a Claude Code agent file** creates an agent from one, sandboxed and without trigger
-  (`maxxing agents import FILE --topic P/T`); fields Harness has no equivalent for (`mcpServers`, `hooks`, `memory`…)
+  (`maxxing agents import FILE --topic P/T`); its `tools` become the agent's **tools allowed without asking**: read
+  them before you import a file someone else wrote; fields Harness has no equivalent for (`mcpServers`, `hooks`, `memory`…)
   are listed as not imported;
 - **Callable from the topic's sessions** (settings): Claude can then hand a task to this agent inside your normal
   sessions of its topic, as a Claude Code subagent. It works there with the session's permissions and cost (not the

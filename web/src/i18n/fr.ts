@@ -3364,6 +3364,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.import.nameHint': 'Vide : le nom du fichier.',
   'agents.import.go': 'Importer',
   'agents.import.badFile': 'Ce fichier ne peut pas être lu : {why}',
+  'agents.import.allowed': 'Ces outils s\'exécutent sans demander (les `tools` du fichier) : {tools}. Les tours lancés de l\'extérieur demandent quand même. Le fichier vient de quelqu\'un d\'autre ? Retirez-les dans les réglages de l\'agent.',
   'agents.import.ignored': 'Non importé (pas d\'équivalent ici) : {fields}',
   // agent groups (Agents page)
   'groups.new': 'Nouveau groupe',

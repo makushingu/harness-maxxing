@@ -651,7 +651,7 @@ function ImportAgentFile({ topicPath, onBack, onOpen }: { topicPath?: string; on
       {
         onSuccess: (a) => {
           toast.success(t('agents.create.done', { name: a.display_name }))
-          if (a.ignored?.length) setDone(a)
+          if (a.ignored?.length || a.allowed_tools?.length) setDone(a)
           else onOpen(a)
         },
       },
@@ -659,7 +659,12 @@ function ImportAgentFile({ topicPath, onBack, onOpen }: { topicPath?: string; on
   if (done)
     return (
       <div className="grid gap-4" data-testid="agent-import-done">
-        <Callout tone="info">{t('agents.import.ignored', { fields: done.ignored.join(', ') })}</Callout>
+        {done.allowed_tools?.length ? (
+          <Callout tone="warning">{t('agents.import.allowed', { tools: done.allowed_tools.join(', ') })}</Callout>
+        ) : null}
+        {done.ignored?.length ? (
+          <Callout tone="info">{t('agents.import.ignored', { fields: done.ignored.join(', ') })}</Callout>
+        ) : null}
         <div>
           <Button onClick={() => onOpen(done)}>
             {t('agents.create.openAgent')} <ArrowRight />
