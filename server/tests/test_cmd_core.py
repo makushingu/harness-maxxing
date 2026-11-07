@@ -330,6 +330,14 @@ def test_uninstall_with_a_caddyfile_not_in_utf8(env):
     assert (env["tmp"] / "crontab").read_text() == ""
 
 
+def test_uninstall_without_the_end_marker_keeps_the_user_cron_lines(env):
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    (env["tmp"] / "crontab").write_text(
+        "# >>> claude-maxxing (managed) >>>\n0 5 * * * maxxing cron run c_abc123\n0 1 * * * /usr/bin/backup-mine\n")
+    assert run_cli("uninstall", "--yes") == 0
+    assert (env["tmp"] / "crontab").read_text() == "0 1 * * * /usr/bin/backup-mine\n"
+
+
 def test_uninstall_purge(env, tmp_path, monkeypatch):
     run_cli("init", "--workspace", str(env["ws"]), "--quiet")
     code = tmp_path / "opt" / "claude-maxxing"

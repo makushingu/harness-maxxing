@@ -2368,10 +2368,11 @@ def remove_crontab_block() -> str:
     if not text:
         return "no crontab"
     keep, inside, removed = [], False, 0
+    closed = any(ln.strip() == end for ln in text.splitlines())   # no end marker: the user's lines after begin stay
     for ln in text.splitlines():
         s = ln.strip()
         if s == begin:
-            inside, removed = True, removed + 1
+            inside, removed = closed, removed + 1
         elif inside:
             removed += 1
             inside = s != end
