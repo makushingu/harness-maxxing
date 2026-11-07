@@ -34,6 +34,7 @@ SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,39}$")
 # Built-in sources: they already report in their own Telegram thread (Crons; Alerts: gateway.alert / system_alert).
 BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins"}
 OWN_THREAD = {"crons", "system", "security"}
+MAX_RULES = 200  # per-source Telegram rules kept in config.json (read everywhere)
 
 _lock = threading.Lock()
 _aside_lock = config.ProcessLock("feed-aside")   # setting an unreadable feed.db aside
@@ -362,6 +363,8 @@ def save_settings(telegram: bool | None = None, rules: dict | None = None, hooks
                     raise FeedError(400, "bad_rule", f"Rule: {', '.join(RULES)}")
                 if v != "auto":
                     clean[clean_source(k)] = v
+            if len(clean) > MAX_RULES:
+                raise FeedError(400, "too_many_rules", f"At most {MAX_RULES} source rules")
             f["rules"] = clean
         if hooks is not None:
             f["hooks"] = hooks
