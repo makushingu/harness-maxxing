@@ -136,7 +136,7 @@ function FolderPane({ acc, all, accounts, folders, loading, error, current, onPi
                       type="button"
                       onClick={() => onPick(f.name)}
                       className={cn(
-                        'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors',
+                        'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
                         active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
                       )}
                       style={{ paddingLeft: 8 + depth(f) * 12 }}
