@@ -52,9 +52,9 @@ export function UsageLines({ collapsed }: { collapsed?: boolean }) {
         collapsed ? (
           <ProgressBar key={r.key} value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 w-8" />
         ) : (
-          <div key={r.key} className="flex items-center gap-2 text-[11px] leading-none text-muted-foreground">
+          <div key={r.key} className="flex items-center gap-2.5 text-xs leading-none text-muted-foreground">
             <span className="shrink-0">Claude · {r.label}</span>
-            <ProgressBar value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 flex-1" />
+            <ProgressBar value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1.5 flex-1" />
             <span className="shrink-0 text-foreground tabular-nums">{used(r.w)}%</span>
           </div>
         ),

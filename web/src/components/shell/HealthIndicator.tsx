@@ -100,7 +100,7 @@ function HealthMeters() {
     { key: 'disk', label: t('health.disk'), pct: h.disk.pct },
   ]
   return (
-    <div className="flex justify-between gap-2 text-[11px] leading-none text-muted-foreground" data-testid="sidebar-meters">
+    <div className="flex justify-between gap-2 text-xs leading-none text-muted-foreground" data-testid="sidebar-meters">
       {rows.map((r) => {
         const tone = meterTone(r.pct)
         return (
@@ -141,18 +141,18 @@ export function StatusFooter({ collapsed }: { collapsed?: boolean }) {
   const tone = healthTone(h)
   const label = !h ? t('health.checking') : tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })
   return (
-    <div className={cn('relative border-t border-sidebar-border px-3 pt-2 pb-[calc(0.5rem+var(--safe-bottom))]', collapsed && 'grid justify-items-center gap-1 px-2.5')}>
+    <div className={cn('relative border-t border-sidebar-border px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'grid justify-items-center gap-1 px-2.5')}>
       <Popover>
         <Tooltip content={collapsed ? label : null} side="right">
           <PopoverTrigger
             data-tour="health"
             aria-label={label}
             className={cn(
-              'grid w-full gap-2 rounded-md px-2.5 py-2 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
+              'grid w-full gap-3 rounded-md px-2.5 py-2.5 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
               collapsed && 'justify-items-center px-0',
             )}
           >
-            <span className={cn('flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground', !collapsed && 'pr-16')}>
+            <span className={cn('flex min-w-0 items-center gap-2.5 text-sm text-muted-foreground', !collapsed && 'pr-16')}>
               <span className="flex size-4 shrink-0 items-center justify-center">
                 <StatusDot tone={tone} pulse={tone === 'error'} />
               </span>
@@ -170,7 +170,7 @@ export function StatusFooter({ collapsed }: { collapsed?: boolean }) {
           </Link>
         </PopoverContent>
       </Popover>
-      <div className={cn('flex items-center', collapsed ? 'flex-col gap-1' : 'absolute top-2.5 right-4')}>
+      <div className={cn('flex items-center', collapsed ? 'flex-col gap-1' : 'absolute top-[17px] right-4')}>
         <PresentationToggle />
         <ThemeToggle collapsed={collapsed} />
       </div>
