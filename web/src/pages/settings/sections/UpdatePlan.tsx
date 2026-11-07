@@ -18,7 +18,7 @@ function Row({ tone, children, detail }: { tone: 'ok' | 'warn' | 'error' | 'info
   return (
     <li className="flex items-start gap-2 text-[13px]">
       <Icon className={cn('mt-0.5 size-3.5 shrink-0', tone === 'ok' ? 'text-success' : tone === 'warn' ? 'text-warning' : tone === 'error' ? 'text-destructive' : 'text-muted-foreground')} />
-      <span className="min-w-0">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         {children}
         {detail && <span className="block truncate font-mono text-[11px] text-muted-foreground">{detail}</span>}
       </span>
