@@ -217,3 +217,15 @@ def test_a_failed_protection_stops_the_install(tmp_path):
         assert "rc=0" in r.stdout and "NOT protected: fail2ban" in r.stdout and "already in use" in r.stdout
     r = sh(stubs + base + 'ALLOW_UNPROTECTED=1; secure_server; echo "rc=$?"')
     assert "rc=0" in r.stdout and "continuing without it" in r.stdout
+
+
+def test_a_proxy_in_docker_is_named_for_what_it_is():
+    # docker-proxy is only Docker's port forwarder: the messages name the proxy behind it (#42)
+    r = sh('WEB_BUSY=docker-proxy; web_busy_name; echo; web_busy_docker && echo docker; '
+           'WEB_BUSY=nginx; web_busy_name; echo; web_busy_docker || echo plain')
+    assert r.stdout.split("\n")[:4] == ["a proxy in Docker (Traefik of Dokploy, Coolify...)", "docker", "nginx", "plain"]
+
+
+def test_security_updates_left_off_say_how_to_turn_them_on():
+    src = INSTALL.read_text()
+    assert "to turn them on: dpkg-reconfigure -plow unattended-upgrades" in src

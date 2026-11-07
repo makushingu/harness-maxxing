@@ -679,7 +679,10 @@ preflight() {
     0:*)     warn "firewall: not enabled, it could cut these services off (to force it: FIREWALL=1 install.sh --secure)" ;;
   esac
   [ "$HAS_DOCKER" = 1 ] && info "Docker found: its published ports bypass ufw - the firewall is left alone"
-  if [ -n "$WEB_BUSY" ]; then
+  if [ -n "$WEB_BUSY" ] && web_busy_docker; then
+    warn "$(web_busy_name) holds ports 80/443: Caddy is not installed; with a domain, maxxing proxy on"
+    warn "gives it a private address and a ready-made Traefik block (or pick tailscale / local)"
+  elif [ -n "$WEB_BUSY" ]; then
     warn "$WEB_BUSY already serves ports 80/443: Caddy is not installed; with a domain you get a ready-made"
     warn "reverse-proxy block to paste into $WEB_BUSY (or pick tailscale / local)"
   fi
@@ -767,7 +770,7 @@ choose_access() {
     if has_tty; then
       echo "      How will you reach the web UI?"
       if [ -n "$WEB_BUSY" ]; then
-        printf '        %s1%s  %sdomain%s     https://ui.example.com - through your %s (block to paste)\n' "$C_A$C_B" "$C_0" "$C_B" "$C_0" "$WEB_BUSY"
+        printf '        %s1%s  %sdomain%s     https://ui.example.com - through your %s (block to paste)\n' "$C_A$C_B" "$C_0" "$C_B" "$C_0" "$(web_busy_name)"
       else
         printf '        %s1%s  %sdomain%s     https://ui.example.com - automatic HTTPS %s(recommended)%s\n' "$C_A$C_B" "$C_0" "$C_B" "$C_0" "$C_G" "$C_0"
       fi
@@ -1267,7 +1270,7 @@ secure_server() {
            > /etc/apt/apt.conf.d/20auto-upgrades)
     systemctl enable --now unattended-upgrades >/dev/null 2>&1 || true
     if auto_upgrades_on; then done+=("security updates")
-    else failed+=("automatic security updates (unattended-upgrades is not enabled - see /etc/apt/apt.conf.d/20auto-upgrades)"); fi
+    else failed+=("automatic security updates (left off by /etc/apt/apt.conf.d/20auto-upgrades - to turn them on: dpkg-reconfigure -plow unattended-upgrades)"); fi
   else
     failed+=("automatic security updates (unattended-upgrades could not be installed)")
   fi
@@ -1660,6 +1663,10 @@ dns_check() {
   fi
 }
 
+# web_busy_docker / web_busy_name - docker-proxy is only Docker's port forwarder: name the proxy behind it
+web_busy_docker() { case "$WEB_BUSY" in docker-proxy*|dockerd*) return 0 ;; *) return 1 ;; esac; }
+web_busy_name() { if web_busy_docker; then printf 'a proxy in Docker (Traefik of Dokploy, Coolify...)'; else printf '%s' "$WEB_BUSY"; fi; }
+
 # proxy_snippet - another web server (nginx, apache...) already owns 80/443: leave it alone and give
 # the block to add to it (saved in <state>/reverse-proxy.conf).
 proxy_snippet() {
@@ -1733,7 +1740,7 @@ OTHER
 OTHER
     ;;
   esac
-  ok "$WEB_BUSY keeps ports 80/443 - add the block saved in $f to it"
+  ok "$(web_busy_name) keeps ports 80/443 - add the block saved in $f to it"
   info "then https://$DOMAIN opens Harness Maxxing (Caddy was not installed)"
 }
 
