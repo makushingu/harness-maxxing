@@ -803,6 +803,16 @@ def read_back(sid: str, end: int | None = None, limit: int = 200) -> dict:
                     count += sum(e["type"] != "task" for e in evs)   # frequent progress lines: not thread rows
                     if count >= limit:
                         break
+        if start == end and pos > 0:                   # one line longer than BACK_SCAN_MAX: skip it, else every
+            while pos > 0:                             # ?before= stopped there and nothing before it was ever read
+                n = min(BACK_CHUNK, pos)
+                pos -= n
+                f.seek(pos)
+                i = f.read(n).rfind(b"\n")
+                if i >= 0:
+                    pos += i + 1
+                    break
+            start = pos
         events = [e for g in reversed(groups) for e in g]
         _add_task_starts(f, start, events)
     return {"events": events, "start": start, "next": end, "more_before": start > 0}

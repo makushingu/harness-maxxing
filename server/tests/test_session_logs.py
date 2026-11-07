@@ -475,3 +475,19 @@ def test_pages_of_a_long_agent_do_not_rescan_the_log_for_its_start(client, topic
     assert tasks == {"far": None, "near": "near agent"} and first > 1024 * 1024
     tasks, again = page()
     assert tasks == {"far": None, "near": "near agent"} and again <= 2 * service.BACK_CHUNK < first, (again, first)
+
+
+def test_a_line_longer_than_the_scan_does_not_stop_the_history(client, topic, monkeypatch):
+    """A line over BACK_SCAN_MAX: ?before= answered the same empty page forever, the history before it unreachable."""
+    monkeypatch.setattr(service, "BACK_SCAN_MAX", 1024 * 1024)
+    sid = _session_with_log(topic, _turn_lines(0) + _turn_lines(1, result_size=3 * 1024 * 1024) + _turn_lines(2))
+    r = client.get(f"/api/sessions/{sid}/events", params={"tail": 1, "limit": 3}).json()
+    seen, start = [e.get("text") for e in r["events"] if e["type"] == "user"], r["start"]
+    for _ in range(6):
+        if not start:
+            break
+        p = client.get(f"/api/sessions/{sid}/events", params={"before": start, "limit": 3}).json()
+        assert p["start"] < start
+        seen += [e.get("text") for e in p["events"] if e["type"] == "user"]
+        start = p["start"]
+    assert start == 0 and "message 0" in seen
