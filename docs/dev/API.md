@@ -512,7 +512,7 @@ folded repeats). Kept 30 days in `<state>/feed.db`.
 | POST | `/api/feed` | `{title, body?, level?, source?, url?, dedupe?, group?}` | `{event, duplicate}` (`dedupe` = idempotent per source; `group` folds into the latest unread row of that group, 24 h) · `400 empty\|bad_level\|bad_source` |
 | POST | `/api/feed/read` | `{ids?: number[], source?, all?: bool}` | `{unread}` |
 | DELETE | `/api/feed/{id}` | – | `{ok}` |
-| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged) | `{telegram, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}` |
+| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged; at most 200 non-auto rules, else `400 too_many_rules`) | `{telegram, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}` |
 | POST | `/api/feed/hooks` | `{name, kind: "stripe"\|"shopify"\|"github"\|"generic", secret?}` | `FeedHook = {id, name, kind, created, url, has_secret}` · `409 exists\|reserved`, `400 bad_kind` |
 | PATCH | `/api/feed/hooks/{id}` | `{secret?, regenerate?: bool}` | `FeedHook` (regenerate = new token, the old URL dies) |
 | DELETE | `/api/feed/hooks/{id}` | – | `{ok}` |
