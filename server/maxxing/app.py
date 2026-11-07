@@ -273,8 +273,12 @@ def _mount_spa(app: FastAPI) -> None:
     async def spa(path: str, request: Request):
         if path.startswith("api/"):
             raise HTTPException(404, detail={"error": "not_found", "message": path})
-        f = (dist / path).resolve()
-        if path and f.is_file() and dist.resolve() in f.parents:
+        try:
+            f = (dist / path).resolve()
+            found = f.is_file()
+        except (ValueError, OSError):  # a NUL byte or a name longer than the filesystem allows: no such file
+            found = False
+        if path and found and dist.resolve() in f.parents:
             # PWA files: the service worker, its manifest and the offline page must be revalidated on every
             # load (a stale sw.js would pin users to an old build); hashed assets never change.
             if path in _PWA_TYPES:
