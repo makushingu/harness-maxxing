@@ -610,3 +610,39 @@ def test_actions_logged_from_many_threads_at_once_are_all_kept(mx):
     [t.start() for t in ts]
     [t.join(30) for t in ts]
     assert len((pcbridge._dir() / "actions.jsonl").read_text().splitlines()) == 120
+
+
+def test_two_downloads_filling_the_agent_cache_at_once_both_succeed(mx, monkeypatch):
+    import hashlib
+    import os
+
+    import httpx
+    data = b"X" * 100_000
+    name = pcbridge.TARGETS["linux-amd64"]
+    monkeypatch.delenv("MAXXING_PC_BIN_DIR", raising=False)
+    monkeypatch.setattr(pcbridge, "_manifest", lambda: {"version": "9", "url": "http://x/{name}",
+                                                        "files": {name: hashlib.sha256(data).hexdigest()}})
+
+    class R:
+        content = data
+
+        def raise_for_status(self):
+            pass
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: R())
+    real = os.replace
+
+    def slow(a, b):
+        time.sleep(0.2)                              # both writers are between write and rename
+        return real(a, b)
+    monkeypatch.setattr(os, "replace", slow)
+    errs = []
+
+    def run():
+        try:
+            assert pcbridge.agent_file("linux-amd64").read_bytes() == data
+        except Exception as e:  # noqa: BLE001
+            errs.append(repr(e))
+    ts = [threading.Thread(target=run) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join(10) for t in ts]
+    assert not errs
