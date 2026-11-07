@@ -491,3 +491,17 @@ def test_a_line_longer_than_the_scan_does_not_stop_the_history(client, topic, mo
         seen += [e.get("text") for e in p["events"] if e["type"] == "user"]
         start = p["start"]
     assert start == 0 and "message 0" in seen
+
+
+def test_clip_line_survives_a_lone_surrogate_and_deep_nesting():
+    """A lone \\ud800 escape in a long tool result made the compaction fail to encode the clipped line; 100 000
+    nested [ made json.loads raise RecursionError: the log was never compacted."""
+    ev = {"type": "user", "message": {"content": [
+        {"type": "tool_result", "content": "\ud800" + "x" * (clip.RESULT_MAX * 2)}]}}
+    out = clip.clip_line(json.dumps(ev))
+    assert len(out) < clip.RESULT_MAX * 2
+    out.encode("utf-8")
+    deep = "[" * 100_000 + "]" * 100_000
+    assert clip.clip_line(deep) == deep
+    shallow_deep = '{"thinking_tokens": 1, "a": ' + "[" * 2000 + "]" * 2000 + "}"
+    assert len(shallow_deep) <= 4096 and clip.drop_line(shallow_deep) is False

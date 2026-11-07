@@ -434,14 +434,16 @@ def _window(d: Any) -> dict | None:
 def _epoch(v: Any) -> float | None:
     """A reset time in Unix seconds (the endpoint gives ISO 8601)."""
     if isinstance(v, (int, float)):
-        return float(v) if math.isfinite(v) else None
-    if isinstance(v, str) and v:
+        at = float(v)
+    elif isinstance(v, str) and v:
         import datetime as _dt
         try:
-            return _dt.datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
+            at = _dt.datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
         except ValueError:
             return None
-    return None
+    else:
+        return None
+    return at if math.isfinite(at) and 0 <= at <= 1e11 else None    # 1e300 makes every date shown for it throw
 
 
 def map_usage(u: dict) -> dict:
