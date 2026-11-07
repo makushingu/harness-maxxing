@@ -25,6 +25,7 @@ import secrets
 import shutil
 import socket
 import struct
+import tempfile
 import threading
 import time
 import unicodedata
@@ -465,6 +466,21 @@ def _text(v) -> str:
     return str(v).encode("utf-8", "replace").decode()
 
 
+def _replace_bytes(path: Path, data: bytes) -> None:
+    """Write through a temp file of its own, then rename: a reader never sees half a file, two writers never share
+    a temp file."""
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
+_actions_lock = threading.Lock()                       # tools run in threads: two appends at once lost lines
+
+
 def _log_action(tool: str, args: dict, ok: bool, ms: int) -> None:
     keep = {k: (_text(v)[:200] if k not in ("value", "text", "url") else
                 _page(_text(v)) if k == "url" else f"<{len(str(v))} chars>")
@@ -472,8 +488,9 @@ def _log_action(tool: str, args: dict, ok: bool, ms: int) -> None:
     line = json.dumps({"at": time.time(), "tool": tool, "args": keep, "ok": ok, "ms": ms}, ensure_ascii=False)
     p = _dir() / "actions.jsonl"
     try:
-        lines = p.read_text().splitlines()[-(MAX_ACTIONS - 1):] if p.exists() else []
-        p.write_text("\n".join(lines + [line]) + "\n")
+        with _actions_lock:
+            lines = p.read_text().splitlines()[-(MAX_ACTIONS - 1):] if p.exists() else []
+            _replace_bytes(p, ("\n".join(lines + [line]) + "\n").encode())
     except (OSError, ValueError):
         pass
 
