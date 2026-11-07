@@ -3,6 +3,22 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.127 - 2026-11-07
+
+New:
+- **Community library**: extensions, widgets and skills made by other Harness Maxxing users, on
+  [harness-maxxing.com/community](https://harness-maxxing.com/community). Install one by asking Claude; publish yours
+  with a form, or let Claude do it with an API key (Page extensions, section 5).
+
+Fixes:
+- **Agents, safer sandbox**: an agent no longer sees the rest of your home folder nor the server's own secrets
+  (SSH host keys, certificates, web server, databases, logs). Runs started from outside (a webhook, a notification,
+  another agent) ask before every tool, even the ones you allowed without asking. Importing an agent file tells you
+  which tools it would run without asking.
+- **E-mail**: an agent's long message can only be sent once you have read it in full; changing a mailbox's server
+  or user name asks for its password again.
+- **Notifications**: a webhook can no longer take the name of a source Harness posts to itself.
+
 ## 2.0.0-alpha.126 - 2026-11-07
 
 Everything tested since 2.0.0-alpha.113 arrives for everyone. Agents and E-mail are off until you switch them on
