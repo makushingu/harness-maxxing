@@ -701,8 +701,8 @@ def update_job(cid: str, fields: dict) -> dict | None:
                     new.pop("done_at", None)
                     new.pop("missed", None)
                 jobs[i] = new
-                if not j["enabled"]:
-                    _drop_retry(cid)                   # switched off: its waiting retry is cancelled
+                if j["enabled"] != bool(cur.get("enabled", True)):
+                    _drop_retry(cid)                   # switched off or back on: a waiting retry is cancelled
                 sync_crontab(jobs)
                 _save_raw(jobs)
                 break
@@ -1438,8 +1438,8 @@ def limit_reset(text: str, now: float) -> float | None:
 def retry_plan(job: dict, *, ok: bool, attempt: int, timed_out: bool, text: str, error: str = "",
                now: float | None = None) -> dict | None:
     """The retry to schedule after a run -> {at, attempt (of the retry), reason} or None (final outcome)."""
-    if ok or timed_out:
-        return None
+    if ok or timed_out or not job.get("enabled", True):
+        return None                                    # a job switched off (Run now on it) is never retried later
     now = time.time() if now is None else now
     if job.get("kind") == "claude":
         reason = classify_failure(text, error)
@@ -1500,6 +1500,8 @@ def _take_retry(cid: str, attempt: int, now: float) -> dict | None:
     if job is None or not job.get("enabled", True) or (is_once(job) and job.get("done_at")):
         return None
     after = entry.get("after") or 0
+    if after < now - CATCH_UP_WINDOW_S:
+        return None                                    # a failure of days ago: the job ran on since, or will
     if any((r.get("at") or 0) > after + 1 for r in _runs_of(cid)):
         return None
     return entry
@@ -1610,6 +1612,10 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
             continue
         try:
             w = waiting.get(cid)
+            if isinstance(w, dict) and not (isinstance(w.get("after"), (int, float))
+                                            and w["after"] >= now - CATCH_UP_WINDOW_S):
+                _drop_retry(cid)                       # a failure older than a day: never retried now
+                w = None
             if isinstance(w, dict) and isinstance(w.get("at"), (int, float)) and w["at"] <= now:
                 spawn_run(cid, "retry", int(w.get("attempt") or 2))
                 started.append((cid, "retry"))
