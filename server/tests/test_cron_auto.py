@@ -340,6 +340,19 @@ def cmd_cron_ns(cid):
     return argparse.Namespace(cron_cmd="run", id=cid, if_due=False, detach=True, trigger=None, attempt=1)
 
 
+def test_a_run_that_plans_no_retry_drops_a_waiting_one(org, monkeypatch):
+    j = crons.create_job({"name": "Flaky", "command": "exit 1", "retries": 3, "notify": "never"})
+    crons.run_job(j["id"])
+    assert j["id"] in crons._read_retries()
+    crons.update_job(j["id"], {"command": "true"})                    # fixed, then Run now
+    assert crons.run_job(j["id"])["ok"]
+    assert crons._read_retries() == {} and crons.get_job(j["id"])["retry_at"] is None
+    crons.update_job(j["id"], {"command": "exit 1", "retries": 0})
+    crons._save_retry(j["id"], {"at": time.time() + 300, "attempt": 2, "after": time.time() - 5, "reason": "x"})
+    assert not crons.run_job(j["id"])["ok"]                           # failed, no retry wanted: none left either
+    assert crons._read_retries() == {}
+
+
 def test_one_time_job_with_delete_after_is_archived(org, monkeypatch):
     when = dt.datetime.fromtimestamp(time.time() + 600, crons.tz()).strftime("%Y-%m-%dT%H:%M")
     j = crons.create_job({"name": "Once", "command": "true", "once_at": when, "delete_after": True, "notify": "never"})
@@ -348,6 +361,19 @@ def test_one_time_job_with_delete_after_is_archived(org, monkeypatch):
     assert crons.get_job(j["id"]) is None
     gone = crons.deleted_jobs()[0]
     assert gone["job"]["id"] == j["id"] and "one-time" in gone["reason"]
+
+
+def test_a_one_time_job_removed_after_its_run_forgets_its_session(org, monkeypatch):
+    when = dt.datetime.fromtimestamp(time.time() + 600, crons.tz()).strftime("%Y-%m-%dT%H:%M")
+    j = crons.create_job({"name": "Once", "command": "true", "once_at": when, "delete_after": True, "notify": "never"})
+    other = crons.create_job({"name": "Other", "command": "true", "notify": "never"})
+    config.write_json(crons._dir() / "sessions.json", {j["id"]: "s_1", other["id"]: "s_2"})
+    crons._save_retry(j["id"], {"at": time.time() + 3600, "attempt": 2, "after": time.time(), "reason": "x"})
+    monkeypatch.setattr(crons.time, "time", lambda: crons.once_ts(when) + 1)
+    crons._finish_once(j["id"])
+    assert crons.get_job(j["id"]) is None
+    assert config.read_json(crons._dir() / "sessions.json", {}) == {other["id"]: "s_2"}
+    assert crons._read_retries() == {}
 
 
 def test_missed_one_time_job_is_caught_up_or_given_up(org, monkeypatch):
