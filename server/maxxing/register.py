@@ -87,13 +87,14 @@ def _call(method: str, path: str, body: dict) -> dict:
     """The cloud's JSON answer, error answers included ({"ok": false, "error": ...}); raises only when offline."""
     req = urllib.request.Request(license.API + path, data=json.dumps(body).encode(), method=method,
                                  headers={"content-type": "application/json", "user-agent": license.USER_AGENT})
+    deadline = time.monotonic() + license.ANSWER_DEADLINE
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
-            raw = license.read_answer(r)
+            raw = license.read_answer(r, deadline)
             out = json.loads(raw or b"{}") if raw is not None else None
     except urllib.error.HTTPError as e:
         try:
-            raw = license.read_answer(e)
+            raw = license.read_answer(e, deadline)
             out = (json.loads(raw or b"{}") if raw is not None else None) or {"ok": False, "error": f"http_{e.code}"}
         except (ValueError, RecursionError, OSError):
             out = {"ok": False, "error": f"http_{e.code}"}
