@@ -74,11 +74,11 @@ function SourceRow({ tone, title, what, children, muted }: { tone: 'ok' | 'warn'
   return (
     <li className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2.5', muted ? 'border-dashed' : 'bg-card')}>
       <StatusDot tone={tone} />
-      <div className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-[13px] font-medium">{title}</span>
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-0.5">
+        <span className="truncate text-[13px] font-medium">{title}</span>
         <span className="text-xs text-muted-foreground">{what}</span>
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2 text-xs">{children}</div>}
+      {children && <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 text-xs">{children}</div>}
     </li>
   )
 }
@@ -153,7 +153,7 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
     return (
       <SourceRow key={id} tone={s.error ? 'error' : missing.length ? 'warn' : 'ok'} title={title} what={t(`infra.src.${id}`)}>
         {s.error && (
-          <span className="max-w-80 truncate text-destructive">
+          <span className="max-w-80 min-w-0 truncate text-destructive">
             <Sensitive length={16}>{s.error}</Sensitive>
           </span>
         )}
@@ -163,16 +163,16 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
   }
   const off = PLATFORMS.filter((id) => v.sources[id] && !v.sources[id]!.connected)
   return (
-    <section className="grid gap-2" data-testid="infra-sources-panel">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-2" data-testid="infra-sources-panel">
       <div className="flex items-center gap-3">
         <h2 className="text-sm font-semibold">{t('infra.src.title')}</h2>
         <DocLink className="ml-auto" />
       </div>
-      <ul className="grid gap-2">
+      <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
         {servers.map(([name, s]) => (
           <SourceRow key={name} tone={s.ok ? 'ok' : 'error'} title={name === 'local' ? locationLabel(name, t) : <Sensitive>{locationLabel(name, t)}</Sensitive>} what={name === 'local' ? t('infra.src.local') : t('infra.src.ssh')}>
             {!s.ok && (
-              <span className="max-w-80 truncate text-destructive">
+              <span className="max-w-80 min-w-0 truncate text-destructive">
                 <Sensitive length={16}>{s.error}</Sensitive>
               </span>
             )}
@@ -192,7 +192,7 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
       {off.length > 0 && (
         <>
           <h3 className="mt-2 text-xs font-medium text-muted-foreground">{t('infra.src.more')}</h3>
-          <ul className="grid gap-2">{off.map(platform)}</ul>
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">{off.map(platform)}</ul>
         </>
       )}
       <p className="text-xs text-muted-foreground">
