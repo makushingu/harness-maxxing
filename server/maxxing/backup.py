@@ -581,12 +581,28 @@ def _out(r: subprocess.CompletedProcess) -> str:
     return r.stdout.decode(errors="replace").strip()
 
 
+def _drop_stale_locks(gd: Path) -> None:
+    """A git killed mid-run (timeout, service stop) leaves its *.lock behind and every later run would fail on it.
+    Under the backup lock no other git works in this copy: the locks are stale."""
+    try:
+        locks = [gd / n for n in ("index.lock", "HEAD.lock", "config.lock", "packed-refs.lock", "shallow.lock")]
+        locks += list((gd / "refs").rglob("*.lock"))
+    except OSError:
+        return
+    for f in locks:
+        try:
+            f.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def prepare(repo: str, tok: str) -> tuple[Path, str | None]:
-    """Working copy ready on top of origin/main -> (path, remote head sha or None)."""
+    """Working copy ready on top of origin/main -> (path, remote head sha or None). Called under `_flock()`."""
     wc = _wc()
     wc.mkdir(parents=True, exist_ok=True)
     if not (wc / ".git").is_dir():
         git("init", "-q", "-b", "main", cwd=wc)
+    _drop_stale_locks(wc / ".git")
     git("config", "user.name", AUTHOR[0], cwd=wc)
     git("config", "user.email", AUTHOR[1], cwd=wc)
     git("config", "core.hooksPath", "/dev/null", cwd=wc)
