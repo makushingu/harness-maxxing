@@ -112,7 +112,7 @@ function FolderPane({ acc, all, accounts, folders, loading, error, current, onPi
           ) : error ? (
             <p className="p-2 text-xs text-destructive">{errorMessage(error)}</p>
           ) : (
-            <ul className="grid gap-px">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-px">
               {folders.map((f) => {
                 const Icon = folderIcon(f)
                 const active = f.name === current
