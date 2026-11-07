@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import signal
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -808,6 +809,8 @@ def read_back(sid: str, end: int | None = None, limit: int = 200) -> dict:
 
 
 _START_FIELDS = ("kind", "background", "description", "agent_type")
+_task_starts: dict[tuple, dict | int] = {}   # (log path, dev, inode, task id) -> fields of its start, or lowest offset scanned in vain
+_task_starts_lock = threading.Lock()
 
 
 def _add_task_starts(f, before: int, events: list[dict]) -> None:
@@ -821,6 +824,21 @@ def _add_task_starts(f, before: int, events: list[dict]) -> None:
             if "kind" in e:
                 first[e["id"]] = {}                   # its start is in the page
     want = {tid: e for tid, e in first.items() if e}
+    # remembered per version of the log (a compaction replaces the file): every page of a long agent whose start is
+    # far or gone re-read up to TASK_START_SCAN_MAX bytes
+    st = os.fstat(f.fileno())
+    log = (str(f.name), st.st_dev, st.st_ino)
+    lowest = max(0, before - -(-TASK_START_SCAN_MAX // BACK_CHUNK) * BACK_CHUNK)   # where the scan below stops
+    with _task_starts_lock:
+        for tid in list(want):
+            known = _task_starts.get((*log, tid))
+            if isinstance(known, dict):
+                tgt = want.pop(tid)
+                for k, v in known.items():
+                    tgt.setdefault(k, v)
+            elif known is not None and known <= lowest:   # no start in the lines after `known`: none here either
+                want.pop(tid)
+    asked = dict(want)
     pos, carry = before, b""
     while want and pos > 0 and before - pos < TASK_START_SCAN_MAX:
         n = min(BACK_CHUNK, pos)
@@ -837,9 +855,16 @@ def _add_task_starts(f, before: int, events: list[dict]) -> None:
             for ev in normalize.normalize_lines([ln.decode("utf-8", "replace")]):
                 tgt = want.pop(ev["id"], None) if ev["type"] == "task" and "kind" in ev else None
                 if tgt is not None:
-                    for k in _START_FIELDS:
-                        if k in ev and k not in tgt:
-                            tgt[k] = ev[k]
+                    found = {k: ev[k] for k in _START_FIELDS if k in ev}
+                    with _task_starts_lock:
+                        _task_starts[(*log, ev["id"])] = found
+                    for k, v in found.items():
+                        tgt.setdefault(k, v)
+    with _task_starts_lock:
+        if len(_task_starts) > 4096:
+            _task_starts.clear()
+        for tid in asked.keys() & want.keys():        # no start among the lines after `pos` (its start is before
+            _task_starts[(*log, tid)] = pos              # the page: a later page has no other line to look at)
 
 
 COMPACT_FREE_MARGIN = 256 * 1024 * 1024               # free space kept beyond the copy of a log
