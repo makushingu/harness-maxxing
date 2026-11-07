@@ -2,6 +2,7 @@ import { isRouteErrorResponse, useNavigate, useRouteError } from 'react-router'
 import { FileQuestion, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useT } from '@/i18n'
 import { Button, EmptyState } from '@/components/ui'
+import { useDocumentTitle } from './Page'
 
 /** Route-level error boundary (chunk load failure after an update, render crash, 404). */
 export function RouteError() {
@@ -35,6 +36,7 @@ export function RouteError() {
 export function NotFound() {
   const t = useT()
   const navigate = useNavigate()
+  useDocumentTitle(t('error.notFound'))
   return (
     <div className="flex min-h-[70vh] flex-1 items-center justify-center p-6">
       <EmptyState icon={FileQuestion} title={t('error.notFound')} description={t('error.notFoundDesc')} action={<Button onClick={() => navigate('/')}>{t('error.home')}</Button>} />
