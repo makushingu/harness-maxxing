@@ -422,10 +422,11 @@ def _nice() -> list[str]:
     return [nice, "-n", "10"] if nice else []
 
 
-def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool:
+def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool | None:
+    """True: dest written; False: ffmpeg cannot read the file; None: no ffmpeg or it timed out (worth another try)."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
-        return False
+        return None
     scale = f"scale='min({w},iw)':-2"
     # a temp file of its own, renamed once complete: a timeout, a crash or a parallel request for the same
     # thumbnail never sees (nor keeps in the cache) a half-written WebP; .webp: _trim_thumbs sweeps crash leftovers
@@ -443,7 +444,7 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool:
             try:
                 r = subprocess.run(cmd, capture_output=True, timeout=THUMB_TIMEOUT_S)
             except (subprocess.TimeoutExpired, OSError):
-                return False
+                return None
             if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
                 os.replace(tmp, dest)
                 return True
@@ -454,18 +455,18 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool:
         tmp.unlink(missing_ok=True)
 
 
-def _pdf_thumb(src: Path, dest: Path, w: int) -> bool:
-    """First page of a PDF -> WebP (pdftoppm renders it, ffmpeg encodes it)."""
+def _pdf_thumb(src: Path, dest: Path, w: int) -> bool | None:
+    """First page of a PDF -> WebP (pdftoppm renders it, ffmpeg encodes it); False/None as _ffmpeg_thumb."""
     pdftoppm = shutil.which("pdftoppm")
     if not pdftoppm:
-        return False
+        return None
     with tempfile.TemporaryDirectory(prefix="mx-pdf-") as tmp:
         out = Path(tmp) / "page"
         try:
             r = subprocess.run([*_nice(), pdftoppm, "-f", "1", "-l", "1", "-singlefile", "-png", "-scale-to", str(w),
                                 str(src), str(out)], capture_output=True, timeout=THUMB_TIMEOUT_S)
         except (subprocess.TimeoutExpired, OSError):
-            return False
+            return None
         png = out.with_suffix(".png")
         if r.returncode != 0 or not png.exists():
             return False
@@ -499,6 +500,24 @@ def _trim_thumbs() -> None:
         total -= size
 
 
+THUMB_FAIL_TTL = 600                               # a file ffmpeg/pdftoppm could not read is not tried again before
+_thumb_failed: dict[str, float] = {}               # key of the thumbnail -> when it failed
+
+
+def _failed_recently(key: str) -> bool:
+    at = _thumb_failed.get(key)
+    return at is not None and time.time() - at < THUMB_FAIL_TTL
+
+
+def _remember_failure(key: str, ok: bool | None) -> None:
+    """A broken video ran 2 ffmpeg (a broken PDF a pdftoppm) at every display of its folder: remember the failure
+    (not a timeout nor a missing tool) for this version of the file."""
+    if ok is False:
+        if len(_thumb_failed) >= 4096:
+            _thumb_failed.clear()
+        _thumb_failed[key] = time.time()
+
+
 def _thumb(p: Path, w: int) -> tuple[Path, str]:
     if not p.is_file():
         raise _err(404, "not_found", "File not found")
@@ -510,9 +529,11 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
         dest = config.state_dir("thumbs") / f"{key}.webp"
         if dest.exists():
             return dest, "image/webp"
-        if _pdf_thumb(p, dest, w):
+        ok = None if _failed_recently(f"{key}|{st.st_size}") else _pdf_thumb(p, dest, w)
+        if ok:
             _trim_thumbs()
             return dest, "image/webp"
+        _remember_failure(f"{key}|{st.st_size}", ok)
         raise _err(415, "unsupported", "Thumbnail unavailable (pdftoppm missing or failed)")
     video = ext in VIDEO_EXT
     if not video and ext not in IMAGE_EXT and not _mime(p).startswith("image/"):
@@ -522,9 +543,11 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
     dest = config.state_dir("thumbs") / f"{key}.webp"
     if dest.exists():
         return dest, "image/webp"
-    if _ffmpeg_thumb(p, dest, w, video):
+    ok = None if _failed_recently(f"{key}|{st.st_size}") else _ffmpeg_thumb(p, dest, w, video)
+    if ok:
         _trim_thumbs()
         return dest, "image/webp"
+    _remember_failure(f"{key}|{st.st_size}", ok)
     if video:
         raise _err(415, "unsupported", "Thumbnail unavailable (ffmpeg missing or failed)")
     return p, _mime(p)                        # fallback: the original image
