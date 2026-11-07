@@ -65,7 +65,7 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 
 ## Workspace
 | GET | `/api/workspace/tree` | – | `{root, projects:[Project]}` |
-| POST | `/api/workspace/projects` | `{name, description?}` | `Project` (creates folder, CLAUDE.md, memory.md) |
+| POST | `/api/workspace/projects` | `{name, description?}` | `Project` (creates folder, CLAUDE.md, memory.md; a description that is not valid UTF-8 → `400 bad_description`, nothing created; same check on topics and PATCH) |
 | PATCH | `/api/workspace/projects/{project}` | `{name?, description?, emoji?}` | `Project` (rename moves the folder and remaps sessions; `emoji` = one emoji, `""` removes it, else `400 bad_emoji`; stored in `projects/<p>/.maxxing.json`) |
 | PUT | `/api/workspace/order` | `{names: [project]}` | `{projects}` (tree order, stored in `projects/.order.json`; unlisted projects follow A-Z) |
 | PUT | `/api/workspace/projects/{project}/order` | `{names: [topic]}` | `{topics}` (stored in `projects/<p>/.maxxing.json`) · `404` |
@@ -738,7 +738,7 @@ cause is handled; their `actions` are then `[]`. `open` is a link button (the UI
 | POST | `/api/feed` | `{title, body?, level?, source?, url?, dedupe?, group?}` | `{event, duplicate}` (`dedupe` = idempotent per source; `group` folds into the latest unread row of that group, 24 h) · `400 empty\|bad_level\|bad_source` |
 | POST | `/api/feed/read` | `{ids?: number[], source?, all?: bool}` | `{unread}` |
 | DELETE | `/api/feed/{id}` | – | `{ok}` |
-| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, health?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged) | `{telegram, health, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}`; `health` = config `health_feed` (server health problems as alerts; `maxxing init`: on for a new install, off for an older one) |
+| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, health?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged; at most 200 non-auto rules, else `400 too_many_rules`) | `{telegram, health, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}`; `health` = config `health_feed` (server health problems as alerts; `maxxing init`: on for a new install, off for an older one) |
 | POST | `/api/feed/hooks` | `{name, kind: "stripe"\|"shopify"\|"github"\|"generic", secret?}` | `FeedHook = {id, name, kind, created, url, has_secret}` · `409 exists\|reserved`, `400 bad_kind` |
 | PATCH | `/api/feed/hooks/{id}` | `{secret?, regenerate?: bool}` | `FeedHook` (regenerate = new token, the old URL dies) |
 | DELETE | `/api/feed/hooks/{id}` | – | `{ok}` |

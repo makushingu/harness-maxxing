@@ -382,3 +382,23 @@ def test_the_pending_count_is_kept_indexed_and_left_out_of_later_pages(client, m
     assert "pending" not in page and len(page["events"]) == 2      # "Load more": no count
     feed.act(ev["id"], "seen")
     assert client.get("/api/feed").json()["pending"] == 0 and calls.count("pending") == 2
+
+
+def test_a_hook_secret_that_is_not_utf8_is_refused(client):
+    h = {"content-type": "application/json"}
+    r = client.post("/api/feed/hooks", content=json.dumps({"name": "s", "kind": "generic", "secret": "a\ud800"}), headers=h)
+    assert r.status_code == 400 and r.json()["error"] == "bad_secret"
+    assert feedhooks.list_hooks() == []
+    hid = client.post("/api/feed/hooks", json={"name": "s", "kind": "generic"}).json()["id"]
+    assert client.patch(f"/api/feed/hooks/{hid}", content=json.dumps({"secret": "\ud800"}), headers=h).status_code == 400
+    assert client.patch(f"/api/feed/hooks/{hid}", json={"secret": "ok"}).json()["has_secret"] is True
+
+
+def test_the_number_of_source_rules_is_capped(client):
+    rules = {f"src{i}": "loud" for i in range(201)}
+    r = client.put("/api/feed/settings", json={"rules": rules})
+    assert r.status_code == 400 and r.json()["error"] == "too_many_rules"
+    assert feed.settings()["rules"] == {}
+    rules.pop("src0")
+    assert client.put("/api/feed/settings", json={"rules": rules}).status_code == 200
+    assert len(feed.settings()["rules"]) == 200

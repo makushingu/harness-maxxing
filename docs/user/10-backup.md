@@ -53,7 +53,8 @@ Settings -> Backup.
 
 - **Settings -> Backup -> Restore** (or `maxxing backup restore`): restores the whitelisted files
   of the latest commit (or a chosen one). Files that would be overwritten are first moved to the
-  trash (`/var/lib/claude-maxxing/trash/backup-restore-<date>/`).
+  trash (`/var/lib/claude-maxxing/trash/backup-restore-<date>/`). Files over 5 MB (never saved by a backup) are
+  skipped, and a restore stops if the files add up to more than 500 MB.
 - On a **new server** (no session started yet: the installer's restore, a move to another server) everything comes
   back as it was, jobs and extensions on. On a server **already in use**, code that runs on the server comes back
   **turned off**: scheduled jobs (shell or Claude) this server does not

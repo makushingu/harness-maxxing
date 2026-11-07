@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from maxxing import config, workspace
 
 from conftest import wait_idle
@@ -146,3 +148,17 @@ def test_a_name_or_path_ending_with_a_newline_is_refused(client, mx, topic):
     assert client.post("/api/workspace/projects/acme/topics", json={"name": "new\n"}).status_code == 400
     assert not (mx["ws"] / "projects" / "abc\n").exists()
     assert workspace._PATH_RE.match("projects/acme\n") is None  # noqa: SLF001
+
+
+def test_a_description_that_is_not_utf8_is_refused_before_anything_is_created(client, mx, topic):
+    bad = {"name": "psur", "description": "a\ud800b"}
+    r = client.post("/api/workspace/projects", content=json.dumps(bad), headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_description"
+    assert not (mx["ws"] / "projects/psur").exists()
+    assert client.post("/api/workspace/projects", json={"name": "psur"}).status_code == 200
+    r = client.post("/api/workspace/projects/acme/topics", content=json.dumps(bad),
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 400 and not (mx["ws"] / "projects/acme/topics/psur").exists()
+    r = client.patch("/api/workspace/projects/acme", content=json.dumps({"name": "acme2", "description": "\ud800"}),
+                     headers={"content-type": "application/json"})
+    assert r.status_code == 400 and (mx["ws"] / "projects/acme").is_dir()

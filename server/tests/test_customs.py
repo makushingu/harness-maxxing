@@ -319,3 +319,17 @@ def test_a_customization_merged_upstream_no_longer_blocks_the_update(code, capsy
     assert "already included upstream" in capsys.readouterr().out
     assert (clone / "feature.txt").exists() and "LIMIT = 50" in (clone / "server/maxxing/rules.py").read_text()
     assert customs.same_code_upstream() and customs.list_customs() == []
+
+
+def test_listing_the_customizations_runs_one_git_log_whatever_their_number(code, monkeypatch):
+    clone = code["clone"]
+    for i in range(3):
+        (clone / "server" / "maxxing" / f"extra{i}.py").write_text(f"X = {i}\n")
+        assert run_cli("custom", "save", f"Add extra {i}", "--why", "line one\n\nline two") == 0
+    calls = []
+    real = customs.git
+    monkeypatch.setattr(customs, "git", lambda *a, **kw: calls.append(a[0]) or real(*a, **kw))
+    items = customs.list_customs()
+    assert [c["files"] for c in items] == [[f"server/maxxing/extra{i}.py"] for i in range(3)]
+    assert all(c["why"].startswith("line one") for c in items)
+    assert calls.count("diff-tree") == 0 and calls.count("log") == 1

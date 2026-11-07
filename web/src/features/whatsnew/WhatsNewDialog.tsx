@@ -72,7 +72,7 @@ export default function WhatsNewDialog() {
           )}
         </div>
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <Link to="/settings/updates" onClick={() => onOpenChange(false)} className="text-[13px] font-medium text-primary hover:underline">
+          <Link to="/settings/updates" onClick={() => onOpenChange(false)} className="items-center text-[13px] font-medium text-primary hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-10">
             {t('updates.all')}
           </Link>
           <DonationLine text="donation.whatsnew" />
