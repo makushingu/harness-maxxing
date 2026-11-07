@@ -79,7 +79,7 @@ def normalise_language(lang: Any) -> str:
     s = str(lang or "auto").strip().lower()
     if s == "auto":
         return s
-    if len(s) in (2, 3) and s.isalpha():
+    if len(s) in (2, 3) and s.isascii() and s.isalpha():   # isalpha() alone accepts "éé"
         return s
     raise VoiceError(400, "invalid_language", "language must be 'auto' or an ISO 639-1 code such as 'en'")
 
