@@ -343,6 +343,7 @@ function Details({ r, t, lang }: { r: InfraResource; t: TFn; lang: string }) {
 }
 
 function AskClaude({ r }: { r: InfraResource }) {
+  const mask = useMask()
   const t = useT()
   const navigate = useNavigate()
   const { data: ws } = useWorkspace()
@@ -370,7 +371,7 @@ function AskClaude({ r }: { r: InfraResource }) {
       </p>
       <Textarea value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('infra.askPlaceholder')} rows={3} />
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={topic || undefined} onValueChange={setTopic} options={topics.map((tp) => ({ value: tp.path, label: tp.label }))} className="h-8 w-auto max-w-56 text-xs" aria-label={t('infra.askTopic')} />
+        <Select value={topic || undefined} onValueChange={setTopic} options={topics.map((tp) => ({ value: tp.path, label: mask(tp.label) }))} className="h-8 w-auto max-w-56 text-xs" aria-label={t('infra.askTopic')} />
         <Button size="sm" className="ml-auto" disabled={!q.trim() || !topic} loading={create.isPending} onClick={send}>
           {t('infra.askSend')}
         </Button>
