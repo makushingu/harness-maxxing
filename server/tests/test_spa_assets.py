@@ -72,3 +72,16 @@ def test_missing_asset_is_a_404_not_the_app_page(spa):
         assert r.status_code == 404, url
         assert not r.headers.get("content-type", "").startswith("text/html"), url
     assert c.get("/sessions").headers["content-type"].startswith("text/html")
+
+
+@pytest.mark.parametrize("path", ["/%00", "/a%00b", "/" + "a" * 5000], ids=["nul", "inner-nul", "long-name"])
+def test_an_impossible_file_name_gets_the_app_page(spa, path):
+    c, _ = spa
+    r = c.get(path)
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("path", ["/assets/%00", "/assets/" + "a" * 5000], ids=["nul", "long-name"])
+def test_an_impossible_asset_name_is_a_404(spa, path):
+    c, _ = spa
+    assert c.get(path).status_code == 404
