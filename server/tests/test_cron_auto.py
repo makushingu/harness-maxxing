@@ -616,3 +616,12 @@ def test_retries_need_the_tick(org, monkeypatch):
     assert r["retry_at"] and telegram == []
     assert crons.tick(r["retry_at"] + crons.RETRY_OVERDUE_S + 60) == []           # far too late: given up
     assert crons._read_retries() == {} and telegram and "not retried" in telegram[-1]
+
+
+def test_an_agent_cron_skipped_by_its_budget_is_a_clean_skipped_turn(monkeypatch):
+    from maxxing import agents
+    monkeypatch.setattr(agents, "is_agent_path", lambda p: True)
+    monkeypatch.setattr(agents, "fire", lambda *a, **k: {"started": False, "reason": "budget"})
+    t = crons._claude_turn(job(kind="claude", prompt="hi", topic_path="p/a/topics/t"))
+    assert t["ok"] is True and t["session_id"] is None and t["text"].startswith("skipped:")
+    assert crons.classify_failure(t["text"], t["error"]) is None
