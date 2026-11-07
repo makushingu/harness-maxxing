@@ -30,7 +30,7 @@ import { useTeamUI } from '@/features/team/store'
 // not before the first paint.
 const CommandPalette = React.lazy(() => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })))
 const ShortcutsDialog = React.lazy(() => import('./ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })))
-const TourHost = React.lazy(() => import('@/tour/Tour').then((m) => ({ default: m.TourHost })))
+const TourHost = React.lazy(withGroups(['tour'], () => import('@/tour/Tour').then((m) => ({ default: m.TourHost }))))
 const InstallDialog = React.lazy(() => import('@/pwa/InstallDialog').then((m) => ({ default: m.InstallDialog })))
 
 /** Mounts its children once the browser is idle (or after 2.5 s), so they never compete with the first paint. */

@@ -277,11 +277,11 @@ function AppPanel() {
                 startTour()
               }}
             >
-              <Compass /> {t('tour.take')}
+              <Compass /> {t('help.tour')}
             </button>
             {tutorial && (
               <button type="button" className={row} onClick={() => navigate(tutorial)}>
-                <GraduationCap /> {t('tour.tutorial')}
+                <GraduationCap /> {t('help.tutorial')}
               </button>
             )}
             <button type="button" className={row} onClick={() => navigate('/docs')}>
