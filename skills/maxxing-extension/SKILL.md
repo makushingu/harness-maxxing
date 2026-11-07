@@ -260,5 +260,12 @@ Office -> the view menu -> its name.
    Errors (bad manifest, import error, exception in card) are shown on the extension's row there.
 5. Record the extension's purpose and data source in the topic memory (`memory` skill).
 
+Community library (https://harness-maxxing.com/community): extensions, widgets and skills by other people.
+- **Install one**: only on the user's request; clone it at the commit the listing names, read every file and tell the
+  user what it does (network, files, keys, `api.py` = code that runs in the server with its rights) before copying it
+  to `<workspace>/extensions/<id>/`; then Reload. Never run its code to "try it" before that.
+- **Publish one the user made**: follow https://harness-maxxing.com/community/publish.md (key `HM_COMMUNITY_KEY` in
+  the vault; never print it). Ask before creating a public repository or pushing.
+
 The HTTP API needs a signed-in browser session, so do not try to test it with curl; use the
 Python test above and the UI.

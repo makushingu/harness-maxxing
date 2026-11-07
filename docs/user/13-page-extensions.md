@@ -210,24 +210,37 @@ that builds one with you.
 
 ## 5. Community extensions
 
-Extensions written by other people, kept in their own repositories and maintained by their authors.
+The [community library](https://harness-maxxing.com/community) lists extensions, widgets and skills written by other
+people, kept in their own GitHub repositories and maintained by their authors. Each listing gives a request to copy
+into a session ("Install the community extension from …"): Claude reads the code at the commit we reviewed, tells you
+what it does, then installs it.
 
-> **Not reviewed by the Harness Maxxing maintainers: install them at your own risk.** An extension's `api.py` runs
-> inside the Harness server, with the server's rights (root on a standard install): it can read your files, your
-> keys and your sessions. Read its code first, and install only what comes from someone you trust.
+> **Not made by the Harness Maxxing maintainers: install them at your own risk.** We check that a listing looks right
+> before it appears, not the code. An extension's `api.py` runs inside the Harness server, with the server's rights
+> (root on a standard install): it can read your files, your keys and your sessions. Listings with an `api.py` say
+> **Runs code on the server**. Read the code first, and install only what comes from someone you trust.
 
-To install one, copy its folder to `/root/maxxing/extensions/<id>/` (for example with `git clone`), then
+To install one by hand, copy its folder to `/root/maxxing/extensions/<id>/` (for example with `git clone`), then
 **Settings -> Extensions -> Reload**. If it ships a skill, link it once so Claude always reads the current one
 (a `git pull` of the extension updates it too):
 `ln -s /root/maxxing/extensions/<id>/skill/<name> /root/maxxing/.claude/skills/<name>`. To remove it, delete the
 folder and that link.
 
+Listed here before the library opened:
+
 | Extension | What it does | Author |
 |---|---|---|
 | [Dokploy](https://github.com/Anthony14FR/harness-maxxing-dokploy) | A Dokploy page (projects, apps, domains, deployment logs, deploy after a confirmation) and a skill so sessions deploy, read logs and add domains, asking first | [Anthony14FR](https://github.com/Anthony14FR) |
 
-To get yours listed, open an issue on GitHub with the link to its repository. Being listed is not a review, and an
-entry that no longer follows these rules is removed:
+### Publish yours
+
+Push it to a public GitHub repository, then list it on
+[harness-maxxing.com/community](https://harness-maxxing.com/community/account) (sign in with GitHub). Every listing is
+reviewed before it appears. To let Claude do it for you (repository, README, screenshots, listing), create an API key
+on that page, save it in **Settings -> Keys** as `HM_COMMUNITY_KEY`, and ask in a session: *"Publish my extension
+`<id>` to the Harness Maxxing community: follow https://harness-maxxing.com/community/publish.md"*. The full guide:
+[harness-maxxing.com/community/publish](https://harness-maxxing.com/community/publish). A listing that no longer follows
+these rules is removed:
 
 - a public repository of its own, with its licence, that you maintain;
 - `id`: lowercase letters, digits and dashes, not taken by a stock extension;
