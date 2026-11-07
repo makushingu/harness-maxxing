@@ -8,7 +8,7 @@ import type { InfraResource } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { useT } from '@/i18n'
 import {
-  Button, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, confirm,
+  Button, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, confirm, useMask, usePresentation,
 } from '@/components/ui'
 
 function PasteKey({ out }: { out: InfraConnectOut }) {
@@ -70,15 +70,17 @@ export function ServerSettings({ r }: { r: InfraResource }) {
   const remove = useInfraServerRemove()
   const [label, setLabel] = React.useState(r.name)
   React.useEffect(() => setLabel(r.name), [r.id, r.name])
-  const save = () => label.trim() && label.trim() !== r.name && rename.mutate({ name, label: label.trim() })
+  const hide = usePresentation()
+  const mask = useMask()
+  const save = () => !hide && label.trim() && label.trim() !== r.name && rename.mutate({ name, label: label.trim() })
   const disconnect = async () => {
-    if (await confirm({ title: t('infra.srv.removeTitle', { name: r.name }), description: t('infra.srv.removeDesc'), destructive: true, confirmText: t('infra.srv.remove') }))
+    if (await confirm({ title: t('infra.srv.removeTitle', { name: mask(r.name) }), description: t('infra.srv.removeDesc'), destructive: true, confirmText: t('infra.srv.remove') }))
       remove.mutate({ name })
   }
   return (
     <div className="grid gap-2 rounded-xl border p-3" data-testid="infra-server-settings">
-      <FormField label={t('infra.srv.label')} hint={t('infra.srv.labelHint', { name })}>
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === 'Enter' && save()} className="h-8 text-xs" />
+      <FormField label={t('infra.srv.label')} hint={t('infra.srv.labelHint', { name: mask(name) })}>
+        <Input value={hide ? mask(label) : label} readOnly={hide} onChange={(e) => setLabel(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === 'Enter' && save()} className="h-8 text-xs" />
       </FormField>
       <Button variant="ghost" size="sm" className="justify-self-start text-destructive" loading={remove.isPending} onClick={disconnect}>
         <Unplug /> {t('infra.srv.remove')}

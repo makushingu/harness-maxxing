@@ -26,18 +26,29 @@ The page itself never changes your sites or databases; the only thing it does on
 
 ## The page
 
-- **Overview**: a "How it works" box (with a link to this page) (close it with ×, bring it back with **How it works** at the top right), the
-  count of each kind with what is down or to check, the list **To look at**, and **What Harness reads**: each
-  source with what it gives and, when something is missing, the next step (**Add the key ...**, **Add these
-  rights** for a Cloudflare token that cannot read everything, **Connect** for a VPS not read yet).
-- **Sites, Databases, Buckets, Domains**: grouped by where they live. **Domains -> Add a domain** watches a domain
-  from any registrar. Search, filter by project, show hidden lines
-  with the eye button.
-- **Servers**: one card per server with its address, its system, memory / disk / CPU in use and how many sites,
-  databases and buckets run on it.
+A bar on the left (a row of tabs on a phone) lists **what you host** - Sites, Databases, Buckets, Domains, E-mail -
+with how many of each and what is down, then **where it runs**: Servers & services. Search, filter by project and
+show hidden lines (eye button) on every tab except E-mail.
+
+- **Overview**: a "How it works" box (with a link to this page) (close it with ×, bring it back with **How it works**
+  at the top right), the list **To look at**, a table **Where everything runs** (one line per type, one column per
+  place: this server, your other servers, then each service such as Cloudflare or Vercel; a number opens that type
+  filtered on that place), and **What Harness reads**: each source with what it gives and, when something is
+  missing, the next step (**Add the key ...**, **Add these rights** for a Cloudflare token that cannot read
+  everything, **Connect** for a VPS not read yet).
+- **To look at**: everything down or to check, in one list.
+- **Sites, Databases, Buckets, Domains**: one block per place, **your servers** first (this server, then the others),
+  then **hosted elsewhere** (Cloudflare, Vercel, Supabase...). A thin bar under the title shows how the type is
+  spread across places; the chips above the blocks show a single place. A domain counts where it points: the place
+  of the site it serves, otherwise its host, otherwise "Points nowhere". **Domains -> Add a domain** watches a domain
+  from any registrar.
+- **Servers & services**: one card per server with its address, its system, memory / disk / CPU in use and how many
+  sites, databases and buckets run on it, then what Harness reads.
 - **E-mail**: where your addresses come from (see [E-mail](#e-mail) below).
 - Click any line for its details, what it is linked to, its repository (opens the Git page), its Cloudflare /
   Hostinger dashboard, a project, a note, to hide it, or to ask Claude about it.
+- **Presentation mode** (eye at the bottom of the sidebar, or Shift+P) blurs names, addresses, server names, projects, details
+  and notes on this page too.
 
 ## What it reads
 
