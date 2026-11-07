@@ -439,3 +439,11 @@ def test_an_answer_sent_drop_by_drop_ends_on_a_deadline(monkeypatch):
     with pytest.raises(TimeoutError):                    # offline for the callers, as a socket timeout
         register._call("POST", "/v1/feedback", {})
     assert time.monotonic() - t < 3
+
+
+def test_license_status_shows_a_date_that_is_not_a_number(mx, capsys):
+    """expires_at "2027-01-01" (kept by license._field) made `maxxing license status` end in a ValueError."""
+    config.set_secret(license.KEY, "HM-ABCD-EFGH-JKMN-PQRS")
+    config.update_config(license={"expires_at": "2027-01-01", "kind": "paid"})
+    assert run_cli("license", "status") == 0
+    assert "ends 2027-01-01" in capsys.readouterr().out
