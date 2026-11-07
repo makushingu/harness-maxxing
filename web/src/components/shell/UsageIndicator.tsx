@@ -17,9 +17,10 @@ export function UsageIndicator({ collapsed, visible }: { collapsed?: boolean; /*
   const rows = [
     { key: 'five', label: t('usage.fiveHour'), w: u.five_hour },
     { key: 'week', label: t('usage.week'), w: u.seven_day },
-  ].filter((r): r is { key: string; label: string; w: UsageWindow } => !!r.w)
-  const used = (w: UsageWindow) => Math.min(100, Math.round(w.pct))
-  const tone = (w: UsageWindow) => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
+  ].filter((r): r is { key: string; label: string; w: UsageWindow & { pct: number } } => Number.isFinite(r.w?.pct)) // no percentage: no row (not "0 % used")
+  if (!rows.length) return null
+  const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)))
+  const tone = (w: { pct: number }) => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
   const reset = (w: UsageWindow) =>
     w.resets_at ? t('usage.resets', { at: fmtDate(w.resets_at, lang, undefined, { dateStyle: undefined, timeStyle: undefined, weekday: 'short', hour: '2-digit', minute: '2-digit' }) }) : null
   const noFive = !u.five_hour && u.plan === 'Ultra' // verified Ultra accounts have no 5-hour window
