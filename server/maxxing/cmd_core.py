@@ -2389,10 +2389,11 @@ def remove_crontab_block() -> str:
     if not text:
         return "no crontab"
     keep, inside, removed = [], False, 0
+    closed = any(ln.strip() == end for ln in text.splitlines())   # no end marker: the user's lines after begin stay
     for ln in text.splitlines():
         s = ln.strip()
         if s == begin:
-            inside, removed = True, removed + 1
+            inside, removed = closed, removed + 1
         elif inside:
             removed += 1
             inside = s != end
@@ -2415,11 +2416,14 @@ def remove_crontab_block() -> str:
 
 
 def remove_caddy_site() -> str:
-    if not CADDY_SITE.exists() and not (CADDYFILE.exists() and str(CADDY_SITE) in CADDYFILE.read_text()):
+    # surrogateescape: a Caddyfile with a Latin-1 comment is rewritten byte for byte instead of stopping the uninstall
+    text = CADDYFILE.read_text(errors="surrogateescape") if CADDYFILE.exists() else ""
+    if not CADDY_SITE.exists() and str(CADDY_SITE) not in text:
         return "no Caddy site"
     if CADDYFILE.exists():
-        lines = [ln for ln in CADDYFILE.read_text().splitlines() if str(CADDY_SITE) not in ln]
-        CADDYFILE.write_text("\n".join(lines).strip("\n") + "\n" if any(x.strip() for x in lines) else "")
+        lines = [ln for ln in text.splitlines() if str(CADDY_SITE) not in ln]
+        CADDYFILE.write_text("\n".join(lines).strip("\n") + "\n" if any(x.strip() for x in lines) else "",
+                             errors="surrogateescape")
     CADDY_SITE.unlink(missing_ok=True)
     code, out = systemctl("is-active", "caddy", timeout=10)
     if out.strip() == "active":
@@ -2548,7 +2552,10 @@ def cmd_uninstall(a) -> int:
         UNIT_PATH.unlink()
         systemctl("daemon-reload")
     line(OK, f"service {SERVICE} removed")
-    line(OK, remove_caddy_site())
+    try:
+        line(OK, remove_caddy_site())
+    except OSError as e:                               # the next steps still run
+        line(WARN, f"Caddy site not removed: {e}")
     line(OK, remove_crontab_block())
     for n in _install_state().get("skills", []):
         d = skills_target() / n

@@ -318,6 +318,26 @@ def test_uninstall_removes_integrations_keeps_workspace(env, capsys):
     assert etc.exists()
 
 
+def test_uninstall_with_a_caddyfile_not_in_utf8(env):
+    """A Latin-1 comment in /etc/caddy/Caddyfile stopped the uninstall halfway (crontab block left behind)."""
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    cmd_core.CADDY_SITE.write_text("ui.example.com {\n}\n")
+    cmd_core.CADDYFILE.write_bytes(b"# caf\xe9\nother.example.com {\n}\n\nimport " + str(cmd_core.CADDY_SITE).encode() + b"\n")
+    (env["tmp"] / "crontab").write_text(
+        "# >>> claude-maxxing (managed) >>>\n0 5 * * * maxxing cron run c_abc123\n# <<< claude-maxxing <<<\n")
+    assert run_cli("uninstall", "--yes") == 0
+    assert cmd_core.CADDYFILE.read_bytes() == b"# caf\xe9\nother.example.com {\n}\n"
+    assert (env["tmp"] / "crontab").read_text() == ""
+
+
+def test_uninstall_without_the_end_marker_keeps_the_user_cron_lines(env):
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    (env["tmp"] / "crontab").write_text(
+        "# >>> claude-maxxing (managed) >>>\n0 5 * * * maxxing cron run c_abc123\n0 1 * * * /usr/bin/backup-mine\n")
+    assert run_cli("uninstall", "--yes") == 0
+    assert (env["tmp"] / "crontab").read_text() == "0 1 * * * /usr/bin/backup-mine\n"
+
+
 def test_uninstall_purge(env, tmp_path, monkeypatch):
     run_cli("init", "--workspace", str(env["ws"]), "--quiet")
     code = tmp_path / "opt" / "claude-maxxing"

@@ -156,7 +156,7 @@ def drop_line(line: bytes | str) -> bool:
         return False
     try:
         ev = json.loads(line)
-    except ValueError:
+    except (ValueError, RecursionError):              # 100 000 nested [ : RecursionError
         return False
     return isinstance(ev, dict) and not keep_event(ev)
 
@@ -167,8 +167,9 @@ def clip_line(line: str) -> str:
         return line
     try:
         ev = json.loads(line)
-    except ValueError:
+        if not isinstance(ev, dict) or not clip_event(ev):
+            return line
+    except (ValueError, RecursionError):              # 100 000 nested [ : RecursionError
         return line
-    if not isinstance(ev, dict) or not clip_event(ev):
-        return line
-    return json.dumps(ev, ensure_ascii=False)
+    # a lone \ud800 escape becomes a surrogate that UTF-8 cannot encode: written as "?" so the log is still compacted
+    return json.dumps(ev, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8")
