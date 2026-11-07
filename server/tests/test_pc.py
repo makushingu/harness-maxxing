@@ -600,3 +600,13 @@ def test_a_hello_with_a_lone_surrogate_version_is_saved_cleaned(pc):
             pass
     asyncio.run(go())
     assert pcbridge.load()["device"]["version"] == "?"
+
+
+def test_actions_logged_from_many_threads_at_once_are_all_kept(mx):
+    def w(i):
+        for j in range(15):
+            pcbridge._log_action("click", {"uid": f"{i}-{j}"}, True, 1)
+    ts = [threading.Thread(target=w, args=(i,)) for i in range(8)]
+    [t.start() for t in ts]
+    [t.join(30) for t in ts]
+    assert len((pcbridge._dir() / "actions.jsonl").read_text().splitlines()) == 120
