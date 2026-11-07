@@ -390,6 +390,42 @@ def test_sandbox_hides_transcripts_logins_and_the_rest_of_the_workspace(client, 
     assert f"Read(/{config.claude_dir()}/history.jsonl)" in deny
 
 
+def test_sandbox_hides_the_home_folder_but_what_commands_need(monkeypatch, tmp_path):
+    from maxxing import agent_guard, config
+    home, outside = tmp_path / "home", tmp_path / "outside"
+    ws = home / "maxxing"
+    for d in (ws / "projects", home / "scripts/secrets", home / ".local/bin", home / ".local/share/uv/python",
+              home / ".cache/uv", home / ".cache/browser-profile", home / ".claude/skills", home / ".claude/projects",
+              home / ".nvm/versions/node/v22/bin", outside / "keys"):
+        d.mkdir(parents=True)
+    for f in ("notes.md", ".bash_history", ".gitconfig", ".claude/.credentials.json", "scripts/run.sh"):
+        (home / f).write_text("x")
+    node = home / ".nvm/versions/node/v22/bin/node"
+    node.write_text("#!/bin/sh\n")
+    node.chmod(0o755)
+    (home / "keys").symlink_to(outside / "keys")              # a link out of the home folder
+    (home / "python").symlink_to("/usr/bin")                  # a link to a tool folder
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", f"{node.parent}:{os.environ['PATH']}")
+    monkeypatch.setattr(config, "workspace", lambda: ws)
+    monkeypatch.setattr(config, "claude_dir", lambda: home / ".claude")
+    wall = agent_guard.home_wall()
+    for p in ("notes.md", ".bash_history", "scripts", ".claude/.credentials.json", ".claude/projects",
+              ".cache/browser-profile", "keys"):
+        assert str(home / p) in wall, p
+    for p in ("maxxing", ".gitconfig", ".local/bin", ".cache/uv", ".claude/skills", ".nvm/versions/node/v22",
+              "python", ".local/share", ".local", ".cache", ".claude"):
+        assert str(home / p) not in wall, p
+    assert not any(w.startswith(str(ws)) for w in wall)       # the workspace has its own walls (private_paths)
+    # a workspace that is the home folder: nothing more is hidden there (a home of / either)
+    monkeypatch.setattr(config, "workspace", lambda: home)
+    assert agent_guard.home_wall() == []
+    # system secrets that exist are named, the others are not (the sandbox would mount them)
+    monkeypatch.setattr(agent_guard, "SYSTEM_SECRETS", (str(outside / "keys"), str(outside / "nope")))
+    s = agent_guard.secret_paths()
+    assert str(outside / "keys") in s and str(outside / "nope") not in s
+
+
 def test_the_apparmor_profile_waits_for_a_sandboxed_agent(client, topic, mx, monkeypatch, tmp_path):
     from maxxing import agent_guard
     calls: list = []
