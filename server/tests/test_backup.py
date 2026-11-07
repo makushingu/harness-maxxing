@@ -586,3 +586,17 @@ def test_restore_refuses_an_invalid_revision(gh, ws, ref):
     assert backup.run()["ok"]
     r = backup.restore(ref)
     assert r["ok"] is False and r["code"] == "bad_ref"
+
+
+def test_a_lock_left_by_a_killed_git_does_not_block_the_next_runs(gh, ws):
+    gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    gd = backup._wc() / ".git"  # noqa: SLF001
+    (gd / "index.lock").write_text("")
+    (gd / "refs/heads/main.lock").write_text("")
+    (ws / "memory.md").write_text("- new fact\n")
+    r = backup.run()
+    assert r["ok"], r
+    assert not (gd / "index.lock").exists() and not (gd / "refs/heads/main.lock").exists()
+    assert backup.restore()["ok"]
