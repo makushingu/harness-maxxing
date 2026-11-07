@@ -189,11 +189,11 @@ function Paired({ s, onReinstall }: { s: PcStatus; onReinstall: () => void }) {
   const tone = !s.online ? 'idle' : s.browser_running ? 'ok' : 'info'
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
-      <dl className="grid gap-4 text-sm sm:grid-cols-3">
-        <div className="grid gap-1">
+      <dl className="grid grid-cols-[minmax(0,1fr)] gap-4 text-sm sm:grid-cols-3">
+        <div className="grid min-w-0 gap-1">
           <dt className="text-[13px] text-muted-foreground">{t('pc.computer')}</dt>
-          <dd className="flex items-center gap-2 font-medium">
-            <StatusDot tone={tone as 'ok'} pulse={s.browser_running} /> {dev.name}
+          <dd className="flex min-w-0 items-center gap-2 font-medium">
+            <StatusDot tone={tone as 'ok'} pulse={s.browser_running} /> <span className="min-w-0 [overflow-wrap:anywhere]">{dev.name}</span>
           </dd>
         </div>
         <div className="grid gap-1">
