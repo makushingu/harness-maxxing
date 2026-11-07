@@ -1996,7 +1996,7 @@ export const fr: Record<keyof typeof en, string> = {
   'files.textBigger': 'Agrandir le texte',
   'files.textSmaller': 'Réduire le texte',
   'files.textZoomReset': 'Taille normale (100 %)',
-  'files.textZoomTip': 'Taille du texte - cliquez pour revenir à 100 %. Ctrl/⌘ + molette ou pincement du pavé tactile sur le texte.',
+  'files.textZoomTip': 'Taille du texte - cliquez pour revenir à 100 %. Ctrl/⌘ + molette ou pincement (pavé tactile ou deux doigts) sur le texte.',
   'files.zoomOut': 'Zoom arrière',
 
   // tasks & crons (pages/tasks, pages/crons)

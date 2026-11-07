@@ -7,18 +7,23 @@
 //   is gone (also after the app comes back from the background): the fixed bars then float a few pixels up
 //   until the next scroll. The document itself never scrolls in this app, so it is put back at 0.
 import * as React from 'react'
+import { PINCH_ATTR } from './touch-zoom'
 
 const FIELD = 'input:not([type=checkbox],[type=radio],[type=range],[type=button],[type=submit],[type=reset],[type=file],[type=color]), textarea, select'
 const isField = (el: Element | null) => el instanceof HTMLElement && (el.matches(FIELD) || el.isContentEditable)
 
 /** iOS Safari ignores `user-scalable=no` in a browser tab: its pinch is cancelled here (gesture events, and any
- *  move with two fingers). Android follows the viewport and `touch-action`. */
+ *  move with two fingers). Android follows the viewport and `touch-action`. A surface marked `data-pinch` (image,
+ *  diagram, text: lib/touch-zoom.ts) zooms its own content with two fingers and cancels those moves itself; the
+ *  gesture events stay cancelled everywhere, the touch events still reach it. */
 function useNoPinchZoom() {
   React.useEffect(() => {
     if (!window.matchMedia('(pointer: coarse)').matches) return
     const stop = (e: Event) => e.preventDefault()
     const twoFingers = (e: TouchEvent) => {
-      if (e.touches.length > 1) e.preventDefault()
+      if (e.touches.length < 2 || e.defaultPrevented) return
+      if (e.target instanceof Element && e.target.closest(`[${PINCH_ATTR}]`)) return
+      e.preventDefault()
     }
     const opts = { passive: false } as const
     document.addEventListener('gesturestart', stop, opts)

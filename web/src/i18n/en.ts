@@ -2014,7 +2014,7 @@ export const en = {
   'files.textBigger': 'Larger text',
   'files.textSmaller': 'Smaller text',
   'files.textZoomReset': 'Normal size (100%)',
-  'files.textZoomTip': 'Text size - click to go back to 100%. Ctrl/⌘ + wheel or a trackpad pinch over the text.',
+  'files.textZoomTip': 'Text size - click to go back to 100%. Ctrl/⌘ + wheel or a pinch (trackpad or two fingers) over the text.',
   'files.zoomOut': 'Zoom out',
 
   // tasks & crons (pages/tasks, pages/crons)

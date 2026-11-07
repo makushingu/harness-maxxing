@@ -10,6 +10,7 @@ import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useHotkey } from '@/commands/shortcuts'
+import { useTouchZoom, type Pt } from '@/lib/touch-zoom'
 import { useDiagramSvg } from '@/components/ui/diagram'
 import { basename, CONVERTED_IMAGE, dirname, extOf, resolvePath } from './kinds'
 import type { CodeEditorProps } from './CodeEditor'
@@ -110,18 +111,41 @@ export function MarkdownView({ content, path, className }: { content: string; pa
 
 /* ------------------------------------------------------------------ image */
 const ZOOMS = [0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8]
+const MIN_ZOOM = 0.05
+const MAX_ZOOM = 8
 /** One wheel notch: the next multiple of 5 % up or down (from a fitted 63 %: 65 %, then 70 %...). */
 const wheelZoom = (from: number, dir: 1 | -1) =>
-  Math.min(8, Math.max(0.05, dir > 0 ? Math.floor(from * 20 + 1e-6) / 20 + 0.05 : Math.ceil(from * 20 - 1e-6) / 20 - 0.05))
+  Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, dir > 0 ? Math.floor(from * 20 + 1e-6) / 20 + 0.05 : Math.ceil(from * 20 - 1e-6) / 20 - 0.05))
+
+/** What the fingers need: the zoom shown now (a number, also when fitted), the fitted zoom, how to set it, what a
+ *  double tap does (same as a double-click) and whether a pinch may start now (`ready`). */
+type TouchZoom = { current: number; fit: number; set: (z: 'fit' | number) => void; toggle: (p: Pt) => void; ready?: () => boolean }
+type Anchor = { px: number; py: number; fx: number; fy: number }
+
+/** End of a pinch: back to fitted when at or below it, else the nearest step when close (98 % -> 100 %), else a
+ *  whole percent. */
+const pinchSettle = (z: number, fit: number): 'fit' | number => {
+  if (z <= fit * 1.03) return 'fit'
+  return ZOOMS.find((s) => Math.abs(s - z) / s < 0.04) ?? Math.round(z * 100) / 100
+}
 
 /**
  * Zoom and pan shared by images and diagrams. The wheel zooms around the pointer (`onWheel(dir)` sets the zoom;
  * Shift + wheel still scrolls), a mouse drag moves a zoomed view (the hand), and `capture(point?)` - called before
  * any zoom change - keeps that point (default: the centre) under the same spot. The zoomed element is the one
  * marked `data-zoomable` inside `box`.
+ * Touch (`touch`): two fingers zoom continuously around their midpoint and move the view while pinching, one finger
+ * moves a zoomed view (with a glide), a double tap toggles. A fitted view leaves one finger alone (swipe to the next
+ * file, scrolling around).
  */
-function usePanZoom(box: React.RefObject<HTMLDivElement | null>, zoom: 'fit' | number, onWheel: (dir: 1 | -1) => void, mountKey: unknown = null) {
-  const anchor = React.useRef<{ px: number; py: number; fx: number; fy: number } | null>(null)
+function usePanZoom(
+  box: React.RefObject<HTMLDivElement | null>,
+  zoom: 'fit' | number,
+  onWheel: (dir: 1 | -1) => void,
+  mountKey: unknown = null,
+  touch?: TouchZoom,
+) {
+  const anchor = React.useRef<Anchor | null>(null)
   const capture = React.useCallback(
     (point?: { x: number; y: number }) => {
       const b = box.current
@@ -135,17 +159,108 @@ function usePanZoom(box: React.RefObject<HTMLDivElement | null>, zoom: 'fit' | n
     },
     [box],
   )
+  /** Scroll so that the point `fx, fy` of the zoomed element sits at `px, py` of the box. */
+  const place = React.useCallback(
+    (a: Anchor) => {
+      const b = box.current
+      const el = b?.querySelector<HTMLElement>('[data-zoomable]')
+      if (!b || !el) return
+      const br = b.getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      b.scrollLeft += r.left - br.left + a.fx * r.width - a.px
+      b.scrollTop += r.top - br.top + a.fy * r.height - a.py
+    },
+    [box],
+  )
   React.useLayoutEffect(() => {
     const a = anchor.current
     anchor.current = null
-    const b = box.current
-    const el = b?.querySelector<HTMLElement>('[data-zoomable]')
-    if (!a || !b || !el || zoom === 'fit') return
-    const br = b.getBoundingClientRect()
-    const r = el.getBoundingClientRect()
-    b.scrollLeft += r.left - br.left + a.fx * r.width - a.px
-    b.scrollTop += r.top - br.top + a.fy * r.height - a.py
-  }, [zoom, box])
+    if (a && zoom !== 'fit') place(a)
+  }, [zoom, place])
+
+  // Fingers. The handlers read the latest values through refs: the listeners stay bound for the whole gesture.
+  const zoomNow = React.useRef(zoom)
+  zoomNow.current = zoom
+  const tz = React.useRef(touch)
+  tz.current = touch
+  const pinching = React.useRef<{ z0: number; fx: number; fy: number; last: number } | null>(null)
+  const glide = React.useRef(0)
+  const stopGlide = () => {
+    cancelAnimationFrame(glide.current)
+    glide.current = 0
+  }
+  React.useEffect(() => () => cancelAnimationFrame(glide.current), [])
+  useTouchZoom(
+    box,
+    {
+      pinchStart: (mid) => {
+        const o = tz.current
+        const el = box.current?.querySelector<HTMLElement>('[data-zoomable]')
+        if (!o || !el || (o.ready && !o.ready())) return false
+        stopGlide()
+        const r = el.getBoundingClientRect()
+        pinching.current = { z0: o.current, fx: (mid.x - r.left) / (r.width || 1), fy: (mid.y - r.top) / (r.height || 1), last: o.current }
+      },
+      pinch: (scale, mid) => {
+        const p = pinching.current
+        const o = tz.current
+        const b = box.current
+        if (!p || !o || !b) return
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, p.z0 * scale))
+        const br = b.getBoundingClientRect()
+        const a = { px: mid.x - br.left, py: mid.y - br.top, fx: p.fx, fy: p.fy }
+        p.last = z
+        // Same zoom (at a limit): the fingers only move the view.
+        if (zoomNow.current !== 'fit' && Math.abs(zoomNow.current - z) < 1e-4) return place(a)
+        anchor.current = a
+        o.set(z)
+      },
+      pinchEnd: (mid) => {
+        const p = pinching.current
+        pinching.current = null
+        const o = tz.current
+        if (!p || !o) return
+        const to = pinchSettle(p.last, o.fit)
+        if (to === 'fit') {
+          anchor.current = null
+          return o.set('fit')
+        }
+        if (Math.abs(to - p.last) < 1e-4) return
+        capture(mid)
+        o.set(to)
+      },
+      pan: (dx, dy) => {
+        const b = box.current
+        if (zoomNow.current === 'fit' || !b || !tz.current) return false
+        stopGlide()
+        b.scrollLeft -= dx
+        b.scrollTop -= dy
+        return true
+      },
+      panEnd: (vx, vy) => {
+        const b = box.current
+        if (zoomNow.current === 'fit' || !b || Math.hypot(vx, vy) < 0.1) return
+        let last = performance.now()
+        const run = (now: number) => {
+          const dt = Math.min(48, now - last)
+          last = now
+          b.scrollLeft -= vx * dt
+          b.scrollTop -= vy * dt
+          const k = Math.pow(0.95, dt / 16)
+          vx *= k
+          vy *= k
+          glide.current = Math.hypot(vx, vy) < 0.02 ? 0 : requestAnimationFrame(run)
+        }
+        stopGlide()
+        glide.current = requestAnimationFrame(run)
+      },
+      doubleTap: (pt) => {
+        stopGlide()
+        tz.current?.toggle(pt)
+      },
+    },
+    mountKey,
+  )
 
   // Native listener: React's wheel listeners are passive, they cannot stop the page from scrolling.
   const wheel = React.useRef(onWheel)
@@ -192,7 +307,8 @@ function usePanZoom(box: React.RefObject<HTMLDivElement | null>, zoom: 'fit' | n
       setDragging(false)
     },
   }
-  const cursor = zoom === 'fit' ? undefined : dragging ? 'cursor-grabbing' : 'cursor-grab'
+  // A zoomed view takes every finger (it pans itself); a fitted one leaves one-finger swipes to the browser.
+  const cursor = zoom === 'fit' ? undefined : cn('touch-none', dragging ? 'cursor-grabbing' : 'cursor-grab')
   return { capture, pan, cursor }
 }
 
@@ -213,12 +329,12 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
   /** Zoom asked on a downscaled preview: the original is loading / loaded. */
   const [full, setFull] = React.useState(false)
   const [fullLoaded, setFullLoaded] = React.useState(false)
-  type Pending = { dir: 1 | -1 } | { to: 'toggle'; anchor: Anchor }
-  type Anchor = { fx: number; fy: number; cx: number; cy: number }
+  type Pending = { dir: 1 | -1 } | { to: 'toggle'; anchor: Centre }
+  type Centre = { fx: number; fy: number; cx: number; cy: number }
   const pending = React.useRef<Pending | null>(null)
   /** A zoom is waiting for the original: show the loading pill. */
   const [pendingShown, setPendingShown] = React.useState(false)
-  const anchor = React.useRef<Anchor | null>(null)
+  const anchor = React.useRef<Centre | null>(null)
   const box = React.useRef<HTMLDivElement>(null)
   const ready = fullLoaded || previewFull
 
@@ -254,7 +370,7 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
     const next = nextStep(current, dir)
     if (next) setZoom(next)
   }
-  const toggle = (a: Anchor | null) => {
+  const toggle = (a: Centre | null) => {
     if (zoom !== 'fit') {
       anchor.current = null
       return setZoom('fit')
@@ -284,6 +400,23 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
       setZoom(wheelZoom(current, dir))
     },
     `${path}:${failed}`,
+    {
+      current,
+      fit: fitOf(natural),
+      set: setZoom,
+      toggle: (p) => {
+        pz.capture(p)
+        toggle(null)
+      },
+      // Pinching a downscaled preview: fetch the original first (it usually is already there).
+      ready: () => {
+        if (!ready) {
+          setPendingShown(true)
+          setFull(true)
+        }
+        return ready
+      },
+    },
   )
 
   useHotkey('arrowleft', () => onPrev?.(), { enabled: !!onPrev })
@@ -460,7 +593,13 @@ export function DiagramView({ code, className }: { code: string; className?: str
   const html = React.useMemo(() => svg?.replace(/max-width:\s*[\d.]+px;?/, ''), [svg])
   const fit = natural && boxSize ? Math.min(2, (boxSize.w - 32) / natural.w, (boxSize.h - 32) / natural.h) : 1
   const current = zoom === 'fit' ? fit : zoom
-  const pz = usePanZoom(box, zoom, (dir) => setZoom(wheelZoom(current, dir)))
+  const pz = usePanZoom(box, zoom, (dir) => setZoom(wheelZoom(current, dir)), null, {
+    current,
+    fit,
+    set: setZoom,
+    toggle: (p) => toggle(p),
+    ready: () => !!natural,
+  })
   const step = (dir: 1 | -1) => {
     pz.capture()
     const next = dir > 0 ? ZOOMS.find((x) => x > current + 0.001) : [...ZOOMS].reverse().find((x) => x < current - 0.001)
