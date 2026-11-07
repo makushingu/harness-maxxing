@@ -174,9 +174,9 @@ export function CommandPalette() {
         perform: () => setPresentation(!presentation),
       },
       { id: 'act:shortcuts', title: t('shortcuts.title'), group: actions, icon: Keyboard, shortcut: ['?'], perform: () => openShortcuts(true) },
-      { id: 'help:tour', title: t('tour.take'), group: t('help.title'), icon: Compass, keywords: ['tour', 'help', 'guide', 'onboarding', 'visite', 'aide'], perform: () => startTour() },
+      { id: 'help:tour', title: t('help.tour'), group: t('help.title'), icon: Compass, keywords: ['tour', 'help', 'guide', 'onboarding', 'visite', 'aide'], perform: () => startTour() },
       ...(tutorialPath
-        ? [{ id: 'help:tutorial', title: t('tour.tutorial'), group: t('help.title'), icon: GraduationCap, keywords: ['tutorial', 'learn', 'tutoriel'], perform: ({ navigate }) => navigate(tutorialHref(tutorialPath)) } satisfies Command]
+        ? [{ id: 'help:tutorial', title: t('help.tutorial'), group: t('help.title'), icon: GraduationCap, keywords: ['tutorial', 'learn', 'tutoriel'], perform: ({ navigate }) => navigate(tutorialHref(tutorialPath)) } satisfies Command]
         : []),
       ...(install
         ? [{ id: 'act:install', title: t('pwa.install'), group: actions, icon: Download, keywords: ['pwa', 'install', 'home screen', 'app'], perform: () => void installApp() } satisfies Command]

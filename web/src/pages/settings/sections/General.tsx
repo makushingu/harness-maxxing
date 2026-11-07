@@ -25,15 +25,15 @@ function HelpCard() {
   return (
     <SettingsCard title={t('help.settingsTitle')} description={t('help.settingsDesc')}>
       <div className="divide-y">
-        <SettingRow label={t('tour.take')} description={t('tour.takeDesc')}>
+        <SettingRow label={t('help.tour')} description={t('help.tourDesc')}>
           <Button variant="outline" size="sm" onClick={startTour}>
-            <Compass /> {t('tour.take')}
+            <Compass /> {t('help.tour')}
           </Button>
         </SettingRow>
         {tutorial && (
-          <SettingRow label={t('tour.tutorial')} description={t('tour.tutorialDesc')}>
+          <SettingRow label={t('help.tutorial')} description={t('help.tutorialDesc')}>
             <Button variant="outline" size="sm" onClick={() => navigate(tutorial!)}>
-              <GraduationCap /> {t('tour.tutorial')}
+              <GraduationCap /> {t('help.tutorial')}
             </Button>
           </SettingRow>
         )}
