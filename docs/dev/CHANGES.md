@@ -5,6 +5,20 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.127 - 2026-11-07
+
+- Security review of a126. Sandbox (`agent_guard.py`): `home_wall()` denies each entry of `$HOME` except the
+  workspace, `HOME_BACK` (git config, `.local/bin`, package caches, tool folders) and `CLAUDE_BACK` (skills,
+  shell-snapshots); shell rc files stay readable unless they match `SECRET_SET` (`SHELL_RC`). `SYSTEM_SECRETS`
+  (shadow, /etc/ssh, TLS, Caddy, DB data, /var/log, /home; only when they exist) + `HOME_SECRETS` + `infra.json` /
+  `team/`. Gotcha: a `denyRead` on `$HOME` with `allowRead` inside breaks bubblewrap's mounts ("Can't create file
+  .claude/settings.json") => entry by entry; a deeper deny wins over `allowRead`. Outside runs
+  (`MAXXING_AGENT_OUTSIDE=1`) drop `--allowedTools`; `agents.import` warns about `tools` (`allowed`). Mail: the send
+  card of a cut message has no Send button, the E-mail page shows the whole text (`TEXT_PAGE`) + "Show all" before
+  Send; a new IMAP/SMTP host or user clears the stored password. `feed.PRODUCT_SOURCES` refused as webhook names.
+- Docs only: community library (PR #48) in 12/13/14 and the `maxxing-extension` skill; the site side
+  (`/community`, API key, `publish.md`) lives in the cloud repository.
+
 ## 2.0.0-alpha.126 - 2026-11-07
 
 - Release preparation for `main` / `stable` (beta a113-a125 go out together). `upgrade_notes(old, new)`
