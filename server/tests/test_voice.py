@@ -342,3 +342,9 @@ def test_faster_whisper_can_decode_audio(tmp_path):
         w.writeframes(b"\x00\x01" * 16000)
     samples = audio.decode_audio(str(p))
     assert len(samples) == 16000
+
+
+@pytest.mark.parametrize("lang", ["éé", "日本"])
+def test_a_non_ascii_language_is_refused(client, lang):
+    r = client.put("/api/voice/settings", json={"language": lang})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_language"
