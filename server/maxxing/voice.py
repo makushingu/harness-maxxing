@@ -454,9 +454,11 @@ def _install_deps() -> None:
 
 def _download_subprocess(name: str) -> None:
     """The download runs in a child process (no heavy import in the server; progress = folder size)."""
+    from . import deps                                 # the same pinned revision as download_model()
+    revision = (deps.get("whisper").get("revisions") or {}).get(name) or ""
     code = ("import sys; from faster_whisper.utils import download_model as d; "
-            "d(sys.argv[1], output_dir=sys.argv[2])")
-    p = subprocess.run([sys.executable, "-c", code, name, str(model_path(name))], capture_output=True,
+            "d(sys.argv[1], output_dir=sys.argv[2], revision=sys.argv[3] or None)")
+    p = subprocess.run([sys.executable, "-c", code, name, str(model_path(name)), revision], capture_output=True,
                        text=True, timeout=3600)
     if p.returncode != 0 or not model_present(name):
         err = (p.stderr or "").strip().splitlines()
