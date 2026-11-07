@@ -579,3 +579,24 @@ def test_one_pairing_code_gives_one_token_even_when_used_twice_at_once(pc, monke
     [t.start() for t in ts]
     [t.join(10) for t in ts]
     assert sum(1 for r in res if r) == 1
+
+
+def test_a_pc_name_with_a_lone_surrogate_pairs_with_a_cleaned_name(pc):
+    code = pc.post("/api/pc/pairing", json={"browser": "brave", "os": "windows"}).json()["code"]
+    r = pc.post("/api/pc/pair", content=json.dumps({"code": code, "name": "\ud800x", "version": "\udfff1"}),
+                headers={"content-type": "application/json"})
+    assert r.status_code == 200, r.text
+    assert pcbridge.load()["candidate"]["name"] == "?x"
+
+
+def test_a_hello_with_a_lone_surrogate_version_is_saved_cleaned(pc):
+    _, token = _pair(pc)
+
+    async def go():
+        h = pcbridge.Hub()
+        try:
+            await h.serve(_FakeWS([json.dumps({"t": "hello", "v": "\ud800"})]), pcbridge.load()["device"])
+        except RuntimeError:
+            pass
+    asyncio.run(go())
+    assert pcbridge.load()["device"]["version"] == "?"
