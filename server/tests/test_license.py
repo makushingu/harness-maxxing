@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -412,3 +413,29 @@ def test_a_huge_answer_from_the_license_server_is_not_read_whole(monkeypatch):
     answer.sent = 0
     assert register._call("POST", "/v1/feedback", {}) == {"ok": False, "error": "bad_answer"}
     assert answer.sent <= license.ANSWER_MAX + (1 << 16)
+
+
+class _Drip(_Endless):
+    """A cloud answer sent one byte at a time, slowly."""
+    def read1(self, n=-1):
+        time.sleep(0.05)
+        self.sent += 1
+        return b" "
+
+    def read(self, n=-1):                                 # a full read waits for every byte: cut at 4 s here
+        time.sleep(4)
+        return b" "
+
+
+def test_an_answer_sent_drop_by_drop_ends_on_a_deadline(monkeypatch):
+    """urlopen's timeout counts per socket read: one byte every 20 s kept an activation (and a thread) forever."""
+    from maxxing import register
+    monkeypatch.setattr(license, "ANSWER_DEADLINE", 0.3)
+    monkeypatch.setattr(license.urllib.request, "urlopen", lambda *a, **k: _Drip())
+    t = time.monotonic()
+    with pytest.raises(license.LicenseError) as e:
+        license._post("/v1/activate", {})
+    assert e.value.code == "network"
+    with pytest.raises(TimeoutError):                    # offline for the callers, as a socket timeout
+        register._call("POST", "/v1/feedback", {})
+    assert time.monotonic() - t < 3

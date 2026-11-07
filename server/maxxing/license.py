@@ -76,24 +76,38 @@ def os_name() -> str:
 
 
 ANSWER_MAX = 1 << 20                                   # bytes of a cloud answer: more is not an answer
+ANSWER_DEADLINE = 30                                   # seconds for a whole answer
 
 
-def read_answer(r) -> bytes | None:
-    """The body of a cloud answer, None past ANSWER_MAX bytes (a broken server could send hundreds of MB)."""
-    out = r.read(ANSWER_MAX + 1)
-    return out if len(out) <= ANSWER_MAX else None
+def read_answer(r, deadline: float | None = None) -> bytes | None:
+    """The body of a cloud answer, None past ANSWER_MAX bytes (a broken server could send hundreds of MB).
+    Read by blocks: urlopen's timeout counts per socket read, so a server sending one byte every 20 s never ends;
+    TimeoutError past `deadline` (time.monotonic(), default ANSWER_DEADLINE from now)."""
+    deadline = time.monotonic() + ANSWER_DEADLINE if deadline is None else deadline
+    read = getattr(r, "read1", None) or r.read
+    out = bytearray()
+    while True:
+        if time.monotonic() > deadline:
+            raise TimeoutError("the answer took too long")
+        b = read(1 << 16)
+        if not b:
+            return bytes(out)
+        out += b
+        if len(out) > ANSWER_MAX:
+            return None
 
 
 def _post(path: str, body: dict, timeout: float = 25) -> dict:
     req = urllib.request.Request(API + path, data=json.dumps(body).encode(), method="POST",
                                  headers={"content-type": "application/json", "user-agent": USER_AGENT})
+    deadline = time.monotonic() + ANSWER_DEADLINE
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = read_answer(r)
+            raw = read_answer(r, deadline)
             out = json.loads(raw or b"{}") if raw is not None else None
     except urllib.error.HTTPError as e:
         try:
-            raw = read_answer(e)
+            raw = read_answer(e, deadline)
             j = json.loads(raw or b"{}") if raw is not None else {}
         except (ValueError, RecursionError, OSError, http.client.HTTPException):
             j = {}
