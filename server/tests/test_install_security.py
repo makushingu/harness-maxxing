@@ -161,6 +161,12 @@ def test_the_free_port_search_stops_at_65535():
     assert r.stdout.strip() == "none"
 
 
+def test_a_port_with_a_leading_zero_is_read_in_base_10():
+    r = sh('check_inputs && echo "port=$PORT"', INSTALL_DIR="/opt/claude-maxxing", WORKSPACE="/root/maxxing",
+           STATE_DIR="/var/lib/claude-maxxing", PORT="08787", BRANCH="main", REPO="a/b")
+    assert "port=8787" in r.stdout, r.stdout + r.stderr
+
+
 def test_a_public_udp_service_keeps_the_firewall_off(tmp_path):
     """A server whose only public service is UDP (WireGuard...) looked fresh: the automatic firewall cut it off."""
     fake = ('ss() { case "$1" in -lunpH) printf "%s\\n" \'UNCONN 0 0 0.0.0.0:51820 0.0.0.0:* users:(("wg",pid=1,fd=3))\' '

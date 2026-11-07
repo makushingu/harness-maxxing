@@ -469,6 +469,7 @@ check_inputs() {
   done
   case "$PORT" in ''|*[!0-9]*) die "PORT must be a number" ;; esac
   [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "PORT must be between 1 and 65535"
+  PORT=$((10#$PORT))   # 08787: bash arithmetic reads a leading zero as octal
   case "$BRANCH" in -*|*..*|*//*|/*|*/) die "BRANCH is not a valid branch name (got '$BRANCH')" ;; esac
   printf '%s' "$BRANCH" | grep -Eq '^[A-Za-z0-9._/-]+$' || die "BRANCH may only contain letters, digits, . _ / - (got '$BRANCH')"
   printf '%s' "$REPO" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || die "REPO must be owner/name (got '$REPO')"
