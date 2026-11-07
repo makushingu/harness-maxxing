@@ -5,6 +5,16 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.128 - 2026-11-07
+
+- Released from `main` ("Urgent fixes" path). Crons: catch-up of the last missed slot (24 h, not for jobs more
+  frequent than hourly, not within 10 min of the next run, a killed run counts for its slot), retries (Claude:
+  `classify_failure` on the turn's error and API-error-shaped answers, max 3, limit reset from the usage windows; shell:
+  `retries` 0-5; only while the tick runs, stale retries > 1 h reported final, cleared on disable/enable), one-time
+  jobs (`once_at`, `delete_after`, +5 years max), `[SILENT]` hint for notify "always" (`silent_ok`). Agent cron
+  triggers skipped by their budget return a clean skipped turn. Web: `lib/touch-zoom.ts` (pinch in image/diagram
+  viewers and text zoom; viewport zoom still locked elsewhere).
+
 ## 2.0.0-alpha.127 - 2026-11-07
 
 - Security review of a126. Sandbox (`agent_guard.py`): `home_wall()` denies each entry of `$HOME` except the
