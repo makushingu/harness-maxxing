@@ -565,7 +565,7 @@ export type UpdateReport = {
   extensions: { id: string; name: string; type: string; ok: boolean; error: string; skipped?: boolean }[]
   checks: { id: string; title: string; check: string; ok: boolean; output: string }[]
 }
-export type UsageWindow = { pct: number; resets_at: number | null }
+export type UsageWindow = { pct: number | null; resets_at: number | null }
 export type UsagePayload = {
   available: boolean
   five_hour: UsageWindow | null
