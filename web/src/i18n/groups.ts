@@ -26,6 +26,8 @@ export const GROUPS = {
   drag: ['drag'],
   // a pasted text that became a file: loaded on that paste
   paste: ['paste'],
+  // the guided tour: loaded with its chunk (tour/Tour.tsx); its entry points (menu, palette) use help.*
+  tour: ['tour'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

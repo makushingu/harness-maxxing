@@ -96,11 +96,11 @@ export function UserMenu({ collapsed }: { collapsed?: boolean }) {
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t('help.title')}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={startTour}>
-          <Compass /> {t('tour.take')}
+          <Compass /> {t('help.tour')}
         </DropdownMenuItem>
         {tutorial && (
           <DropdownMenuItem onSelect={() => navigate(tutorial!)}>
-            <GraduationCap /> {t('tour.tutorial')}
+            <GraduationCap /> {t('help.tutorial')}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => navigate('/docs')}>
