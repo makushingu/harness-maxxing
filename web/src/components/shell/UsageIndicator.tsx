@@ -47,7 +47,7 @@ export function UsageIndicator({ collapsed, visible }: { collapsed?: boolean; /*
           ) : (
             <div key={r.key} className="grid gap-1">
               <div className="flex justify-between text-[11px] leading-none text-muted-foreground">
-                <span>{r.label}</span>
+                <span>Claude · {r.label}</span>
                 <span className="tabular-nums">{t('usage.used', { pct: used(r.w) })}</span>
               </div>
               <ProgressBar value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1" />
