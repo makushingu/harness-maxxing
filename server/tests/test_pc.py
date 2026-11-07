@@ -655,3 +655,24 @@ def test_a_binary_frame_from_the_agent_does_not_end_the_link(pc):
         ws.send_bytes(b"\x00\x01")
         time.sleep(0.5)
         assert pc.get("/api/pc").json()["online"]
+
+
+def test_a_child_reply_over_the_frame_limit_fails_the_call_at_once():
+    import sys
+
+    async def go():
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-c", "import sys,time; sys.stdout.write('x'*(17*1024*1024)+'\\n'); sys.stdout.flush(); "
+            "time.sleep(30)", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, limit=pcbridge.MAX_FRAME)
+        c = pcbridge.Child(proc)
+        t0 = time.time()
+        try:
+            await c.call("tools/call", {}, timeout=10)
+            return "answered", 0.0
+        except RuntimeError as e:
+            return str(e), time.time() - t0
+        finally:
+            proc.kill()
+            await proc.wait()
+    why, took = asyncio.run(go())
+    assert "too large" in why and took < 5

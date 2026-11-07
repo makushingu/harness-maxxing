@@ -888,20 +888,27 @@ class Child:
 
     async def _read(self) -> None:
         assert self.proc.stdout is not None
-        while True:
-            line = await self.proc.stdout.readline()
-            if not line:
-                break
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue
-            fut = self._wait.get(msg.get("id")) if isinstance(msg, dict) else None
-            if fut and not fut.done():
-                fut.set_result(msg)
-        for f in self._wait.values():
-            if not f.done():
-                f.set_exception(RuntimeError("chrome-devtools-mcp stopped"))
+        why = "chrome-devtools-mcp stopped"
+        try:
+            while True:
+                try:
+                    line = await self.proc.stdout.readline()
+                except ValueError:                     # a line over MAX_FRAME: its call can never be answered
+                    why = "the result of chrome-devtools-mcp is too large"
+                    break
+                if not line:
+                    break
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    continue
+                fut = self._wait.get(msg.get("id")) if isinstance(msg, dict) else None
+                if fut and not fut.done():
+                    fut.set_result(msg)
+        finally:                                       # the calls waiting fail now, not at their timeout
+            for f in self._wait.values():
+                if not f.done():
+                    f.set_exception(RuntimeError(why))
 
     async def _write(self, msg: dict) -> None:
         assert self.proc.stdin is not None
