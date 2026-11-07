@@ -176,7 +176,15 @@ def check_overrides() -> dict[str, str]:
     return {str(k): str(v) for k, v in d.items()} if isinstance(d, dict) else {}
 
 
+def _plain(*texts: str) -> None:
+    """No NUL, valid UTF-8: else git (or the JSON file) fails with a traceback instead of a message."""
+    for text in texts:
+        if "\0" in text or text.encode("utf-8", "replace").decode() != text:
+            raise CustomError("the title, reason and check must be plain text (no NUL or invalid character)")
+
+
 def set_check(cid: str, command: str) -> dict[str, Any]:
+    _plain(command or "")
     cid = _find(cid)["id"]                               # a sha prefix: stored under the customization's own id
     d = check_overrides()
     command = " ".join((command or "").split())
@@ -246,6 +254,7 @@ def save(title: str, why: str = "", files: list[str] | None = None, check: str =
     title = " ".join((title or "").split())[:120]
     if not title:
         raise CustomError("give the customization a title: maxxing custom save \"what it does\" --why \"...\"")
+    _plain(title, why or "", check or "")             # they go to git commit -m
     changed = dirty_files()
     if not changed:
         raise CustomError("nothing to save: no uncommitted change in " + str(config.CODE))

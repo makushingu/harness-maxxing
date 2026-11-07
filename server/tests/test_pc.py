@@ -557,3 +557,149 @@ def test_deep_json_body_is_a_json_rpc_error(pc, monkeypatch):
     h = {"Authorization": f"Bearer {pcbridge.load()['mcp_secret']}", "Content-Type": "application/json"}
     r = pc.post("/api/pc/mcp", content="[" * 100000 + "]" * 100000, headers=h)
     assert r.status_code == 200 and r.json()["error"]["code"] == -32700
+
+
+def test_one_pairing_code_gives_one_token_even_when_used_twice_at_once(pc, monkeypatch):
+    code = pc.post("/api/pc/pairing", json={"browser": "brave", "os": "windows"}).json()["code"]
+    real = pcbridge._pairing_for
+
+    def slow(c):
+        p = real(c)
+        time.sleep(0.2)                              # both requests are past the check before either uses the code
+        return p
+    monkeypatch.setattr(pcbridge, "_pairing_for", slow)
+    res = []
+
+    def run():
+        try:
+            res.append(pcbridge.pair(code, {}, ""))
+        except pcbridge.PcError:
+            res.append(None)
+    ts = [threading.Thread(target=run) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join(10) for t in ts]
+    assert sum(1 for r in res if r) == 1
+
+
+def test_a_pc_name_with_a_lone_surrogate_pairs_with_a_cleaned_name(pc):
+    code = pc.post("/api/pc/pairing", json={"browser": "brave", "os": "windows"}).json()["code"]
+    r = pc.post("/api/pc/pair", content=json.dumps({"code": code, "name": "\ud800x", "version": "\udfff1"}),
+                headers={"content-type": "application/json"})
+    assert r.status_code == 200, r.text
+    assert pcbridge.load()["candidate"]["name"] == "?x"
+
+
+def test_a_hello_with_a_lone_surrogate_version_is_saved_cleaned(pc):
+    _, token = _pair(pc)
+
+    async def go():
+        h = pcbridge.Hub()
+        try:
+            await h.serve(_FakeWS([json.dumps({"t": "hello", "v": "\ud800"})]), pcbridge.load()["device"])
+        except RuntimeError:
+            pass
+    asyncio.run(go())
+    assert pcbridge.load()["device"]["version"] == "?"
+
+
+def test_actions_logged_from_many_threads_at_once_are_all_kept(mx):
+    def w(i):
+        for j in range(15):
+            pcbridge._log_action("click", {"uid": f"{i}-{j}"}, True, 1)
+    ts = [threading.Thread(target=w, args=(i,)) for i in range(8)]
+    [t.start() for t in ts]
+    [t.join(30) for t in ts]
+    assert len((pcbridge._dir() / "actions.jsonl").read_text().splitlines()) == 120
+
+
+def test_two_downloads_filling_the_agent_cache_at_once_both_succeed(mx, monkeypatch):
+    import hashlib
+    import os
+
+    import httpx
+    data = b"X" * 100_000
+    name = pcbridge.TARGETS["linux-amd64"]
+    monkeypatch.delenv("MAXXING_PC_BIN_DIR", raising=False)
+    monkeypatch.setattr(pcbridge, "_manifest", lambda: {"version": "9", "url": "http://x/{name}",
+                                                        "files": {name: hashlib.sha256(data).hexdigest()}})
+
+    class R:
+        content = data
+
+        def raise_for_status(self):
+            pass
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: R())
+    real = os.replace
+
+    def slow(a, b):
+        time.sleep(0.2)                              # both writers are between write and rename
+        return real(a, b)
+    monkeypatch.setattr(os, "replace", slow)
+    errs = []
+
+    def run():
+        try:
+            assert pcbridge.agent_file("linux-amd64").read_bytes() == data
+        except Exception as e:  # noqa: BLE001
+            errs.append(repr(e))
+    ts = [threading.Thread(target=run) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join(10) for t in ts]
+    assert not errs
+
+
+def test_a_binary_frame_from_the_agent_does_not_end_the_link(pc):
+    _, token = _pair(pc)
+    with pc.websocket_connect("/api/pc/ws", headers={"Authorization": f"Bearer {token}"}) as ws:
+        _wait(lambda: pc.get("/api/pc").json()["online"], "online")
+        ws.send_bytes(b"\x00\x01")
+        time.sleep(0.5)
+        assert pc.get("/api/pc").json()["online"]
+
+
+def test_a_child_reply_over_the_frame_limit_fails_the_call_at_once():
+    import sys
+
+    async def go():
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-c", "import sys,time; sys.stdout.write('x'*(17*1024*1024)+'\\n'); sys.stdout.flush(); "
+            "time.sleep(30)", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, limit=pcbridge.MAX_FRAME)
+        c = pcbridge.Child(proc)
+        t0 = time.time()
+        try:
+            await c.call("tools/call", {}, timeout=10)
+            return "answered", 0.0
+        except RuntimeError as e:
+            return str(e), time.time() - t0
+        finally:
+            proc.kill()
+            await proc.wait()
+    why, took = asyncio.run(go())
+    assert "too large" in why and took < 5
+
+
+def test_a_child_whose_reader_died_is_stopped_before_it_is_replaced(monkeypatch):
+    killed = []
+
+    class P:
+        returncode = None
+
+        def terminate(self):
+            killed.append("terminate")
+
+        async def wait(self):
+            self.returncode = 0
+
+    async def go():
+        h = pcbridge.Hub()
+        old = pcbridge.Child.__new__(pcbridge.Child)
+        old.proc, old._wait = P(), {}
+        old._reader = asyncio.get_running_loop().create_future()
+        old._reader.set_result(None)                 # the reader ended, the process did not
+        h.child = old
+
+        async def start():
+            return "new"
+        monkeypatch.setattr(pcbridge.Child, "start", staticmethod(start))
+        return await h.get_child()
+    assert asyncio.run(go()) == "new" and killed == ["terminate"]

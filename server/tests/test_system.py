@@ -244,6 +244,18 @@ def test_update_spawn(client, monkeypatch):
     assert spawned[0][-2:] == ["update", "--smart"]                 # the Update button: smart update
 
 
+def test_update_spawn_is_refused_while_an_update_holds_the_lock(client, monkeypatch):
+    from maxxing import cmd_core
+    spawned = []
+    monkeypatch.setattr(system_api.subprocess, "Popen", lambda cmd, **kw: spawned.append(cmd))
+    lock = cmd_core.update_lock()                    # a `maxxing update` from a terminal
+    try:
+        r = client.post("/api/system/update")
+    finally:
+        lock.close()
+    assert r.status_code == 409 and r.json()["error"] == "update_running" and not spawned
+
+
 class _Resp:
     def __init__(self, status, data):
         self.status_code, self._data = status, data

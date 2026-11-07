@@ -129,7 +129,8 @@ class _Answer:
         return self.body
 
 
-@pytest.mark.parametrize("body", [b"[1]", b'"ok"', b"3"])
+@pytest.mark.parametrize("body", [b"[1]", b'"ok"', b"3", b"[" * 100000 + b"]" * 100000],
+                         ids=["list", "string", "number", "deep"])
 def test_an_answer_that_is_not_an_object_is_a_clean_error(client, mx, monkeypatch, body):
     """[1] from the cloud: AttributeError on .get -> 500 (feedback, register) or a raw exception (license)."""
     monkeypatch.setattr(register, "_offline", lambda: False)
