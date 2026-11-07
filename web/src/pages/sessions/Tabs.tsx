@@ -160,6 +160,8 @@ export function useSwipe(ref: React.RefObject<HTMLElement | null>, on: boolean, 
       for (let n = e.target as HTMLElement | null; n && n !== el; n = n.parentElement)
         if (n.scrollWidth > n.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return (start = null)
       if ((e.target as HTMLElement).closest('textarea, input, [contenteditable="true"]')) return (start = null)
+      // Text being selected (to copy it): a flick moves the selection handles, it does not change the tab.
+      if (document.getSelection()?.toString()) return (start = null)
       start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() }
     }
     const onEnd = (e: TouchEvent) => {
@@ -168,6 +170,7 @@ export function useSwipe(ref: React.RefObject<HTMLElement | null>, on: boolean, 
       const dy = e.changedTouches[0].clientY - start.y
       const fast = Date.now() - start.t < 600
       start = null
+      if (document.getSelection()?.toString()) return
       if (fast && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2) go(dx < 0 ? 1 : -1)
     }
     el.addEventListener('touchstart', onStart, { passive: true })
