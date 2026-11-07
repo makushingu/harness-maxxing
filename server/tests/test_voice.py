@@ -342,3 +342,33 @@ def test_faster_whisper_can_decode_audio(tmp_path):
         w.writeframes(b"\x00\x01" * 16000)
     samples = audio.decode_audio(str(p))
     assert len(samples) == 16000
+
+
+@pytest.mark.parametrize("lang", ["éé", "日本"])
+def test_a_non_ascii_language_is_refused(client, lang):
+    r = client.put("/api/voice/settings", json={"language": lang})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_language"
+
+
+def test_a_key_with_a_non_ascii_character_is_a_no_key_error(mx, tmp_path, monkeypatch):
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(lambda req: httpx.Response(200, json={"text": "hi"})))
+    voice.update_settings(engine="groq")
+    vault.put("GROQ_API_KEY", "gsk_abc’def")
+    with pytest.raises(voice.VoiceError) as e:
+        voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    assert e.value.status == 503 and e.value.code == "no_key" and "gsk_abc" not in str(e.value)
+
+
+def test_the_model_download_uses_the_pinned_revision(mx, monkeypatch):
+    from maxxing import deps
+    seen: list[list[str]] = []
+
+    def run(argv, **kw):
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(voice.subprocess, "run", run)
+    monkeypatch.setattr(voice, "model_present", lambda name: True)
+    voice._download_subprocess("tiny")
+    pinned = deps.get("whisper")["revisions"]["tiny"]
+    assert seen[0][-1] == pinned and "revision=sys.argv[3]" in seen[0][2]
