@@ -3382,6 +3382,7 @@ export const en = {
   'agents.import.nameHint': 'Empty: the name in the file.',
   'agents.import.go': 'Import',
   'agents.import.badFile': 'This file cannot be read: {why}',
+  'agents.import.allowed': 'These tools run without asking (the file\'s `tools`): {tools}. Runs started from outside still ask. Did someone else write this file? Remove them in the agent\'s settings.',
   'agents.import.ignored': 'Not imported (no equivalent here): {fields}',
   // agent groups (Agents page)
   'groups.new': 'New group',
