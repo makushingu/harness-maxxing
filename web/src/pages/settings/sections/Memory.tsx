@@ -58,7 +58,7 @@ export function MemorySection() {
             />
           </SettingRow>
           <SettingRow label={t('memory.daily')} description={t('memory.dailyDesc')}>
-            <Button variant="outline" size="sm" onClick={() => navigate('/crons')}>
+            <Button variant="outline" size="sm" onClick={() => navigate('/settings/crons')}>
               {t('memory.openCrons')}
             </Button>
           </SettingRow>

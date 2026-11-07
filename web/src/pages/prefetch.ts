@@ -5,7 +5,6 @@ const PAGE_LOADERS: Record<string, () => Promise<unknown>> = {
   '': () => import('./dashboard'),
   files: () => import('./files'),
   tasks: () => import('./tasks'),
-  crons: () => import('./crons'),
   settings: () => import('./settings'),
   feed: () => import('./feed'),
   docs: () => import('./docs'),

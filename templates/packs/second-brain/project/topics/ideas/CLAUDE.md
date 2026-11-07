@@ -47,5 +47,5 @@ ideas did I have about the garden?", "triage my ideas".
 ## Automations
 
 - "Ideas triage" (Friday 17:00, this topic): lists the week's new ideas with a suggested decision
-  for each, and changes nothing until you answer. Created disabled, enable it on the Crons page or
+  for each, and changes nothing until you answer. Created disabled, enable it in Settings -> Crons or
   ask here.

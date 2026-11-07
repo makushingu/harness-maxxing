@@ -1726,7 +1726,7 @@ def _finish_once(cid: str, missed: bool = False, ran: dict | None = None) -> Non
             from . import feed
             feed.system(f"One-time job missed: {job.get('name')}",
                         f"It was due at {str(job.get('once_at')).replace('T', ' ')} and the server could not run it "
-                        "within 24 h.", "warning", "crons", f"/crons?job={cid}")
+                        "within 24 h.", "warning", "crons", f"/settings/crons?job={cid}")
         except Exception:  # noqa: BLE001
             pass
 
@@ -1859,7 +1859,7 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
 def _feed(job: dict, run: dict) -> None:
     """Every run goes to the notifications feed: failures one by one, successes folded into one row."""
     from . import feed
-    url = f"/crons?job={run['cron_id']}"
+    url = f"/settings/crons?job={run['cron_id']}"
     more = _run_note(run)
     if run["ok"]:
         quiet = " · nothing to report" if run.get("silent") else ""

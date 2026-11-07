@@ -36,7 +36,7 @@ Running turns live in transient units `maxxing-<8 chars>`: `systemctl list-units
 | "resume failed" note in a session | Claude transcript missing | normal fallback: a new Claude context is started automatically |
 | Scheduled job never runs | crontab block out of sync, cron daemon stopped, job disabled | `maxxing cron list`, `crontab -l`, `maxxing cron sync`, `systemctl status cron` |
 | Job fires at the wrong hour | config time zone differs from the system zone (cron uses the system one) | `timedatectl set-timezone <Zone> && systemctl restart cron`; `maxxing init --timezone <Zone>`; restart the service |
-| Job runs but fails | command error | `maxxing cron run <id>` and read the output; Crons page -> history |
+| Job runs but fails | command error | `maxxing cron run <id>` and read the output; Settings -> Crons -> history |
 | Telegram silent | token revoked, chat unlinked, another program polls the same bot | `maxxing telegram status`, `maxxing telegram test`; see `maxxing-telegram` |
 | Backup fails | token expired, repo became public, secret detected | `maxxing backup status`; see `maxxing-backup` |
 | Disk full | transcripts, attachments, logs | `du -sh ~/.claude/projects {{STATE_DIR}}/* <workspace>/projects/*/topics/*/attachments`; `journalctl --vacuum-size=200M` - ask before deleting anything |

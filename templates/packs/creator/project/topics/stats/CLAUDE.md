@@ -56,4 +56,4 @@ topics bring the most subscribers?". The weekly review runs here.
 ## Automations
 
 - "Weekly stats review" (Monday 09:00): last week's numbers, best and worst posts, ideas for this week.
-  Created disabled, enable it on the Crons page or ask here.
+  Created disabled, enable it in Settings -> Crons or ask here.

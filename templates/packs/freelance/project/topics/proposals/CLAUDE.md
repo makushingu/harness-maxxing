@@ -49,4 +49,4 @@ Quotes, proposals and invoices as clean PDFs: "quote for Example Ltd: website re
 ## Automations
 
 - "Unpaid invoices" (Monday 09:00, this topic): lists late and soon-due invoices and the total
-  outstanding, drafts and sends nothing. Created disabled, enable it on the Crons page or ask here.
+  outstanding, drafts and sends nothing. Created disabled, enable it in Settings -> Crons or ask here.

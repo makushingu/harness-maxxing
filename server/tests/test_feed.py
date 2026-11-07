@@ -155,7 +155,7 @@ def test_cron_runs_go_to_the_feed(client, mx):
     evs = client.get("/api/feed", params={"source": "crons"}).json()["events"]
     fail = next(e for e in evs if e["level"] == "error")
     okrow = next(e for e in evs if e["level"] == "success")
-    assert fail["title"] == "Cron failed: Nightly bad" and "oops" in fail["body"] and fail["url"] == f"/crons?job={bad['id']}"
+    assert fail["title"] == "Cron failed: Nightly bad" and "oops" in fail["body"] and fail["url"] == f"/settings/crons?job={bad['id']}"
     assert okrow["title"] == "Cron jobs succeeded" and okrow["count"] == 2
 
 

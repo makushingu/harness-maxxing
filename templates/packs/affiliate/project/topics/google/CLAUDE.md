@@ -54,6 +54,6 @@ indexed?", "which queries are close to page 1?". Search Console first, Google Ad
 ## Automations
 
 - "SEO report" (Monday 08:00): last 7 days vs the week before, pages up and down, queries ranked
-  5-15, indexing and Core Web Vitals issues, at most 3 actions. Created disabled, enable it on the
-  Crons page or ask here.
+  5-15, indexing and Core Web Vitals issues, at most 3 actions. Created disabled, enable it in Settings ->
+  Crons or ask here.
 - A sharp drop can go to the feed with `maxxing feed post "Clicks -40% this week" --level warning --source seo`.

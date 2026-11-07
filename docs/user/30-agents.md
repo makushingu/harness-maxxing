@@ -161,7 +161,7 @@ only the agents waiting for your OK or with something to read.
 | Trigger | When it starts |
 |---|---|
 | **By hand** | a message in its page, or `maxxing agents run <agent> "task"` |
-| **Schedule** | at the times you choose (same editor as [Crons](crons); the job is also listed on the Crons page) |
+| **Schedule** | at the times you choose (same editor as [Crons](crons); the job is also listed in Settings -> Crons) |
 | **Webhook** | a service calls its address (Stripe, Shopify, GitHub or any JSON): the agent gets the event. It is a [feed](feed) webhook made for the agent, so the event also shows in your notifications |
 | **Notification** | a new event of the [feed](feed) from a source you pick (written as the feed writes it: `Shopify` -> `shopify`), optionally only some levels (warning, error...) or only events containing a word |
 | **Telegram** | a message you write in the agent's Telegram thread (option below) |

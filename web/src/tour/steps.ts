@@ -46,9 +46,8 @@ export const STEPS: TourStep[] = [
     route: (c) => (c.firstTopic === null ? null : `/sessions?path=${encodeURIComponent(c.search.get('path') ?? c.firstTopic)}&new=1`),
   },
   { id: 'palette', targets: ['palette'], title: 'tour.palette.title', body: 'tour.palette.body', bodyMobile: 'tour.palette.bodyMobile', before: panel('app') },
-  // Tasks is optional: its step is skipped when the page is off, the crons one always comes.
+  // Tasks is optional: its step is skipped when the page is off. Crons live in Settings (its step says so).
   { id: 'tasks', targets: ['nav-tasks'], title: 'tour.tasks.title', body: 'tour.tasks.body', before: panel('app') },
-  { id: 'crons', targets: ['nav-crons'], title: 'tour.crons.title', body: 'tour.crons.body', before: panel('app') },
   { id: 'settings', targets: ['nav-settings'], title: 'tour.settings.title', body: 'tour.settings.body', before: panel('app') },
   { id: 'health', targets: ['health'], title: 'tour.health.title', body: 'tour.health.body', bodyMobile: 'tour.health.bodyMobile', before: panel('app') },
 ]

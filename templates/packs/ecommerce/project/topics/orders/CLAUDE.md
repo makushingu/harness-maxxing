@@ -55,6 +55,6 @@ to this customer asking where their parcel is".
 ## Automations
 
 - "Orders report" (weekdays 17:00): end-of-day summary of orders, revenue, unfulfilled and refunded
-  orders and low stock. Created disabled, enable it on the Crons page or ask here.
+  orders and low stock. Created disabled, enable it in Settings -> Crons or ask here.
 - Urgent things (big order, payment failed, stock out) can go to the feed with
   `maxxing feed post "Out of stock: Blue mug" --level warning --source shop`.

@@ -104,7 +104,7 @@ field), or add a trigger with the commands above.
 | Trigger | How |
 |---|---|
 | Manual | Run button on the agent, or `maxxing agents run <agent> [task]` |
-| Schedule | `maxxing agents cron`: a Claude cron job whose `topic_path` is the agent path (agent page -> When it works, or `POST /api/agents/<p>/<t>/<a>/crons`); it shows on the Crons page too |
+| Schedule | `maxxing agents cron`: a Claude cron job whose `topic_path` is the agent path (agent page -> When it works, or `POST /api/agents/<p>/<t>/<a>/crons`); it shows in Settings -> Crons too |
 | Webhook | `maxxing agents webhook` (agent page -> When it works, `POST /api/agents/<p>/<t>/<a>/webhook`): a feed hook named after the agent + a feed trigger on its source; paste the URL in the service |
 | Feed event | a `feed` trigger: new events of `source` (optionally only `levels`, only those containing `match`) |
 | Telegram | `telegram: true`: the agent gets its own thread; its results are posted there and a message there starts it |

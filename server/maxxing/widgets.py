@@ -3,7 +3,7 @@ threads by api/dashboard.py, so they may block briefly but must never raise for 
 situations (module not configured, nothing to show): they return a card saying so instead.
 
 Labels follow the configured UI language (en / fr). Links are SPA routes
-(/sessions/<id>, /tasks, /crons, /settings/<section>).
+(/sessions/<id>, /tasks, /settings/<section>; the crons are /settings/crons).
 """
 from __future__ import annotations
 
@@ -171,7 +171,7 @@ def crons(force: bool = False) -> dict:
             (ok_pts if r.get("ok") else ko_pts)[d] += 1
     items = [{"title": r.get("name") or r.get("cron_id"), "subtitle": ago(r.get("at")),
               "value": cr.fmt_duration(r.get("duration_s")), "status": "ok" if r.get("ok") else "error",
-              "href": f"/crons?job={r.get('cron_id')}"} for r in runs[:5]]
+              "href": f"/settings/crons?job={r.get('cron_id')}"} for r in runs[:5]]
     blocks: list[dict] = [
         {"type": "stats", "items": [
             {"type": "stat", "label": t("Jobs"), "value": sum(1 for j in jobs if j["enabled"])},
@@ -182,7 +182,7 @@ def crons(force: bool = False) -> dict:
         blocks.append({"type": "chart", "kind": "bar", "series": [
             {"name": t("Success"), "points": [[d.isoformat(), ok_pts[d]] for d in days]},
             {"name": t("Failure"), "points": [[d.isoformat(), ko_pts[d]] for d in days]}]})
-    return {"title": t("Scheduled jobs"), "link": "/crons", "status": "error" if failed_24h else "ok",
+    return {"title": t("Scheduled jobs"), "link": "/settings/crons", "status": "error" if failed_24h else "ok",
             "blocks": blocks}
 
 
@@ -232,7 +232,7 @@ def day(force: bool = False) -> dict:
             continue
         lanes.append({"name": j.get("name") or j["id"], "sub": j.get("human") or cr.humanize(j["schedule"]), "dense": dense,
                       "kind": j.get("kind"), "events": ev if not dense else ev[:MAX_PLANNED],
-                      "first": min([e["at"] for e in ev] + planned[:1] or [end]), "href": f"/crons?job={j['id']}"})
+                      "first": min([e["at"] for e in ev] + planned[:1] or [end]), "href": f"/settings/crons?job={j['id']}"})
     lanes.sort(key=lambda l: l["first"])
     extra = max(0, len(lanes) - MAX_LANES)
     lanes = lanes[:MAX_LANES]
@@ -246,14 +246,14 @@ def day(force: bool = False) -> dict:
         stats.append({"type": "stat", "label": t("Next"), "value": f"{dt.datetime.fromtimestamp(nxt[0], zone):%H:%M}",
                       "hint": nxt[1]})
     if not lanes and not runs:
-        return {"title": t("Today's schedule"), "link": "/crons", "blocks": _next_run_blocks(cr, zone, now, start)}
+        return {"title": t("Today's schedule"), "link": "/settings/crons", "blocks": _next_run_blocks(cr, zone, now, start)}
     blocks: list[dict] = [{"type": "stats", "items": stats}]
     if lanes:
         blocks.append({"type": "timeline", "start": start, "end": end, "now": now, "lanes": lanes,
                        "more": f"+{extra} {t('more jobs')}" if extra else None})
     else:
         blocks.append({"type": "markdown", "text": t("Nothing scheduled today")})
-    return {"title": t("Today's schedule"), "link": "/crons", "status": "error" if failed else "ok", "blocks": blocks}
+    return {"title": t("Today's schedule"), "link": "/settings/crons", "status": "error" if failed else "ok", "blocks": blocks}
 
 
 def _next_run_blocks(cr: Any, zone: ZoneInfo, now: float, start: float) -> list[dict]:
@@ -279,7 +279,7 @@ def _next_run_blocks(cr: Any, zone: ZoneInfo, now: float, start: float) -> list[
         when.strftime("%a") if t("ago") == "ago" else ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."][when.weekday()]
     return [{"type": "markdown", "text": t("Nothing scheduled today.")},
             {"type": "list", "items": [{"title": nxt[1], "subtitle": t("Next run"),
-                                        "value": f"{day_label} {when:%H:%M}", "href": f"/crons?job={nxt[2]}"}]}]
+                                        "value": f"{day_label} {when:%H:%M}", "href": f"/settings/crons?job={nxt[2]}"}]}]
 
 
 def server(force: bool = False) -> dict:

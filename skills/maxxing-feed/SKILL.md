@@ -30,7 +30,7 @@ maxxing feed post "Invoice from ACME: 39 EUR due Friday" --source mail --level w
 - `--dedupe KEY`: the same key twice (same source) is ignored - ALWAYS set it when a script may see the
   same item again (message id, order id, date of the check).
 - `--group KEY`: repeats fold into one unread row ("Backups OK x7") - for routine successes.
-- `--url`: https://... or an app path (`/files?path={{WORKSPACE}}/...`, `/crons?job=<id>`).
+- `--url`: https://... or an app path (`/files?path={{WORKSPACE}}/...`, `/settings/crons?job=<id>`).
 - `--quiet`: never to Telegram. `maxxing feed list [--unread]`, `maxxing feed read-all`.
 
 Script rules: post only what the user asked for (filter in the script, e.g. only mails from these

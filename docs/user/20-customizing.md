@@ -12,7 +12,7 @@ level below, records what it did and carries it over every update.
 | Level | For | Where | On update |
 |---|---|---|---|
 | **Extensions** | widgets (Card or free HTML: games, canvas), pages, their API | `<workspace>/extensions/` | never touched |
-| **Workspace** | how Claude behaves in a topic, scheduled jobs, your own skills | `CLAUDE.md` files, Crons page, `.claude/skills/` | never touched |
+| **Workspace** | how Claude behaves in a topic, scheduled jobs, your own skills | `CLAUDE.md` files, Settings -> Crons, `.claude/skills/` | never touched |
 | **Customizations** | changing the product itself (a server rule, a limit, a CLI command…) | the code directory, recorded with `maxxing custom save` | replayed on top of the new version |
 
 Claude always tries the first two before touching the product code. The web interface itself
