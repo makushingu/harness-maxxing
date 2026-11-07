@@ -1,7 +1,8 @@
 """Walls around an agent's turns, built on what Claude Code provides.
 
     sandbox    Claude Code's sandbox (`settings.sandbox`, bubblewrap + socat on Linux): shell commands can only write
-               in the agent folder (+ `writable` folders of the topic), cannot read the server's secrets, and reach
+               in the agent folder (+ `writable` folders of the topic), cannot read the server's secrets nor the
+               home folder (but for the workspace, git's settings and the tools: `home_wall`, `read_back`), and reach
                only the `domains` of the agent. Read/Edit/Write are not shell commands: the same secrets get
                `permissions.deny` rules (they hold in every mode). Claude Code ignores the domain list in bypass
                mode, so a sandboxed turn never runs in bypass (bypass -> acceptEdits).
@@ -144,6 +145,11 @@ def secret_paths() -> list[str]:
              home / ".config" / "gh", home / ".aws", home / ".docker" / "config.json", home / ".config" / "rclone"]
     paths += [config.claude_dir() / "projects", home / ".claude" / "projects", config.claude_dir() / "history.jsonl",
               home / ".config", home / ".local" / "share"]       # transcripts of every session; other tools' logins
+    paths += [config.claude_dir() / "file-history", home / ".claude" / "file-history"]   # copies of edited files
+    paths += [home / f for f in HOME_SECRETS]
+    ws = config.workspace()
+    paths += [ws / "infra.json", ws / "team"]       # where every site / server is; the Team chats and their files
+    paths += [Path(p) for p in SYSTEM_SECRETS if os.path.lexists(p)]
     out: list[str] = []
     for p in paths:
         s = str(p)
@@ -152,9 +158,28 @@ def secret_paths() -> list[str]:
     return out
 
 
+# logins and histories in the home folder (the sandbox hides the whole home anyway: these also hold for Read/Edit)
+HOME_SECRETS = (".bash_history", ".zsh_history", ".python_history", ".psql_history", ".mysql_history", ".lesshst",
+                ".viminfo", ".npmrc", ".pypirc", ".pgpass", ".my.cnf", ".gnupg", ".kube", ".cloudflared", ".wrangler",
+                ".terraform.d", ".azure", ".oci", ".gcloud", ".vault-token")
+# the server's own secrets outside the home folder (only those that exist: the sandbox would mount the others):
+# password hashes, SSH host keys, TLS keys and certificates, the web server's data, databases, logs, other users
+SYSTEM_SECRETS = ("/etc/shadow", "/etc/shadow-", "/etc/gshadow", "/etc/gshadow-", "/etc/ssh", "/etc/letsencrypt",
+                  "/etc/ssl/private", "/etc/caddy", "/var/lib/caddy", "/etc/credstore", "/etc/credstore.encrypted",
+                  "/run/credentials", "/etc/garage.toml", "/var/lib/garage", "/var/lib/postgresql", "/var/lib/mysql",
+                  "/etc/mysql/debian.cnf", "/var/backups", "/var/log", "/home")
 # under the denied ~/.local/share: Claude Code itself (its sandbox helper), the interpreters and tools its commands
 # run (the product's venv python is uv's)
 READ_BACK = ("claude", "uv/python", "uv/tools", "pnpm", "fnm", "mise/installs")
+# the home folder is hidden from a sandboxed command (`home_wall`), but for what its commands need: the workspace
+# (narrowed by private_paths), git's settings, tools installed in the home folder, package caches
+HOME_BACK = (".gitconfig", ".local/bin", ".local/lib", ".nvm", ".bun", ".cargo", ".rustup", ".deno", ".pyenv", "go",
+             ".npm", ".cache/uv", ".cache/pip", ".cache/ms-playwright", ".cache/pnpm", ".cache/yarn", ".cache/deno",
+             ".cache/go-build")
+CLAUDE_BACK = ("skills", "shell-snapshots", "session-env", ".cc-writes")   # in Claude Code's folder
+# a link of the home folder into these is a tool, left readable
+TOOL_ROOTS = tuple(Path(p) for p in ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/opt", "/snap", "/nix"))
+TOOLS = ("node", "npm", "npx", "uv", "python3", "python", "git", "bun", "deno", "pnpm", "go")
 ENV_GLOBS = (".env", ".env.*", "*/.env", "*/.env.*", "*/*/.env", "*/*/.env.*")
 
 
@@ -190,9 +215,69 @@ def _member(group: Path, path: str) -> bool:
         return False
 
 
+def _home() -> Path:
+    return Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir)
+
+
+def _home_kept() -> set[Path]:
+    """What a sandboxed command still reads in the home folder: the workspace (narrowed by private_paths), HOME_BACK,
+    the skills and shell snapshots of Claude Code, the install folder of a tool installed in the home folder."""
+    home = _home()
+    h = home.resolve()
+    kept = {home / p for p in HOME_BACK}
+    kept.add(config.workspace())
+    for d in {config.claude_dir(), home / ".claude"}:
+        kept |= {d / n for n in CLAUDE_BACK}
+    for t in TOOLS:
+        w = shutil.which(t)
+        p = Path(w).resolve() if w else None
+        if not p or h not in p.parents:
+            continue
+        root = p.parent.parent if p.parent.name == "bin" else p.parent    # ~/.nvm/versions/node/v22, ~/.hermes/node
+        kept.add(root if root not in (h, h / ".local") else p.parent)
+    return {k.resolve() for k in kept}
+
+
+def home_wall() -> list[str]:
+    """`denyRead` of a sandboxed command beyond the named secrets: everything in the home folder (SSH keys, scripts,
+    notes, other tools' files: a list of names always misses some) but `_home_kept`, entry by entry (a denied home
+    with allowRead inside breaks bubblewrap's mounts). A link is denied when it leads out of the home folder (but into
+    a tool folder, TOOL_ROOTS); one inside is its target's entry. ~/.local/share stays with secret_paths + READ_BACK."""
+    home = _home()
+    h = home.resolve()
+    ws = config.workspace().resolve()
+    if h == Path("/") or ws == h or ws in h.parents:   # a workspace that is the home folder: its own walls only
+        return []
+    kept = _home_kept()
+    out: list[str] = []
+
+    def walk(d: Path, depth: int) -> None:
+        try:
+            kids = sorted(d.iterdir())
+        except OSError:
+            return
+        for k in kids:
+            if k == home / ".local" / "share":
+                continue
+            r = k.resolve()
+            if k.is_symlink():                      # inside the home folder: its target is an entry of its own
+                if r not in kept and h not in r.parents and r != h and r != Path("/") \
+                        and not any(r == t or t in r.parents for t in TOOL_ROOTS):
+                    out.append(str(k))
+                continue
+            if r in kept:
+                continue
+            if depth < 4 and k.is_dir() and any(r in x.parents for x in kept):
+                walk(k, depth + 1)
+            else:
+                out.append(str(k))
+    walk(home, 0)
+    return out
+
+
 def read_back() -> list[str]:
     """`allowRead` inside the denied folders: the tools its commands run."""
-    share = Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir) / ".local" / "share"
+    share = _home() / ".local" / "share"
     return [str(share / p) for p in READ_BACK if (share / p).exists()]
 
 
@@ -291,7 +376,8 @@ def settings(path: str, a: dict, approvals: bool = False) -> dict:
         locked = locked_paths(path)
         out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
                           "autoAllowBashIfSandboxed": not approvals, "excludedCommands": ["maxxing:*"],
-                          "filesystem": {"denyRead": secrets, "allowRead": read_back(), "allowWrite": write,
+                          "filesystem": {"denyRead": secrets + [p for p in home_wall() if p not in secrets], "allowRead": read_back(),
+                                         "allowWrite": write,
                                          "denyWrite": locked},
                           "network": {"allowedDomains": list(a.get("domains") or [])}}
         deny = []
