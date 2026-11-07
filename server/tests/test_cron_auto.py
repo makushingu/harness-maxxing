@@ -462,3 +462,22 @@ def test_a_killed_run_is_never_run_again_by_the_catch_up(org, monkeypatch, tmp_p
     assert len(reports) == 1 and not reports[0]["ok"]
     assert crons._lock_path(j["id"]).read_text() == ""
     assert crons.tick(now) == []
+
+
+def test_no_stale_retry_when_a_job_is_switched_back_on(org, monkeypatch):
+    j = crons.create_job({"name": "Sync", "command": "exit 1", "retries": 2, "enabled": False, "notify": "never"})
+    assert "retry_at" not in crons.run_job(j["id"]) and crons._read_retries() == {}   # Run now on a disabled job
+    on = crons.create_job({"name": "On", "command": "exit 1", "retries": 2, "notify": "never"})
+    r = crons.run_job(on["id"])
+    crons.update_job(on["id"], {"enabled": False})
+    crons._save_retry(on["id"], {"at": r["retry_at"], "attempt": 2, "after": r["at"], "reason": "failed"})
+    crons.update_job(on["id"], {"enabled": True})                    # switched back on: the old retry is gone
+    assert crons._read_retries() == {}
+    started = []
+    monkeypatch.setattr(crons, "spawn_run", lambda cid, trigger="manual", attempt=1: started.append(trigger))
+    crons._save_retry(on["id"], {"at": r["retry_at"], "attempt": 2, "after": r["at"], "reason": "failed"})
+    assert crons.tick(r["at"] + 9 * 86400) == [] or "retry" not in started    # days later: dropped, never run
+    assert "retry" not in started and crons._read_retries() == {}
+    crons._save_retry(on["id"], {"at": r["retry_at"], "attempt": 2, "after": r["at"] - 2 * 86400, "reason": "failed"})
+    monkeypatch.setattr(crons.time, "time", lambda: r["retry_at"] + 1)
+    assert crons.run_job(on["id"], "retry", 2)["skipped"] == "retry cancelled"
