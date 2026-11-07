@@ -65,6 +65,7 @@ TRIGGERS = ("manual", "schedule", "catch-up", "retry")   # who started a run (Ru
 CATCH_UP_WINDOW_S = 24 * 3600            # a run missed longer ago than this is not made up for
 CATCH_UP_GRACE_S = 180                   # a slot counts as missed only this long after it (the regular run starts)
 CATCH_UP_MIN_INTERVAL_S = 3600           # jobs that run more often than hourly are never caught up
+CATCH_UP_NEXT_S = 600                    # no catch-up when the next regular run is this close (or 10 % of the interval)
 SLOT_SLACK_S = 60                        # a run that started this long before its slot still counts for it
 RETRY_BACKOFF_S = (300, 900, 1800)       # wait before retry 1, 2, 3 (then the last value)
 MAX_RETRIES = 3                          # automatic retries of a Claude job after a transient failure
@@ -1562,17 +1563,20 @@ def _known_since(runs: list[dict]) -> float | None:
 # =============================================================================================
 # Catch-up of missed runs
 # =============================================================================================
-def _last_slot(c: CronExpr, now: float, zone: ZoneInfo) -> float | None:
-    """The most recent fire time of `c` in the catch-up window (<= now); None when there is none, or when the job
-    runs more often than CATCH_UP_MIN_INTERVAL_S (an every-N-minutes job simply runs again soon)."""
+def _last_slot(c: CronExpr, now: float, zone: ZoneInfo) -> tuple[float | None, float | None]:
+    """(the most recent fire time of `c` in the catch-up window (<= now), the next one after now). The first is
+    None when there is none, or when the job runs more often than CATCH_UP_MIN_INTERVAL_S (an every-N-minutes job
+    simply runs again soon)."""
     slot = prev = None
     for i, ts in enumerate(iter_runs(c, now - CATCH_UP_WINDOW_S - 1, zone)):
         if prev is not None and ts - prev < CATCH_UP_MIN_INTERVAL_S:
-            return None
-        if ts > now or i > 400:
+            return None, None
+        if ts > now:
+            return slot, ts
+        if i > 400:
             break
         slot = prev = ts
-    return slot
+    return slot, None
 
 
 def catch_up_slot(job: dict, runs: list[dict], now: float, zone: ZoneInfo,
@@ -1599,9 +1603,11 @@ def catch_up_slot(job: dict, runs: list[dict], now: float, zone: ZoneInfo,
             return None
         if c.reboot:
             return None
-        slot = _last_slot(c, now, zone)
+        slot, nxt = _last_slot(c, now, zone)
         if slot is None or max(born) >= slot:
             return None
+        if nxt is not None and nxt - now < max(CATCH_UP_NEXT_S, (nxt - slot) / 10):
+            return None                                # the regular run comes soon: no double run
     if slot is None or slot > now - CATCH_UP_GRACE_S or slot < now - CATCH_UP_WINDOW_S:
         return None
     if known_since is not None and known_since > slot - SLOT_SLACK_S:
