@@ -50,10 +50,14 @@ Phones and tablets get the **touch layout** (Settings -> General -> Layout chang
 bar at the bottom, the conversation fills the screen. Two buttons sit at the top of every screen:
 - **☰** (top left) opens your sessions - see [Sessions](04-sessions.md). Its counter shows the unread answers.
 - **⊞** (top right) opens everything else, laid out like the sidebar: a search field (the same as ⌘K), every page
-  in your sidebar order (and Notifications), the extension pages apart, Help (tour, tutorial, docs, Sign out),
-  Feedback and Settings, then the status card - server health (tap it for the issues), CPU / RAM / disk (opens
-  Settings -> System), your Claude plan (opens Settings -> Stats), presentation mode, the theme and General
-  settings. A dot on ⊞ means an update is waiting or the server needs attention.
+  in your sidebar order (and Notifications), the extension pages apart, Feedback and Settings, then the status
+  card - server health (tap it for the issues), CPU / RAM / disk (opens Settings -> System), your Claude plan
+  (opens Settings -> Stats), presentation mode, the theme, the docs and General settings. A dot on ⊞ means an
+  update is waiting or the server needs attention.
+
+On a computer the bottom of the sidebar holds the same status block, with the keyboard shortcuts next to the docs.
+The guided tour and the interactive tutorial are in **Settings -> General**; **Sign out** is in **Settings ->
+Security**.
 
 Also:
 - In the installed app, **swipe from the left edge** to open the sessions, from the right edge to open the menu;

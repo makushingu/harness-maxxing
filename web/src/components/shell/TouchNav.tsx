@@ -1,23 +1,22 @@
 // Touch layout (phones, tablets - html[data-compact], stores/media.ts): no sidebar and no tab bar. Two buttons at the
 // top of every screen open two drawers: the sessions on the left, the rest of the app on the right (every entry of the
-// desktop sidebar: pages, extensions, notifications, update, server health, plan usage, look, settings, help).
+// desktop sidebar: pages, extensions, notifications, feedback, settings, update and the status card).
 import * as React from 'react'
 import { create } from 'zustand'
-import { NavLink, useLocation, useNavigate } from 'react-router'
-import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, GraduationCap, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
-import { useAgentsAttention, useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
+import { NavLink, useLocation } from 'react-router'
+import { Blocks, Bell, ChevronRight, Download, LayoutGrid, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
+import { useAgentsAttention, useExtensions, useFeed, useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { CountBadge, CountDot, NamedIcon } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
-import { startTour, useTour, useTutorialHref } from '@/tour/store'
+import { useTour } from '@/tour/store'
 import { navTourId, useNav } from './nav'
 import { Logo } from './Logo'
 import { healthTone, StatusFooter } from './HealthIndicator'
 import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
-import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
 
 type Panel = 'sessions' | 'app' | null
@@ -154,25 +153,12 @@ function AgentsTileBadge() {
 /** Right drawer: everything the desktop sidebar holds. */
 function AppPanel() {
   const t = useT()
-  const navigate = useNavigate()
   const nav = useNav()
   const { data: ext } = useExtensions()
   const pages = (ext || []).filter((e) => e.type === 'page' && e.enabled && !e.error)
   const feed = useFeed()
   const unreadFeed = feed.data?.unread ?? 0
   const install = useInstallMode()
-  const tutorial = useTutorialHref()
-  const logout = useLogout()
-  const openShortcuts = useShortcutsDialog((s) => s.setOpen)
-  const keyboard = typeof window !== 'undefined' && window.matchMedia('(any-pointer: fine)').matches
-  const [helpOpen, setHelpOpen] = React.useState(false)
-  // the help list folds away instead of vanishing: kept 140 ms after it closes, playing animate-out
-  const [helpShown, setHelpShown] = React.useState(helpOpen)
-  React.useEffect(() => {
-    if (helpOpen) return setHelpShown(true)
-    const id = setTimeout(() => setHelpShown(false), 140)
-    return () => clearTimeout(id)
-  }, [helpOpen])
   const close = () => useTouchNav.getState().setPanel(null)
   const linkCls = ({ isActive }: { isActive: boolean }) => cn(tile, isActive && 'border-primary/60 text-primary')
   // Settings is a row at the bottom, like the sidebar's account area; every other page is a tile.
@@ -235,51 +221,6 @@ function AppPanel() {
       )}
 
       <div className="grid gap-0.5 px-2 pt-3">
-        <button type="button" className={row} onClick={() => setHelpOpen(!helpOpen)} aria-expanded={helpOpen}>
-          <BookOpen />
-          <span className="grid flex-1">
-            <span>{t('shell.help')}</span>
-            <span className="text-[13px] text-muted-foreground">{t('shell.helpHint')}</span>
-          </span>
-          <ChevronRight className={cn('transition-transform', helpOpen && 'rotate-90')} />
-        </button>
-        {(helpOpen || helpShown) && (
-          <div className={cn('grid gap-0.5 pl-6', helpOpen ? 'animate-in' : 'pointer-events-none animate-[mx-out_140ms_ease-in_forwards]')}>
-            <button
-              type="button"
-              className={row}
-              onClick={() => {
-                close()
-                startTour()
-              }}
-            >
-              <Compass /> {t('help.tour')}
-            </button>
-            {tutorial && (
-              <button type="button" className={row} onClick={() => navigate(tutorial)}>
-                <GraduationCap /> {t('help.tutorial')}
-              </button>
-            )}
-            <button type="button" className={row} onClick={() => navigate('/docs')}>
-              <BookOpen /> {t('nav.docs')}
-            </button>
-            {keyboard && (
-              <button
-                type="button"
-                className={row}
-                onClick={() => {
-                  close()
-                  openShortcuts(true)
-                }}
-              >
-                <Keyboard /> {t('shortcuts.title')}
-              </button>
-            )}
-            <button type="button" className={cn(row, 'text-destructive [&>svg]:text-destructive')} onClick={() => logout.mutate()}>
-              <LogOut /> {t('auth.signOut')}
-            </button>
-          </div>
-        )}
         {install && (
           <button
             type="button"

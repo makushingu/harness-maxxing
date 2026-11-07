@@ -17,7 +17,6 @@ import { SidebarExtensions } from './SidebarExtensions'
 import { useDragOrder } from './dragOrder'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
-import { HelpMenu } from './UserMenu'
 import { useFeedbackDialog } from './feedback-store'
 
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
@@ -249,7 +248,7 @@ export function Sidebar() {
         </Tooltip>
       </div>
 
-      {/* The pages (drag to reorder), then the extension pages (one scroll when the window is short); Help, Feedback and Settings stay at the bottom. */}
+      {/* The pages (drag to reorder), then the extension pages (one scroll when the window is short); Feedback and Settings stay at the bottom. */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
           {drag.order.map((to) => {
@@ -262,10 +261,9 @@ export function Sidebar() {
 
       <div className="flex-1" />
 
-      {/* Help, Feedback and Settings: rows like the pages, kept at the bottom (not draggable). */}
+      {/* Feedback and Settings: rows like the pages, kept at the bottom (not draggable). */}
       <div className={block('border-t border-sidebar-border')}>
         <UpdateIndicator collapsed={collapsed} />
-        <HelpMenu collapsed={collapsed} />
         <FeedbackRow collapsed={collapsed} />
         {end.map((item) => navItem(item, nav.indexOf(item)))}
       </div>

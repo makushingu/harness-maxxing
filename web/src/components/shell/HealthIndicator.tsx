@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
-import { AlertTriangle, Check, CheckCircle2, CircleAlert, Info, SlidersHorizontal, Undo2 } from 'lucide-react'
+import type * as React from 'react'
+import { AlertTriangle, BookOpen, Check, CheckCircle2, CircleAlert, Info, Keyboard, SlidersHorizontal, Undo2 } from 'lucide-react'
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -8,6 +9,7 @@ import type { Health } from '@/lib/types'
 import { Button, Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, StatusDot, Tooltip } from '@/components/ui'
 import { UsageLines } from './UsageIndicator'
 import { PresentationToggle, ThemeToggle } from './UserMenu'
+import { useShortcutsDialog } from './shortcuts-store'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -139,12 +141,14 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
 
 /** The sidebar's status footer (and the touch menu's status card): the health line (a click shows the issues, or
  *  "nothing to report"), CPU / RAM / disk (-> Settings -> System), the Claude plan (-> Settings -> Stats), then the
- *  eye, the theme and General settings. Folded: the dot, the thin plan bars and the three icons. */
+ *  eye, the theme, the docs, the keyboard shortcuts and General settings. Folded: the dot, the thin plan bars and the three icons. */
 export function StatusFooter({ collapsed, touch }: { collapsed?: boolean; touch?: boolean }) {
   const t = useT()
   const { data: h } = useHealth()
   const tone = healthTone(h)
   const label = !h ? t('health.checking') : tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })
+  const openShortcuts = useShortcutsDialog((s) => s.setOpen)
+  const keyboard = typeof window !== 'undefined' && window.matchMedia('(any-pointer: fine)').matches // shortcuts need a keyboard
   const area = cn(
     'rounded-md px-2.5 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
     touch && 'py-2.5 active:bg-accent',
@@ -183,15 +187,29 @@ export function StatusFooter({ collapsed, touch }: { collapsed?: boolean; touch?
       <div className={cn('flex items-center gap-1 pt-1', collapsed ? 'flex-col' : 'px-1')}>
         <PresentationToggle />
         <ThemeToggle collapsed={collapsed} />
-        <Tooltip content={`${t('nav.settings')} · ${t('settings.general')}`} side={collapsed ? 'right' : 'top'}>
-          <Button asChild variant="ghost" size="icon-sm" className="size-8">
-            <Link to="/settings/general" aria-label={`${t('nav.settings')} · ${t('settings.general')}`}>
-              <SlidersHorizontal />
-            </Link>
-          </Button>
-        </Tooltip>
+        <IconLink to="/docs" label={t('nav.docs')} collapsed={collapsed} icon={<BookOpen />} />
+        {keyboard && (
+          <Tooltip content={t('shortcuts.title')} side={collapsed ? 'right' : 'top'}>
+            <Button variant="ghost" size="icon-sm" className="size-8" onClick={() => openShortcuts(true)} aria-label={t('shortcuts.title')}>
+              <Keyboard />
+            </Button>
+          </Tooltip>
+        )}
+        <IconLink to="/settings/general" label={`${t('nav.settings')} · ${t('settings.general')}`} collapsed={collapsed} icon={<SlidersHorizontal />} />
       </div>
     </div>
+  )
+}
+
+function IconLink({ to, label, icon, collapsed }: { to: string; label: string; icon: React.ReactNode; collapsed?: boolean }) {
+  return (
+    <Tooltip content={label} side={collapsed ? 'right' : 'top'}>
+      <Button asChild variant="ghost" size="icon-sm" className="size-8">
+        <Link to={to} aria-label={label}>
+          {icon}
+        </Link>
+      </Button>
+    </Tooltip>
   )
 }
 
