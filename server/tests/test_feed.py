@@ -357,3 +357,13 @@ def test_source_counts_are_not_recomputed_while_the_feed_is_unchanged(client, mx
     feed.mark_read(everything=True)
     assert client.get("/api/feed").json()["unread"] == 0
     assert len(calls) == 3
+
+
+def test_a_hook_secret_that_is_not_utf8_is_refused(client):
+    h = {"content-type": "application/json"}
+    r = client.post("/api/feed/hooks", content=json.dumps({"name": "s", "kind": "generic", "secret": "a\ud800"}), headers=h)
+    assert r.status_code == 400 and r.json()["error"] == "bad_secret"
+    assert feedhooks.list_hooks() == []
+    hid = client.post("/api/feed/hooks", json={"name": "s", "kind": "generic"}).json()["id"]
+    assert client.patch(f"/api/feed/hooks/{hid}", content=json.dumps({"secret": "\ud800"}), headers=h).status_code == 400
+    assert client.patch(f"/api/feed/hooks/{hid}", json={"secret": "ok"}).json()["has_secret"] is True
