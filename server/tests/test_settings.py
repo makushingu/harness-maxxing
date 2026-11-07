@@ -130,3 +130,13 @@ def test_sidebar_order(client, org):
     assert client.put("/api/settings", json={"sidebar_order": ["javascript:alert(1)"]}).status_code == 400
     assert client.put("/api/settings", json={"sidebar_order": ["/x"] * 41}).status_code == 400
     assert config.load_config()["sidebar_order"] == ["/files", "/sessions", "/"]
+
+
+def test_a_broken_saved_sidebar_order_never_breaks_the_settings(client, org):
+    # hand-edited or restored config: not a list, too long, duplicated, foreign values
+    config.update_config(sidebar_order=1)
+    assert client.get("/api/settings").json()["sidebar_order"] == []
+    config.update_config(sidebar_order=[f"/p{i}" for i in range(60)] + ["/p1", "http://evil", 3])
+    got = client.get("/api/settings").json()["sidebar_order"]
+    assert got == [f"/p{i}" for i in range(40)]
+    assert client.put("/api/settings", json={"sidebar_order": got}).status_code == 200

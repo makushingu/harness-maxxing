@@ -59,7 +59,8 @@ export function SidebarExtensions({ collapsed }: { collapsed: boolean }) {
       </div>
       {open &&
         drag.order.map((id) => {
-          const x = pinned.find((p) => p.id === id)!
+          const x = pinned.find((p) => p.id === id)
+          if (!x) return null // unpinned or disabled during a drag
           return (
             <Tooltip key={x.id} content={collapsed ? x.name : null} side="right">
               <NavLink to={`/x/${x.id}`} className={item(collapsed)} {...drag.props(x.id)}>
