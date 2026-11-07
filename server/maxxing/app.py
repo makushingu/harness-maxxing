@@ -278,7 +278,8 @@ def _mount_spa(app: FastAPI) -> None:
             found = f.is_file()
         except (ValueError, OSError):  # a NUL byte or a name longer than the filesystem allows: no such file
             found = False
-        if path and found and dist.resolve() in f.parents:
+        # /index.html is the app page: same no-store answer and CSP as `/`, never cached as a plain file.
+        if path and path != "index.html" and found and dist.resolve() in f.parents:
             # PWA files: the service worker, its manifest and the offline page must be revalidated on every
             # load (a stale sw.js would pin users to an old build); hashed assets never change.
             if path in _PWA_TYPES:
