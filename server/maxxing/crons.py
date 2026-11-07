@@ -1293,7 +1293,8 @@ def _claude_turn(job: dict) -> dict:
         r = agents.fire(job["topic_path"], trigger=f"cron:{job['id']}", prompt=job["prompt"], source="cron",
                         cron_env=env, timeout_s=timeout)
         if not r["started"]:
-            return True, 0, f"skipped: {agents.SKIP_TEXT.get(r['reason'], r['reason'])}", None
+            return {"ok": True, "text": f"skipped: {agents.SKIP_TEXT.get(r['reason'], r['reason'])}",
+                    "session_id": None, "error": "", "timed_out": False, "skipped": True}
         sid = r["session"]["id"]
     if sid is None:
         s = service.create_session(job["topic_path"], message=job["prompt"], title=title,
