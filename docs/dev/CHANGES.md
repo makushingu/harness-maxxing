@@ -5,6 +5,27 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.130 - 2026-11-07
+
+- Crons: `pages/crons` is the lazy section `crons` of Settings (data preloaded by `pageData.SETTINGS`); route
+  `/crons/*` -> `CronsMoved` (`/settings/crons` + same search); server links (`crons._feed`, one-time missed event,
+  widgets `crons` / `day`) point to `/settings/crons?job=`; tour step `crons` removed (the Settings step mentions
+  them). Docs, skills and workspace / pack templates say "Settings -> Crons" (upgrade note for existing workspaces).
+- Config `sidebar_order` (default `[]`, settings API, `RESTORABLE_CONFIG`): routes `^/[a-z0-9-]{0,40}$`, max 40,
+  deduped; a broken saved value reads as cleaned (`api.settings.sidebar_order`). `nav.orderNav()` puts saved routes
+  first and inserts any other page after its default predecessor; group `end` (Settings) always last. `useNav()`
+  feeds the sidebar, the touch menu, the palette and the shortcuts.
+- Pins: `extensions.pinned` keeps its order (`set_pinned` appends), `set_pin_order(order)` (only reorders existing
+  pins), `PUT /api/extensions/pins {order}` (max 200), `info()["pin_order"]`.
+- `components/shell/dragOrder.ts`: native HTML5 drag, one MIME scope per list (`nav`, `pins`), commit on drag end
+  unless the drop was cancelled (`dropEffect === 'none'`).
+- Sidebar: `navRow()` shared row style; Help menu removed; `StatusFooter` (`HealthIndicator.tsx`) = health popover
+  (`HealthIssues`), meters link, `UsageLines` (`usePlanUsage`), icons (presentation, theme, docs, shortcuts when
+  `any-pointer: fine`, General); the touch ⊞ menu renders the same footer (`touch`, `onInstall`). Donate links stay
+  in Settings -> Support, What's new, Feedback and License (no longer in the sidebar / ⊞ menu).
+- `ui/tooltip.tsx`: `KeepClass` - Radix `Slot` joined a function `className` (NavLink) into a string, so links in a
+  tooltip (folded sidebar) lost their classes and active state.
+
 ## 2.0.0-alpha.129 - 2026-11-07
 
 - Config `tasks_page` (default `False`, settings API, `RESTORABLE_CONFIG`). `maxxing init` writes it once when

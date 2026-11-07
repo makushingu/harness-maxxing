@@ -9,8 +9,9 @@ Everything is configurable from **Settings**; no file editing is needed.
 |---|---|
 | **General** | theme (dark/light), accent color (the logo takes it too), density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*), background (neutral or tinted with the accent) - the last theme, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window), interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it), language (English/French), time zone, files root, public URL, **App** (install it on this computer or phone, below) |
 | **License** | optional **Enterprise key**, only for companies that need one (who does is explained there): record it, see it, remove it - see [License](license) |
-| **Support** | Harness Maxxing is free: **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes the Donate buttons from the sidebar (or the ⊞ menu), What's new, the Feedback window and Settings → License, in every browser - see [License](license#donations) |
+| **Support** | Harness Maxxing is free: **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes the Donate buttons from What's new, the Feedback window and Settings → License, in every browser - see [License](license#donations) |
 | **Features** | every optional feature in one place: HUD mode and "notify me when a session finishes" (this browser), web conversations in Telegram, Claude plan usage widget, the **Tasks**, **Git & GitHub** and **Infra** pages and **Maxxing mode (beta)** of the Sessions page (off by default) and presentation mode by default (for everyone) |
+| **Crons** | the scheduled jobs: list, run now, history, editor (see [Crons](crons)); old `/crons` links open it |
 | **Notifications** | a notification (and an optional sound) when a Claude session finishes, pulsing unread badges - saved per browser; then the [notifications feed](feed): its Telegram thread, **Server problems in the notifications**, sources and webhooks |
 | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), sign out |
 | **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
@@ -32,8 +33,7 @@ Changing the **time zone** here does not change the server clock: run
 ## Install the app
 
 Harness Maxxing installs like an app (its own window, an icon in the Dock, the taskbar or the home screen,
-full screen on a phone). Two places: **Install app** in the account menu (the person icon at the bottom of the
-sidebar; on a phone, in the ⊞ menu) and **Settings -> General -> App**.
+full screen on a phone). Two places: **Install app** in the ⊞ menu on a phone, and **Settings -> General -> App**.
 
 - **Chrome, Edge (computer or Android)**: one click when the browser offers it; otherwise the button shows the
   steps (the install icon at the end of the address bar, or the browser menu).
@@ -49,10 +49,15 @@ sidebar; on a phone, in the ⊞ menu) and **Settings -> General -> App**.
 Phones and tablets get the **touch layout** (Settings -> General -> Layout changes it per device): no sidebar, no
 bar at the bottom, the conversation fills the screen. Two buttons sit at the top of every screen:
 - **☰** (top left) opens your sessions - see [Sessions](04-sessions.md). Its counter shows the unread answers.
-- **⊞** (top right) opens everything else: a search field (the same as ⌘K), every page (Dashboard, Sessions,
-  Files, Tasks, Crons, Notifications, Git and Infra when turned on, Extensions and pinned pages), the update
-  waiting, the server health, your Claude plan usage, the theme, presentation mode, Settings, Help (tour,
-  tutorial, docs) and Sign out. A dot on ⊞ means an update is waiting or the server needs attention.
+- **⊞** (top right) opens everything else, laid out like the sidebar: a search field (the same as ⌘K), every page
+  in your sidebar order (and Notifications), the extension pages apart, Feedback and Settings, then the status
+  card - server health (tap it for the issues), CPU / RAM / disk (opens Settings -> System), your Claude plan
+  (opens Settings -> Stats), presentation mode, the theme, the docs and General settings. A dot on ⊞ means an
+  update is waiting or the server needs attention.
+
+On a computer the bottom of the sidebar holds the same status block, with the keyboard shortcuts next to the docs.
+The guided tour and the interactive tutorial are in **Settings -> General**; **Sign out** is in **Settings ->
+Security**.
 
 Also:
 - In the installed app, **swipe from the left edge** to open the sessions, from the right edge to open the menu;

@@ -451,6 +451,7 @@ export const en = {
 
   // health
   'health.allGood': 'All systems normal',
+  'health.nothing': 'Nothing to report',
   'health.checking': 'Checking…',
   'health.cpu': 'CPU',
   'health.details': 'System details',
@@ -461,6 +462,7 @@ export const en = {
   'health.seenHint': 'Mark as seen: it stops counting here until it changes, or for 24 h',
   'health.unsee': 'Count it again',
   'health.memory': 'Memory',
+  'health.ram': 'RAM',
   'health.unavailable': 'Health data unavailable.',
   'health.uptime': 'Uptime',
 
@@ -1315,6 +1317,9 @@ export const en = {
   'ext.open': 'Open page',
   'ext.sidebar': 'In the sidebar',
   'ext.hubTitle': 'Extensions',
+  'ext.allPages': 'All pages',
+  'ext.foldPins': 'Hide the pinned pages',
+  'ext.unfoldPins': 'Show the pinned pages',
   'ext.hubDesc': 'Pages added by your extensions. Pin one to give it its own sidebar entry.',
   'ext.hubEmpty': 'No extension page yet',
   'ext.pin': 'Pin to the sidebar',
@@ -2496,10 +2501,8 @@ export const en = {
   'tour.palette.bodyMobile': "Search files, sessions, topics, settings and actions from here.",
   'tour.tasks.title': 'Tasks',
   'tour.tasks.body': 'Tasks is your board of things to do, that Harness can read and update too.',
-  'tour.crons.title': 'Crons',
-  'tour.crons.body': 'Crons run scheduled jobs (a nightly report, a backup) and tell you how they went.',
   'tour.settings.title': 'Settings',
-  'tour.settings.body': 'Connect Telegram to chat from your phone, set up voice messages and back up your memory to GitHub: it all lives here.',
+  'tour.settings.body': 'Crons (scheduled jobs: a nightly report, a backup), Telegram to chat from your phone, voice messages and the backup of your memory to GitHub: it all lives here.',
   'tour.health.title': 'Server health',
   'tour.health.body': 'This dot turns orange or red when something needs attention: disk, memory, a failed cron, a stopped service. Click it for details.',
   'tour.health.bodyMobile': "Updates, server health and your Claude plan, at a glance. A dot on ⊞ tells you when something needs your attention.",

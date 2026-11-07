@@ -28,7 +28,7 @@ give are written into the topic's `memory.md`, so the project becomes yours from
 Add a pack as many times as you like: each time it is a **new project** - `ecommerce`, then `ecommerce-2` for a
 second store, and so on (rename it from the Sessions page). Nothing existing is ever touched. The pack's
 scheduled jobs are created **disabled** (named "Orders report (ecommerce-2)" for a second copy): enable them on
-the Crons page, or ask in the topic ("enable the orders report").
+Settings -> Crons, or ask in the topic ("enable the orders report").
 
 ## Putting back the default projects
 

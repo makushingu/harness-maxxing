@@ -7,10 +7,10 @@ description: Create, change, disable or debug Harness Maxxing scheduled jobs (sh
 
 Jobs are managed by Harness Maxxing and stored in `{{STATE_DIR}}/crons/jobs.json`. Each
 enabled job is one line of a **managed block** in root's crontab calling `maxxing cron run <id>`;
-lines outside the block are never touched. Run history: `crons/runs.jsonl` (shown in the Crons page).
+lines outside the block are never touched. Run history: `crons/runs.jsonl` (shown in Settings -> Crons).
 
 ## Prefer the UI
-Crons page -> New job: name, schedule (with a live preview of the next runs), type, notify policy,
+Settings -> Crons -> New job: name, schedule (with a live preview of the next runs), type, notify policy,
 timeout. "Run now" and history are there too.
 
 ## Job fields

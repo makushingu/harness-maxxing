@@ -26,9 +26,9 @@ Changes show up on the Tasks page immediately.
 - Completing / moving / editing: find the task by its title (ask if several match).
 - Do not delete tasks unless explicitly asked; completed tasks go to `done`.
 
-Morning reminder: the job "Morning tasks" (Crons page, disabled by default) runs every day at
+Morning reminder: the job "Morning tasks" (Settings -> Crons, disabled by default) runs every day at
 08:00 in this topic (`projects/general/topics/inbox`) and sends the list of today's and overdue
-tasks on Telegram. Enable it on the Crons page or ask here ("enable the morning reminder").
+tasks on Telegram. Enable it in Settings -> Crons or ask here ("enable the morning reminder").
 
 ## Subscriptions & accounts (on demand)
 

@@ -33,7 +33,7 @@ Ready-made projects with their topics and instructions: `ecommerce`, `affiliate`
 | Morning tasks | off | daily 08:00 in `general/inbox`: overdue and today's tasks on Telegram |
 | Renewal reminder | not created | ask in `general/inbox` ("remind me of my renewals"): Claude creates it, Mondays 09:30, renewals in the next 30 days on Telegram |
 
-Turn them on, change the hour or delete them on the Crons page. A deleted default job is never
+Turn them on, change the hour or delete them in Settings -> Crons. A deleted default job is never
 re-created.
 
 ## Updates and your workspace

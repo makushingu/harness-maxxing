@@ -1,6 +1,4 @@
-import { useNavigate } from 'react-router'
-import { BookOpen, Compass, Download, Eye, EyeOff, GraduationCap, Keyboard, LogOut, Monitor, Moon, Settings, Sun, User } from 'lucide-react'
-import { useLogout } from '@/lib/queries'
+import { Eye, EyeOff, Monitor, Moon, Sun } from 'lucide-react'
 import { useUI, type Theme } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -8,17 +6,11 @@ import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Tooltip,
 } from '@/components/ui'
-import { useShortcutsDialog } from './shortcuts-store'
-import { startTour, useTutorialHref } from '@/tour/store'
-import { installApp, useInstallMode } from '@/pwa'
 
 const THEME_ICON: Record<Theme, typeof Sun> = { light: Sun, dark: Moon, system: Monitor }
 
@@ -64,56 +56,5 @@ export function PresentationToggle() {
         {on ? <EyeOff /> : <Eye />}
       </Button>
     </Tooltip>
-  )
-}
-
-export function UserMenu({ collapsed }: { collapsed?: boolean }) {
-  const t = useT()
-  const navigate = useNavigate()
-  const logout = useLogout()
-  const openShortcuts = useShortcutsDialog((s) => s.setOpen)
-  const install = useInstallMode()
-  const tutorial = useTutorialHref()
-  return (
-    <DropdownMenu>
-      <Tooltip content={collapsed ? t('shell.account') : null} side="right">
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="size-8" aria-label={t('shell.account')}>
-            <User />
-          </Button>
-        </DropdownMenuTrigger>
-      </Tooltip>
-      <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuLabel>{t('shell.account')}</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => navigate('/settings/general')}>
-          <Settings /> {t('nav.settings')}
-        </DropdownMenuItem>
-        {install && (
-          <DropdownMenuItem onSelect={() => void installApp()}>
-            <Download /> {t('pwa.install')}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t('help.title')}</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={startTour}>
-          <Compass /> {t('help.tour')}
-        </DropdownMenuItem>
-        {tutorial && (
-          <DropdownMenuItem onSelect={() => navigate(tutorial!)}>
-            <GraduationCap /> {t('help.tutorial')}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onSelect={() => navigate('/docs')}>
-          <BookOpen /> {t('nav.docs')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openShortcuts(true)}>
-          <Keyboard /> {t('shortcuts.title')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem destructive onSelect={() => logout.mutate()}>
-          <LogOut /> {t('auth.signOut')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }

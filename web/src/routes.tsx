@@ -4,7 +4,7 @@
 //      groups it shows (i18n/groups.ts) as a 2nd argument, e.g. `page(() => import('./pages/tasks'), ['tasks'])`
 //   3. if it belongs in the primary nav, add it to components/shell/nav.ts (sidebar, tab bar, palette, g-shortcut)
 // Feature pages own their sub-paths (`sessions/*`): use nested <Routes> inside the page or add `children` here.
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+import { createBrowserRouter, Navigate, useLocation, type RouteObject } from 'react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import { AppShell } from '@/components/shell/AppShell'
 import { RouteError, NotFound } from '@/components/shell/RouteError'
@@ -45,7 +45,8 @@ export const routes: RouteObject[] = [
           { path: 'sessions/*', lazy: page(() => import('./pages/sessions'), ['files']) },
           { path: 'files/*', lazy: page(() => import('./pages/files'), ['files', 'media']) },
           { path: 'tasks/*', lazy: page(() => import('./pages/tasks'), ['tasks']) },
-          { path: 'crons/*', lazy: page(() => import('./pages/crons'), ['tasks']) },
+          // Crons moved into Settings (links in old notifications, Telegram reports and bookmarks keep working)
+          { path: 'crons/*', Component: CronsMoved },
           { path: 'feed', lazy: page(() => import('./pages/feed')) },
           // Optional feature pages (Settings -> Features)
           { path: 'git', lazy: page(() => import('./features/git/GitPage'), ['git']) },
@@ -57,7 +58,7 @@ export const routes: RouteObject[] = [
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
           { path: 'settings/docs', element: <Navigate to="/docs" replace /> },
-          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show']) },
+          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks']) },
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },
           // Extension pages: /x/<id> loads /ext/<id>/page.js
@@ -69,6 +70,12 @@ export const routes: RouteObject[] = [
     ],
   },
 ]
+
+/** /crons?job=<id> (before Crons moved into Settings) -> /settings/crons?job=<id>. */
+function CronsMoved() {
+  const { search } = useLocation()
+  return <Navigate to={`/settings/crons${search}`} replace />
+}
 
 export function createAppRouter(qc: QueryClient) {
   client = qc

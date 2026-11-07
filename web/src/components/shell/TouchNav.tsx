@@ -1,27 +1,23 @@
 // Touch layout (phones, tablets - html[data-compact], stores/media.ts): no sidebar and no tab bar. Two buttons at the
 // top of every screen open two drawers: the sessions on the left, the rest of the app on the right (every entry of the
-// desktop sidebar: pages, extensions, notifications, update, server health, plan usage, look, settings, help).
+// desktop sidebar: pages, extensions, notifications, feedback, settings, update and the status card).
 import * as React from 'react'
 import { create } from 'zustand'
-import { NavLink, useLocation, useNavigate } from 'react-router'
-import { BookOpen, Blocks, Bell, ChevronRight, Compass, Download, Eye, GraduationCap, HandHeart, Keyboard, LayoutGrid, LogOut, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
-import { useAgentsAttention, useExtensions, useFeed, useHealth, useLogout, useWorkspace } from '@/lib/queries'
-import { useUI, type Theme } from '@/stores/ui'
+import { NavLink, useLocation } from 'react-router'
+import { Blocks, Bell, ChevronRight, LayoutGrid, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
+import { useAgentsAttention, useExtensions, useFeed, useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
-import { useLang, useT, withGroups } from '@/i18n'
+import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { CountBadge, CountDot, NamedIcon, Segmented, Switch } from '@/components/ui'
+import { CountBadge, CountDot, NamedIcon } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
-import { startTour, useTour, useTutorialHref } from '@/tour/store'
+import { useTour } from '@/tour/store'
 import { navTourId, useNav } from './nav'
 import { Logo } from './Logo'
-import { HealthSummary, healthTone } from './HealthIndicator'
+import { healthTone, StatusFooter } from './HealthIndicator'
 import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
-import { UsageIndicator } from './UsageIndicator'
-import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
-import { donationUrl, useDonationShown } from '@/features/donation/Donation'
 
 type Panel = 'sessions' | 'app' | null
 export const useTouchNav = create<{ panel: Panel; setPanel: (p: Panel) => void }>((set) => ({ panel: null, setPanel: (panel) => set({ panel }) }))
@@ -157,31 +153,12 @@ function AgentsTileBadge() {
 /** Right drawer: everything the desktop sidebar holds. */
 function AppPanel() {
   const t = useT()
-  const lang = useLang()
-  const donate = useDonationShown()
-  const navigate = useNavigate()
   const nav = useNav()
   const { data: ext } = useExtensions()
   const pages = (ext || []).filter((e) => e.type === 'page' && e.enabled && !e.error)
   const feed = useFeed()
   const unreadFeed = feed.data?.unread ?? 0
-  const theme = useUI((s) => s.theme)
-  const setTheme = useUI((s) => s.setTheme)
-  const presentation = useUI((s) => s.presentation)
-  const setPresentation = useUI((s) => s.setPresentation)
   const install = useInstallMode()
-  const tutorial = useTutorialHref()
-  const logout = useLogout()
-  const openShortcuts = useShortcutsDialog((s) => s.setOpen)
-  const keyboard = typeof window !== 'undefined' && window.matchMedia('(any-pointer: fine)').matches
-  const [helpOpen, setHelpOpen] = React.useState(false)
-  // the help list folds away instead of vanishing: kept 140 ms after it closes, playing animate-out
-  const [helpShown, setHelpShown] = React.useState(helpOpen)
-  React.useEffect(() => {
-    if (helpOpen) return setHelpShown(true)
-    const id = setTimeout(() => setHelpShown(false), 140)
-    return () => clearTimeout(id)
-  }, [helpOpen])
   const close = () => useTouchNav.getState().setPanel(null)
   const linkCls = ({ isActive }: { isActive: boolean }) => cn(tile, isActive && 'border-primary/60 text-primary')
   // Settings is a row at the bottom, like the sidebar's account area; every other page is a tile.
@@ -219,117 +196,31 @@ function AppPanel() {
           <span className="max-w-full truncate">{t('feed.title')}</span>
           <CountBadge count={unreadFeed} className="absolute top-2 right-2" title={t('feed.unreadCount', { count: unreadFeed })} />
         </NavLink>
-        {pages.length > 0 && (
-          <NavLink to="/x" end className={linkCls} onClick={close}>
-            <Blocks strokeWidth={1.9} />
-            <span className="max-w-full truncate">{t('ext.hubTitle')}</span>
-          </NavLink>
-        )}
-        {pages
-          .filter((x) => x.pinned)
-          .map((x) => (
-            <NavLink key={x.id} to={`/x/${x.id}`} className={linkCls} onClick={close}>
-              <NamedIcon name={x.icon} strokeWidth={1.9} />
-              <span className="max-w-full truncate">{x.name}</span>
-            </NavLink>
-          ))}
       </nav>
 
-      <div className="mx-3 mt-4 grid gap-1 rounded-xl border bg-card p-2" data-tour="health">
-        <UpdateIndicator />
-        <div className="px-1.5 py-1">
-          <HealthSummary compact />
-        </div>
-        <UsageIndicator visible />
-      </div>
+      {/* The extension pages apart from the app's pages, as in the sidebar. */}
+      {pages.length > 0 && (
+        <>
+          <h3 className="px-4 pt-4 pb-2 text-xs font-semibold text-muted-foreground">{t('ext.hubTitle')}</h3>
+          <div className="grid grid-cols-3 gap-2 px-3">
+            <NavLink to="/x" end className={linkCls} onClick={close}>
+              <Blocks strokeWidth={1.9} />
+              <span className="max-w-full truncate">{t('ext.allPages')}</span>
+            </NavLink>
+            {pages
+              .filter((x) => x.pinned)
+              .sort((a, b) => (a.pin_order ?? 1e9) - (b.pin_order ?? 1e9))   // the order dragged in the sidebar
+              .map((x) => (
+                <NavLink key={x.id} to={`/x/${x.id}`} className={linkCls} onClick={close}>
+                  <NamedIcon name={x.icon} strokeWidth={1.9} />
+                  <span className="max-w-full truncate">{x.name}</span>
+                </NavLink>
+              ))}
+          </div>
+        </>
+      )}
 
       <div className="grid gap-0.5 px-2 pt-3">
-        <div className="flex min-h-12 items-center justify-between gap-3 px-3">
-          <span className="text-[15px]">{t('shell.theme')}</span>
-          <Segmented<Theme>
-            value={theme}
-            onChange={setTheme}
-            aria-label={t('shell.theme')}
-            options={[
-              { value: 'dark', label: t('theme.dark') },
-              { value: 'light', label: t('theme.light') },
-              { value: 'system', label: t('theme.auto') },
-            ]}
-          />
-        </div>
-        <label className="flex min-h-12 items-center justify-between gap-3 px-3">
-          <span className="flex items-center gap-3 text-[15px]">
-            <Eye className="size-5 text-muted-foreground" /> {t('presentation.label')}
-          </span>
-          <Switch checked={presentation} onCheckedChange={setPresentation} />
-        </label>
-        <NavLink to="/settings" className={row} onClick={close} data-tour="nav-settings">
-          <Settings /> <span className="flex-1">{t('nav.settings')}</span>
-          <ChevronRight />
-        </NavLink>
-        <button type="button" className={row} onClick={() => setHelpOpen(!helpOpen)} aria-expanded={helpOpen}>
-          <BookOpen />
-          <span className="grid flex-1">
-            <span>{t('shell.help')}</span>
-            <span className="text-[13px] text-muted-foreground">{t('shell.helpHint')}</span>
-          </span>
-          <ChevronRight className={cn('transition-transform', helpOpen && 'rotate-90')} />
-        </button>
-        {(helpOpen || helpShown) && (
-          <div className={cn('grid gap-0.5 pl-6', helpOpen ? 'animate-in' : 'pointer-events-none animate-[mx-out_140ms_ease-in_forwards]')}>
-            <button
-              type="button"
-              className={row}
-              onClick={() => {
-                close()
-                startTour()
-              }}
-            >
-              <Compass /> {t('help.tour')}
-            </button>
-            {tutorial && (
-              <button type="button" className={row} onClick={() => navigate(tutorial)}>
-                <GraduationCap /> {t('help.tutorial')}
-              </button>
-            )}
-            <button type="button" className={row} onClick={() => navigate('/docs')}>
-              <BookOpen /> {t('nav.docs')}
-            </button>
-            {keyboard && (
-              <button
-                type="button"
-                className={row}
-                onClick={() => {
-                  close()
-                  openShortcuts(true)
-                }}
-              >
-                <Keyboard /> {t('shortcuts.title')}
-              </button>
-            )}
-          </div>
-        )}
-        {install && (
-          <button
-            type="button"
-            className={row}
-            onClick={() => {
-              close()
-              void installApp()
-            }}
-          >
-            <Download /> {t('pwa.install')}
-          </button>
-        )}
-        {donate && (
-          <a href={donationUrl(lang)} target="_blank" rel="noopener" className={cn(row, 'font-semibold text-primary [&>svg]:text-primary')} onClick={close}>
-            <HandHeart />
-            <span className="grid flex-1">
-              <span>{t('donation.donate')}</span>
-              <span className="text-[13px] font-normal opacity-80">{t('settings.support.desc')}</span>
-            </span>
-          </a>
-        )}
         <button
           type="button"
           className={row}
@@ -344,9 +235,26 @@ function AppPanel() {
             <span className="text-[13px] text-muted-foreground">{t('shell.feedbackHint')}</span>
           </span>
         </button>
-        <button type="button" className={cn(row, 'text-destructive [&>svg]:text-destructive')} onClick={() => logout.mutate()}>
-          <LogOut /> {t('auth.signOut')}
-        </button>
+        <NavLink to="/settings" className={row} onClick={close} data-tour="nav-settings">
+          <Settings /> <span className="flex-1">{t('nav.settings')}</span>
+          <ChevronRight />
+        </NavLink>
+      </div>
+
+      {/* The sidebar's status footer: health, CPU / RAM / disk, Claude plan, eye, theme, General settings. */}
+      <div className="mx-3 mt-3 grid gap-1 rounded-xl border bg-card p-2" data-tour="health">
+        <UpdateIndicator />
+        <StatusFooter
+          touch
+          onInstall={
+            install
+              ? () => {
+                  close()
+                  void installApp()
+                }
+              : undefined
+          }
+        />
       </div>
       <div className="h-4 shrink-0" />
     </div>

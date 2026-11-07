@@ -7,7 +7,7 @@ def test_get_defaults(client, org):
     assert s == {"timezone": "UTC", "language": "en", "public_url": "", "files_root": str(org.tmp),
                  "presentation_default": False, "usage_widget": False, "tasks_page": False, "git_page": False, "infra_page": False, "team_page": False, "agents_page": False, "mail_page": False,
                  "maxxing_mode": False,
-                 "memory_max_lines": 200, "result_line_hidden": [], "donation_hidden": False}
+                 "memory_max_lines": 200, "result_line_hidden": [], "donation_hidden": False, "sidebar_order": []}
 
 
 def test_maxxing_mode_is_an_opt_in_feature(client, org):
@@ -122,3 +122,21 @@ def test_profile_pseudo(client):
     assert client.put("/api/settings/profile", json={"name": "x" * 50}).json()["name"] == "x" * 32
     client.cookies.clear()
     assert client.get("/api/settings/profile").status_code == 401
+
+
+def test_sidebar_order(client, org):
+    r = client.put("/api/settings", json={"sidebar_order": ["/files", "/sessions", "/files", "/"]})
+    assert r.status_code == 200 and r.json()["sidebar_order"] == ["/files", "/sessions", "/"]
+    assert client.put("/api/settings", json={"sidebar_order": ["javascript:alert(1)"]}).status_code == 400
+    assert client.put("/api/settings", json={"sidebar_order": ["/x"] * 41}).status_code == 400
+    assert config.load_config()["sidebar_order"] == ["/files", "/sessions", "/"]
+
+
+def test_a_broken_saved_sidebar_order_never_breaks_the_settings(client, org):
+    # hand-edited or restored config: not a list, too long, duplicated, foreign values
+    config.update_config(sidebar_order=1)
+    assert client.get("/api/settings").json()["sidebar_order"] == []
+    config.update_config(sidebar_order=[f"/p{i}" for i in range(60)] + ["/p1", "http://evil", 3])
+    got = client.get("/api/settings").json()["sidebar_order"]
+    assert got == [f"/p{i}" for i in range(40)]
+    assert client.put("/api/settings", json={"sidebar_order": got}).status_code == 200

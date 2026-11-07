@@ -1,9 +1,9 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
 // Support (donation) stays last and in the accent colour (pages/settings/index.tsx).
-import { Building2, UserRound, BarChart3, Bell, FolderKanban, HandHeart, History, ToggleRight, Blocks, BookOpen, Bot, Brain, DatabaseBackup, FileInput, KeyRound, Mic, Plug, Send, Server, Shield, SlidersHorizontal, Trash2, type LucideIcon } from 'lucide-react'
+import { Building2, UserRound, BarChart3, Bell, FolderKanban, HandHeart, History, ToggleRight, Blocks, BookOpen, Bot, Brain, Clock, DatabaseBackup, FileInput, KeyRound, Mic, Plug, Send, Server, Shield, SlidersHorizontal, Trash2, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
-export type SettingsSectionId = 'general' | 'profile' | 'license' | 'support' | 'packs' | 'features' | 'notifications' | 'security' | 'claude' | 'stats' | 'memory' | 'telegram' | 'voice' | 'backup' | 'keys' | 'mcp' | 'extensions' | 'import' | 'trash' | 'system' | 'updates' | 'docs'
+export type SettingsSectionId = 'general' | 'profile' | 'license' | 'support' | 'packs' | 'features' | 'notifications' | 'security' | 'claude' | 'stats' | 'memory' | 'crons' | 'telegram' | 'voice' | 'backup' | 'keys' | 'mcp' | 'extensions' | 'import' | 'trash' | 'system' | 'updates' | 'docs'
 
 export const SETTINGS_SECTIONS: { id: SettingsSectionId; label: TKey; description: TKey; icon: LucideIcon; keywords?: string }[] = [
   { id: 'general', label: 'settings.general', description: 'settings.general.desc', icon: SlidersHorizontal, keywords: 'theme accent language timezone density' },
@@ -17,6 +17,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId; label: TKey; descriptio
   { id: 'security', label: 'settings.security', description: 'settings.security.desc', icon: Shield, keywords: 'password sign out' },
   { id: 'claude', label: 'settings.claude', description: 'settings.claude.desc', icon: Bot, keywords: 'model token api key permission' },
   { id: 'memory', label: 'settings.memory', description: 'settings.memory.desc', icon: Brain, keywords: 'second brain memory.md clean compaction lines' },
+  { id: 'crons', label: 'nav.crons', description: 'crons.description', icon: Clock, keywords: 'cron jobs schedule scheduled tasks timer recurring once history run' },
   { id: 'telegram', label: 'settings.telegram', description: 'settings.telegram.desc', icon: Send, keywords: 'bot threads' },
   { id: 'voice', label: 'settings.voice', description: 'settings.voice.desc', icon: Mic, keywords: 'microphone speech transcription whisper dictation audio' },
   { id: 'backup', label: 'settings.backup', description: 'settings.backup.desc', icon: DatabaseBackup, keywords: 'github memory restore' },

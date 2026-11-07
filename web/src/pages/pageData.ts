@@ -42,6 +42,7 @@ const SETTINGS: Record<string, () => Q[]> = {
   backup: () => [backupQuery()],
   telegram: () => [telegramQuery()],
   trash: () => [trashQuery()],
+  crons: () => [cronsQuery(), cronRunsQuery(null, 8)],
 }
 
 /** Starts the requests of the page at `pathname` (+ `search`). Unknown pages: nothing. */
@@ -69,9 +70,6 @@ export function prefetchPageData(qc: QueryClient, pathname: string, search = '')
       break
     case 'tasks':
       queries.push(tasksQuery())
-      break
-    case 'crons':
-      queries.push(cronsQuery(), cronRunsQuery(null, 8))
       break
     case 'feed':
       void qc.prefetchInfiniteQuery(feedPagesQuery(null, false))
