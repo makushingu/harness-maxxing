@@ -67,7 +67,15 @@ def list_hooks() -> list[dict]:
     return [public(h, store) for h in feed.settings()["hooks"]]
 
 
+def _check_secret(secret: str | None) -> None:
+    try:
+        (secret or "").encode("utf-8")
+    except UnicodeEncodeError:
+        raise FeedError(400, "bad_secret", "The secret contains an invalid character") from None
+
+
 def create(name: str, kind: str, secret: str = "") -> dict:
+    _check_secret(secret)
     if kind not in KINDS:
         raise FeedError(400, "bad_kind", f"Kind: {', '.join(KINDS)}")
     source = feed.clean_source(name or kind)
@@ -86,6 +94,7 @@ def create(name: str, kind: str, secret: str = "") -> dict:
 
 
 def update(hid: str, secret: str | None = None, regenerate: bool = False) -> dict:
+    _check_secret(secret)
     with _lock:
         h = _find(hid)
         store = _store()

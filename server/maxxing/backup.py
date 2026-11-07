@@ -54,6 +54,8 @@ ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*
 META_DIR = "_maxxing"
 CRON_NAME = "Memory backup"
 MAX_FILE = 5 * 1024 * 1024
+MAX_RESTORE = 500 * 1024 * 1024    # files read by one restore, in all
+REF_RE = re.compile(r"\A[A-Za-z0-9._/~^@{}][A-Za-z0-9._/~^@{}-]{0,199}\Z")   # a sha, a branch, HEAD~2...
 HISTORY_MAX = 500
 AUTHOR = ("Harness Maxxing", "backup@localhost")
 
@@ -571,6 +573,8 @@ def git(*args: str, cwd: Path, tok: str | None = None, check: bool = True,
         raise BackupError(f"git {args[0]} timed out", "git_timeout") from None
     except FileNotFoundError:
         raise BackupError("git is not installed on this server", "no_git") from None
+    except ValueError:                                 # NUL or lone surrogate in an argument
+        raise BackupError(f"git {args[0]}: invalid argument", "git_failed") from None
     if check and r.returncode != 0:
         err = _scrub(r.stderr.decode(errors="replace").strip(), tok)[-600:]
         raise BackupError(f"git {args[0]} failed: {err}", "git_failed")
@@ -581,12 +585,28 @@ def _out(r: subprocess.CompletedProcess) -> str:
     return r.stdout.decode(errors="replace").strip()
 
 
+def _drop_stale_locks(gd: Path) -> None:
+    """A git killed mid-run (timeout, service stop) leaves its *.lock behind and every later run would fail on it.
+    Under the backup lock no other git works in this copy: the locks are stale."""
+    try:
+        locks = [gd / n for n in ("index.lock", "HEAD.lock", "config.lock", "packed-refs.lock", "shallow.lock")]
+        locks += list((gd / "refs").rglob("*.lock"))
+    except OSError:
+        return
+    for f in locks:
+        try:
+            f.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def prepare(repo: str, tok: str) -> tuple[Path, str | None]:
-    """Working copy ready on top of origin/main -> (path, remote head sha or None)."""
+    """Working copy ready on top of origin/main -> (path, remote head sha or None). Called under `_flock()`."""
     wc = _wc()
     wc.mkdir(parents=True, exist_ok=True)
     if not (wc / ".git").is_dir():
         git("init", "-q", "-b", "main", cwd=wc)
+    _drop_stale_locks(wc / ".git")
     git("config", "user.name", AUTHOR[0], cwd=wc)
     git("config", "user.email", AUTHOR[1], cwd=wc)
     git("config", "core.hooksPath", "/dev/null", cwd=wc)
@@ -744,14 +764,27 @@ def _safe_rel(name: str) -> str | None:
     return p.as_posix()
 
 
+def _utf8(rel: str) -> bool:
+    """A name that is not UTF-8 (never written by a backup) would break the restore half-way: skipped."""
+    try:
+        rel.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _extract(wc: Path, rev: str) -> dict[str, bytes]:
     data = git("archive", "--format=tar", rev, cwd=wc).stdout
     out: dict[str, bytes] = {}
+    total = 0
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         for m in tf.getmembers():
             rel = _safe_rel(m.name)
-            if not m.isfile() or rel is None:
+            if not m.isfile() or rel is None or not _utf8(rel) or m.size > MAX_FILE:   # a backup never has more
                 continue
+            total += m.size
+            if total > MAX_RESTORE:
+                raise BackupError(f"The backup is larger than {MAX_RESTORE // 2**20} MB.", "too_large")
             f = tf.extractfile(m)
             if f is not None:
                 out[rel] = f.read()
@@ -767,6 +800,8 @@ def restore(ref: str | None = None, hold: bool | None = None) -> dict:
     in use) even on a new server (the installer does that, then asks), None = decided by `_fresh_server()`.
     """
     try:
+        if ref and not REF_RE.match(ref):
+            raise BackupError("Invalid revision.", "bad_ref")
         with _flock():
             repo, tok = _settings().get("repo"), _token()
             if not repo or not tok:

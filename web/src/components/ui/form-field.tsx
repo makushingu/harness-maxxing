@@ -27,7 +27,7 @@ export function FormField({ label, hint, error, aside, className, children, id }
     'aria-invalid': error ? true : undefined,
   })
   return (
-    <div className={cn('grid gap-2', className)}>
+    <div className={cn('grid grid-cols-[minmax(0,1fr)] gap-2', className)}>
       {(label || aside) && (
         <div className="flex items-center justify-between gap-2">
           {label ? <Label htmlFor={cid}>{label}</Label> : <span />}

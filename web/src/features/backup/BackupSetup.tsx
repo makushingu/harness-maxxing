@@ -72,7 +72,7 @@ export function BackupSetup({ onFirstRun }: { onFirstRun?: (r: BackupRunResult) 
         >
           <span className="flex flex-wrap items-center gap-2">
             <GitBranch className="size-3.5" />
-            <span className="font-mono">
+            <span className="min-w-0 font-mono break-all">
               <Sensitive length={10}>{b.repo}</Sensitive>
             </span>
             {b.private && (
