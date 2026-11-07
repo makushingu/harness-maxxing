@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import type * as React from 'react'
-import { AlertTriangle, BookOpen, Check, CheckCircle2, CircleAlert, Info, Keyboard, SlidersHorizontal, Undo2 } from 'lucide-react'
+import { AlertTriangle, BookOpen, Check, Download, CheckCircle2, CircleAlert, Info, Keyboard, SlidersHorizontal, Undo2 } from 'lucide-react'
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -142,7 +142,7 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
 /** The sidebar's status footer (and the touch menu's status card): the health line (a click shows the issues, or
  *  "nothing to report"), CPU / RAM / disk (-> Settings -> System), the Claude plan (-> Settings -> Stats), then the
  *  eye, the theme, the docs, the keyboard shortcuts and General settings. Folded: the dot, the thin plan bars and the three icons. */
-export function StatusFooter({ collapsed, touch }: { collapsed?: boolean; touch?: boolean }) {
+export function StatusFooter({ collapsed, touch, onInstall }: { collapsed?: boolean; touch?: boolean; /** touch menu: Install app at the right of the icons */ onInstall?: () => void }) {
   const t = useT()
   const { data: h } = useHealth()
   const tone = healthTone(h)
@@ -196,6 +196,11 @@ export function StatusFooter({ collapsed, touch }: { collapsed?: boolean; touch?
           </Tooltip>
         )}
         <IconLink to="/settings/general" label={`${t('nav.settings')} · ${t('settings.general')}`} collapsed={collapsed} icon={<SlidersHorizontal />} />
+        {onInstall && (
+          <Button variant="ghost" size="sm" className="ml-auto h-8 gap-1.5 px-2.5 text-muted-foreground hover:text-foreground" onClick={onInstall}>
+            <Download /> {t('pwa.install')}
+          </Button>
+        )}
       </div>
     </div>
   )

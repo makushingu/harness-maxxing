@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation } from 'react-router'
-import { Blocks, Bell, ChevronRight, Download, LayoutGrid, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
+import { Blocks, Bell, ChevronRight, LayoutGrid, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
 import { useAgentsAttention, useExtensions, useFeed, useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
@@ -221,18 +221,6 @@ function AppPanel() {
       )}
 
       <div className="grid gap-0.5 px-2 pt-3">
-        {install && (
-          <button
-            type="button"
-            className={row}
-            onClick={() => {
-              close()
-              void installApp()
-            }}
-          >
-            <Download /> {t('pwa.install')}
-          </button>
-        )}
         <button
           type="button"
           className={row}
@@ -256,7 +244,17 @@ function AppPanel() {
       {/* The sidebar's status footer: health, CPU / RAM / disk, Claude plan, eye, theme, General settings. */}
       <div className="mx-3 mt-3 grid gap-1 rounded-xl border bg-card p-2" data-tour="health">
         <UpdateIndicator />
-        <StatusFooter touch />
+        <StatusFooter
+          touch
+          onInstall={
+            install
+              ? () => {
+                  close()
+                  void installApp()
+                }
+              : undefined
+          }
+        />
       </div>
       <div className="h-4 shrink-0" />
     </div>
