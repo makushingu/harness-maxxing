@@ -15,7 +15,7 @@ from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
-KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "git_page", "infra_page", "team_page", "agents_page", "mail_page",
+KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page",
         "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 _URL = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")
@@ -28,6 +28,7 @@ class SettingsIn(BaseModel):
     files_root: Optional[str] = None
     presentation_default: Optional[bool] = None
     usage_widget: Optional[bool] = None
+    tasks_page: Optional[bool] = None
     git_page: Optional[bool] = None
     infra_page: Optional[bool] = None
     team_page: Optional[bool] = None
@@ -49,6 +50,7 @@ def current() -> dict:
             "public_url": cfg.get("public_url") or "", "files_root": cfg.get("files_root") or "/root",
             "presentation_default": bool(cfg.get("presentation_default", False)),
             "usage_widget": bool(cfg.get("usage_widget", False)),
+            "tasks_page": bool(cfg.get("tasks_page", False)),
             "git_page": bool(cfg.get("git_page", False)),
             "infra_page": bool(cfg.get("infra_page", False)),
             "team_page": bool(cfg.get("team_page", False)),

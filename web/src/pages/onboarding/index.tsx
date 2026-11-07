@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { store as lsStore } from '@/lib/utils'
 import { useNavigate, useSearchParams } from 'react-router'
-import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, FolderOpen, ListChecks, MessagesSquare, Send, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, FolderOpen, ListChecks, MessagesSquare, Send, ToggleRight, type LucideIcon } from 'lucide-react'
 import { useClaudeStatus, useCompleteOnboarding, useOnboarding, useProfile, useRegister, useSaveLicense, useSaveProfile, useSaveRegister, useSaveSettings, useSettings } from '@/lib/queries'
 import { browserTimezone } from '@/lib/timezones'
 import { useUI } from '@/stores/ui'
@@ -399,11 +399,15 @@ const TOUR: { icon: LucideIcon; title: TKey; desc: TKey }[] = [
   { icon: Send, title: 'settings.telegram', desc: 'onb.tour.telegram' },
   { icon: BookOpen, title: 'nav.docs', desc: 'onb.tour.docs' },
 ]
+/** In place of the Tasks card while Tasks is off (new installs): the optional pages, Tasks among them. */
+const FEATURES_CARD = { icon: ToggleRight, title: 'settings.features', desc: 'onb.tour.features' } as const
 
 function DoneStep({ onBack, onboarding }: { onBack: () => void; onboarding: OnboardingState | undefined }) {
   const t = useT()
   const navigate = useNavigate()
   const complete = useCompleteOnboarding()
+  const { data: settings } = useSettings()
+  const tour = TOUR.map((c) => (c.title === 'nav.tasks' && settings && !settings.tasks_page ? FEATURES_CARD : c))
   const rows: { label: TKey; ok: boolean; optional?: boolean }[] = [
     { label: 'onb.summary.password', ok: !!onboarding?.steps.password },
     { label: 'onb.summary.claude', ok: !!onboarding?.steps.claude },
@@ -427,7 +431,7 @@ function DoneStep({ onBack, onboarding }: { onBack: () => void; onboarding: Onbo
           ))}
         </ul>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {TOUR.map((c) => (
+          {tour.map((c) => (
             <div key={c.title} className="rounded-xl border bg-card p-4">
               <c.icon className="mb-3 size-5 text-primary" strokeWidth={1.8} />
               <div className="text-sm font-medium">{t(c.title)}</div>

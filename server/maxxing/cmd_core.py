@@ -544,6 +544,9 @@ def do_init(a: argparse.Namespace) -> dict:
     if "health_feed" not in raw:                  # health problems in the feed: new installs only (they may reach
         old = _install_state()                    # Telegram); an older install turns it on itself (Notifications)
         raw["health_feed"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
+    if "tasks_page" not in raw:                   # Tasks became optional, off for new installs; older
+        old = _install_state()                    # ones keep the page they had
+        raw["tasks_page"] = bool(old.get("version") or old.get("initialized") or old.get("default_crons"))
     from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
     register.migrate(raw)
     config.write_json(config.config_path(), raw)
