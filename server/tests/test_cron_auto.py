@@ -198,7 +198,7 @@ def test_limit_reset_reads_the_limits_claude_code_reported(org):
 def test_failed_shell_job_with_retries_is_retried_by_the_tick(org, monkeypatch):
     sent, telegram = [], []
     gw = types.ModuleType("maxxing.telegram.gateway")
-    gw.notify_cron = telegram.append
+    gw.notify_cron_report = lambda header, body="", **kw: telegram.append(header + ("\n" + body if body else ""))
     monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
     import maxxing.telegram as tpkg
     monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
@@ -228,7 +228,7 @@ def test_failed_shell_job_with_retries_is_retried_by_the_tick(org, monkeypatch):
 def test_last_attempt_reports_the_failure_on_telegram(org, monkeypatch):
     telegram = []
     gw = types.ModuleType("maxxing.telegram.gateway")
-    gw.notify_cron = telegram.append
+    gw.notify_cron_report = lambda header, body="", **kw: telegram.append(header + ("\n" + body if body else ""))
     monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
     import maxxing.telegram as tpkg
     monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
@@ -601,7 +601,7 @@ def test_retries_need_the_tick(org, monkeypatch):
     assert not crons.tick_alive()
     telegram = []
     gw = types.ModuleType("maxxing.telegram.gateway")
-    gw.notify_cron = telegram.append
+    gw.notify_cron_report = lambda header, body="", **kw: telegram.append(header + ("\n" + body if body else ""))
     monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
     import maxxing.telegram as tpkg
     monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
