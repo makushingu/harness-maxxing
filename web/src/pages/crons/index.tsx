@@ -34,7 +34,7 @@ import {
   useMask,
 } from '@/components/ui'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
-import { KindBadge, LastRun, RunsHistory, cap, useNow } from '@/features/crons/parts'
+import { KindBadge, LastRun, RunsHistory, StateBadge, cap, useJobWhen, useNow } from '@/features/crons/parts'
 
 /** An agent's cron runs in the agent's folder: its link opens the agent, not Sessions. */
 const agentPage = (path: string) => {
@@ -186,6 +186,8 @@ type Actions = { edit: (j: Cron) => void; duplicate: (j: Cron) => void; remove: 
 function NextRun({ job, tz, now }: { job: Cron; tz?: string; now: number }) {
   const t = useT()
   const lang = useLang()
+  if (job.retry_at) return <span title={fmtDate(job.retry_at, lang, tz)}>{t('crons.retryAt', { when: fmtRelative(job.retry_at, lang, now) })}</span>
+  if (job.once_at && job.done_at) return <span>{job.missed ? t('crons.missed') : t('crons.done')}</span>
   if (!job.enabled) return <span>{t('crons.paused')}</span>
   if (!job.next_run) return <span>{t('crons.noNextRun')}</span>
   return (
@@ -245,6 +247,7 @@ function RunButton({ job, actions, withLabel }: { job: Cron; actions: Actions; w
 
 function JobRow({ job, tz, now, onOpen, onToggle, actions }: { job: Cron; tz?: string; now: number; onOpen: () => void; onToggle: (v: boolean) => void; actions: Actions }) {
   const t = useT()
+  const when = useJobWhen()
   return (
     <li className={cn('flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40', !job.enabled && 'opacity-70')} data-job-id={job.id}>
       <button type="button" onClick={onOpen} className="grid min-w-0 flex-1 gap-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -259,10 +262,10 @@ function JobRow({ job, tz, now, onOpen, onToggle, actions }: { job: Cron; tz?: s
               {t('crons.running')}
             </Badge>
           )}
-          {!job.enabled && <Badge variant="muted">{t('crons.disabled')}</Badge>}
+          <StateBadge job={job} />
         </span>
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-muted-foreground">
-          <span className="font-medium text-foreground/80">{cap(job.human)}</span>
+          <span className="font-medium text-foreground/80">{when(job, tz)}</span>
           <span aria-hidden className="max-sm:hidden">·</span>
           <NextRun job={job} tz={tz} now={now} />
         </span>
@@ -297,6 +300,7 @@ function JobSheet({
   const t = useT()
   const lang = useLang()
   const mask = useMask()
+  const when = useJobWhen()
   const listed = id ? jobs.find((j) => j.id === id) : undefined
   const one = useCron(id && !listed && !loading ? id : null)
   const job = listed || one.data
@@ -343,13 +347,19 @@ function JobSheet({
                     {t('crons.running')}
                   </Badge>
                 )}
-                {!job.enabled && <Badge variant="muted">{t('crons.disabled')}</Badge>}
+                <StateBadge job={job} />
               </div>
               <SheetTitle className="text-lg">
                 <Sensitive length={10}>{job.name}</Sensitive>
               </SheetTitle>
               <SheetDescription>
-                {cap(job.human)} · <code className="font-mono text-xs">{job.schedule}</code>
+                {job.once_at ? (
+                  when(job, tz)
+                ) : (
+                  <>
+                    {cap(job.human)} · <code className="font-mono text-xs">{job.schedule}</code>
+                  </>
+                )}
               </SheetDescription>
               <div className="flex flex-wrap gap-2 pt-1">
                 <RunButton job={job} actions={actions} withLabel />

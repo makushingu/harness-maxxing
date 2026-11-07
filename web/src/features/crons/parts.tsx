@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
 import { useCronRuns } from '@/lib/queries'
-import type { CronKind, CronLastRun, CronRun } from '@/lib/types'
+import type { Cron, CronKind, CronLastRun, CronRun } from '@/lib/types'
 import { Badge, Button, CodeBlock, EmptyState, Sensitive, Skeleton, StatusDot } from '@/components/ui'
 
 /** Sentence case for the server's humanised schedules. */
@@ -20,6 +20,42 @@ export function useNow(ms = 30_000) {
     return () => clearInterval(id)
   }, [ms])
   return now
+}
+
+/** When a job runs, in words: the server's text for a schedule, the date of a one-time job in the UI language. */
+export function useJobWhen() {
+  const t = useT()
+  const lang = useLang()
+  return (job: Cron, tz?: string) =>
+    job.once_at && job.once_ts ? t('crons.onceOn', { date: fmtDate(job.once_ts, lang, tz, { dateStyle: 'medium', timeStyle: 'short' }) }) : cap(job.human)
+}
+
+/** State badge of a job: done / missed one-time job, else disabled. */
+export function StateBadge({ job }: { job: Cron }) {
+  const t = useT()
+  if (job.once_at && job.done_at) return <Badge variant="muted">{job.missed ? t('crons.missed') : t('crons.done')}</Badge>
+  if (!job.enabled) return <Badge variant="muted">{t('crons.disabled')}</Badge>
+  return null
+}
+
+/** How a run was started, when it is worth saying: a catch-up, a retry, an answer with nothing to report. */
+export function RunNotes({ run, className }: { run: Pick<CronRun, 'trigger' | 'attempt' | 'silent'>; className?: string }) {
+  const t = useT()
+  const notes = [
+    run.trigger === 'catch-up' && t('crons.trigger.catchUp'),
+    (run.attempt || 1) > 1 && t('crons.trigger.retry', { n: run.attempt || 1 }),
+    run.silent && t('crons.silent'),
+  ].filter(Boolean) as string[]
+  if (!notes.length) return null
+  return (
+    <span className={cn('inline-flex flex-wrap gap-1', className)}>
+      {notes.map((n) => (
+        <Badge key={n} variant="muted" className="font-normal">
+          {n}
+        </Badge>
+      ))}
+    </span>
+  )
 }
 
 export function KindBadge({ kind, className }: { kind: CronKind; className?: string }) {
@@ -43,6 +79,7 @@ export function LastRun({ run, tz, now }: { run: CronLastRun | null; tz?: string
       <span className="truncate text-muted-foreground max-md:whitespace-normal max-md:break-words">
         {fmtRelative(run.at, lang, now)} · {fmtDuration(run.duration_s)}
       </span>
+      <RunNotes run={{ trigger: run.trigger || undefined, attempt: run.attempt, silent: run.silent }} />
     </span>
   )
 }
@@ -115,9 +152,11 @@ function RunRow({ run, tz, showName, defaultOpen }: { run: CronRun; tz?: string;
               </span>
             )}
             <span className="text-muted-foreground tabular-nums">{fmtDate(run.at, lang, tz)}</span>
+            <RunNotes run={run} />
           </span>
           <span className="text-xs text-muted-foreground tabular-nums">
             {fmtRelative(run.at, lang)} · {fmtDuration(run.duration_s)}
+            {run.retry_at ? ` · ${t('crons.retryAt', { when: fmtRelative(run.retry_at, lang) })}` : ''}
           </span>
         </span>
         {hasOut && <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />}

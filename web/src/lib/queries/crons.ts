@@ -29,6 +29,16 @@ export function useCronPreview(schedule: string) {
     staleTime: 60_000,
   })
 }
+/** Preview of a one-time job's date ("YYYY-MM-DDTHH:MM", debounced by the caller). */
+export function useCronOncePreview(onceAt: string) {
+  return useQuery({
+    queryKey: qk.crons.preview(`once:${onceAt}`),
+    queryFn: () => api.get<CronPreview>('/api/crons/preview', { once_at: onceAt }),
+    enabled: onceAt.trim().length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  })
+}
 const inv = [qk.crons.all] as const
 export function useCreateCron() {
   return useMut((b: CronInput) => api.post<Cron>('/api/crons', b), { invalidate: inv, errorToast: false })
