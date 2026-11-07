@@ -423,3 +423,36 @@ def test_only_cron_turns_get_the_silent_hint(mx, monkeypatch, tmp_path):
     hints = [c["argv"][c["argv"].index("--append-system-prompt") + 1] for c in calls]
     assert spawn.CRON_SILENT in hints[0] and "[SILENT]" not in calls[0]["prompt"]
     assert spawn.CRON_SILENT not in hints[-1]
+
+
+# ---- review fixes -------------------------------------------------------------------------------
+def _aged(name, **fields):
+    j = crons.create_job({"name": name, **fields})
+    raw = crons._load_raw()
+    for x in raw:
+        if x["id"] == j["id"]:
+            x["created"] = x["updated"] = time.time() - 3 * 86400
+    crons._save_raw(raw)
+    return j
+
+
+def test_a_killed_run_is_never_run_again_by_the_catch_up(org, monkeypatch, tmp_path):
+    """A run killed by a reboot / out of memory leaves only its mark in the lock file: it counts for its slot."""
+    import json
+    sent = tmp_path / "sent"
+    j = _aged("Invoices", command=f"echo SENT >> {sent}", schedule="0 7 * * *")
+    slot = crons.next_runs("0 7 * * *", 1, time.time() - 86400)[0]
+    crons._lock_path(j["id"]).write_text(json.dumps({"at": slot + 1, "pgid": 999999, "pgid_start": "x"}))
+    started = []
+    monkeypatch.setattr(crons, "spawn_run", lambda cid, trigger="manual", attempt=1: started.append(trigger))
+    reports = []
+    monkeypatch.setattr(crons, "_notify", lambda job, r, answer=None: reports.append(r))
+    now = max(time.time(), slot + 600)
+    assert crons.tick(now) == [] and started == []
+    r = crons.run_job(j["id"], "catch-up")                            # started anyway (an older server's tick)
+    assert r["skipped"] and not sent.exists()
+    runs = crons.read_runs(j["id"])
+    assert len(runs) == 1 and "interrupted" in runs[0]["output_tail"]   # recorded and reported, once
+    assert len(reports) == 1 and not reports[0]["ok"]
+    assert crons._lock_path(j["id"]).read_text() == ""
+    assert crons.tick(now) == []

@@ -1508,6 +1508,19 @@ def _runs_of(cid: str) -> list[dict]:
     return [r for r in _all_runs() if r.get("cron_id") == cid]
 
 
+def _lock_mark(cid: str) -> list[dict]:
+    """The run left in the lock file by a run killed before its end (reboot, out of memory), as a Run-like entry
+    ([] when there is none). It is recorded "interrupted" only by the job's next run: until then it still counts as
+    the run of its slot, so a killed run is never started again by the catch-up. Read without the lock: the tick
+    only asks for jobs that are not running."""
+    try:
+        mark = json.loads(_lock_path(cid).read_text() or "null")
+    except (OSError, ValueError):
+        return []
+    at = mark.get("at") if isinstance(mark, dict) else None
+    return [{"at": float(at), "duration_s": 0}] if isinstance(at, (int, float)) and math.isfinite(at) else []
+
+
 def _known_since(runs: list[dict]) -> float | None:
     """The time of the oldest run of a history that was trimmed (MAX_RUNS reached; None when it holds everything)."""
     if len(runs) < MAX_RUNS:
@@ -1603,7 +1616,8 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
             if is_once(j) and not j.get("done_at") and (once_ts(j["once_at"], zone) or now) < now - CATCH_UP_WINDOW_S:
                 _finish_once(cid, missed=True)
                 continue
-            if catch_up_slot(j, runs.get(cid, []), now, zone, since) is not None and not isinstance(w, dict):
+            if catch_up_slot(j, runs.get(cid, []) + _lock_mark(cid), now, zone, since) is not None \
+                    and not isinstance(w, dict):
                 spawn_run(cid, "catch-up")
                 started.append((cid, "catch-up"))
         except Exception as e:  # noqa: BLE001 - one job must not stop the others
@@ -1683,17 +1697,21 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
     try:
         if not _flock_within(lockf, 1.0):
             return None
-        why = _skip_reason(cid, trigger, attempt, time.time())
-        if why:
-            log.info("cron %s: %s run skipped: %s", cid, trigger, why)
-            return {"skipped": why, "cron_id": cid}
-        slot = catch_up_slot(job, _runs_of(cid), time.time(), tz()) if trigger == "catch-up" else None
+        # a run killed before its end is recorded first: it counts as the run of its slot (never caught up again)
         lost = _interrupted(cid, job, lockf)
         if lost:
             try:
                 append_run(lost)
             except Exception:
                 log.exception("cron %s: cannot record the interrupted run", cid)
+            lockf.seek(0)
+            lockf.truncate()
+            lockf.flush()
+        why = _skip_reason(cid, trigger, attempt, time.time())
+        if why:
+            log.info("cron %s: %s run skipped: %s", cid, trigger, why)
+            return {"skipped": why, "cron_id": cid}     # the interrupted run is still reported (finally)
+        slot = catch_up_slot(job, _runs_of(cid), time.time(), tz()) if trigger == "catch-up" else None
         start = time.time()
         _mark(lockf, start)
         _live_locks[cid] = (lockf, start)
@@ -1751,8 +1769,8 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
             fcntl.flock(lockf, fcntl.LOCK_UN)
         finally:
             lockf.close()
-    if lost:
-        _notify(job, lost)
+        if lost:
+            _notify(job, lost)
     _notify(job, run, answer)                            # after the lock: a slow Telegram never holds the job
     return run
 
