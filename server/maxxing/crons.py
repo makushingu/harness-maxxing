@@ -1508,6 +1508,14 @@ def _runs_of(cid: str) -> list[dict]:
     return [r for r in _all_runs() if r.get("cron_id") == cid]
 
 
+def _known_since(runs: list[dict]) -> float | None:
+    """The time of the oldest run of a history that was trimmed (MAX_RUNS reached; None when it holds everything)."""
+    if len(runs) < MAX_RUNS:
+        return None
+    at = runs[0].get("at")
+    return float(at) if isinstance(at, (int, float)) else None
+
+
 # =============================================================================================
 # Catch-up of missed runs
 # =============================================================================================
@@ -1524,12 +1532,14 @@ def _last_slot(c: CronExpr, now: float, zone: ZoneInfo) -> float | None:
     return slot
 
 
-def catch_up_slot(job: dict, runs: list[dict], now: float, zone: ZoneInfo) -> float | None:
+def catch_up_slot(job: dict, runs: list[dict], now: float, zone: ZoneInfo,
+                  known_since: float | None = None) -> float | None:
     """The missed fire time to make up for now, or None. Pure (job, its runs, a clock): a job is caught up once,
     for its most recent slot of the last 24 h, when that slot is past by CATCH_UP_GRACE_S, no run started at or
     after it, none was still running at that time (an overlap is not a miss), and the job already existed with
     this definition before it (`created` / `updated`; a job without them is never caught up). Never for @reboot,
-    jobs running more often than hourly, disabled jobs or `catch_up: false`. A one-time job's slot is its date."""
+    jobs running more often than hourly, disabled jobs or `catch_up: false`. A one-time job's slot is its date.
+    `known_since`: the oldest run left in a trimmed history - before it, a run may have been dropped, not missed."""
     if not job.get("enabled", True) or job.get("catch_up", True) is False:
         return None
     if is_once(job):
@@ -1550,6 +1560,8 @@ def catch_up_slot(job: dict, runs: list[dict], now: float, zone: ZoneInfo) -> fl
         if slot is None or max(born) >= slot:
             return None
     if slot is None or slot > now - CATCH_UP_GRACE_S or slot < now - CATCH_UP_WINDOW_S:
+        return None
+    if known_since is not None and known_since > slot - SLOT_SLACK_S:
         return None
     for r in runs:
         at = r.get("at")
@@ -1572,7 +1584,9 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
         return []
     zone, started = tz(), []
     runs: dict[str, list[dict]] = {}
-    for r in _all_runs():
+    history = _all_runs()
+    since = _known_since(history)
+    for r in history:
         runs.setdefault(str(r.get("cron_id")), []).append(r)
     waiting = _read_retries()
     for raw in jobs:
@@ -1589,7 +1603,7 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
             if is_once(j) and not j.get("done_at") and (once_ts(j["once_at"], zone) or now) < now - CATCH_UP_WINDOW_S:
                 _finish_once(cid, missed=True)
                 continue
-            if catch_up_slot(j, runs.get(cid, []), now, zone) is not None and not isinstance(w, dict):
+            if catch_up_slot(j, runs.get(cid, []), now, zone, since) is not None and not isinstance(w, dict):
                 spawn_run(cid, "catch-up")
                 started.append((cid, "catch-up"))
         except Exception as e:  # noqa: BLE001 - one job must not stop the others
@@ -1641,7 +1655,7 @@ def _skip_reason(cid: str, trigger: str, attempt: int, now: float) -> str | None
         return "gone"
     job = {**DEFAULTS, **job}
     if trigger == "catch-up":
-        if catch_up_slot(job, _runs_of(cid), now, tz()) is None:
+        if catch_up_slot(job, _runs_of(cid), now, tz(), _known_since(_all_runs())) is None:
             return "not missed any more"
     elif trigger == "retry":
         if _take_retry(cid, attempt, now) is None:

@@ -72,6 +72,14 @@ def test_a_slot_skipped_because_the_previous_run_was_still_running_is_not_a_miss
     assert crons.catch_up_slot(j, [long_run], ts(2026, 11, 7, 9, 30), UTC) is None   # 08:00 overlapped
 
 
+def test_a_trimmed_history_is_not_taken_for_a_miss():
+    j = job(schedule="0 7 * * *")
+    now = ts(2026, 11, 7, 10)
+    assert crons.catch_up_slot(j, [], now, UTC, known_since=ts(2026, 11, 7, 8)) is None    # its run may be gone
+    assert crons.catch_up_slot(j, [], now, UTC, known_since=ts(2026, 11, 6, 8)) == ts(2026, 11, 7, 7)
+    assert crons._known_since([{"at": 5.0}]) is None
+
+
 def test_catch_up_uses_the_configured_zone():
     j = job(schedule="0 7 * * *")
     now = ts(2026, 11, 7, 10)                                                       # 11:00 in Paris
@@ -396,3 +404,22 @@ def test_silent_claude_run_sends_nothing_on_telegram(org, monkeypatch):
 def test_cron_turns_are_told_they_may_answer_silent():
     from maxxing.sessions import spawn
     assert "[SILENT]" in spawn.CRON_SILENT and len(spawn.CRON_SILENT) < 300
+
+
+def test_only_cron_turns_get_the_silent_hint(mx, monkeypatch, tmp_path):
+    """Real sessions service + fake claude binary: the hint goes into the turn's system prompt, not its message."""
+    import json
+    from maxxing import bus, workspace
+    from maxxing.sessions import service, spawn
+    monkeypatch.setattr(bus, "_loop", None)                         # like the CLI: no server loop
+    workspace.create_project("acme")
+    workspace.create_topic("acme", "blog")
+    j = crons.create_job({"name": "Digest", "kind": "claude", "topic_path": "projects/acme/topics/blog",
+                          "prompt": "NOTOOL say hi", "timeout_s": 60})
+    assert crons.run_job(j["id"])["ok"]
+    s = service.create_session("projects/acme/topics/blog", message="NOTOOL hello")
+    service.wait_turn(s["id"], 30)
+    calls = [json.loads(x) for x in (mx["fake_dir"] / "calls.jsonl").read_text().splitlines()]
+    hints = [c["argv"][c["argv"].index("--append-system-prompt") + 1] for c in calls]
+    assert spawn.CRON_SILENT in hints[0] and "[SILENT]" not in calls[0]["prompt"]
+    assert spawn.CRON_SILENT not in hints[-1]
