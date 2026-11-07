@@ -3,6 +3,21 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.130 - 2026-11-07
+
+Changed:
+- **Crons moved into Settings**: **Settings -> Crons** (same page, same jobs). Old links to the Crons page, in
+  notifications, Telegram reports or bookmarks, still open it.
+- **Your sidebar, your order**: drag the pages of the sidebar to reorder them (Settings stays at the bottom). The
+  Extensions entry folds and unfolds your pinned pages, which you can drag among themselves too. Phones and tablets
+  follow the same order in the ⊞ menu.
+- **A cleaner bottom of the sidebar**: Feedback and Settings are rows like the pages; below them, the server status
+  (click it for the issues, or "Nothing to report"), CPU / RAM / disk (opens Settings -> System), your Claude plan
+  (opens Settings -> Stats), then presentation mode, the theme, the docs, the keyboard shortcuts and General
+  settings. The button that folds the sidebar sits next to the logo.
+- **The ⊞ menu on phones** is laid out the same way, with Install app next to the icons. The guided tour and the
+  tutorial are in **Settings -> General**, Sign out in **Settings -> Security**.
+
 ## 2.0.0-alpha.129 - 2026-11-07
 
 Changed:

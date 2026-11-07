@@ -252,7 +252,8 @@ export function Sidebar() {
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
           {drag.order.map((to) => {
-            const item = main.find((n) => n.to === to)!
+            const item = main.find((n) => n.to === to)
+            if (!item) return null // switched off in another tab during a drag
             return navItem(item, nav.indexOf(item), drag.props(to))
           })}
         </nav>

@@ -62,7 +62,14 @@ def current() -> dict:
             "memory_max_lines": memory.max_lines(),
             "result_line_hidden": [f for f in RESULT_FIELDS if f in (cfg.get("result_line_hidden") or [])],
             "donation_hidden": bool(cfg.get("donation_hidden", False)),
-            "sidebar_order": [r for r in (cfg.get("sidebar_order") or []) if isinstance(r, str) and _ROUTE.match(r)]}
+            "sidebar_order": sidebar_order(cfg.get("sidebar_order"))}
+
+
+def sidebar_order(raw: object) -> list[str]:
+    """The saved sidebar order, cleaned (a hand-edited or restored config never breaks the settings or the sidebar)."""
+    if not isinstance(raw, list):
+        return []
+    return list(dict.fromkeys(r for r in raw if isinstance(r, str) and _ROUTE.match(r)))[:40]
 
 
 ACCENTS = ("blue", "clay", "violet", "green", "amber", "rose")

@@ -36,10 +36,11 @@ export function useDragOrder(ids: string[], commit: (ids: string[]) => void, sco
     onDrop: (e: React.DragEvent) => {
       if (dragged.current && e.dataTransfer.types.includes(type)) e.preventDefault()
     },
-    onDragEnd: () => {
-      const l = liveRef.current
+    onDragEnd: (e: React.DragEvent) => {
+      const l = liveRef.current?.filter((x) => ids.includes(x))
       dragged.current = null
       update(null)
+      if (e.dataTransfer.dropEffect === 'none') return // Escape, or dropped outside the list: nothing changes
       if (l && l.join('\n') !== ids.join('\n')) commit(l)
     },
   })

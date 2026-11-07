@@ -58,7 +58,7 @@ export function orderNav(items: NavItem[], order: string[] | undefined): NavItem
   const main = items.filter((n) => n.group === 'main')
   const end = items.filter((n) => n.group !== 'main')
   if (!order?.length) return items
-  const out = order.map((to) => main.find((n) => n.to === to)).filter((n): n is NavItem => !!n)
+  const out = [...new Set(order)].map((to) => main.find((n) => n.to === to)).filter((n): n is NavItem => !!n)
   main.forEach((n, i) => {
     if (out.includes(n)) return
     const before = main.slice(0, i).reverse().find((p) => out.includes(p))
