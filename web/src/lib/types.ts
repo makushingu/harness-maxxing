@@ -740,6 +740,8 @@ export type Settings = {
   files_root: string
   presentation_default?: boolean
   usage_widget: boolean
+  /** Settings -> Features: the Tasks page (/tasks), its sidebar entry and dashboard widget (off when new) */
+  tasks_page?: boolean
   /** Settings -> Features: the Git & GitHub page (/git) and its sidebar entry */
   git_page: boolean
   /** Settings -> Features: the Infra page (/infra) and its sidebar entry */
