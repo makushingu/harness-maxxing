@@ -3630,7 +3630,7 @@ export const en = {
   'mail.acc.note.gmail': 'Gmail refuses your normal password here. Turn on 2-Step Verification on the Google account, then create an app password (16 letters) and paste it above:',
   'mail.acc.note.microsoft': 'Outlook.com / Hotmail no longer accept a password for IMAP (Microsoft sign-in only): this mailbox cannot be added yet. A work Microsoft 365 mailbox works only if its admin left IMAP on.',
   'mail.acc.note.proton': 'Proton Mail has no IMAP access: a free Proton mailbox cannot be added. Paid plans can, through Proton Mail Bridge installed on this server (advanced).',
-  'mail.acc.passwordKeep': 'Leave empty to keep the current one.',
+  'mail.acc.passwordKeep': 'Leave empty to keep the current one (needed again to change the server or the user name).',
   'mail.acc.name': 'Your name',
   'mail.acc.nameHint': 'Shown to the people you write to.',
   'mail.acc.label': 'Short name',
