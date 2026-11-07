@@ -13,16 +13,53 @@ Click **New job** and fill in:
 | Field | Meaning |
 |---|---|
 | Name | short label |
-| Schedule | cron expression; the editor shows it in words and lists the next runs |
+| Schedule | **Repeat**: a cron expression; the editor shows it in words and lists the next runs. **Once**: a date and time (see [One-time jobs](#one-time-jobs)) |
+| Catch up a missed run | repeating jobs: run once a run missed while the server was off (on by default, see below) |
 | Type | **Shell** (a command run with bash) or **Claude** (a prompt sent to a session in a topic) |
 | Command | shell: e.g. `/root/maxxing/projects/acme/scripts/report.sh` |
 | Topic, prompt, model | Claude: where the session runs (follows a rename of the topic or its project), what to do, which model |
 | Reuse session | Claude: keep one session across runs (it accumulates context) instead of a new session each time |
 | Notify | Telegram report: never, on failure (default), always |
 | Timeout | maximum duration (default 1 hour) |
+| Retries after a failure | shell: try a failed command again, up to 5 times (none by default) |
 
 **Run now** starts a job immediately. The history shows the last runs with their output tail; for
 Claude jobs, a link opens the session.
+
+## One-time jobs
+
+For a reminder or a single task ("remind me in 30 minutes", "tomorrow at 9, check the deployment"), choose
+**Once** in the editor and pick a date and time (in the time zone of Settings -> General). The job runs once at that
+minute, then turns itself off and shows **Done** in the list (its history stays). With **Delete the job once it ran**,
+it is removed instead (`maxxing cron deleted` still lists it). To use it again, give it a new date and switch it on.
+Harness creates such jobs when you ask in a session.
+
+## Missed runs and retries
+
+**Catch-up.** If the server was off (or the cron daemon stopped) when a job should have run, Harness Maxxing runs it
+**once** when it is back, even if several runs were missed. Only the most recent missed run of the last 24 hours
+counts, and only for jobs that run at most every hour (a job every 15 minutes simply runs again soon); `@reboot` jobs
+are never caught up, nor a job created or changed after the missed time. The server checks a minute and a half after it
+starts, then every 5 minutes. The run is marked "Catch-up" in the history and the report says which run it makes up
+for. Turn **Catch up a missed run** off for a job that must only run at its exact time. A one-time job missed by
+more than 24 hours is not run: it shows **Missed**.
+
+**Retries.** A Claude job that fails for a passing reason is tried again by itself:
+- the usage limit of your Claude plan was reached: after the limit resets (the reset time Claude Code reported, else
+  30 minutes later);
+- Claude's API was overloaded or unreachable (errors 5xx, 529, 429, network): after 5, then 15, then 30 minutes.
+
+At most 3 retries. A shell job is retried only when you set **Retries after a failure** (`retries`), after any failure,
+with the same delays. A job that hit its timeout is never retried, and a waiting retry is cancelled when you switch
+the job off, delete it, or it runs again meanwhile. The history shows "Attempt 2", "Attempt 3"...; Telegram gets
+only the final outcome (a failure that will be retried appears in the notifications feed as "Cron will retry", not on
+Telegram).
+
+## Nothing to report
+
+A Claude job is told it may answer exactly `[SILENT]` when there is nothing worth reporting (no new order, nothing
+changed on the watched page...). Such a run sends nothing on Telegram, even with notify "always", and shows as a
+success marked "Nothing to report". You can also ask for it in the prompt: "if nothing changed, answer [SILENT]".
 
 ## Schedule syntax
 
@@ -96,8 +133,10 @@ Each enabled job becomes one line in root's crontab, inside a block that Harness
 Lines outside the block are yours and never touched; they are listed read-only as "external" jobs. If the
 closing line of the block gets deleted by hand, only the `maxxing cron run` lines are treated as managed: your own
 lines after it are kept.
+A one-time job's line names its date (`30 9 8 11 *`); it is removed once the job ran.
 From a terminal: `maxxing cron list`, `maxxing cron run <id>` (runs it in your terminal and waits),
-`maxxing cron sync` (rewrites the block), `maxxing cron deleted` (the removed jobs kept) and
+`maxxing cron sync` (rewrites the block), `maxxing cron tick` (starts the missed runs and the retries that are due,
+what the server does every 5 minutes), `maxxing cron deleted` (the removed jobs kept) and
 `maxxing cron restore <id>` (puts one back). Two runs of the same job never overlap.
 
 An [agent](agents)'s schedule is a job of this page too: its link opens the agent, and the agent's limits decide

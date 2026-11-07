@@ -218,14 +218,20 @@ the change is re-applied on the fresh file (3 tries), then `409 conflict`. Not v
 
 ## Crons
 ```
-Cron = {id, name, schedule,            // 5-field cron expression
+Cron = {id, name, schedule,            // 5-field cron expression ("" for a one-time job)
+        once_at:string, once_ts:float|null, delete_after:bool,  // one-time job: "YYYY-MM-DDTHH:MM" in the configured zone
+        done_at?:float, missed?:bool,  // one-time job that ran (or was missed for good): disabled
+        catch_up:bool(true), retries:int(0-5, shell only), retry_at:float|null,  // a retry waits until then
         kind:"shell"|"claude", command, // shell
         topic_path, prompt, model, reuse_session:bool,  // claude
         permission_mode:""|"bypass"|"acceptEdits"|"default",  // claude; "" = the topic's, else the global mode
         enabled, notify:"never"|"failure"|"always", timeout_s,
-        last_run:{at, ok, code, duration_s}|null, next_run:float|null, human:string,
+        last_run:{at, ok, code, duration_s, trigger, attempt, silent}|null, next_run:float|null, human:string,
         running:bool}                  // a run is in progress (flock held); overlapping runs are skipped
-Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|null}   (output_tail: a Claude job keeps the first 2048 characters of its answer, a command the last 2048 of its output)
+Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|null,
+        trigger:"manual"|"schedule"|"catch-up"|"retry", attempt?:int (absent = 1), slot?:float (catch-up: the missed time),
+        silent?:true (the answer was [SILENT]), retry_at?:float (failed, retried then)}
+        (output_tail: a Claude job keeps the first 2048 characters of its answer, a command the last 2048 of its output)
 ```
 | GET | `/api/crons` | – | `{jobs:[Cron], external:[{schedule, command, human}]}` (external = crontab lines outside the managed block, read-only) |
 | POST | `/api/crons` | Cron fields | `Cron` (validates expression; syncs crontab) · `409 damaged_jobs` (jobs.json cannot be read: nothing is written) |
@@ -234,6 +240,7 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET | `/api/crons/runs?cron_id=&limit=50` | – | `[Run]` |
 | GET | `/api/crons/{id}` | – | `Cron` |
 | GET | `/api/crons/preview?schedule=` | – | `{valid, human, next:[at×5], error?}` (next runs in the configured time zone) |
+| GET | `/api/crons/preview?once_at=` | – | `{valid, human, next:[at], once:true, error?}` (a one-time date, read in the configured time zone) · POST/PATCH with a past `once_at` -> `400 invalid_once` |
 
 ## Telegram
 | GET | `/api/telegram` | – | `{configured, running, bot:{id, username, name}\|null, chat:{id, title, type}\|null, topics_enabled, mode:"simple"\|"threads"\|"mirror", threads:[{path, thread_id, name, session_id?}], agent_threads:[{path, thread_id, name}], settings:{mode, notify_crons, notify_system:bool(true), login_alerts, two_factor:bool, reply_mode:"progress"(default)\|"final", thread_days:int(30), mirror_web:bool (= mode "mirror")}, linking:bool, link:{code, deep_link, expires_at, expires_in, expired}\|null, poll_error, poll_error_code:"token_rejected"\|"conflict"\|"unreachable"\|null, sync_error, topics_notice, last_poll_ok, last_poll_age, last_error}` (special threads: path `"#crons"` / `"#alerts"` / `"#feed"`; session threads: `session_id`, path `""`). `mode`: `simple` (default of a new link: one chat - sessions without threads, their messages sent as replies, a reply continues the session; alerts in the main chat), `threads` (one thread per open session + Crons, Alerts, Notifications), `mirror` (threads + web turns copied). Not chosen yet in config.json: `threads` (or `mirror` if the old `mirror_web` was chosen) when the chat already has threads, else `simple`; the gateway writes it at start. A chat without threads (`topics_enabled:false`) works as `simple` whatever the mode. `running`: in the server, the poller itself; in another process (CLI, doctor), the `poller_pid` of the server's heartbeat is alive. `poll_error` is set and cleared only by the poller (getUpdates: 401 → `token_rejected`, the poller stops; 409 → `conflict`, another program reads the bot); `sync_error` only by the thread sync; `topics_notice` = threads are off for the bot (BotFather "Threaded Mode") - information, not an error. `last_poll_ok` = last successful getUpdates (Unix s, written at most every 30 s). `link` = the last link code, pending or expired (kept until a chat links). `last_error` (older readers) = `poll_error` or `sync_error`. Setup is done once a chat is linked (same rule as `/api/onboarding`) |
