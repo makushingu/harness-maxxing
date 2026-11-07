@@ -16,33 +16,34 @@ export type NavItem = {
   end?: boolean
   /** shown only when this setting is on (Settings -> Features) */
   setting?: FeatureSetting
+  /** shown while the settings load (optional pages only) */
+  defaultOn?: boolean
+  /** sidebar block: everyday pages, technical tools, then Settings (after the extension pages) */
+  group: NavGroup
 }
+
+export type NavGroup = 'main' | 'tools' | 'end'
 
 /** `data-tour` id of a nav item (guided tour targets): nav-dashboard, nav-sessions… */
 export const navTourId = (n: NavItem) => `nav-${n.to === '/' ? 'dashboard' : n.to.slice(1)}`
 
+/** Every page in its sidebar order (the palette, the shortcuts and the touch menu follow it). Optional pages are
+ *  listed only when switched on (Settings -> Features); an empty group disappears with its separator. */
 export const NAV: NavItem[] = [
-  { to: '/', label: 'nav.dashboard', short: 'nav.home', icon: LayoutDashboard, key: 'd', end: true },
-  { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's' },
-  { to: '/files', label: 'nav.files', icon: FolderOpen, key: 'f' },
-  { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page' },   // optional, keeps its place
-  { to: '/settings', label: 'nav.settings', icon: Settings, key: ',' },
+  { to: '/', label: 'nav.dashboard', short: 'nav.home', icon: LayoutDashboard, key: 'd', end: true, group: 'main' },
+  { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's', group: 'main' },
+  { to: '/agents', label: 'nav.agents', icon: Bot, key: 'a', setting: 'agents_page', group: 'main' },
+  { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page', defaultOn: true, group: 'main' },
+  { to: '/mail', label: 'nav.mail', icon: Mail, key: 'e', setting: 'mail_page', group: 'main' },
+  { to: '/team', label: 'nav.team', icon: UsersRound, key: 'm', setting: 'team_page', group: 'main' },
+  { to: '/files', label: 'nav.files', icon: FolderOpen, key: 'f', group: 'main' },
+  { to: '/infra', label: 'nav.infra', icon: Network, key: 'i', setting: 'infra_page', group: 'tools' },
+  { to: '/git', label: 'nav.git', icon: GitBranch, key: 'b', setting: 'git_page', group: 'tools' },
+  { to: '/settings', label: 'nav.settings', icon: Settings, key: ',', group: 'end' },
 ]
 
-/** Pages of optional features (Settings -> Features), inserted before Settings when switched on. Not in the mobile
- *  tab bar (no room). */
-const FEATURE_NAV: (NavItem & { setting: FeatureSetting; defaultOn: boolean })[] = [
-  { to: '/agents', label: 'nav.agents', icon: Bot, key: 'a', setting: 'agents_page', defaultOn: false },
-  { to: '/team', label: 'nav.team', icon: UsersRound, key: 'm', setting: 'team_page', defaultOn: false },
-  { to: '/git', label: 'nav.git', icon: GitBranch, key: 'b', setting: 'git_page', defaultOn: false },
-  { to: '/infra', label: 'nav.infra', icon: Network, key: 'i', setting: 'infra_page', defaultOn: false },
-  { to: '/mail', label: 'nav.mail', icon: Mail, key: 'e', setting: 'mail_page', defaultOn: false },
-]
-
-/** NAV (its optional entries when on) plus the feature pages switched on (sidebar, palette, shortcuts). */
+/** The pages shown on this install, in order (sidebar, touch menu, palette, shortcuts). */
 export function useNav(): NavItem[] {
   const { data: s } = useSettings()
-  const base = NAV.filter((n) => !n.setting || !s || !!s[n.setting])
-  const extra = FEATURE_NAV.filter((n) => (s ? !!s[n.setting] : n.defaultOn))
-  return extra.length ? [...base.slice(0, -1), ...extra, base[base.length - 1]] : base
+  return NAV.filter((n) => !n.setting || (s ? !!s[n.setting] : !!n.defaultOn))
 }

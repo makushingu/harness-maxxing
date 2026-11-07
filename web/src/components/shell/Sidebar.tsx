@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, Kbd, MOD, Tooltip } from '@/components/ui'
-import { navTourId, useNav } from './nav'
+import { navTourId, useNav, type NavItem } from './nav'
 import { Logo } from './Logo'
 import { HealthIndicator } from './HealthIndicator'
 import { UsageIndicator } from './UsageIndicator'
@@ -17,7 +17,7 @@ import { UpdateIndicator } from './UpdateIndicator'
 import { SidebarExtensions } from './SidebarExtensions'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
-import { PresentationToggle, ThemeToggle, UserMenu } from './UserMenu'
+import { HelpMenu, PresentationToggle, ThemeToggle } from './UserMenu'
 import { useFeedbackDialog } from './feedback-store'
 import { donationUrl, useDonationShown } from '@/features/donation/Donation'
 import { useLang } from '@/i18n'
@@ -134,6 +134,63 @@ export function Sidebar() {
   const width = useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default
   const side = React.useRef<HTMLElement>(null)
 
+  const navItem = (item: NavItem, idx: number) => {
+    const label = t(item.label)
+    // Expanded: the counters stay mounted so they can animate out when they reach 0.
+    const showBadge = item.to === '/sessions' && (!collapsed || badge.unread > 0 || badge.running > 0)
+    return (
+      <Tooltip key={item.to} content={collapsed ? label : null} side="right">
+        <NavLink
+          to={item.to}
+          {...prefetchLink(item.to)}
+          end={item.end}
+          data-tour={navTourId(item)}
+          style={{ '--i': idx } as React.CSSProperties}
+          className={({ isActive }) =>
+            cn(
+              'mx-boot-item group relative flex h-9 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+              isActive && 'bg-accent text-foreground',
+              collapsed && 'justify-center px-0',
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
+              <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
+              {!collapsed && <span className="flex-1 truncate">{label}</span>}
+              {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
+              {item.to === '/agents' && <AgentsNavExtra collapsed={collapsed} />}
+              {showBadge &&
+                (collapsed ? (
+                  badge.unread ? (
+                    <span onClick={showSessions('unread')} title={t('sessions.showUnread', { count: badge.unread })} className="absolute top-0.5 right-1 flex size-4 cursor-pointer items-center justify-center">
+                      <CountDot tone="unread" />
+                    </span>
+                  ) : (
+                    <span onClick={showSessions('running')} title={t('sessions.showRunning', { count: badge.running })} className="absolute top-0.5 right-1 flex size-4 cursor-pointer items-center justify-center">
+                      <CountDot tone="running" />
+                    </span>
+                  )
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <span onClick={showSessions('running')} className="cursor-pointer rounded-full transition-transform empty:hidden hover:scale-110">
+                        <CountBadge count={badge.running} tone="running" title={t('sessions.showRunning', { count: badge.running })} />
+                      </span>
+                    <span onClick={showSessions('unread')} className="cursor-pointer rounded-full transition-transform empty:hidden hover:scale-110">
+                        <CountBadge count={badge.unread} title={t('sessions.showUnread', { count: badge.unread })} />
+                      </span>
+                  </span>
+                ))}
+            </>
+          )}
+        </NavLink>
+      </Tooltip>
+    )
+  }
+  const groups = (['main', 'tools', 'end'] as const).map((g) => nav.filter((n) => n.group === g))
+  const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
+
   return (
     <aside
       ref={side}
@@ -145,10 +202,28 @@ export function Sidebar() {
       aria-label={t('shell.navigation')}
     >
       {!collapsed && <ResizeEdge side={side} />}
-      <div className={cn('flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
-        <NavLink to="/" className="min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Harness Maxxing">
+      {/* Logo + fold button (folded: the button takes the logo's place on hover). */}
+      <div className={cn('group/head flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
+        <NavLink
+          to="/"
+          className={cn('min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring', collapsed && !tablet && 'group-hover/head:hidden group-focus-within/head:hidden')}
+          aria-label="Harness Maxxing"
+        >
           <Logo collapsed={collapsed} className={cn(collapsed && 'justify-center')} />
         </NavLink>
+        {!tablet && (
+          <Tooltip content={<>{collapsed ? t('shell.expand') : t('shell.collapse')} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={cn('size-8 shrink-0 text-muted-foreground', collapsed && 'hidden group-hover/head:inline-flex group-focus-within/head:inline-flex')}
+              onClick={toggle}
+              aria-label={collapsed ? t('shell.expand') : t('shell.collapse')}
+            >
+              {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+            </Button>
+          </Tooltip>
+        )}
       </div>
 
       <div className={cn('px-3 pb-2', collapsed && 'px-2.5')}>
@@ -174,64 +249,15 @@ export function Sidebar() {
         </Tooltip>
       </div>
 
-      <nav data-tour="nav" className={cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5')}>
-        {nav.map((item, idx) => {
-          const label = t(item.label)
-          // Expanded: the counters stay mounted so they can animate out when they reach 0.
-          const showBadge = item.to === '/sessions' && (!collapsed || badge.unread > 0 || badge.running > 0)
-          return (
-            <Tooltip key={item.to} content={collapsed ? label : null} side="right">
-              <NavLink
-                to={item.to}
-                {...prefetchLink(item.to)}
-                end={item.end}
-                data-tour={navTourId(item)}
-                style={{ '--i': idx } as React.CSSProperties}
-                className={({ isActive }) =>
-                  cn(
-                    'mx-boot-item group relative flex h-9 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                    isActive && 'bg-accent text-foreground',
-                    collapsed && 'justify-center px-0',
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
-                    <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
-                    {!collapsed && <span className="flex-1 truncate">{label}</span>}
-                    {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
-                    {item.to === '/agents' && <AgentsNavExtra collapsed={collapsed} />}
-                    {showBadge &&
-                      (collapsed ? (
-                        badge.unread ? (
-                          <span onClick={showSessions('unread')} title={t('sessions.showUnread', { count: badge.unread })} className="absolute top-0.5 right-1 flex size-4 cursor-pointer items-center justify-center">
-                            <CountDot tone="unread" />
-                          </span>
-                        ) : (
-                          <span onClick={showSessions('running')} title={t('sessions.showRunning', { count: badge.running })} className="absolute top-0.5 right-1 flex size-4 cursor-pointer items-center justify-center">
-                            <CountDot tone="running" />
-                          </span>
-                        )
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <span onClick={showSessions('running')} className="cursor-pointer rounded-full transition-transform empty:hidden hover:scale-110">
-                              <CountBadge count={badge.running} tone="running" title={t('sessions.showRunning', { count: badge.running })} />
-                            </span>
-                          <span onClick={showSessions('unread')} className="cursor-pointer rounded-full transition-transform empty:hidden hover:scale-110">
-                              <CountBadge count={badge.unread} title={t('sessions.showUnread', { count: badge.unread })} />
-                            </span>
-                        </span>
-                      ))}
-                  </>
-                )}
-              </NavLink>
-            </Tooltip>
-          )
-        })}
-      </nav>
-
-      <SidebarExtensions collapsed={collapsed} />
+      {/* Everyday pages, then the technical tools, the extension pages and Settings (one scroll when the window is short). */}
+      <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
+        <nav aria-label={t('shell.navigation')} className={block()}>
+          {groups[0].map((item) => navItem(item, nav.indexOf(item)))}
+        </nav>
+        {groups[1].length > 0 && <div className={block('border-t border-sidebar-border')}>{groups[1].map((item) => navItem(item, nav.indexOf(item)))}</div>}
+        <SidebarExtensions collapsed={collapsed} />
+        <div className={block('border-t border-sidebar-border')}>{groups[2].map((item) => navItem(item, nav.indexOf(item)))}</div>
+      </div>
 
       <div className="flex-1" />
 
@@ -239,22 +265,12 @@ export function Sidebar() {
         <UpdateIndicator collapsed={collapsed} />
         <HealthIndicator collapsed={collapsed} />
         <UsageIndicator collapsed={collapsed} />
-        <FeedbackButton collapsed={collapsed} />
-        <div className={cn('flex items-center gap-1', collapsed ? 'flex-col' : 'justify-between')}>
-          <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
-            <PresentationToggle />
-            <ThemeToggle collapsed={collapsed} />
-            <UserMenu collapsed={collapsed} />
-            <DonateLink />
-          </div>
-          {/* Fold / unfold: always at the bottom, in the same place in both states. */}
-          {!tablet && (
-            <Tooltip content={<>{collapsed ? t('shell.expand') : t('shell.collapse')} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
-              <Button variant="ghost" size="icon-sm" className="size-8 text-muted-foreground" onClick={toggle} aria-label={collapsed ? t('shell.expand') : t('shell.collapse')}>
-                {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-              </Button>
-            </Tooltip>
-          )}
+        <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
+          <PresentationToggle />
+          <ThemeToggle collapsed={collapsed} />
+          <FeedbackButton collapsed={collapsed} />
+          <HelpMenu collapsed={collapsed} />
+          <DonateLink />
         </div>
       </div>
     </aside>
@@ -283,19 +299,10 @@ function FeedbackButton({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const open = useFeedbackDialog((s) => s.setOpen)
   return (
-    <Tooltip content={t('shell.feedbackHint')} side="right">
-      <button
-        type="button"
-        onClick={() => open(true)}
-        aria-label={collapsed ? t('shell.feedback') : undefined}
-        className={cn(
-          'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-          collapsed && 'justify-center px-0',
-        )}
-      >
-        <MessageSquareText className="size-4 shrink-0" />
-        {!collapsed && <span className="truncate">{t('shell.feedback')}</span>}
-      </button>
+    <Tooltip content={t('shell.feedbackHint')} side={collapsed ? 'right' : 'top'}>
+      <Button variant="ghost" size="icon-sm" className="size-8" onClick={() => open(true)} aria-label={t('shell.feedback')}>
+        <MessageSquareText />
+      </Button>
     </Tooltip>
   )
 }
