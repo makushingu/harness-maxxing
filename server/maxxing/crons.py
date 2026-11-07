@@ -1620,11 +1620,16 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
                 spawn_run(cid, "retry", int(w.get("attempt") or 2))
                 started.append((cid, "retry"))
                 continue
-            if is_once(j) and not j.get("done_at") and (once_ts(j["once_at"], zone) or now) < now - CATCH_UP_WINDOW_S:
-                _finish_once(cid, missed=True)
-                continue
-            if catch_up_slot(j, runs.get(cid, []) + _lock_mark(cid), now, zone, since) is not None \
-                    and not isinstance(w, dict):
+            done = runs.get(cid, []) + _lock_mark(cid)
+            if is_once(j) and not j.get("done_at") and not isinstance(w, dict):
+                at = once_ts(j["once_at"], zone)
+                if at is not None and any((r.get("at") or 0) >= at - SLOT_SLACK_S for r in done):
+                    _finish_once(cid, ran=j)           # it ran (or was killed) but was not marked done
+                    continue
+                if (at or now) < now - CATCH_UP_WINDOW_S:
+                    _finish_once(cid, missed=True, ran=j)
+                    continue
+            if catch_up_slot(j, done, now, zone, since) is not None and not isinstance(w, dict):
                 spawn_run(cid, "catch-up")
                 started.append((cid, "catch-up"))
         except Exception as e:  # noqa: BLE001 - one job must not stop the others
@@ -1632,15 +1637,19 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
     return started
 
 
-def _finish_once(cid: str, missed: bool = False) -> None:
+def _finish_once(cid: str, missed: bool = False, ran: dict | None = None) -> None:
     """A one-time job ran (or was missed for good): disabled and marked done, or removed with `delete_after`
-    (archived in deleted.jsonl like any removed job)."""
+    (archived in deleted.jsonl like any removed job). `ran`: the job as it was when its run started - given a new
+    date (or delete_after changed) meanwhile, it is left as the person set it."""
     with _lock:
         jobs = _read_raw()
         if jobs is None:
             return
         job = next((j for j in jobs if j["id"] == cid), None)
         if job is None or not is_once(job):
+            return
+        if ran is not None and (job.get("once_at") != ran.get("once_at")
+                                or bool(job.get("delete_after")) != bool(ran.get("delete_after"))):
             return
         if job.get("delete_after") and not missed:
             rest = [j for j in jobs if j["id"] != cid]
@@ -1763,7 +1772,7 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
             log.exception("cron %s: cannot record the run", cid)
         if is_once(job) and not retry and start >= (once_ts(job["once_at"]) or math.inf) - SLOT_SLACK_S:
             try:
-                _finish_once(cid)                        # its run is over: disabled (done) or removed
+                _finish_once(cid, ran=job)               # its run is over: disabled (done) or removed
             except Exception:
                 log.exception("cron %s: cannot mark the one-time job done", cid)
     finally:
