@@ -447,6 +447,14 @@ def test_map_usage_drops_non_finite_numbers():
     JSONResponse(u)                                    # NaN / Infinity would make the response raise
 
 
+def test_map_usage_drops_out_of_range_reset_times():
+    """A finite but absurd resets_at (1e300, negative) would make the web's date formatting throw."""
+    for v in (1e300, -1e15, -1):
+        assert health._window({"utilization": 5, "resets_at": v})["resets_at"] is None
+    assert health._window({"utilization": 5, "resets_at": 1791633600})["resets_at"] == 1791633600.0
+    assert health._window({"utilization": 5, "resets_at": "2026-11-07T10:00:00Z"})["resets_at"] is not None
+
+
 def test_non_finite_limits_from_a_turn_do_not_break_usage(client, org, monkeypatch):
     """claude-limits.json with NaN / 1e999 (valid JSON for Python): /api/usage answers 200 without that bar, and a
     turn reporting a non-finite utilization is not recorded."""
