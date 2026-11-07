@@ -724,11 +724,16 @@ def delete_job(cid: str) -> bool:
             return False
         sync_crontab(rest)
         _save_raw(rest, "deleted")
-        _drop_retry(cid)
-        m = config.read_json(_dir() / "sessions.json", {}) or {}
-        if m.pop(cid, None):
-            config.write_json(_dir() / "sessions.json", m)
+        _forget_job(cid)
     return True
+
+
+def _forget_job(cid: str) -> None:
+    """A removed job leaves no waiting retry and no remembered Claude session."""
+    _drop_retry(cid)
+    m = config.read_json(_dir() / "sessions.json", {}) or {}
+    if m.pop(cid, None):
+        config.write_json(_dir() / "sessions.json", m)
 
 
 # =============================================================================================
@@ -1708,6 +1713,7 @@ def _finish_once(cid: str, missed: bool = False, ran: dict | None = None) -> Non
             rest = [j for j in jobs if j["id"] != cid]
             sync_crontab(rest)
             _save_raw(rest, "removed (one-time job done)")
+            _forget_job(cid)
             return
         job["enabled"], job["done_at"] = False, time.time()
         if missed:
@@ -1819,6 +1825,11 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
                 log.exception("cron %s: cannot keep the retry", cid)
                 retry = None
                 run.pop("retry_at", None)
+        if not retry:
+            try:
+                _drop_retry(cid)                       # a run that plans none ends any older retry
+            except Exception:  # noqa: BLE001
+                log.exception("cron %s: cannot drop the retry", cid)
         try:
             append_run(run)
         except Exception:                                # the report still goes out
