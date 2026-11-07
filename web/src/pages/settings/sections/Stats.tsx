@@ -19,17 +19,18 @@ type Group = 'projects' | 'topics' | 'sessions'
 function QuotaRow({ label, w }: { label: string; w: UsageWindow | null }) {
   const t = useT()
   const lang = useLang()
-  if (!w) return null
+  if (!w || w.pct == null || !Number.isFinite(w.pct)) return null      // no percentage: no row (not "0 %")
+  const pct = Math.min(100, Math.max(0, w.pct))
   return (
     <div className="grid gap-1.5">
       <div className="flex items-baseline justify-between gap-3 text-sm">
         <span className="font-medium">{label}</span>
         <span className="tabular-nums">
-          {Math.round(w.pct)} %
+          {Math.round(pct)} %
           {w.resets_at && <span className="ml-2 text-xs text-muted-foreground">{t('stats.resets', { at: fmtDate(w.resets_at, lang, undefined, { dateStyle: undefined, timeStyle: undefined, weekday: 'short', hour: '2-digit', minute: '2-digit' }) })}</span>}
         </span>
       </div>
-      <ProgressBar value={w.pct} tone={w.pct >= 90 ? 'error' : w.pct >= 70 ? 'warn' : undefined} label={label} />
+      <ProgressBar value={pct} tone={pct >= 90 ? 'error' : pct >= 70 ? 'warn' : undefined} label={label} />
     </div>
   )
 }
