@@ -79,7 +79,7 @@ def normalise_language(lang: Any) -> str:
     s = str(lang or "auto").strip().lower()
     if s == "auto":
         return s
-    if len(s) in (2, 3) and s.isalpha():
+    if len(s) in (2, 3) and s.isascii() and s.isalpha():   # isalpha() alone accepts "éé"
         return s
     raise VoiceError(400, "invalid_language", "language must be 'auto' or an ISO 639-1 code such as 'en'")
 
@@ -330,6 +330,8 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
     key = api_key(engine)
     if not key:
         raise VoiceError(503, "no_key", f"add {KEY_NAMES[engine]} in Settings → Keys")
+    if not (key.isascii() and key.isprintable()):     # httpx cannot put it in a header (UnicodeEncodeError)
+        raise VoiceError(503, "no_key", f"{KEY_NAMES[engine]} contains invalid characters, paste it again in Settings → Keys")
     model = (config.load_config().get("voice") or {}).get(f"{engine}_model") or API_MODELS[engine]
     audio = _to_ogg(wav, wav.with_suffix(".ogg"))
     verbose = model.startswith("whisper")
@@ -452,9 +454,11 @@ def _install_deps() -> None:
 
 def _download_subprocess(name: str) -> None:
     """The download runs in a child process (no heavy import in the server; progress = folder size)."""
+    from . import deps                                 # the same pinned revision as download_model()
+    revision = (deps.get("whisper").get("revisions") or {}).get(name) or ""
     code = ("import sys; from faster_whisper.utils import download_model as d; "
-            "d(sys.argv[1], output_dir=sys.argv[2])")
-    p = subprocess.run([sys.executable, "-c", code, name, str(model_path(name))], capture_output=True,
+            "d(sys.argv[1], output_dir=sys.argv[2], revision=sys.argv[3] or None)")
+    p = subprocess.run([sys.executable, "-c", code, name, str(model_path(name)), revision], capture_output=True,
                        text=True, timeout=3600)
     if p.returncode != 0 or not model_present(name):
         err = (p.stderr or "").strip().splitlines()
