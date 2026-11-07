@@ -21,7 +21,7 @@ export function UpdatesSection() {
   return (
     <SectionStack>
       <SettingsCard title={t('updates.title')} description={t('updates.desc', { count: data?.entries.length ?? 0 })}>
-        <div className="grid gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
           <div className="relative max-w-sm">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('updates.search')} className="pl-8" aria-label={t('updates.search')} />
@@ -36,15 +36,15 @@ export function UpdatesSection() {
           ) : entries.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('updates.none')}</p>
           ) : (
-            <ol className="grid gap-6" data-testid="updates-list">
+            <ol className="grid grid-cols-[minmax(0,1fr)] gap-6" data-testid="updates-list">
               {entries.map((e) => (
-                <li key={e.version} className="grid gap-2 border-l-2 pl-4 data-[current=true]:border-primary" data-current={e.current}>
-                  <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                <li key={e.version} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-l-2 pl-4 data-[current=true]:border-primary" data-current={e.current}>
+                  <h3 className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold [overflow-wrap:anywhere]">
                     <span className="tabular-nums">{e.version}</span>
                     {e.label && <span className="font-normal text-muted-foreground">{e.label}</span>}
                     {e.current && <Badge variant="success">{t('updates.installed')}</Badge>}
                   </h3>
-                  <Markdown onLink={onLink} className={`text-[13.5px] ${SHOW_LINK_CLASS}`}>
+                  <Markdown onLink={onLink} className={`min-w-0 text-[13.5px] [overflow-wrap:anywhere] ${SHOW_LINK_CLASS}`}>
                     {showLinks(e.body, t('show.button'))}
                   </Markdown>
                 </li>
