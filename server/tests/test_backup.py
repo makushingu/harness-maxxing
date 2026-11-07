@@ -455,6 +455,16 @@ def test_restore_keeps_pushed_files_and_commands_off(ws, mx_state):
     assert json.loads((ws / rel).read_text()) == settings
 
 
+def test_release_skips_a_file_it_can_no_longer_write(ws, mx_state):
+    """A folder turned into a file between the restore and the user's yes: that file stays out, the others are
+    put back and the release is done (it used to stop at the first error, half done, on every new try)."""
+    files = {"scripts/a.sh": b"#!/bin/sh\n", "tools/c.sh": b"#!/bin/sh\n"}
+    _in_use()
+    assert backup._apply(files)["held"]["outside"] == ["scripts/a.sh", "tools/c.sh"]
+    (ws / "scripts").write_text("now a file")
+    assert backup.release_held()["files"] == ["tools/c.sh"]
+    assert (ws / "tools/c.sh").exists() and backup.held_manifest()[1]["released"] is True
+
 def test_restore_holds_local_mcp_servers(ws, mx_state, monkeypatch):
     """A local (stdio) MCP server is a command Claude Code starts at every turn: a restore adds back the remote
     servers only and keeps the local ones aside for the user (like new jobs)."""

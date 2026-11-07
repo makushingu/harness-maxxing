@@ -1191,8 +1191,12 @@ def release_held() -> dict:
         src, dest = path.parent / "outside" / str(rel), root / str(rel)
         if root not in dest.resolve().parents or not src.is_file() or dest.exists():
             continue                                                   # written here since: leave it to the user
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, dest)
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dest)
+        except OSError as e:                                           # a folder became a file since: the user's
+            log.warning("release: %s not put back: %s", rel, e)
+            continue
         out["files"].append(rel)
     hooks = config.read_json(path.parent / "hooks-held.json", {}) or {}
     for rel, val in hooks.items() if isinstance(hooks, dict) else []:
@@ -1208,8 +1212,12 @@ def release_held() -> dict:
             if not isinstance(cur, dict) or any(k in cur for k in keys):
                 continue                                               # changed since: leave it to the user
             data = json.dumps({**cur, **keys}, indent=2) + "\n"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(data)
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(data)
+        except OSError as e:
+            log.warning("release: hooks of %s not put back: %s", rel, e)
+            continue
         out["hooks"].append(rel)
     local = config.read_json(path.parent / "mcp-held.json", []) or []
     if local:
