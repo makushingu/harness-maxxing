@@ -1315,6 +1315,8 @@ export const en = {
   'ext.open': 'Open page',
   'ext.sidebar': 'In the sidebar',
   'ext.hubTitle': 'Extensions',
+  'ext.foldPins': 'Hide the pinned pages',
+  'ext.unfoldPins': 'Show the pinned pages',
   'ext.hubDesc': 'Pages added by your extensions. Pin one to give it its own sidebar entry.',
   'ext.hubEmpty': 'No extension page yet',
   'ext.pin': 'Pin to the sidebar',

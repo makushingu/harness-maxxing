@@ -440,3 +440,16 @@ def test_editing_agents_view_html_is_seen_by_the_hot_reload(client, org):
     (d / "agents-view.html").write_text("<p>hi</p>")
     e = {x["id"]: x for x in client.get("/api/extensions").json()}["v"]
     assert e["error"] is None and e["agents_view"] == {"name": "v", "icon": "puzzle"}
+
+
+def test_pinned_pages_keep_the_order_they_are_dragged_in(client, org):
+    for eid in ("a", "b", "c"):
+        _ext(org, eid, {"type": "page"}, page="export function mount(el){}")
+    for eid in ("c", "a", "b"):                                          # a new pin goes last
+        client.patch(f"/api/extensions/{eid}", json={"pinned": True})
+    assert config.load_config()["extensions"]["pinned"] == ["c", "a", "b"]
+    assert client.put("/api/extensions/pins", json={"order": ["b", "zz", "c"]}).json() == {"pinned": ["b", "c", "a"]}
+    lst = {e["id"]: e for e in client.get("/api/extensions").json()}
+    assert [lst[i]["pin_order"] for i in "abc"] == [2, 0, 1]             # never pins an unknown id
+    client.patch("/api/extensions/c", json={"pinned": False})
+    assert {e["id"]: e for e in client.get("/api/extensions").json()}["c"]["pin_order"] is None

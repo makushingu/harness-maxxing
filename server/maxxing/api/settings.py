@@ -16,8 +16,9 @@ from ..security import require_auth
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
 KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page",
-        "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden")
+        "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden", "sidebar_order")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
+_ROUTE = re.compile(r"^/[a-z0-9-]{0,40}\Z")
 _URL = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")
 
 
@@ -38,6 +39,7 @@ class SettingsIn(BaseModel):
     memory_max_lines: Optional[int] = None
     result_line_hidden: Optional[list[Literal[RESULT_FIELDS]]] = None  # type: ignore[valid-type]
     donation_hidden: Optional[bool] = None
+    sidebar_order: Optional[list[str]] = None     # routes of the sidebar pages, in the order the user dragged them
 
 
 def _err(code: str, msg: str) -> HTTPException:
@@ -59,7 +61,8 @@ def current() -> dict:
             "maxxing_mode": bool(cfg.get("maxxing_mode", False)),
             "memory_max_lines": memory.max_lines(),
             "result_line_hidden": [f for f in RESULT_FIELDS if f in (cfg.get("result_line_hidden") or [])],
-            "donation_hidden": bool(cfg.get("donation_hidden", False))}
+            "donation_hidden": bool(cfg.get("donation_hidden", False)),
+            "sidebar_order": [r for r in (cfg.get("sidebar_order") or []) if isinstance(r, str) and _ROUTE.match(r)]}
 
 
 ACCENTS = ("blue", "clay", "violet", "green", "amber", "rose")
@@ -250,6 +253,11 @@ def put_settings(body: SettingsIn):
             raise _err("invalid_memory_max_lines", "memory_max_lines is 0 (no limit) or between 50 and 5000")
     if "result_line_hidden" in changes:
         changes["result_line_hidden"] = [f for f in RESULT_FIELDS if f in changes["result_line_hidden"]]
+    if "sidebar_order" in changes:
+        order = changes["sidebar_order"]
+        if len(order) > 40 or not all(_ROUTE.match(r) for r in order):
+            raise _err("invalid_sidebar_order", "sidebar_order: at most 40 page routes like /sessions")
+        changes["sidebar_order"] = list(dict.fromkeys(order))
     if "files_root" in changes:
         p = Path(changes["files_root"]).expanduser()
         if not p.is_absolute() or not p.is_dir():

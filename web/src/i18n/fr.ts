@@ -1300,6 +1300,8 @@ export const fr: Record<keyof typeof en, string> = {
   'ext.open': 'Ouvrir la page',
   'ext.sidebar': 'Dans la barre latérale',
   'ext.hubTitle': 'Extensions',
+  'ext.foldPins': 'Masquer les pages épinglées',
+  'ext.unfoldPins': 'Afficher les pages épinglées',
   'ext.hubDesc': 'Les pages ajoutées par vos extensions. Épinglez-en une pour lui donner sa propre entrée dans la barre latérale.',
   'ext.hubEmpty': 'Aucune page d’extension pour l’instant',
   'ext.pin': 'Épingler dans la barre latérale',
