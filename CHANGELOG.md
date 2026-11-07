@@ -3,6 +3,23 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.124 - 2026-11-07
+
+Fixes:
+- **Updates**: an automatic and a manual update can no longer run at the same time, and an update that fails before
+  touching the code no longer leaves a half-done mark behind.
+- **PC browser**: pairing codes give one token each, parallel downloads and action logs no longer clash, and a dead
+  browser process is replaced cleanly.
+- **Backup**: a run no longer stops halfway on a stale git lock, a file it cannot write or a non-UTF-8 name; restore
+  skips files over 5 MB.
+- **Videos and thumbnails**: an unreadable file is no longer retried on every view.
+- **Voice**: the Whisper model is installed at the pinned revision, and odd API keys or language codes give a clear
+  error.
+- **Installer and uninstall**: correct free-port search, and uninstall keeps your own cron lines.
+- **Usage gauge**, **licence**, **MCP**, **Telegram settings**, **session history** and **long names on phones**:
+  small fixes.
+- **Extensions**: dropdown options follow the dark theme; the guide links a skill instead of copying it.
+
 ## 2.0.0-alpha.123 - 2026-11-06
 
 Fixes:
