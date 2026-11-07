@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.125 - 2026-11-07
+
+New:
+- **A clearer Infra page.** A bar on the left lists what you host (Sites, Databases, Buckets, Domains, E-mail) with
+  their counts and what is down, then your servers and services. Each type is grouped by place: your servers first,
+  then what is hosted elsewhere (Cloudflare, Vercel...), with a bar showing how it is spread and a chip per place.
+  The overview gets a table of every type by place, and a domain now shows where it points. Presentation mode
+  blurs the names, addresses and notes of the page.
+
 ## 2.0.0-alpha.124 - 2026-11-07
 
 Fixes:
