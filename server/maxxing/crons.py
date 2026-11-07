@@ -1396,24 +1396,34 @@ def _interrupted(cid: str, job: dict, lockf) -> dict | None:
 # network error is tried again after RETRY_BACKOFF_S. A shell job is retried only when it has `retries`. A timeout
 # is never retried (the job would most likely time out again). The retry waits in retries.json until the tick
 # starts it: it survives a restart and needs no extra unit.
-_LIMIT_RE = re.compile(r"usage limit|limit reached|hit your (?:\w+ )?limit|out of (?:extra )?usage", re.I)
-_TRANSIENT_RE = re.compile(
-    r"overloaded|api error:? *(?:5\d\d|429)|\b(?:500|502|503|504|529)\b|internal server error|bad gateway"
-    r"|service unavailable|gateway time-?out|rate_limit_error|too many requests|connection (?:error|refused|reset|closed)"
-    r"|econnreset|econnrefused|etimedout|enotfound|eai_again|socket hang up|network (?:error|is unreachable)"
-    r"|fetch failed|request timed out|temporarily unavailable|spawn failed", re.I)
+# Claude Code's own usage-limit message, at the start of a line (an answer quoting another service's "rate limit" is
+# not one): "Claude AI usage limit reached|<epoch>", "You've hit your limit · resets 4pm", "5-hour limit reached ∙ …"
+_LIMIT_RE = re.compile(r"^\W*(?:claude ai usage limit reached|you(?:'|’)ve hit your (?:\w+ )?limit"
+                       r"|(?:5-hour|session|weekly|opus|sonnet|usage) limit reached)", re.I | re.M)
+# An answer that is Claude Code's API error: "API Error: 529 {…overloaded_error…}", "API Error: Connection error."
+_API_ERROR_RE = re.compile(
+    r"^\W*API Error:?\s*(?:5\d\d|429|overloaded|connection|request timed out|fetch failed|terminated)"
+    r"|overloaded_error|\"type\":\s*\"api_error\"|rate_limit_error", re.I | re.M)
+# The turn's own error (the session's, not free text): API or network trouble
+_ERROR_TRANSIENT_RE = re.compile(
+    r"overloaded|api error|internal server error|bad gateway|service unavailable|gateway time-?out|rate_limit_error"
+    r"|too many requests|connection (?:error|refused|reset|closed)|econnreset|econnrefused|etimedout|enotfound"
+    r"|eai_again|socket hang up|network (?:error|is unreachable)|fetch failed|request timed out"
+    r"|temporarily unavailable|spawn failed", re.I)
 _EPOCH_RE = re.compile(r"limit reached\|(\d{10})")
 
 
 def classify_failure(text: str, error: str = "") -> str | None:
-    """Why a Claude turn failed, when it is worth trying again: "limit" (usage limit), "transient" (API overloaded,
-    5xx, network) or None. Only the error and the end of a long answer are read: a real answer may mention
-    "network" anywhere."""
+    """Why a Claude turn failed, when it is worth trying again: "limit" (Claude Code's usage-limit message) or
+    "transient" (an API error: overloaded, 5xx, 429, network) or None. Read from the turn's own error and from an
+    answer shaped like those messages only: a real answer may mention a 503 or a "rate limit" of another service.
+    Only the end of a long answer is read (the error comes last)."""
     text = text or ""
-    sample = f"{error or ''}\n{text if len(text) <= 2000 else text[-1000:]}"
-    if _LIMIT_RE.search(sample):
+    tail = text if len(text) <= 2000 else text[-1000:]
+    error = error or ""
+    if _LIMIT_RE.search(error) or _LIMIT_RE.search(tail):
         return "limit"
-    if _TRANSIENT_RE.search(sample):
+    if _ERROR_TRANSIENT_RE.search(error) or _API_ERROR_RE.search(tail):
         return "transient"
     return None
 
