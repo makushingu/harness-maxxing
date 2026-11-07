@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import { ArrowUpRight, BellRing, BookOpen, Eye, KeyRound, MessageSquarePlus, Plug, ServerCog, X } from 'lucide-react'
 import type { InfraResource, InfraSource, InfraView } from '@/lib/types'
 import { tDyn, useT } from '@/i18n'
-import { Badge, Button, StatusDot } from '@/components/ui'
+import { Badge, Button, Sensitive, StatusDot } from '@/components/ui'
 import { cn, store } from '@/lib/utils'
 import { KIND_ICON, PLATFORMS, locationLabel } from './shared'
 
@@ -103,7 +103,11 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
       )
     return (
       <SourceRow key={name} tone={s.error ? 'error' : missing.length ? 'warn' : 'ok'} title={label} what={t(`infra.src.${name}`)}>
-        {s.error && <span className="text-destructive">{s.error}</span>}
+        {s.error && (
+          <span className="text-destructive">
+            <Sensitive length={16}>{s.error}</Sensitive>
+          </span>
+        )}
         {missing.length > 0 && (
           <>
             <span className="text-warning">{t('infra.src.missing', { list: missing.join(', ') })}</span>
@@ -148,7 +152,11 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
       )
     return (
       <SourceRow key={id} tone={s.error ? 'error' : missing.length ? 'warn' : 'ok'} title={title} what={t(`infra.src.${id}`)}>
-        {s.error && <span className="max-w-80 truncate text-destructive" title={s.error}>{s.error}</span>}
+        {s.error && (
+          <span className="max-w-80 truncate text-destructive">
+            <Sensitive length={16}>{s.error}</Sensitive>
+          </span>
+        )}
         {missing.length > 0 && <span className="text-warning">{t('infra.src.missing', { list: missing.join(', ') })}</span>}
       </SourceRow>
     )
@@ -162,8 +170,12 @@ export function SourcesPanel({ v, all, onServers }: { v: InfraView; all: InfraRe
       </div>
       <ul className="grid gap-2">
         {servers.map(([name, s]) => (
-          <SourceRow key={name} tone={s.ok ? 'ok' : 'error'} title={locationLabel(name, t)} what={name === 'local' ? t('infra.src.local') : t('infra.src.ssh')}>
-            {!s.ok && <span className="max-w-80 truncate text-destructive" title={s.error || ''}>{s.error}</span>}
+          <SourceRow key={name} tone={s.ok ? 'ok' : 'error'} title={name === 'local' ? locationLabel(name, t) : <Sensitive>{locationLabel(name, t)}</Sensitive>} what={name === 'local' ? t('infra.src.local') : t('infra.src.ssh')}>
+            {!s.ok && (
+              <span className="max-w-80 truncate text-destructive">
+                <Sensitive length={16}>{s.error}</Sensitive>
+              </span>
+            )}
           </SourceRow>
         ))}
         {notRead.length > 0 && (
@@ -233,12 +245,12 @@ export function ServerCard({ r, all, onOpen, onConnect }: { r: InfraResource; al
           <div className="grid min-w-0 flex-1 gap-0.5">
             <span className="flex items-center gap-2">
               <StatusDot tone={r.status === 'ok' ? 'ok' : r.status === 'down' ? 'error' : r.status === 'warn' ? 'warn' : 'idle'} />
-              <span className="truncate font-medium">{d.this ? t('infra.thisServer') : r.name}</span>
+              <span className="truncate font-medium">{d.this ? t('infra.thisServer') : <Sensitive>{r.name}</Sensitive>}</span>
             </span>
             <span className="truncate text-xs text-muted-foreground">
-              {[d.hostname && d.hostname !== r.name ? d.hostname : null, (d.ips || [])[0], d.os || d.hostinger?.os].filter(Boolean).join(' · ')}
+              <Sensitive length={18}>{[d.hostname && d.hostname !== r.name ? d.hostname : null, (d.ips || [])[0], d.os || d.hostinger?.os].filter(Boolean).join(' · ')}</Sensitive>
             </span>
-            <span className="text-xs text-muted-foreground">{how}</span>
+            <span className="text-xs text-muted-foreground">{d.this ? how : <Sensitive length={18}>{how}</Sensitive>}</span>
           </div>
         </div>
         {d.mem_total ? (

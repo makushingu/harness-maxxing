@@ -1,5 +1,5 @@
 // Shared bits of the Infra page and of the ```infra chat blocks.
-import { Boxes, Cloud, Database, Globe, HardDrive, type LucideIcon, Server, Workflow, Zap } from 'lucide-react'
+import { Boxes, Database, Globe, type LucideIcon, Server, Workflow, Zap } from 'lucide-react'
 import type { InfraKind, InfraResource, InfraStatus } from '@/lib/types'
 import type { DotTone } from '@/components/ui'
 import { fmtBytes } from '@/lib/format'
@@ -15,11 +15,9 @@ export const KIND_ICON: Record<InfraKind, LucideIcon> = {
   domain: Globe,
 }
 export const PLATFORMS = ['vercel', 'netlify', 'supabase', 'github'] as const
-export const LOCATION_ICON = (loc: string): LucideIcon =>
-  loc === 'cloudflare' || (PLATFORMS as readonly string[]).includes(loc) ? Cloud : loc === 'hostinger' ? HardDrive : Server
 
 /** Display name of a provider id (registrar, DNS, host, platform) from server/maxxing/infra (dnsinfo, platforms). */
-const PROVIDER_NAMES: Record<string, string> = {
+export const PROVIDER_NAMES: Record<string, string> = {
   cloudflare: 'Cloudflare', hostinger: 'Hostinger', ovh: 'OVHcloud', gandi: 'Gandi', namecheap: 'Namecheap', godaddy: 'GoDaddy',
   ionos: 'IONOS', aws: 'AWS', google: 'Google', vercel: 'Vercel', netlify: 'Netlify', porkbun: 'Porkbun', wix: 'Wix',
   o2switch: 'o2switch', infomaniak: 'Infomaniak', digitalocean: 'DigitalOcean', hetzner: 'Hetzner', 'name.com': 'Name.com',
