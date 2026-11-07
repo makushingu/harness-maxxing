@@ -62,8 +62,8 @@ def _handler(a) -> int:
             if not key:
                 line(FAIL, "give the license key", "maxxing license activate  (it asks for the key)")
                 return 2
-            r = license.activate(key)
-            line(OK, f"Enterprise key recorded ({r['license'].get('kind')}, {r['license'].get('email')})",
+            info = license.activate(key).get("license") or {}
+            line(OK, f"Enterprise key recorded ({info.get('kind')}, {info.get('email')})",
                  "nothing else changes: updates keep coming from the git repository")
             return 0
         if act == "status":
@@ -84,7 +84,8 @@ def _handler(a) -> int:
             return 0
     except license.LicenseError as e:
         line(FAIL, str(e))
-        for s in (e.data.get("servers") or [])[:10]:
+        servers = e.data.get("servers")
+        for s in [s for s in (servers if isinstance(servers, list) else []) if isinstance(s, dict)][:10]:
             line(INFO, f"active on {s.get('hostname') or '?'} (last seen {_date(s.get('last_seen'))})")
         return 1
     return 2

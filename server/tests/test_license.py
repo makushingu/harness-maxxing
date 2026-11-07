@@ -447,3 +447,14 @@ def test_license_status_shows_a_date_that_is_not_a_number(mx, capsys):
     config.update_config(license={"expires_at": "2027-01-01", "kind": "paid"})
     assert run_cli("license", "status") == 0
     assert "ends 2027-01-01" in capsys.readouterr().out
+
+
+def test_activate_answers_without_license_or_with_odd_servers_end_cleanly(server, mx, monkeypatch, capsys):
+    with monkeypatch.context() as m:
+        m.setattr(license, "_post", lambda *a, **k: {"ok": True, "token": "tok"})
+        assert run_cli("license", "activate", "HM-ABCD-EFGH-JKMN-PQRS") == 0
+    assert "Enterprise key recorded" in capsys.readouterr().out
+    server.refuse = {"ok": False, "error": "limit", "message": "already on 1 server", "servers": [1, {"hostname": "old-vps"}]}
+    assert run_cli("license", "activate", "HM-ABCD-EFGH-JKMN-PQRS") == 1
+    out = capsys.readouterr().out
+    assert "already on 1 server" in out and "old-vps" in out
