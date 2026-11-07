@@ -379,3 +379,36 @@ def test_license_numbers_out_of_range_do_not_break_the_settings(mx, monkeypatch,
     assert info["updates_until"] is info["activation_id"] is None
     config.update_config(license={"max_servers": float("inf")})           # stored by a version before this one
     assert client.get("/api/settings/license").json()["max_servers"] is None
+
+
+class _Endless:
+    """A cloud answer that never ends: counts the bytes handed out."""
+    def __init__(self):
+        self.sent = 0
+
+    def read(self, n=-1):
+        n = 8 << 20 if n is None or n < 0 else n              # "everything": stands for hundreds of MB
+        self.sent += n
+        return b" " * n
+
+    def read1(self, n=-1):
+        return self.read(min(n, 1 << 16) if n and n > 0 else 1 << 16)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_a_huge_answer_from_the_license_server_is_not_read_whole(monkeypatch):
+    from maxxing import register
+    answer = _Endless()
+    monkeypatch.setattr(license.urllib.request, "urlopen", lambda *a, **k: answer)
+    with pytest.raises(license.LicenseError) as e:
+        license._post("/v1/activate", {})
+    assert e.value.code == "bad_answer"
+    assert answer.sent <= license.ANSWER_MAX + (1 << 16)
+    answer.sent = 0
+    assert register._call("POST", "/v1/feedback", {}) == {"ok": False, "error": "bad_answer"}
+    assert answer.sent <= license.ANSWER_MAX + (1 << 16)
