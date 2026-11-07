@@ -72,5 +72,9 @@ Tips:
   just did into a skill".
 - Custom skills are never overwritten by updates. Skills under `<workspace>/.claude/skills/` are
   included in the backup; user-level skills in `~/.claude/skills/` are not.
+- **Share a skill** in the [community library](https://harness-maxxing.com/community): push its folder (the
+  `SKILL.md` and its scripts, no secret) to a public GitHub repository and list it on the site, or create an API key
+  there and ask Claude: *"Publish my skill `<name>` to the Harness Maxxing community: follow
+  https://harness-maxxing.com/community/publish.md"*. Every listing is reviewed before it appears.
 - Check how your Claude Code version discovers project-level skills (`claude --help`, Claude Code
   docs) if a workspace skill is not picked up in a topic session; the user level always works.
