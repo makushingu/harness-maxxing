@@ -564,7 +564,9 @@ export type TaskBulkResult = { ok: boolean; updated: number; deleted: number }
 /* ---------------------------------------------------------------- Crons */
 export type CronKind = 'shell' | 'claude'
 export type CronNotify = 'never' | 'failure' | 'always'
-export type CronLastRun = { at: number; ok: boolean; code: number; duration_s: number }
+/** Who started a run: by hand, the schedule, a catch-up of a missed run, an automatic retry. */
+export type CronTrigger = 'manual' | 'schedule' | 'catch-up' | 'retry'
+export type CronLastRun = { at: number; ok: boolean; code: number; duration_s: number; trigger?: CronTrigger | ''; attempt?: number; silent?: boolean }
 export type CronPermissionMode = '' | PermissionMode
 export type Cron = {
   id: string
@@ -581,13 +583,28 @@ export type Cron = {
   enabled: boolean
   notify: CronNotify
   timeout_s: number
+  /** One-time job: its date and time ("YYYY-MM-DDTHH:MM" in the configured zone); `schedule` is then "". */
+  once_at?: string
+  /** Unix time of `once_at` (null for a schedule). */
+  once_ts?: number | null
+  /** One-time job: removed once it ran (else disabled and marked done). */
+  delete_after?: boolean
+  /** One-time job that ran (or was missed for good): when. */
+  done_at?: number | null
+  missed?: boolean
+  /** Make up for a run missed while the server was down (default true). */
+  catch_up?: boolean
+  /** Shell job: automatic retries after a failure (0-5). */
+  retries?: number
+  /** An automatic retry waits until then. */
+  retry_at?: number | null
   last_run: CronLastRun | null
   next_run: number | null
   human: string
   /** A run is in progress (overlapping runs are skipped). */
   running: boolean
 }
-export type CronInput = Partial<Omit<Cron, 'id' | 'last_run' | 'next_run' | 'human'>>
+export type CronInput = Partial<Omit<Cron, 'id' | 'last_run' | 'next_run' | 'human' | 'once_ts' | 'done_at' | 'missed' | 'retry_at'>>
 export type CronRun = {
   id: string
   cron_id: string
@@ -598,10 +615,19 @@ export type CronRun = {
   duration_s: number
   output_tail: string
   session_id: string | null
+  trigger?: CronTrigger
+  /** Attempt number (absent = 1). */
+  attempt?: number
+  /** Catch-up: the missed time it made up for. */
+  slot?: number
+  /** The answer was [SILENT]: nothing reported. */
+  silent?: boolean
+  /** It failed and will be tried again then. */
+  retry_at?: number
 }
 export type ExternalCron = { schedule: string; command: string; human: string }
 export type CronsPayload = { jobs: Cron[]; external: ExternalCron[] }
-export type CronPreview = { valid: boolean; human: string; next: number[]; error?: string }
+export type CronPreview = { valid: boolean; human: string; next: number[]; error?: string; once?: boolean }
 
 /* ---------------------------------------------------------------- Telegram */
 export type TelegramBot = { id: number; username: string; name: string }

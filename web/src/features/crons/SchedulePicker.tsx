@@ -4,7 +4,7 @@ import * as React from 'react'
 import { AlertCircle, CalendarClock } from 'lucide-react'
 import { useLang, useT, type TKey } from '@/i18n'
 import { fmtDate, fmtRelative } from '@/lib/format'
-import { useCronPreview, useSettings } from '@/lib/queries'
+import { useCronOncePreview, useCronPreview, useSettings } from '@/lib/queries'
 import { Input, Label, Select, Skeleton } from '@/components/ui'
 import { cap } from './parts'
 import { PRESET_KINDS, fromPreset, hhmm, toPreset, weekdayNames, type Preset, type PresetKind } from './schedule'
@@ -213,6 +213,40 @@ export function SchedulePreview({ schedule }: { schedule: string }) {
             <p className="text-[13px] text-muted-foreground">{t('crons.noNextRun')}</p>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+/** The single run of a one-time job, in the server's zone (same box as the schedule preview). */
+export function OncePreview({ onceAt }: { onceAt: string }) {
+  const t = useT()
+  const lang = useLang()
+  const { data: settings } = useSettings()
+  const tz = settings?.timezone
+  const debounced = useDebounced(onceAt.trim(), 300)
+  const q = useCronOncePreview(debounced)
+  const p = debounced ? q.data : undefined
+  const at = p?.valid ? p.next[0] : undefined
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3 text-sm" aria-live="polite" data-testid="cron-once-preview">
+      {!debounced ? (
+        <p className="text-muted-foreground">{t('crons.previewEmpty')}</p>
+      ) : !p ? (
+        <Skeleton className="h-4 w-64" />
+      ) : !p.valid ? (
+        <p className="flex items-start gap-2 text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{p.error || t('crons.invalidSchedule')}</span>
+        </p>
+      ) : at ? (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums">
+          <CalendarClock className="size-4 shrink-0 text-muted-foreground" />
+          <span className="font-medium">{fmtDate(at, lang, tz, { dateStyle: 'full', timeStyle: 'short' })}</span>
+          <span className="text-[13px] text-muted-foreground">{fmtRelative(at, lang)}</span>
+        </p>
+      ) : (
+        <p className="text-muted-foreground">{t('crons.noNextRun')}</p>
       )}
     </div>
   )

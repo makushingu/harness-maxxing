@@ -1,9 +1,9 @@
 // Job editor (create / edit / duplicate). Errors from the server are mapped to their field.
 import * as React from 'react'
-import { Bot, Terminal } from 'lucide-react'
+import { Bot, CalendarClock, Repeat, Terminal } from 'lucide-react'
 import { useT } from '@/i18n'
 import { isApiError } from '@/lib/api'
-import { useClaudeStatus, useSaveCron, useTelegram, useWorkspace } from '@/lib/queries'
+import { useClaudeStatus, useSaveCron, useSettings, useTelegram, useWorkspace } from '@/lib/queries'
 import type { Cron, CronKind, CronNotify, CronPermissionMode } from '@/lib/types'
 import {
   Button,
@@ -26,8 +26,8 @@ import {
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { Callout } from '@/features/common'
-import { SchedulePicker } from './SchedulePicker'
-import { UNIT_S, splitTimeout, type TimeoutUnit } from './schedule'
+import { OncePreview, SchedulePicker } from './SchedulePicker'
+import { UNIT_S, defaultOnceAt, splitTimeout, type TimeoutUnit } from './schedule'
 
 export type EditorSeed = { mode: 'new' } | { mode: 'edit'; job: Cron } | { mode: 'duplicate'; job: Cron }
 
@@ -41,6 +41,12 @@ type Form = {
   reuse_session: boolean
   permission_mode: CronPermissionMode
   schedule: string
+  /** Repeat on `schedule`, or run once at `once_at` ("YYYY-MM-DDTHH:MM" in the server's zone). */
+  when: 'repeat' | 'once'
+  once_at: string
+  delete_after: boolean
+  catch_up: boolean
+  retries: number
   enabled: boolean
   notify: CronNotify
   timeout: string
@@ -48,7 +54,7 @@ type Form = {
 }
 type Field = 'name' | 'command' | 'topic' | 'prompt' | 'schedule' | 'timeout' | 'form'
 
-function initial(seed: EditorSeed, copyName: (n: string) => string): Form {
+function initial(seed: EditorSeed, copyName: (n: string) => string, tz?: string): Form {
   if (seed.mode === 'new')
     return {
       name: '',
@@ -60,6 +66,11 @@ function initial(seed: EditorSeed, copyName: (n: string) => string): Form {
       reuse_session: false,
       permission_mode: '',
       schedule: '0 7 * * *',
+      when: 'repeat',
+      once_at: defaultOnceAt(tz),
+      delete_after: false,
+      catch_up: true,
+      retries: 0,
       enabled: true,
       notify: 'failure',
       timeout: '1',
@@ -76,7 +87,12 @@ function initial(seed: EditorSeed, copyName: (n: string) => string): Form {
     model: j.model,
     reuse_session: j.reuse_session,
     permission_mode: j.permission_mode || '',
-    schedule: j.schedule,
+    schedule: j.schedule || '0 7 * * *',
+    when: j.once_at ? 'once' : 'repeat',
+    once_at: j.once_at || defaultOnceAt(tz),
+    delete_after: !!j.delete_after,
+    catch_up: j.catch_up !== false,
+    retries: j.retries || 0,
     enabled: seed.mode === 'duplicate' ? false : j.enabled,
     notify: j.notify,
     timeout: String(to.value),
@@ -91,6 +107,7 @@ const CODE_FIELD: Record<string, Field> = {
   invalid_topic: 'topic',
   invalid_timeout: 'timeout',
   invalid: 'schedule',
+  invalid_once: 'schedule',
 }
 
 export function CronEditor({ seed, onOpenChange, onSaved }: { seed: EditorSeed | null; onOpenChange: (o: boolean) => void; onSaved: (job: Cron) => void }) {
@@ -116,7 +133,9 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
   const t = useT()
   const mask = useMask()
   const presentation = usePresentation()
-  const [f, setF] = React.useState<Form>(() => initial(seed, (n) => t('crons.copyOf', { name: n })))
+  const { data: settings } = useSettings()
+  const tz = settings?.timezone
+  const [f, setF] = React.useState<Form>(() => initial(seed, (n) => t('crons.copyOf', { name: n }), tz))
   const [errors, setErrors] = React.useState<Partial<Record<Field, string>>>({})
   const save = useSaveCron()
   const { data: claude } = useClaudeStatus()
@@ -124,7 +143,7 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
   const { data: tg } = useTelegram()
   const set = <K extends keyof Form>(k: K, v: Form[K]) => {
     setF((cur) => ({ ...cur, [k]: v }))
-    const fk = (k === 'topic_path' ? 'topic' : k === 'unit' ? 'timeout' : k) as Field
+    const fk = (k === 'topic_path' ? 'topic' : k === 'unit' ? 'timeout' : k === 'once_at' || k === 'when' ? 'schedule' : k) as Field
     if (errors[fk] || errors.form) setErrors((e) => ({ ...e, [fk]: undefined, form: undefined }))
   }
 
@@ -156,7 +175,8 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
       if (!f.prompt.trim()) e.prompt = t('crons.err.prompt')
       if (f.topic_path === null) e.topic = t('crons.err.topic')
     }
-    if (!f.schedule.trim()) e.schedule = t('crons.err.schedule')
+    if (f.when === 'repeat' && !f.schedule.trim()) e.schedule = t('crons.err.schedule')
+    if (f.when === 'once' && !f.once_at) e.schedule = t('crons.err.onceAt')
     const secs = Number(f.timeout) * UNIT_S[f.unit]
     if (!Number.isFinite(secs) || secs < 10 || secs > 7 * 86400) e.timeout = t('crons.err.timeout')
     setErrors(e)
@@ -169,12 +189,14 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
     const body = {
       name: f.name.trim(),
       kind: f.kind,
-      schedule: f.schedule.trim(),
+      ...(f.when === 'once'
+        ? { once_at: f.once_at, delete_after: f.delete_after }
+        : { schedule: f.schedule.trim(), once_at: '', catch_up: f.catch_up }),
       enabled: f.enabled,
       notify: f.notify,
       timeout_s: Math.round(Number(f.timeout) * UNIT_S[f.unit]),
       ...(f.kind === 'shell'
-        ? { command: f.command }
+        ? { command: f.command, retries: f.retries }
         : { topic_path: f.topic_path || '', prompt: f.prompt, model: f.model, reuse_session: f.reuse_session, permission_mode: f.permission_mode }),
     }
     save.mutate(
@@ -274,13 +296,72 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
 
       <div className="grid gap-2">
         <Label>{t('crons.field.schedule')}</Label>
-        <SchedulePicker value={f.schedule} onChange={(v) => set('schedule', v)} error={errors.schedule} />
+        <Segmented<Form['when']>
+          value={f.when}
+          onChange={(v) => set('when', v)}
+          aria-label={t('crons.field.schedule')}
+          options={[
+            { value: 'repeat', label: t('crons.when.repeat'), icon: <Repeat /> },
+            { value: 'once', label: t('crons.when.once'), icon: <CalendarClock /> },
+          ]}
+        />
+        {f.when === 'repeat' ? (
+          <>
+            <SchedulePicker value={f.schedule} onChange={(v) => set('schedule', v)} error={errors.schedule} />
+            <div className="flex items-start gap-3 pt-1">
+              <Switch id="cron-catch-up" checked={f.catch_up} onCheckedChange={(v) => set('catch_up', v)} className="mt-0.5" />
+              <div className="grid gap-0.5">
+                <Label htmlFor="cron-catch-up" className="font-normal">
+                  {t('crons.catchUp')}
+                </Label>
+                <p className="text-[13px] text-muted-foreground">{t('crons.catchUpHint')}</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="cron-once-at" className="text-[13px] font-normal text-muted-foreground">
+                {t('crons.onceAt')}
+              </Label>
+              <Input
+                id="cron-once-at"
+                type="datetime-local"
+                value={f.once_at}
+                onChange={(e) => set('once_at', e.target.value)}
+                aria-invalid={!!errors.schedule || undefined}
+                className="w-auto max-w-xs tabular-nums"
+                data-testid="cron-once-at"
+              />
+              <p className="text-[13px] text-muted-foreground">{t('crons.onceHint', { tz: tz || 'UTC' })}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch id="cron-delete-after" checked={f.delete_after} onCheckedChange={(v) => set('delete_after', v)} />
+              <Label htmlFor="cron-delete-after" className="font-normal">
+                {t('crons.deleteAfter')}
+              </Label>
+            </div>
+            <OncePreview onceAt={f.once_at} />
+          </div>
+        )}
         {errors.schedule && (
           <p className="text-[13px] text-destructive" role="alert">
             {errors.schedule}
           </p>
         )}
       </div>
+
+      {f.kind === 'shell' && (
+        <FormField label={t('crons.field.retries')} hint={t('crons.retriesHint')}>
+          <Select
+            value={String(f.retries)}
+            onValueChange={(v) => set('retries', Number(v))}
+            className="sm:max-w-xs"
+            options={[0, 1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: n ? t('crons.retriesN', { count: n }) : t('crons.retriesNone') }))}
+            data-testid="cron-retries"
+          />
+        </FormField>
+      )}
 
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField label={t('crons.field.timeout')} error={errors.timeout} hint={t('crons.timeoutHint')}>
