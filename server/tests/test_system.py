@@ -447,6 +447,14 @@ def test_map_usage_drops_non_finite_numbers():
     JSONResponse(u)                                    # NaN / Infinity would make the response raise
 
 
+def test_map_usage_drops_out_of_range_reset_times():
+    """A finite but absurd resets_at (1e300, negative) would make the web's date formatting throw."""
+    for v in (1e300, -1e15, -1):
+        assert health._window({"utilization": 5, "resets_at": v})["resets_at"] is None
+    assert health._window({"utilization": 5, "resets_at": 1791633600})["resets_at"] == 1791633600.0
+    assert health._window({"utilization": 5, "resets_at": "2026-11-07T10:00:00Z"})["resets_at"] is not None
+
+
 def test_non_finite_limits_from_a_turn_do_not_break_usage(client, org, monkeypatch):
     """claude-limits.json with NaN / 1e999 (valid JSON for Python): /api/usage answers 200 without that bar, and a
     turn reporting a non-finite utilization is not recorded."""
@@ -482,6 +490,18 @@ def test_a_bad_seen_at_in_the_limits_does_not_break_usage(client, org, monkeypat
         assert claude_auth.limits()["seen_at"] is None
     claude_auth.limits_file().unlink()
     health._usage.update(at=0.0, data=None, blocked_until=0.0)
+
+
+def test_an_out_of_range_reset_time_does_not_break_the_usage_card(org):
+    """resets_at = 1e300 / -1e15 (finite, but outside the datetime range): the card shows no time instead of raising,
+    and a turn's limits drop such a reset time."""
+    from maxxing import claude_auth, widgets
+    assert widgets._reset(1e300) == "" and widgets._reset(-1e15) == ""
+    assert widgets._reset(time.time()) != ""
+    claude_auth.limits_file().write_text(
+        '{"at": %f, "five_hour": {"utilization": 0.5, "resets_at": 1e300}}' % time.time())
+    assert claude_auth.limits()["five_hour"] == {"pct": 50.0, "resets_at": None}
+    claude_auth.limits_file().unlink()
 
 
 def test_parallel_forced_usage_makes_one_upstream_call(org, monkeypatch):

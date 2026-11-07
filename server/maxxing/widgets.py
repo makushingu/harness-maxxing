@@ -358,7 +358,10 @@ def _reset(at: object) -> str:
     """A reset time: Unix seconds (seen in a turn) or the ISO string of the usage endpoint."""
     if isinstance(at, (int, float)):
         import datetime as _dt
-        d = _dt.datetime.fromtimestamp(at)
+        try:
+            d = _dt.datetime.fromtimestamp(at)
+        except (OverflowError, OSError, ValueError):     # 1e300 / -1e15: out of the datetime range
+            return ""
         return d.strftime("%H:%M") if d.date() == _dt.date.today() else d.strftime("%d/%m %H:%M")
     return str(at)
 

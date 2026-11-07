@@ -195,8 +195,8 @@ def limits(now: float | None = None) -> dict | None:
         if not isinstance(w, dict):
             continue
         reset = w.get("resets_at") if isinstance(w.get("resets_at"), (int, float)) else None
-        if reset is not None and not math.isfinite(reset):
-            reset = None
+        if reset is not None and not (math.isfinite(reset) and 0 <= reset <= 1e11):
+            reset = None                                # 1e300 would break every date shown for it
         u = w.get("utilization") or 0
         if not isinstance(u, (int, float)) or not math.isfinite(u):
             continue                                    # NaN / 1e999 would make /api/usage answer 500
