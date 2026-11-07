@@ -85,3 +85,11 @@ def test_an_impossible_file_name_gets_the_app_page(spa, path):
 def test_an_impossible_asset_name_is_a_404(spa, path):
     c, _ = spa
     assert c.get(path).status_code == 404
+
+
+def test_index_html_is_the_app_page_never_cached(spa):
+    c, _ = spa
+    r = c.get("/index.html")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-store"
+    assert "content-security-policy" in r.headers
