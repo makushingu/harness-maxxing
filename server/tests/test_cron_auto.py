@@ -18,6 +18,13 @@ def ts(y, mo, d, h=0, mi=0, zone=UTC) -> float:
     return dt.datetime(y, mo, d, h, mi, tzinfo=zone).timestamp()
 
 
+@pytest.fixture(autouse=True)
+def _tick_alive(request, monkeypatch):
+    """Retries are planned only while the server's tick runs (tests marked real_tick check it for real)."""
+    if "real_tick" not in request.keywords:
+        monkeypatch.setattr(crons, "tick_alive", lambda now=None: True)
+
+
 def job(**kw) -> dict:
     return {**crons.DEFAULTS, "id": "c_aaaaaa", "name": "j", "created": ts(2026, 1, 1), "updated": ts(2026, 1, 1), **kw}
 
@@ -530,3 +537,27 @@ def test_a_one_time_job_waiting_for_its_retry_is_not_marked_missed(org, monkeypa
     crons.tick(now + 6 * 3600)
     after = crons._raw_job(j["id"])
     assert after["done_at"] and not after.get("missed") and not after["enabled"]
+
+
+@pytest.mark.real_tick
+def test_retries_need_the_tick(org, monkeypatch):
+    """With the server down or its tick off, no retry is promised; a retry the tick could not start in time is
+    reported as the final failure."""
+    assert not crons.tick_alive()
+    telegram = []
+    gw = types.ModuleType("maxxing.telegram.gateway")
+    gw.notify_cron = telegram.append
+    monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
+    import maxxing.telegram as tpkg
+    monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
+    j = crons.create_job({"name": "Flaky", "command": "echo oops; exit 2", "retries": 2})
+    r = crons.run_job(j["id"])
+    assert "retry_at" not in r and telegram and telegram[-1].startswith("FAILED")   # final at once
+    monkeypatch.setattr(crons, "spawn_run", lambda *a, **k: None)
+    crons.tick()
+    assert crons.tick_alive()
+    telegram.clear()
+    r = crons.run_job(j["id"])
+    assert r["retry_at"] and telegram == []
+    assert crons.tick(r["retry_at"] + crons.RETRY_OVERDUE_S + 60) == []           # far too late: given up
+    assert crons._read_retries() == {} and telegram and "not retried" in telegram[-1]
