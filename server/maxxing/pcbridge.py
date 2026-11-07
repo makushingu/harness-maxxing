@@ -581,7 +581,10 @@ class Hub:
         self._ensure_idle_watch()
         try:
             while True:
-                raw = await ws.receive_text()
+                try:
+                    raw = await ws.receive_text()
+                except KeyError:                       # a binary frame: Starlette has no "text" for it
+                    continue
                 if len(raw) > MAX_FRAME:
                     continue
                 try:
