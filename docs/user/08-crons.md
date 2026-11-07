@@ -39,7 +39,9 @@ Harness creates such jobs when you ask in a session.
 **Catch-up.** If the server was off (or the cron daemon stopped) when a job should have run, Harness Maxxing runs it
 **once** when it is back, even if several runs were missed. Only the most recent missed run of the last 24 hours
 counts, and only for jobs that run at most every hour (a job every 15 minutes simply runs again soon); `@reboot` jobs
-are never caught up, nor a job created or changed after the missed time. The server checks a minute and a half after it
+are never caught up, nor a job created or changed after the missed time, nor one whose next regular run is close
+(within 10 minutes, or a tenth of the time between two runs: 2.4 hours for a daily job). A run stopped halfway (server
+restarted while it ran) counts as its run: it is not started again. The server checks a minute and a half after it
 starts, then every 5 minutes. The run is marked "Catch-up" in the history and the report says which run it makes up
 for. Turn **Catch up a missed run** off for a job that must only run at its exact time. A one-time job missed by
 more than 24 hours is not run: it shows **Missed**.
@@ -51,15 +53,16 @@ more than 24 hours is not run: it shows **Missed**.
 
 At most 3 retries. A shell job is retried only when you set **Retries after a failure** (`retries`), after any failure,
 with the same delays. A job that hit its timeout is never retried, and a waiting retry is cancelled when you switch
-the job off, delete it, or it runs again meanwhile. The history shows "Attempt 2", "Attempt 3"...; Telegram gets
+the job off, delete it, or it runs again meanwhile. Retries are started by the Harness Maxxing server: while it is off,
+a failure is final at once, and a retry it could not start within an hour of its time is reported as the final failure. The history shows "Attempt 2", "Attempt 3"...; Telegram gets
 only the final outcome (a failure that will be retried appears in the notifications feed as "Cron will retry", not on
 Telegram).
 
 ## Nothing to report
 
-A Claude job is told it may answer exactly `[SILENT]` when there is nothing worth reporting (no new order, nothing
-changed on the watched page...). Such a run sends nothing on Telegram, even with notify "always", and shows as a
-success marked "Nothing to report". You can also ask for it in the prompt: "if nothing changed, answer [SILENT]".
+A Claude job that reports every run (notify "always") is told it may answer exactly `[SILENT]` when there is nothing worth reporting (no new order, nothing
+changed on the watched page...). Such a run sends nothing on Telegram and shows as a
+success marked "Nothing to report". You can also ask for it in the prompt of any Claude job: "if nothing changed, answer [SILENT]".
 
 ## Schedule syntax
 
