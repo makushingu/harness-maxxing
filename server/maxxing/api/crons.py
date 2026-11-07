@@ -2,11 +2,14 @@
 
 Runs are recorded by `maxxing cron run` in another process, so a small watcher polls the
 mtime of runs.jsonl / jobs.json / the lock dir every 2 s and invalidates the "crons" bus topic.
+A second loop calls `crons.tick` TICK_DELAY_S after the start, then every TICK_S: the runs missed while the server
+or the cron daemon was down (catch-up) and the retries that are due (MAXXING_CRON_TICK=0 turns it off).
 """
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 from typing import Literal, Optional
 
@@ -16,6 +19,7 @@ from pydantic import BaseModel
 from .. import bus, crons
 from ..security import require_auth
 
+log = logging.getLogger("maxxing.crons")
 router = APIRouter(prefix="/api/crons", tags=["crons"], dependencies=[Depends(require_auth)])
 
 
@@ -32,6 +36,10 @@ class CronIn(BaseModel):
     notify: Optional[Literal["never", "failure", "always"]] = None
     timeout_s: Optional[int] = None
     permission_mode: Optional[Literal["", "bypass", "acceptEdits", "default"]] = None
+    once_at: Optional[str] = None
+    delete_after: Optional[bool] = None
+    catch_up: Optional[bool] = None
+    retries: Optional[int] = None
 
 
 def _bad(e: crons.CronError) -> HTTPException:
@@ -64,7 +72,14 @@ def runs(cron_id: str = "", limit: int = Query(50, ge=1, le=crons.MAX_RUNS)):
 
 
 @router.get("/preview")
-def preview(schedule: str = ""):
+def preview(schedule: str = "", once_at: str = ""):
+    if once_at:
+        try:
+            norm = crons.parse_once(once_at)
+        except crons.CronError as e:
+            return {"valid": False, "human": "", "next": [], "error": str(e)}
+        at = crons.once_ts(norm)
+        return {"valid": True, "human": crons.once_human(norm), "next": [at] if at else [], "once": True}
     try:
         expr = crons.parse(schedule)
     except crons.CronError as e:
@@ -120,6 +135,22 @@ def run_now(cid: str):
 
 # ---- watcher --------------------------------------------------------------------------------
 _task: asyncio.Task | None = None
+_tick_task: asyncio.Task | None = None
+TICK_DELAY_S = 90          # after a start: the server is up, and a crontab line of this minute had time to start
+TICK_S = 300
+
+
+async def _ticks() -> None:
+    await asyncio.sleep(float(os.environ.get("MAXXING_CRON_TICK_DELAY", TICK_DELAY_S)))
+    while True:
+        try:
+            if await asyncio.to_thread(crons.tick):
+                bus.invalidate("crons")
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("cron tick failed")
+        await asyncio.sleep(TICK_S)
 
 
 def _signature() -> tuple:
@@ -151,16 +182,19 @@ async def _watch(interval: float = 2.0) -> None:
 
 
 async def startup() -> None:
-    global _task
+    global _task, _tick_task
     from .. import workspace
     workspace.on_change(crons.on_workspace_change)
     _task = asyncio.create_task(_watch())
+    if os.environ.get("MAXXING_CRON_TICK", "1") != "0":
+        _tick_task = asyncio.create_task(_ticks())
 
 
 async def shutdown() -> None:
-    global _task
-    if _task:
-        _task.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
-            await _task
-        _task = None
+    global _task, _tick_task
+    for t in (_task, _tick_task):
+        if t:
+            t.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await t
+    _task = _tick_task = None
