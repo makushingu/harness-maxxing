@@ -6,9 +6,9 @@ import { useLang, useT } from '@/i18n'
 import type { UsageWindow } from '@/lib/types'
 import { ProgressBar, Tooltip } from '@/components/ui'
 
-/** How much of the Claude plan is used (5-hour window, week), as on claude.ai: two small bars under the health indicator.
- *  Hidden when the server has no plan usage (API key, never read). */
-export function UsageIndicator({ collapsed, visible }: { collapsed?: boolean; /** Shown in the touch layout's menu (polls while it is open). */ visible?: boolean }) {
+/** The Claude plan usage rows (5-hour window, week) and their details; null when the server has no plan usage
+ *  (API key, never read). `visible`: shown in the touch layout's menu (polls while it is open). */
+export function usePlanUsage(visible?: boolean) {
   const t = useT()
   const lang = useLang()
   const desktop = !useIsMobile() || !!visible     // the sidebar is hidden in the touch layout: no polling for a bar nobody sees
@@ -19,8 +19,6 @@ export function UsageIndicator({ collapsed, visible }: { collapsed?: boolean; /*
     { key: 'week', label: t('usage.week'), w: u.seven_day },
   ].filter((r): r is { key: string; label: string; w: UsageWindow & { pct: number } } => Number.isFinite(r.w?.pct)) // no percentage: no row (not "0 % used")
   if (!rows.length) return null
-  const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)))
-  const tone = (w: { pct: number }) => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
   const reset = (w: UsageWindow) =>
     w.resets_at ? t('usage.resets', { at: fmtDate(w.resets_at, lang, undefined, { dateStyle: undefined, timeStyle: undefined, weekday: 'short', hour: '2-digit', minute: '2-digit' }) }) : null
   const noFive = !u.five_hour && u.plan === 'Ultra' // verified Ultra accounts have no 5-hour window
@@ -38,6 +36,39 @@ export function UsageIndicator({ collapsed, visible }: { collapsed?: boolean; /*
       {u.source === 'turn' && u.seen_at && <span className="max-w-60 opacity-70">{t('usage.seen', { when: fmtRelative(u.seen_at, lang) })}</span>}
     </div>
   )
+  return { rows, title, details }
+}
+
+const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)))
+const tone = (w: { pct: number }) => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
+
+/** One line per window in the sidebar's status footer: "Claude · Week ▁▁▁ 38 %" (folded: the thin bars only). */
+export function UsageLines({ collapsed }: { collapsed?: boolean }) {
+  const p = usePlanUsage()
+  if (!p) return null
+  return (
+    <>
+      {p.rows.map((r) =>
+        collapsed ? (
+          <ProgressBar key={r.key} value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 w-8" />
+        ) : (
+          <div key={r.key} className="flex items-center gap-2 text-[11px] leading-none text-muted-foreground">
+            <span className="shrink-0">Claude · {r.label}</span>
+            <ProgressBar value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 flex-1" />
+            <span className="shrink-0 text-foreground tabular-nums">{used(r.w)}%</span>
+          </div>
+        ),
+      )}
+    </>
+  )
+}
+
+/** Plan usage as two small bars (the touch layout's menu). */
+export function UsageIndicator({ collapsed, visible }: { collapsed?: boolean; visible?: boolean }) {
+  const t = useT()
+  const p = usePlanUsage(visible)
+  if (!p) return null
+  const { rows, title, details } = p
   return (
     <Tooltip content={details} side="right">
       <div className={cn('grid gap-1.5 px-2.5 py-1.5', collapsed && 'px-1')} aria-label={title}>

@@ -21,12 +21,34 @@ export function TooltipContent({ className, sideOffset = 6, ...props }: React.Co
   )
 }
 
+/** Trigger for a child whose className is a function (NavLink): Radix's Slot joins class names as strings, which
+ *  turned the function into text (the link lost its classes). The trigger's props go to the child, handlers composed. */
+const KeepClass = React.forwardRef<HTMLElement, Record<string, unknown>>(function KeepClass(props, ref) {
+  const { child: c, className: _joined, ...slot } = props
+  const child = c as React.ReactElement<Record<string, unknown>>
+  const own = child.props
+  const merged: Record<string, unknown> = { ...slot }
+  for (const k of Object.keys(slot)) {
+    const a = own[k]
+    const b = slot[k]
+    if (/^on[A-Z]/.test(k) && typeof a === 'function' && typeof b === 'function')
+      merged[k] = (...args: unknown[]) => {
+        ;(a as (...x: unknown[]) => void)(...args)
+        ;(b as (...x: unknown[]) => void)(...args)
+      }
+  }
+  if (own.style && slot.style) merged.style = { ...(slot.style as object), ...(own.style as object) }
+  return React.cloneElement(child, { ...merged, ref })
+})
+
 /** Shorthand: <Tooltip content="Label" side="right"><Button …/></Tooltip>. `content=null` disables it. */
 export function Tooltip({ content, side, align, children, disabled }: { content: React.ReactNode; side?: 'top' | 'right' | 'bottom' | 'left'; align?: 'start' | 'center' | 'end'; children: React.ReactNode; disabled?: boolean }) {
   if (disabled || content == null || content === '') return <>{children}</>
   return (
     <TooltipRoot>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        {React.isValidElement<Record<string, unknown>>(children) && typeof children.props.className === 'function' ? <KeepClass child={children} /> : children}
+      </TooltipTrigger>
       <TooltipContent side={side} align={align}>
         {content}
       </TooltipContent>

@@ -3,16 +3,12 @@ import { Blocks, ChevronRight } from 'lucide-react'
 import { useExtensions, useOrderPins } from '@/lib/queries'
 import { useUI } from '@/stores/ui'
 import { useDragOrder } from './dragOrder'
+import { navRow } from './nav'
 import { useT } from '@/i18n'
 import { NamedIcon, Tooltip } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
-const item = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) =>
-  cn(
-    'group relative flex h-9 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-    isActive && 'bg-accent text-foreground',
-    collapsed && 'justify-center px-0',
-  )
+const item = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) => navRow(collapsed, isActive)
 
 /**
  * Extension pages in the sidebar: one "Extensions" row (the /x hub, without a counter: the count of unpinned pages
