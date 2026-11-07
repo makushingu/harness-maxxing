@@ -75,19 +75,32 @@ def os_name() -> str:
     return platform.platform()
 
 
+ANSWER_MAX = 1 << 20                                   # bytes of a cloud answer: more is not an answer
+
+
+def read_answer(r) -> bytes | None:
+    """The body of a cloud answer, None past ANSWER_MAX bytes (a broken server could send hundreds of MB)."""
+    out = r.read(ANSWER_MAX + 1)
+    return out if len(out) <= ANSWER_MAX else None
+
+
 def _post(path: str, body: dict, timeout: float = 25) -> dict:
     req = urllib.request.Request(API + path, data=json.dumps(body).encode(), method="POST",
                                  headers={"content-type": "application/json", "user-agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            out = json.loads(r.read() or b"{}")
+            raw = read_answer(r)
+            out = json.loads(raw or b"{}") if raw is not None else None
     except urllib.error.HTTPError as e:
         try:
-            j = json.loads(e.read() or b"{}")
-        except (ValueError, RecursionError):
+            raw = read_answer(e)
+            j = json.loads(raw or b"{}") if raw is not None else {}
+        except (ValueError, RecursionError, OSError, http.client.HTTPException):
             j = {}
         j = j if isinstance(j, dict) else {}
-        raise LicenseError(j.get("message") or f"license server answered HTTP {e.code}", j.get("error") or f"http_{e.code}", j) from None
+        msg = j.get("message")
+        msg = msg[:300] if isinstance(msg, str) and msg else f"license server answered HTTP {e.code}"
+        raise LicenseError(msg, j.get("error") or f"http_{e.code}", j) from None
     except RecursionError:                              # JSON nested too deep: not an answer
         raise LicenseError("the license server sent an answer this version does not read", "bad_answer") from None
     except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
