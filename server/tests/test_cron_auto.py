@@ -134,6 +134,11 @@ def test_a_catch_up_overtaken_by_the_regular_run_is_skipped(org, monkeypatch):
     ("I could not find the file report.csv.", "", None),
     ("", "Claude exited with code 1", None),
     ("x" * 5000 + " the network was fine " + "y" * 3000, "", None),               # a long answer: only its end
+    # an answer that only mentions an error of something else is the job's own result, not a passing failure
+    ("I checked the site: it returned 503 three times, so I stopped.", "", None),
+    ("Processed 500 rows; the export step failed because the file is locked.", "", None),
+    ("The Stripe API said: rate limit reached for this key.", "", None),
+    ("Done.\nAPI Error: Connection error.", "", "transient"),
 ])
 def test_failures_worth_a_retry(text, error, want):
     assert crons.classify_failure(text, error) == want
@@ -155,7 +160,7 @@ def test_retry_plan_backoff_limits_and_never_on_timeout(org, monkeypatch):
     p = crons.retry_plan(claude, ok=False, attempt=1, timed_out=False, text="You've hit your limit", now=now)
     assert p["at"] - now == crons.LIMIT_RETRY_S
     monkeypatch.setattr(crons, "limit_reset", lambda text, now: now + 5 * 86400)   # weekly limit: give up
-    assert crons.retry_plan(claude, ok=False, attempt=1, timed_out=False, text="usage limit", now=now) is None
+    assert crons.retry_plan(claude, ok=False, attempt=1, timed_out=False, text="Weekly limit reached", now=now) is None
     # shell: only with `retries`
     assert crons.retry_plan({"kind": "shell"}, ok=False, attempt=1, timed_out=False, text="boom", now=now) is None
     sh = {"kind": "shell", "retries": 2}
