@@ -577,3 +577,12 @@ def test_a_secret_in_a_file_name_that_is_not_utf8_is_recorded(gh, ws):
     assert r["ok"] is False and r["code"] == "secret_found"
     h = backup.history()[0]
     assert h["ok"] is False and h["leaks"][0]["file"] == "projects/acme/topics/blog/caf?.md"
+
+
+@pytest.mark.parametrize("ref", ["a\x00b", "a\ud800", "x" * 5000, "main\n", "--all"], ids=["nul", "surrogate", "long", "newline", "option"])
+def test_restore_refuses_an_invalid_revision(gh, ws, ref):
+    gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    r = backup.restore(ref)
+    assert r["ok"] is False and r["code"] == "bad_ref"
