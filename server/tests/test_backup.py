@@ -627,3 +627,19 @@ def test_a_file_name_that_is_not_utf8_is_skipped_by_the_restore(gh, ws, mx_state
     assert r["ok"], r
     assert (ws / "memory.md").read_text() == "- pushed fact\n"
     assert not any(b"weird" in os.fsencode(p.name) for p in ws.iterdir())
+
+
+def test_the_restore_skips_files_larger_than_the_backup_limit(gh, ws, mx_state, monkeypatch):
+    bare = gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    monkeypatch.setattr(backup, "MAX_FILE", 1000)
+    _push_extra(bare, mx_state / "pusher", {b"memory.md": b"x" * 2000, b"projects/acme/CLAUDE.md": b"# acme v2\n"})
+    _in_use()
+    r = backup.restore()
+    assert r["ok"], r
+    assert (ws / "projects/acme/CLAUDE.md").read_text() == "# acme v2\n"
+    assert (ws / "memory.md").read_text() == "- root fact\n"
+    monkeypatch.setattr(backup, "MAX_RESTORE", 5)
+    r = backup.restore()
+    assert r["ok"] is False and r["code"] == "too_large"
