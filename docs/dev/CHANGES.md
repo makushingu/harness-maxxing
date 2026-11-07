@@ -5,6 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.124 - 2026-11-07
+
+- Released from `main` (beta-only a113-a122 still stay on `beta`). Holds Radar's hunt of 07/11 (45 findings) and
+  issues #41-#43: update file lock for the whole run + in-progress mark dropped on early failure; pcbridge pairing
+  under one lock, per-download temp file, action log lock + atomic write, binary frames ignored, frame-limit failure
+  fails waiters at once, old chrome-devtools-mcp stopped; license/cloud answers capped at 1 MB with a 30 s deadline and
+  nesting guard (bad_answer); videos remember unreadable files and share one ffprobe; thumbnails cache failures 10 min;
+  backup restore caps (5 MB / 500 MB), git lock cleanup, bad_ref; MCP check 4 folders at a time; voice Whisper
+  revision from deps.toml; log compaction survives lone surrogates; uninstall cron marker; installer PORT base 10;
+  ui-kit `<option>` colours.
+
 ## 2.0.0-alpha.123 - 2026-11-06
 
 - Released from `main` without the beta-only work (a113-a122: Agents, groups, e-mail, secret files): those numbers
