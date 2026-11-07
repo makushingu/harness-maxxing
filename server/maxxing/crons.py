@@ -70,6 +70,8 @@ RETRY_BACKOFF_S = (300, 900, 1800)       # wait before retry 1, 2, 3 (then the l
 MAX_RETRIES = 3                          # automatic retries of a Claude job after a transient failure
 MAX_SHELL_RETRIES = 5                    # `retries` of a shell job (0 = none, the default)
 LIMIT_RETRY_S = 1800                     # usage limit with no known reset time: try again after this
+TICK_ALIVE_S = 900                       # retries are planned only while the server's tick ran this recently
+RETRY_OVERDUE_S = 3600                   # a retry this late (server down, tick off) is given up: final failure
 ONCE_PAST_S = 60                         # a one-time job may be set at most this long in the past
 SILENT = "[SILENT]"                      # a Claude job's answer starting with it: nothing to report
 
@@ -1475,6 +1477,19 @@ def retries_path() -> Path:
     return _dir() / "retries.json"
 
 
+def tick_path() -> Path:
+    return _dir() / "tick.json"
+
+
+def tick_alive(now: float | None = None) -> bool:
+    """Did the server's tick run lately? Only it starts retries: with the server down or its tick off
+    (MAXXING_CRON_TICK=0), a failure is final at once instead of promising a retry that never comes."""
+    d = config.read_json(tick_path(), {})
+    at = d.get("at") if isinstance(d, dict) else None
+    now = time.time() if now is None else now
+    return isinstance(at, (int, float)) and now - at <= TICK_ALIVE_S
+
+
 def _read_retries() -> dict:
     d = config.read_json(retries_path(), {})
     return d if isinstance(d, dict) else {}
@@ -1605,6 +1620,10 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
     """One pass of the server (start + every TICK_S): start the catch-up runs and the retries that are due, mark the
     one-time jobs missed for good. -> [(job id, trigger)] started. Never raises for one job."""
     now = time.time() if now is None else now
+    try:
+        config.write_json(tick_path(), {"at": now})    # retries may be planned (tick_alive)
+    except OSError:
+        pass
     jobs = _read_raw()
     if not jobs:
         return []
@@ -1626,6 +1645,10 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
                                             and w["after"] >= now - CATCH_UP_WINDOW_S):
                 _drop_retry(cid)                       # a failure older than a day: never retried now
                 w = None
+            if isinstance(w, dict) and isinstance(w.get("at"), (int, float)) and w["at"] < now - RETRY_OVERDUE_S:
+                _drop_retry(cid)                       # the server was down or its tick off: it is final now
+                _give_up_retry(j, w, runs.get(cid, []))
+                w = None
             if isinstance(w, dict) and isinstance(w.get("at"), (int, float)) and w["at"] <= now:
                 spawn_run(cid, "retry", int(w.get("attempt") or 2))
                 started.append((cid, "retry"))
@@ -1645,6 +1668,18 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
         except Exception as e:  # noqa: BLE001 - one job must not stop the others
             log.warning("cron %s: tick: %s", cid, e)
     return started
+
+
+def _give_up_retry(job: dict, entry: dict, runs: list[dict]) -> None:
+    """A retry that could not run in time: its failed run is reported as the final outcome (feed + Telegram per
+    `notify`), which the failure that planned it did not do."""
+    run = next((r for r in reversed(runs) if r.get("id") == entry.get("run_id")), None) or \
+        {"id": entry.get("run_id") or "", "cron_id": job["id"], "name": job["name"], "at": entry.get("after") or 0,
+         "ok": False, "code": 1, "duration_s": 0, "output_tail": "", "session_id": None}
+    final = {k: v for k, v in run.items() if k != "retry_at"}
+    final["output_tail"] = ((final.get("output_tail") or "").rstrip()
+                            + "\n[not retried: the server could not start the retry in time]").lstrip()
+    _notify(job, final)
 
 
 def _finish_once(cid: str, missed: bool = False, ran: dict | None = None) -> None:
@@ -1767,7 +1802,7 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
         if ok and job["kind"] == "claude" and is_silent(answer):
             run["silent"] = True
         retry = retry_plan(job, ok=ok, attempt=attempt, timed_out=timed_out, text=answer or tail, error=error,
-                           now=now)
+                           now=now) if tick_alive(now) else None
         if retry:
             run["retry_at"] = retry["at"]
             try:

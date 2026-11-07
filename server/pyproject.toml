@@ -30,3 +30,4 @@ packages = ["maxxing"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["real_tick: do not fake the cron tick heartbeat (test_cron_auto.py)"]
