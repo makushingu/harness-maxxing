@@ -62,7 +62,7 @@ def write_atomic(f: Path, data: dict) -> None:
 def read(f: Path) -> dict | None:
     try:
         d = json.loads(f.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):      # RecursionError: JSON nested too deep
         return None
     return d if isinstance(d, dict) else None
 

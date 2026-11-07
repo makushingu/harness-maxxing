@@ -432,3 +432,10 @@ def test_the_watcher_parses_only_the_requests_that_changed(client, topic, monkey
     approval_mcp.write_atomic(d / f"{one}.json", {"id": one, "session": "s", "status": "deny", "at": now})
     assert next(x for x in approvals._all() if x["id"] == one)["status"] == "deny"
     assert len(reads) == first + 1
+
+
+def test_a_request_file_nested_too_deep_reads_as_nothing(tmp_path):
+    from maxxing import approval_mcp
+    f = tmp_path / "r.json"
+    f.write_text("[" * 100_000)
+    assert approval_mcp.read(f) is None
