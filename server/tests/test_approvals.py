@@ -439,3 +439,15 @@ def test_a_request_file_nested_too_deep_reads_as_nothing(tmp_path):
     f = tmp_path / "r.json"
     f.write_text("[" * 100_000)
     assert approval_mcp.read(f) is None
+
+
+def test_a_line_nested_too_deep_is_a_parse_error_and_the_server_goes_on(tmp_path):
+    """RecursionError was not caught: the server died without expiring what waited."""
+    srv = Server(tmp_path / "ap")
+    assert srv.p.stdin
+    srv.p.stdin.write("[" * 100_000 + "\n")
+    srv.p.stdin.flush()
+    assert srv.recv()["error"]["code"] == -32700
+    srv.send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    assert srv.recv()["result"]["tools"]
+    assert srv.close() == 0
