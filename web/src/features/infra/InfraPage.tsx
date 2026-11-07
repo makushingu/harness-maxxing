@@ -172,7 +172,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">{t('infra.problems')}</h2>
           {nProblems > 4 && (
-            <button type="button" onClick={() => onTab('problems')} className="ml-auto text-xs text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => onTab('problems')} className="ml-auto text-xs text-muted-foreground hover:text-foreground pointer-coarse:min-h-10">
               {t('infra.place.seeAll', { count: nProblems })}
             </button>
           )}
