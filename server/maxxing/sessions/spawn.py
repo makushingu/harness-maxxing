@@ -174,6 +174,12 @@ FOREGROUND_AGENTS = ("Subagents (Agent tool): run them in the foreground, always
                      "Agent calls in the same message: they run in parallel and their results come back in this turn.")
 
 
+# A turn started by a scheduled job (item source "cron"): Claude may say there is nothing to report, then the job sends
+# nothing on Telegram (crons.is_silent).
+CRON_SILENT = ("This turn was started by a scheduled job. If there is nothing worth reporting this time, answer "
+               "exactly [SILENT] and nothing else: no report is then sent.")
+
+
 def agents_args(cfg: dict, extra: str = "") -> list[str]:
     """`--append-system-prompt` asking for foreground subagents, unless config `background_agents` is on, followed by
     `extra` (the MCP servers not loaded, mcp_auto.py). One flag only: Claude Code keeps the last of several."""
