@@ -64,6 +64,18 @@ def test_no_catch_up_older_than_a_day_or_for_frequent_reboot_or_opted_out_jobs()
     assert crons.catch_up_slot(job(schedule="not valid"), [], now, UTC) is None
 
 
+def test_no_catch_up_just_before_the_next_regular_run():
+    hourly = job(schedule="0 * * * *")
+    assert crons.catch_up_slot(hourly, [], ts(2026, 11, 7, 10, 45), UTC) == ts(2026, 11, 7, 10)
+    assert crons.catch_up_slot(hourly, [], ts(2026, 11, 7, 10, 52), UTC) is None   # 11:00 is 8 min away
+    daily = job(schedule="0 7 * * *")
+    assert crons.catch_up_slot(daily, [], ts(2026, 11, 8, 4), UTC) == ts(2026, 11, 7, 7)
+    assert crons.catch_up_slot(daily, [], ts(2026, 11, 8, 5), UTC) is None         # 2 h < 10 % of a day
+    every3h = job(schedule="0 */3 * * *")
+    assert crons.catch_up_slot(every3h, [], ts(2026, 11, 7, 10, 40), UTC) == ts(2026, 11, 7, 9)
+    assert crons.catch_up_slot(every3h, [], ts(2026, 11, 7, 11, 45), UTC) is None   # 15 min < 18 min
+
+
 def test_a_job_created_or_changed_after_the_slot_is_not_caught_up():
     now = ts(2026, 11, 7, 10)
     assert crons.catch_up_slot(job(schedule="0 7 * * *", created=ts(2026, 11, 7, 8), updated=ts(2026, 11, 7, 8)),
