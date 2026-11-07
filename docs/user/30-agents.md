@@ -249,7 +249,8 @@ until you switch it on):
   and the transcripts of your sessions, other command-line logins (`~/.config`, `~/.local/share`, cloud tools), the
   server's own secrets (password hashes, SSH host keys, TLS certificates, the web server's files, databases, logs,
   other users' folders), **anything else in your home folder** (scripts, notes, histories: only the workspace, git's
-  settings, Claude's skills, package caches and the tools installed there stay readable), nor the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
+  settings, the shell's settings when they set no secret, Claude's skills, package caches and the tools installed
+  there stay readable), nor the rest of the workspace (other projects, other topics, the other agents of its topic) and the `.env` files of its
   topic. Claude's own Read / Edit tools are refused there too;
 - they reach **only the domains you list** (`api.github.com`, `*.example.com`; none by default). A wildcard names a
   site: `*.com`, `*.co.uk`, `*.github.io` or a shared host such as `*.s3.amazonaws.com` or `*.blogspot.com` are

@@ -177,6 +177,12 @@ HOME_BACK = (".gitconfig", ".local/bin", ".local/lib", ".nvm", ".bun", ".cargo",
              ".npm", ".cache/uv", ".cache/pip", ".cache/ms-playwright", ".cache/pnpm", ".cache/yarn", ".cache/deno",
              ".cache/go-build")
 CLAUDE_BACK = ("skills", "shell-snapshots", "session-env", ".cc-writes")   # in Claude Code's folder
+# the shell's own settings (bash reads them in every command: denied, each one starts with "Permission denied"),
+# unless one sets something that looks like a secret (`export API_TOKEN=...`: those belong in the Keys vault)
+SHELL_RC = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".bash_aliases", ".bash_logout", ".zshrc",
+            ".zshenv", ".zprofile", ".inputrc")
+SECRET_SET = re.compile(r"^\s*(?:export\s+|declare\s+-x\s+)?(?:[A-Z0-9]+_)*(?:KEY|APIKEY|TOKEN|SECRET|PASS|PASSWD|"
+                        r"PASSWORD|PWD|CREDENTIALS?|AUTH|PAT|DSN)(?:_[A-Z0-9]+)*=\S", re.M)
 # a link of the home folder into these is a tool, left readable
 TOOL_ROOTS = tuple(Path(p) for p in ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/opt", "/snap", "/nix"))
 TOOLS = ("node", "npm", "npx", "uv", "python3", "python", "git", "bun", "deno", "pnpm", "go")
@@ -226,6 +232,14 @@ def _home_kept() -> set[Path]:
     h = home.resolve()
     kept = {home / p for p in HOME_BACK}
     kept.add(config.workspace())
+    for n in SHELL_RC:
+        rc = home / n
+        try:
+            if rc.is_file() and not rc.is_symlink() and rc.stat().st_size < 1_000_000 \
+                    and not SECRET_SET.search(rc.read_text(encoding="utf-8", errors="replace")):
+                kept.add(rc)
+        except OSError:
+            pass
     for d in {config.claude_dir(), home / ".claude"}:
         kept |= {d / n for n in CLAUDE_BACK}
     for t in TOOLS:

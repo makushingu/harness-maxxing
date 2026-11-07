@@ -400,6 +400,8 @@ def test_sandbox_hides_the_home_folder_but_what_commands_need(monkeypatch, tmp_p
         d.mkdir(parents=True)
     for f in ("notes.md", ".bash_history", ".gitconfig", ".claude/.credentials.json", "scripts/run.sh"):
         (home / f).write_text("x")
+    (home / ".bashrc").write_text('export PATH="$HOME/.local/bin:$PATH"\nalias ll="ls -l"\n')   # read by every command
+    (home / ".profile").write_text("export OPENAI_API_KEY=sk-123\n")                         # a secret: stays hidden
     node = home / ".nvm/versions/node/v22/bin/node"
     node.write_text("#!/bin/sh\n")
     node.chmod(0o755)
@@ -411,9 +413,9 @@ def test_sandbox_hides_the_home_folder_but_what_commands_need(monkeypatch, tmp_p
     monkeypatch.setattr(config, "claude_dir", lambda: home / ".claude")
     wall = agent_guard.home_wall()
     for p in ("notes.md", ".bash_history", "scripts", ".claude/.credentials.json", ".claude/projects",
-              ".cache/browser-profile", "keys"):
+              ".cache/browser-profile", "keys", ".profile"):
         assert str(home / p) in wall, p
-    for p in ("maxxing", ".gitconfig", ".local/bin", ".cache/uv", ".claude/skills", ".nvm/versions/node/v22",
+    for p in ("maxxing", ".gitconfig", ".bashrc", ".local/bin", ".cache/uv", ".claude/skills", ".nvm/versions/node/v22",
               "python", ".local/share", ".local", ".cache", ".claude"):
         assert str(home / p) not in wall, p
     assert not any(w.startswith(str(ws)) for w in wall)       # the workspace has its own walls (private_paths)
