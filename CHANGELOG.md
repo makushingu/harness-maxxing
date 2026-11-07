@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.129 - 2026-11-07
+
+Changed:
+- **Tasks is optional**: switch it on or off in **Settings -> Features -> Tasks**. It stays on if you already
+  have it; a new install starts without it. Off hides the Tasks entry of the sidebar and the dashboard widget, and
+  deletes nothing: your tasks are still there, and Claude can still read and change them.
+
 ## 2.0.0-alpha.128 - 2026-11-07
 
 New:
