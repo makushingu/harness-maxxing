@@ -354,3 +354,16 @@ def test_a_broken_video_or_pdf_is_not_rendered_again_at_every_display(client, mx
     bad.write_bytes(os.urandom(3000) + b"x")                 # another version of the file: tried again
     client.get("/api/files/thumb", params={"path": str(bad), "w": 320})
     assert len(runs) == 4
+
+
+def test_thumb_of_an_avif_with_a_percent_in_its_name(client, mx):
+    """A "%" forced image2, which cannot read AVIF/HEIC: the original came back (a broken image for a HEIC)."""
+    plain = mx["files"] / "plain.avif"
+    r = subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1",
+                        "-c:v", "libaom-av1", "-still-picture", "1", str(plain)], capture_output=True)
+    if r.returncode:
+        pytest.skip("ffmpeg cannot write AVIF here")
+    (mx["files"] / "p%d.avif").write_bytes(plain.read_bytes())
+    for name in ("plain.avif", "p%d.avif"):
+        r = client.get("/api/files/thumb", params={"path": str(mx["files"] / name), "w": 320})
+        assert r.status_code == 200 and r.headers["content-type"] == "image/webp", name
