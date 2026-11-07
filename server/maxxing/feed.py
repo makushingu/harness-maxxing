@@ -37,6 +37,9 @@ SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,39}$")
 # Built-in sources: they already report in their own Telegram thread (Crons; Alerts: gateway.alert / system_alert).
 BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins", "health": "Server health",
            "agents": "Agents"}
+# sources the product posts to by itself besides BUILTIN: mail (mail/outbox.py, the e-mails waiting for the owner's
+# OK) and infra (sites down, certificates): a webhook or an agent posting there could pass for them
+PRODUCT_SOURCES = {"mail", "infra"}
 OWN_THREAD = {"crons", "system", "security"}
 MAX_RULES = 200  # per-source Telegram rules kept in config.json (read everywhere)
 

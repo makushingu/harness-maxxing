@@ -79,7 +79,7 @@ def create(name: str, kind: str, secret: str = "") -> dict:
     if kind not in KINDS:
         raise FeedError(400, "bad_kind", f"Kind: {', '.join(KINDS)}")
     source = feed.clean_source(name or kind)
-    if source in feed.BUILTIN:
+    if source in feed.BUILTIN or source in feed.PRODUCT_SOURCES:    # a webhook named "mail" would pass for the product
         raise FeedError(409, "reserved", f"{source!r} is a built-in source")
     with _lock:
         hooks = feed.settings()["hooks"]
