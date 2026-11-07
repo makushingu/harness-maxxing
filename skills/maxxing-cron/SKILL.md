@@ -29,7 +29,7 @@ timeout. "Run now" and history are there too.
 | `timeout_s` | max duration, 10 s to 7 days (default 3600) |
 | `once_at` | one-time job instead of `schedule`: `"YYYY-MM-DDTHH:MM"`, wall time in the configured zone; runs once, then `enabled: false` + `done_at` |
 | `delete_after` | one-time job: removed once it ran (archived, `maxxing cron deleted`) instead of disabled |
-| `catch_up` | default `true`: a run missed while the server was down (last 24 h, jobs at most hourly) runs once when it is back |
+| `catch_up` | default `true`: a run missed while the server was down (last 24 h, jobs at most hourly) runs once when it is back (not if the next run is close) |
 | `retries` | shell only, 0-5 (default 0): retry a failed command after 5, 15, 30 min. Claude jobs retry by themselves after a usage limit or an API/network error (3 max); a timeout is never retried |
 
 Schedule examples: `0 7 * * *` every day 07:00 · `*/15 * * * *` every 15 min · `30 8 * * 1-5`
@@ -42,7 +42,7 @@ reminder text, with `notify: "always"` so it arrives on Telegram, and usually `d
 exact date and time you set. A past `once_at` is refused.
 
 ## Nothing to report
-A Claude job may answer exactly `[SILENT]` (its turn is told so): no Telegram report, even with `notify: "always"`.
+A Claude job may answer exactly `[SILENT]`: no Telegram report (with `notify: "always"` its turn is told so).
 For watch jobs, say it in the prompt too: "if nothing changed since the last run, answer [SILENT]".
 
 ## Without the UI (CLI + file)

@@ -431,9 +431,11 @@ either a text key or a file, never both (`name_taken`; `vault.put` refuses a nam
 - `run_job(id, trigger="manual", attempt=1) -> Run | None | {"skipped": reason}` (blocking; None = unknown or already
   running) · `spawn_run(id, trigger, attempt)` · `sync_crontab()` · `tick()`
 - `tick()` (api/crons.py: 90 s after the start, then every 5 min; `maxxing cron tick`; MAXXING_CRON_TICK=0 = off):
-  starts the retries due in `retries.json` and the catch-up runs (`catch_up_slot(job, runs, now, zone)`, pure: the
+  writes the heartbeat `tick.json` (`tick_alive`: within 15 min; without it no retry is planned), gives up a retry
+  more than 1 h late (`_give_up_retry`: reported as the final failure), starts the retries due in `retries.json` and the catch-up runs (`catch_up_slot(job, runs, now, zone)`, pure: the
   most recent slot of the last 24 h, past by 3 min, no run started at/after it nor running over it, job created and
-  last updated before it, not @reboot nor more often than hourly, `catch_up` not false; a one-time job's slot is its
+  last updated before it, not @reboot nor more often than hourly, the next slot not within max(10 min, 10 % of the
+  interval), `catch_up` not false; a run killed mid-way (lock file mark, `_lock_mark`/`_interrupted`) counts; a one-time job's slot is its
   date), and marks a one-time job more than 24 h late as done + `missed`. Both start through `spawn_run` with
   `--trigger catch-up|retry [--attempt N]`; `run_job` checks again under the job flock (`_skip_reason`: the regular
   run, Run now or another start may have overtaken it) and a retry entry is claimed once (`_take_retry`).
@@ -443,13 +445,14 @@ either a text key or a file, never both (`name_taken`; `vault.put` refuses a nam
   Shell job: `retries` (0-5) for any failure. Never after a timeout (exit 124 with the timeout marker, a Claude turn
   "Turn stopped (timeout)" or still running, or a run that lasted 98 % of `timeout_s`). The failed Run gets
   `retry_at`; the feed gets a "Cron will retry" warning, Telegram nothing until the final outcome. Switching a job off
-  or deleting it drops its retry.
+  or deleting it drops its retry, and so does any run that plans none; a disabled job plans none.
 - One-time jobs (`once_at`, `schedule` = ""): crontab line `M H D Mo *` (or the hourly `--if-due` line of a kept clock,
   `job_is_due`); `cmd_cron` runs a scheduled start only while `once_pending` (the line fires again every year). After
   its run (no retry pending) `_finish_once` disables it with `done_at`, or removes it with `delete_after` (archived in
-  deleted.jsonl). A new date or switching it back on clears `done_at`; a past date is refused (`invalid_once`).
+  deleted.jsonl, retry and sessions.json entry dropped like `delete_job`); a date changed while it ran is kept. A new date or switching it back on clears `done_at`; a past date is refused (`invalid_once`).
 - Silent runs: a Claude answer starting with `[SILENT]` (`is_silent`) -> Run `silent`, folded feed success "nothing to
-  report", no Telegram. The runner appends `spawn.CRON_SILENT` to the system prompt of turns whose item source is "cron".
+  report", no Telegram. The runner appends `spawn.CRON_SILENT` to the system prompt of turns whose queue item has `silent_ok` (Claude jobs
+  with notify "always" only: for the others a silent answer saves nothing).
 - `list_jobs()`, `read_runs(cron_id=None, limit=50)`, `last_runs() -> {cron_id: Run}`, `parse/humanize/next_runs`.
   The run history is parsed once per file version (`_all_runs`, keyed on path + mtime + size); `read_runs`
   returns copies.
