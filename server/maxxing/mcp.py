@@ -94,7 +94,7 @@ def _read_cfg(fresh: bool = False) -> dict:
             return _cfg_cache["data"]
         d = json.loads(p.read_text(encoding="utf-8"))
         d = d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):      # JSON nested too deep
         return {}
     if not fresh:
         _cfg_cache.update(key=key, data=d)
@@ -686,7 +686,7 @@ def remove(sid: str) -> None:
         try:
             data = json.loads(_read_mcp_json(f))
             data.get("mcpServers", {}).pop(name)
-        except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        except (OSError, ValueError, KeyError, AttributeError, TypeError, RecursionError):
             raise McpError(404, "not_found", f"no {name} in {f}") from None
         _write_mcp_json(f, data)
     elif folder is not None and not Path(folder).is_dir():

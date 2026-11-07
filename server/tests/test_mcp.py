@@ -321,3 +321,17 @@ def test_pc_mcp_registered_reads_no_project_file(env, monkeypatch):
     mcp.remove(mcp._id("user", None, pcbridge.MCP_NAME))
     assert pcbridge.mcp_registered() is False
     assert any(s["name"] == "x" for s in mcp.servers()) and reads
+
+
+def test_mcp_files_nested_too_deep_are_not_a_500(env):
+    """A .mcp.json of 200 000 "[" (under MCP_JSON_MAX): RecursionError -> 500 on DELETE instead of 404."""
+    from maxxing import mcp
+    f = env.ws / "projects/acme/.mcp.json"
+    f.write_text(json.dumps({"mcpServers": {"shared": {"type": "http", "url": "https://s.example.com/mcp"}}}))
+    sid = next(s["id"] for s in mcp.servers() if s["name"] == "shared")
+    f.write_text("[" * 200_000)
+    with pytest.raises(mcp.McpError) as e:
+        mcp.remove(sid)
+    assert e.value.status == 404
+    (env.tmp / "claude" / ".claude.json").write_text("[" * 200_000)
+    assert mcp._read_cfg(fresh=True) == {}
