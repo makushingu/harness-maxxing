@@ -177,10 +177,10 @@ def pair(code: str, info: dict, ip: str = "") -> dict:
         p = _pairing_for(code)
         token = secrets.token_urlsafe(32)
         dev = {"id": "pc_" + secrets.token_hex(4), "token_hash": _hash(token), "created": time.time(),
-               "name": str(info.get("name") or "PC")[:64], "os": str(info.get("os") or p["os"])[:16],
-               "arch": str(info.get("arch") or "")[:16], "version": str(info.get("version") or "")[:32],
+               "name": _text(info.get("name") or "PC")[:64], "os": _text(info.get("os") or p["os"])[:16],
+               "arch": _text(info.get("arch") or "")[:16], "version": _text(info.get("version") or "")[:32],
                "browsers": [b for b in (info.get("browsers") or []) if b in BROWSERS][:10],
-               "browser": p["browser"], "last_seen": time.time(), "ip": str(ip or "")[:64]}
+               "browser": p["browser"], "last_seen": time.time(), "ip": _text(ip or "")[:64]}
         d = load()
         d["candidate"], d["pairing"] = dev, None
         save(d)
@@ -583,7 +583,7 @@ class Hub:
         if t == "hello":
             self.hello = {k: msg.get(k) for k in ("v", "os", "arch", "name", "browsers")}
             self.running = bool(msg.get("running"))
-            await asyncio.to_thread(_touch_device, version=str(msg.get("v") or "")[:32],
+            await asyncio.to_thread(_touch_device, version=_text(msg.get("v") or "")[:32],
                                     browsers=[b for b in (msg.get("browsers") or []) if b in BROWSERS][:10])
         elif t in ("launched", "closed", "wiped", "opened") and isinstance(msg.get("id" if t != "opened" else "ch"), int):
             key = msg["id"] if t != "opened" else -msg["ch"]
