@@ -351,3 +351,20 @@ def test_an_update_that_fails_before_the_code_moves_is_not_resumed_by_the_next_o
     capsys.readouterr()
     run_cli("update", "--no-restart")
     assert "the last update was interrupted" not in capsys.readouterr().out
+
+
+def test_a_second_update_cannot_run_during_the_first_one(code, monkeypatch, capsys):
+    from maxxing import auto_update
+    _upstream_release(code["work"], "1.1.0", extra="feature.txt")
+    inner = []
+
+    def sync():
+        if not inner:
+            inner.append(run_cli("update", "--no-restart"))
+            inner.append(auto_update._update_running())
+        return True, ""
+    monkeypatch.setattr(cmd_core, "_sync_deps", sync)
+    assert run_cli("update", "--no-restart") == 0
+    assert inner == [1, True]
+    assert "another update is running" in capsys.readouterr().out
+    assert cmd_core.update_lock() is not None          # released at the end

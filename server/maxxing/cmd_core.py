@@ -1824,12 +1824,37 @@ def cmd_update(a) -> int:
     if not (config.CODE / ".git").exists():
         line(FAIL, f"{config.CODE} is not a git clone - re-run install.sh")
         return 1
-    if a.rollback:
-        return _update_rollback(a)
-    rc = _update_code(a)
-    if rc != 1 or _code_not_moved():                   # done, or back on the old code: nothing left to resume
-        (config.STATE / IN_PROGRESS).unlink(missing_ok=True)
-    return rc
+    lock = update_lock()
+    if lock is None:
+        line(FAIL, "another update is running - nothing changed", "wait for it to end, then run it again")
+        return 1
+    try:
+        if a.rollback:
+            return _update_rollback(a)
+        rc = _update_code(a)
+        if rc != 1 or _code_not_moved():               # done, or back on the old code: nothing left to resume
+            (config.STATE / IN_PROGRESS).unlink(missing_ok=True)
+        return rc
+    finally:
+        lock.close()
+
+
+UPDATE_LOCK = "update/lock"
+
+
+def update_lock():
+    """The lock an update holds from start to end (an automatic one and a manual one never run at once), or None
+    when another process holds it. Released when the file closes, or when the process dies."""
+    import fcntl
+    p = config.STATE / UPDATE_LOCK
+    p.parent.mkdir(parents=True, exist_ok=True)
+    f = p.open("a")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    return f
 
 
 def _code_not_moved() -> bool:
