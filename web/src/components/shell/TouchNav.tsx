@@ -227,6 +227,7 @@ function AppPanel() {
         )}
         {pages
           .filter((x) => x.pinned)
+          .sort((a, b) => (a.pin_order ?? 1e9) - (b.pin_order ?? 1e9))   // the order dragged in the sidebar
           .map((x) => (
             <NavLink key={x.id} to={`/x/${x.id}`} className={linkCls} onClick={close}>
               <NamedIcon name={x.icon} strokeWidth={1.9} />

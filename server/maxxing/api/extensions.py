@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import bus, extensions
 from ..security import require_auth
@@ -57,6 +57,17 @@ async def patch_extension(eid: str, body: PatchIn):
         raise _err(404, "not_found", f"no extension {eid}")
     bus.invalidate("extensions")
     return {"ok": True}
+
+
+class PinsIn(BaseModel):
+    order: list[str] = Field(max_length=200)  # pinned page ids in their new sidebar order
+
+
+@router.put("/api/extensions/pins")
+async def order_pins(body: PinsIn):
+    pins = await asyncio.to_thread(extensions.set_pin_order, body.order)
+    bus.invalidate("extensions")
+    return {"pinned": pins}
 
 
 @router.post("/api/extensions/reload")

@@ -754,6 +754,8 @@ export type Settings = {
   maxxing_mode?: boolean
   /** Settings -> Features: the E-mail page (/mail) and its sidebar entry */
   mail_page?: boolean
+  /** Sidebar pages in the order the user dragged them (routes, e.g. "/sessions"); empty = the default order. */
+  sidebar_order?: string[]
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
@@ -950,6 +952,8 @@ export type Extension = {
   agents_view?: { name: string; icon: string } | null
   /** Page extensions: own entry in the sidebar (otherwise listed under "Extensions"). */
   pinned?: boolean
+  /** place among the pinned pages of the sidebar (null when not pinned) */
+  pin_order?: number | null
   /** page.js mtime (ms): version of the module URL (the browser reuses it until the file changes). */
   page_v?: number | null
 }

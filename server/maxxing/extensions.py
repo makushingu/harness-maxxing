@@ -99,7 +99,8 @@ class Extension:
                 "version": self.version, "enabled": self.enabled, "error": self.error,
                 "api": self.api, "has_api": self.has_api, "has_page": self.has_page, "span": self.span,
                 "has_html": self.has_html, "height": self.height, "page_v": self.page_v,
-                "pinned": self.type == "page" and self.id in pinned_ids(), "agents_view": self.view_info()}
+                "pinned": self.type == "page" and self.id in pinned_ids(), "agents_view": self.view_info(),
+                "pin_order": pin_order(self.id)}
 
 
 _lock = threading.RLock()
@@ -209,19 +210,37 @@ def pinned_ids() -> set[str]:
     return {x for x in d if isinstance(x, str)}
 
 
+def _pinned_list() -> list[str]:
+    d = (config.load_config().get("extensions") or {}).get("pinned") or []
+    return list(dict.fromkeys(x for x in d if isinstance(x, str)))
+
+
+def pin_order(eid: str) -> int | None:
+    """Place of a pinned page in the sidebar (extensions.pinned keeps the order the user dragged them in)."""
+    pins = _pinned_list()
+    return pins.index(eid) if eid in pins else None
+
+
 def set_pinned(eid: str, pinned: bool) -> bool:
-    """Persist in config extensions.pinned. False if unknown or not a page."""
+    """Persist in config extensions.pinned (a new pin goes last). False if unknown or not a page."""
     ext = get(eid)
     if ext is None or ext.type != "page":
         return False
     with config._lock:
-        pin = pinned_ids()
-        if pinned:
-            pin.add(eid)
-        else:
-            pin.discard(eid)
-        config.update_config(extensions={"pinned": sorted(pin)})
+        pins = [x for x in _pinned_list() if x != eid] + ([eid] if pinned else [])
+        config.update_config(extensions={"pinned": pins})
     return True
+
+
+def set_pin_order(order: list[str]) -> list[str]:
+    """Reorder the pinned pages: the given ids first, in that order, then the pins it does not mention. Ids that are
+    not pinned are ignored (this never pins anything)."""
+    with config._lock:
+        pins = _pinned_list()
+        first = [x for x in dict.fromkeys(order) if x in pins]
+        pins = first + [x for x in pins if x not in first]
+        config.update_config(extensions={"pinned": pins})
+    return pins
 
 
 def _module_name(eid: str) -> str:

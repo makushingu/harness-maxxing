@@ -3,7 +3,7 @@ import { NavLink } from 'react-router'
 import { HandHeart, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
-import { useAgentsAttention, useTeam, useWorkspace } from '@/lib/queries'
+import { useAgentsAttention, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
 import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -15,6 +15,7 @@ import { HealthIndicator } from './HealthIndicator'
 import { UsageIndicator } from './UsageIndicator'
 import { UpdateIndicator } from './UpdateIndicator'
 import { SidebarExtensions } from './SidebarExtensions'
+import { useDragOrder } from './dragOrder'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
 import { HelpMenu, PresentationToggle, ThemeToggle } from './UserMenu'
@@ -133,8 +134,9 @@ export function Sidebar() {
   const showSessions = useShowSessions()
   const width = useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default
   const side = React.useRef<HTMLElement>(null)
+  const saveSettings = useSaveSettings()
 
-  const navItem = (item: NavItem, idx: number) => {
+  const navItem = (item: NavItem, idx: number, drag?: object) => {
     const label = t(item.label)
     // Expanded: the counters stay mounted so they can animate out when they reach 0.
     const showBadge = item.to === '/sessions' && (!collapsed || badge.unread > 0 || badge.running > 0)
@@ -143,6 +145,7 @@ export function Sidebar() {
         <NavLink
           to={item.to}
           {...prefetchLink(item.to)}
+          {...drag}
           end={item.end}
           data-tour={navTourId(item)}
           style={{ '--i': idx } as React.CSSProperties}
@@ -188,7 +191,13 @@ export function Sidebar() {
       </Tooltip>
     )
   }
-  const groups = (['main', 'tools', 'end'] as const).map((g) => nav.filter((n) => n.group === g))
+  const main = nav.filter((n) => n.group === 'main')
+  const end = nav.filter((n) => n.group !== 'main')
+  const drag = useDragOrder(
+    main.map((n) => n.to),
+    (order) => saveSettings.mutate({ sidebar_order: order }),
+    'nav',
+  )
   const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
 
   return (
@@ -249,14 +258,16 @@ export function Sidebar() {
         </Tooltip>
       </div>
 
-      {/* Everyday pages, then the technical tools, the extension pages and Settings (one scroll when the window is short). */}
+      {/* The pages (drag to reorder), the extension pages, then Settings (one scroll when the window is short). */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
-          {groups[0].map((item) => navItem(item, nav.indexOf(item)))}
+          {drag.order.map((to) => {
+            const item = main.find((n) => n.to === to)!
+            return navItem(item, nav.indexOf(item), drag.props(to))
+          })}
         </nav>
-        {groups[1].length > 0 && <div className={block('border-t border-sidebar-border')}>{groups[1].map((item) => navItem(item, nav.indexOf(item)))}</div>}
         <SidebarExtensions collapsed={collapsed} />
-        <div className={block('border-t border-sidebar-border')}>{groups[2].map((item) => navItem(item, nav.indexOf(item)))}</div>
+        <div className={block('border-t border-sidebar-border')}>{end.map((item) => navItem(item, nav.indexOf(item)))}</div>
       </div>
 
       <div className="flex-1" />
