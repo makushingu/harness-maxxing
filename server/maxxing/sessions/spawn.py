@@ -174,8 +174,8 @@ FOREGROUND_AGENTS = ("Subagents (Agent tool): run them in the foreground, always
                      "Agent calls in the same message: they run in parallel and their results come back in this turn.")
 
 
-# A turn started by a scheduled job (item source "cron"): Claude may say there is nothing to report, then the job sends
-# nothing on Telegram (crons.is_silent).
+# A turn started by a scheduled job that reports every run (notify "always", queue item `silent_ok`): Claude may say
+# there is nothing to report, then the job sends nothing on Telegram (crons.is_silent). Other jobs keep a full answer.
 CRON_SILENT = ("This turn was started by a scheduled job. If there is nothing worth reporting this time, answer "
                "exactly [SILENT] and nothing else: no report is then sent.")
 
