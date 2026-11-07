@@ -481,3 +481,47 @@ def test_no_stale_retry_when_a_job_is_switched_back_on(org, monkeypatch):
     crons._save_retry(on["id"], {"at": r["retry_at"], "attempt": 2, "after": r["at"] - 2 * 86400, "reason": "failed"})
     monkeypatch.setattr(crons.time, "time", lambda: r["retry_at"] + 1)
     assert crons.run_job(on["id"], "retry", 2)["skipped"] == "retry cancelled"
+
+
+def _local(at: float) -> str:
+    return dt.datetime.fromtimestamp(at, crons.tz()).strftime("%Y-%m-%dT%H:%M")
+
+
+def test_a_one_time_job_rescheduled_while_it_runs_keeps_its_new_date(org, monkeypatch):
+    at = crons.once_ts(_local(time.time() + 600))
+    j = crons.create_job({"name": "Once", "command": "true", "once_at": _local(at), "notify": "never"})
+    tomorrow = _local(at + 86400)
+    real = crons._run_shell
+
+    def moved_meanwhile(job):
+        crons.update_job(j["id"], {"once_at": tomorrow})
+        return real(job)
+    monkeypatch.setattr(crons, "_run_shell", moved_meanwhile)
+    monkeypatch.setattr(crons.time, "time", lambda: at + 5)
+    assert crons.run_job(j["id"], "schedule")["ok"]
+    after = crons._raw_job(j["id"])
+    assert after["once_at"] == tomorrow and after["enabled"] and not after.get("done_at")
+    # same for delete_after switched on meanwhile: not removed by the end of the old run
+    crons.update_job(j["id"], {"once_at": _local(at), "delete_after": True})
+    crons._finish_once(j["id"], ran={"once_at": _local(at), "delete_after": False})
+    assert crons._raw_job(j["id"]) is not None
+
+
+def test_a_one_time_job_waiting_for_its_retry_is_not_marked_missed(org, monkeypatch):
+    now = time.time()
+    j = crons.create_job({"name": "Once", "command": "x", "once_at": _local(now + 600), "notify": "never"})
+    raw = crons._load_raw()
+    raw[0]["once_at"] = _local(now - 23 * 3600)
+    crons._save_raw(raw)
+    crons.append_run({"id": "r1", "cron_id": j["id"], "at": now, "ok": False, "duration_s": 3,
+                      "retry_at": now + 5 * 3600})
+    crons._save_retry(j["id"], {"at": now + 5 * 3600, "attempt": 2, "after": now, "reason": "limit"})
+    started = []
+    monkeypatch.setattr(crons, "spawn_run", lambda cid, trigger="manual", attempt=1: started.append(trigger))
+    assert crons.tick(now + 2 * 3600) == []
+    assert crons._raw_job(j["id"])["enabled"] and not crons._raw_job(j["id"]).get("missed")
+    assert crons.tick(now + 5 * 3600 + 10) == [(j["id"], "retry")]
+    crons._drop_retry(j["id"])                                       # the retry ran out: it did run, not missed
+    crons.tick(now + 6 * 3600)
+    after = crons._raw_job(j["id"])
+    assert after["done_at"] and not after.get("missed") and not after["enabled"]
