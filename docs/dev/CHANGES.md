@@ -5,6 +5,18 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.125 - 2026-11-07
+
+- Infra page redesign, front end only (no API change): `features/infra/places.ts` (place of a resource: `location`;
+  a domain takes the place of its linked non-domain resources, else `details.hosted_by`, else `none`; tiers
+  own/hosted/none, server names and unknown places `sensitive`) and `TypeView.tsx` (blocks per place, `MixBar`,
+  place chips, 40 rows then "Show N more"). `InfraPage.tsx`: inner `InfraNav` (sticky bar on desktop, chips on
+  touch), new `problems` tab, overview as a type x place table (`infra-matrix`), `?at=<place>` next to `tab`/`id`;
+  old `/infra?id=` and `?tab=servers|domains` links still work, an unknown `tab` falls back. Test ids
+  `infra-card-*` and `infra-sources` gone (new: `infra-nav`, `infra-tab-<id>`, `infra-place`, `infra-matrix`).
+  Presentation mode: `Sensitive`/`useMask` on names, subtitles, projects, place names, details, notes, ids, server
+  settings and source errors. `LOCATION_ICON` removed (unused).
+
 ## 2.0.0-alpha.124 - 2026-11-07
 
 - Released from `main` (beta-only a113-a122 still stay on `beta`). Holds Radar's hunt of 07/11 (45 findings) and
