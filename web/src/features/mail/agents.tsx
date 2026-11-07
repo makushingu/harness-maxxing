@@ -168,6 +168,10 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
   const act = useMailOutboxAct()
   const busy = act.isPending ? act.variables?.action : null
   const to = [...x.to, ...x.cc]
+  // a long text shows its first lines: it is sent only once read in full (an agent may hide orders after them)
+  const long = x.text.length > 280 || x.text.split('\n').length > 3
+  const [all, setAll] = React.useState(false)
+  const unread = x.text_cut || (long && !all)
   return (
     <li className="grid grid-cols-[minmax(0,1fr)] gap-1.5 rounded-lg border bg-card p-2.5 text-[13px]" data-testid="mail-outbox-item">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -185,9 +189,14 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           <Sensitive length={10}>{x.subject || t('mail.noSubject')}</Sensitive>
         </span>
         {x.text && (
-          <p className="line-clamp-3 text-xs break-words whitespace-pre-line text-muted-foreground">
+          <p className={cn('text-xs break-words whitespace-pre-line text-muted-foreground', !all && 'line-clamp-3')}>
             <Sensitive block>{x.text}</Sensitive>
           </p>
+        )}
+        {long && !all && (
+          <button type="button" className="justify-self-start text-xs text-primary hover:underline" onClick={() => setAll(true)} data-testid="mail-outbox-all">
+            {t('mail.outbox.showAll')}
+          </button>
         )}
       </div>
       {!!x.files.length && (
@@ -210,9 +219,13 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
       )}
       {x.note && <p className="text-xs text-destructive">{x.note}</p>}
       <div className="flex flex-wrap gap-1.5 pt-0.5">
-        <Button size="sm" loading={busy === 'send'} disabled={!!busy} onClick={() => act.mutate({ id: x.id, action: 'send' })} data-testid="mail-outbox-send">
-          <Send /> {t('mail.compose.send')}
-        </Button>
+        <Tooltip content={unread ? t(x.text_cut ? 'mail.outbox.tooLong' : 'mail.outbox.readFirst') : null}>
+          <span>
+            <Button size="sm" loading={busy === 'send'} disabled={!!busy || unread} onClick={() => act.mutate({ id: x.id, action: 'send' })} data-testid="mail-outbox-send">
+              <Send /> {t('mail.compose.send')}
+            </Button>
+          </span>
+        </Tooltip>
         {x.draft && (
           <Button size="sm" variant="outline" disabled={!!busy} onClick={() => onEdit(x.draft!)}>
             <Pencil /> {t('common.edit')}

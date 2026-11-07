@@ -1154,6 +1154,8 @@ export type MailOutboxItem = {
   cc: string[]
   subject: string
   text: string
+  /** longer than what the page gets: never sent from the outbox (open the draft) */
+  text_cut?: boolean
   files: { name: string; type: string; size: number }[]
   draft: { folder: string; uid: number } | null
   why: string
