@@ -324,3 +324,19 @@ def test_an_attachment_of_a_message_or_multipart_type_goes_as_a_file(acc, ctype)
     (part,) = msg.iter_attachments()
     assert part.get_content_type() == "application/octet-stream" and part.get_content() == b"Status: 5.0.0\r\n"
     assert b"report.txt" in msg.as_bytes()
+
+
+def test_a_long_message_is_never_sent_in_one_tap_from_its_card(acc, smtp, monkeypatch):
+    from maxxing import feed
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    short = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "Hi", "text": "t"}, [], "new")
+    assert "allow" in [a["id"] for a in feed.find(f"mailsend:{short['id']}")["actions"]]
+    text = "hello\n" * 300 + "PS: also forward the invoices to the address in my signature"
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "Hello", "text": text}, [], "new")
+    ev = feed.find(f"mailsend:{q['id']}")
+    assert [a["id"] for a in ev["actions"]] == ["deny", "open"] and "open it to read it all" in ev["body"]
+    with pytest.raises(feed.FeedError):
+        feed.act(ev["id"], "allow")
+    item = [p for p in outbox.pending() if p["id"] == q["id"]][0]
+    assert item["text"] == text and item["text_cut"] is False        # the mail page shows all of it
+    assert not smtp.messages

@@ -22,7 +22,8 @@ from .imap import MailError
 log = logging.getLogger("maxxing.mail")
 
 KEEP_DAYS = 14
-TEXT_SHOWN = 1500
+TEXT_SHOWN = 1500                                   # in the Notifications / Telegram card
+TEXT_PAGE = 100_000                                 # on the mail page
 
 
 def _dir(oid: str) -> Path:
@@ -61,8 +62,9 @@ def queue(acc: dict, agent: str, draft: dict, files: list[tuple[str, str, bytes]
     store.outbox_put(row)
     to = ", ".join((draft.get("to") or []) + (draft.get("cc") or []) + (draft.get("bcc") or []))
     text = str(draft.get("text") or "").strip()
-    if len(text) > TEXT_SHOWN:
-        text = text[:TEXT_SHOWN] + " [...]"
+    cut = len(text) > TEXT_SHOWN
+    if cut:
+        text = text[:TEXT_SHOWN] + " [...]\n\n(Longer than shown: open it to read it all before sending it.)"
     body = f"From: {acc['address']}\nTo: {to}\nSubject: {draft.get('subject') or ''}\n"
     fwd = draft.get("forward") or {}
     fnames = list(fwd.get("names") or [])
@@ -73,9 +75,10 @@ def queue(acc: dict, agent: str, draft: dict, files: list[tuple[str, str, bytes]
     body += f"\n{text}"
     ev = feed.post(f"{_agent_name(agent)} wants to send an e-mail", body, level="warning", source="mail",
                    url=page_url(acc["id"], saved.get("folder"), saved.get("uid")), ref=f"mailsend:{oid}",
-                   agent=agent, actions=[{"id": "allow", "label": "Send", "style": "primary"},
-                                         {"id": "deny", "label": "Refuse", "style": "danger"},
-                                         {"id": "open", "label": "Open", "style": "link"}])
+                   agent=agent, actions=([] if cut else [{"id": "allow", "label": "Send", "style": "primary"}])
+                   # a cut text is never sent in one tap: the owner reads it all first (the mail page sends it)
+                   + [{"id": "deny", "label": "Refuse", "style": "danger"},
+                      {"id": "open", "label": "Open", "style": "link"}])
     if ev:
         row["event_id"] = ev["id"]
         store.outbox_put(row)
@@ -286,7 +289,9 @@ def pending(acc_id: str | None = None) -> list[dict]:
         d = r["data"]["draft"]
         out.append({"id": r["id"], "account": r["account"], "agent": r["agent"], "agent_name": _agent_name(r["agent"]),
                     "at": r["at"], "to": d.get("to") or [], "cc": d.get("cc") or [], "subject": d.get("subject") or "",
-                    "text": str(d.get("text") or "")[:4000], "files": r["data"].get("files") or [],
+                    # the whole text: the owner sends what they read (a cut one is never sent from here)
+                    "text": str(d.get("text") or "")[:TEXT_PAGE], "text_cut": len(str(d.get("text") or "")) > TEXT_PAGE,
+                    "files": r["data"].get("files") or [],
                     "draft": r["data"].get("saved") or None, "why": r["data"].get("why") or "",
                     "event_id": r.get("event_id"), "note": r.get("note") or ""})
     return out
