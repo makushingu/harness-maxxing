@@ -215,11 +215,13 @@ export function TypeView({ items, v, byId, at, onAt, onOpen, intro }: { items: I
       type="button"
       onClick={() => onAt(cur === x.p.key ? null : x.p.key)}
       aria-pressed={cur === x.p.key}
-      className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors hover:bg-accent pointer-coarse:h-9', cur === x.p.key ? 'text-foreground' : 'text-muted-foreground')}
+      className={cn('inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors hover:bg-accent pointer-coarse:h-10', cur === x.p.key ? 'text-foreground' : 'text-muted-foreground')}
       style={cur === x.p.key ? { borderColor: x.p.color, background: `color-mix(in oklch, ${x.p.color} 14%, transparent)` } : undefined}
     >
-      <i className="size-2 rounded-[2px]" style={{ background: x.p.color }} />
-      <PlaceName p={x.p} />
+      <i className="size-2 shrink-0 rounded-[2px]" style={{ background: x.p.color }} />
+      <span className="min-w-0 truncate">
+        <PlaceName p={x.p} />
+      </span>
       <span className="tabular-nums opacity-70">{x.n}</span>
     </button>
   )
@@ -229,14 +231,14 @@ export function TypeView({ items, v, byId, at, onAt, onOpen, intro }: { items: I
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       {intro}
-      <div className="grid gap-2.5">
-        <MixBar parts={parts} className="h-2" onPick={(k) => onAt(cur === k ? null : k)} current={cur} />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+        <MixBar parts={parts} className="h-2 pointer-coarse:pointer-events-none" onPick={(k) => onAt(cur === k ? null : k)} current={cur} />
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => onAt(null)}
             aria-pressed={!cur}
-            className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors hover:bg-accent pointer-coarse:h-9', !cur ? 'bg-secondary text-foreground' : 'text-muted-foreground')}
+            className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors hover:bg-accent pointer-coarse:h-10', !cur ? 'bg-secondary text-foreground' : 'text-muted-foreground')}
           >
             {t('infra.place.all')} <span className="tabular-nums opacity-70">{items.length}</span>
           </button>
