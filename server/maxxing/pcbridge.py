@@ -25,6 +25,7 @@ import secrets
 import shutil
 import socket
 import struct
+import tempfile
 import threading
 import time
 import unicodedata
@@ -173,14 +174,14 @@ def pair(code: str, info: dict, ip: str = "") -> dict:
     """POST /api/pc/pair from the agent: the PC waits as `candidate` until the user confirms it in Harness (a
     pairing code seen by someone else - a screenshot of the command - cannot plug their computer in silently).
     One PC per server: confirming replaces the previous one."""
-    p = _pairing_for(code)
-    token = secrets.token_urlsafe(32)
-    dev = {"id": "pc_" + secrets.token_hex(4), "token_hash": _hash(token), "created": time.time(),
-           "name": str(info.get("name") or "PC")[:64], "os": str(info.get("os") or p["os"])[:16],
-           "arch": str(info.get("arch") or "")[:16], "version": str(info.get("version") or "")[:32],
-           "browsers": [b for b in (info.get("browsers") or []) if b in BROWSERS][:10],
-           "browser": p["browser"], "last_seen": time.time(), "ip": str(ip or "")[:64]}
-    with _state_lock:
+    with _state_lock:                                  # check and use up the code at once: one code, one token
+        p = _pairing_for(code)
+        token = secrets.token_urlsafe(32)
+        dev = {"id": "pc_" + secrets.token_hex(4), "token_hash": _hash(token), "created": time.time(),
+               "name": _text(info.get("name") or "PC")[:64], "os": _text(info.get("os") or p["os"])[:16],
+               "arch": _text(info.get("arch") or "")[:16], "version": _text(info.get("version") or "")[:32],
+               "browsers": [b for b in (info.get("browsers") or []) if b in BROWSERS][:10],
+               "browser": p["browser"], "last_seen": time.time(), "ip": _text(ip or "")[:64]}
         d = load()
         d["candidate"], d["pairing"] = dev, None
         save(d)
@@ -284,21 +285,23 @@ def agent_file(target: str) -> Path:
     if not want:
         raise PcError(404, "not_found", "this server has no agent for this computer yet")
     cache = _dir() / "bin" / f"{man.get('version')}-{name}"
-    if cache.is_file():
-        with cache.open("rb") as f:
-            if hashlib.file_digest(f, "sha256").hexdigest() == want:
-                return cache
-    import httpx
-    url = str(man.get("url") or "").format(version=man.get("version"), name=name)
-    r = httpx.get(url, follow_redirects=True, timeout=60)
-    r.raise_for_status()
-    if hashlib.sha256(r.content).hexdigest() != want:
-        raise PcError(502, "checksum", "the downloaded agent does not match its checksum")
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    tmp = cache.with_suffix(".tmp")
-    tmp.write_bytes(r.content)
-    os.replace(tmp, cache)
-    return cache
+    with _download_lock:                               # two downloads at once: the second one finds the cache
+        if cache.is_file():
+            with cache.open("rb") as f:
+                if hashlib.file_digest(f, "sha256").hexdigest() == want:
+                    return cache
+        import httpx
+        url = str(man.get("url") or "").format(version=man.get("version"), name=name)
+        r = httpx.get(url, follow_redirects=True, timeout=60)
+        r.raise_for_status()
+        if hashlib.sha256(r.content).hexdigest() != want:
+            raise PcError(502, "checksum", "the downloaded agent does not match its checksum")
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        _replace_bytes(cache, r.content)
+        return cache
+
+
+_download_lock = threading.Lock()
 
 
 def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, bytes]:
@@ -465,6 +468,21 @@ def _text(v) -> str:
     return str(v).encode("utf-8", "replace").decode()
 
 
+def _replace_bytes(path: Path, data: bytes) -> None:
+    """Write through a temp file of its own, then rename: a reader never sees half a file, two writers never share
+    a temp file."""
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
+_actions_lock = threading.Lock()                       # tools run in threads: two appends at once lost lines
+
+
 def _log_action(tool: str, args: dict, ok: bool, ms: int) -> None:
     keep = {k: (_text(v)[:200] if k not in ("value", "text", "url") else
                 _page(_text(v)) if k == "url" else f"<{len(str(v))} chars>")
@@ -472,8 +490,9 @@ def _log_action(tool: str, args: dict, ok: bool, ms: int) -> None:
     line = json.dumps({"at": time.time(), "tool": tool, "args": keep, "ok": ok, "ms": ms}, ensure_ascii=False)
     p = _dir() / "actions.jsonl"
     try:
-        lines = p.read_text().splitlines()[-(MAX_ACTIONS - 1):] if p.exists() else []
-        p.write_text("\n".join(lines + [line]) + "\n")
+        with _actions_lock:
+            lines = p.read_text().splitlines()[-(MAX_ACTIONS - 1):] if p.exists() else []
+            _replace_bytes(p, ("\n".join(lines + [line]) + "\n").encode())
     except (OSError, ValueError):
         pass
 
@@ -562,7 +581,10 @@ class Hub:
         self._ensure_idle_watch()
         try:
             while True:
-                raw = await ws.receive_text()
+                try:
+                    raw = await ws.receive_text()
+                except KeyError:                       # a binary frame: Starlette has no "text" for it
+                    continue
                 if len(raw) > MAX_FRAME:
                     continue
                 try:
@@ -583,7 +605,7 @@ class Hub:
         if t == "hello":
             self.hello = {k: msg.get(k) for k in ("v", "os", "arch", "name", "browsers")}
             self.running = bool(msg.get("running"))
-            await asyncio.to_thread(_touch_device, version=str(msg.get("v") or "")[:32],
+            await asyncio.to_thread(_touch_device, version=_text(msg.get("v") or "")[:32],
                                     browsers=[b for b in (msg.get("browsers") or []) if b in BROWSERS][:10])
         elif t in ("launched", "closed", "wiped", "opened") and isinstance(msg.get("id" if t != "opened" else "ch"), int):
             key = msg["id"] if t != "opened" else -msg["ch"]
@@ -737,6 +759,8 @@ class Hub:
         self._locks()
         async with self._child_lock:                   # two sessions calling at once share one child
             if self.child is None or not self.child.alive:
+                if self.child is not None:             # its reader died: the node process may still run
+                    await self.child.stop()
                 self.child = await Child.start()
             return self.child
 
@@ -866,20 +890,27 @@ class Child:
 
     async def _read(self) -> None:
         assert self.proc.stdout is not None
-        while True:
-            line = await self.proc.stdout.readline()
-            if not line:
-                break
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue
-            fut = self._wait.get(msg.get("id")) if isinstance(msg, dict) else None
-            if fut and not fut.done():
-                fut.set_result(msg)
-        for f in self._wait.values():
-            if not f.done():
-                f.set_exception(RuntimeError("chrome-devtools-mcp stopped"))
+        why = "chrome-devtools-mcp stopped"
+        try:
+            while True:
+                try:
+                    line = await self.proc.stdout.readline()
+                except ValueError:                     # a line over MAX_FRAME: its call can never be answered
+                    why = "the result of chrome-devtools-mcp is too large"
+                    break
+                if not line:
+                    break
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    continue
+                fut = self._wait.get(msg.get("id")) if isinstance(msg, dict) else None
+                if fut and not fut.done():
+                    fut.set_result(msg)
+        finally:                                       # the calls waiting fail now, not at their timeout
+            for f in self._wait.values():
+                if not f.done():
+                    f.set_exception(RuntimeError(why))
 
     async def _write(self, msg: dict) -> None:
         assert self.proc.stdin is not None

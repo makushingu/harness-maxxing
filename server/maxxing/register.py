@@ -93,8 +93,10 @@ def _call(method: str, path: str, body: dict) -> dict:
     except urllib.error.HTTPError as e:
         try:
             out = json.loads(e.read() or b"{}") or {"ok": False, "error": f"http_{e.code}"}
-        except ValueError:
+        except (ValueError, RecursionError):
             out = {"ok": False, "error": f"http_{e.code}"}
+    except RecursionError:                              # JSON nested too deep: not an answer
+        out = None
     return out if isinstance(out, dict) else {"ok": False, "error": "bad_answer"}   # [1], "x": not an answer
 
 
