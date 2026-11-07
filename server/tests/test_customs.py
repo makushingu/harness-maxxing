@@ -333,3 +333,21 @@ def test_listing_the_customizations_runs_one_git_log_whatever_their_number(code,
     assert [c["files"] for c in items] == [[f"server/maxxing/extra{i}.py"] for i in range(3)]
     assert all(c["why"].startswith("line one") for c in items)
     assert calls.count("diff-tree") == 0 and calls.count("log") == 1
+
+
+def test_an_update_that_fails_before_the_code_moves_is_not_resumed_by_the_next_one(code, monkeypatch, capsys):
+    clone, work = code["clone"], code["work"]
+    _upstream_release(work, "1.1.0", extra="feature.txt")
+    real, realc = cmd_core._git, customs.git
+    monkeypatch.setattr(cmd_core, "_git", lambda *a, **k: (1, "fatal: Unable to create index.lock")
+                        if a[:1] in (("merge",), ("reset",)) else real(*a, **k))
+    monkeypatch.setattr(customs, "git", lambda *a, **k: (1, "locked") if a[:1] == ("rebase",) else realc(*a, **k))
+    assert run_cli("update", "--no-restart") == 1
+    assert not (clone / "feature.txt").exists()          # the code did not move
+    assert not (config.STATE / cmd_core.IN_PROGRESS).exists()
+    monkeypatch.setattr(cmd_core, "_git", real)
+    monkeypatch.setattr(customs, "git", realc)
+    _upstream_release(work, "1.2.0", extra="f2.txt")
+    capsys.readouterr()
+    run_cli("update", "--no-restart")
+    assert "the last update was interrupted" not in capsys.readouterr().out
