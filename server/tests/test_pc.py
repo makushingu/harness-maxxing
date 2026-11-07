@@ -676,3 +676,30 @@ def test_a_child_reply_over_the_frame_limit_fails_the_call_at_once():
             await proc.wait()
     why, took = asyncio.run(go())
     assert "too large" in why and took < 5
+
+
+def test_a_child_whose_reader_died_is_stopped_before_it_is_replaced(monkeypatch):
+    killed = []
+
+    class P:
+        returncode = None
+
+        def terminate(self):
+            killed.append("terminate")
+
+        async def wait(self):
+            self.returncode = 0
+
+    async def go():
+        h = pcbridge.Hub()
+        old = pcbridge.Child.__new__(pcbridge.Child)
+        old.proc, old._wait = P(), {}
+        old._reader = asyncio.get_running_loop().create_future()
+        old._reader.set_result(None)                 # the reader ended, the process did not
+        h.child = old
+
+        async def start():
+            return "new"
+        monkeypatch.setattr(pcbridge.Child, "start", staticmethod(start))
+        return await h.get_child()
+    assert asyncio.run(go()) == "new" and killed == ["terminate"]

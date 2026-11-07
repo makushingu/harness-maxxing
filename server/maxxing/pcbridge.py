@@ -759,6 +759,8 @@ class Hub:
         self._locks()
         async with self._child_lock:                   # two sessions calling at once share one child
             if self.child is None or not self.child.alive:
+                if self.child is not None:             # its reader died: the node process may still run
+                    await self.child.stop()
                 self.child = await Child.start()
             return self.child
 
