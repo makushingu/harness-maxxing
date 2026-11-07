@@ -16,15 +16,16 @@ export const KIND_ICON: Record<InfraKind, LucideIcon> = {
 }
 export const PLATFORMS = ['vercel', 'netlify', 'supabase', 'github'] as const
 
-/** Display name of a provider id (registrar, DNS, host, platform) from server/maxxing/infra (dnsinfo, platforms). */
-export const PROVIDER_NAMES: Record<string, string> = {
+/** Display name of a provider id (registrar, DNS, host, platform) from server/maxxing/infra (dnsinfo, platforms).
+ *  No prototype: a server may be named "constructor" or "toString". */
+export const PROVIDER_NAMES: Record<string, string> = Object.assign(Object.create(null), {
   cloudflare: 'Cloudflare', hostinger: 'Hostinger', ovh: 'OVHcloud', gandi: 'Gandi', namecheap: 'Namecheap', godaddy: 'GoDaddy',
   ionos: 'IONOS', aws: 'AWS', google: 'Google', vercel: 'Vercel', netlify: 'Netlify', porkbun: 'Porkbun', wix: 'Wix',
   o2switch: 'o2switch', infomaniak: 'Infomaniak', digitalocean: 'DigitalOcean', hetzner: 'Hetzner', 'name.com': 'Name.com',
   dnsimple: 'DNSimple', azure: 'Azure', vultr: 'Vultr', linode: 'Akamai (Linode)', squarespace: 'Squarespace',
   github: 'GitHub Pages', shopify: 'Shopify', webflow: 'Webflow', supabase: 'Supabase', render: 'Render', railway: 'Railway',
   fly: 'Fly.io', firebase: 'Firebase', heroku: 'Heroku', ghost: 'Ghost',
-}
+})
 export function providerName(id: string | null | undefined, t: TFn): string {
   if (!id) return ''
   if (id === 'server') return t('infra.yourServer')

@@ -10,7 +10,7 @@ export type Tier = 'own' | 'hosted' | 'none'
 /** `sensitive`: the label is the user's own data (a server name), masked in presentation mode. */
 export type Place = { key: string; label: string; tier: Tier; color: string; icon: LucideIcon; sensitive?: boolean }
 
-const PROVIDER_COLOR: Record<string, string> = {
+const PROVIDER_COLOR: Record<string, string> = Object.assign(Object.create(null), {
   cloudflare: 'oklch(0.72 0.16 55)',
   vercel: 'oklch(0.7 0 0)',
   netlify: 'oklch(0.72 0.12 185)',
@@ -18,7 +18,7 @@ const PROVIDER_COLOR: Record<string, string> = {
   github: 'oklch(0.62 0.02 260)',
   hostinger: 'oklch(0.62 0.17 275)',
   shopify: 'oklch(0.7 0.16 135)',
-}
+})
 // Other servers, in the order of the config.
 const SERVER_COLORS = ['oklch(0.7 0.12 190)', 'oklch(0.7 0.13 330)', 'oklch(0.74 0.13 95)', 'oklch(0.68 0.13 230)']
 
