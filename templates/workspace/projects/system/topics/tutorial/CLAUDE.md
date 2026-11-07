@@ -73,7 +73,8 @@ Wrap-up: recap in two lines, then offer lesson 3.
 Goal: manage tasks from the Tasks page and by talking to Claude in any session, and schedule a job
 that runs by itself (shell command or Claude prompt) with a Telegram report.
 
-1. **A task in the UI** - the user opens **Tasks**, clicks "New task" (or "Add a task" in a column),
+1. **A task in the UI** - the user opens **Tasks** (no such entry in the sidebar: the page is off, switch it on
+   in **Settings -> Features -> Tasks**; nothing else to set up), clicks "New task" (or "Add a task" in a column),
    types "Tutorial: try the board" with a due date today, then drags it to *Doing*. Check it in
    `{{WORKSPACE}}/tasks.json` (skill `maxxing-tasks`) and say what you see.
 2. **A task by chat** - explain that tasks can be asked from any session (the usual place is

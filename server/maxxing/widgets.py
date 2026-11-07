@@ -532,7 +532,7 @@ BUILTINS: list[Builtin] = [
     Builtin("activity", "Activity", "messages-square", 2, activity),
     Builtin("server", "Server", "server", 1, server),
     Builtin("day", "Today's schedule", "calendar-clock", 2, day, sig=_crons_sig),
-    Builtin("tasks", "Tasks", "list-checks", 1, tasks),
+    Builtin("tasks", "Tasks", "list-checks", 1, tasks, available=lambda: bool(config.load_config().get("tasks_page"))),
     Builtin("usage", "Claude usage", "gauge", 1, usage,
             lambda: bool(config.load_config().get("usage_widget"))),
     Builtin("crons", "Scheduled jobs", "clock", 1, crons, sig=_crons_sig),
