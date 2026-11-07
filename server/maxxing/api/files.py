@@ -53,6 +53,7 @@ IMAGE_FORMATS = "image2,png_pipe,apng,jpeg_pipe,jpegxl_pipe,gif,webp_pipe,bmp_pi
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".avif", ".heic", ".heif"}
 CONVERT_EXT = {".tif", ".tiff", ".heic", ".heif"}    # browsers cannot show them: the viewer always gets a WebP
 PDF_EXT = {".pdf"}
+MOV_IMAGE_EXT = {".avif", ".heic", ".heif"}         # still images in an ISO media (mov) container
 ARCHIVE_MAX = 5000                                   # entries listed by /archive
 ARCHIVE_READ_MAX = 256 << 20                         # a tar is read (decompressed) this far at most, then truncated
 ARCHIVE_TIME_S = 3.0                                 # and for this long at most (a zip's directory too)
@@ -437,7 +438,9 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool | None:
             # make ffmpeg fetch URLs or pipes, nor open another file (a link out of the files root) and draw it
             # a "%" in the path: image2 would read it as a sequence pattern (a%d.png -> a1.png, maybe a link out of
             # the root); force image2 with no pattern (its private option: refused by the other demuxers)
-            single = ["-f", "image2", "-pattern_type", "none"] if not video and "%" in str(src) else []
+            # (AVIF/HEIC/HEIF are mov containers image2 cannot read: name the mov demuxer, which reads no pattern)
+            single = ([] if video or "%" not in str(src) else ["-f", "mov"] if src.suffix.lower() in MOV_IMAGE_EXT
+                      else ["-f", "image2", "-pattern_type", "none"])
             cmd = [*_nice(), ffmpeg, "-v", "error", "-y", "-protocol_whitelist", "file",
                    "-format_whitelist", videos.VIDEO_FORMATS if video else IMAGE_FORMATS, *seek, *single, "-i", str(src),
                    "-frames:v", "1", "-vf", scale, "-c:v", "libwebp", "-quality", "78", "-f", "webp", str(tmp)]
