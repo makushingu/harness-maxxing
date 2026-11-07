@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { NavLink } from 'react-router'
+import { NavLink, useMatch } from 'react-router'
 import { MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search, Settings } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
@@ -310,20 +310,20 @@ function FeedbackButton({ collapsed }: { collapsed: boolean }) {
 function SettingsLink({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const prefetchLink = usePrefetchLink()
+  const active = !!useMatch('/settings/*')
   return (
     <Tooltip content={<>{t('nav.settings')} <Kbd className="border-background/20 bg-background/15 text-background">G ,</Kbd></>} side={collapsed ? 'right' : 'top'}>
       <Button
         asChild
         variant="ghost"
         size={collapsed ? 'icon-sm' : 'sm'}
-        className={collapsed ? 'size-8' : 'h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground'}
+        className={cn(collapsed ? 'size-8' : 'h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground', active && 'bg-accent text-foreground')}
       >
         <NavLink
           to="/settings"
           {...prefetchLink('/settings')}
           data-tour="nav-settings"
           aria-label={t('nav.settings')}
-          className={({ isActive }) => cn(isActive && 'bg-accent text-foreground')}
         >
           <Settings />
           {!collapsed && <span className="truncate">{t('nav.settings')}</span>}
