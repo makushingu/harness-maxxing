@@ -646,3 +646,12 @@ def test_two_downloads_filling_the_agent_cache_at_once_both_succeed(mx, monkeypa
     [t.start() for t in ts]
     [t.join(10) for t in ts]
     assert not errs
+
+
+def test_a_binary_frame_from_the_agent_does_not_end_the_link(pc):
+    _, token = _pair(pc)
+    with pc.websocket_connect("/api/pc/ws", headers={"Authorization": f"Bearer {token}"}) as ws:
+        _wait(lambda: pc.get("/api/pc").json()["online"], "online")
+        ws.send_bytes(b"\x00\x01")
+        time.sleep(0.5)
+        assert pc.get("/api/pc").json()["online"]
