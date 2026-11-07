@@ -53,6 +53,7 @@ ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*
 META_DIR = "_maxxing"
 CRON_NAME = "Memory backup"
 MAX_FILE = 5 * 1024 * 1024
+REF_RE = re.compile(r"\A[A-Za-z0-9._/~^@{}][A-Za-z0-9._/~^@{}-]{0,199}\Z")   # a sha, a branch, HEAD~2...
 HISTORY_MAX = 500
 AUTHOR = ("Harness Maxxing", "backup@localhost")
 
@@ -568,6 +569,8 @@ def git(*args: str, cwd: Path, tok: str | None = None, check: bool = True,
         raise BackupError(f"git {args[0]} timed out", "git_timeout") from None
     except FileNotFoundError:
         raise BackupError("git is not installed on this server", "no_git") from None
+    except ValueError:                                 # NUL or lone surrogate in an argument
+        raise BackupError(f"git {args[0]}: invalid argument", "git_failed") from None
     if check and r.returncode != 0:
         err = _scrub(r.stderr.decode(errors="replace").strip(), tok)[-600:]
         raise BackupError(f"git {args[0]} failed: {err}", "git_failed")
@@ -764,6 +767,8 @@ def restore(ref: str | None = None, hold: bool | None = None) -> dict:
     in use) even on a new server (the installer does that, then asks), None = decided by `_fresh_server()`.
     """
     try:
+        if ref and not REF_RE.match(ref):
+            raise BackupError("Invalid revision.", "bad_ref")
         with _flock():
             repo, tok = _settings().get("repo"), _token()
             if not repo or not tok:
