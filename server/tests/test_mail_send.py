@@ -340,3 +340,17 @@ def test_a_long_message_is_never_sent_in_one_tap_from_its_card(acc, smtp, monkey
     item = [p for p in outbox.pending() if p["id"] == q["id"]][0]
     assert item["text"] == text and item["text_cut"] is False        # the mail page shows all of it
     assert not smtp.messages
+
+
+def test_the_stored_password_never_goes_to_a_new_server(acc, monkeypatch):
+    from maxxing import mail
+    tried = []
+    monkeypatch.setattr(mail, "test", lambda a, pw: tried.append((a["imap_host"], pw)) or {"imap": "ok", "smtp": "skipped"})
+    with pytest.raises(MailError) as e:
+        mail.update_account(acc["id"], {"imap_host": "imap.attacker.example"})
+    assert e.value.code == "invalid" and "password again" in e.value.message and not tried
+    with pytest.raises(MailError):
+        mail.update_account(acc["id"], {"smtp_host": "smtp.attacker.example"})
+    assert not tried
+    mail.update_account(acc["id"], {"imap_host": "imap.new.example"}, password="typed-again")
+    assert tried == [("imap.new.example", "typed-again")]

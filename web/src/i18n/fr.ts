@@ -3612,7 +3612,7 @@ export const fr: Record<keyof typeof en, string> = {
   'mail.acc.note.gmail': 'Gmail refuse ici votre mot de passe habituel. Activez la validation en deux étapes du compte Google, puis créez un mot de passe d\'application (16 lettres) et collez-le ci-dessus :',
   'mail.acc.note.microsoft': 'Outlook.com / Hotmail n\'acceptent plus de mot de passe en IMAP (connexion Microsoft seulement) : cette boîte ne peut pas encore être ajoutée. Une boîte Microsoft 365 professionnelle marche seulement si son administrateur a laissé l\'IMAP actif.',
   'mail.acc.note.proton': 'Proton Mail n\'a pas d\'accès IMAP : une boîte Proton gratuite ne peut pas être ajoutée. Les offres payantes le peuvent, avec Proton Mail Bridge installé sur ce serveur (avancé).',
-  'mail.acc.passwordKeep': 'Laisser vide pour garder l\'actuel.',
+  'mail.acc.passwordKeep': 'Laisser vide pour garder l\'actuel (à retaper pour changer de serveur ou d\'identifiant).',
   'mail.acc.name': 'Votre nom',
   'mail.acc.nameHint': 'Affiché à vos destinataires.',
   'mail.acc.label': 'Nom court',
