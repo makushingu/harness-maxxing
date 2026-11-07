@@ -79,26 +79,26 @@ export function TelegramSection() {
           </Button>
         }
       >
-        <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div className="grid gap-1">
+        <dl className="grid grid-cols-[minmax(0,1fr)] gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 gap-1">
             <dt className="text-[13px] text-muted-foreground">{t('telegram.gateway')}</dt>
             <dd className="flex items-center gap-2 font-medium">
               <StatusDot tone={s.running ? (s.poll_error ? 'warn' : 'ok') : 'error'} /> {s.running ? t('telegram.running') : t('telegram.stopped')}
             </dd>
           </div>
-          <div className="grid gap-1">
+          <div className="grid min-w-0 gap-1">
             <dt className="text-[13px] text-muted-foreground">{t('telegram.lastPoll')}</dt>
             <dd className="font-medium tabular-nums">{lastPoll}</dd>
           </div>
-          <div className="grid gap-1">
+          <div className="grid min-w-0 gap-1">
             <dt className="text-[13px] text-muted-foreground">{t('telegram.bot')}</dt>
-            <dd className="font-medium">
+            <dd className="font-medium [overflow-wrap:anywhere]">
               <Sensitive>@{s.bot?.username}</Sensitive>
             </dd>
           </div>
-          <div className="grid gap-1">
+          <div className="grid min-w-0 gap-1">
             <dt className="text-[13px] text-muted-foreground">{t('telegram.chat')}</dt>
-            <dd className="font-medium">
+            <dd className="font-medium [overflow-wrap:anywhere]">
               <Sensitive>{s.chat?.title}</Sensitive>
             </dd>
           </div>
