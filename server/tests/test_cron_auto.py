@@ -406,23 +406,29 @@ def test_cron_turns_are_told_they_may_answer_silent():
     assert "[SILENT]" in spawn.CRON_SILENT and len(spawn.CRON_SILENT) < 300
 
 
-def test_only_cron_turns_get_the_silent_hint(mx, monkeypatch, tmp_path):
-    """Real sessions service + fake claude binary: the hint goes into the turn's system prompt, not its message."""
+def test_only_cron_turns_that_report_every_run_get_the_silent_hint(mx, monkeypatch, tmp_path):
+    """Real sessions service + fake claude binary: the hint goes into the turn's system prompt, not its message, and
+    only for notify "always" (with "failure" / "never" the answer must stay the full report)."""
     import json
     from maxxing import bus, workspace
     from maxxing.sessions import service, spawn
     monkeypatch.setattr(bus, "_loop", None)                         # like the CLI: no server loop
     workspace.create_project("acme")
     workspace.create_topic("acme", "blog")
-    j = crons.create_job({"name": "Digest", "kind": "claude", "topic_path": "projects/acme/topics/blog",
-                          "prompt": "NOTOOL say hi", "timeout_s": 60})
-    assert crons.run_job(j["id"])["ok"]
+    always = crons.create_job({"name": "Digest", "kind": "claude", "topic_path": "projects/acme/topics/blog",
+                               "prompt": "NOTOOL say hi", "timeout_s": 60, "notify": "always"})
+    failure = crons.create_job({"name": "Quiet", "kind": "claude", "topic_path": "projects/acme/topics/blog",
+                                "prompt": "NOTOOL say hi", "timeout_s": 60})
+    reused = crons.create_job({"name": "Reused", "kind": "claude", "topic_path": "projects/acme/topics/blog",
+                               "prompt": "NOTOOL say hi", "timeout_s": 60, "notify": "always", "reuse_session": True})
+    for j in (always, failure, reused, reused):
+        assert crons.run_job(j["id"])["ok"]
     s = service.create_session("projects/acme/topics/blog", message="NOTOOL hello")
     service.wait_turn(s["id"], 30)
     calls = [json.loads(x) for x in (mx["fake_dir"] / "calls.jsonl").read_text().splitlines()]
     hints = [c["argv"][c["argv"].index("--append-system-prompt") + 1] for c in calls]
-    assert spawn.CRON_SILENT in hints[0] and "[SILENT]" not in calls[0]["prompt"]
-    assert spawn.CRON_SILENT not in hints[-1]
+    assert [spawn.CRON_SILENT in h for h in hints] == [True, False, True, True, False]
+    assert "[SILENT]" not in calls[0]["prompt"]
 
 
 # ---- review fixes -------------------------------------------------------------------------------

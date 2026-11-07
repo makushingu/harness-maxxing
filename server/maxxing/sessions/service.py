@@ -310,8 +310,9 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    source: str = "web", notify: bool = False, cron: bool = False,
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
-                   client_id: str | None = None) -> dict:
-    """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title."""
+                   client_id: str | None = None, silent_ok: bool = False) -> dict:
+    """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
+    `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT)."""
     try:
         p = workspace.normalize_path(path)
         workspace.topic_dir(p)
@@ -328,7 +329,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
     if automatic and not has_text:
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
     store.create(meta)
-    first = _item((message or "").strip(), files, source, **_client_ids(client_id))
+    first = _item((message or "").strip(), files, source, **_client_ids(client_id),
+                  **({"silent_ok": True} if silent_ok else {}))
     if audio:
         _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:
@@ -388,7 +390,7 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
                  hud: bool = False, voice_path: str | None = None, ref: str | None = None,
-                 client_id: str | None = None) -> dict:
+                 client_id: str | None = None, silent_ok: bool = False) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
     (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
     for it, kept in its queue item and its log line (`client_ids`)."""
@@ -401,6 +403,8 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
     if ref:
         extra["refs"] = [str(ref)]
     extra.update(_client_ids(client_id))
+    if silent_ok:
+        extra["silent_ok"] = True
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)

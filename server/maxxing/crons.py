@@ -1270,12 +1270,13 @@ def _claude_turn(job: dict) -> dict:
     timeout = _timeout(job)
     env = {"MAXXING_CRON_ID": job["id"], "MAXXING_CRON_NAME": job["name"]}
     smap_path = _dir() / "sessions.json"
+    silent = {"silent_ok": True} if job.get("notify") == "always" else {}   # else the answer stays the full report
     sid = None
     if job.get("reuse_session"):
         prev = (config.read_json(smap_path, {}) or {}).get(job["id"])
         if prev and service.get_session(prev):
             store_mode(prev, job.get("permission_mode") or "")
-            service.send_message(prev, job["prompt"], source="cron")
+            service.send_message(prev, job["prompt"], source="cron", **silent)
             sid = prev
     if sid is None and agents.is_agent_path(job["topic_path"]):
         # an agent's cron trigger: its budget / rate / on-off decide, the run is written in the agent's thread
@@ -1288,7 +1289,7 @@ def _claude_turn(job: dict) -> dict:
         s = service.create_session(job["topic_path"], message=job["prompt"], title=title,
                                    model=job.get("model") or None, source="cron", notify=False,
                                    cron=True, env=env, timeout_s=timeout,
-                                   permission_mode=job.get("permission_mode") or "")
+                                   permission_mode=job.get("permission_mode") or "", **silent)
         sid = s["id"]
         if job.get("reuse_session"):
             with _lock:
