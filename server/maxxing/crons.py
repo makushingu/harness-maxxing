@@ -6,6 +6,7 @@ Storage (state_dir("crons")):
   deleted.jsonl {at, reason, job} per removed job       - last MAX_DELETED kept; `maxxing cron restore <id>`
   runs.jsonl    one Run per line (last MAX_RUNS kept)  - appended by `maxxing cron run` (other process)
   sessions.json {cron_id: session_id}                  - session reused by `reuse_session` Claude jobs
+  retries.json  {cron_id: {at, attempt, after, reason}} - the retry waiting after a failed run (see `tick`)
   locks/<id>.lock                                      - flock held while a job runs (no overlap)
 
 The scheduler is the system cron daemon: every enabled job becomes one line of a *managed block*
@@ -13,7 +14,12 @@ in root's crontab that calls `MAXXING_CRON_DETACH=1 maxxing cron run <id>` (an e
 older version restored by a rollback ignores it instead of refusing the line): the run starts in a transient systemd unit
 (the same one as "Run now": MemoryMax, the `maxxing-jobs.slice` budget, cleanup of every process it left),
 or in the cron process itself when systemd is not available. Lines outside the block are never touched.
-`last_run` is derived from runs.jsonl at read time, so the runner never rewrites jobs.json.
+`last_run` is derived from runs.jsonl at read time, so the runner never rewrites jobs.json (except a one-time job,
+disabled or removed once it ran).
+
+The server also calls `tick` every few minutes: it starts once the run of a job missed while the server or the cron
+daemon was down (catch-up), and the retries due after a transient failure. Both go through `spawn_run` and are
+checked again by `run_job` under the job lock, so they never run twice with the regular crontab line.
 
 Cron expressions are parsed, humanised and evaluated here in pure Python (5 fields, ranges,
 steps, lists, month/day names, @daily/@hourly/@weekly/@monthly/@yearly/@reboot), in the
@@ -55,6 +61,17 @@ KILL_GRACE_S = 5.0                       # timed-out shell job: SIGTERM, this lo
 JOBS_SLICE = "maxxing-jobs.slice"        # every job unit runs in it: its MemoryMax = budget of all jobs together
 UNIT_RUNTIME_MARGIN_S = 120              # RuntimeMaxSec of a job unit = timeout + this (the run's own kill comes first)
 SYSTEMD_DIR = Path("/run/systemd/system")   # present when systemd is PID 1 (absent in most containers)
+TRIGGERS = ("manual", "schedule", "catch-up", "retry")   # who started a run (Run.trigger)
+CATCH_UP_WINDOW_S = 24 * 3600            # a run missed longer ago than this is not made up for
+CATCH_UP_GRACE_S = 180                   # a slot counts as missed only this long after it (the regular run starts)
+CATCH_UP_MIN_INTERVAL_S = 3600           # jobs that run more often than hourly are never caught up
+SLOT_SLACK_S = 60                        # a run that started this long before its slot still counts for it
+RETRY_BACKOFF_S = (300, 900, 1800)       # wait before retry 1, 2, 3 (then the last value)
+MAX_RETRIES = 3                          # automatic retries of a Claude job after a transient failure
+MAX_SHELL_RETRIES = 5                    # `retries` of a shell job (0 = none, the default)
+LIMIT_RETRY_S = 1800                     # usage limit with no known reset time: try again after this
+ONCE_PAST_S = 60                         # a one-time job may be set at most this long in the past
+SILENT = "[SILENT]"                      # a Claude job's answer starting with it: nothing to report
 
 _lock = config.ProcessLock("crons")      # jobs.json + crontab: also written by `maxxing cron` and the runs
 log = logging.getLogger("maxxing.crons")
@@ -228,6 +245,63 @@ def next_run(expr: str, after: float | None = None) -> float | None:
     except CronError:
         return None
     return r[0] if r else None
+
+
+# ---- one-time jobs ---------------------------------------------------------------------------
+# A job with `once_at` ("2026-11-08T09:00", wall time in the configured zone) runs once at that minute instead of
+# on a schedule: its crontab line names that minute (it would fire again next year, so `once_pending` checks the
+# date), the tick makes up for it when missed, and the run disables it (`done_at`) or removes it (`delete_after`).
+def parse_once(value: str, zone: ZoneInfo | None = None) -> str:
+    """Normalise a one-time date -> "YYYY-MM-DDTHH:MM" in the configured zone (an offset or a Z is converted to it).
+    Raises CronError."""
+    text = " ".join(str(value or "").split()).replace(" ", "T", 1)
+    try:
+        d = dt.datetime.fromisoformat(text)
+    except ValueError:
+        raise CronError(f"once_at: '{value}' is not a date and time (YYYY-MM-DDTHH:MM)", "invalid_once") from None
+    if d.tzinfo is not None:
+        d = d.astimezone(zone or tz()).replace(tzinfo=None)
+    return d.strftime("%Y-%m-%dT%H:%M")
+
+
+def once_ts(value: str, zone: ZoneInfo | None = None) -> float | None:
+    """Unix time of a one-time date (None when it cannot be read: a hand edit)."""
+    if not value:
+        return None
+    try:
+        local = dt.datetime.fromisoformat(parse_once(value, zone))
+    except (CronError, ValueError):
+        return None
+    return local.replace(tzinfo=zone or tz()).timestamp()
+
+
+def once_human(value: str) -> str:
+    try:
+        return f"once on {parse_once(value).replace('T', ' at ')}"
+    except CronError:
+        return str(value)
+
+
+def is_once(job: dict) -> bool:
+    return bool(job.get("once_at"))
+
+
+def once_pending(job: dict, now: float | None = None) -> bool:
+    """A one-time job still to run now: enabled, not done, its time reached and not older than the catch-up window."""
+    at = once_ts(str(job.get("once_at") or ""))
+    now = time.time() if now is None else now
+    return (at is not None and bool(job.get("enabled", True)) and not job.get("done_at")
+            and at - SLOT_SLACK_S <= now <= at + CATCH_UP_WINDOW_S)
+
+
+def job_runs(job: dict, after: float | None = None, zone: ZoneInfo | None = None) -> Iterator[float]:
+    """The next fire times of a job (a schedule, or the single time of a one-time job not done yet)."""
+    if is_once(job):
+        at = once_ts(str(job["once_at"]), zone)
+        if at is not None and not job.get("done_at") and at > (time.time() if after is None else after):
+            yield at
+        return
+    yield from iter_runs(job.get("schedule") or "", after, zone)
 
 
 # ---- humaniser ------------------------------------------------------------------------------
@@ -455,6 +529,8 @@ DEFAULTS: dict[str, Any] = {
     "name": "", "schedule": "0 5 * * *", "kind": "shell", "command": "", "topic_path": "",
     "prompt": "", "model": "", "reuse_session": False, "enabled": True, "notify": "failure",
     "timeout_s": DEFAULT_TIMEOUT, "permission_mode": "",     # "" = the topic's / global permission mode
+    "once_at": "", "delete_after": False,     # one-time job: its date (then `schedule` is ""), removed once it ran
+    "catch_up": True, "retries": 0,           # make up for a missed run; automatic retries of a shell job
 }
 PERMISSION_MODES = ("", "bypass", "acceptEdits", "default")
 
@@ -467,7 +543,11 @@ def _clean(job: dict) -> dict:
         raise CronError("name is required (max 80 characters)", "invalid_name")
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in j["name"]):   # goes into the run's environment
         raise CronError("the name cannot contain control characters", "invalid_name")
-    j["schedule"] = validate(str(j["schedule"]))
+    j["once_at"] = str(j["once_at"] or "").strip()
+    if j["once_at"]:
+        j["once_at"], j["schedule"] = parse_once(j["once_at"]), ""
+    else:
+        j["schedule"] = validate(str(j["schedule"]))
     if j["kind"] not in KINDS:
         raise CronError("kind must be shell or claude", "invalid_kind")
     if j["notify"] not in NOTIFY_POLICIES:
@@ -478,8 +558,14 @@ def _clean(job: dict) -> dict:
         raise CronError("timeout_s must be a number of seconds", "invalid_timeout") from None
     if not 10 <= j["timeout_s"] <= 7 * 86400:
         raise CronError("timeout_s must be between 10 s and 7 days", "invalid_timeout")
-    for b in ("enabled", "reuse_session"):
+    for b in ("enabled", "reuse_session", "delete_after", "catch_up"):
         j[b] = bool(j[b])
+    try:
+        j["retries"] = int(j["retries"])
+    except (TypeError, ValueError, OverflowError):
+        raise CronError("retries must be a number", "invalid_retries") from None
+    if not 0 <= j["retries"] <= MAX_SHELL_RETRIES:
+        raise CronError(f"retries must be between 0 and {MAX_SHELL_RETRIES}", "invalid_retries")
     for s in ("command", "topic_path", "prompt", "model", "permission_mode"):
         j[s] = str(j[s] or "")
     if j["permission_mode"] not in PERMISSION_MODES:
@@ -521,17 +607,22 @@ def list_jobs() -> list[dict]:
     with _lock:
         jobs = _load_raw()
     last = last_runs()
+    waiting = _read_retries()
     out = []
     for j in jobs:
         j = {**DEFAULTS, **j}
         r = last.get(j["id"])
         j["last_run"] = ({"at": r.get("at"), "ok": bool(r.get("ok")), "code": r.get("code"),
-                          "duration_s": r.get("duration_s")} if r else None)
+                          "duration_s": r.get("duration_s"), "trigger": r.get("trigger") or "",
+                          "attempt": r.get("attempt") or 1, "silent": bool(r.get("silent"))} if r else None)
         try:                                           # a job edited by hand with a broken schedule
-            j["next_run"] = next_run(j["schedule"]) if j["enabled"] else None
-            j["human"] = humanize(j["schedule"])
+            j["next_run"] = next(job_runs(j), None) if j["enabled"] else None
+            j["human"] = once_human(j["once_at"]) if is_once(j) else humanize(j["schedule"])
         except Exception:
             j["next_run"], j["human"] = None, str(j.get("schedule"))
+        j["once_ts"] = once_ts(str(j["once_at"])) if is_once(j) else None
+        w = waiting.get(j["id"])
+        j["retry_at"] = w.get("at") if isinstance(w, dict) and j["enabled"] else None
         j["running"] = is_running(j["id"])
         out.append(j)
     return out
@@ -549,9 +640,18 @@ def _raw_job(cid: str) -> dict | None:
 _STORED = tuple(DEFAULTS) + ("id", "created", "updated")
 
 
+def _check_once_future(j: dict, now: float) -> None:
+    """A one-time job set (or switched back on) must name a time to come: a past one would never run."""
+    at = once_ts(j["once_at"])
+    if j["enabled"] and at is not None and at < now - ONCE_PAST_S:
+        raise CronError("this date and time is already past", "invalid_once")
+
+
 def create_job(fields: dict) -> dict:
     j = _clean({k: v for k, v in fields.items() if k in DEFAULTS})
     now = time.time()
+    if j["once_at"]:
+        _check_once_future(j, now)
     with _lock:
         jobs = _load_for_write()
         j.update(id=new_id(), created=now, updated=now)
@@ -590,7 +690,19 @@ def update_job(cid: str, fields: dict) -> dict | None:
                 merged = {**DEFAULTS, **cur, **{k: v for k, v in fields.items() if k in DEFAULTS}}
                 j = _clean(merged)
                 j.update(id=cid, created=cur.get("created", time.time()), updated=time.time())
-                jobs[i] = {**cur, **{k: j[k] for k in _STORED}}
+                new = {**cur, **{k: j[k] for k in _STORED}}
+                # a one-time job given a new date, or switched back on, is to run again
+                again = j["once_at"] and (j["once_at"] != cur.get("once_at") or (j["enabled"] and not cur.get("enabled", True)))
+                if again:
+                    _check_once_future(j, time.time())
+                    new.pop("done_at", None)
+                    new.pop("missed", None)
+                if not j["once_at"]:
+                    new.pop("done_at", None)
+                    new.pop("missed", None)
+                jobs[i] = new
+                if not j["enabled"]:
+                    _drop_retry(cid)                   # switched off: its waiting retry is cancelled
                 sync_crontab(jobs)
                 _save_raw(jobs)
                 break
@@ -607,6 +719,7 @@ def delete_job(cid: str) -> bool:
             return False
         sync_crontab(rest)
         _save_raw(rest, "deleted")
+        _drop_retry(cid)
         m = config.read_json(_dir() / "sessions.json", {}) or {}
         if m.pop(cid, None):
             config.write_json(_dir() / "sessions.json", m)
@@ -877,6 +990,24 @@ def is_due(expr: str, at: float | None = None) -> bool:
     return next(iter_runs(c, minute - 1, tz()), None) == minute
 
 
+def job_is_due(job: dict, at: float | None = None) -> bool:
+    """`--if-due` of a job's line: its schedule, or the minute of a one-time job, matches the minute `at`."""
+    if is_once(job):
+        when = once_ts(str(job.get("once_at") or ""))
+        return when is not None and (at if at is not None else time.time()) // 60 == when // 60
+    return is_due(job.get("schedule", ""), at)
+
+
+def _once_fields(job: dict) -> str | None:
+    """The 5 fields that fire a one-time job at its minute (in the configured zone = the cron daemon's when the
+    server clock follows it). None when the job is done or its date cannot be read."""
+    at = once_ts(str(job.get("once_at") or ""))
+    if at is None or job.get("done_at"):
+        return None
+    d = dt.datetime.fromtimestamp(at, tz())
+    return f"{d.minute} {d.hour} {d.day} {d.month} *"
+
+
 DETACH_ENV = "MAXXING_CRON_DETACH"   # set by the crontab lines = `--detach` (a flag would break a rolled-back version)
 
 
@@ -887,6 +1018,16 @@ def managed_lines(jobs: list[dict]) -> list[str]:
     out = []
     for j in jobs:
         if not j.get("enabled", True) or not SAFE_ID.fullmatch(str(j.get("id"))):
+            continue
+        if is_once(j):
+            fields = _once_fields(j)
+            if fields is None:
+                continue
+            if guard:
+                minute = fields.split(" ", 1)[0] if whole else "*"
+                out.append(f"{minute} * * * * {env}{DETACH_ENV}=1 {exe} cron run {j['id']} --if-due >/dev/null 2>&1")
+            else:
+                out.append(f"{fields} {env}{DETACH_ENV}=1 {exe} cron run {j['id']} >/dev/null 2>&1")
             continue
         try:
             sched = validate(j.get("schedule", ""))
@@ -1115,6 +1256,13 @@ def store_mode(sid: str, mode: str) -> None:
 
 def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
     """Run the prompt as a Claude session turn. -> (ok, code, output_tail, session_id)."""
+    t = _claude_turn(job)
+    return t["ok"], 0 if t["ok"] else 1, t["text"], t["session_id"]
+
+
+def _claude_turn(job: dict) -> dict:
+    """Run the prompt as a Claude session turn -> {ok, text, session_id, error, timed_out}: `error` is the turn's
+    own error (the session's), `text` the whole answer (run_job keeps its start)."""
     from .sessions import service                       # lazy: sessions are owned by core
     from . import agents
     when = dt.datetime.now(tz()).strftime("%Y-%m-%d %H:%M")
@@ -1161,9 +1309,11 @@ def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
         text = service.last_assistant_text(sid) or ""
     except Exception:
         text = ""
+    error = str(res.get("error") or "") if isinstance(res, dict) else ""
+    timed_out = (isinstance(res, dict) and res.get("state") == "running") or "Turn stopped (timeout)" in error
     if not ok and not text:
-        text = str(res.get("error") or "the Harness turn failed or timed out")
-    return ok, 0 if ok else 1, text, sid                 # whole answer: run_job keeps its start
+        text = error or "the Harness turn failed or timed out"
+    return {"ok": ok, "text": text, "session_id": sid, "error": error, "timed_out": timed_out}
 
 
 def _turn_ok(res: dict) -> bool:
@@ -1237,18 +1387,293 @@ def _interrupted(cid: str, job: dict, lockf) -> dict | None:
             "session_id": None}
 
 
-def run_job(cid: str) -> dict | None:
+# =============================================================================================
+# Retries after a transient failure
+# =============================================================================================
+# A Claude job that failed because the plan's usage limit was reached is tried again after the reset time (read
+# from the answer or from the last limits Claude Code reported, else LIMIT_RETRY_S); one that failed on an API or
+# network error is tried again after RETRY_BACKOFF_S. A shell job is retried only when it has `retries`. A timeout
+# is never retried (the job would most likely time out again). The retry waits in retries.json until the tick
+# starts it: it survives a restart and needs no extra unit.
+_LIMIT_RE = re.compile(r"usage limit|limit reached|hit your (?:\w+ )?limit|out of (?:extra )?usage", re.I)
+_TRANSIENT_RE = re.compile(
+    r"overloaded|api error:? *(?:5\d\d|429)|\b(?:500|502|503|504|529)\b|internal server error|bad gateway"
+    r"|service unavailable|gateway time-?out|rate_limit_error|too many requests|connection (?:error|refused|reset|closed)"
+    r"|econnreset|econnrefused|etimedout|enotfound|eai_again|socket hang up|network (?:error|is unreachable)"
+    r"|fetch failed|request timed out|temporarily unavailable|spawn failed", re.I)
+_EPOCH_RE = re.compile(r"limit reached\|(\d{10})")
+
+
+def classify_failure(text: str, error: str = "") -> str | None:
+    """Why a Claude turn failed, when it is worth trying again: "limit" (usage limit), "transient" (API overloaded,
+    5xx, network) or None. Only the error and the end of a long answer are read: a real answer may mention
+    "network" anywhere."""
+    text = text or ""
+    sample = f"{error or ''}\n{text if len(text) <= 2000 else text[-1000:]}"
+    if _LIMIT_RE.search(sample):
+        return "limit"
+    if _TRANSIENT_RE.search(sample):
+        return "transient"
+    return None
+
+
+def limit_reset(text: str, now: float) -> float | None:
+    """When the usage limit that stopped a turn resets: the time in an old-style answer ("…limit reached|<epoch>"),
+    else the reset of a full window among the limits Claude Code last reported. None = unknown."""
+    m = _EPOCH_RE.search(text or "")
+    if m and float(m.group(1)) > now:
+        return float(m.group(1))
+    try:
+        from . import claude_auth
+        lim = claude_auth.limits(now) or {}
+    except Exception:  # noqa: BLE001
+        return None
+    full = [w["resets_at"] for w in (lim.get("five_hour"), lim.get("seven_day"))
+            if isinstance(w, dict) and isinstance(w.get("resets_at"), (int, float)) and w["resets_at"] > now
+            and (w.get("pct") or 0) >= 99.5]
+    return max(full) if full else None
+
+
+def retry_plan(job: dict, *, ok: bool, attempt: int, timed_out: bool, text: str, error: str = "",
+               now: float | None = None) -> dict | None:
+    """The retry to schedule after a run -> {at, attempt (of the retry), reason} or None (final outcome)."""
+    if ok or timed_out:
+        return None
+    now = time.time() if now is None else now
+    if job.get("kind") == "claude":
+        reason = classify_failure(text, error)
+        allowed = MAX_RETRIES if reason else 0
+    else:
+        reason = "failed"
+        try:
+            allowed = max(0, min(int(job.get("retries") or 0), MAX_SHELL_RETRIES))
+        except (TypeError, ValueError, OverflowError):
+            allowed = 0
+    if attempt > allowed or reason is None:
+        return None
+    delay = RETRY_BACKOFF_S[min(attempt - 1, len(RETRY_BACKOFF_S) - 1)]
+    if reason == "limit":
+        reset = limit_reset(text, now)
+        delay = max(60.0, reset + 120 - now) if reset else LIMIT_RETRY_S
+        if delay > CATCH_UP_WINDOW_S:
+            return None                                # a weekly limit: the next scheduled run will do
+    return {"at": now + delay, "attempt": attempt + 1, "reason": reason}
+
+
+def retries_path() -> Path:
+    return _dir() / "retries.json"
+
+
+def _read_retries() -> dict:
+    d = config.read_json(retries_path(), {})
+    return d if isinstance(d, dict) else {}
+
+
+def _save_retry(cid: str, entry: dict) -> None:
+    with _lock:
+        d = _read_retries()
+        d[cid] = entry
+        config.write_json(retries_path(), d)
+
+
+def _drop_retry(cid: str) -> None:
+    with _lock:
+        d = _read_retries()
+        if d.pop(cid, None) is not None:
+            config.write_json(retries_path(), d)
+
+
+def _take_retry(cid: str, attempt: int, now: float) -> dict | None:
+    """Claim the waiting retry `attempt` of a job (removed from the file). None when there is none any more, or when
+    it was overtaken: the job was switched off, removed, or ran again meanwhile (a scheduled run, Run now)."""
+    with _lock:
+        d = _read_retries()
+        entry = d.get(cid)
+        if not isinstance(entry, dict) or entry.get("attempt") != attempt:
+            return None
+        if (entry.get("at") or 0) > now + SLOT_SLACK_S:
+            return None                                # not due yet (started by hand with --trigger retry)
+        d.pop(cid)
+        config.write_json(retries_path(), d)
+    job = _raw_job(cid)
+    if job is None or not job.get("enabled", True) or (is_once(job) and job.get("done_at")):
+        return None
+    after = entry.get("after") or 0
+    if any((r.get("at") or 0) > after + 1 for r in _runs_of(cid)):
+        return None
+    return entry
+
+
+def _runs_of(cid: str) -> list[dict]:
+    return [r for r in _all_runs() if r.get("cron_id") == cid]
+
+
+# =============================================================================================
+# Catch-up of missed runs
+# =============================================================================================
+def _last_slot(c: CronExpr, now: float, zone: ZoneInfo) -> float | None:
+    """The most recent fire time of `c` in the catch-up window (<= now); None when there is none, or when the job
+    runs more often than CATCH_UP_MIN_INTERVAL_S (an every-N-minutes job simply runs again soon)."""
+    slot = prev = None
+    for i, ts in enumerate(iter_runs(c, now - CATCH_UP_WINDOW_S - 1, zone)):
+        if prev is not None and ts - prev < CATCH_UP_MIN_INTERVAL_S:
+            return None
+        if ts > now or i > 400:
+            break
+        slot = prev = ts
+    return slot
+
+
+def catch_up_slot(job: dict, runs: list[dict], now: float, zone: ZoneInfo) -> float | None:
+    """The missed fire time to make up for now, or None. Pure (job, its runs, a clock): a job is caught up once,
+    for its most recent slot of the last 24 h, when that slot is past by CATCH_UP_GRACE_S, no run started at or
+    after it, none was still running at that time (an overlap is not a miss), and the job already existed with
+    this definition before it (`created` / `updated`; a job without them is never caught up). Never for @reboot,
+    jobs running more often than hourly, disabled jobs or `catch_up: false`. A one-time job's slot is its date."""
+    if not job.get("enabled", True) or job.get("catch_up", True) is False:
+        return None
+    if is_once(job):
+        if job.get("done_at"):
+            return None
+        slot = once_ts(str(job.get("once_at") or ""), zone)
+    else:
+        born = [x for x in (job.get("created"), job.get("updated")) if isinstance(x, (int, float))]
+        if not born:
+            return None
+        try:
+            c = parse(str(job.get("schedule") or ""))
+        except CronError:
+            return None
+        if c.reboot:
+            return None
+        slot = _last_slot(c, now, zone)
+        if slot is None or max(born) >= slot:
+            return None
+    if slot is None or slot > now - CATCH_UP_GRACE_S or slot < now - CATCH_UP_WINDOW_S:
+        return None
+    for r in runs:
+        at = r.get("at")
+        if not isinstance(at, (int, float)):
+            continue
+        if at >= slot - SLOT_SLACK_S:
+            return None                                # it ran (or was retried) for this slot
+        dur = r.get("duration_s") if isinstance(r.get("duration_s"), (int, float)) else 0
+        if at <= slot <= at + dur + SLOT_SLACK_S:
+            return None                                # still running at that time: skipped by the overlap rule
+    return slot
+
+
+def tick(now: float | None = None) -> list[tuple[str, str]]:
+    """One pass of the server (start + every TICK_S): start the catch-up runs and the retries that are due, mark the
+    one-time jobs missed for good. -> [(job id, trigger)] started. Never raises for one job."""
+    now = time.time() if now is None else now
+    jobs = _read_raw()
+    if not jobs:
+        return []
+    zone, started = tz(), []
+    runs: dict[str, list[dict]] = {}
+    for r in _all_runs():
+        runs.setdefault(str(r.get("cron_id")), []).append(r)
+    waiting = _read_retries()
+    for raw in jobs:
+        j = {**DEFAULTS, **raw}
+        cid = j["id"]
+        if not j["enabled"] or not SAFE_ID.fullmatch(cid) or is_running(cid):
+            continue
+        try:
+            w = waiting.get(cid)
+            if isinstance(w, dict) and isinstance(w.get("at"), (int, float)) and w["at"] <= now:
+                spawn_run(cid, "retry", int(w.get("attempt") or 2))
+                started.append((cid, "retry"))
+                continue
+            if is_once(j) and not j.get("done_at") and (once_ts(j["once_at"], zone) or now) < now - CATCH_UP_WINDOW_S:
+                _finish_once(cid, missed=True)
+                continue
+            if catch_up_slot(j, runs.get(cid, []), now, zone) is not None and not isinstance(w, dict):
+                spawn_run(cid, "catch-up")
+                started.append((cid, "catch-up"))
+        except Exception as e:  # noqa: BLE001 - one job must not stop the others
+            log.warning("cron %s: tick: %s", cid, e)
+    return started
+
+
+def _finish_once(cid: str, missed: bool = False) -> None:
+    """A one-time job ran (or was missed for good): disabled and marked done, or removed with `delete_after`
+    (archived in deleted.jsonl like any removed job)."""
+    with _lock:
+        jobs = _read_raw()
+        if jobs is None:
+            return
+        job = next((j for j in jobs if j["id"] == cid), None)
+        if job is None or not is_once(job):
+            return
+        if job.get("delete_after") and not missed:
+            rest = [j for j in jobs if j["id"] != cid]
+            sync_crontab(rest)
+            _save_raw(rest, "removed (one-time job done)")
+            return
+        job["enabled"], job["done_at"] = False, time.time()
+        if missed:
+            job["missed"] = True
+        sync_crontab(jobs)
+        _save_raw(jobs)
+    if missed:
+        try:
+            from . import feed
+            feed.system(f"One-time job missed: {job.get('name')}",
+                        f"It was due at {str(job.get('once_at')).replace('T', ' ')} and the server could not run it "
+                        "within 24 h.", "warning", "crons", f"/crons?job={cid}")
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def is_silent(answer: str | None) -> bool:
+    """A Claude job's answer that says there is nothing to report: `[SILENT]` alone, or at the very start."""
+    s = (answer or "").strip().lstrip("`*_ ").upper()
+    return s.startswith(SILENT)
+
+
+def _skip_reason(cid: str, trigger: str, attempt: int, now: float) -> str | None:
+    """Checked under the job lock, just before a run: a catch-up or a retry started by the tick may have been
+    overtaken meanwhile (the regular run, Run now), and a one-time job's crontab line fires every year."""
+    job = _raw_job(cid)
+    if job is None:
+        return "gone"
+    job = {**DEFAULTS, **job}
+    if trigger == "catch-up":
+        if catch_up_slot(job, _runs_of(cid), now, tz()) is None:
+            return "not missed any more"
+    elif trigger == "retry":
+        if _take_retry(cid, attempt, now) is None:
+            return "retry cancelled"
+    elif trigger == "schedule" and is_once(job):
+        if not once_pending(job, now) or any((r.get("at") or 0) >= (once_ts(job["once_at"]) or 0) - SLOT_SLACK_S
+                                             for r in _runs_of(cid)):
+            return "one-time job already done"
+    return None
+
+
+def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
     """Execute one job now (blocking), record the Run and send the Telegram report.
-    Returns the Run, or None when the job does not exist or is already running."""
+    Returns the Run, None when the job does not exist or is already running, or {"skipped": reason} when a
+    catch-up / retry / one-time run is not due any more (checked under the job lock)."""
     job = _raw_job(cid)
     if job is None:
         return None
     job = {**DEFAULTS, **job}
+    trigger = trigger if trigger in TRIGGERS else "manual"
+    attempt = max(1, int(attempt or 1))
     lockf = open(_lock_path(cid), "a+")                 # not "w": the mark of a killed run is read first
     lost = run = None
+    retry = None
     try:
         if not _flock_within(lockf, 1.0):
             return None
+        why = _skip_reason(cid, trigger, attempt, time.time())
+        if why:
+            log.info("cron %s: %s run skipped: %s", cid, trigger, why)
+            return {"skipped": why, "cron_id": cid}
+        slot = catch_up_slot(job, _runs_of(cid), time.time(), tz()) if trigger == "catch-up" else None
         lost = _interrupted(cid, job, lockf)
         if lost:
             try:
@@ -1260,21 +1685,48 @@ def run_job(cid: str) -> dict | None:
         _live_locks[cid] = (lockf, start)
         session_id = None
         answer = None
+        error, timed_out = "", False
         try:
             if job["kind"] == "claude":
-                ok, code, answer, session_id = _run_claude(job)
+                turn = _claude_turn(job)
+                ok, answer, session_id = turn["ok"], turn["text"], turn["session_id"]
+                code, error, timed_out = 0 if ok else 1, turn["error"], turn["timed_out"]
                 tail = _clip_head(answer, OUTPUT_TAIL)  # an answer starts with its title and summary
             else:
                 ok, code, tail = _run_shell(job)
+                timed_out = code == 124 and tail.rstrip().endswith(f"[timed out after {_timeout(job)} s]")
         except Exception as e:                           # never die without recording the run
             ok, code, tail = False, 1, f"{type(e).__name__}: {e}"
+        now = time.time()
+        timed_out = timed_out or (not ok and now - start >= _timeout(job) * 0.98)
         run = {"id": "r_" + _secrets.token_hex(4), "cron_id": cid, "name": job["name"], "at": start,
-               "ok": ok, "code": code, "duration_s": round(time.time() - start, 2),
-               "output_tail": tail, "session_id": session_id}
+               "ok": ok, "code": code, "duration_s": round(now - start, 2),
+               "output_tail": tail, "session_id": session_id, "trigger": trigger}
+        if attempt > 1:
+            run["attempt"] = attempt
+        if slot is not None:
+            run["slot"] = slot
+        if ok and job["kind"] == "claude" and is_silent(answer):
+            run["silent"] = True
+        retry = retry_plan(job, ok=ok, attempt=attempt, timed_out=timed_out, text=answer or tail, error=error,
+                           now=now)
+        if retry:
+            run["retry_at"] = retry["at"]
+            try:
+                _save_retry(cid, {**retry, "after": start, "run_id": run["id"]})
+            except Exception:
+                log.exception("cron %s: cannot keep the retry", cid)
+                retry = None
+                run.pop("retry_at", None)
         try:
             append_run(run)
         except Exception:                                # the report still goes out
             log.exception("cron %s: cannot record the run", cid)
+        if is_once(job) and not retry and start >= (once_ts(job["once_at"]) or math.inf) - SLOT_SLACK_S:
+            try:
+                _finish_once(cid)                        # its run is over: disabled (done) or removed
+            except Exception:
+                log.exception("cron %s: cannot mark the one-time job done", cid)
     finally:
         _live_locks.pop(cid, None)
         try:
@@ -1295,13 +1747,31 @@ def _feed(job: dict, run: dict) -> None:
     """Every run goes to the notifications feed: failures one by one, successes folded into one row."""
     from . import feed
     url = f"/crons?job={run['cron_id']}"
+    more = _run_note(run)
     if run["ok"]:
-        feed.system("Cron jobs succeeded", f"{job['name']} ({fmt_duration(run['duration_s'])})", "success",
-                    "crons", url, group="ok")
+        quiet = " · nothing to report" if run.get("silent") else ""
+        feed.system("Cron jobs succeeded", f"{job['name']} ({fmt_duration(run['duration_s'])}{more}){quiet}",
+                    "success", "crons", url, group="ok")
     else:
         out = run.get("output_tail") or ""
         body = _clip_head(out, 600) if job.get("kind") == "claude" else _clip_tail(out, 600)
-        feed.system(f"Cron failed: {job['name']}", body, "error", "crons", url)
+        if run.get("retry_at"):                          # not the end: said once, quietly (no Telegram)
+            when = dt.datetime.fromtimestamp(run["retry_at"], tz()).strftime("%H:%M")
+            feed.system(f"Cron will retry: {job['name']}",
+                        f"Attempt {run.get('attempt') or 1} failed, next attempt at {when}.\n\n{body}".strip(),
+                        "warning", "crons", url)
+        else:
+            feed.system(f"Cron failed: {job['name']}", (f"{more.strip(' ·')}\n\n" if more else "") + body,
+                        "error", "crons", url)
+
+
+def _run_note(run: dict) -> str:
+    """" · catch-up of 09:00" / " · attempt 2": what the report says about how the run was started."""
+    if run.get("trigger") == "catch-up" and isinstance(run.get("slot"), (int, float)):
+        return f" · catch-up of {dt.datetime.fromtimestamp(run['slot'], tz()):%Y-%m-%d %H:%M}"
+    if (run.get("attempt") or 1) > 1:
+        return f" · attempt {run['attempt']}"
+    return ""
 
 
 def _clip_head(text: str, n: int) -> str:
@@ -1321,8 +1791,10 @@ def _notify(job: dict, run: dict, answer: str | None = None) -> None:
     policy = job.get("notify", "failure")
     if policy == "never" or (policy == "failure" and run["ok"]):
         return
+    if run.get("silent") or run.get("retry_at"):
+        return                                         # nothing to report / not the final outcome yet
     status = "OK" if run["ok"] else f"FAILED (code {run['code']})"
-    header = f"{status} - {job['name']} ({fmt_duration(run['duration_s'])})"
+    header = f"{status} - {job['name']} ({fmt_duration(run['duration_s'])}){_run_note(run)}"
     claude = job.get("kind") == "claude"
     body = ""
     if not run["ok"] or policy == "always":
@@ -1367,13 +1839,16 @@ def unit_properties(job: dict | None) -> list[str]:
             "--property", f"RuntimeMaxSec={timeout + int(KILL_GRACE_S) + UNIT_RUNTIME_MARGIN_S}"]
 
 
-def spawn_run(cid: str) -> None:
+def spawn_run(cid: str, trigger: str = "manual", attempt: int = 1) -> None:
     """Start `maxxing cron run <id>` detached: in a transient systemd unit (`maxxing-cron-<id>`), or a plain
-    subprocess when units are not available (MAXXING_SPAWN=direct, no systemd). Used by "Run now" and by the
-    crontab lines (MAXXING_CRON_DETACH / `--detach`). Raises CronError('already_running') if the job is running."""
+    subprocess when units are not available (MAXXING_SPAWN=direct, no systemd). Used by "Run now", by the
+    crontab lines (MAXXING_CRON_DETACH / `--detach`) and by the tick (catch-up, retry). Raises
+    CronError('already_running') if the job is running."""
     if is_running(cid, wait=1.0):
         raise CronError("this job is already running", "already_running")
     cmd = [sys.executable, "-m", "maxxing", "cron", "run", cid]
+    if trigger != "manual":
+        cmd += ["--trigger", trigger] + (["--attempt", str(attempt)] if attempt > 1 else [])
     if not units_available():
         subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)

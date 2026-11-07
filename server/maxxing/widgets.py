@@ -217,7 +217,7 @@ def day(force: bool = False) -> dict:
         planned: list[float] = []
         if j.get("enabled"):
             try:
-                for at in cr.iter_runs(j["schedule"], after=now, zone=zone):
+                for at in cr.job_runs(j, after=now, zone=zone):
                     if at >= end or len(planned) > MAX_PLANNED:
                         break
                     planned.append(at)
@@ -230,7 +230,7 @@ def day(force: bool = False) -> dict:
             nxt = (planned[0], j.get("name") or j["id"])
         if not ev and not dense:
             continue
-        lanes.append({"name": j.get("name") or j["id"], "sub": cr.humanize(j["schedule"]), "dense": dense,
+        lanes.append({"name": j.get("name") or j["id"], "sub": j.get("human") or cr.humanize(j["schedule"]), "dense": dense,
                       "kind": j.get("kind"), "events": ev if not dense else ev[:MAX_PLANNED],
                       "first": min([e["at"] for e in ev] + planned[:1] or [end]), "href": f"/crons?job={j['id']}"})
     lanes.sort(key=lambda l: l["first"])
@@ -263,7 +263,7 @@ def _next_run_blocks(cr: Any, zone: ZoneInfo, now: float, start: float) -> list[
         if not j.get("enabled"):
             continue
         try:
-            at = next(iter(cr.iter_runs(j["schedule"], after=now, zone=zone)), None)
+            at = next(iter(cr.job_runs(j, after=now, zone=zone)), None)
         except Exception:  # noqa: BLE001
             at = None
         if at and at < now + 8 * 86400 and (nxt is None or at < nxt[0]):

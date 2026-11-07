@@ -2,6 +2,8 @@
 
   maxxing cron run <id>   run a job now, in this process (what the job unit of "Run now" runs)
   maxxing cron run <id> --detach   start it in its transient systemd unit (what the crontab lines call)
+  maxxing cron run <id> --trigger catch-up|retry [--attempt N]   what the server's tick starts (checked again here)
+  maxxing cron tick       start the missed runs and the retries that are due (the server does it every 5 min)
   maxxing cron sync       rewrite the managed crontab block from jobs.json
   maxxing cron list       print the jobs, their schedule and last result
   maxxing cron deleted    the removed jobs kept (deleted, or gone from jobs.json after a hand edit)
@@ -25,7 +27,11 @@ def _configure(p) -> None:
     r.add_argument("--detach", action="store_true",
                    help="start the run in its transient systemd unit (memory cap, jobs budget) and return; "
                         "runs here when systemd is not available")
+    r.add_argument("--trigger", choices=["schedule", "catch-up", "retry"], default=None,
+                   help="what started the run (default: the schedule when detached, else by hand)")
+    r.add_argument("--attempt", type=int, default=1, help="attempt number of a retry")
     sub.add_parser("sync", help="rewrite the managed crontab block")
+    sub.add_parser("tick", help="start the missed runs and the retries that are due")
     sub.add_parser("list", help="list jobs")
     sub.add_parser("deleted", help="list the removed jobs that can be restored")
     r = sub.add_parser("restore", help="put a removed job back, with its id")
@@ -35,19 +41,24 @@ def _configure(p) -> None:
 def _handler(a) -> int:
     from . import crons
     if a.cron_cmd == "run":
-        if crons._raw_job(a.id) is None:
+        job = crons._raw_job(a.id)
+        if job is None:
             print(f"unknown job {a.id}", file=sys.stderr)
             return 2
-        if a.if_due and not crons.is_due(crons._raw_job(a.id).get("schedule", "")):
+        if a.if_due and not crons.job_is_due(job):
             return 0
         detach = getattr(a, "detach", False) or os.environ.pop(crons.DETACH_ENV, "") == "1"   # read once: never inherited
+        trigger = getattr(a, "trigger", None) or ("schedule" if detach or a.if_due else "manual")
+        attempt = getattr(a, "attempt", 1) or 1
+        if trigger == "schedule" and crons.is_once(job) and not crons.once_pending(job):
+            return 0                                   # the line of a one-time job fires every year on that date
         # installed before 2.0.0a70 (cron_keep_background): scheduled runs stay in the cron process, as they were -
         # the background programs a job leaves keep living, and no unit name stays taken by them
         if detach and config.load_config().get("cron_keep_background"):
             detach = False
         if detach and crons.units_available():
             try:
-                crons.spawn_run(a.id)
+                crons.spawn_run(a.id, trigger, attempt)
             except crons.CronError as e:
                 print(f"job {a.id}: {e}", file=sys.stderr)
                 if e.code == "already_running":
@@ -55,11 +66,18 @@ def _handler(a) -> int:
                 # no unit (systemd busy, D-Bus error...): run it here rather than skip it without a trace
             else:
                 return 0
-        run = crons.run_job(a.id)
+        run = crons.run_job(a.id, trigger, attempt)
         if run is None:
             print(f"job {a.id} is already running", file=sys.stderr)
             return 3
+        if run.get("skipped"):
+            print(f"job {a.id}: not run ({run['skipped']})", file=sys.stderr)
+            return 0
         return 0 if run["ok"] else 1
+    if a.cron_cmd == "tick":
+        for cid, why in crons.tick():
+            print(f"started {cid} ({why})")
+        return 0
     if a.cron_cmd == "sync":
         if crons._read_raw() is None:
             print(f"{crons.jobs_path()} cannot be read: crontab left as it is", file=sys.stderr)
@@ -98,11 +116,19 @@ def _handler(a) -> int:
             ("ok" if last["ok"] else f"failed ({last['code']})") + " "
             + dt.datetime.fromtimestamp(last["at"], zone).strftime("%Y-%m-%d %H:%M"))
         state = "on " if j["enabled"] else "off"
-        print(f"{j['id']}  {state}  {j['schedule']:<15} {j['name']}  [{j['kind']}]  {j['human']}  - {last_txt}")
+        when = j["schedule"]
+        if crons.is_once(j):
+            state = "done" if j.get("done_at") else state
+            when = "once"
+            last_txt += " (missed)" if j.get("missed") else ""
+            last_txt += ", removed after it runs" if j.get("delete_after") else ""
+        if j.get("retry_at"):
+            last_txt += ", retry at " + dt.datetime.fromtimestamp(j["retry_at"], zone).strftime("%Y-%m-%d %H:%M")
+        print(f"{j['id']}  {state:<3}  {when:<15} {j['name']}  [{j['kind']}]  {j['human']}  - {last_txt}")
     ext = crons.external_jobs()
     if ext:
         print(f"\n{len(ext)} other crontab line(s) not managed by Harness Maxxing")
     return 0
 
 
-cli.register("cron", "scheduled jobs (run, sync, list, deleted, restore)", _configure, _handler)
+cli.register("cron", "scheduled jobs (run, sync, list, tick, deleted, restore)", _configure, _handler)

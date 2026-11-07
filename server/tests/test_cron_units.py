@@ -96,7 +96,8 @@ def test_scheduled_run_goes_through_a_job_unit_with_memory_caps(org, units):  # 
     assert "--slice=maxxing-jobs.slice" in args                       # the budget of all jobs together
     assert "MemoryMax=75%" in args and "OOMPolicy=continue" in args   # the cap of this job
     assert f"RuntimeMaxSec={300 + int(crons.KILL_GRACE_S) + crons.UNIT_RUNTIME_MARGIN_S}" in args
-    assert args[args.index("--") + 1:][-3:] == ["cron", "run", j["id"]]   # the unit runs it inline
+    # the unit runs it inline, as a scheduled run
+    assert args[args.index("--") + 1:][-5:] == ["cron", "run", j["id"], "--trigger", "schedule"]
     run = crons.read_runs(j["id"])[0]
     assert run["ok"] and "from-the-unit" in run["output_tail"]
 
