@@ -30,6 +30,9 @@ export function BackupSetup({ onFirstRun }: { onFirstRun?: (r: BackupRunResult) 
   const config = useBackupConfig()
   const run = useBackupRun()
   const [result, setResult] = React.useState<BackupRunResult | null>(null)
+  // run.isPending only disables the button on the next render: a fast double click would send a second
+  // run, answered 409 busy, whose error replaced the first run's result.
+  const running = React.useRef(false)
 
   if (isLoading || !b) return <Skeleton className="h-64" />
   const configured = b.configured && !editing
@@ -91,15 +94,18 @@ export function BackupSetup({ onFirstRun }: { onFirstRun?: (r: BackupRunResult) 
           <Button
             loading={run.isPending}
             variant={result?.ok ? 'outline' : 'default'}
-            onClick={() =>
+            onClick={() => {
+              if (running.current) return
+              running.current = true
               run.mutate(undefined, {
                 onSuccess: (r) => {
                   setResult(r)
                   if (r.ok) onFirstRun?.(r)
                 },
                 onError: (e) => setResult({ ok: false, commit: null, files: 0, error: errorMessage(e) }),
+                onSettled: () => { running.current = false },
               })
-            }
+            }}
           >
             <CloudUpload /> {b.last ? t('backup.runNow') : t('backup.runFirst')}
           </Button>

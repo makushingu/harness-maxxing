@@ -1254,7 +1254,7 @@ export const en = {
   'keys.expose': 'Expose to Harness sessions',
   'keys.exposeShort': 'Exposed',
   'keys.unexpose': 'Stop exposing',
-  'keys.exposeDesc': 'Exported as an environment variable in every Harness turn.',
+  'keys.exposeDesc': 'Exported as an environment variable in every Harness turn. Extensions read keys without it: leave it off unless sessions need the variable.',
   'keys.exposeTitle': 'Exposed keys',
   'keys.exposeExplain': 'An exposed key is available to Harness as an environment variable (e.g. $OPENAI_API_KEY) in every session and cron, so scripts can use it without the value ever appearing in a prompt. Harness can still read it: expose only what sessions need.',
   'keys.reveal': 'Reveal',

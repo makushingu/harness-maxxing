@@ -682,14 +682,14 @@ function MessageRow({
         {!right && <span className="w-7 shrink-0 self-end">{(showAvatar || card) && <Avatar profile={author} size="md" />}</span>}
         <div className={cn('flex min-w-0 flex-col', card ? 'flex-1' : 'max-w-[85%]', right && 'items-end')}>
           {(showName || card) && (
-            <span className="mb-1 flex items-baseline gap-2 px-1 text-[12px]">
-              <span className="font-semibold" style={{ color: mine ? undefined : projectColor(author.color || 'zinc') }}>
+            <span className="mb-1 flex min-w-0 max-w-full items-baseline gap-2 px-1 text-[12px]">
+              <span className="min-w-0 truncate font-semibold" style={{ color: mine ? undefined : projectColor(author.color || 'zinc') }}>
                 {mine ? t('team.you') : author.name}
               </span>
               {!mine && author.peer && !author.contact && (
-                <span className="text-muted-foreground" title={t('team.notContactHint')}>{t('team.notContact')}</span>
+                <span className="shrink-0 text-muted-foreground" title={t('team.notContactHint')}>{t('team.notContact')}</span>
               )}
-              {card && <span className="text-muted-foreground tabular-nums">{clock(m.at, lang)}</span>}
+              {card && <span className="shrink-0 text-muted-foreground tabular-nums">{clock(m.at, lang)}</span>}
             </span>
           )}
           <div className={cn('relative flex max-w-full min-w-0 flex-col gap-1', right && 'items-end', selecting && 'pointer-events-none')}>

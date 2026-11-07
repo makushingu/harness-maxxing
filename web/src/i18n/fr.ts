@@ -1240,7 +1240,7 @@ export const fr: Record<keyof typeof en, string> = {
   'keys.expose': 'Fournir aux sessions Harness',
   'keys.exposeShort': 'Exposée',
   'keys.unexpose': 'Ne plus exposer',
-  'keys.exposeDesc': 'Exportée comme variable d’environnement à chaque tour de Harness.',
+  'keys.exposeDesc': 'Exportée comme variable d’environnement à chaque tour de Harness. Les extensions lisent les clés sans cela : laissez désactivé sauf si les sessions ont besoin de la variable.',
   'keys.exposeTitle': 'Clés exposées',
   'keys.exposeExplain': 'Une clé exposée est disponible pour Harness comme variable d’environnement (par ex. $OPENAI_API_KEY) dans chaque session et chaque cron : les scripts peuvent l’utiliser sans que la valeur apparaisse dans un prompt. Harness peut quand même la lire : n’exposez que ce dont les sessions ont besoin.',
   'keys.reveal': 'Révéler',
