@@ -189,6 +189,7 @@ def test_logs_whitelist(client, monkeypatch):
     assert client.get("/api/system/logs?unit=maxxing-cron-c-abc123").status_code == 200
     assert client.get("/api/system/logs?unit=ssh").status_code == 400
     assert client.get("/api/system/logs?unit=caddy;reboot").status_code == 400
+    assert client.get("/api/system/logs?unit=maxxing-cron-c-abc123%0A").status_code == 400
     assert client.get("/api/system/logs?lines=0").status_code == 422
 
 
