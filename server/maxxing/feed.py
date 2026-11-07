@@ -38,6 +38,7 @@ SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,39}$")
 BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins", "health": "Server health",
            "agents": "Agents"}
 OWN_THREAD = {"crons", "system", "security"}
+MAX_RULES = 200  # per-source Telegram rules kept in config.json (read everywhere)
 
 # Alerts: an event can carry buttons (`actions`), follow something (`ref`: "approval:<id>", "health:<id>",
 # "agent:<path>") and end (`resolved` = when, `resolution` = how). `act()` runs a button through the module of its
@@ -607,6 +608,8 @@ def save_settings(telegram: bool | None = None, rules: dict | None = None, hooks
                     raise FeedError(400, "bad_rule", f"Rule: {', '.join(RULES)}")
                 if v != "auto":
                     clean[clean_source(k)] = v
+            if len(clean) > MAX_RULES:
+                raise FeedError(400, "too_many_rules", f"At most {MAX_RULES} source rules")
             f["rules"] = clean
         if hooks is not None:
             f["hooks"] = hooks

@@ -79,7 +79,7 @@ export function CreateProjectTopic({ onCreated, submitLabel }: { onCreated?: (t:
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-5" noValidate>
+    <form onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] gap-5" noValidate>
       {projects.length > 0 && (
         <Segmented
           value={mode}

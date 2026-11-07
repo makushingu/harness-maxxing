@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -577,3 +578,68 @@ def test_a_secret_in_a_file_name_that_is_not_utf8_is_recorded(gh, ws):
     assert r["ok"] is False and r["code"] == "secret_found"
     h = backup.history()[0]
     assert h["ok"] is False and h["leaks"][0]["file"] == "projects/acme/topics/blog/caf?.md"
+
+
+@pytest.mark.parametrize("ref", ["a\x00b", "a\ud800", "x" * 5000, "main\n", "--all"], ids=["nul", "surrogate", "long", "newline", "option"])
+def test_restore_refuses_an_invalid_revision(gh, ws, ref):
+    gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    r = backup.restore(ref)
+    assert r["ok"] is False and r["code"] == "bad_ref"
+
+
+def test_a_lock_left_by_a_killed_git_does_not_block_the_next_runs(gh, ws):
+    gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    gd = backup._wc() / ".git"  # noqa: SLF001
+    (gd / "index.lock").write_text("")
+    (gd / "refs/heads/main.lock").write_text("")
+    (ws / "memory.md").write_text("- new fact\n")
+    r = backup.run()
+    assert r["ok"], r
+    assert not (gd / "index.lock").exists() and not (gd / "refs/heads/main.lock").exists()
+    assert backup.restore()["ok"]
+
+
+def _push_extra(gh_bare: Path, tmp: Path, files: dict[bytes, bytes]) -> None:
+    """A commit pushed to the backup repository by someone else (names as raw bytes)."""
+    subprocess.run(["git", "clone", "-q", str(gh_bare), str(tmp)], check=True)
+    for name, data in files.items():
+        p = os.path.join(os.fsencode(tmp), name)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "wb") as f:
+            f.write(data)
+    git = ["git", "-C", str(tmp), "-c", "user.name=x", "-c", "user.email=x@x"]
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "extra"], check=True)
+    subprocess.run([*git, "push", "-q", "origin", "main"], check=True)
+
+
+def test_a_file_name_that_is_not_utf8_is_skipped_by_the_restore(gh, ws, mx_state):
+    bare = gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    _push_extra(bare, mx_state / "pusher", {b"weird\xff.sh": b"echo hi\n", b"memory.md": b"- pushed fact\n"})
+    _in_use()
+    r = backup.restore()
+    assert r["ok"], r
+    assert (ws / "memory.md").read_text() == "- pushed fact\n"
+    assert not any(b"weird" in os.fsencode(p.name) for p in ws.iterdir())
+
+
+def test_the_restore_skips_files_larger_than_the_backup_limit(gh, ws, mx_state, monkeypatch):
+    bare = gh.add_repo(REPO)
+    assert backup.configure(REPO, GH_TOKEN)["ok"]
+    assert backup.run()["ok"]
+    monkeypatch.setattr(backup, "MAX_FILE", 1000)
+    _push_extra(bare, mx_state / "pusher", {b"memory.md": b"x" * 2000, b"projects/acme/CLAUDE.md": b"# acme v2\n"})
+    _in_use()
+    r = backup.restore()
+    assert r["ok"], r
+    assert (ws / "projects/acme/CLAUDE.md").read_text() == "# acme v2\n"
+    assert (ws / "memory.md").read_text() == "- root fact\n"
+    monkeypatch.setattr(backup, "MAX_RESTORE", 5)
+    r = backup.restore()
+    assert r["ok"] is False and r["code"] == "too_large"

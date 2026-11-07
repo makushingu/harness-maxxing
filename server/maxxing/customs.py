@@ -137,7 +137,8 @@ def list_customs(branch: str | None = None, head: str = "HEAD") -> list[dict[str
     another local branch for instance)."""
     if not is_git() or git("rev-parse", "-q", "--verify", upstream(branch))[0] != 0:
         return []
-    code, out = git("log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", *_local_range(branch, head))
+    # one git call for all of them (the files of each commit follow its \x1d)
+    code, out = git("log", "--reverse", "--name-only", "--format=%x1e%H%x1f%s%x1f%b%x1d", *_local_range(branch, head))
     if code != 0:
         return []
     overrides = check_overrides()
@@ -146,9 +147,9 @@ def list_customs(branch: str | None = None, head: str = "HEAD") -> list[dict[str
         rec = rec.strip("\n")
         if not rec.strip():
             continue
-        sha, subject, body = (rec.split("\x1f") + ["", ""])[:3]
+        meta, _, files = rec.partition("\x1d")
+        sha, subject, body = (meta.split("\x1f") + ["", ""])[:3]
         t = _trailers(body)
-        _, files = git("diff-tree", "--no-commit-id", "--name-only", "-r", sha)
         cid = t.get("custom_id") or sha[:8]
         items.append({"id": cid, "title": subject.removeprefix(PREFIX).strip(),
                       "why": t.get("why", ""), "saved": t.get("saved", ""), "commit": sha,

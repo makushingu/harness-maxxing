@@ -363,6 +363,17 @@ def project_emoji(project: str) -> str:
     return e if isinstance(e, str) else ""
 
 
+def check_description(value: str | None) -> str | None:
+    """A description must be writable as UTF-8 (a lone surrogate would fail half-way through a create)."""
+    if value is None:
+        return None
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise WorkspaceError(400, "bad_description", "The description contains an invalid character") from None
+    return value
+
+
 def check_emoji(value: str) -> str:
     """One emoji (a few code points: flags, skin tones, ZWJ sequences) - not words."""
     v = (value or "").strip()
@@ -418,6 +429,7 @@ def get_topic(project: str, name: str) -> dict:
 # ---- mutations -----------------------------------------------------------------------------
 def create_project(name: str, description: str = "") -> dict:
     check_slug(name)
+    check_description(description)
     ensure_root()
     d = project_dir(name)
     if d.exists():
@@ -430,6 +442,7 @@ def create_project(name: str, description: str = "") -> dict:
 
 def create_topic(project: str, name: str, description: str = "") -> dict:
     check_slug(name)
+    check_description(description)
     if not project_dir(check_slug(project)).is_dir():
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
     d = project_dir(project) / "topics" / name
@@ -445,6 +458,7 @@ def update_project(project: str, name: str | None = None, description: str | Non
     d = project_dir(check_slug(project))
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
+    check_description(description)
     if emoji is not None:
         set_project_emoji(project, check_emoji(emoji))
     new = project
@@ -472,6 +486,7 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
     d = project_dir(check_slug(project)) / "topics" / check_slug(topic)
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
+    check_description(description)
     if permission_mode is not None:
         _set_folder_meta(d, "permission_mode", check_permission_mode(permission_mode))
     new = topic

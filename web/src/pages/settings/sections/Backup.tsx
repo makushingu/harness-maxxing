@@ -66,8 +66,8 @@ function ScheduleAndInclude() {
             </li>
           ))}
           {include.map((g) => (
-            <li key={g}>
-              <Badge variant="outline" className="h-7 gap-1.5 pr-1 pl-2.5 font-mono text-xs">
+            <li key={g} className="max-w-full min-w-0">
+              <Badge variant="outline" className="h-auto min-h-7 max-w-full gap-1.5 py-1 pr-1 pl-2.5 font-mono text-xs break-all whitespace-normal">
                 {g}
                 <button type="button" onClick={() => setInclude(include.filter((x) => x !== g))} aria-label={`${t('common.remove')} ${g}`} className="relative rounded p-0.5 before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent pointer-coarse:before:-inset-3">
                   <X className="size-3" />

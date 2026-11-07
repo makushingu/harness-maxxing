@@ -21,7 +21,7 @@ from ..security import require_auth
 log = logging.getLogger("maxxing.license")
 router = APIRouter(prefix="/api", tags=["system"], dependencies=[Depends(require_auth)])
 
-_TRANSIENT_UNIT = re.compile(r"^maxxing-[a-z0-9-]{1,64}$")     # session turns, cron runs, update
+_TRANSIENT_UNIT = re.compile(r"^maxxing-[a-z0-9-]{1,64}\Z")     # session turns, cron runs, update
 
 
 def _err(status: int, code: str, msg: str) -> HTTPException:

@@ -284,7 +284,7 @@ function TourRun() {
                     type="button"
                     onClick={finish}
                     aria-label={t('tour.skip')}
-                    className="-mt-1 -mr-1 flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    className="-mt-1 -mr-1 flex size-8 shrink-0 items-center pointer-coarse:size-10 justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <X className="size-4" />
                   </button>
