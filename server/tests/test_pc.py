@@ -557,3 +557,25 @@ def test_deep_json_body_is_a_json_rpc_error(pc, monkeypatch):
     h = {"Authorization": f"Bearer {pcbridge.load()['mcp_secret']}", "Content-Type": "application/json"}
     r = pc.post("/api/pc/mcp", content="[" * 100000 + "]" * 100000, headers=h)
     assert r.status_code == 200 and r.json()["error"]["code"] == -32700
+
+
+def test_one_pairing_code_gives_one_token_even_when_used_twice_at_once(pc, monkeypatch):
+    code = pc.post("/api/pc/pairing", json={"browser": "brave", "os": "windows"}).json()["code"]
+    real = pcbridge._pairing_for
+
+    def slow(c):
+        p = real(c)
+        time.sleep(0.2)                              # both requests are past the check before either uses the code
+        return p
+    monkeypatch.setattr(pcbridge, "_pairing_for", slow)
+    res = []
+
+    def run():
+        try:
+            res.append(pcbridge.pair(code, {}, ""))
+        except pcbridge.PcError:
+            res.append(None)
+    ts = [threading.Thread(target=run) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join(10) for t in ts]
+    assert sum(1 for r in res if r) == 1

@@ -173,14 +173,14 @@ def pair(code: str, info: dict, ip: str = "") -> dict:
     """POST /api/pc/pair from the agent: the PC waits as `candidate` until the user confirms it in Harness (a
     pairing code seen by someone else - a screenshot of the command - cannot plug their computer in silently).
     One PC per server: confirming replaces the previous one."""
-    p = _pairing_for(code)
-    token = secrets.token_urlsafe(32)
-    dev = {"id": "pc_" + secrets.token_hex(4), "token_hash": _hash(token), "created": time.time(),
-           "name": str(info.get("name") or "PC")[:64], "os": str(info.get("os") or p["os"])[:16],
-           "arch": str(info.get("arch") or "")[:16], "version": str(info.get("version") or "")[:32],
-           "browsers": [b for b in (info.get("browsers") or []) if b in BROWSERS][:10],
-           "browser": p["browser"], "last_seen": time.time(), "ip": str(ip or "")[:64]}
-    with _state_lock:
+    with _state_lock:                                  # check and use up the code at once: one code, one token
+        p = _pairing_for(code)
+        token = secrets.token_urlsafe(32)
+        dev = {"id": "pc_" + secrets.token_hex(4), "token_hash": _hash(token), "created": time.time(),
+               "name": str(info.get("name") or "PC")[:64], "os": str(info.get("os") or p["os"])[:16],
+               "arch": str(info.get("arch") or "")[:16], "version": str(info.get("version") or "")[:32],
+               "browsers": [b for b in (info.get("browsers") or []) if b in BROWSERS][:10],
+               "browser": p["browser"], "last_seen": time.time(), "ip": str(ip or "")[:64]}
         d = load()
         d["candidate"], d["pairing"] = dev, None
         save(d)
