@@ -203,3 +203,9 @@ Rules: one file only (no other file of the folder is served to the frame - inlin
 load libraries from a CDN `<script src="https://...">`); no `localStorage`/cookies (the sandbox has
 none: save through `api.py` and `ctx["state_dir"]`). The refresh button of the card reloads the
 frame. Full example: `examples/extensions/snake-widget/` in the code directory.
+
+## Share a widget
+
+Widgets you made can go to the [community library](https://harness-maxxing.com/community): push the folder to a public
+GitHub repository and list it, or let Claude do it with an API key. The rules and the steps are in
+[Page extensions -> Publish yours](page-extensions#publish-yours).
