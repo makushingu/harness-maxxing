@@ -11,7 +11,7 @@ program to install. One bot, linked to **your** private chat only.
 | Mode | What you get |
 |---|---|
 | **Simple** (default) | **one chat to follow.** Write a message: the bot asks in which topic (or offers **↩ Continue** the last session you wrote to), the session runs, its live status and its answer come **as replies to your message**. **Reply** to any message of a session (its answer, your own message, its bell) to continue it. The alerts land in the same chat. Every session is also in the web UI, as usual |
-| **One thread per session** | the Telegram chat mirrors the Sessions page: one thread per open session, plus *Crons*, *Alerts* and *Notifications* threads (see [Threads = open sessions](#threads--open-sessions)) |
+| **One thread per session** | the Telegram chat mirrors the Sessions page: one thread per open session, plus *Crons*, *Alerts* and *Notifications* threads (see [Threads: one per open session](#threads-one-per-open-session)) |
 | **Threads + web conversations** | the same, and what you write in the web UI and Claude's answers are copied into the session's thread, silently |
 
 In every mode, an [agent](agents) with the Telegram option keeps **its own thread** (its results, a reply there
@@ -65,7 +65,7 @@ Cron reports arrive in *Crons* (the main chat in Simple): a Claude job's answer 
 characters (the whole answer stays on the Crons page). A command job shows the end of its output, where errors
 are. Successful reports arrive silently; failures ring.
 
-## Threads = open sessions
+## Threads: one per open session
 
 (Modes *One thread per session* and *Threads + web conversations*.)
 
