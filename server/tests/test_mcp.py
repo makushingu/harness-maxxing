@@ -321,3 +321,43 @@ def test_pc_mcp_registered_reads_no_project_file(env, monkeypatch):
     mcp.remove(mcp._id("user", None, pcbridge.MCP_NAME))
     assert pcbridge.mcp_registered() is False
     assert any(s["name"] == "x" for s in mcp.servers()) and reads
+
+
+def test_mcp_files_nested_too_deep_are_not_a_500(env):
+    """A .mcp.json of 200 000 "[" (under MCP_JSON_MAX): RecursionError -> 500 on DELETE instead of 404."""
+    from maxxing import mcp
+    f = env.ws / "projects/acme/.mcp.json"
+    f.write_text(json.dumps({"mcpServers": {"shared": {"type": "http", "url": "https://s.example.com/mcp"}}}))
+    sid = next(s["id"] for s in mcp.servers() if s["name"] == "shared")
+    f.write_text("[" * 200_000)
+    with pytest.raises(mcp.McpError) as e:
+        mcp.remove(sid)
+    assert e.value.status == 404
+    (env.tmp / "claude" / ".claude.json").write_text("[" * 200_000)
+    assert mcp._read_cfg(fresh=True) == {}
+
+
+def test_check_lists_the_folders_a_few_at_a_time(env, monkeypatch):
+    """One `claude mcp list` per folder, in series: 30 topics with a .mcp.json = 31 runs one after the other."""
+    import threading
+    import time
+    from maxxing import mcp
+    for i in range(12):
+        d = env.ws / "projects" / f"p{i}"
+        d.mkdir(parents=True)
+        (d / ".mcp.json").write_text(json.dumps({"mcpServers": {f"s{i}": {"type": "http", "url": "https://s.example.com/mcp"}}}))
+    calls, live, peak, lock = [], [0], [0], threading.Lock()
+
+    def cli(args, folder=None, timeout=None):
+        with lock:
+            calls.append(folder)
+            live[0] += 1
+            peak[0] = max(peak[0], live[0])
+        time.sleep(0.1)
+        with lock:
+            live[0] -= 1
+        return ""
+    monkeypatch.setattr(mcp, "_cli", cli)
+    mcp.check(wait=True)
+    assert len(calls) == len(set(calls)) == 12           # each folder once
+    assert 1 < peak[0] <= mcp.CHECK_WORKERS

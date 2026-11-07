@@ -34,6 +34,7 @@ import subprocess
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from typing import Any
@@ -94,7 +95,7 @@ def _read_cfg(fresh: bool = False) -> dict:
             return _cfg_cache["data"]
         d = json.loads(p.read_text(encoding="utf-8"))
         d = d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):      # JSON nested too deep
         return {}
     if not fresh:
         _cfg_cache.update(key=key, data=d)
@@ -408,6 +409,9 @@ def parse_list(out: str) -> dict[str, dict]:
     return res
 
 
+CHECK_WORKERS = 4
+
+
 def check(wait: bool = False) -> dict:
     """Refresh every server's state in the background (`claude mcp list` per folder). `wait` = synchronous."""
     deadline = time.time() + 300
@@ -426,11 +430,11 @@ def check(wait: bool = False) -> dict:
             for s in servers():
                 folder = s["where"]["path"]
                 todo.setdefault(folder, []).append(s)
-            for folder, items in sorted(todo.items(), key=lambda kv: kv[0] is not None):
+            def one(folder: str | None, items: list[dict]) -> None:
                 if folder is not None and not Path(folder).is_dir():
                     for s in items:
                         _status[s["id"]] = {"state": "failed", "detail": "folder no longer exists", "at": time.time()}
-                    continue
+                    return
                 try:
                     out = _cli(["list"], folder, timeout=120)
                     found = parse_list(out)
@@ -438,13 +442,17 @@ def check(wait: bool = False) -> dict:
                         from . import mcp_auto
                         mcp_auto.record_connectors(connectors_of_list(out))
                 except McpError as e:
-                    found = {}
                     for s in items:
                         _status[s["id"]] = {"state": "failed", "detail": e.message, "at": time.time()}
-                    continue
+                    return
                 for s in items:
                     if s["name"] in found:
                         _status[s["id"]] = {**found[s["name"]], "at": time.time()}
+            # one `claude mcp list` per folder, CHECK_WORKERS at a time: 30 topics in series took up to 31 x 120 s
+            with ThreadPoolExecutor(CHECK_WORKERS, thread_name_prefix="mcp-list") as pool:
+                for f in [pool.submit(one, folder, items)
+                          for folder, items in sorted(todo.items(), key=lambda kv: kv[0] is not None)]:
+                    f.result()
         finally:
             with _lock:
                 _check.update(running=False, at=time.time())
@@ -687,7 +695,7 @@ def remove(sid: str) -> None:
         try:
             data = json.loads(_read_mcp_json(f))
             data.get("mcpServers", {}).pop(name)
-        except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        except (OSError, ValueError, KeyError, AttributeError, TypeError, RecursionError):
             raise McpError(404, "not_found", f"no {name} in {f}") from None
         _write_mcp_json(f, data)
     elif folder is not None and not Path(folder).is_dir():
