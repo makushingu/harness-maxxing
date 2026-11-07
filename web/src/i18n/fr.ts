@@ -458,6 +458,7 @@ export const fr: Record<keyof typeof en, string> = {
   'health.seenHint': 'Marquer comme vu : il ne compte plus ici tant qu’il ne change pas, ou pendant 24 h',
   'health.unsee': 'Le compter à nouveau',
   'health.memory': 'Mémoire',
+  'health.ram': 'RAM',
   'health.unavailable': 'Données de santé indisponibles.',
   'health.uptime': 'Démarré depuis',
 
