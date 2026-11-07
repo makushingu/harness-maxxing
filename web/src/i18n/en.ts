@@ -451,6 +451,7 @@ export const en = {
 
   // health
   'health.allGood': 'All systems normal',
+  'health.nothing': 'Nothing to report',
   'health.checking': 'Checking…',
   'health.cpu': 'CPU',
   'health.details': 'System details',
@@ -1316,6 +1317,7 @@ export const en = {
   'ext.open': 'Open page',
   'ext.sidebar': 'In the sidebar',
   'ext.hubTitle': 'Extensions',
+  'ext.allPages': 'All pages',
   'ext.foldPins': 'Hide the pinned pages',
   'ext.unfoldPins': 'Show the pinned pages',
   'ext.hubDesc': 'Pages added by your extensions. Pin one to give it its own sidebar entry.',
