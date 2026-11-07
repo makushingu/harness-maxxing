@@ -330,6 +330,8 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
     key = api_key(engine)
     if not key:
         raise VoiceError(503, "no_key", f"add {KEY_NAMES[engine]} in Settings → Keys")
+    if not (key.isascii() and key.isprintable()):     # httpx cannot put it in a header (UnicodeEncodeError)
+        raise VoiceError(503, "no_key", f"{KEY_NAMES[engine]} contains invalid characters, paste it again in Settings → Keys")
     model = (config.load_config().get("voice") or {}).get(f"{engine}_model") or API_MODELS[engine]
     audio = _to_ogg(wav, wav.with_suffix(".ogg"))
     verbose = model.startswith("whisper")

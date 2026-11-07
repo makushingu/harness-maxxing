@@ -348,3 +348,12 @@ def test_faster_whisper_can_decode_audio(tmp_path):
 def test_a_non_ascii_language_is_refused(client, lang):
     r = client.put("/api/voice/settings", json={"language": lang})
     assert r.status_code == 400 and r.json()["error"] == "invalid_language"
+
+
+def test_a_key_with_a_non_ascii_character_is_a_no_key_error(mx, tmp_path, monkeypatch):
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(lambda req: httpx.Response(200, json={"text": "hi"})))
+    voice.update_settings(engine="groq")
+    vault.put("GROQ_API_KEY", "gsk_abc’def")
+    with pytest.raises(voice.VoiceError) as e:
+        voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    assert e.value.status == 503 and e.value.code == "no_key" and "gsk_abc" not in str(e.value)
