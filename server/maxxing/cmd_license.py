@@ -11,7 +11,11 @@ from .cmd_core import FAIL, INFO, OK, line
 
 
 def _date(t) -> str:
-    return time.strftime("%Y-%m-%d", time.localtime(float(t))) if t else ""
+    """A stored timestamp as a day; a value that is not one (a text date sent by the server...) as it is."""
+    try:
+        return time.strftime("%Y-%m-%d", time.localtime(float(t))) if t else ""
+    except (TypeError, ValueError, OverflowError, OSError):
+        return str(t)[:40]
 
 
 def _show(st: dict) -> None:
