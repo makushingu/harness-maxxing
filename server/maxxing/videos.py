@@ -49,7 +49,8 @@ MAX_QUEUED = 20                        # copies waiting behind the running one (
 _lock = threading.Lock()
 _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mx-video")   # one encode at a time
 _jobs: dict[str, dict] = {}            # cache key -> {state: queued|running|error, progress: 0-1, error}
-_probes: dict[str, dict] = {}
+_probes: dict[str, dict | VideoError] = {}     # file version -> its probe, or why it cannot be read
+_probing: dict[str, threading.Lock] = {}
 
 
 class VideoError(Exception):
@@ -113,8 +114,28 @@ def probe(p: Path) -> dict:
     version; `width` / `height` as coded, `rotation` 90 / 270 = shown sideways)."""
     key = _ident(p)
     with _lock:
-        if key in _probes:
-            return _probes[key]
+        hit = _probes.get(key)
+        one = _probing.setdefault(key, threading.Lock())
+    if hit is None:
+        with one:                                   # one ffprobe per file version: the other callers wait for it
+            with _lock:
+                hit = _probes.get(key)
+            if hit is None:
+                try:
+                    hit = _probe(p)
+                except VideoError as e:             # an unreadable file is not probed again at every opening
+                    hit = e
+                with _lock:
+                    if len(_probes) > 500:
+                        _probes.clear()
+                    _probes[key] = hit
+                    _probing.pop(key, None)
+    if isinstance(hit, VideoError):
+        raise VideoError(str(hit))
+    return hit
+
+
+def _probe(p: Path) -> dict:
     ffprobe = shutil.which("ffprobe")
     if not ffprobe:
         raise VideoError("ffprobe is not installed")
@@ -141,10 +162,6 @@ def probe(p: Path) -> dict:
             "bitrate": int(fmt.get("bit_rate") or s.get("bit_rate") or 0),
             "duration": float(fmt.get("duration") or 0), "fps": fps,
             "has_audio": any(x.get("codec_type") == "audio" for x in streams), "rotation": _rotation(s)}
-    with _lock:
-        if len(_probes) > 500:
-            _probes.clear()
-        _probes[key] = info
     return info
 
 
