@@ -285,21 +285,23 @@ def agent_file(target: str) -> Path:
     if not want:
         raise PcError(404, "not_found", "this server has no agent for this computer yet")
     cache = _dir() / "bin" / f"{man.get('version')}-{name}"
-    if cache.is_file():
-        with cache.open("rb") as f:
-            if hashlib.file_digest(f, "sha256").hexdigest() == want:
-                return cache
-    import httpx
-    url = str(man.get("url") or "").format(version=man.get("version"), name=name)
-    r = httpx.get(url, follow_redirects=True, timeout=60)
-    r.raise_for_status()
-    if hashlib.sha256(r.content).hexdigest() != want:
-        raise PcError(502, "checksum", "the downloaded agent does not match its checksum")
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    tmp = cache.with_suffix(".tmp")
-    tmp.write_bytes(r.content)
-    os.replace(tmp, cache)
-    return cache
+    with _download_lock:                               # two downloads at once: the second one finds the cache
+        if cache.is_file():
+            with cache.open("rb") as f:
+                if hashlib.file_digest(f, "sha256").hexdigest() == want:
+                    return cache
+        import httpx
+        url = str(man.get("url") or "").format(version=man.get("version"), name=name)
+        r = httpx.get(url, follow_redirects=True, timeout=60)
+        r.raise_for_status()
+        if hashlib.sha256(r.content).hexdigest() != want:
+            raise PcError(502, "checksum", "the downloaded agent does not match its checksum")
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        _replace_bytes(cache, r.content)
+        return cache
+
+
+_download_lock = threading.Lock()
 
 
 def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, bytes]:
