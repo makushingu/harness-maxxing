@@ -196,6 +196,21 @@ function Workspace() {
     [mobile, navigate, sessions],
   )
 
+  // Phone: the URL names the session on screen and the state -> URL effect is off. When its column goes (tab closed,
+  // session deleted), show the column now focused, else the most recent other session - never a blank screen.
+  const prevCols = React.useRef(cols)
+  React.useEffect(() => {
+    const before = prevCols.current
+    prevCols.current = cols
+    const id = params.get('session')
+    const has = (list: Col[]) => list.some((c) => c.kind === 'session' && c.id === id)
+    if (!mobile || !id || has(cols) || !has(before)) return
+    const f = cols.find((c) => c.key === focused)
+    if (f) return pickTab(f)
+    const other = sessions?.filter((s) => s.id !== id).sort((a, b) => b.updated - a.updated)[0]
+    navigate(other ? `/sessions?path=${encodeURIComponent(other.path)}&session=${other.id}` : '/sessions', { replace: true })
+  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Maxxing mode (beta, Settings -> Features): a finished session comes to the front (first, big column; full screen
   // on a phone). Turned off in the settings while on in this browser: it ends, the previous arrangement comes back.
   const maxxingEnabled = useMaxxingEnabled()
