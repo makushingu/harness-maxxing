@@ -2,6 +2,15 @@
 import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 import { useSettings } from '@/lib/queries'
+import { cn } from '@/lib/utils'
+
+/** A sidebar row (pages, extensions, Help / Feedback / Settings): one look everywhere. */
+export const navRow = (collapsed: boolean, active?: boolean) =>
+  cn(
+    'group relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+    active && 'bg-accent text-foreground',
+    collapsed && 'justify-center px-0',
+  )
 
 type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page'
 

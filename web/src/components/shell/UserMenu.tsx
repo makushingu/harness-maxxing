@@ -18,6 +18,7 @@ import {
 } from '@/components/ui'
 import { useShortcutsDialog } from './shortcuts-store'
 import { startTour, useTutorialHref } from '@/tour/store'
+import { navRow } from './nav'
 
 const THEME_ICON: Record<Theme, typeof Sun> = { light: Sun, dark: Moon, system: Monitor }
 
@@ -78,18 +79,13 @@ export function HelpMenu({ collapsed }: { collapsed?: boolean }) {
     <DropdownMenu>
       <Tooltip content={collapsed ? t('help.title') : null} side="right">
         <DropdownMenuTrigger asChild>
-          {collapsed ? (
-            <Button variant="ghost" size="icon-sm" className="size-8" aria-label={t('help.title')}>
-              <CircleHelp />
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" className="h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground">
-              <CircleHelp /> <span className="truncate">{t('help.title')}</span>
-            </Button>
-          )}
+          <button type="button" className={cn(navRow(!!collapsed), 'data-[state=open]:bg-accent data-[state=open]:text-foreground')} aria-label={t('help.title')}>
+            <CircleHelp className="size-[18px] shrink-0" strokeWidth={1.9} />
+            {!collapsed && <span className="flex-1 truncate text-left">{t('help.title')}</span>}
+          </button>
         </DropdownMenuTrigger>
       </Tooltip>
-      <DropdownMenuContent side="top" align="start" className="w-56">
+      <DropdownMenuContent side="right" align="end" className="w-56">
         <DropdownMenuLabel>{t('help.title')}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={startTour}>
           <Compass /> {t('help.tour')}

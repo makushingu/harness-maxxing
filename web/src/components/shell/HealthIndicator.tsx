@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, StatusDot, Tooltip } from '@/components/ui'
+import { usePlanUsage, UsageLines } from './UsageIndicator'
+import { PresentationToggle, ThemeToggle } from './UserMenu'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -86,8 +88,8 @@ export function HealthSummary({ compact, metrics = true }: { compact?: boolean; 
 
 const meterTone = (pct: number) => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
 
-/** CPU, RAM and disk as figures on one line under the health status (expanded sidebar); the bars are in Settings -> System. */
-export function HealthMeters() {
+/** CPU, RAM and disk as figures on one line (the sidebar's status footer); the bars are in Settings -> System. */
+function HealthMeters() {
   const t = useT()
   const { data: h } = useHealth()
   if (!h) return null
@@ -98,7 +100,7 @@ export function HealthMeters() {
     { key: 'disk', label: t('health.disk'), pct: h.disk.pct },
   ]
   return (
-    <div className="flex justify-between gap-2 px-2.5 py-0.5 text-[11px] text-muted-foreground" data-testid="sidebar-meters">
+    <div className="flex justify-between gap-2 text-[11px] leading-none text-muted-foreground" data-testid="sidebar-meters">
       {rows.map((r) => {
         const tone = meterTone(r.pct)
         return (
@@ -129,35 +131,49 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
   )
 }
 
-/** The health status line; click for the message (issues, uptime; with the meters when the sidebar is folded). */
-export function HealthIndicator({ collapsed }: { collapsed?: boolean }) {
+/** The sidebar's status footer: health, CPU / RAM / disk, Claude plan usage - one block that opens the details
+ *  (issues, uptime, plan resets); the eye and the theme as two small icons beside it. Folded: the dot, the thin
+ *  usage bars and the two icons, the meters move into the details. */
+export function StatusFooter({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
   const { data: h } = useHealth()
+  const usage = usePlanUsage()
   const tone = healthTone(h)
   const label = !h ? t('health.checking') : tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })
   return (
-    <Popover>
-      <Tooltip content={collapsed ? label : null} side="right">
-        <PopoverTrigger
-          data-tour="health"
-          className={cn(
-            'flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-            collapsed && 'justify-center px-0',
-          )}
-          aria-label={label}
-        >
-          <span className="flex size-4 items-center justify-center">
-            <StatusDot tone={tone} pulse={tone === 'error'} />
-          </span>
-          {!collapsed && <span className="truncate">{label}</span>}
-        </PopoverTrigger>
-      </Tooltip>
-      <PopoverContent side="right" align="end" className="w-80">
-        <HealthSummary metrics={collapsed} />
-        <Link to="/settings/system" className="mt-3 block text-[13px] font-medium text-primary hover:underline">
-          {t('health.details')}
-        </Link>
-      </PopoverContent>
-    </Popover>
+    <div className={cn('relative border-t border-sidebar-border px-3 pt-2 pb-[calc(0.5rem+var(--safe-bottom))]', collapsed && 'grid justify-items-center gap-1 px-2.5')}>
+      <Popover>
+        <Tooltip content={collapsed ? label : null} side="right">
+          <PopoverTrigger
+            data-tour="health"
+            aria-label={label}
+            className={cn(
+              'grid w-full gap-2 rounded-md px-2.5 py-2 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
+              collapsed && 'justify-items-center px-0',
+            )}
+          >
+            <span className={cn('flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground', !collapsed && 'pr-16')}>
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                <StatusDot tone={tone} pulse={tone === 'error'} />
+              </span>
+              {!collapsed && <span className="truncate">{label}</span>}
+            </span>
+            {!collapsed && <HealthMeters />}
+            <UsageLines collapsed={collapsed} />
+          </PopoverTrigger>
+        </Tooltip>
+        <PopoverContent side="right" align="end" className="w-80">
+          <HealthSummary metrics={collapsed} />
+          {usage && <div className="mt-3 border-t pt-3">{usage.details}</div>}
+          <Link to="/settings/system" className="mt-3 block text-[13px] font-medium text-primary hover:underline">
+            {t('health.details')}
+          </Link>
+        </PopoverContent>
+      </Popover>
+      <div className={cn('flex items-center', collapsed ? 'flex-col gap-1' : 'absolute top-2.5 right-4')}>
+        <PresentationToggle />
+        <ThemeToggle collapsed={collapsed} />
+      </div>
+    </div>
   )
 }

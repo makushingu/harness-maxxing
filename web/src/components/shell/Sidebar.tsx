@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { NavLink, useMatch } from 'react-router'
-import { MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search, Settings } from 'lucide-react'
+import { NavLink } from 'react-router'
+import { MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -9,16 +9,15 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, Kbd, MOD, Tooltip } from '@/components/ui'
-import { navTourId, useNav, type NavItem } from './nav'
+import { navRow, navTourId, useNav, type NavItem } from './nav'
 import { Logo } from './Logo'
-import { HealthIndicator, HealthMeters } from './HealthIndicator'
-import { UsageIndicator } from './UsageIndicator'
+import { StatusFooter } from './HealthIndicator'
 import { UpdateIndicator } from './UpdateIndicator'
 import { SidebarExtensions } from './SidebarExtensions'
 import { useDragOrder } from './dragOrder'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
-import { HelpMenu, PresentationToggle, ThemeToggle } from './UserMenu'
+import { HelpMenu } from './UserMenu'
 import { useFeedbackDialog } from './feedback-store'
 
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
@@ -147,13 +146,7 @@ export function Sidebar() {
           end={item.end}
           data-tour={navTourId(item)}
           style={{ '--i': idx } as React.CSSProperties}
-          className={({ isActive }) =>
-            cn(
-              'mx-boot-item group relative flex h-9 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-              isActive && 'bg-accent text-foreground',
-              collapsed && 'justify-center px-0',
-            )
-          }
+          className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
         >
           {({ isActive }) => (
             <>
@@ -190,6 +183,7 @@ export function Sidebar() {
     )
   }
   const main = nav.filter((n) => n.group === 'main')
+  const end = nav.filter((n) => n.group !== 'main')
   const drag = useDragOrder(
     main.map((n) => n.to),
     (order) => saveSettings.mutate({ sidebar_order: order }),
@@ -255,7 +249,7 @@ export function Sidebar() {
         </Tooltip>
       </div>
 
-      {/* The pages (drag to reorder), then the extension pages (one scroll when the window is short); Settings is an icon at the bottom. */}
+      {/* The pages (drag to reorder), then the extension pages (one scroll when the window is short); Help, Feedback and Settings stay at the bottom. */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
           {drag.order.map((to) => {
@@ -268,67 +262,29 @@ export function Sidebar() {
 
       <div className="flex-1" />
 
-      <div className={cn('grid gap-1 border-t border-sidebar-border p-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'px-2.5')}>
+      {/* Help, Feedback and Settings: rows like the pages, kept at the bottom (not draggable). */}
+      <div className={block('border-t border-sidebar-border')}>
         <UpdateIndicator collapsed={collapsed} />
-        <HealthIndicator collapsed={collapsed} />
-        {!collapsed && <HealthMeters />}
-        <UsageIndicator collapsed={collapsed} />
-        <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
-          <FeedbackButton collapsed={collapsed} />
-          <HelpMenu collapsed={collapsed} />
-        </div>
-        <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
-          <SettingsLink collapsed={collapsed} />
-          <PresentationToggle />
-          <ThemeToggle collapsed={collapsed} />
-        </div>
+        <HelpMenu collapsed={collapsed} />
+        <FeedbackRow collapsed={collapsed} />
+        {end.map((item) => navItem(item, nav.indexOf(item)))}
       </div>
+
+      <StatusFooter collapsed={collapsed} />
     </aside>
   )
 }
 
 /** Feedback to the authors (bug, idea): opens the Feedback dialog (FeedbackDialog.tsx). */
-function FeedbackButton({ collapsed }: { collapsed: boolean }) {
+function FeedbackRow({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const open = useFeedbackDialog((s) => s.setOpen)
   return (
-    <Tooltip content={t('shell.feedbackHint')} side={collapsed ? 'right' : 'top'}>
-      {collapsed ? (
-        <Button variant="ghost" size="icon-sm" className="size-8" onClick={() => open(true)} aria-label={t('shell.feedback')}>
-          <MessageSquareText />
-        </Button>
-      ) : (
-        <Button variant="ghost" size="sm" className="h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground" onClick={() => open(true)}>
-          <MessageSquareText /> <span className="truncate">{t('shell.feedback')}</span>
-        </Button>
-      )}
-    </Tooltip>
-  )
-}
-
-/** Settings: a labelled button under Feedback and Help (an icon when folded), highlighted on /settings. */
-function SettingsLink({ collapsed }: { collapsed: boolean }) {
-  const t = useT()
-  const prefetchLink = usePrefetchLink()
-  const active = !!useMatch('/settings/*')
-  return (
-    <Tooltip content={<>{t('nav.settings')} <Kbd className="border-background/20 bg-background/15 text-background">G ,</Kbd></>} side={collapsed ? 'right' : 'top'}>
-      <Button
-        asChild
-        variant="ghost"
-        size={collapsed ? 'icon-sm' : 'sm'}
-        className={cn(collapsed ? 'size-8' : 'h-8 min-w-0 flex-1 justify-start gap-2 px-2.5 font-normal text-muted-foreground hover:text-foreground', active && 'bg-accent text-foreground')}
-      >
-        <NavLink
-          to="/settings"
-          {...prefetchLink('/settings')}
-          data-tour="nav-settings"
-          aria-label={t('nav.settings')}
-        >
-          <Settings />
-          {!collapsed && <span className="truncate">{t('nav.settings')}</span>}
-        </NavLink>
-      </Button>
+    <Tooltip content={collapsed ? t('shell.feedbackHint') : null} side="right">
+      <button type="button" className={navRow(collapsed)} onClick={() => open(true)} aria-label={t('shell.feedback')}>
+        <MessageSquareText className="size-[18px] shrink-0" strokeWidth={1.9} />
+        {!collapsed && <span className="flex-1 truncate text-left">{t('shell.feedback')}</span>}
+      </button>
     </Tooltip>
   )
 }
