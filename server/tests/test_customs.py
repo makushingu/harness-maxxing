@@ -368,3 +368,12 @@ def test_a_second_update_cannot_run_during_the_first_one(code, monkeypatch, caps
     assert inner == [1, True]
     assert "another update is running" in capsys.readouterr().out
     assert cmd_core.update_lock() is not None          # released at the end
+
+
+@pytest.mark.parametrize("title, why", [("Raise\0 the limit", ""), ("Raise \ud800", ""), ("Raise", "x\udfff")],
+                         ids=["nul", "surrogate-title", "surrogate-why"])
+def test_a_title_or_reason_with_a_nul_or_lone_surrogate_is_a_clean_error(code, title, why):
+    (code["clone"] / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
+    with pytest.raises(customs.CustomError, match="plain text"):
+        customs.save(title, why)
+    assert customs.list_customs() == []
