@@ -461,6 +461,7 @@ export const en = {
   'health.seenHint': 'Mark as seen: it stops counting here until it changes, or for 24 h',
   'health.unsee': 'Count it again',
   'health.memory': 'Memory',
+  'health.ram': 'RAM',
   'health.unavailable': 'Health data unavailable.',
   'health.uptime': 'Uptime',
 

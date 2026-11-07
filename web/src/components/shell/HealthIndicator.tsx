@@ -94,7 +94,7 @@ export function HealthMeters() {
   const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
   const rows = [
     { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct },
-    { key: 'mem', label: t('health.memory'), pct: mem },
+    { key: 'mem', label: t('health.ram'), pct: mem },
     { key: 'disk', label: t('health.disk'), pct: h.disk.pct },
   ]
   return (
