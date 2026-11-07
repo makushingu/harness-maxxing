@@ -53,6 +53,7 @@ ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*
 META_DIR = "_maxxing"
 CRON_NAME = "Memory backup"
 MAX_FILE = 5 * 1024 * 1024
+MAX_RESTORE = 500 * 1024 * 1024    # files read by one restore, in all
 REF_RE = re.compile(r"\A[A-Za-z0-9._/~^@{}][A-Za-z0-9._/~^@{}-]{0,199}\Z")   # a sha, a branch, HEAD~2...
 HISTORY_MAX = 500
 AUTHOR = ("Harness Maxxing", "backup@localhost")
@@ -772,11 +773,15 @@ def _utf8(rel: str) -> bool:
 def _extract(wc: Path, rev: str) -> dict[str, bytes]:
     data = git("archive", "--format=tar", rev, cwd=wc).stdout
     out: dict[str, bytes] = {}
+    total = 0
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         for m in tf.getmembers():
             rel = _safe_rel(m.name)
-            if not m.isfile() or rel is None or not _utf8(rel):
+            if not m.isfile() or rel is None or not _utf8(rel) or m.size > MAX_FILE:   # a backup never has more
                 continue
+            total += m.size
+            if total > MAX_RESTORE:
+                raise BackupError(f"The backup is larger than {MAX_RESTORE // 2**20} MB.", "too_large")
             f = tf.extractfile(m)
             if f is not None:
                 out[rel] = f.read()
