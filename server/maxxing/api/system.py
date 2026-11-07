@@ -232,7 +232,12 @@ async def version(refresh: bool = False):
 def _spawn_update(smart: bool = True) -> None:
     """Start `maxxing update` apart from the server (it restarts it). `smart`: the Update button also opens the
     Harness session that applies the upgrade notes; the automatic update does not (nobody is there)."""
+    from ..cmd_core import update_lock
     from ..crons import maxxing_bin
+    lock = update_lock()                               # one started from a terminal is not a systemd unit
+    if lock is None:
+        raise _err(409, "update_running", "An update is already running")
+    lock.close()
     extra = ["--smart"] if smart else []
     if os.environ.get("MAXXING_SPAWN") == "direct":
         subprocess.Popen([sys.executable, "-m", "maxxing", "update", *extra], stdin=subprocess.DEVNULL,

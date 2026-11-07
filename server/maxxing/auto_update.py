@@ -58,6 +58,11 @@ def browsers() -> int:
 
 
 def _update_running() -> bool:
+    from . import cmd_core
+    lock = cmd_core.update_lock()                      # a `maxxing update` from a terminal holds it too
+    if lock is None:
+        return True
+    lock.close()
     try:
         r = subprocess.run(["systemctl", "is-active", "maxxing-update"], capture_output=True, text=True, timeout=5)
         return r.stdout.strip() in ("active", "activating")
