@@ -278,6 +278,23 @@ def test_once_at_is_normalised_in_the_configured_zone(org):
     assert e.value.code == "invalid_once"
 
 
+def test_once_at_out_of_range_is_a_clean_error(org, client):
+    for v in ("9999-12-31T23:30-10:00", "0001-01-01T00:10+05:00"):          # past year 9999 / before year 1
+        with pytest.raises(crons.CronError) as e:
+            crons.parse_once(v)
+        assert e.value.code == "invalid_once"
+        assert crons.once_ts(v) is None
+        assert client.get("/api/crons/preview", params={"once_at": v}).json()["valid"] is False
+    far = dt.datetime.fromtimestamp(time.time() + 6 * 366 * 86400, crons.tz()).strftime("%Y-%m-%dT%H:%M")
+    with pytest.raises(crons.CronError) as e:
+        crons.create_job({"name": "Far", "command": "true", "once_at": far})
+    assert e.value.code == "invalid_once"
+    r = client.post("/api/crons", json={"name": "Far", "command": "true", "once_at": "9999-12-31T23:30-10:00"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_once"
+    soon = dt.datetime.fromtimestamp(time.time() + 4 * 365 * 86400, crons.tz()).strftime("%Y-%m-%dT%H:%M")
+    assert crons.create_job({"name": "Ok", "command": "true", "once_at": soon})["once_at"] == soon
+
+
 def test_one_time_job_fires_once_then_is_disabled(org, monkeypatch):
     when = dt.datetime.fromtimestamp(time.time() + 1800, crons.tz()).strftime("%Y-%m-%dT%H:%M")
     j = crons.create_job({"name": "Remind me", "command": "echo hey", "once_at": when, "notify": "never"})

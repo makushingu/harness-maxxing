@@ -73,6 +73,7 @@ LIMIT_RETRY_S = 1800                     # usage limit with no known reset time:
 TICK_ALIVE_S = 900                       # retries are planned only while the server's tick ran this recently
 RETRY_OVERDUE_S = 3600                   # a retry this late (server down, tick off) is given up: final failure
 ONCE_PAST_S = 60                         # a one-time job may be set at most this long in the past
+ONCE_MAX_YEARS = 5                       # ...and at most this many years ahead
 SILENT = "[SILENT]"                      # a Claude job's answer starting with it: nothing to report
 
 _lock = config.ProcessLock("crons")      # jobs.json + crontab: also written by `maxxing cron` and the runs
@@ -259,11 +260,11 @@ def parse_once(value: str, zone: ZoneInfo | None = None) -> str:
     text = " ".join(str(value or "").split()).replace(" ", "T", 1)
     try:
         d = dt.datetime.fromisoformat(text)
-    except ValueError:
+        if d.tzinfo is not None:
+            d = d.astimezone(zone or tz()).replace(tzinfo=None)   # year 1 / 9999 with an offset: out of range
+        return d.strftime("%Y-%m-%dT%H:%M")
+    except (ValueError, OverflowError):
         raise CronError(f"once_at: '{value}' is not a date and time (YYYY-MM-DDTHH:MM)", "invalid_once") from None
-    if d.tzinfo is not None:
-        d = d.astimezone(zone or tz()).replace(tzinfo=None)
-    return d.strftime("%Y-%m-%dT%H:%M")
 
 
 def once_ts(value: str, zone: ZoneInfo | None = None) -> float | None:
@@ -271,10 +272,9 @@ def once_ts(value: str, zone: ZoneInfo | None = None) -> float | None:
     if not value:
         return None
     try:
-        local = dt.datetime.fromisoformat(parse_once(value, zone))
-    except (CronError, ValueError):
+        return dt.datetime.fromisoformat(parse_once(value, zone)).replace(tzinfo=zone or tz()).timestamp()
+    except (CronError, ValueError, OverflowError):
         return None
-    return local.replace(tzinfo=zone or tz()).timestamp()
 
 
 def once_human(value: str) -> str:
@@ -647,6 +647,8 @@ def _check_once_future(j: dict, now: float) -> None:
     at = once_ts(j["once_at"])
     if j["enabled"] and at is not None and at < now - ONCE_PAST_S:
         raise CronError("this date and time is already past", "invalid_once")
+    if at is not None and at > now + ONCE_MAX_YEARS * 366 * 86400:
+        raise CronError(f"this date is more than {ONCE_MAX_YEARS} years away", "invalid_once")
 
 
 def create_job(fields: dict) -> dict:
