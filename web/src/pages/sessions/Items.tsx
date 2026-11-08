@@ -20,7 +20,7 @@ import { QuotedFile } from './QuotedFile'
 import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
 import { gripRef } from './contentDrag'
 import { authServerOf, McpAuthButton } from '@/features/mcp/AuthButton'
-import { audioPaths, baseName, diffStats, FILE_HREF, fileHrefPath, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
+import { audioPaths, baseName, diffStats, FILE_HREF, fileHrefPath, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, scopeOf, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
 
 export type ItemCtx = {
   filesRoot: string | null
@@ -30,6 +30,10 @@ export type ItemCtx = {
   /** Absolute topic folder of the session and workspace root: tool cards show paths relative to them. */
   topicDir?: string | null
   wsRoot?: string | null
+  /** Set for the answers of agents and groups (their text may come from mail, webhooks, other agents): the only
+   *  folders whose paths become links, thumbnails and players (server: GET .../media-roots), each file checked by the
+   *  server through `within`. Unset (sessions): every path of filesRoot. */
+  scope?: readonly string[] | null
 }
 /** Hover / focus on a media thumbnail: start loading what the viewer will show (light preview, video poster). */
 function prefetchMedia(p: string) {
@@ -106,16 +110,18 @@ export type MsgActions = {
   onEdit?: () => void
   /** The message got no answer (stopped): removed from the thread. */
   onDelete?: () => void
+  /** Offer the menu (Copy, Send to) even when there is nothing else in it. */
+  copy?: boolean
 }
 
 /** Right click (a long press on a phone) on a message: a menu at the pointer (placed inside the row - the thread scroller is a containing block).
  *  A selection keeps the browser's own menu (copy it, or Quote from the pill), and so does a link. With Team on, "Send to" a friend. */
-function useMessageMenu({ text, onFork, onEdit, onDelete }: MsgActions) {
+export function useMessageMenu({ text, onFork, onEdit, onDelete, copy }: MsgActions) {
   const t = useT()
   const [menuAt, setMenuAt] = React.useState<{ x: number; y: number } | null>(null)
   const after = React.useRef<(() => void) | undefined>(undefined)
   const [sendTo, setSendTo] = React.useState<SendTarget | null>(null)
-  const any = !!(onFork || onEdit || onDelete)
+  const any = !!(onFork || onEdit || onDelete || (copy && text?.trim()))
   const onContextMenu = any
     ? (e: React.MouseEvent<HTMLElement>) => {
         if ((e.target as Element).closest('a')) return
@@ -472,21 +478,69 @@ function RequestRow({ text }: { text: string }) {
 }
 
 /* ---------------------------------------------------------------- assistant */
+/** Links of a message: a path of the files root opens the in-app viewer (pass it to Markdown's `onLink`). */
+export function useFileLink() {
+  const open = useOpenPreview()
+  const { scope } = React.useContext(ItemContext)
+  return React.useCallback(
+    (href: string) => {
+      const p = href.startsWith(FILE_HREF) ? fileHrefPath(href) : null
+      if (p === null || (scope && !scopeOf(p, scope))) return null
+      return () => open(p)
+    },
+    [open, scope],
+  )
+}
+
+/** The pictures, videos and sounds a message names (paths of the files root, see ItemContext): thumbnails that open
+ *  the viewer and audio players, under the text. A file written after the message shows up once it exists (Thumb). */
+export function MessageMedia({ text }: { text: string }) {
+  const { filesRoot, scope } = React.useContext(ItemContext)
+  const open = useOpenPreview()
+  const roots = scope ?? filesRoot
+  const media = React.useMemo(() => mediaPaths(text, roots), [text, roots])
+  const audio = React.useMemo(() => audioPaths(text, roots), [text, roots])
+  // a scope: each file is asked with the folder that holds it (the server refuses a link that leads out of it), and
+  // nothing is prefetched on hover (the viewer's own URLs carry no `within`)
+  const within = (p: string) => (scope ? scopeOf(p, scope) : null)
+  const prefetch = (p: string) => !scope && prefetchMedia(p)
+  return (
+    <>
+      {media.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {media.map((p) => (
+            // a box of fixed shape: nothing in the thread moves when the picture arrives
+            <button key={p} type="button" data-mx-file={p} draggable onClick={() => open(p)} onPointerEnter={() => prefetch(p)} onFocus={() => prefetch(p)} className="relative aspect-[4/3] h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <Thumb path={p} w={320} anim within={within(p)} alt={baseName(p)} loading="lazy" className="size-full object-cover" />
+              {isGif(p) && <GifBadge />}
+              {isVideo(p) && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                  <Play className="size-6 fill-white text-white" />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {audio.length > 0 && (
+        <div className="mt-2 grid gap-2">
+          {audio.map((p) => (
+            <div key={p} data-mx-file={p} className="max-w-md">
+              <MediaPlayer path={p} kind="audio" keepAlive within={within(p)} onOpen={() => open(p)} className="gap-2 p-3" />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 export const AssistantMessage = React.memo(function AssistantMessage({ text, onFork }: { text: string; onFork?: (seed: Seed) => void }) {
   const { filesRoot } = React.useContext(ItemContext)
   // "New session from this message": the reply goes along as a quote.
   const { onContextMenu, touch, menu } = useMessageMenu({ text, onFork: onFork && (() => onFork({ text: '', quotes: [text.trim()], attachments: [] })) })
-  const open = useOpenPreview()
   const md = React.useMemo(() => linkifyMarkdown(text, filesRoot), [text, filesRoot])
-  const media = React.useMemo(() => mediaPaths(text, filesRoot), [text, filesRoot])
-  const audio = React.useMemo(() => audioPaths(text, filesRoot), [text, filesRoot])
-  const onLink = React.useCallback(
-    (href: string) => {
-      const p = href.startsWith(FILE_HREF) ? fileHrefPath(href) : null
-      return p === null ? null : () => open(p)
-    },
-    [open],
-  )
+  const onLink = useFileLink()
   return (
     <div className="group/msg relative min-w-0" onContextMenu={onContextMenu} {...touch}>
       {menu}
@@ -496,31 +550,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({ text, onF
         <Markdown onLink={onLink} className="mx-assistant">
           {md}
         </Markdown>
-        {media.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {media.map((p) => (
-              // a box of fixed shape: nothing in the thread moves when the picture arrives
-              <button key={p} type="button" data-mx-file={p} draggable onClick={() => open(p)} onPointerEnter={() => prefetchMedia(p)} onFocus={() => prefetchMedia(p)} className="relative aspect-[4/3] h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                <Thumb path={p} w={320} anim alt={baseName(p)} loading="lazy" className="size-full object-cover" />
-                {isGif(p) && <GifBadge />}
-                {isVideo(p) && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                    <Play className="size-6 fill-white text-white" />
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        {audio.length > 0 && (
-          <div className="mt-2 grid gap-2">
-            {audio.map((p) => (
-              <div key={p} data-mx-file={p} className="max-w-md">
-                <MediaPlayer path={p} kind="audio" keepAlive onOpen={() => open(p)} className="gap-2 p-3" />
-              </div>
-            ))}
-          </div>
-        )}
+        <MessageMedia text={text} />
       </Sensitive>
     </div>
   )

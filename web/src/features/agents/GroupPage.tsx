@@ -30,18 +30,21 @@ import {
 } from '@/components/ui'
 import { Page, PageHeader } from '@/components/shell/Page'
 import { ApprovalCard } from '@/pages/sessions/Approvals'
-import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
+import { absTopicDir, filesUrl, fmtCost } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { GroupFace } from './AgentsList'
 import { GroupForm, claudeTopic } from './GroupForm'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
 import { MentionChip, mentionComponents, mentionNodes, namedIn, useMentionMap, type MentionMap } from './mentions'
-import { AttachButton, AttachList, useAttachments } from './attach'
-import { AttachmentStrip } from '@/pages/sessions/Items'
+import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { QuotePill } from '@/pages/sessions/Quote'
+import { agentDraftKey } from '@/lib/drafts'
+import { VoiceButton } from '@/features/voice/VoiceButton'
+import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
+import { AnswerContext, AnswerText } from './answer'
 import { groupUrl } from '@/lib/queries'
 
-const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
 /** An answer longer than this is folded (the first lines and "Read all"), as on an agent's page. */
 const FOLD_CHARS = 700
@@ -313,10 +316,9 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
 }
 
 /* ---------------------------------------------------------------- The conversation */
-function Conversation({ group: g, composer }: { group: AgentGroup; composer: React.Ref<ComposerApi> }) {
+function Conversation({ group: g, composer }: { group: AgentGroup; composer: React.RefObject<ComposerApi | null> }) {
   const t = useT()
   const { data, isLoading, error } = useGroupMessages(g.path)
-  const { data: ws } = useWorkspace()
   const seen = useGroupSeen()
   const box = React.useRef<HTMLDivElement>(null)
   const msgs = React.useMemo(() => data || [], [data])
@@ -353,24 +355,28 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
         className="min-h-0 flex-1 overflow-y-auto"
         aria-live="polite"
         data-testid="group-thread"
+        data-thread
       >
-        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
-          {isLoading ? (
-            [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
-          ) : error ? (
-            <EmptyState tone="error" compact title={t('groups.thread.error')} description={errorMessage(error)} />
-          ) : (
-            <>
-              {!said && <HowItWorks group={g} />}
-              {msgs.map((m) => (
-                <GroupMessage key={m.id} m={m} member={byPath.get(m.author)} root={ws?.root} names={names} chips={chips} />
-              ))}
-            </>
-          )}
-          {g.speaking && <Speaking group={g} />}
-        </div>
+        <AnswerContext owner={{ group: g.path }}>
+          <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
+            {isLoading ? (
+              [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
+            ) : error ? (
+              <EmptyState tone="error" compact title={t('groups.thread.error')} description={errorMessage(error)} />
+            ) : (
+              <>
+                {!said && <HowItWorks group={g} />}
+                {msgs.map((m) => (
+                  <GroupMessage key={m.id} m={m} member={byPath.get(m.author)} names={names} chips={chips} />
+                ))}
+              </>
+            )}
+            {g.speaking && <Speaking group={g} />}
+          </div>
+        </AnswerContext>
       </div>
-      <Composer group={g} ref={composer} first={!said} />
+      <QuotePill scope={box} selector="[data-quote]" onQuote={(q, el) => composer.current?.quote(q, quotedFrom(el, members))} />
+      <Composer key={g.path} group={g} ref={composer} first={!said} />
     </div>
   )
 }
@@ -458,11 +464,13 @@ function skipText(t: TFn, m: AgentGroupMessage): string {
 }
 
 const GroupMessage = React.memo(function GroupMessage({
-  m, member, root, names, chips,
-}: { m: AgentGroupMessage; member?: AgentGroupMember; root?: string; names: MentionMap; chips: ReturnType<typeof mentionComponents> }) {
+  m, member, names, chips,
+}: { m: AgentGroupMessage; member?: AgentGroupMember; names: MentionMap; chips: ReturnType<typeof mentionComponents> }) {
   const t = useT()
   const lang = useLang()
   const [open, setOpen] = React.useState(false)
+  // Right click (long press): copy what was said, mine or a member's.
+  const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
   const when = (
     <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
       {fmtRelative(m.at, lang)}
@@ -508,8 +516,9 @@ const GroupMessage = React.memo(function GroupMessage({
       <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="mine">
         {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
         {m.text && (
-          <div className="min-w-0 rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
-            <p className="whitespace-pre-wrap break-words">
+          <div className="relative min-w-0 rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" onContextMenu={onContextMenu} {...touch}>
+            {menu}
+            <p className="whitespace-pre-wrap break-words" data-quote>
               <Sensitive block>{mentionNodes(m.text, names, 'primary')}</Sensitive>
             </p>
           </div>
@@ -521,7 +530,8 @@ const GroupMessage = React.memo(function GroupMessage({
   return (
     <div className="flex items-start gap-2" data-kind="answer" data-author={slugOf(m.author)}>
       <AgentAvatarIcon avatar={member?.avatar} size={32} />
-      <div className="grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full">
+      <div className="relative grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full" onContextMenu={onContextMenu} {...touch}>
+        {menu}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{who}</Sensitive>
@@ -534,15 +544,16 @@ const GroupMessage = React.memo(function GroupMessage({
           {when}
           {m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
         </div>
-        <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
+        <div className="grid min-w-0">
+          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
+            <Sensitive block>
+              <AnswerText text={m.text} components={chips} />
+            </Sensitive>
+            {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
+          </div>
           <Sensitive block>
-            <React.Suspense fallback={<p className="whitespace-pre-wrap break-words">{m.text}</p>}>
-              <Markdown className="text-sm" components={chips}>
-                {linkifyMarkdown(m.text, root)}
-              </Markdown>
-            </React.Suspense>
+            <MessageMedia text={m.text} />
           </Sensitive>
-          {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 empty:hidden">
           {long && (
@@ -558,7 +569,16 @@ const GroupMessage = React.memo(function GroupMessage({
 })
 
 /* ---------------------------------------------------------------- The box */
-export type ComposerApi = { mention: (slug: string) => void }
+/** What the box gets: a member to @mention, a quoted selection (`from`: the member that wrote it, null = the owner). */
+export type ComposerApi = { mention: (slug: string) => void; quote: (text: string, from: string | null) => void }
+
+/** Who wrote the quoted message `el`: null for the owner's, else the member's name (its folder name if gone). */
+function quotedFrom(el: Element, members: AgentGroup['members']): string | null {
+  const m = el.closest('[data-kind]')
+  if (m?.getAttribute('data-kind') === 'mine') return null
+  const slug = m?.getAttribute('data-author') || ''
+  return members.find((x) => slugOf(x.path) === slug)?.display_name || slug || 'an agent'
+}
 
 /** The `@word` being typed just before the caret (start of the text or after a space / bracket), else null. */
 function mentionAt(text: string, caret: number): { start: number; q: string } | null {
@@ -577,18 +597,29 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const t = useT()
   const touch = useCompact()
   const say = useGroupSay()
-  const [text, setText] = React.useState('')
-  const files = useAttachments(g.path, groupUrl(g.path, '/uploads'))
+  const key = agentDraftKey('group', g.path)
+  const { text, setText } = useDraftText(key)
   const [caret, setCaret] = React.useState(0)
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
   const input = React.useRef<HTMLTextAreaElement>(null)
+  // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
+  const placeAt = React.useRef<number | null>(null)
+  const putText = (pasted: string, start: number, end: number) =>
+    setText((cur) => {
+      const from = Math.min(start, cur.length)
+      placeAt.current = from + pasted.length
+      return cur.slice(0, from) + pasted + cur.slice(Math.min(end, cur.length))
+    })
+  const files = useAttachments(g.path, groupUrl(g.path, '/uploads'), { draftKey: key, putText })
   const location = useLocation()
   const focus = !!(location.state as { focus?: boolean } | null)?.focus
   React.useEffect(() => {
     if (focus) input.current?.focus()
   }, [focus])
   const ready = g.members.filter((m) => m.exists).length >= 2
+  // Nothing can be sent now (fewer than 2 members, files uploading, a send in flight): a dictation then waits in the box.
+  const busy = files.uploading || !ready || say.isPending
   const names = useMentionMap(g.members)
   const to = namedIn(text, names, g.members.filter((m) => m.exists))
 
@@ -622,8 +653,6 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     setClosed(false)
     placeAt.current = pos
   }
-  // The caret goes after the inserted name as soon as the new text is in the box (before the next key is typed).
-  const placeAt = React.useRef<number | null>(null)
   React.useLayoutEffect(() => {
     const el = input.current
     if (placeAt.current == null || !el) return
@@ -631,26 +660,44 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     el.setSelectionRange(placeAt.current, placeAt.current)
     placeAt.current = null
   }, [text])
-  React.useImperativeHandle(ref, () => ({ mention: (slug: string) => insert(slug) }))
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
+  // The voice button hands the text over with the handler of the render where recording stopped: it goes through
+  // `voice`, the handler of the last render, so what was typed or attached meanwhile is neither lost nor sent stale.
+  const onVoice = (heard: string, autoSend: boolean) => {
+    if (autoSend && !busy) return submit(heard)
+    const next = insertAtCaret(input.current, text, heard)
+    setText(next.text)
+    setCaret(next.caret)
+    placeAt.current = next.caret
+  }
+  const voice = React.useRef(onVoice)
+  voice.current = onVoice
+  const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
+  React.useImperativeHandle(ref, () => ({
+    mention: (slug: string) => insert(slug),
+    // a selection quoted from the conversation: a Markdown quote at the end of the text, the message goes after it
+    quote: (q: string, from: string | null) => {
+      const next = withQuote(text, q, from)
+      setText(next)
+      setCaret(next.length)
+      placeAt.current = next.length
+    },
+  }))
   const pick = (p: MentionPick) => at && insert(p.slug, at.start, caret)
 
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
-  const submit = () => {
-    const v = text.trim()
-    if (!canSend || !ready || say.isPending) return
+  const submit = (heard?: string) => {
+    const typed = text.trim()
+    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
+    if ((!v && !files.paths.length) || busy) return
     const kept = files.atts
+    files.dismissNotices()
     setText('')
     setCaret(0)
-    files.restore([])
-    say.mutate(
-      { path: g.path, text: v, attachments: files.paths },
-      {
-        onError: () => {
-          setText(v)
-          files.restore(kept)
-        },
-      },
-    )
+    files.clear()
+    // mutateAsync: its answer arrives even once this box is gone (another group opened): the message never stays
+    // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
+    say.mutateAsync({ path: g.path, text: v, attachments: files.paths }).catch((e) => bringBackDraft(key, v, kept, t, e))
   }
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
@@ -671,10 +718,9 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
         return
       }
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      submit()
-    }
+    const k = files.keyAction(e)
+    if (k === 'send') submit()
+    else if (k === 'escape') e.currentTarget.blur()
   }
   const track = (e: React.SyntheticEvent<HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart ?? 0)
 
@@ -746,7 +792,8 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="group-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
+            <VoiceButton onTranscript={onTranscript} />
+            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
               <Send />
             </Button>
           </div>

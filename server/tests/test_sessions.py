@@ -316,7 +316,7 @@ def test_topic_permission_deny_rules_and_turn_env(client, topic, mx):
     assert argv[argv.index("--permission-mode") + 1] == "default" and "--dangerously-skip-permissions" not in argv
     rules = json.loads(argv[argv.index("--settings") + 1])["permissions"]["deny"]
     assert f"Read(/{config.STATE}/secrets.json)" in rules and any(r.startswith("Read(//") and ".ssh/**" in r for r in rules)
-    assert c["env"]["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] == str(400000 + spawn.COMPACT_WINDOW_MARGIN)
+    assert c["env"]["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] == str(300000 + spawn.COMPACT_WINDOW_MARGIN)
     assert c["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
     # back to the global mode; protection, compaction and quiet start can be turned off
     client.patch(f"/api/workspace/projects/{project}/topics/{name}", json={"permission_mode": ""})
@@ -666,7 +666,7 @@ def test_move_rechecks_the_session_is_idle_under_the_lock(client, topic, mx, mon
 
 def test_auto_compact_after_a_big_context(client, topic, mx):
     from maxxing import config
-    assert client.get("/api/claude/status").json()["auto_compact_tokens"] == 400000
+    assert client.get("/api/claude/status").json()["auto_compact_tokens"] == 300000
     assert client.put("/api/claude/settings", json={"auto_compact_tokens": 100000}).json() == {"ok": True}
     s = client.post("/api/sessions", json={"path": topic, "message": "long work BIGCTX NOTOOL"}).json()
     s2 = wait_for(lambda: (lambda x: x if x["turns"] == 3 and x["state"] == "idle" else None)(

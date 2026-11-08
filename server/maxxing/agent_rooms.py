@@ -818,6 +818,17 @@ def turn_writable(path: str) -> list[str]:
     return [str(d)]
 
 
+def media_roots(path: str) -> list[str]:
+    """The folders whose files the group's messages may show (links, thumbnails, players): the group's folder (the
+    owner's attachments, the shared files) and each member's own (agent_guard.media_roots)."""
+    from . import agent_guard
+    out = [str(folder(path))]
+    for m in load(path)["members"]:
+        if agents.exists(m["path"]):
+            out += [r for r in agent_guard.media_roots(m["path"]) if r not in out]
+    return out
+
+
 def is_member(path: str, member: str) -> bool:
     return exists(path) and member in [m["path"] for m in load(path)["members"]]
 

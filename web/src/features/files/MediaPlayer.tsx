@@ -123,8 +123,9 @@ function useMediaEvents(el: HTMLMediaElement | null, handlers: MediaHandlers) {
 }
 
 /** `onOpen` (audio): the name opens the file viewer - the player shown inline in a conversation. `keepAlive`
- *  (audio): playback goes on when the player unmounts (see sharedAudio.ts). */
-export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, className }: { path: string; kind: 'video' | 'audio'; version?: number | null; onError?: () => void; onOpen?: () => void; keepAlive?: boolean; className?: string }) {
+ *  (audio): playback goes on when the player unmounts (see sharedAudio.ts). `within` (audio): a folder the file must
+ *  really be in (an agent's answer: ItemCtx.scope), else the server refuses it. */
+export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, within, className }: { path: string; kind: 'video' | 'audio'; version?: number | null; onError?: () => void; onOpen?: () => void; keepAlive?: boolean; within?: string | null; className?: string }) {
   const t = useT()
   const media = React.useRef<HTMLMediaElement | null>(null)
   const [el, setEl] = React.useState<HTMLMediaElement | null>(null)
@@ -171,7 +172,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, c
     if (gif) setIdle(true) // a GIF-like clip: controls only on hover / tap
   }, [gif])
   const copy = video && vq.src && !copyFailed ? vq.src : null
-  const wanted = copy ?? fileRawUrl(path, false, version)
+  const wanted = copy ?? fileRawUrl(path, false, version, within)
   // The source is frozen once playback started (see the header). `ver` = the file version it plays.
   const [cur, setCur] = React.useState({ src: wanted, ver: version ?? null })
   const src = cur.src

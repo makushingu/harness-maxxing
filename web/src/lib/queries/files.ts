@@ -78,45 +78,58 @@ export function useFileSearch(q: string) {
 }
 /** `version` = the file's mtime when known (listing): a versioned URL is cached by the browser for good. */
 const ver = (v?: number | null) => (v ? String(Math.round(v * 1000)) : undefined)
-export const fileRawUrl = (path: string, download = false, version?: number | null) => withQuery('/api/files/raw', { path, download, v: ver(version) })
+/** `within` (raw, thumb, preview, stamps): a folder the file must really be in (links followed), else 403 - the
+ *  automatic previews of an agent's answers stay in the agent's folders (ItemCtx.scope). */
+export const fileRawUrl = (path: string, download = false, version?: number | null, within?: string | null) =>
+  withQuery('/api/files/raw', { path, download, v: ver(version), within: within || undefined })
 /** A folder as a zip, made while it downloads. `check` = only `{count, size}` or the 413 that the zip would get. */
 export const fileZipUrl = (path: string, check = false) => withQuery('/api/files/zip', { path, check: check ? 1 : undefined })
 /** `anim`: a GIF (up to 8 MB) comes as it is, so it moves (chat); else a still WebP (file grids). */
-export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false, attempt = 0) =>
-  withQuery('/api/files/thumb', { path, w, v: ver(version), anim: anim ? 1 : undefined, try: attempt || undefined })
+export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false, attempt = 0, within?: string | null) =>
+  withQuery('/api/files/thumb', { path, w, v: ver(version), anim: anim ? 1 : undefined, try: attempt || undefined, within: within || undefined })
 /** Current mtime of the files shown as previews (chat thumbnails, viewer), asked in one batch per tick: it goes in
  *  their URLs, so a file rewritten under the same name shows its new version. Refreshed when a turn writes files
  *  (`refreshFileStamps`), on focus, and by any file mutation (key under `files`). */
-const stampKey = (path: string) => ['files', 'stamp', path] as const
+const stampKey = (path: string, within?: string | null) => (within ? (['files', 'stamp', path, within] as const) : (['files', 'stamp', path] as const))
+// stamps asked with a `within` folder are kept apart (a link that leads out of it is null there, not elsewhere)
+const knownKey = (path: string, within?: string | null) => (within ? `${within}\0${path}` : path)
 const known = new Map<string, number | null>()
-const stampWait = new Map<string, ((v: number | null) => void)[]>()
+const stampWait = new Map<string, Map<string, ((v: number | null) => void)[]>>() // within ('' = none) -> path -> waiting
 let stampTimer = 0
-function fetchStamp(path: string) {
+function fetchStamp(path: string, within?: string | null) {
   return new Promise<number | null>((resolve) => {
-    const waiting = stampWait.get(path)
+    const w = within || ''
+    let group = stampWait.get(w)
+    if (!group) stampWait.set(w, (group = new Map()))
+    const waiting = group.get(path)
     if (waiting) waiting.push(resolve)
-    else stampWait.set(path, [resolve])
+    else group.set(path, [resolve])
     if (!stampTimer) stampTimer = window.setTimeout(flushStamps, 0)
   })
 }
 async function flushStamps() {
   stampTimer = 0
-  const batch = [...stampWait]
+  const groups = [...stampWait]
   stampWait.clear()
-  for (let i = 0; i < batch.length; i += 200) {
-    const part = batch.slice(i, i + 200)
-    let mtimes: Record<string, number | null> = {}
-    try {
-      mtimes = (await api.post<{ mtimes: Record<string, number | null> }>('/api/files/stat', { paths: part.map(([p]) => p) })).mtimes
-    } catch {
-      // unversioned URLs (revalidated by the browser) until the next refresh
-    }
-    for (const [p, fns] of part) {
-      if (mtimes[p] == null) {
-        if (!missingSince.has(p)) missingSince.set(p, Date.now())
-      } else missingSince.delete(p)
-      known.set(p, mtimes[p] ?? null)
-      for (const fn of fns) fn(mtimes[p] ?? null)
+  for (const [within, waiting] of groups) {
+    const batch = [...waiting]
+    for (let i = 0; i < batch.length; i += 200) {
+      const part = batch.slice(i, i + 200)
+      let mtimes: Record<string, number | null> = {}
+      try {
+        const body = { paths: part.map(([p]) => p), ...(within ? { within: [within] } : {}) }
+        mtimes = (await api.post<{ mtimes: Record<string, number | null> }>('/api/files/stat', body)).mtimes
+      } catch {
+        // unversioned URLs (revalidated by the browser) until the next refresh
+      }
+      for (const [p, fns] of part) {
+        const k = knownKey(p, within)
+        if (mtimes[p] == null) {
+          if (!missingSince.has(k)) missingSince.set(k, Date.now())
+        } else missingSince.delete(k)
+        known.set(k, mtimes[p] ?? null)
+        for (const fn of fns) fn(mtimes[p] ?? null)
+      }
     }
   }
 }
@@ -137,17 +150,19 @@ export function seedFileStamps(entries: { path: string; type: string; mtime: num
       seededAt.set(e.path, now)
     }
 }
-export function useFileStamp(path: string | null | undefined) {
+/** `within`: the stamp of the file only if it really is in that folder (fileRawUrl), else null. */
+export function useFileStamp(path: string | null | undefined, within?: string | null) {
   const p = path ?? ''
+  const k = knownKey(p, within)
   const q = useQuery({
-    queryKey: stampKey(p),
-    queryFn: () => fetchStamp(path!),
+    queryKey: stampKey(p, within),
+    queryFn: () => fetchStamp(path!, within),
     enabled: !!path,
     staleTime: 30_000,
     // a stamp already known (a listing, a thumbnail shown before): used at once, re-asked once it is stale
-    initialData: known.has(p) ? () => known.get(p) ?? null : undefined,
-    initialDataUpdatedAt: () => seededAt.get(p) ?? 0,
-    refetchInterval: (query) => (query.state.data === null ? missingPoll(p) : false),
+    initialData: known.has(k) ? () => known.get(k) ?? null : undefined,
+    initialDataUpdatedAt: () => seededAt.get(k) ?? 0,
+    refetchInterval: (query) => (query.state.data === null ? missingPoll(k) : false),
   })
   const { refetch } = q
   const recheck = React.useCallback(() => refetch(), [refetch])

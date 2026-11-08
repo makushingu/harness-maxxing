@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.131 - 2026-11-08
+
+Changed:
+- **Automatic compaction at 300k tokens by default** (was 400k): measured over a week on a real server, the context
+  re-read per call dropped by 12 % (about 10 % of the cost of re-reads) with no sign of lost context after a
+  compaction. A value you set yourself in Settings -> Claude is kept.
+
+Fixed:
+- Security and robustness fixes found by the Radar audit: sign-in attempts, Telegram unlink with two-step sign-in,
+  agent sandbox settings, e-mail agent messages, Infra, Crons, Import, Extensions and Feed (see the commits).
+- Touch zoom, Infra on phones and the health popover.
+
 ## 2.0.0-alpha.130 - 2026-11-07
 
 Changed:

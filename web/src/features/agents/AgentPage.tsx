@@ -25,7 +25,7 @@ import {
   Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { Page, PageHeader } from '@/components/shell/Page'
-import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
+import { absTopicDir, filesUrl, fmtCost } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings, type SectionId } from './AgentSettings'
@@ -33,10 +33,16 @@ import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ThreadApprovalBody, useThreadApprovals } from './approvals'
-import { AttachButton, AttachList, useAttachments } from './attach'
-import { AttachmentStrip } from '@/pages/sessions/Items'
+import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { QuotePill } from '@/pages/sessions/Quote'
+import { agentDraftKey } from '@/lib/drafts'
+import { VoiceButton } from '@/features/voice/VoiceButton'
+import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
+import { AnswerContext, AnswerText } from './answer'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+/** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
+const clickToLoad = () => null
 
 /** A result longer than this is folded (the first lines and "Read all"). */
 const FOLD_CHARS = 700
@@ -162,7 +168,8 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
         }
       />
       <div className="flex min-h-0 flex-1">
-        <Conversation agent={a} />
+        {/* keyed: a reply started on one agent never goes with a message to another */}
+        <Conversation key={a.path} agent={a} />
         {wide && (
           <aside className="w-[360px] shrink-0 overflow-y-auto border-l" data-testid="agent-profile">
             <Profile agent={a} />
@@ -240,9 +247,9 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const { data, isLoading, error } = useAgentThread(a.path)
   const { data: crons } = useCrons()
-  const { data: ws } = useWorkspace()
   const seen = useAgentSeen()
   const box = React.useRef<HTMLDivElement>(null)
+  const composer = React.useRef<AgentComposerApi>(null)
   const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
   const msgs = React.useMemo(() => data?.messages || [], [data])
   const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
@@ -272,37 +279,40 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
         className="min-h-0 flex-1 overflow-y-auto"
         aria-live="polite"
         data-testid="agent-thread"
+        data-thread
       >
-        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
-          {isLoading ? (
-            [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
-          ) : error ? (
-            <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
-          ) : !msgs.length ? (
-            <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
-          ) : (
-            msgs
-              .filter((m) => !asks.merged(m))
-              .map((m) => (
-                <ThreadMessage
-                  key={m.id}
-                  m={m}
-                  agent={a}
-                  crons={crons?.jobs || []}
-                  root={ws?.root}
-                  answers={m.reply_to ? byId.get(m.reply_to) : undefined}
-                  onReply={setReplyTo}
-                  live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
-                  decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
-                />
-              ))
-          )}
-          {(a.running_sessions || []).map((s) => (
-            <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
-          ))}
-        </div>
+        <AnswerContext owner={{ agent: a.path }}>
+          <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
+            {isLoading ? (
+              [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
+            ) : error ? (
+              <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
+            ) : !msgs.length ? (
+              <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
+            ) : (
+              msgs
+                .filter((m) => !asks.merged(m))
+                .map((m) => (
+                  <ThreadMessage
+                    key={m.id}
+                    m={m}
+                    agent={a}
+                    crons={crons?.jobs || []}
+                    answers={m.reply_to ? byId.get(m.reply_to) : undefined}
+                    onReply={setReplyTo}
+                    live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
+                    decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
+                  />
+                ))
+            )}
+            {(a.running_sessions || []).map((s) => (
+              <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
+            ))}
+          </div>
+        </AnswerContext>
       </div>
-      <Composer agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+      <QuotePill scope={box} selector="[data-quote]" onQuote={(q, el) => composer.current?.quote(q, isOwnRun(el) ? null : a.display_name)} />
+      <Composer key={a.path} ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
 }
@@ -327,12 +337,11 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
 }
 
 function ThreadMessage({
-  m, agent: a, crons, root, answers, onReply, live, decided,
+  m, agent: a, crons, answers, onReply, live, decided,
 }: {
   m: AgentMessage
   agent: AgentDetail
   crons: Cron[]
-  root?: string
   answers?: AgentMessage
   onReply: (m: AgentMessage) => void
   /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
@@ -342,6 +351,8 @@ function ThreadMessage({
   const t = useT()
   const lang = useLang()
   const [open, setOpen] = React.useState(false)
+  // Right click (long press): copy what was said, mine or the agent's (not the approvals: their buttons are the point).
+  const { onContextMenu, touch, menu } = useMessageMenu({ text: m.kind === 'approval' ? '' : m.text, copy: true })
   const when = (
     <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
       {fmtRelative(m.at, lang)}
@@ -384,8 +395,9 @@ function ThreadMessage({
         <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
           {quote}
           {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
-          <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
-            <p className="whitespace-pre-wrap break-words">
+          <div className="relative rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" onContextMenu={onContextMenu} {...touch}>
+            {menu}
+            <p className="whitespace-pre-wrap break-words" data-quote>
               <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
             </p>
           </div>
@@ -419,7 +431,12 @@ function ThreadMessage({
   return (
     <div className="flex items-start gap-2" data-kind={m.kind}>
       <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}>
+      <div
+        onContextMenu={onContextMenu}
+        {...touch}
+        className={cn('relative grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}
+      >
+        {menu}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{a.display_name}</Sensitive>
@@ -441,13 +458,16 @@ function ThreadMessage({
         {m.kind === 'approval' ? (
           <ThreadApprovalBody m={m} live={live} decided={decided} />
         ) : m.text ? (
-          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
+          <div className="grid min-w-0">
+            <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
+              <Sensitive block>
+                <AnswerText text={m.text} />
+              </Sensitive>
+              {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
+            </div>
             <Sensitive block>
-              <React.Suspense fallback={<p className="whitespace-pre-wrap break-words">{m.text}</p>}>
-                <Markdown className="text-sm">{linkifyMarkdown(m.text, root)}</Markdown>
-              </React.Suspense>
+              <MessageMedia text={m.text} />
             </Sensitive>
-            {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
           </div>
         ) : (
           <span className="text-sm text-muted-foreground italic">{t('agents.thread.noText')}</span>
@@ -473,44 +493,102 @@ function ThreadMessage({
 
 const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
 
-function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void }) {
+/** A message of the owner (a run he started, right-aligned), not something the agent wrote. */
+const isOwnRun = (el: Element) => {
+  const m = el.closest('[data-kind]')
+  return m?.getAttribute('data-kind') === 'run' && m.classList.contains('ml-auto')
+}
+
+/** What the conversation hands to the box: a quoted selection (`from`: the agent that wrote it, null = the owner). */
+type AgentComposerApi = { quote: (text: string, from: string | null) => void }
+
+function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
   const run = useRunAgent()
-  const [text, setText] = React.useState('')
-  const files = useAttachments(a.path)
+  const key = agentDraftKey('agent', a.path)
+  const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
+  // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
+  const placeAt = React.useRef<number | null>(null)
+  const putText = (pasted: string, start: number, end: number) =>
+    setText((cur) => {
+      const from = Math.min(start, cur.length)
+      placeAt.current = from + pasted.length
+      return cur.slice(0, from) + pasted + cur.slice(Math.min(end, cur.length))
+    })
+  React.useLayoutEffect(() => {
+    const el = input.current
+    if (placeAt.current == null || !el) return
+    el.focus()
+    el.setSelectionRange(placeAt.current, placeAt.current)
+    placeAt.current = null
+  }, [text])
+  const files = useAttachments(a.path, undefined, { draftKey: key, putText })
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
   }, [replyTo])
+  /** Caret after `next` once it is in the box. */
+  const caretTo = (pos: number) =>
+    requestAnimationFrame(() => {
+      input.current?.focus({ preventScroll: true })
+      input.current?.setSelectionRange(pos, pos)
+    })
+  // A selection quoted from the conversation: a Markdown quote at the end of the text, the reply goes after it.
+  React.useImperativeHandle(ref, () => ({
+    quote: (q: string, from: string | null) => {
+      const next = withQuote(text, q, from)
+      setText(next)
+      caretTo(next.length)
+    },
+  }))
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
-  const submit = () => {
-    const v = text.trim()
-    if (!canSend || !a.enabled || run.isPending) return
-    const kept = files.atts
-    setText('')
-    files.restore([])
-    const back = () => {
-      setText(v)
-      files.restore(kept)
+  // Nothing can be sent now (files uploading, a send in flight): a dictation then waits in the box.
+  const busy = files.uploading || !a.enabled || run.isPending
+  const alive = React.useRef(true)
+  React.useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
     }
-    run.mutate(
-      { path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths },
-      {
-        onSuccess: (r) => {
-          if (r.started) onCancelReply()
-          else {
-            back()
-            toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
-          }
-        },
-        // The reply target stays with the text, so sending again still goes on with the same session.
-        onError: back,
+  }, [])
+  const submit = (heard?: string) => {
+    const typed = text.trim()
+    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
+    if ((!v && !files.paths.length) || busy) return
+    const kept = files.atts
+    files.dismissNotices()
+    setText('')
+    files.clear()
+    // mutateAsync: its answer arrives even once this box is gone (another agent opened): the message never stays
+    // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
+    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths }).then(
+      (r) => {
+        if (r.started) {
+          if (alive.current) onCancelReply()
+          return
+        }
+        bringBackDraft(key, v, kept, t)
+        toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
       },
+      // The reply target stays with the text, so sending again still goes on with the same session.
+      (e) => bringBackDraft(key, v, kept, t, e),
     )
   }
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
+  // The voice button hands the text over with the handler of the render where recording stopped: it goes through
+  // `voice`, the handler of the last render, so what was typed or attached meanwhile is neither lost nor sent stale.
+  const onVoice = (heard: string, autoSend: boolean) => {
+    if (autoSend && !busy) return submit(heard)
+    const next = insertAtCaret(input.current, text, heard)
+    setText(next.text)
+    caretTo(next.caret)
+  }
+  const voice = React.useRef(onVoice)
+  voice.current = onVoice
+  const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
+      <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
         {replyTo && (
           <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
             <Reply className="size-3.5 shrink-0 text-primary" />
@@ -536,12 +614,11 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               onPaste={files.onPaste}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  submit()
-                } else if (e.key === 'Escape' && replyTo) {
-                  e.preventDefault()
-                  onCancelReply()
+                const k = files.keyAction(e)
+                if (k === 'send') submit()
+                else if (k === 'escape') {
+                  if (replyTo) onCancelReply()
+                  else e.currentTarget.blur()
                 }
               }}
               minRows={1}
@@ -550,7 +627,8 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
+            <VoiceButton onTranscript={onTranscript} />
+            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
           </div>
@@ -861,7 +939,9 @@ function MemoryEditor({ agent: a }: { agent: AgentDetail }) {
         <div className="rounded-xl border bg-card p-4">
           <Sensitive block>
             <React.Suspense fallback={<pre className="text-sm whitespace-pre-wrap">{content}</pre>}>
-              <Markdown className="text-sm">{content}</Markdown>
+              <Markdown className="text-sm" localImage={clickToLoad}>
+                {content}
+              </Markdown>
             </React.Suspense>
           </Sensitive>
         </div>

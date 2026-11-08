@@ -5,6 +5,11 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.131 - 2026-11-08
+
+- Released from `main` ("Urgent fixes" path). `auto_compact_tokens` default 400000 -> 300000 (`config.py`; the
+  Settings -> Claude "recommended" mark moves to 300k). Plus the Radar audit commits of 07-08/11 (one per finding).
+
 ## 2.0.0-alpha.130 - 2026-11-07
 
 - Crons: `pages/crons` is the lazy section `crons` of Settings (data preloaded by `pageData.SETTINGS`); route
