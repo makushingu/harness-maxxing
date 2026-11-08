@@ -369,11 +369,19 @@ def topic_allowed_tools(path: str) -> list[str]:
     return [r for r in rules if isinstance(r, str) and r][:ALLOWED_MAX] if isinstance(rules, list) else []
 
 
+def _utf8_ok(s: str) -> bool:
+    try:
+        s.encode("utf-8")
+        return True
+    except UnicodeEncodeError:                      # a lone surrogate (valid JSON): the topic file cannot store it
+        return False
+
+
 def check_allowed_tools(rules: list) -> list[str]:
     out: list[str] = []
     for r in rules:
         r = r.strip() if isinstance(r, str) else ""
-        if not r or len(r) > RULE_MAX or any(c in r for c in "\x00\n\r"):
+        if not r or len(r) > RULE_MAX or any(c in r for c in "\x00\n\r") or not _utf8_ok(r):
             raise WorkspaceError(400, "bad_rule", "allowed_tools: one Claude Code rule per entry, one line each")
         if r not in out:
             out.append(r)

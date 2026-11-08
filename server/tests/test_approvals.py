@@ -512,11 +512,27 @@ def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     ("Edit", {"file_path": "relative.md"}, ""),
     ("WebFetch", {"url": "https://Example.com/a?b=1"}, "WebFetch(domain:example.com)"),
     ("Task", {"prompt": "do it"}, ""),
+    ("Write", {"file_path": "/root/"}, ""),                              # a folder: the whole tree below it
+    ("Write", {"file_path": "/tmp/[ab].txt"}, ""),                       # gitignore patterns
+    ("Edit", {"file_path": "/tmp/a?.md"}, ""),
+    ("Edit", {"file_path": "/tmp/{a,b}.md"}, ""),
+    ("Edit", {"file_path": "/root/x/../../etc/passwd"}, ""),
+    ("Edit", {"file_path": "/root/./x.md"}, ""),
+    ("Read", {"file_path": "/etc/hostname"}, ""),                        # the bare tool would read anything
+    ("Grep", {"pattern": "x"}, ""),
     ("mcp__notion__search", {"query": "x"}, "mcp__notion__search"),
 ])
 def test_always_rule_is_narrow(tool, inp, rule):
     from maxxing import approvals
     assert approvals.always_rule({"tool": tool, "input": inp, "agent_path": ""}) == rule
+
+
+def test_a_rule_with_a_lone_surrogate_is_refused_not_a_500(client, topic):
+    from maxxing import approvals
+    assert approvals.always_rule({"tool": "Bash", "input": {"command": "echo \ud800"}, "agent_path": ""}) == ""
+    r = client.patch("/api/workspace/projects/acme/topics/blog", content=json.dumps({"allowed_tools": ["Bash(\ud800)"]}),
+                     headers={"content-type": "application/json"})
+    assert r.status_code == 400 and "bad_rule" in r.text
 
 
 def test_mode_ask_is_accepted_everywhere(client, topic):

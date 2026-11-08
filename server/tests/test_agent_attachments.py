@@ -3,6 +3,7 @@
 the agent's sandbox keeps attachments/ read only. Agent groups in the full-text search (kind "group")."""
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -54,6 +55,9 @@ def test_agent_refuses_files_from_elsewhere(client, topic, mx):
                 str(att / ".." / "agent.json"), "attachments/x", str(att)):
         r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL x", "attachments": [bad]})
         assert r.status_code == 400 and r.json()["error"] == "bad_attachment", (bad, r.text)
+    r = client.post("/api/agents/acme/blog/writer/run", headers={"content-type": "application/json"},
+                    content=json.dumps({"text": "NOTOOL x", "attachments": [str(att / "a\ud800")]}))
+    assert r.status_code == 400 and r.json()["error"] == "bad_attachment", r.text
     many = [_upload(client, f"/api/uploads?path={A}", f"f{i}.txt") for i in range(11)]
     assert client.post("/api/agents/acme/blog/writer/run", json={"text": "x", "attachments": many}).status_code == 422
     assert ws.is_dir()
