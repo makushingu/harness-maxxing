@@ -130,6 +130,10 @@ def test_sidebar_order(client, org):
     assert client.put("/api/settings", json={"sidebar_order": ["javascript:alert(1)"]}).status_code == 400
     assert client.put("/api/settings", json={"sidebar_order": ["/x"] * 41}).status_code == 400
     assert config.load_config()["sidebar_order"] == ["/files", "/sessions", "/"]
+    # pinned extension pages take a place among the pages
+    r = client.put("/api/settings", json={"sidebar_order": ["/x/radar", "/files", "/"]})
+    assert r.status_code == 200 and r.json()["sidebar_order"] == ["/x/radar", "/files", "/"]
+    assert client.put("/api/settings", json={"sidebar_order": ["/x/../etc"]}).status_code == 400
 
 
 def test_a_broken_saved_sidebar_order_never_breaks_the_settings(client, org):

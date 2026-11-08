@@ -8,7 +8,6 @@ const PAGE_LOADERS: Record<string, () => Promise<unknown>> = {
   settings: () => import('./settings'),
   feed: () => import('./feed'),
   docs: () => import('./docs'),
-  x: () => import('./ext/hub'),
 }
 
 export function prefetchPages() {

@@ -32,8 +32,6 @@ type UIState = {
   monoFont: MonoFont
   language: Language
   sidebarCollapsed: boolean
-  /** Sidebar: the pinned extension pages shown under "Extensions" (folded: only the Extensions row). */
-  sidebarExtOpen: boolean
   /** Width of the expanded sidebar dragged by the user (desktop); null = the default (SIDEBAR_W). */
   sidebarWidth: number | null
   layout: Layout
@@ -64,7 +62,6 @@ type UIState = {
   setMonoFont: (f: MonoFont) => void
   setLanguage: (l: Language) => void
   toggleSidebar: () => void
-  toggleSidebarExt: () => void
   setSidebarWidth: (w: number | null) => void
   setLayout: (l: Layout) => void
   setTouchHome: (h: TouchHome) => void
@@ -92,7 +89,6 @@ export const useUI = create<UIState>()(
       monoFont: 'system',
       language: initialLang(),
       sidebarCollapsed: false,
-      sidebarExtOpen: true,
       sidebarWidth: null,
       layout: 'auto',
       touchHome: 'session',
@@ -113,7 +109,6 @@ export const useUI = create<UIState>()(
       setMonoFont: (monoFont) => set({ monoFont }),
       setLanguage: (language) => set({ language }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      toggleSidebarExt: () => set((s) => ({ sidebarExtOpen: !s.sidebarExtOpen })),
       setSidebarWidth: (w) => set({ sidebarWidth: w == null ? null : clampSidebar(w) }),
       setLayout: (layout) => set({ layout }),
       setTouchHome: (touchHome) => set({ touchHome }),
@@ -145,7 +140,6 @@ export const useUI = create<UIState>()(
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
         out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
         if (out.touchHome !== 'dashboard') out.touchHome = 'session'
-        out.sidebarExtOpen = out.sidebarExtOpen !== false
         return out
       },
     },

@@ -43,7 +43,15 @@ export function usePlanUsage(visible?: boolean) {
 const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)))
 const tone = (w: { pct: number }) => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
 
-/** The plan in the sidebar's status footer: "Claude · Week   38 %" over a full-width bar, a link to Settings -> Stats
+/** The plan figure of the sidebar's status line: the week when the server has it, else the 5-hour window; null
+ *  without plan usage. */
+export function usePlanPct(visible?: boolean): number | null {
+  const p = usePlanUsage(visible)
+  const r = p?.rows.find((x) => x.key === 'week') ?? p?.rows[0]
+  return r ? used(r.w) : null
+}
+
+/** The plan in the status panel: "Claude · Week   38 %" over a full-width bar, a link to Settings -> Stats
  *  (folded: the thin bars only). */
 export function UsageLines({ collapsed, className, visible }: { collapsed?: boolean; className?: string; visible?: boolean }) {
   const t = useT()

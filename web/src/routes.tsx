@@ -61,8 +61,8 @@ export const routes: RouteObject[] = [
           { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks']) },
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },
-          // Extension pages: /x/<id> loads /ext/<id>/page.js
-          { path: 'x', lazy: page(() => import('./pages/ext/hub')) },
+          // Extension pages: /x/<id> loads /ext/<id>/page.js; the list of pages (old /x hub) is in Settings -> Extensions
+          { path: 'x', element: <Navigate to="/settings/extensions" replace /> },
           { path: 'x/:id/*', lazy: page(() => import('./pages/ext')) },
           { path: '*', Component: NotFound },
         ],

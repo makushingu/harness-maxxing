@@ -1,23 +1,23 @@
 // Touch layout (phones, tablets - html[data-compact], stores/media.ts): no sidebar and no tab bar. Two buttons at the
 // top of every screen open two drawers: the sessions on the left, the rest of the app on the right (every entry of the
-// desktop sidebar: pages, extensions, notifications, feedback, settings, update and the status card).
+// desktop sidebar: pages and pinned extension pages, notifications, help, settings, update and the status line).
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation } from 'react-router'
-import { Blocks, Bell, ChevronRight, LayoutGrid, Menu, MessageSquareText, Search, Settings } from 'lucide-react'
-import { useAgentsAttention, useExtensions, useFeed, useHealth, useWorkspace } from '@/lib/queries'
+import { Bell, ChevronDown, ChevronRight, CircleHelp, LayoutGrid, Menu, Search } from 'lucide-react'
+import { useAgentsAttention, useFeed, useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { CountBadge, CountDot, NamedIcon } from '@/components/ui'
+import { CountBadge, CountDot, NamedIcon, Sensitive, StatusDot } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
 import { useTour } from '@/tour/store'
-import { navTourId, useNav } from './nav'
+import { navTourId, useNavEntries } from './nav'
 import { Logo } from './Logo'
-import { healthTone, StatusFooter } from './HealthIndicator'
+import { healthTone, StatusPanel, useStatusLine } from './HealthIndicator'
+import { useHelpActions } from './HelpMenu'
 import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
-import { useFeedbackDialog } from './feedback-store'
 
 type Panel = 'sessions' | 'app' | null
 export const useTouchNav = create<{ panel: Panel; setPanel: (p: Panel) => void }>((set) => ({ panel: null, setPanel: (panel) => set({ panel }) }))
@@ -153,18 +153,14 @@ function AgentsTileBadge() {
 /** Right drawer: everything the desktop sidebar holds. */
 function AppPanel() {
   const t = useT()
-  const nav = useNav()
-  const { data: ext } = useExtensions()
-  const pages = (ext || []).filter((e) => e.type === 'page' && e.enabled && !e.error)
+  const { entries, end } = useNavEntries()
   const feed = useFeed()
   const unreadFeed = feed.data?.unread ?? 0
   const install = useInstallMode()
   const close = () => useTouchNav.getState().setPanel(null)
   const linkCls = ({ isActive }: { isActive: boolean }) => cn(tile, isActive && 'border-primary/60 text-primary')
-  // Settings is a row at the bottom, like the sidebar's account area; every other page is a tile.
-  const tiles = nav.filter((n) => n.to !== '/settings')
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain" data-testid="touch-app-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain" data-testid="touch-app-panel">
       <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-1">
         <Logo />
       </div>
@@ -178,19 +174,27 @@ function AppPanel() {
           className="flex h-11 w-full items-center gap-2.5 rounded-xl bg-muted px-3 text-[15px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-tour="palette"
         >
-          <Search className="size-[18px]" /> {t('shell.searchAll')}
+          <Search className="size-[18px] shrink-0" /> <span className="truncate">{t('shell.searchAll')}</span>
         </button>
       </div>
 
+      {/* The pages and the pinned extension pages, in the sidebar's order. */}
       <h3 className="px-4 pt-4 pb-2 text-xs font-semibold text-muted-foreground">{t('shell.goTo')}</h3>
       <nav aria-label={t('shell.navigation')} className="grid grid-cols-3 gap-2 px-3">
-        {tiles.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={linkCls} data-tour={navTourId(n)} onClick={close}>
-            <n.icon strokeWidth={1.9} />
-            <span className="max-w-full truncate">{t(n.short ?? n.label)}</span>
-            {n.to === '/agents' && <AgentsTileBadge />}
-          </NavLink>
-        ))}
+        {entries.map((e) =>
+          e.page ? (
+            <NavLink key={e.to} to={e.to} end={e.page.end} className={linkCls} data-tour={navTourId(e.page)} onClick={close}>
+              <e.page.icon strokeWidth={1.9} />
+              <span className="max-w-full truncate">{t(e.page.short ?? e.page.label)}</span>
+              {e.to === '/agents' && <AgentsTileBadge />}
+            </NavLink>
+          ) : (
+            <NavLink key={e.to} to={e.to} className={linkCls} data-ext={e.ext.id} onClick={close}>
+              <NamedIcon name={e.ext.icon} strokeWidth={1.9} />
+              <span className="max-w-full truncate">{e.ext.name}</span>
+            </NavLink>
+          ),
+        )}
         <NavLink to="/feed" className={linkCls} onClick={close}>
           <Bell strokeWidth={1.9} />
           <span className="max-w-full truncate">{t('feed.title')}</span>
@@ -198,65 +202,93 @@ function AppPanel() {
         </NavLink>
       </nav>
 
-      {/* The extension pages apart from the app's pages, as in the sidebar. */}
-      {pages.length > 0 && (
-        <>
-          <h3 className="px-4 pt-4 pb-2 text-xs font-semibold text-muted-foreground">{t('ext.hubTitle')}</h3>
-          <div className="grid grid-cols-3 gap-2 px-3">
-            <NavLink to="/x" end className={linkCls} onClick={close}>
-              <Blocks strokeWidth={1.9} />
-              <span className="max-w-full truncate">{t('ext.allPages')}</span>
-            </NavLink>
-            {pages
-              .filter((x) => x.pinned)
-              .sort((a, b) => (a.pin_order ?? 1e9) - (b.pin_order ?? 1e9))   // the order dragged in the sidebar
-              .map((x) => (
-                <NavLink key={x.id} to={`/x/${x.id}`} className={linkCls} onClick={close}>
-                  <NamedIcon name={x.icon} strokeWidth={1.9} />
-                  <span className="max-w-full truncate">{x.name}</span>
-                </NavLink>
-              ))}
-          </div>
-        </>
-      )}
-
       <div className="grid gap-0.5 px-2 pt-3">
-        <button
-          type="button"
-          className={row}
-          onClick={() => {
-            close()
-            useFeedbackDialog.getState().setOpen(true)
-          }}
-        >
-          <MessageSquareText />
-          <span className="grid flex-1">
-            <span>{t('shell.feedback')}</span>
-            <span className="text-[13px] text-muted-foreground">{t('shell.feedbackHint')}</span>
-          </span>
-        </button>
-        <NavLink to="/settings" className={row} onClick={close} data-tour="nav-settings">
-          <Settings /> <span className="flex-1">{t('nav.settings')}</span>
-          <ChevronRight />
-        </NavLink>
+        <UpdateIndicator />
+        <HelpRows close={close} />
+        {end.map((n) => (
+          <NavLink key={n.to} to={n.to} className={row} onClick={close} data-tour={navTourId(n)}>
+            <n.icon /> <span className="min-w-0 flex-1 truncate">{t(n.label)}</span>
+            <ChevronRight />
+          </NavLink>
+        ))}
       </div>
 
-      {/* The sidebar's status footer: health, CPU / RAM / disk, Claude plan, eye, theme, General settings. */}
-      <div className="mx-3 mt-3 grid gap-1 rounded-xl border bg-card p-2" data-tour="health">
-        <UpdateIndicator />
-        <StatusFooter
-          touch
-          onInstall={
-            install
-              ? () => {
-                  close()
-                  void installApp()
-                }
-              : undefined
-          }
-        />
-      </div>
+      <StatusCard
+        onInstall={
+          install
+            ? () => {
+                close()
+                void installApp()
+              }
+            : undefined
+        }
+      />
       <div className="h-4 shrink-0" />
+    </div>
+  )
+}
+
+/** Help: a row that unfolds the Help entries (docs, shortcuts with a keyboard, the tour, Feedback). */
+function HelpRows({ close }: { close: () => void }) {
+  const t = useT()
+  const [open, setOpen] = React.useState(false)
+  const actions = useHelpActions()
+  return (
+    <>
+      <button type="button" className={row} aria-expanded={open} onClick={() => setOpen(!open)} data-testid="touch-help">
+        <CircleHelp /> <span className="min-w-0 flex-1 truncate">{t('shell.help')}</span>
+        <ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
+      </button>
+      {open &&
+        actions.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            className={cn(row, 'min-h-11 pl-11 text-[14px]')}
+            data-help={a.id}
+            onClick={() => {
+              close()
+              a.run()
+            }}
+          >
+            <a.icon /> <span className="min-w-0 flex-1 truncate">{a.label}</span>
+          </button>
+        ))}
+    </>
+  )
+}
+
+/** The sidebar's status line as a card: "All good · Claude 47 %", a tap unfolds the status panel in place. */
+function StatusCard({ onInstall }: { onInstall?: () => void }) {
+  const [open, setOpen] = React.useState(false)
+  const s = useStatusLine(true)
+  const alert = s.tone === 'error' || s.tone === 'warn'
+  return (
+    <div className="mx-3 mt-3 grid min-w-0 gap-1 rounded-xl border bg-card p-1.5" data-tour="health">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        data-testid="touch-status"
+        className={cn(
+          'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-lg px-2.5 text-left text-[15px] outline-none transition-colors active:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+          alert && (s.tone === 'error' ? 'text-destructive' : 'text-warning'),
+        )}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          <StatusDot tone={s.tone} pulse={s.tone === 'error'} />
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {s.health}
+          {s.plan && <span className="text-muted-foreground"> · <Sensitive length={3}>{s.plan}</Sensitive></span>}
+        </span>
+        <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="min-w-0 px-1 pb-1" data-testid="touch-status-panel">
+          <StatusPanel touch onInstall={onInstall} />
+        </div>
+      )}
     </div>
   )
 }

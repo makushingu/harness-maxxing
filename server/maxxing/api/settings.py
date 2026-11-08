@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depe
 KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page",
         "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden", "sidebar_order")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
-_ROUTE = re.compile(r"^/[a-z0-9-]{0,40}\Z")
+_ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
 _URL = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")
 
 
@@ -263,7 +263,7 @@ def put_settings(body: SettingsIn):
     if "sidebar_order" in changes:
         order = changes["sidebar_order"]
         if len(order) > 40 or not all(_ROUTE.match(r) for r in order):
-            raise _err("invalid_sidebar_order", "sidebar_order: at most 40 page routes like /sessions")
+            raise _err("invalid_sidebar_order", "sidebar_order: at most 40 page routes like /sessions or /x/<id>")
         changes["sidebar_order"] = list(dict.fromkeys(order))
     if "files_root" in changes:
         p = Path(changes["files_root"]).expanduser()

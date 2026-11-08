@@ -1,23 +1,22 @@
 import * as React from 'react'
 import { NavLink } from 'react-router'
-import { MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
-import { useAgentsAttention, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
+import { useAgentsAttention, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
 import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { Button, CountBadge, CountDot, Kbd, MOD, Tooltip } from '@/components/ui'
-import { navRow, navTourId, useNav, type NavItem } from './nav'
+import { Button, CountBadge, CountDot, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
+import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
-import { StatusFooter } from './HealthIndicator'
+import { StatusLine } from './HealthIndicator'
+import { HelpMenu } from './HelpMenu'
 import { UpdateIndicator } from './UpdateIndicator'
-import { SidebarExtensions } from './SidebarExtensions'
 import { useDragOrder } from './dragOrder'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
-import { useFeedbackDialog } from './feedback-store'
 
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
 function useSessionBadge() {
@@ -121,7 +120,7 @@ function ResizeEdge({ side }: { side: React.RefObject<HTMLElement | null> }) {
 export function Sidebar() {
   const prefetchLink = usePrefetchLink()
   const t = useT()
-  const nav = useNav()
+  const { entries, end } = useNavEntries()
   const userCollapsed = useUI((s) => s.sidebarCollapsed)
   const toggle = useUI((s) => s.toggleSidebar)
   const tablet = useIsTablet()
@@ -131,6 +130,7 @@ export function Sidebar() {
   const width = useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default
   const side = React.useRef<HTMLElement>(null)
   const saveSettings = useSaveSettings()
+  const orderPins = useOrderPins()
 
   const navItem = (item: NavItem, idx: number, drag?: object) => {
     const label = t(item.label)
@@ -181,11 +181,36 @@ export function Sidebar() {
       </Tooltip>
     )
   }
-  const main = nav.filter((n) => n.group === 'main')
-  const end = nav.filter((n) => n.group !== 'main')
+  /** A pinned extension page: a row like the pages. */
+  const extItem = (e: Extract<NavEntry, { ext: object }>, idx: number, drag: object) => (
+    <Tooltip key={e.to} content={collapsed ? e.ext.name : null} side="right">
+      <NavLink
+        to={e.to}
+        {...drag}
+        data-ext={e.ext.id}
+        style={{ '--i': idx } as React.CSSProperties}
+        className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
+            <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
+            {!collapsed && <span className="flex-1 truncate">{e.ext.name}</span>}
+          </>
+        )}
+      </NavLink>
+    </Tooltip>
+  )
+  // Dragging saves the whole order (pages and pinned pages) in `sidebar_order`; the pin order follows, so the
+  // other lists of pinned pages (Extensions) show them in the same order.
   const drag = useDragOrder(
-    main.map((n) => n.to),
-    (order) => saveSettings.mutate({ sidebar_order: order }),
+    entries.map((e) => e.to),
+    (order) => {
+      saveSettings.mutate({ sidebar_order: order })
+      const pins = order.filter((to) => to.startsWith('/x/')).map((to) => to.slice(3))
+      const before = entries.flatMap((e) => (e.ext ? [e.ext.id] : []))
+      if (pins.join('\n') !== before.join('\n')) orderPins.mutate(pins)
+    },
     'nav',
   )
   const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
@@ -248,42 +273,27 @@ export function Sidebar() {
         </Tooltip>
       </div>
 
-      {/* The pages (drag to reorder), then the extension pages (one scroll when the window is short); Feedback and Settings stay at the bottom. */}
+      {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short); Help and
+          Settings stay at the bottom, then the status line. */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
-          {drag.order.map((to) => {
-            const item = main.find((n) => n.to === to)
-            if (!item) return null // switched off in another tab during a drag
-            return navItem(item, nav.indexOf(item), drag.props(to))
+          {drag.order.map((to, idx) => {
+            const e = entries.find((x) => x.to === to)
+            if (!e) return null // switched off or unpinned in another tab during a drag
+            return e.page ? navItem(e.page, idx, drag.props(to)) : extItem(e, idx, drag.props(to))
           })}
         </nav>
-        <SidebarExtensions collapsed={collapsed} />
       </div>
 
       <div className="flex-1" />
 
-      {/* Feedback and Settings: rows like the pages, kept at the bottom (not draggable). */}
       <div className={block('border-t border-sidebar-border')}>
         <UpdateIndicator collapsed={collapsed} />
-        <FeedbackRow collapsed={collapsed} />
-        {end.map((item) => navItem(item, nav.indexOf(item)))}
+        <HelpMenu collapsed={collapsed} />
+        {end.map((item) => navItem(item, entries.length))}
       </div>
 
-      <StatusFooter collapsed={collapsed} />
+      <StatusLine collapsed={collapsed} />
     </aside>
-  )
-}
-
-/** Feedback to the authors (bug, idea): opens the Feedback dialog (FeedbackDialog.tsx). */
-function FeedbackRow({ collapsed }: { collapsed: boolean }) {
-  const t = useT()
-  const open = useFeedbackDialog((s) => s.setOpen)
-  return (
-    <Tooltip content={collapsed ? t('shell.feedbackHint') : null} side="right">
-      <button type="button" className={navRow(collapsed)} onClick={() => open(true)} aria-label={t('shell.feedback')}>
-        <MessageSquareText className="size-[18px] shrink-0" strokeWidth={1.9} />
-        {!collapsed && <span className="flex-1 truncate text-left">{t('shell.feedback')}</span>}
-      </button>
-    </Tooltip>
   )
 }

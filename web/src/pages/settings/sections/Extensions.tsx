@@ -1,18 +1,21 @@
 import { Link } from 'react-router'
-import { AlertTriangle, BookOpen, Blocks, ExternalLink, RefreshCw } from 'lucide-react'
-import { useExtensions, usePinExtension, useReloadExtensions, useToggleExtension } from '@/lib/queries'
+import { AlertTriangle, BookOpen, Blocks, RefreshCw } from 'lucide-react'
+import { useExtensions, useReloadExtensions, useToggleExtension } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { Badge, Button, EmptyState, NamedIcon, Skeleton, Switch, toast } from '@/components/ui'
 import { SettingsCard, SectionStack } from './ui'
+import { ExtensionPages } from './ExtensionPages'
 
 export function ExtensionsSection() {
   const t = useT()
   const { data, isLoading } = useExtensions()
   const toggle = useToggleExtension()
-  const pin = usePinExtension()
   const reload = useReloadExtensions()
   return (
     <SectionStack>
+      <SettingsCard title={t('setui.pages')} description={t('ext.hubDesc')}>
+        <ExtensionPages />
+      </SettingsCard>
       <SettingsCard
         title={t('ext.installed')}
         description={t('ext.installedDesc')}
@@ -59,17 +62,6 @@ export function ExtensionsSection() {
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                       <span className="font-mono break-all">{x.error}</span>
                     </p>
-                  )}
-                  {x.type === 'page' && x.enabled && !x.error && (
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                      <Link to={`/x/${x.id}`} className="inline-flex w-fit items-center gap-1 pointer-coarse:min-h-10 text-[13px] font-medium text-primary hover:underline">
-                        {t('ext.open')} <ExternalLink className="size-3" />
-                      </Link>
-                      <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
-                        <Switch checked={!!x.pinned} onCheckedChange={(v) => pin.mutate({ id: x.id, pinned: v })} />
-                        {t('ext.sidebar')}
-                      </label>
-                    </div>
                   )}
                 </div>
                 <Switch checked={x.enabled} onCheckedChange={(v) => toggle.mutate({ id: x.id, enabled: v })} aria-label={`${t('ext.enable')} ${x.name}`} className="mt-1" />

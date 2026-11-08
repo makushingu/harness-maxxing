@@ -105,6 +105,9 @@ export const en = {
   'feedback.err.offline': "This server is set to never contact the Harness Maxxing cloud.",
   'shell.help': "Help",
   'shell.helpHint': "Guided tour, tutorial, docs",
+  'shell.allGood': "All good",
+  'shell.claudePct': "Claude {pct}%",
+  'shell.replayTour': "Replay the tour",
   'sessions.filter.label': "Show",
   'sessions.filter.all': "All",
   'sessions.filter.running': "Running",
@@ -695,8 +698,11 @@ export const en = {
   'updates.search': "Search the updates…",
   'updates.none': "Nothing matches.",
   'updates.installed': "Installed",
-  'settings.docs': 'Docs',
-  'settings.docs.desc': 'Documentation.',
+  'setui.essentials': 'Essentials',
+  'setui.data': 'Data & security',
+  'setui.tools': 'Tools & automation',
+  'setui.server': 'Server & about',
+  'setui.pages': 'Pages',
 
   // general
   'settings.appearance': 'Appearance',

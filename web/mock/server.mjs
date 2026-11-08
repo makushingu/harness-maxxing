@@ -9,6 +9,14 @@
 // Implements every endpoint of docs/dev/API.md with in-memory state and fake, product-neutral data.
 // Serves the built SPA from ../dist (web/dist). Scenarios: setup | login | onboarding | ready | maxxing.
 // maxxing: 30 more sessions that keep finishing at random (Maxxing mode); MOCK_PASSWORD=... asks for that password.
+//
+// Sidebar screenshots (hm-sidebar-proto):
+//   MOCK_FEATURES=all  -> optional pages on (agents/mail/infra/team/tasks/git_page) + page extension "radar" pinned;
+//                         default = fresh install (all off, nothing pinned; stock "notes" page extension kept).
+//   MOCK_LANG=fr       -> settings.language (default en).
+//   Settings carry those *_page flags + sidebar_order (GET/PUT /api/settings); page extensions carry pinned/pin_order
+//   (PATCH /api/extensions/:id {pinned}, PUT /api/extensions/pins {order}). /api/usage returns a Max plan (5 h 23 %,
+//   week 47 %). Empty stubs: /api/agents, /api/team, /api/feed so the shell's badges do not 404.
 
 import http from 'node:http'
 import fs from 'node:fs'
@@ -26,6 +34,8 @@ const SETUP_TOKEN = 'dev-token'
 const DEFAULT_PASSWORD = 'password123'
 const SCENARIOS = ['setup', 'login', 'onboarding', 'ready', 'maxxing']
 const MOCK_PASSWORD = process.env.MOCK_PASSWORD || ''
+const MOCK_ALL = process.env.MOCK_FEATURES === 'all'
+const PAGE_FLAGS = ['agents_page', 'mail_page', 'infra_page', 'team_page', 'tasks_page', 'git_page']
 
 /* =================================================================== helpers */
 const now = () => Date.now() / 1000
@@ -110,7 +120,8 @@ function buildState(scenario) {
     loginFails: [], // timestamps
     lockUntil: 0,
     onboarding_completed: ready,
-    settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, usage_widget: false, maxxing_mode: false, memory_max_lines: 200, donation_hidden: false },
+    settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, usage_widget: false, maxxing_mode: false, memory_max_lines: 200, donation_hidden: false,
+      ...Object.fromEntries(PAGE_FLAGS.map((k) => [k, MOCK_ALL])), sidebar_order: [] },
     claude: {
       installed: true, version: '2.4.1',
       auth: ready ? { ok: true, method: 'oauth_token', detail: 'Long-lived OAuth token (claude setup-token), Max plan' } : { ok: false, method: null, detail: 'Not connected' },
@@ -135,11 +146,13 @@ function buildState(scenario) {
     uptimeFixed: false,
     extensions: [
       { id: 'shop-sales', name: 'Shop sales', type: 'widget', icon: 'shopping-cart', version: '1.2.0', enabled: true, error: null, has_api: true },
-      { id: 'notes', name: 'Notes', type: 'page', icon: 'notebook-pen', version: '0.3.0', enabled: true, error: null, has_api: true },
+      { id: 'notes', name: 'Notes', type: 'page', icon: 'notebook-pen', version: '0.3.0', enabled: true, error: null, has_api: true, pinned: false, pin_order: null },
+      ...(MOCK_ALL ? [{ id: 'radar', name: 'Radar', type: 'page', icon: 'radar', version: '2.0.0', enabled: true, error: null, has_api: true, pinned: true, pin_order: 0 }] : []),
       { id: 'broken-widget', name: 'Broken widget', type: 'widget', icon: 'triangle-alert', version: '0.1.0', enabled: false, error: 'SyntaxError in api.py line 12', has_api: true },
     ],
     fs: new Map(),
   }
+  if (process.env.MOCK_LANG === 'fr') st.settings.language = 'fr'
 
   if (scenario !== 'setup' && scenario !== 'onboarding') {
     // full workspace
@@ -1762,7 +1775,7 @@ R('GET', '/api/settings', () => S.settings)
 R('PUT', '/api/settings', ({ body }) => {
   if (body.language !== undefined && !['en', 'fr'].includes(body.language)) fail(422, 'invalid', 'language must be en or fr')
   if (body.public_url !== undefined && body.public_url && !/^https?:\/\//.test(body.public_url)) fail(422, 'invalid', 'public_url must start with http(s)://')
-  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'usage_widget', 'memory_max_lines', 'donation_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
+  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings
 })
 const secretOut = (s) => ({ name: s.name, note: s.note, expose: s.expose, updated: s.updated, preview: s.value.slice(0, 4) + '…' })
@@ -1860,7 +1873,12 @@ R('GET', '/api/stats/tokens', () => {
     sessions: (S.sessions || []).slice(0, 5).map((x, i) => ({ id: x.id, title: x.title, path: x.path, archived: false, updated: x.updated, ...row(2_000_000 - i * 300_000) })),
     days, at: now() }
 })
-R('GET', '/api/usage', () => ({ available: false, five_hour: null, seven_day: null, reason: 'disabled' }))
+R('GET', '/api/usage', () => ({ available: true, plan: 'Max', source: 'api', seen_at: now(),
+  five_hour: { pct: 23, resets_at: now() + 2 * HOUR }, seven_day: { pct: 47, resets_at: now() + 3 * DAY } }))
+R('GET', '/api/agents', () => ({ agents: [], avatar: {} }))
+R('GET', '/api/team', () => ({ me: 'alex', people: {}, chats: [], reactions: [], typing: {} }))
+R('POST', '/api/team/presence', () => ({ ok: true }))
+R('GET', '/api/feed', () => ({ events: [], more: false, unread: 0, pending: 0, sources: [] }))
 
 /* ---- docs */
 R('GET', '/api/docs', () => DOCS.map(({ slug, title, section, order }) => ({ slug, title, section, order })))
@@ -1888,11 +1906,24 @@ R('PUT', '/api/dashboard/layout', ({ body }) => {
 R('GET', '/api/extensions', () => S.extensions)
 R('PATCH', '/api/extensions/:id', ({ params, body }) => {
   const e = S.extensions.find((x) => x.id === params.id) || fail(404, 'not_found', 'Unknown extension')
-  if (typeof body.enabled !== 'boolean') fail(422, 'invalid', 'enabled must be a boolean')
+  if (typeof body.pinned === 'boolean') { // like extensions.set_pinned: a new pin goes last
+    if (e.type !== 'page') fail(400, 'not_a_page', `${e.id} is not a page extension`)
+    const pins = S.extensions.filter((x) => x.pinned && x !== e).sort((a, b) => a.pin_order - b.pin_order)
+    if (body.pinned) pins.push(e)
+    for (const x of S.extensions) { x.pinned = pins.includes(x); x.pin_order = x.pinned ? pins.indexOf(x) : null }
+  } else if (typeof body.enabled !== 'boolean') fail(422, 'invalid', 'enabled must be a boolean')
   if (body.enabled && e.error) fail(409, 'broken', `Cannot enable: ${e.error}`)
-  e.enabled = body.enabled
+  if (typeof body.enabled === 'boolean') e.enabled = body.enabled
   bus('extensions')
   return { ok: true }
+})
+R('PUT', '/api/extensions/pins', ({ body }) => { // like extensions.set_pin_order: never pins anything
+  const pins = S.extensions.filter((x) => x.pinned).sort((a, b) => a.pin_order - b.pin_order).map((x) => x.id)
+  const first = [...new Set(Array.isArray(body.order) ? body.order : [])].filter((x) => pins.includes(x))
+  const order = [...first, ...pins.filter((x) => !first.includes(x))]
+  for (const x of S.extensions) if (x.pinned) x.pin_order = order.indexOf(x.id)
+  bus('extensions')
+  return { pinned: order }
 })
 R('POST', '/api/extensions/reload', async () => { await sleep(400); bus('extensions'); return { ok: true, count: S.extensions.length } })
 for (const m of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) {
