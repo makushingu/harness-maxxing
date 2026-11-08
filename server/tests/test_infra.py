@@ -245,6 +245,43 @@ def test_path_site(fake_caddy, tmp_path):
     assert "site:local:ui.example.com/demo" not in registry.resources()
 
 
+def test_a_failed_site_add_does_not_undo_one_made_meanwhile(fake_caddy, tmp_path, monkeypatch):
+    import threading
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    b_done = threading.Event()
+    real = caddy._caddy
+
+    def slow_caddy(*args, **kwargs):
+        if args[:1] == ("validate",) and threading.current_thread().name == "add-a":
+            b_done.wait(1)                       # b gets its chance while a is between write and validate
+            return 1, "Error: bad directive"
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(caddy, "_caddy", slow_caddy)
+    out = {}
+
+    def add(name):
+        try:
+            out[name] = caddy.add_site(name, root=str(tmp_path / name))["url"]
+        except caddy.CaddyError as e:
+            out[name] = e.code
+        if name == "b":
+            b_done.set()
+
+    ta = threading.Thread(target=add, args=("a",), name="add-a")
+    ta.start()
+    time.sleep(0.1)
+    tb = threading.Thread(target=add, args=("b",), name="add-b")
+    tb.start()
+    ta.join(10)
+    tb.join(10)
+    assert out == {"a": "invalid_config", "b": "https://ui.example.com/b/"}
+    assert f"import {fake_caddy / 'maxxing-paths'}/*.caddy" in (fake_caddy / "claude-maxxing.caddy").read_text()
+    assert (fake_caddy / "maxxing-paths" / "b.caddy").exists()
+    assert not (fake_caddy / "maxxing-paths" / "a.caddy").exists()
+
+
 def test_host_site_and_rollback(fake_caddy, tmp_path):
     www = tmp_path / "www"
     www.mkdir()
