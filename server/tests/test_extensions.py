@@ -357,6 +357,14 @@ def test_a_lone_surrogate_in_a_manifest_marks_only_that_extension(client, org):
     assert d["good"]["error"] is None and "invalid text" in d["bad"]["error"]
 
 
+def test_a_folder_name_that_is_not_utf8_never_breaks_the_lists(client, org):
+    _ext(org, "good", {"type": "widget"}, "def card(ctx): return {'blocks': []}\n")
+    (extensions.root() / "bad\udcff").mkdir()
+    r = client.get("/api/extensions")
+    assert r.status_code == 200 and [x["id"] for x in r.json()] == ["good"]
+    assert client.get("/api/dashboard").status_code == 200
+
+
 def test_too_deeply_nested_json_in_or_out_of_handle_is_handled(client, org):
     _ext(org, "h", {"type": "page"}, "def handle(ctx, m, p, q, b):\n    return {'b': type(b).__name__}\n", page="x")
     r = client.post("/api/ext/h/p", content=b"[" * 200000, headers={"content-type": "application/json"})

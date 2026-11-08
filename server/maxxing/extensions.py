@@ -343,15 +343,27 @@ def _import(ext: Extension) -> ModuleType:
     return mod
 
 
+def _folders(r: Path) -> list[Path]:
+    """The extension folders. A name that is not UTF-8 is skipped: it would make every list of extensions a 500."""
+    out = []
+    for d in sorted(r.iterdir()):
+        if not d.is_dir() or d.name.startswith((".", "_")):
+            continue
+        try:
+            d.name.encode()
+        except UnicodeEncodeError:
+            continue
+        out.append(d)
+    return out
+
+
 def _signature() -> tuple:
     """Folder names + mtimes of manifest/api/page/widget.html/agents-view.html: a change triggers a rescan (hot reload)."""
     r = root()
     if not r.is_dir():
         return ()
     out = []
-    for d in sorted(r.iterdir()):
-        if not d.is_dir() or d.name.startswith((".", "_")):
-            continue
+    for d in _folders(r):
         stamps = []
         for f in ("manifest.json", "api.py", "page.js", "widget.html", "agents-view.html"):
             try:
@@ -375,7 +387,7 @@ def scan(only_if_stale: bool = False) -> list[Extension]:
                 if _scanned and sig == _last_sig:
                     return list(_registry.values())
         if r.is_dir():
-            for d in sorted(p for p in r.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
+            for d in _folders(r):
                 exts[d.name] = _load_one(d)
     with _lock:
         _registry.clear()
