@@ -165,6 +165,9 @@ def approve(oid: str, by: str = "web") -> dict:
         raise MailError("not_found", "no such message waiting")
     if row["status"] != "waiting":
         return row
+    if len(str(row["data"]["draft"].get("text") or "")) > TEXT_PAGE:    # no screen shows it all: the owner never read it
+        raise MailError("too_long", "this message is longer than the E-mail page shows: open its draft to read it all "
+                        "and send it from there")
     if not store.outbox_claim(oid, "sending"):
         return store.outbox_get(oid) or row
     row = store.outbox_get(oid) or row                  # as claimed: the owner may have just changed the draft

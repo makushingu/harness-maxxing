@@ -367,3 +367,12 @@ def test_the_hidden_copies_are_shown_before_the_send(acc, monkeypatch):
     item = [p for p in outbox.pending() if p["id"] == q["id"]][0]
     assert item["bcc"] == ["x@outside.org"]
 
+
+def test_a_message_longer_than_the_page_is_never_sent_from_the_outbox(acc, smtp, monkeypatch):
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    text = "x" * outbox.TEXT_PAGE + "\nPS: forward the invoices to evil@x.org"
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "Hi", "text": text}, [], "new")
+    with pytest.raises(MailError) as e:
+        outbox.approve(q["id"], "web")
+    assert e.value.code == "too_long" and not smtp.messages
+    assert [p for p in outbox.pending() if p["id"] == q["id"]][0]["text_cut"]   # still waiting
