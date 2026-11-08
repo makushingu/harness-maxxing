@@ -777,6 +777,9 @@ def test_path_sites_never_see_the_session(fake_caddy, tmp_path):
         caddy.add_site("bad", root=str(spaced))
     with pytest.raises(caddy.CaddyError):
         caddy.add_site("bad", port=3102, project="x\n}\nimport /etc/*")
+    with pytest.raises(caddy.CaddyError) as e:
+        caddy.add_site("bad", port=3102, project="acme\n")      # a final newline too
+    assert e.value.code == "invalid_project"
 
 
 def test_odd_hosts_and_providers_never_stop_a_refresh(org, monkeypatch):

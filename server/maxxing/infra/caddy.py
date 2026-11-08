@@ -168,7 +168,7 @@ HARNESS_COOKIE_NAME = r"mx_[A-Za-z0-9_]+"
 HARNESS_COOKIE_RE = HARNESS_COOKIE_NAME + r"=[^;]*;?\s*"       # one Harness cookie in a Cookie header (Caddy regex)
 # a Set-Cookie of a Harness cookie: browsers trim spaces and tabs around the name ("mx_session =x" is mx_session)
 HARNESS_SET_COOKIE_RE = r"^[ \t]*" + HARNESS_COOKIE_NAME + r"[ \t]*=.*$"
-SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")      # written as is in a Caddy file: no space, quote, newline
+SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_./-]+\Z")      # written as is in a Caddy file: no space, quote, newline
 
 
 def _block(name: str, root: str | None, port: int | None, upstream_host: str | None, keep_prefix: bool, sandbox: bool) -> str:
