@@ -45,8 +45,9 @@ REVOKED_MAX = 500                  # revoked cookie ids kept; past it: sessions_
 KEEP_S = 3600                      # failures kept this long (failures_last_hour), then pruned
 GOOD_KEEP_S = 30 * 24 * 3600       # a client key that signed in skips the global cap this long
 GOOD_MAX = 64
+FAILS_KEYS_MAX = 10_000             # client keys with failures kept; past it the one that failed longest ago goes
 
-_fails: dict[str, list[float]] = {}
+_fails: dict[str, list[float]] = {}   # ordered by last failure: a failure moves its key to the end
 _fails_lock = threading.Lock()
 _last_global = 0.0
 _last_fresh = 0.0
@@ -240,13 +241,24 @@ def client_key(request: Request) -> str:
 
 
 def _prune(now: float) -> None:
-    """Drop old failures and empty clients (caller holds the lock): `_fails` cannot grow for good."""
-    for k in list(_fails):
-        lst = [t for t in _fails[k] if now - t < KEEP_S]
-        if lst:
-            _fails[k] = lst
-        else:
-            del _fails[k]
+    """Drop the clients whose last failure is old, and the oldest past FAILS_KEYS_MAX (caller holds the lock):
+    `_fails` cannot grow for good. They are at the front: an attempt never goes through the whole table."""
+    while _fails:
+        k = next(iter(_fails))
+        lst = _fails[k]
+        if lst and now - lst[-1] < KEEP_S and len(_fails) <= FAILS_KEYS_MAX:
+            break
+        del _fails[k]
+
+
+def _recent_all(now: float) -> int:
+    """Failures in the window, all clients: from the end (latest failures) to the first client with none."""
+    n = 0
+    for lst in reversed(_fails.values()):
+        if not lst or now - lst[-1] >= FAIL_WINDOW:
+            break
+        n += _recent(lst, now)
+    return n
 
 
 def _recent(lst: list[float], now: float) -> int:
@@ -266,7 +278,7 @@ def begin_attempt(key: str, trusted: bool = False) -> tuple[str | None, int]:
         if n >= FAIL_MAX:
             return "client", n
         known = trusted or now - _good.get(key, 0.0) < GOOD_KEEP_S
-        if not known and sum(_recent(lst, now) for lst in _fails.values()) >= GLOBAL_FAIL_MAX:
+        if not known and _recent_all(now) >= GLOBAL_FAIL_MAX:
             # two slots: clients that keep failing cannot take the one of a client trying for the first time
             last = _last_fresh if n == 0 else _last_global
             if now - last < GLOBAL_GAP_S:
@@ -275,7 +287,10 @@ def begin_attempt(key: str, trusted: bool = False) -> tuple[str | None, int]:
                 _last_fresh = now
             else:
                 _last_global = now
-        _fails.setdefault(key, []).append(now)
+        lst = [t for t in _fails.pop(key, []) if now - t < KEEP_S]
+        lst.append(now)
+        _fails[key] = lst
+        _prune(now)
         return None, n + 1
 
 
