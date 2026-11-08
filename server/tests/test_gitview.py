@@ -197,6 +197,8 @@ def test_github(client, org, repo, monkeypatch):
         assert c["files"] == [{"path": "a.py", "additions": 3, "deletions": 1}] and c["message"] == "feat work"
         assert client.get("/api/git/pulls", params={"repo": "github:acme/site"}).json()[0]["number"] == 7
         assert client.get("/api/git/graph", params={"repo": "github:../x"}).json()["error"] == "bad_repo"
+        r = client.get("/api/git/pulls", params={"repo": "github:acme/site\n"})          # a final newline too
+        assert r.status_code == 400 and r.json()["error"] == "bad_repo"
         assert client.get("/api/git/graph", params={"repo": "github:nobody/none"}).json()["error"] == "not_found"
     finally:
         srv.close()

@@ -42,7 +42,7 @@ CACHE_S = 60
 PRUNE = {"node_modules", "__pycache__", "venv", "site-packages", "dist", "build", "target", "vendor", "proc", "sys",
          "snap", "attachments", "trash"}
 SHA_RE = re.compile(r"\A[0-9a-fA-F]{4,40}\Z")
-FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
+FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}\Z")
 GH_PATH_RE = re.compile(r"/*([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?")
 SCP_REMOTE_RE = re.compile(r"(?:[^@/:]+@)?([^/:]+):(.*)")
 GH_HOSTS = ("github.com", "www.github.com")
