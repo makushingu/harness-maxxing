@@ -13,7 +13,7 @@ import { FeedPanel } from '@/features/feed/FeedItems'
 import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
 import { StatusBlock } from './HealthIndicator'
-import { SessionsRail } from './SessionsRail'
+import { preloadRailTree, SessionsRail } from './SessionsRail'
 import { HelpMenu } from './HelpMenu'
 import { UpdateIndicator } from './UpdateIndicator'
 import { useDragOrder } from './dragOrder'
@@ -190,7 +190,7 @@ const FOLDED_DOT = 'absolute top-1 right-1 flex size-4 items-center justify-cent
 /** The active page's marker on the bar's left edge (the folded rows sit 10 px from it, the unfolded ones 12 px). */
 const activeMark = (collapsed: boolean) => cn('absolute top-2 bottom-2 w-[3px] rounded-r-full bg-primary', collapsed ? '-left-2.5 top-2.5 bottom-2.5' : '-left-3')
 
-/** Width of the folded icon bar (the page always keeps this room when the bar is not pinned). */
+/** Width of the folded icon bar (the page always keeps this room when the bar is not pinned; same 64 px in globals.css `.mx-side`). */
 const FOLDED_W = 64
 /** Width of the second column (the sessions) shown beside the unfolded bar. */
 const RAIL_W = 304
@@ -207,7 +207,20 @@ const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(pre
 /** The folded bar unfolds over the page on hover or keyboard focus, and folds back 250 ms after the pointer / focus
  *  left (Esc folds at once). A menu opened from the bar (Help, status) keeps it open until it closes. */
 function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) {
-  const [phase, setPhase] = React.useState<UnfoldPhase>('closed')
+  // React only knows open / closed: `closing` (labels still there, the edge moving back) is written on the bar's own
+  // element, so folding costs one render (at the end) instead of two. React never writes `data-unfold` back while it
+  // stays 'open' (it only patches what changed since its last render).
+  const [phase, setPhase] = React.useState<'open' | 'closed'>('closed')
+  const phaseRef = React.useRef(phase) // the committed phase (a sliced render may still be thrown away)
+  React.useLayoutEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
+  const setClosing = (on: boolean) => {
+    const el = side.current
+    if (!el || el.dataset.unfold === 'pinned') return
+    if (on) el.dataset.unfold = 'closing'
+    else if (el.dataset.unfold === 'closing') el.dataset.unfold = 'open' // React's own value ('closed' is React's)
+  }
   const timer = React.useRef<number | undefined>(undefined)
   const hover = React.useRef(false)
   const focus = React.useRef(false)
@@ -226,7 +239,9 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   }
   const open = () => {
     clear()
-    if (enabled && !blocked.current) setPhase('open')
+    if (!enabled || blocked.current) return
+    setClosing(false) // back over the bar while it folds: it unfolds again from where it is
+    setPhase('open')
   }
   const fold = (delay: number) => {
     clear()
@@ -236,9 +251,15 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
         timer.current = window.setTimeout(tick, FOLD_DELAY_MS) // a menu of the bar is open: wait for it
         return
       }
-      if (reducedMotion()) return setPhase('closed')
-      setPhase((p) => (p === 'open' ? 'closing' : p))
-      timer.current = window.setTimeout(() => setPhase((p) => (p === 'closing' ? 'closed' : p)), FOLD_MS)
+      if (phaseRef.current !== 'open') return
+      const done = () => {
+        // The folded bar looks the same before this render (labels faded out, edge at 64 px): React may slice it
+        // (no long task); the pointer coming back meanwhile wins (an urgent update).
+        React.startTransition(() => setPhase('closed'))
+      }
+      if (reducedMotion()) return done()
+      setClosing(true)
+      timer.current = window.setTimeout(done, FOLD_MS)
     }
     if (delay) timer.current = window.setTimeout(tick, delay)
     else tick()
@@ -322,7 +343,8 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       // Only keys pressed in the bar itself (not in a menu it opened, rendered in a portal).
       if (e.key !== 'Escape' || !enabled || phase === 'closed' || !side.current?.contains(e.target as Node)) return
       e.preventDefault()
-      blocked.current = true
+      // stays folded until the pointer leaves and comes back, if it is over the bar (else the next visit unfolds it)
+      blocked.current = hover.current
       hover.current = false
       focus.current = false
       if (side.current?.contains(document.activeElement)) refocus.current = true
@@ -332,13 +354,70 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   /** A session was picked in the second column: fold now, stay folded until the pointer comes back. */
   const dismiss = () => {
     if (!enabled) return
-    blocked.current = true
+    blocked.current = hover.current // a pick from the keyboard, pointer elsewhere: the next visit unfolds it
     hover.current = false
     focus.current = false
     ;(document.activeElement as HTMLElement | null)?.blur?.()
     fold(0)
   }
-  return { phase: enabled ? phase : 'closed', props, dismiss } as const
+  // stable for the sessions column (kept mounted: a new function would re-render its whole tree on every unfold)
+  const dismissRef = React.useRef(dismiss)
+  dismissRef.current = dismiss
+  const stableDismiss = React.useCallback(() => dismissRef.current(), [])
+  return { phase: enabled ? phase : 'closed', props, dismiss: stableDismiss } as const
+}
+
+/** The sessions column is mounted ahead of the first unfold (on idle, a desktop with a mouse) and then kept, so no
+ *  unfold pays for its chunk, its data and its first render while the bar moves. */
+function useKeptRail(enabled: boolean, unfolded: boolean) {
+  const [kept, setKept] = React.useState(false)
+  if (unfolded && !kept) setKept(true)
+  React.useEffect(() => {
+    if (!enabled || kept || typeof matchMedia !== 'function' || !matchMedia('(min-width: 768px) and (hover: hover)').matches) return
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    // after the page's own first load (its requests and renders), then on idle, as a transition: React renders the
+    // tree in small slices (no long task), and an unfold meanwhile takes over at once (the render-time set above)
+    let idle: number | undefined
+    let live = true
+    const keep = () => live && React.startTransition(() => setKept(true))
+    // its chunk first, so the column mounts with the tree (not a skeleton) and is laid out once before it is hidden
+    const load = () => void preloadRailTree().then(keep, keep)
+    const t = window.setTimeout(() => {
+      idle = w.requestIdleCallback ? w.requestIdleCallback(load, { timeout: 1500 }) : window.setTimeout(load, 0)
+    }, 500)
+    return () => {
+      live = false
+      window.clearTimeout(t)
+      if (idle !== undefined) (w.cancelIdleCallback ?? window.clearTimeout)(idle)
+    }
+  }, [enabled, kept])
+  return kept
+}
+
+/** The sessions column's box. Mounted ahead (on idle), it stays rendered for a moment, clipped by the folded bar
+ *  (out of sight), so its styles and layout are computed then and kept while it is skipped: even the first unfold
+ *  only reveals it. */
+function RailSlot({ shown, children }: { shown: boolean; children: React.ReactNode }) {
+  const [warm, setWarm] = React.useState(true)
+  React.useEffect(() => {
+    let raf = 0
+    const t = window.setTimeout(() => (raf = requestAnimationFrame(() => setWarm(false))), 600)
+    return () => {
+      window.clearTimeout(t)
+      cancelAnimationFrame(raf)
+    }
+  }, [])
+  return (
+    <div
+      data-testid="sessions-rail"
+      data-shown={shown || undefined}
+      data-warm={(warm && !shown) || undefined}
+      className="mx-side-rail h-full min-h-0 shrink-0 border-l border-sidebar-border"
+      style={{ width: RAIL_W }}
+    >
+      {children}
+    </div>
+  )
 }
 
 export function Sidebar() {
@@ -445,76 +524,73 @@ export function Sidebar() {
   const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
 
   const unfolded = !pinned && unfold.phase !== 'closed'
+  const railKept = useKeptRail(!pinned, unfolded)
   const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
-  // The logo sits at the top while the bar is unfolded or pinned, at the bottom while it is folded (or folding back).
-  const logoTop = pinned || unfold.phase === 'open'
-  const logoBottom = !logoTop
-  // Its two rows open / close with the bar's width: 300 ms to unfold, 220 ms to fold, nothing when pinned / reduced.
-  const ms = pinned || unfold.phase === 'closed' || reducedMotion() ? 0 : unfold.phase === 'open' ? 300 : FOLD_MS
-  const rowMotion = (shown: boolean): React.CSSProperties => ({
-    gridTemplateRows: shown ? '1fr' : '0fr',
-    transition: ms ? `grid-template-rows ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)` : 'none',
-  })
-  // Fading: the logo leaving goes fast (120 ms), the one arriving fades in over most of the move.
-  const fadeMotion = (shown: boolean): React.CSSProperties => ({
-    opacity: shown ? 1 : 0,
-    transition: ms ? (shown ? `opacity ${ms - 60}ms ease-out 60ms` : 'opacity 120ms ease-out') : 'none',
-  })
 
   return (
     // The slot keeps the layout width (folded: 60 px, so the page never moves when the bar unfolds over it).
     <div
       ref={side}
       className={cn('mx-boot-side relative hidden shrink-0 md:block', unfolded ? 'z-40' : 'z-30')}
-      style={{ width: pinned ? width : FOLDED_W }}
+      // `--mx-side-open`: the unfolded width (bar + sessions column), read by globals.css (`.mx-side`)
+      style={pinned ? { width } : ({ width: FOLDED_W, '--mx-side-open': `${width + RAIL_W}px` } as React.CSSProperties)}
     >
       <aside
         ref={bar}
         {...unfold.props}
         data-testid="sidebar"
         data-unfold={pinned ? 'pinned' : unfold.phase}
-        data-expanded={collapsed ? 'false' : 'true'}
+        // not `data-expanded`: sonner's toast CSS has a `[data-expanded=false]…>*` rule, so flipping that attribute
+        // restyled the whole bar on every unfold / fold
+        data-side-expanded={collapsed ? 'false' : 'true'}
         className={cn(
-          // width and shadow move in globals.css (`.mx-side[data-unfold]`): soft, a bit longer to open than to fold
+          // the edge and the shadow move in globals.css (`.mx-side[data-unfold]`): soft, a bit longer to open than to fold
           'mx-side absolute inset-y-0 left-0 flex border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]',
-          !pinned && 'overflow-hidden',
+          // `clip`, not `hidden`: not a scroll container, so a row of the kept sessions column scrolled into view
+          // (Tree.tsx, the active topic) can never shift the folded bar sideways
+          !pinned && 'overflow-clip',
         )}
-        style={{ width: pinned ? '100%' : unfold.phase === 'open' ? width + RAIL_W : FOLDED_W }}
+        // not pinned: width and position by `data-unfold` (globals.css), so the fold can start without a render
+        style={pinned ? { width: '100%' } : undefined}
         aria-label={t('shell.navigation')}
       >
        <KeepTooltipShape.Provider value>
+        {/* The bar slides in from the left while this layer slides the other way: the content stays still and the
+            moving edge reveals it, with transforms only (composited: no layout, paint or style per frame). */}
+        <div className="mx-side-inner flex h-full min-h-0 w-full">
         {/* Laid out at its final width while the bar unfolds or folds: the edge of the bar reveals it, nothing wraps. */}
         <div className="mx-side-body flex h-full min-h-0 shrink-0 flex-col" style={{ width: pinned ? '100%' : collapsed ? FOLDED_W : width }}>
       {pinned && <ResizeEdge side={side} />}
-      {/* Unfolded or pinned: the logo (a link to the dashboard) and the pin button, first row at the top. It grows from
-          0 to its height as the bar unfolds (and shrinks as it folds), so the rows below glide instead of jumping. */}
-      <div aria-hidden={!logoTop || undefined} inert={!logoTop || undefined} className="grid shrink-0" style={rowMotion(logoTop)}>
-        <div className="min-h-0 overflow-hidden">
-          <div className="flex items-center gap-1.5 px-3 pt-2" style={fadeMotion(logoTop)}>
-            <NavLink
-              to="/"
-              className="flex h-11 min-w-0 flex-1 items-center rounded-md px-1.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Harness Maxxing"
+      {/* First row, in every state: the logo (a link to the dashboard). Folded, the mark alone, centred; unfolded or
+          pinned, the mark stays where it is, the name fades in beside it and the pin button sits on the right. Same
+          height both ways, so nothing below moves. `data-side-logo` = where the focus goes back after Escape folds. */}
+      <div className="flex shrink-0 items-center gap-1.5 px-3 pt-2">
+        <NavLink
+          to="/"
+          data-side-logo="folded"
+          className={cn(
+            'flex h-11 items-center rounded-md px-1.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+            collapsed ? 'w-10 flex-none' : 'min-w-0 flex-1',
+          )}
+          aria-label="Harness Maxxing"
+        >
+          <Logo collapsed={collapsed} />
+        </NavLink>
+        {!collapsed && !tablet && (
+          <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="sidebar-pin"
+              aria-pressed={pinned}
+              className="mx-side-reveal size-8 shrink-0 text-muted-foreground"
+              onClick={toggle}
+              aria-label={pinLabel}
             >
-              <Logo />
-            </NavLink>
-            {!tablet && (
-              <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  data-testid="sidebar-pin"
-                  aria-pressed={pinned}
-                  className="size-8 shrink-0 text-muted-foreground"
-                  onClick={toggle}
-                  aria-label={pinLabel}
-                >
-                  {pinned ? <PanelLeftClose strokeWidth={1.7} /> : <Pin strokeWidth={1.7} />}
-                </Button>
-              </Tooltip>
-            )}
-          </div>
-        </div>
+              {pinned ? <PanelLeftClose strokeWidth={1.7} /> : <Pin strokeWidth={1.7} />}
+            </Button>
+          </Tooltip>
+        )}
       </div>
       {/* Top row: folded, the notifications bell alone; unfolded, the search field (Ctrl K) with the bell on its right
           (the same element, moved by `order`, so its focus survives). The rows below sit at the same height in both
@@ -537,7 +613,7 @@ export function Sidebar() {
       </div>
 
       {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short); Help and
-          Settings stay at the bottom, then CPU / RAM / disk, the Claude quota and the logo. */}
+          Settings stay at the bottom, then CPU / RAM / disk and the Claude quota. */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
           {drag.order.map((to, idx) => {
@@ -561,31 +637,21 @@ export function Sidebar() {
 
       <StatusBlock collapsed={collapsed} />
 
-      {/* Folded: the logo mark alone at the very bottom (a link to the dashboard). It fades out and its room closes as
-          the bar unfolds (the logo moves to the top), and comes back while the bar folds. */}
-      <div aria-hidden={!logoBottom || undefined} inert={!logoBottom || undefined} className="grid shrink-0" style={rowMotion(logoBottom)}>
-        <div className="min-h-0 overflow-hidden">
-          <div className="flex items-center px-3 pt-1 pb-[calc(0.5rem+var(--safe-bottom))]" style={fadeMotion(logoBottom)}>
-            <NavLink
-              to="/"
-              data-side-logo="folded"
-              className="flex h-11 w-10 flex-none items-center justify-center rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Harness Maxxing"
-            >
-              <Logo collapsed />
-            </NavLink>
-          </div>
-        </div>
-      </div>
         </div>
         {/* Unfolded over the page: a second column with the sessions (running, unread, recent), one click away. */}
-        {unfolded && (
-          <div data-testid="sessions-rail" className="mx-side-rail h-full min-h-0 shrink-0 border-l border-sidebar-border" style={{ width: RAIL_W }}>
-            <SessionsRail onPick={unfold.dismiss} />
-          </div>
+        {/* Mounted once (on idle after load, or at the first unfold) and kept: folded, `content-visibility: hidden`
+            (globals.css) skips it, keeps its layout and takes it out of the tab order and the accessibility tree
+            (cheaper than `inert`, which restyles the whole tree each time), so every unfold only reveals it. */}
+        {!pinned && (unfolded || railKept) && (
+          <RailSlot shown={unfolded}>
+            <SessionsRail onPick={unfold.dismiss} shown={unfolded} />
+          </RailSlot>
         )}
+        </div>
        </KeepTooltipShape.Provider>
       </aside>
+      {/* The unfolded bar's shadow: its own layer behind the bar, sliding with it and fading (globals.css). */}
+      {!pinned && <div aria-hidden className="mx-side-shadow" />}
     </div>
   )
 }

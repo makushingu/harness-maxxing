@@ -1,15 +1,24 @@
 import { useSyncExternalStore } from 'react'
 import { useUI, type Layout } from './ui'
 
+// One MediaQueryList per query (its `matches` is live): `matchMedia()` parses the query and builds a new object on
+// every call, and the snapshots below are read on every render of every user (twice per commit).
+const lists = new Map<string, MediaQueryList>()
+const mql = (q: string) => {
+  let m = lists.get(q)
+  if (!m) lists.set(q, (m = window.matchMedia(q)))
+  return m
+}
+
 /** Live media query (no flicker: read synchronously on first render). */
 export function useMediaQuery(q: string): boolean {
   return useSyncExternalStore(
     (cb) => {
-      const m = window.matchMedia(q)
+      const m = mql(q)
       m.addEventListener('change', cb)
       return () => m.removeEventListener('change', cb)
     },
-    () => window.matchMedia(q).matches,
+    () => mql(q).matches,
     () => false,
   )
 }
@@ -21,12 +30,12 @@ const TOUCH = '(pointer: coarse) and (hover: none)'
  *  top. Copied in index.html (applied before the first paint) - keep both in sync. */
 export function isCompact(layout: Layout = useUI.getState().layout): boolean {
   if (typeof window === 'undefined') return false
-  if (window.matchMedia(NARROW).matches || layout === 'touch') return true
-  return layout !== 'desktop' && window.matchMedia(TOUCH).matches
+  if (mql(NARROW).matches || layout === 'touch') return true
+  return layout !== 'desktop' && mql(TOUCH).matches
 }
 
 function subscribe(cb: () => void) {
-  const qs = [NARROW, TOUCH].map((q) => window.matchMedia(q))
+  const qs = [NARROW, TOUCH].map(mql)
   qs.forEach((m) => m.addEventListener('change', cb))
   const unsub = useUI.subscribe((s, prev) => s.layout !== prev.layout && cb())
   return () => {

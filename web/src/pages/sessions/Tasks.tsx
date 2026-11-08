@@ -153,7 +153,6 @@ export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
           <p className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">{t('tasks.title')}</p>
           <ul className="grid gap-0.5">
             {live.map((tk) => {
-              const Icon = tk.kind === 'agent' ? Bot : SquareTerminal
               return (
                 <li key={tk.id}>
                   <button
@@ -164,21 +163,7 @@ export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
                     }}
                     className="grid w-full grid-cols-[minmax(0,1fr)] content-center gap-0.5 rounded-md px-2 py-1.5 text-left pointer-coarse:min-h-10 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   >
-                    <span className="flex min-w-0 items-center gap-2 text-[13px]">
-                      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        <Sensitive length={14}>{tk.description || t(`tasks.kind.${tk.kind || 'other'}`)}</Sensitive>
-                      </span>
-                      <TaskElapsed task={tk} status="running" />
-                    </span>
-                    <span className="pl-5.5">
-                      <LastAction task={tk} />
-                      {!!(tk.tools || tk.tokens) && (
-                        <span className="block text-[11px] text-muted-foreground">
-                          {[tk.tools ? t('tasks.tools', { count: tk.tools }) : '', tk.tokens ? t('tasks.tokens', { count: fmtTokens(tk.tokens) }) : ''].filter(Boolean).join(' · ')}
-                        </span>
-                      )}
-                    </span>
+                    <TaskLine task={tk} />
                   </button>
                 </li>
               )
@@ -187,5 +172,31 @@ export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
         </PopoverContent>
       </Popover>
     </div>
+  )
+}
+
+/** One running task as the bar's list shows it: icon, what it is, running time, its last action, tools and tokens
+ *  (also the sidebar's session preview card). */
+export function TaskLine({ task: tk }: { task: Task }) {
+  const t = useT()
+  const Icon = tk.kind === 'agent' ? Bot : SquareTerminal
+  return (
+    <>
+      <span className="flex min-w-0 items-center gap-2 text-[13px]">
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate font-medium">
+          <Sensitive length={14}>{tk.description || t(`tasks.kind.${tk.kind || 'other'}`)}</Sensitive>
+        </span>
+        <TaskElapsed task={tk} status="running" />
+      </span>
+      <span className="pl-5.5">
+        <LastAction task={tk} />
+        {!!(tk.tools || tk.tokens) && (
+          <span className="block text-[11px] text-muted-foreground">
+            {[tk.tools ? t('tasks.tools', { count: tk.tools }) : '', tk.tokens ? t('tasks.tokens', { count: fmtTokens(tk.tokens) }) : ''].filter(Boolean).join(' · ')}
+          </span>
+        )}
+      </span>
+    </>
   )
 }

@@ -342,6 +342,16 @@ function conversation(s, d) {
     ev.push({ type: 'tool_result', tool_use_id: g, text: 'drafts/2026-09-cart-abandonment.md:14: …a slow checkout is the first reason…\ndrafts/2026-10-payment-methods.md:3: …one-page checkout…', is_error: false, at: at() })
     const w = tid()
     ev.push({ type: 'tool_use', id: w, name: 'Write', input: { file_path: `${cwd}/drafts/2026-10-speed-up-checkout.md`, content: '# 5 ways to speed up checkout\n…' }, summary: 'Write drafts/2026-10-speed-up-checkout.md', at: at() })
+    if (s.title.includes('checkout')) {
+      // a sub-agent at work (its progress ticks while the session runs: MOCK_AGENT_ACTIVITY below)
+      ev.push({ type: 'tool_result', tool_use_id: w, text: 'File created successfully.', is_error: false, at: at() })
+      const a = tid()
+      const desc = 'Check the numbers in section 2'
+      ev.push({ type: 'tool_use', id: a, name: 'Agent', input: { description: desc, subagent_type: 'general-purpose', prompt: 'Verify every statistic quoted in section 2 of the draft against its source.' }, summary: `Agent: ${desc}`, at: at() })
+      const started = now() - 47
+      ev.push({ type: 'task', id: `task_${a}`, tool_use_id: a, at: started, state: 'running', kind: 'agent', description: desc, agent_type: 'general-purpose', activity: 'WebFetch baymard.com/lists/cart-abandonment-rate', last_tool: 'WebFetch', tools: 6, tokens: 18400 })
+      s.mockAgent = { id: `task_${a}`, tool_use_id: a, desc, n: 0 }
+    }
     return ev
   }
 
@@ -679,6 +689,22 @@ setInterval(() => {
   for (const set of sessionSubs.values()) for (const c of set) c.write(': ping\n\n')
 }, 15000).unref()
 setInterval(() => bus('health'), 20000).unref()
+// The running mock session's sub-agent moves on every few seconds (live preview card / thread).
+const MOCK_AGENT_ACTIVITY = [
+  ['Read', 'Read drafts/2026-10-speed-up-checkout.md'],
+  ['WebSearch', 'WebSearch "checkout abandonment rate 2026"'],
+  ['WebFetch', 'WebFetch baymard.com/lists/cart-abandonment-rate'],
+  ['Grep', 'Grep "%" in drafts/2026-10-speed-up-checkout.md'],
+]
+setInterval(() => {
+  for (const s of S.sessions) {
+    const a = s.mockAgent
+    if (!a || s.state !== 'running') continue
+    a.n++
+    const [tool, act] = MOCK_AGENT_ACTIVITY[a.n % MOCK_AGENT_ACTIVITY.length]
+    addEvents(s, { type: 'task', id: a.id, tool_use_id: a.tool_use_id, at: now(), state: 'running', kind: 'agent', description: a.desc, activity: act, last_tool: tool, tools: 6 + a.n, tokens: 18400 + a.n * 1300 })
+  }
+}, 3000).unref()
 
 /* =================================================================== simulated turns */
 function later(s, ms, fn) {

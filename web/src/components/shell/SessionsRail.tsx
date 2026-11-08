@@ -1,6 +1,6 @@
 // Second column of the unfolded desktop sidebar: the Sessions page's own tree (filter, Running / Unread chips,
-// folding, menus, archived folds), lazy-loaded from the Sessions page chunk the first time the bar unfolds (the
-// shell stays in the core chunk). A pick opens the session (pages/sessions/RailTree.tsx) and folds the bar.
+// folding, menus, archived folds), lazy-loaded from the Sessions page chunk on idle after the first page load, then
+// kept (the shell stays in the core chunk). A pick opens the session (pages/sessions/RailTree.tsx) and folds the bar.
 // Hovering a session row (mouse) or focusing it (keyboard) shows its preview card beside the rail: delegated on the
 // tree's `data-session-row` buttons, so the tree itself knows nothing about it.
 // The container (placement, width, slide) is the sidebar's: this component only fills it.
@@ -11,7 +11,16 @@ import { useT, withGroups } from '@/i18n'
 import { Skeleton } from '@/components/ui'
 import { SessionPreviewCard } from './SessionPreview'
 
-const RailTree = React.lazy(withGroups(['files'], () => import('@/pages/sessions/RailTree')))
+const loadRailTree = withGroups(['files'], () => import('@/pages/sessions/RailTree'))
+let railTree: ReturnType<typeof loadRailTree> | undefined
+/** The tree's chunk and texts, fetched once: on idle by the sidebar (before it mounts the column), or at the first
+ *  unfold. A failed download is tried again next time. */
+export const preloadRailTree = () =>
+  (railTree ??= loadRailTree().catch((e: unknown) => {
+    railTree = undefined
+    throw e
+  }))
+const RailTree = React.lazy(preloadRailTree)
 /** Hover intent before the preview card shows; once shown, another row switches it at once. */
 const PREVIEW_DELAY_MS = 250
 const PREVIEW_SWITCH_MS = 70
@@ -53,18 +62,36 @@ export const sessionHref = (s: Session) => `/sessions?path=${encodeURIComponent(
 
 const rowOf = (t: EventTarget | null) => (t instanceof Element ? t.closest<HTMLElement>('[data-session-row]') : null)
 
-export function SessionsRail({ onPick }: { onPick?: () => void }) {
+export function SessionsRail({ onPick, shown = true }: { onPick?: () => void; shown?: boolean }) {
   const t = useT()
   const railRef = React.useRef<HTMLDivElement>(null)
   const preview = usePreview()
+  // The column stays mounted while the bar is folded: its card goes with the bar.
+  const hidePreview = preview.hide
+  React.useEffect(() => {
+    if (!shown) hidePreview(0)
+  }, [shown, hidePreview])
   // The tree's own queries (same keys): the archived list is only read from the cache, the tree decides to load it.
   const { data: live } = useSessions()
   const { data: archived } = useSessions(undefined, true, false)
   const shownSession = preview.at ? (live?.find((s) => s.id === preview.at!.id) ?? archived?.find((s) => s.id === preview.at!.id)) : undefined
+  // Stable, and the tree element memoized on it: the preview card and the bar's phases never re-render the tree.
+  const hideRef = React.useRef(preview.hide)
+  hideRef.current = preview.hide
+  const pickRef = React.useRef(onPick)
+  pickRef.current = onPick
   const pick = React.useCallback(() => {
-    preview.hide(0)
-    onPick?.()
-  }, [preview, onPick])
+    hideRef.current(0)
+    pickRef.current?.()
+  }, [])
+  const tree = React.useMemo(
+    () => (
+      <React.Suspense fallback={<RailSkeleton />}>
+        <RailTree onPick={pick} className="h-full min-h-0 flex-1" />
+      </React.Suspense>
+    ),
+    [pick],
+  )
 
   const inRail = (t: EventTarget | null) => t instanceof Node && !!railRef.current?.contains(t)
   return (
@@ -91,10 +118,8 @@ export function SessionsRail({ onPick }: { onPick?: () => void }) {
       className="flex h-full min-h-0 w-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
       data-testid="sessions-rail-body"
     >
-      <React.Suspense fallback={<RailSkeleton />}>
-        <RailTree onPick={pick} className="h-full min-h-0 flex-1" />
-      </React.Suspense>
-      {shownSession && preview.at && railRef.current && (
+      {tree}
+      {shown && shownSession && preview.at && railRef.current && (
         <SessionPreviewCard
           session={shownSession}
           anchor={preview.at.el.closest<HTMLElement>('[role="treeitem"]') ?? preview.at.el}

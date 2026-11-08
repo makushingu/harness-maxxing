@@ -382,7 +382,7 @@ function Elapsed({ since }: { since: number }) {
   return <span className="ml-auto shrink-0 tabular-nums">{fmtElapsed(now - since)}</span>
 }
 
-function RunningRow({ session, log }: { session: Session; log: LogState }) {
+export function RunningRow({ session, log }: { session: Session; log: LogState }) {
   const t = useT()
   // Current activity: the last tool still waiting for its result, if any.
   let activity = t('sessions.working')

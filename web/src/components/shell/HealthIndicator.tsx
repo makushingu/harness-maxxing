@@ -207,7 +207,7 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
     </span>
   )
   return (
-    <div data-testid="sidebar-status" className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2', collapsed && 'justify-items-center px-2')}>
+    <div data-testid="sidebar-status" className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
       <Popover open={open} onOpenChange={setOpen}>
         <Tooltip content={collapsed ? tip : null} side="right">
           <PopoverTrigger
@@ -227,8 +227,10 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
                 {rows.map((r) => (
                   <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
                 ))}
+                {/* the health dot only says something is wrong (all good = nothing; notifications live in the bell);
+                    its room is kept so the block never changes height */}
                 <span className="mt-0.5 flex size-3 items-center justify-center">
-                  <LiveDot tone={s.tone} />
+                  {alert && <LiveDot tone={s.tone} />}
                 </span>
               </>
             ) : (

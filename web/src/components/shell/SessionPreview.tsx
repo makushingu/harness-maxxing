@@ -2,6 +2,9 @@
 // from the keyboard): title, place, state, model, then the last exchange. The data is the thread's own first load:
 // `prefetchTail` starts it and the card reads it without consuming it, so opening the session right after uses the
 // same request. Polled (a small tail) only while the card is open on a running session.
+// A running session also gets, at the bottom, the thread's own working rows (pages/sessions/PreviewWorking.tsx,
+// lazy): last tool cards, running sub-agents with what they do now, the running line with its timer, live from that
+// session's stream while the card is open.
 // Rendered in a portal (the bar is overflow-hidden) but as a React child of the rail: pointer enter / leave through
 // the portal count as staying inside the bar, so hovering the card keeps the bar unfolded and leaving it folds it.
 // No focus is ever moved into it, and nothing in it sets aria-expanded (the bar waits for those before folding).
@@ -12,11 +15,18 @@ import { Clock } from 'lucide-react'
 import { fetchTail, peekEarlyTail, prefetchTail, TAIL_EVENTS } from '@/lib/queries'
 import type { Session, SessionEvent, SessionEventsBackPage } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
-import { useLang, useT } from '@/i18n'
+import { useLang, useT, withGroups } from '@/i18n'
 import { Sensitive, Skeleton, SkeletonText, StatusDot } from '@/components/ui'
 
 const CARD_W = 340
+/** Wider for a running session: its tool cards read like in the thread. */
+const CARD_W_RUNNING = 400
 const CARD_MAX_H = 360
+/** A running session's card also holds its working block. */
+const CARD_MAX_H_RUNNING = 384
+/** The working block of a running session (tool cards, sub-agents, running line): the Sessions page's own rows,
+ *  lazy-loaded with that page's chunk (the rail's tree comes from it too), so the shell stays light. */
+const PreviewWorking = React.lazy(withGroups(['files'], () => import('@/pages/sessions/PreviewWorking')))
 /** Events read on each poll of a running session (the full first page comes from the thread's own load). */
 const POLL_EVENTS = 40
 const POLL_MS = 4000
@@ -201,14 +211,14 @@ export function SessionPreviewCard({
       onPointerLeave={onPointerLeave}
       className="fixed z-50 pl-2"
       style={{
-        width: CARD_W + 8,
+        width: (running ? CARD_W_RUNNING : CARD_W) + 8,
         left: pos?.left ?? -9999,
         top: pos?.top ?? 0,
         visibility: pos ? 'visible' : 'hidden',
         transition: reducedMotion() ? undefined : 'top 120ms ease-out',
       }}
     >
-      <div className="flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-pop" style={{ maxHeight: CARD_MAX_H }}>
+      <div className="flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-pop" style={{ maxHeight: running ? CARD_MAX_H_RUNNING : CARD_MAX_H }}>
         <div ref={body} className="flex min-h-0 flex-col">
           <div className="shrink-0 border-b px-3.5 pt-3 pb-2.5">
             <p className="line-clamp-2 text-sm leading-5 font-semibold">
@@ -226,7 +236,7 @@ export function SessionPreviewCard({
               <span className="shrink-0 tabular-nums">{fmtRelative(session.updated, lang)}</span>
             </div>
           </div>
-          <div className="min-h-0 overflow-y-auto overscroll-contain px-3.5 py-2.5 text-[13px] leading-5">
+          <div className={`${running ? 'min-h-16' : 'min-h-0'} overflow-y-auto overscroll-contain px-3.5 py-2.5 text-[13px] leading-5`}>
             {isError && !data ? (
               <p className="text-xs text-muted-foreground">{t('shell.preview.error')}</p>
             ) : isPending && !assistant ? (
@@ -234,14 +244,14 @@ export function SessionPreviewCard({
                 <Skeleton className="h-3.5 w-1/2" />
                 <SkeletonText lines={4} />
               </div>
-            ) : !user && !assistant && !(running && data?.activity) ? (
+            ) : !user && !assistant ? (
               <p className="text-xs text-muted-foreground">{t('shell.preview.empty')}</p>
             ) : (
               <div className="grid gap-2.5">
                 {user ? (
                   <div className="rounded-md bg-muted/60 px-2.5 py-1.5">
                     <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{t('shell.preview.you')}</p>
-                    <p className="line-clamp-3 break-words whitespace-pre-line">
+                    <p className={`${running ? 'line-clamp-1' : 'line-clamp-3'} break-words whitespace-pre-line`}>
                       <Sensitive length={20}>{plain(user)}</Sensitive>
                     </p>
                   </div>
@@ -251,23 +261,34 @@ export function SessionPreviewCard({
                 {assistant && (
                   <div>
                     <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{t('shell.preview.claude')}</p>
-                    <p className="line-clamp-8 break-words whitespace-pre-line text-foreground/90">
+                    <p className={`${running ? 'line-clamp-2' : 'line-clamp-8'} break-words whitespace-pre-line text-foreground/90`}>
                       <Sensitive length={40}>{plain(assistant)}</Sensitive>
                     </p>
                   </div>
                 )}
-                {running && data?.activity && (
-                  <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <StatusDot tone="running" pulse className="shrink-0" />
-                    <span className="shrink-0">{t('shell.preview.now')}</span>
-                    <span className="min-w-0 truncate font-mono text-[11px]">
-                      <Sensitive length={16}>{data.activity}</Sensitive>
-                    </span>
-                  </p>
-                )}
               </div>
             )}
           </div>
+          {running && (
+            // the thread's own bottom rows while Claude works; until its chunk is there, the current tool alone
+            <div className="flex max-h-[176px] shrink-0 flex-col justify-end overflow-hidden border-t bg-muted/30 px-3 pt-2 pb-0.5">
+              <React.Suspense
+                fallback={
+                  data?.activity ? (
+                    <p className="flex h-7 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <StatusDot tone="running" pulse className="shrink-0" />
+                      <span className="shrink-0">{t('shell.preview.now')}</span>
+                      <span className="min-w-0 truncate font-mono text-[11px]">
+                        <Sensitive length={16}>{data.activity}</Sensitive>
+                      </span>
+                    </p>
+                  ) : null
+                }
+              >
+                <PreviewWorking session={session} />
+              </React.Suspense>
+            </div>
+          )}
         </div>
       </div>
     </div>,

@@ -287,19 +287,36 @@ html[data-boot] .mx-boot-side { animation: mx-slide-right 340ms cubic-bezier(0.1
 html[data-boot] .mx-boot-item { animation: mx-slide-right 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 30ms); }
 html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 /* Folding sidebar (Sidebar.tsx). The bar unfolds over the page in 300 ms and folds back in 220 ms on one soft ease;
-   its shadow fades in a little slower than the width so the edge never "pops". Its content is laid out at the final
+   its shadow fades in a little slower than the edge so the edge never "pops". Its content is laid out at the final
    width and revealed by the moving edge; the labels (and what only exists unfolded: `.mx-side-reveal`) fade in a
    beat later, staggered down the list by the rows' --i (capped), with a tiny slide; they fade out first when it
    folds. Rows keep their folded height (44 px) while unfolded over the page, so nothing moves vertically. */
-.mx-side { --mx-side-ease: cubic-bezier(0.22, 1, 0.36, 1); box-shadow: 0 0 0 0 transparent; }
-.mx-side:is([data-unfold='open'], [data-unfold='closing'], [data-unfold='closed']) {
-  transition: width 220ms var(--mx-side-ease), box-shadow 200ms ease-out;
+/* Not pinned, the bar is always as wide as unfolded (--mx-side-open, Sidebar.tsx) and slid left so only its last 64 px
+   show; `.mx-side-inner` slides back the same distance, so the content stays still under the moving edge. Transforms
+   only (composited), and `closing` is set on the element alone (no render). The shadow is a layer of its own that
+   slides with the bar and fades (no box-shadow animation, which repaints every frame). */
+.mx-side { --mx-side-ease: cubic-bezier(0.22, 1, 0.36, 1); }
+.mx-side:is([data-unfold='open'], [data-unfold='closing'], [data-unfold='closed']),
+.mx-side-shadow {
+  width: var(--mx-side-open, 64px);
+  transform: translateX(calc(64px - var(--mx-side-open, 64px)));
+  transition: transform 220ms var(--mx-side-ease);
 }
-.mx-side[data-unfold='open'] {
-  transition: width 300ms var(--mx-side-ease), box-shadow 420ms ease-out;
+.mx-side:is([data-unfold='open'], [data-unfold='closing'], [data-unfold='closed']) > .mx-side-inner {
+  transform: translateX(calc(var(--mx-side-open, 64px) - 64px));
+  transition: transform 220ms var(--mx-side-ease);
+}
+.mx-side[data-unfold='open'], .mx-side[data-unfold='open'] > .mx-side-inner, .mx-side[data-unfold='open'] ~ .mx-side-shadow {
+  transform: none;
+  transition: transform 300ms var(--mx-side-ease);
+}
+.mx-side-shadow {
+  position: absolute; inset-block: 0; left: 0; z-index: -1; pointer-events: none; opacity: 0;
   box-shadow: 12px 0 32px -14px rgb(0 0 0 / 0.18), 2px 0 8px -4px rgb(0 0 0 / 0.06);
+  transition: transform 220ms var(--mx-side-ease), opacity 200ms ease-out;
 }
-.dark .mx-side[data-unfold='open'] { box-shadow: 14px 0 36px -14px rgb(0 0 0 / 0.55), 2px 0 10px -4px rgb(0 0 0 / 0.3); }
+.dark .mx-side-shadow { box-shadow: 14px 0 36px -14px rgb(0 0 0 / 0.55), 2px 0 10px -4px rgb(0 0 0 / 0.3); }
+.mx-side[data-unfold='open'] ~ .mx-side-shadow { opacity: 1; transition: transform 300ms var(--mx-side-ease), opacity 420ms ease-out; }
 .mx-side:is([data-unfold='open'], [data-unfold='closing']) .mx-nav-row { height: 2.75rem; }
 @keyframes mx-label-in { from { opacity: 0; transform: translateX(-3px); } }
 @keyframes mx-rail-in { from { opacity: 0; transform: translateX(-8px); } }
@@ -308,6 +325,9 @@ html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
   animation-delay: calc(70ms + min(var(--i, 0), 8) * 14ms);
 }
 .mx-side[data-unfold='open'] .mx-side-rail { animation: mx-rail-in 340ms var(--mx-side-ease) 60ms backwards; }
+/* Folded, the sessions column stays mounted but skipped: no rendering, no focus, no accessibility tree; its styles and
+   layout are kept for the next unfold (`data-warm`: its first moment, rendered once out of sight; Sidebar.tsx RailSlot). */
+.mx-side-rail:not([data-shown], [data-warm]) { content-visibility: hidden; }
 .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 0; transition: opacity 130ms ease-out; }
 /* The bell, back at its folded spot once the bar has folded (it left the search field's row fading out). */
 @keyframes mx-bell-in { from { opacity: 0; } }
@@ -320,12 +340,6 @@ html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 /* Claude's sparkle, a faint watermark inside the quota ring (UsageIndicator.tsx ClaudeRing), behind the figure. */
 .mx-claude-mark { opacity: 0.22; pointer-events: none; }
 .dark .mx-claude-mark { opacity: 0.32; }
-@media (prefers-reduced-motion: reduce) {
-  .mx-arc { transition: none; }
-  .mx-side, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-bell-in { transition: none !important; animation: none !important; }
-  .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 1; }
-  .mx-soft-ping { animation: none; opacity: 0; }
-}
 .mx-cv { content-visibility: auto; contain-intrinsic-size: auto 44px; }
 .mx-cv-tile { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .mx-grow-y { transform-box: fill-box; transform-origin: 50% 100%; animation: mx-grow-y 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(140ms + var(--i, 0) * 24ms); }
@@ -469,6 +483,11 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* the sidebar, its meters and status dot (above) */
+  .mx-arc { transition: none; }
+  .mx-side, .mx-side-inner, .mx-side-shadow, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-bell-in { transition: none !important; animation: none !important; }
+  .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 1; }
+  .mx-soft-ping { animation: none; opacity: 0; }
 }
 
 /* Markdown (docs, dashboard markdown blocks, later: session messages) */
