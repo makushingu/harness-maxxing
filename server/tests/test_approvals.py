@@ -527,6 +527,14 @@ def test_always_rule_is_narrow(tool, inp, rule):
     assert approvals.always_rule({"tool": tool, "input": inp, "agent_path": ""}) == rule
 
 
+def test_a_rule_with_a_lone_surrogate_is_refused_not_a_500(client, topic):
+    from maxxing import approvals
+    assert approvals.always_rule({"tool": "Bash", "input": {"command": "echo \ud800"}, "agent_path": ""}) == ""
+    r = client.patch("/api/workspace/projects/acme/topics/blog", content=json.dumps({"allowed_tools": ["Bash(\ud800)"]}),
+                     headers={"content-type": "application/json"})
+    assert r.status_code == 400 and "bad_rule" in r.text
+
+
 def test_mode_ask_is_accepted_everywhere(client, topic):
     assert client.put("/api/claude/settings", json={"permission_mode": "ask"}).status_code == 200
     assert client.put("/api/claude/settings", json={"permission_mode": "nope"}).status_code == 400

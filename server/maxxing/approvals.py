@@ -98,6 +98,10 @@ def always_rule(d: dict) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,200}", tool) or any(
             isinstance(v, str) and logs.redact(v) != v for v in inp.values()):   # a secret in it: never in a rule
         return ""
+    try:                                             # a lone surrogate: the topic file could not store the rule
+        json.dumps(inp, ensure_ascii=False).encode("utf-8")
+    except (UnicodeEncodeError, ValueError, RecursionError):
+        return ""
     if tool == "Bash":
         cmd = inp.get("command")
         # "*" and a final ":*" are wildcards in Bash rules: the rule would match more than what was allowed
