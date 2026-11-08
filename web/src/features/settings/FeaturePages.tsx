@@ -57,12 +57,16 @@ export function FeaturePages({ compact }: { compact?: boolean }) {
               {need && (
                 <p className="text-xs text-muted-foreground/80">
                   {t(need.text)}
-                  {need.to && need.link && !compact && (
+                  {need.to && need.link && (
                     <>
                       {' '}
-                      <Link to={need.to} className="text-primary hover:underline">
-                        {t(need.link)}
-                      </Link>
+                      {compact ? (
+                        `${t('nav.settings')} → ${t(need.link)}.` // the first-run wizard: no link that leaves it
+                      ) : (
+                        <Link to={need.to} className="text-primary hover:underline">
+                          {t(need.link)}
+                        </Link>
+                      )}
                     </>
                   )}
                 </p>
