@@ -25,7 +25,7 @@ import {
   Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { Page, PageHeader } from '@/components/shell/Page'
-import { absTopicDir, filesUrl, fmtCost, linkifyMarkdown } from '@/pages/sessions/util'
+import { absTopicDir, filesUrl, fmtCost } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings, type SectionId } from './AgentSettings'
@@ -36,7 +36,8 @@ import { ThreadApprovalBody, useThreadApprovals } from './approvals'
 import { AttachButton, AttachList, agentDraftKey, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { QuotePill } from '@/pages/sessions/Quote'
 import { VoiceButton } from '@/features/voice/VoiceButton'
-import { AttachmentStrip } from '@/pages/sessions/Items'
+import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
+import { AnswerContext, AnswerText } from './answer'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -242,7 +243,6 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const { data, isLoading, error } = useAgentThread(a.path)
   const { data: crons } = useCrons()
-  const { data: ws } = useWorkspace()
   const seen = useAgentSeen()
   const box = React.useRef<HTMLDivElement>(null)
   const composer = React.useRef<AgentComposerApi>(null)
@@ -275,35 +275,37 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
         className="min-h-0 flex-1 overflow-y-auto"
         aria-live="polite"
         data-testid="agent-thread"
+        data-thread
       >
-        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
-          {isLoading ? (
-            [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
-          ) : error ? (
-            <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
-          ) : !msgs.length ? (
-            <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
-          ) : (
-            msgs
-              .filter((m) => !asks.merged(m))
-              .map((m) => (
-                <ThreadMessage
-                  key={m.id}
-                  m={m}
-                  agent={a}
-                  crons={crons?.jobs || []}
-                  root={ws?.root}
-                  answers={m.reply_to ? byId.get(m.reply_to) : undefined}
-                  onReply={setReplyTo}
-                  live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
-                  decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
-                />
-              ))
-          )}
-          {(a.running_sessions || []).map((s) => (
-            <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
-          ))}
-        </div>
+        <AnswerContext>
+          <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
+            {isLoading ? (
+              [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
+            ) : error ? (
+              <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
+            ) : !msgs.length ? (
+              <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
+            ) : (
+              msgs
+                .filter((m) => !asks.merged(m))
+                .map((m) => (
+                  <ThreadMessage
+                    key={m.id}
+                    m={m}
+                    agent={a}
+                    crons={crons?.jobs || []}
+                    answers={m.reply_to ? byId.get(m.reply_to) : undefined}
+                    onReply={setReplyTo}
+                    live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
+                    decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
+                  />
+                ))
+            )}
+            {(a.running_sessions || []).map((s) => (
+              <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
+            ))}
+          </div>
+        </AnswerContext>
       </div>
       <QuotePill scope={box} selector="[data-kind]" onQuote={(q) => composer.current?.quote(q)} />
       <Composer key={a.path} ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
@@ -331,12 +333,11 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
 }
 
 function ThreadMessage({
-  m, agent: a, crons, root, answers, onReply, live, decided,
+  m, agent: a, crons, answers, onReply, live, decided,
 }: {
   m: AgentMessage
   agent: AgentDetail
   crons: Cron[]
-  root?: string
   answers?: AgentMessage
   onReply: (m: AgentMessage) => void
   /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
@@ -346,6 +347,8 @@ function ThreadMessage({
   const t = useT()
   const lang = useLang()
   const [open, setOpen] = React.useState(false)
+  // Right click (long press): copy what was said, mine or the agent's (not the approvals: their buttons are the point).
+  const { onContextMenu, touch, menu } = useMessageMenu({ text: m.kind === 'approval' ? '' : m.text, copy: true })
   const when = (
     <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
       {fmtRelative(m.at, lang)}
@@ -388,7 +391,8 @@ function ThreadMessage({
         <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
           {quote}
           {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
-          <div className="rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
+          <div className="relative rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" onContextMenu={onContextMenu} {...touch}>
+            {menu}
             <p className="whitespace-pre-wrap break-words">
               <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
             </p>
@@ -423,7 +427,12 @@ function ThreadMessage({
   return (
     <div className="flex items-start gap-2" data-kind={m.kind}>
       <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div className={cn('grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}>
+      <div
+        onContextMenu={onContextMenu}
+        {...touch}
+        className={cn('relative grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}
+      >
+        {menu}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{a.display_name}</Sensitive>
@@ -445,13 +454,16 @@ function ThreadMessage({
         {m.kind === 'approval' ? (
           <ThreadApprovalBody m={m} live={live} decided={decided} />
         ) : m.text ? (
-          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
+          <div className="grid min-w-0">
+            <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
+              <Sensitive block>
+                <AnswerText text={m.text} />
+              </Sensitive>
+              {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
+            </div>
             <Sensitive block>
-              <React.Suspense fallback={<p className="whitespace-pre-wrap break-words">{m.text}</p>}>
-                <Markdown className="text-sm">{linkifyMarkdown(m.text, root)}</Markdown>
-              </React.Suspense>
+              <MessageMedia text={m.text} />
             </Sensitive>
-            {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
           </div>
         ) : (
           <span className="text-sm text-muted-foreground italic">{t('agents.thread.noText')}</span>
