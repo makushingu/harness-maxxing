@@ -68,6 +68,7 @@ export const en = {
   'shell.collapse': 'Collapse sidebar',
   'shell.resize': "Drag to resize (double-click: normal width)",
   'shell.expand': 'Expand sidebar',
+  'shell.pin': 'Keep the sidebar open',
   'settings.layout': "Layout",
   'settings.layoutDesc': "On this device. Touch: the sessions and the rest of the app behind two buttons at the top, the conversation fills the screen. Auto picks it on phones and tablets. Desktop keeps the sidebar when the screen is wide enough.",
   'layout.auto': "Auto",

@@ -66,6 +66,7 @@ export const fr: Record<keyof typeof en, string> = {
   'shell.collapse': 'Réduire la barre latérale',
   'shell.resize': "Glisser pour redimensionner (double-clic : largeur normale)",
   'shell.expand': 'Déplier la barre latérale',
+  'shell.pin': 'Garder la barre latérale ouverte',
   'settings.layout': "Affichage",
   'settings.layoutDesc': "Sur cet appareil. Tactile : les sessions et le reste de l'app derrière deux boutons en haut, la conversation prend tout l'écran. Auto le choisit sur téléphone et tablette. Ordinateur garde la barre latérale si l'écran est assez large.",
   'layout.auto': "Auto",

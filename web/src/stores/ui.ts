@@ -88,7 +88,8 @@ export const useUI = create<UIState>()(
       font: 'inter',
       monoFont: 'system',
       language: initialLang(),
-      sidebarCollapsed: false,
+      // New browsers start with the icon bar (it unfolds over the page on hover); the pin keeps it open.
+      sidebarCollapsed: true,
       sidebarWidth: null,
       layout: 'auto',
       touchHome: 'session',

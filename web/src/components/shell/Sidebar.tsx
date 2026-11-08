@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { NavLink } from 'react-router'
-import { PanelLeftClose, PanelLeftOpen, PanelRight, Search } from 'lucide-react'
+import { PanelLeftClose, PanelRight, Pin, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -8,7 +8,7 @@ import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { Button, CountBadge, CountDot, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
+import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
 import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
 import { StatusLine } from './HealthIndicator'
@@ -75,7 +75,7 @@ function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
 }
 
 /** Right edge: drag to resize the expanded sidebar (double-click: default width). */
-function ResizeEdge({ side }: { side: React.RefObject<HTMLElement | null> }) {
+function ResizeEdge({ side }: { side: React.RefObject<HTMLDivElement | null> }) {
   const t = useT()
   const setWidth = useUI((s) => s.setSidebarWidth)
   return (
@@ -117,6 +117,102 @@ function ResizeEdge({ side }: { side: React.RefObject<HTMLElement | null> }) {
   )
 }
 
+/** Width of the folded icon bar (the page always keeps this room when the bar is not pinned). */
+const FOLDED_W = 60
+/** Unfold / fold animation (keep in sync with the `duration-200` of the aside and the CSS of `.mx-side`). */
+const UNFOLD_MS = 200
+/** Delay before folding back once the pointer (or the keyboard focus) left the bar. */
+const FOLD_DELAY_MS = 250
+
+/** closed = icon bar; open = unfolded over the page; closing = folding back (labels still there, clipped). */
+export type UnfoldPhase = 'closed' | 'open' | 'closing'
+
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** The folded bar unfolds over the page on hover or keyboard focus, and folds back 250 ms after the pointer / focus
+ *  left (Esc folds at once). A menu opened from the bar (Help, status) keeps it open until it closes. */
+function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) {
+  const [phase, setPhase] = React.useState<UnfoldPhase>('closed')
+  const timer = React.useRef<number | undefined>(undefined)
+  const hover = React.useRef(false)
+  const focus = React.useRef(false)
+  // After Esc or un-pinning: stay folded until the pointer leaves and comes back, or the focus moves.
+  const blocked = React.useRef(false)
+
+  const clear = () => {
+    window.clearTimeout(timer.current)
+    timer.current = undefined
+  }
+  const open = () => {
+    clear()
+    if (enabled && !blocked.current) setPhase('open')
+  }
+  const fold = (delay: number) => {
+    clear()
+    const tick = () => {
+      if (hover.current || focus.current) return
+      if (side.current?.querySelector('[aria-expanded="true"]')) {
+        timer.current = window.setTimeout(tick, FOLD_DELAY_MS) // a menu of the bar is open: wait for it
+        return
+      }
+      if (reducedMotion()) return setPhase('closed')
+      setPhase((p) => (p === 'open' ? 'closing' : p))
+      timer.current = window.setTimeout(() => setPhase((p) => (p === 'closing' ? 'closed' : p)), UNFOLD_MS)
+    }
+    if (delay) timer.current = window.setTimeout(tick, delay)
+    else tick()
+  }
+
+  const was = React.useRef(enabled)
+  React.useEffect(() => {
+    if (was.current === enabled) return
+    was.current = enabled
+    clear()
+    setPhase('closed')
+    // Just un-pinned with the pointer on it: fold now (the user sees the click did something), unfold on next visit.
+    if (enabled) blocked.current = true
+  }, [enabled])
+  React.useEffect(() => clear, [])
+
+  const props = {
+    onPointerEnter: (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch') return
+      hover.current = true
+      open()
+    },
+    onPointerLeave: (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch') return
+      hover.current = false
+      blocked.current = false
+      if (enabled) fold(FOLD_DELAY_MS)
+    },
+    onFocus: (e: React.FocusEvent) => {
+      // Keyboard focus only: a mouse click on a row must not keep the bar open once the pointer leaves.
+      const el = e.target as HTMLElement
+      if (!side.current?.contains(el) || !el.matches(':focus-visible')) return
+      focus.current = true
+      blocked.current = false
+      open()
+    },
+    onBlur: (e: React.FocusEvent) => {
+      const next = e.relatedTarget as Node | null
+      if (next && side.current?.contains(next)) return
+      focus.current = false
+      if (enabled) fold(FOLD_DELAY_MS)
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      // Only keys pressed in the bar itself (not in a menu it opened, rendered in a portal).
+      if (e.key !== 'Escape' || !enabled || phase === 'closed' || !side.current?.contains(e.target as Node)) return
+      e.preventDefault()
+      blocked.current = true
+      hover.current = false
+      focus.current = false
+      fold(0)
+    },
+  }
+  return { phase: enabled ? phase : 'closed', props } as const
+}
+
 export function Sidebar() {
   const prefetchLink = usePrefetchLink()
   const t = useT()
@@ -124,11 +220,16 @@ export function Sidebar() {
   const userCollapsed = useUI((s) => s.sidebarCollapsed)
   const toggle = useUI((s) => s.toggleSidebar)
   const tablet = useIsTablet()
-  const collapsed = tablet || userCollapsed
+  // Not pinned (the default): an icon bar that unfolds over the page. Pinned: the full sidebar takes its room.
+  const pinned = !tablet && !userCollapsed
+  const bar = React.useRef<HTMLElement>(null)
+  const unfold = useUnfold(!pinned, bar)
+  /** What the bar looks like right now: folded icons, or the labelled sidebar (pinned or unfolded). */
+  const collapsed = !pinned && unfold.phase === 'closed'
   const badge = useSessionBadge()
   const showSessions = useShowSessions()
   const width = useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default
-  const side = React.useRef<HTMLElement>(null)
+  const side = React.useRef<HTMLDivElement>(null)
   const saveSettings = useSaveSettings()
   const orderPins = useOrderPins()
 
@@ -215,36 +316,55 @@ export function Sidebar() {
   )
   const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
 
+  const unfolded = !pinned && unfold.phase !== 'closed'
+  const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
+
   return (
-    <aside
+    // The slot keeps the layout width (folded: 60 px, so the page never moves when the bar unfolds over it).
+    <div
       ref={side}
-      className={cn(
-        'mx-boot-side relative z-30 hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)] md:flex',
-        collapsed && 'w-[60px]',
-      )}
-      style={collapsed ? undefined : { width }}
-      aria-label={t('shell.navigation')}
+      className={cn('mx-boot-side relative hidden shrink-0 md:block', unfolded ? 'z-40' : 'z-30')}
+      style={{ width: pinned ? width : FOLDED_W }}
     >
-      {!collapsed && <ResizeEdge side={side} />}
-      {/* Logo + fold button (folded: the button takes the logo's place on hover). */}
-      <div className={cn('group/head flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
+      <aside
+        ref={bar}
+        {...unfold.props}
+        data-testid="sidebar"
+        data-unfold={pinned ? 'pinned' : unfold.phase}
+        data-expanded={collapsed ? 'false' : 'true'}
+        className={cn(
+          'mx-side absolute inset-y-0 left-0 flex flex-col border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]',
+          !pinned && 'overflow-hidden transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
+          unfold.phase === 'open' && !pinned && 'shadow-2xl',
+        )}
+        style={{ width: pinned ? '100%' : unfold.phase === 'open' ? width : FOLDED_W }}
+        aria-label={t('shell.navigation')}
+      >
+       <KeepTooltipShape.Provider value>
+        {/* Laid out at its final width while the bar unfolds or folds: the edge of the bar reveals it, nothing wraps. */}
+        <div className="mx-side-body flex h-full min-h-0 flex-col" style={{ width: pinned ? '100%' : collapsed ? FOLDED_W : width }}>
+      {pinned && <ResizeEdge side={side} />}
+      {/* Logo + pin button (shown once the bar is unfolded or pinned). */}
+      <div className={cn('flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
         <NavLink
           to="/"
-          className={cn('min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring', collapsed && !tablet && 'group-hover/head:hidden group-focus-within/head:hidden')}
+          className="min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Harness Maxxing"
         >
           <Logo collapsed={collapsed} className={cn(collapsed && 'justify-center')} />
         </NavLink>
-        {!tablet && (
-          <Tooltip content={<>{collapsed ? t('shell.expand') : t('shell.collapse')} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
+        {!tablet && !collapsed && (
+          <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
             <Button
               variant="ghost"
               size="icon-sm"
-              className={cn('size-8 shrink-0 text-muted-foreground', collapsed && 'hidden group-hover/head:inline-flex group-focus-within/head:inline-flex')}
+              data-testid="sidebar-pin"
+              aria-pressed={pinned}
+              className="size-8 shrink-0 text-muted-foreground"
               onClick={toggle}
-              aria-label={collapsed ? t('shell.expand') : t('shell.collapse')}
+              aria-label={pinLabel}
             >
-              {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+              {pinned ? <PanelLeftClose /> : <Pin />}
             </Button>
           </Tooltip>
         )}
@@ -265,7 +385,7 @@ export function Sidebar() {
             <Search className="size-4 shrink-0" />
             {!collapsed && (
               <>
-                <span className="flex-1 text-left">{t('palette.search')}</span>
+                <span className="flex-1 truncate text-left">{t('palette.search')}</span>
                 <Kbd>{MOD} K</Kbd>
               </>
             )}
@@ -294,6 +414,9 @@ export function Sidebar() {
       </div>
 
       <StatusLine collapsed={collapsed} />
-    </aside>
+        </div>
+       </KeepTooltipShape.Provider>
+      </aside>
+    </div>
   )
 }

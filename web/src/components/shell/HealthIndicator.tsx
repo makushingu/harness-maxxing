@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Download, Info, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Download, HardDrive, Info, MemoryStick, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { useUI, type Theme } from '@/stores/ui'
-import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
+import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
+import { useTween } from '@/lib/useTween'
+import { MeterBar, MeterIcon, MeterValue } from './Meter'
 import { usePlanPct, UsageLines } from './UsageIndicator'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
@@ -95,27 +97,33 @@ function IssueList({ issues }: { issues: Health['issues'] }) {
 
 const meterTone = (pct: number) => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
 
-/** CPU, RAM and disk as three figures side by side (the status panel); the bars are in Settings -> System. */
+/** CPU, RAM and disk side by side (the status panel): icon and name, the figure counting to its new value, a thin
+ *  bar; the bars with every detail are in Settings -> System. 75 % warning, 90 % critical: the colour fades over and
+ *  the icon pops once when a line changes level. */
 function HealthMeters() {
   const t = useT()
   const { data: h } = useHealth()
-  if (!h) return <Skeleton className="h-8" />
+  if (!h) return <Skeleton className="h-10" />
   const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
   const rows = [
-    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct },
-    { key: 'mem', label: t('health.ram'), pct: mem },
-    { key: 'disk', label: t('health.disk'), pct: h.disk.pct },
+    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct, icon: Cpu },
+    { key: 'mem', label: t('health.ram'), pct: mem, icon: MemoryStick },
+    { key: 'disk', label: t('health.disk'), pct: h.disk.pct, icon: HardDrive },
   ]
   return (
-    <span className="grid grid-cols-3 gap-2" data-testid="sidebar-meters">
+    <span className="grid grid-cols-3 gap-3" data-testid="sidebar-meters">
       {rows.map((r) => {
         const tone = meterTone(r.pct)
         return (
-          <span key={r.key} className="grid min-w-0 gap-0.5">
-            <span className="truncate text-xs text-muted-foreground">{r.label}</span>
+          <span key={r.key} className="grid min-w-0 gap-1">
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <MeterIcon icon={r.icon} tone={tone} />
+              <span className="truncate">{r.label}</span>
+            </span>
             <Sensitive length={3}>
-              <span className={cn('text-sm tabular-nums', tone === 'error' ? 'text-destructive' : tone === 'warn' && 'text-warning')}>{Math.round(r.pct)}%</span>
+              <MeterValue pct={r.pct} tone={tone} className="text-sm" />
             </Sensitive>
+            <MeterBar pct={r.pct} tone={tone} label={r.label} className="h-1" />
           </span>
         )
       })}
@@ -144,7 +152,9 @@ export function useStatusLine(visible?: boolean) {
   const t = useT()
   const { data: h } = useHealth()
   const tone = healthTone(h)
-  const pct = usePlanPct(visible)
+  const raw = usePlanPct(visible)
+  const tween = Math.round(useTween(raw ?? NaN)) // counts up / down like the panel's figures (not from nothing on load)
+  const pct = raw === null ? null : tween
   const health = !h ? t('health.checking') : tone === 'ok' ? t('shell.allGood') : t('health.issues', { count: openIssues(h).length })
   return { tone, health, plan: pct === null ? null : t('shell.claudePct', { pct }), label: pct === null ? health : `${health} · ${t('shell.claudePct', { pct })}` }
 }
@@ -173,7 +183,7 @@ export function StatusLine({ collapsed }: { collapsed?: boolean }) {
             )}
           >
             <span className="flex size-4 shrink-0 items-center justify-center">
-              <StatusDot tone={s.tone} pulse={s.tone === 'error'} />
+              <LiveDot tone={s.tone} />
             </span>
             {!collapsed && (
               <span className="min-w-0 flex-1 truncate">
@@ -191,11 +201,24 @@ export function StatusLine({ collapsed }: { collapsed?: boolean }) {
   )
 }
 
+const dotTone = { ok: 'bg-success', warn: 'bg-warning', error: 'bg-destructive', idle: 'bg-muted-foreground/50' } as const
+
+/** The status line's dot (also alone in the folded bar): its colour fades over (400 ms) when the health changes,
+ *  a ping ring while something is critical; instant / still under reduced motion. */
+function LiveDot({ tone }: { tone: keyof typeof dotTone }) {
+  return (
+    <span className="relative inline-flex size-2 shrink-0" aria-hidden>
+      <span className={cn('absolute inline-flex size-full rounded-full opacity-0 transition-opacity duration-[400ms] motion-reduce:transition-none', dotTone[tone], tone === 'error' && 'animate-ping opacity-60 motion-reduce:animate-none')} />
+      <span className={cn('relative inline-flex size-full rounded-full transition-colors duration-[400ms] ease-out motion-reduce:transition-none', dotTone[tone])} />
+    </span>
+  )
+}
+
 const panelRow =
   'flex min-h-9 min-w-0 items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11'
 
-/** What the status line opens (the touch menu shows it inline): the health issues or "all good", CPU / RAM / disk
- *  (-> Settings -> System), the Claude plan (-> Settings -> Stats), the theme, presentation mode, Install app. */
+/** What the status line opens (the touch menu shows it inline): the health issues or "all good", the Claude plan
+ *  (-> Settings -> Stats), CPU / RAM / disk (-> Settings -> System), the theme, presentation mode, Install app. */
 export function StatusPanel({ touch, onInstall }: { touch?: boolean; /** touch menu: Install app */ onInstall?: () => void }) {
   const t = useT()
   const theme = useUI((s) => s.theme)
@@ -207,13 +230,13 @@ export function StatusPanel({ touch, onInstall }: { touch?: boolean; /** touch m
       <div className="px-2 pt-0.5 pb-1.5">
         <HealthIssues />
       </div>
-      <Link to="/settings/system" className={cn(panelRow, 'grid gap-1.5')} aria-label={t('health.details')}>
+      <UsageLines visible={touch} className={cn(panelRow, 'grid')} />
+      <Link to="/settings/system" className={cn(panelRow, 'grid gap-1.5')} aria-label={t('health.details')} data-testid="status-system">
         <span className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
           {t('health.details')} <ChevronRight className="size-3.5 shrink-0" />
         </span>
         <HealthMeters />
       </Link>
-      <UsageLines visible={touch} className={cn(panelRow, 'grid')} />
       <div className="mt-1 grid gap-1 border-t pt-2">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2 py-1">
           <span className="text-sm">{t('shell.theme')}</span>

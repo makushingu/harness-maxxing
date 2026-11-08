@@ -41,17 +41,29 @@ const KeepClass = React.forwardRef<HTMLElement, Record<string, unknown>>(functio
   return React.cloneElement(child, { ...merged, ref })
 })
 
+/** Inside a provider set to true, a disabled tooltip keeps its Radix wrapper (closed) instead of returning the bare
+ *  child: switching a tooltip off then does not remount the child, so it keeps the keyboard focus (the folding
+ *  sidebar turns its tooltips off while it unfolds). */
+export const KeepTooltipShape = React.createContext(false)
+
 /** Shorthand: <Tooltip content="Label" side="right"><Button …/></Tooltip>. `content=null` disables it. */
 export function Tooltip({ content, side, align, children, disabled }: { content: React.ReactNode; side?: 'top' | 'right' | 'bottom' | 'left'; align?: 'start' | 'center' | 'end'; children: React.ReactNode; disabled?: boolean }) {
-  if (disabled || content == null || content === '') return <>{children}</>
+  const keep = React.useContext(KeepTooltipShape)
+  const [open, setOpen] = React.useState(false)
+  const off = disabled || content == null || content === ''
+  if (off && !keep) return <>{children}</>
   return (
-    <TooltipRoot>
+    // While off, Radix still asks to open on hover/focus but never asks to close (the controlled value is already
+    // false): ignore those opens, or every row touched while unfolded shows its tooltip once the bar folds.
+    <TooltipRoot open={!off && open} onOpenChange={(o) => setOpen(off ? false : o)}>
       <TooltipTrigger asChild>
         {React.isValidElement<Record<string, unknown>>(children) && typeof children.props.className === 'function' ? <KeepClass child={children} /> : children}
       </TooltipTrigger>
-      <TooltipContent side={side} align={align}>
-        {content}
-      </TooltipContent>
+      {!off && (
+        <TooltipContent side={side} align={align}>
+          {content}
+        </TooltipContent>
+      )}
     </TooltipRoot>
   )
 }

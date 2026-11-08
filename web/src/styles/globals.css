@@ -286,6 +286,13 @@ html[data-kbd] {
 html[data-boot] .mx-boot-side { animation: mx-slide-right 340ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 html[data-boot] .mx-boot-item { animation: mx-slide-right 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 30ms); }
 html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
+/* Folding sidebar (Sidebar.tsx): labels slide in while the bar unfolds over the page, fade while it folds back. */
+@keyframes mx-label-in { from { opacity: 0; transform: translateX(-6px); } }
+.mx-side[data-unfold='open'] .mx-side-body :is(.truncate, kbd) { animation: mx-label-in 200ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.mx-side[data-unfold='closing'] .mx-side-body :is(.truncate, kbd) { opacity: 0; transition: opacity 120ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .mx-side, .mx-side-body :is(.truncate, kbd) { transition: none !important; animation: none !important; }
+}
 .mx-cv { content-visibility: auto; contain-intrinsic-size: auto 44px; }
 .mx-cv-tile { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .mx-grow-y { transform-box: fill-box; transform-origin: 50% 100%; animation: mx-grow-y 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(140ms + var(--i, 0) * 24ms); }

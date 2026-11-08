@@ -15,8 +15,8 @@
 //                         default = fresh install (all off, nothing pinned; stock "notes" page extension kept).
 //   MOCK_LANG=fr       -> settings.language (default en).
 //   Settings carry those *_page flags + sidebar_order (GET/PUT /api/settings); page extensions carry pinned/pin_order
-//   (PATCH /api/extensions/:id {pinned}, PUT /api/extensions/pins {order}). /api/usage returns a Max plan (5 h 23 %,
-//   week 47 %). Empty stubs: /api/agents, /api/team, /api/feed so the shell's badges do not 404.
+//   (PATCH /api/extensions/:id {pinned}, PUT /api/extensions/pins {order}). /api/usage returns a Max plan (5 h and week moving,
+//   see meters(); MOCK_METERS=off = 5 h 23 %, week 47 %). Empty stubs: /api/agents, /api/team, /api/feed so the shell's badges do not 404.
 
 import http from 'node:http'
 import fs from 'node:fs'
@@ -34,6 +34,21 @@ const SETUP_TOKEN = 'dev-token'
 const DEFAULT_PASSWORD = 'password123'
 const SCENARIOS = ['setup', 'login', 'onboarding', 'ready', 'maxxing']
 const MOCK_PASSWORD = process.env.MOCK_PASSWORD || ''
+
+// Live meters (MOCK_METERS=off for the old near-still values): CPU swings 35-96 % over 30 s (crosses the panel's
+// 75 % / 90 % thresholds), RAM wanders, the Claude 5-hour window swings 40-98 % over 40 s (crosses 70 % / 90 %), the
+// week creeps. The values follow the clock; a bus push every METER_PUSH_MS makes open pages refetch them (the UI only
+// polls every 60 s): `health` refetches /api/system/health, `license` refetches every ['system', ...] query (usage).
+const LIVE_METERS = process.env.MOCK_METERS !== 'off'
+const METER_PUSH_MS = 3000
+const wave = (periodS, phase = 0) => Math.sin((2 * Math.PI * Date.now()) / (periodS * 1000) + phase)
+function meters() {
+  if (!LIVE_METERS) {
+    const jitter = Math.sin(Date.now() / 20000)
+    return { cpu: 23 + jitter * 8, memAvail: 3.1e9 + jitter * 2e8, five: 23, week: 47 }
+  }
+  return { cpu: 65.5 + 30.5 * wave(30), memAvail: 8e9 * (1 - (0.58 + 0.12 * wave(47, 1))), five: 69 + 29 * wave(40, 2), week: 47 + 4 * wave(90) }
+}
 const MOCK_ALL = process.env.MOCK_FEATURES === 'all'
 const PAGE_FLAGS = ['agents_page', 'mail_page', 'infra_page', 'team_page', 'tasks_page', 'git_page']
 
@@ -631,6 +646,8 @@ function sseOpen(req, res) {
 }
 const sseSend = (res, event, data) => { try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`) } catch {} }
 
+if (LIVE_METERS) setInterval(() => { if (busClients.size) bus('health', 'license') }, METER_PUSH_MS).unref()
+
 function bus(...topics) {
   const data = { topics: [...new Set(topics)] }
   for (const c of busClients) sseSend(c, 'invalidate', data)
@@ -819,10 +836,11 @@ function healthObj() {
   const fails = S.loginFails.filter((x) => x > now() - HOUR).length
   if (fails >= 8) issues.push({ level: 'warn', code: 'failed_logins', text: `${fails} failed logins in the last hour` })
   const jitter = Math.sin(Date.now() / 20000)
+  const m = meters()
   const disk = { total: 80e9, free: Math.round(80e9 * 0.18), pct: 82 }
   if (!(S.scenario === 'ready' || S.scenario === 'login')) { disk.free = 52e9; disk.pct = 35 }
-  return { ok: !issues.some((i) => i.level === 'error'), issues, cpu_pct: +(23 + jitter * 8).toFixed(1), load: [+(0.42 + jitter * 0.1).toFixed(2), 0.38, 0.31],
-    mem: { total: 8e9, avail: Math.round(3.1e9 + jitter * 2e8) }, disk, uptime_s: Math.round(now() - S.bootAt),
+  return { ok: !issues.some((i) => i.level === 'error'), issues, cpu_pct: +m.cpu.toFixed(1), load: [+(0.42 + jitter * 0.1).toFixed(2), 0.38, 0.31],
+    mem: { total: 8e9, avail: Math.round(m.memAvail) }, disk, uptime_s: Math.round(now() - S.bootAt),
     claude_auth: S.claude.auth.ok, backup_age_h: last ? +((now() - last.at) / HOUR).toFixed(1) : null, failed_logins_1h: fails, at: now() }
 }
 
@@ -1874,7 +1892,7 @@ R('GET', '/api/stats/tokens', () => {
     days, at: now() }
 })
 R('GET', '/api/usage', () => ({ available: true, plan: 'Max', source: 'api', seen_at: now(),
-  five_hour: { pct: 23, resets_at: now() + 2 * HOUR }, seven_day: { pct: 47, resets_at: now() + 3 * DAY } }))
+  five_hour: { pct: +meters().five.toFixed(1), resets_at: now() + 2 * HOUR }, seven_day: { pct: +meters().week.toFixed(1), resets_at: now() + 3 * DAY } }))
 R('GET', '/api/agents', () => ({ agents: [], avatar: {} }))
 R('GET', '/api/team', () => ({ me: 'alex', people: {}, chats: [], reactions: [], typing: {} }))
 R('POST', '/api/team/presence', () => ({ ok: true }))
