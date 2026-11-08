@@ -137,6 +137,17 @@ def test_names_that_give_the_same_folder_stay_apart(client, mx):
     assert "two" in (mx["ws"] / "projects/acme/topics/my-blog-2/memory.md").read_text()
 
 
+def test_a_renamed_folder_never_lands_in_an_unrelated_existing_one(client, mx):
+    (mx["ws"] / "projects/my-blog-2").mkdir(parents=True)
+    (mx["ws"] / "projects/my-blog-2/CLAUDE.md").write_text("# Mine\n")
+    p = _upload(client, _zip({"projects/My Blog/CLAUDE.md": "# A\n\nRules A\n",
+                              "projects/my-blog/CLAUDE.md": "# B\n\nRules B\n"}, top="")).json()
+    assert [x["name"] for x in p["projects"]] == ["my-blog", "my-blog-3"]
+    client.post(f"/api/import/{p['id']}/apply")
+    assert (mx["ws"] / "projects/my-blog-2/CLAUDE.md").read_text() == "# Mine\n"
+    assert "Rules B" in (mx["ws"] / "projects/my-blog-3/CLAUDE.md").read_text()
+
+
 def test_slug():
     assert importer.slug("Café Crème !") == "cafe-creme" and importer.slug("***") == "imported"
 
