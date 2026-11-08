@@ -314,6 +314,9 @@ html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 .mx-soft-ping { animation: mx-soft-ping 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
 /* Ring meters (Meter.tsx RingArc): the arc glides to its new length, its colour fades over. */
 .mx-arc { transition: stroke-dasharray 500ms ease-out, stroke 500ms ease-out; }
+/* Claude's sparkle, a faint watermark inside the quota ring (UsageIndicator.tsx ClaudeRing), behind the figure. */
+.mx-claude-mark { opacity: 0.22; pointer-events: none; }
+.dark .mx-claude-mark { opacity: 0.32; }
 @media (prefers-reduced-motion: reduce) {
   .mx-arc { transition: none; }
   .mx-side, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal) { transition: none !important; animation: none !important; }

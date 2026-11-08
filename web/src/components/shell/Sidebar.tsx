@@ -281,9 +281,9 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     const el = side.current
     const a = document.activeElement
     if (!el || (a && a !== document.body && el.contains(a))) return
-    // the focused element only exists unfolded (search, pin): the bar's first control (the bell) takes the focus
+    // the focused element only exists unfolded (search, pin, top logo): the folded logo at the bottom takes the focus
     ignoreFocusUntil.current = performance.now() + 400
-    el.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus()
+    el.querySelector<HTMLElement>('[data-side-logo="folded"]')?.focus()
   }, [phase, side])
 
   const props = {
@@ -440,6 +440,20 @@ export function Sidebar() {
 
   const unfolded = !pinned && unfold.phase !== 'closed'
   const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
+  // The logo sits at the top while the bar is unfolded or pinned, at the bottom while it is folded (or folding back).
+  const logoTop = pinned || unfold.phase === 'open'
+  const logoBottom = !logoTop
+  // Its two rows open / close with the bar's width: 300 ms to unfold, 220 ms to fold, nothing when pinned / reduced.
+  const ms = pinned || unfold.phase === 'closed' || reducedMotion() ? 0 : unfold.phase === 'open' ? 300 : FOLD_MS
+  const rowMotion = (shown: boolean): React.CSSProperties => ({
+    gridTemplateRows: shown ? '1fr' : '0fr',
+    transition: ms ? `grid-template-rows ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)` : 'none',
+  })
+  // Fading: the logo leaving goes fast (120 ms), the one arriving fades in over most of the move.
+  const fadeMotion = (shown: boolean): React.CSSProperties => ({
+    opacity: shown ? 1 : 0,
+    transition: ms ? (shown ? `opacity ${ms - 60}ms ease-out 60ms` : 'opacity 120ms ease-out') : 'none',
+  })
 
   return (
     // The slot keeps the layout width (folded: 60 px, so the page never moves when the bar unfolds over it).
@@ -466,6 +480,36 @@ export function Sidebar() {
         {/* Laid out at its final width while the bar unfolds or folds: the edge of the bar reveals it, nothing wraps. */}
         <div className="mx-side-body flex h-full min-h-0 shrink-0 flex-col" style={{ width: pinned ? '100%' : collapsed ? FOLDED_W : width }}>
       {pinned && <ResizeEdge side={side} />}
+      {/* Unfolded or pinned: the logo (a link to the dashboard) and the pin button, first row at the top. It grows from
+          0 to its height as the bar unfolds (and shrinks as it folds), so the rows below glide instead of jumping. */}
+      <div aria-hidden={!logoTop || undefined} inert={!logoTop || undefined} className="grid shrink-0" style={rowMotion(logoTop)}>
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex items-center gap-1.5 px-3 pt-2" style={fadeMotion(logoTop)}>
+            <NavLink
+              to="/"
+              className="flex h-11 min-w-0 flex-1 items-center rounded-md px-1.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Harness Maxxing"
+            >
+              <Logo />
+            </NavLink>
+            {!tablet && (
+              <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  data-testid="sidebar-pin"
+                  aria-pressed={pinned}
+                  className="size-8 shrink-0 text-muted-foreground"
+                  onClick={toggle}
+                  aria-label={pinLabel}
+                >
+                  {pinned ? <PanelLeftClose /> : <Pin />}
+                </Button>
+              </Tooltip>
+            )}
+          </div>
+        </div>
+      </div>
       {/* Top row: the notifications bell (same place folded or not), then, unfolded, the search field (Ctrl K). Folded,
           the bell alone: the rows below sit at the same height in both states. */}
       <div className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
@@ -510,31 +554,21 @@ export function Sidebar() {
 
       <StatusBlock collapsed={collapsed} />
 
-      {/* The logo at the very bottom (a link to the dashboard; the mark keeps its place folded or not), and the pin
-          button beside it once unfolded. */}
-      <div className="flex items-center gap-1.5 px-3 pt-1 pb-[calc(0.5rem+var(--safe-bottom))]">
-        <NavLink
-          to="/"
-          className={cn('flex h-11 min-w-0 flex-1 items-center rounded-md px-1.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring', collapsed && 'w-10 flex-none justify-center px-0')}
-          aria-label="Harness Maxxing"
-        >
-          <Logo collapsed={collapsed} />
-        </NavLink>
-        {!collapsed && !tablet && (
-          <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="sidebar-pin"
-              aria-pressed={pinned}
-              className="mx-side-reveal size-8 shrink-0 text-muted-foreground"
-              onClick={toggle}
-              aria-label={pinLabel}
+      {/* Folded: the logo mark alone at the very bottom (a link to the dashboard). It fades out and its room closes as
+          the bar unfolds (the logo moves to the top), and comes back while the bar folds. */}
+      <div aria-hidden={!logoBottom || undefined} inert={!logoBottom || undefined} className="grid shrink-0" style={rowMotion(logoBottom)}>
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex items-center px-3 pt-1 pb-[calc(0.5rem+var(--safe-bottom))]" style={fadeMotion(logoBottom)}>
+            <NavLink
+              to="/"
+              data-side-logo="folded"
+              className="flex h-11 w-10 flex-none items-center justify-center rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Harness Maxxing"
             >
-              {pinned ? <PanelLeftClose /> : <Pin />}
-            </Button>
-          </Tooltip>
-        )}
+              <Logo collapsed />
+            </NavLink>
+          </div>
+        </div>
       </div>
         </div>
         {/* Unfolded over the page: a second column with the sessions (running, unread, recent), one click away. */}

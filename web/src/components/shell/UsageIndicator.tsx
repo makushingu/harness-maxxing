@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 import { useUsage } from '@/lib/queries'
 import { useIsMobile } from '@/stores/media'
@@ -166,6 +166,8 @@ export function ClaudeRing({
         <RingArc r={r} width={w} pct={pct} tone={mainTone} size={size} />
         {second && <RingArc r={r2} width={w2} pct={second.pct} tone={second.tone} size={size} />}
       </svg>
+      {/* Claude's sparkle as a faint watermark behind the figure */}
+      <ClaudeMark className="mx-claude-mark absolute" style={{ width: Math.round(size * 0.52), height: Math.round(size * 0.52) }} />
       <span
         aria-hidden
         className={cn('relative font-semibold tabular-nums leading-none transition-colors duration-[400ms] ease-out motion-reduce:transition-none', mainTone ? toneText(mainTone) : 'text-foreground')}
@@ -180,19 +182,19 @@ export function ClaudeRing({
   )
 }
 
-/** A small eight-ray sparkle in Claude's terracotta: marks the ring as the Claude quota in the folded bar (a generic
- *  glyph drawn here, not Anthropic's logo). */
-export function ClaudeMark({ className }: { className?: string }) {
+/** An eight-ray sparkle in Claude's terracotta, drawn faintly inside the quota ring (a generic glyph drawn here, not
+ *  Anthropic's logo); its opacity is `.mx-claude-mark` (globals.css, lighter in light theme). */
+function ClaudeMark({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
-    <svg viewBox="0 0 12 12" aria-hidden className={cn('size-2.5 shrink-0', className)} fill="none" stroke="#D97757" strokeLinecap="round">
+    <svg viewBox="0 0 12 12" aria-hidden className={cn('shrink-0', className)} style={style} fill="none" stroke="#D97757" strokeLinecap="round">
       <path d="M6 1v10M1 6h10" strokeWidth={1.7} />
       <path d="M2.6 2.6l6.8 6.8M9.4 2.6l-6.8 6.8" strokeWidth={1.3} />
     </svg>
   )
 }
 
-/** The sidebar's Claude quota entry (under CPU / RAM / disk): the ring, with a tiny "✳ Claude" under it in the folded
- *  bar, or "Claude quota · Max" and "5 h 47 % · Week 12 %" beside it once unfolded; the quota and its resets in a
+/** The sidebar's Claude quota entry (under CPU / RAM / disk): the ring (Claude's sparkle faint inside it) alone in the
+ *  folded bar, with "Claude quota · Max" and "5 h 47 % · Week 12 %" beside it once unfolded; the quota and its resets in a
  *  tooltip; a link to Settings -> Stats. The ring keeps its size and place in both states (only the text around it
  *  changes), and it is the same link, so the keyboard focus survives folding. Nothing without plan usage. */
 export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
@@ -206,10 +208,7 @@ export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
   const label = lang === 'en' ? `${heading}: ${summary}` : `${heading} : ${summary}`
   const tip = (
     <div className="grid gap-1.5 text-xs">
-      <span className="flex items-center gap-1.5 font-medium">
-        <ClaudeMark />
-        {heading}
-      </span>
+      <span className="font-medium">{heading}</span>
       {c.lines}
     </div>
   )
@@ -220,22 +219,14 @@ export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
         aria-label={label}
         data-testid="status-claude"
         className={cn(
-          'flex h-[58px] min-w-0 items-start gap-2.5 rounded-md px-0.5 pt-1 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-          collapsed && 'w-11 flex-col items-center gap-0.5 px-0',
+          'flex h-[50px] min-w-0 items-center gap-2.5 rounded-md px-0.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+          collapsed && 'w-11 justify-center px-0',
         )}
       >
-        <ClaudeRing pct={c.main.pct} tone={c.main.tone} second={c.second} size={36} />
-        {collapsed ? (
-          <span className="flex items-center gap-0.5 text-[9.5px] leading-3 font-medium tracking-tight text-muted-foreground">
-            <ClaudeMark className="size-2" />
-            Claude
-          </span>
-        ) : (
+        <ClaudeRing pct={c.main.pct} tone={c.main.tone} second={c.second} size={40} />
+        {!collapsed && (
           <span className="mx-side-reveal grid h-9 min-w-0 flex-1 content-center gap-0.5 leading-tight">
-            <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-foreground">
-              <ClaudeMark />
-              <span className="truncate">{heading}</span>
-            </span>
+            <span className="truncate text-[13px] font-medium text-foreground">{heading}</span>
             <span className="truncate text-[11.5px] whitespace-nowrap text-muted-foreground">
               <Sensitive length={8}>
               {c.rows.map((r, i) => (
