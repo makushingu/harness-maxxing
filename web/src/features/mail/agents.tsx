@@ -185,6 +185,12 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           <span className="text-muted-foreground">{t('mail.to')} </span>
           <Sensitive length={10}>{to.join(', ')}</Sensitive>
         </span>
+        {!!x.bcc?.length && (
+          <span className="truncate" data-testid="mail-outbox-bcc">
+            <span className="text-muted-foreground">{t('mail.compose.bcc')} </span>
+            <Sensitive length={10}>{x.bcc.join(', ')}</Sensitive>
+          </span>
+        )}
         <span className="truncate font-medium">
           <Sensitive length={10}>{x.subject || t('mail.noSubject')}</Sensitive>
         </span>

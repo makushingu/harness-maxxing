@@ -359,3 +359,11 @@ def test_the_stored_password_never_goes_to_a_new_server(acc, monkeypatch):
     mail.update_account(acc["id"], {"imap_host": "imap.new.example"}, password="typed-again")
     assert tried == [("imap.new.example", "typed-again")]
 
+
+def test_the_hidden_copies_are_shown_before_the_send(acc, monkeypatch):
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "bcc": ["x@outside.org"], "subject": "Hi", "text": "t"},
+                     [], "new")
+    item = [p for p in outbox.pending() if p["id"] == q["id"]][0]
+    assert item["bcc"] == ["x@outside.org"]
+

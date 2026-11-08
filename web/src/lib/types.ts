@@ -1178,6 +1178,8 @@ export type MailOutboxItem = {
   at: number
   to: string[]
   cc: string[]
+  /** hidden copies: shown to the owner before the send like the others */
+  bcc?: string[]
   subject: string
   text: string
   /** longer than what the page gets: never sent from the outbox (open the draft) */
