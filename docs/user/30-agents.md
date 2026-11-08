@@ -136,7 +136,8 @@ The page is a **conversation** with the agent, like a contact in a chat app:
   the box (or cancels a reply). Select text in the conversation and click **Quote**: it goes into your message as a
   quote.
 - **Its answers** open file links in the preview, show images and videos as thumbnails and audio with a player, and
-  have a copy menu.
+  have a copy menu. Only the files of the agent's own folders (its folder and its writable folders) get a link or a
+  preview: any other path stays plain text, since an answer can repeat text from a mail or a webhook.
 - **Reply** on a result goes on with **that result's session**: same context, nothing to explain again. A reply in its
   Telegram thread to one of its results does the same.
 - The **schedule, webhook and notification runs stay separate**: each one is a new session of its own.

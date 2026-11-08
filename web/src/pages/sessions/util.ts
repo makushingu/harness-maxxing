@@ -181,10 +181,25 @@ export { FILE_HREF, fileHrefPath }
 const PATH_CHARS = "[^\\s`'\"()<>\\[\\]{}|,;*?]"
 const TRAIL = new Set('.,:;!?)]')
 
-/** Absolute paths inside `root` found in plain text → [start, end, path]. */
-export function findPaths(text: string, root: string | null | undefined): [number, number, string][] {
-  if (!root) return []
-  const r = root.replace(/\/+$/, '') || '/'
+/** Where file paths are looked for: the files root (a session), or a list of folders (a scope: what an agent's answers
+ *  may show, see ItemCtx.scope) - then a path must sit in one of them and hold no `.` / `..` part. */
+export type PathRoots = string | readonly string[] | null | undefined
+
+/** The folder of `roots` (a scope) that holds `p`, or null: outside, or a `.` / `..` part, or an empty part. */
+export function scopeOf(p: string, roots: readonly string[]): string | null {
+  if (!p.startsWith('/') || p.split('/').some((x, i, all) => (i > 0 && i < all.length - 1 && x === '') || x === '.' || x === '..')) return null
+  for (const r0 of roots) {
+    const r = r0.replace(/\/+$/, '')
+    if (r && (p === r || p.startsWith(r + '/'))) return r0
+  }
+  return null
+}
+
+/** Absolute paths inside `root` (or one folder of a scope) found in plain text → [start, end, path]. */
+export function findPaths(text: string, root: PathRoots): [number, number, string][] {
+  if (!root || (typeof root !== 'string' && !root.length)) return []
+  const scope = typeof root === 'string' ? null : root
+  const r = typeof root === 'string' ? root.replace(/\/+$/, '') || '/' : ''
   const re = new RegExp(`(?<![\\w\\]\\)/.~-])(/${PATH_CHARS}+)`, 'g')
   const out: [number, number, string][] = []
   for (const m of text.matchAll(re)) {
@@ -192,15 +207,19 @@ export function findPaths(text: string, root: string | null | undefined): [numbe
     while (end > 0 && TRAIL.has(m[1][end - 1])) end-- // a loop, not /[.,]+$/: that regex is quadratic on long runs
     const p = m[1].slice(0, end)
     if (p.length < 2) continue
-    if (r !== '/' && p !== r && !p.startsWith(r + '/')) continue
-    if (r === '/' && p.split('/').length < 3) continue
+    if (scope) {
+      if (!scopeOf(p, scope)) continue
+    } else {
+      if (r !== '/' && p !== r && !p.startsWith(r + '/')) continue
+      if (r === '/' && p.split('/').length < 3) continue
+    }
     out.push([m.index!, m.index! + p.length, p])
   }
   return out
 }
 
 /** Markdown with absolute file paths turned into preview links (`#mx-file=…`), code blocks untouched. */
-export function linkifyMarkdown(md: string, root: string | null | undefined): string {
+export function linkifyMarkdown(md: string, root: PathRoots): string {
   if (!root || !md.includes('/')) return md
   const parts = md.split(/(```[\s\S]*?(?:```|$)|`[^`\n]+`)/g)
   return parts
@@ -228,13 +247,13 @@ export function linkifyMarkdown(md: string, root: string | null | undefined): st
 }
 
 /** Media paths mentioned in a text: images and videos (inline thumbnails), audio (inline players). */
-export function mediaPaths(text: string, root: string | null | undefined, max = 6): string[] {
+export function mediaPaths(text: string, root: PathRoots, max = 6): string[] {
   return pathsOf(text, root, (p) => isImage(p) || isVideo(p), max)
 }
-export function audioPaths(text: string, root: string | null | undefined, max = 4): string[] {
+export function audioPaths(text: string, root: PathRoots, max = 4): string[] {
   return pathsOf(text, root, isAudio, max)
 }
-function pathsOf(text: string, root: string | null | undefined, keep: (p: string) => boolean, max: number): string[] {
+function pathsOf(text: string, root: PathRoots, keep: (p: string) => boolean, max: number): string[] {
   const seen = new Set<string>()
   for (const [, , p] of findPaths(text, root)) if (keep(p)) seen.add(p)
   return [...seen].slice(0, max)

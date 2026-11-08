@@ -70,7 +70,8 @@ with it, the others see their paths in the conversation.
 text**, or Ctrl/⌘+Shift+V, keeps it as text), the draft and its uploaded files stay after a reload (a file still
 uploading does not), a message that could not be sent comes back into the box, the microphone dictates at the cursor, Enter sends (a new line on a phone), Shift+Enter goes to a new line, Esc leaves the box.
 Select text in the conversation and click **Quote** to quote it in your message. The members' answers open file links
-in the preview, show images and videos as thumbnails and audio with a player, and have a copy menu.
+in the preview, show images and videos as thumbnails and audio with a player, and have a copy menu; only files of the
+group's folder and of the members' own folders get a link or a preview, any other path stays plain text.
 
 While you type `@`, the members are suggested with their face (type a few letters of the `@name` or of the name).
 In the conversation every `@name` shows as a small badge with the member's face and name, and the line **To:** above

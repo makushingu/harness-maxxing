@@ -222,6 +222,20 @@ def get_agent(project: str, topic: str, name: str):
     return {**a, "crons": agents.cron_jobs(a["path"])}
 
 
+@router.get("/{project}/{topic}/{name}/media-roots")
+def agent_media_roots(project: str, topic: str, name: str):
+    """The folders whose files the agent's answers may show on its page (agent_guard.media_roots)."""
+    _on()
+    try:
+        path = _path(project, topic, name)
+    except agents.AgentError as e:
+        raise _bad(e) from None
+    if not agents.exists(path):
+        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
+    from .. import agent_guard
+    return {"roots": agent_guard.media_roots(path)}
+
+
 @router.patch("/{project}/{topic}/{name}")
 def update_agent(project: str, topic: str, name: str, body: AgentIn):
     _on()

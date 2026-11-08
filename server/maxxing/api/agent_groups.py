@@ -112,6 +112,13 @@ def get_group(project: str, name: str):
         raise _bad(e) from None
 
 
+@router.get("/{project}/{name}/media-roots")
+def group_media_roots(project: str, name: str):
+    """The folders whose files the group's messages may show (agent_rooms.media_roots)."""
+    _on()
+    return {"roots": agent_rooms.media_roots(_get(project, name))}
+
+
 @router.patch("/{project}/{name}")
 def update_group(project: str, name: str, body: GroupIn):
     _on()

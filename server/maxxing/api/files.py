@@ -98,6 +98,21 @@ def resolve(path: str | None, *, follow: bool = True, new: bool = False) -> Path
     return p
 
 
+def confined(path: str, within: list[str]) -> Path:
+    """resolve(path), and with `within` (folders of the files root, e.g. an agent's own: what its answers may show)
+    the real path must also be inside the real path of one of them (a link that leads out is refused) and the path
+    as written may hold no `.` / `..` part. No `within`: resolve() alone."""
+    p = resolve(path)
+    if not within:
+        return p
+    if any(part in (".", "..") for part in path.split("/")):
+        raise _err(403, "forbidden", "Outside the allowed folders")
+    for w in within[:20]:
+        if _inside(p, resolve(w)):
+            return p
+    raise _err(403, "forbidden", "Outside the allowed folders")
+
+
 def _unshow(raw: Path) -> Path:
     """Undo _shown() for a path the UI sends back: a part with U+FFFD that does not exist is the one name of its
     folder shown that way (else unchanged, so a 404)."""
@@ -226,9 +241,13 @@ def _serve(p: Path, v: str, download: bool = False) -> FileResponse:
     return FileResponse(p, media_type=mime, headers=headers)
 
 
+# `within` (raw, preview, thumb, stat): the automatic previews of an agent's answers stay in its folders (confined)
+Within = Query([], max_length=20)
+
+
 @router.get("/raw")
-async def raw(path: str, download: int = 0, v: str = ""):
-    p = resolve(path)
+async def raw(path: str, download: int = 0, v: str = "", within: list[str] = Within):
+    p = await _t(confined, path, within)
     if not await _t(p.is_file):
         raise _err(404, "not_found", "File not found")
     return _serve(p, v, bool(download))
@@ -344,9 +363,9 @@ PREVIEW_ORIGINAL_EXT = {".gif", ".svg"}   # animated / vector: never flattened i
 
 
 @router.get("/preview")
-async def preview(path: str, w: int = Query(2048, ge=64, le=4096), v: str = ""):
+async def preview(path: str, w: int = Query(2048, ge=64, le=4096), v: str = "", within: list[str] = Within):
     """An image for the viewer: a WebP at most `w` px wide when the original is heavy, else the original."""
-    p = resolve(path)
+    p = await _t(confined, path, within)
     if not await _t(p.is_file):
         raise _err(404, "not_found", "File not found")
     ext = p.suffix.lower()
@@ -584,8 +603,9 @@ GIF_ANIM_MAX = 8 * 1024**2                # anim=1: a GIF up to this size is ser
 
 
 @router.get("/thumb")
-async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = "", anim: int = 0):
-    p = resolve(path)
+async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = "", anim: int = 0,
+                within: list[str] = Within):
+    p = await _t(confined, path, within)
     if anim and p.suffix.lower() == ".gif" and await _t(p.is_file) and (await _t(p.stat)).st_size <= GIF_ANIM_MAX:
         return _serve(p, v)
     f, mime = await _render(p, w)
@@ -762,13 +782,14 @@ async def site_url(path: str, request: Request):
 
 class StatIn(BaseModel):
     paths: list[str] = Field(max_length=500)
+    within: list[str] = Field(default_factory=list, max_length=20)   # see confined()
 
 
-def _stat(paths: list[str]) -> dict:
+def _stat(paths: list[str], within: list[str] | None = None) -> dict:
     out: dict[str, float | None] = {}
     for raw in paths:
         try:
-            out[raw] = resolve(raw).stat().st_mtime
+            out[raw] = confined(raw, within or []).stat().st_mtime
         except (HTTPException, OSError, ValueError, RuntimeError):     # RuntimeError: a symlink loop (< 3.13)
             out[raw] = None
     return {"mtimes": out}
@@ -778,7 +799,7 @@ def _stat(paths: list[str]) -> dict:
 async def stat_paths(body: StatIn):
     """Current mtime of the files shown as previews (null = missing / outside): the UI puts it in their URLs, so
     a file rewritten under the same name shows its new version."""
-    return await _t(_stat, body.paths)
+    return await _t(_stat, body.paths, body.within)
 
 
 # ---- mutations -----------------------------------------------------------------------------
