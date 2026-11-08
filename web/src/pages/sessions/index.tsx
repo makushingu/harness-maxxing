@@ -505,7 +505,10 @@ function Workspace() {
         const room = Math.max(startW, st.clientWidth - 8 - (placesNow.current.tops.length - 1) * MIN_W)
         // one grid change per frame (pointer events can come faster, each relays out every open session)
         let frame = 0
+        let moved = false
         const onMove = (ev: PointerEvent) => {
+          moved ||= Math.abs(ev.clientX - startX) >= 2
+          if (!moved) return
           w = Math.max(MIN_W, Math.min(MAX_W, room, startW + ev.clientX - startX))
           frame ||= requestAnimationFrame(() => {
             frame = 0
@@ -518,7 +521,8 @@ function Workspace() {
           target.removeEventListener('pointerup', onUp)
           target.removeEventListener('pointercancel', onUp)
           document.body.style.cursor = ''
-          useSessionsUI.getState().setWidth(key, w)
+          // a click without a drag keeps the column as it was (a saved width would stop it following the window)
+          if (moved) useSessionsUI.getState().setWidth(key, w)
         }
         document.body.style.cursor = 'col-resize'
         target.addEventListener('pointermove', onMove)
