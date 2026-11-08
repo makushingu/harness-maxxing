@@ -52,7 +52,7 @@ export function ClaudeDefaults() {
           options={[
             ...COMPACT_AT.map((n) => ({
               value: String(n),
-              label: n === 0 ? t('cdef.autoCompactOff') : `${n / 1000}k${n === 400_000 ? ` · ${t('cdef.autoCompactRecommended')}` : ''}`,
+              label: n === 0 ? t('cdef.autoCompactOff') : `${n / 1000}k${n === 300_000 ? ` · ${t('cdef.autoCompactRecommended')}` : ''}`,
             })),
             ...(COMPACT_AT.includes(s.auto_compact_tokens) ? [] : [{ value: String(s.auto_compact_tokens), label: `${Math.round(s.auto_compact_tokens / 1000)}k` }]),
           ]}
