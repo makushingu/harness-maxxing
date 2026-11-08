@@ -35,7 +35,7 @@ import { prefetchPageChunk } from './prefetch'
 type Q = { queryKey: readonly unknown[]; queryFn: (...a: never[]) => Promise<unknown>; staleTime?: number | ((q: never) => number) }
 
 const SETTINGS: Record<string, () => Q[]> = {
-  stats: () => [tokenStatsQuery()],
+  usage: () => [tokenStatsQuery()],
   claude: () => [claudeStatusQuery()],
   system: () => [healthQuery(), servicesQuery(), versionQuery()],
   keys: () => [secretsQuery()],

@@ -1010,6 +1010,7 @@ def test_new_weekly_jobs_arrive_off_on_an_existing_install(env):
     assert config.load_config()["unit_hardening"] is False            # protections new there: off
     assert config.load_config()["health_feed"] is False               # health in the feed (may reach Telegram): off
     assert config.load_config()["tasks_page"] is True                 # Tasks became optional: kept there
+    assert config.load_config()["agents_page"] is False               # Agents on for new installs only (a132)
 
 
 def test_a_new_install_ends_jobs_background_programs(env):
@@ -1020,6 +1021,7 @@ def test_a_new_install_ends_jobs_background_programs(env):
     assert config.load_config()["unit_hardening"] is True
     assert config.load_config()["health_feed"] is True
     assert config.load_config()["tasks_page"] is False                # new installs: Tasks off (Settings -> Features)
+    assert config.load_config()["agents_page"] is True                # ... and Agents on
     jobs = {j["name"]: j for j in crons.list_jobs()}
     assert jobs["Clean caches and old versions"]["enabled"]
 

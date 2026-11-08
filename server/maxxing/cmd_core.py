@@ -547,6 +547,9 @@ def do_init(a: argparse.Namespace) -> dict:
     if "tasks_page" not in raw:                   # Tasks became optional, off for new installs; older
         old = _install_state()                    # ones keep the page they had
         raw["tasks_page"] = bool(old.get("version") or old.get("initialized") or old.get("default_crons"))
+    if "agents_page" not in raw:                  # 2.0.0a132: Agents on for new installs; older ones keep
+        old = _install_state()                    # what they had (off unless switched on)
+        raw["agents_page"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
     from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
     register.migrate(raw)
     config.write_json(config.config_path(), raw)

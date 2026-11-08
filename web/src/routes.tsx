@@ -57,7 +57,6 @@ export const routes: RouteObject[] = [
           { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
-          { path: 'settings/docs', element: <Navigate to="/docs" replace /> },
           { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks']) },
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },

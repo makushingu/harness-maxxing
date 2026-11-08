@@ -10,7 +10,7 @@ import { useUI } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { useT, type TKey } from '@/i18n'
 import type { Language, OnboardingState } from '@/lib/types'
-import { Badge, Button, Checkbox, Input, Label, Sensitive, Skeleton } from '@/components/ui'
+import { Badge, Button, Checkbox, Input, Label, Sensitive, Skeleton, Switch, toast } from '@/components/ui'
 import { errorMessage } from '@/lib/api'
 import { LogoMark } from '@/components/shell/Logo'
 import { useDocumentTitle } from '@/components/shell/Page'
@@ -20,21 +20,24 @@ import { ClaudeDefaults } from '@/features/claude/ClaudeDefaults'
 import { CreateProjectTopic } from '@/features/workspace/CreateProjectTopic'
 import { TelegramSetup } from '@/features/telegram/TelegramSetup'
 import { BackupSetup, BackupWhy } from '@/features/backup/BackupSetup'
-import { Callout } from '@/features/common'
+import { Callout, SettingRow } from '@/features/common'
 import { VoiceQuickSetup } from '@/features/voice/VoiceSetup'
 import { requestTourAfterOnboarding } from '@/tour/store'
 import { ImportWizard } from '@/features/import/ImportWizard'
 import { PackChooser } from '@/features/packs/PackPicker'
+import { FeaturePages } from '@/features/settings/FeaturePages'
+import { usePermission } from '@/pages/settings/sections/Notifications'
 import { RegisterFields, validEmail, type RegisterValues } from '@/features/profile/Register'
 import { LicenseKeyField, WhoNeedsAKey, validKey } from '@/features/license/LicenseKey'
 
-type StepId = 'language' | 'profile' | 'claude' | 'import' | 'workspace' | 'telegram' | 'backup' | 'done'
+type StepId = 'language' | 'profile' | 'claude' | 'import' | 'workspace' | 'features' | 'telegram' | 'backup' | 'done'
 const STEPS: { id: StepId; label: TKey; optional?: boolean }[] = [
   { id: 'language', label: 'onb.step.language' },
   { id: 'profile', label: 'onb.step.profile', optional: true },
   { id: 'claude', label: 'onb.step.claude' },
   { id: 'import', label: 'onb.step.import', optional: true },
   { id: 'workspace', label: 'onb.step.workspace' },
+  { id: 'features', label: 'onb.step.features', optional: true },
   { id: 'telegram', label: 'onb.step.telegram', optional: true },
   { id: 'backup', label: 'onb.step.backup', optional: true },
   { id: 'done', label: 'onb.step.done' },
@@ -137,6 +140,7 @@ export default function OnboardingPage() {
             {current === 'claude' && <ClaudeStep onNext={next} onBack={back} />}
             {current === 'import' && <ImportStep onNext={next} onBack={back} />}
             {current === 'workspace' && <WorkspaceStep onNext={next} onBack={back} />}
+            {current === 'features' && <FeaturesStep onNext={next} onBack={back} />}
             {current === 'telegram' && <TelegramStep onNext={next} onBack={back} done={stepDone('telegram', onboarding)} />}
             {current === 'backup' && <BackupStep onNext={next} onBack={back} done={stepDone('backup', onboarding)} />}
             {current === 'done' && <DoneStep onBack={back} onboarding={onboarding} />}
@@ -363,6 +367,20 @@ function ImportStep({ onNext, onBack }: { onNext: () => void; onBack: () => void
   )
 }
 
+/** 2.0.0a132: the optional pages, switched on here at once (each switch saves; nothing blocks the next step). */
+function FeaturesStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const t = useT()
+  return (
+    <>
+      <StepHeader step="features" title={t('onb.features.title')} description={t('onb.features.desc')} />
+      <div className="rounded-xl border p-4">
+        <FeaturePages compact />
+      </div>
+      <StepFooter onBack={onBack} onNext={onNext} />
+    </>
+  )
+}
+
 function TelegramStep({ onNext, onBack, done }: { onNext: () => void; onBack: () => void; done: boolean }) {
   const t = useT()
   return (
@@ -408,6 +426,12 @@ function DoneStep({ onBack, onboarding }: { onBack: () => void; onboarding: Onbo
   const complete = useCompleteOnboarding()
   const { data: settings } = useSettings()
   const tour = TOUR.map((c) => (c.title === 'nav.tasks' && settings && !settings.tasks_page ? FEATURES_CARD : c))
+  const ui = useUI()
+  const [perm, ask] = usePermission()
+  const toggleDone = async (on: boolean) => {
+    ui.setNotify({ notifyDone: on })
+    if (on && perm !== 'granted' && (await ask()) === 'denied') toast.error(t('notify.blocked'), t('notify.blockedDesc'))
+  }
   const rows: { label: TKey; ok: boolean; optional?: boolean }[] = [
     { label: 'onb.summary.password', ok: !!onboarding?.steps.password },
     { label: 'onb.summary.claude', ok: !!onboarding?.steps.claude },
@@ -430,6 +454,11 @@ function DoneStep({ onBack, onboarding }: { onBack: () => void; onboarding: Onbo
             </li>
           ))}
         </ul>
+        <div className="rounded-xl border p-4">
+          <SettingRow label={t('onb.done.notify')} description={t('onb.done.notifyDesc')} htmlFor="onb-notify">
+            <Switch id="onb-notify" checked={ui.notifyDone} onCheckedChange={toggleDone} />
+          </SettingRow>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {tour.map((c) => (
             <div key={c.title} className="rounded-xl border bg-card p-4">

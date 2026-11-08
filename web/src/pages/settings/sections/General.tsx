@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { FONT_GROUPS, loadFontPreview, MONO_FONTS, SANS_FONTS, type FontGroup } from '@/lib/fonts'
 import { useT, type TKey } from '@/i18n'
 import type { Language } from '@/lib/types'
-import { Button, FormField, Input, Segmented, Skeleton, Tooltip, toast } from '@/components/ui'
+import { Button, FormField, Input, Segmented, Skeleton, Switch, Tooltip, toast } from '@/components/ui'
 import { QRCode } from '@/components/ui/qr-code'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RegionFields } from '@/features/general/RegionFields'
@@ -312,6 +312,13 @@ export function GeneralSection() {
             />
           </div>
         )}
+      </SettingsCard>
+
+      {/* was in Settings -> Features before 2.0.0a132: saved on the server, for the browsers to come */}
+      <SettingsCard>
+        <SettingRow label={t('settings.presentationDefault')} description={t('settings.presentationDefaultDesc')} htmlFor="gen-pres">
+          <Switch id="gen-pres" checked={!!s?.presentation_default} disabled={!s} onCheckedChange={(v) => save.mutate({ presentation_default: v })} />
+        </SettingRow>
       </SettingsCard>
 
       <SettingsCard title={t('settings.server')} description={t('settings.serverDesc')}>

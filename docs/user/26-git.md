@@ -45,8 +45,8 @@ The repository must be inside the files root (`/root` by default): the same fold
 
 ## The Git page
 
-**Git** in the sidebar (shortcut `G` then `B`), once **Git & GitHub page** is turned on in **Settings -> Features**
-(off by default; the graphs in conversations work either way).
+**Git** in the sidebar (shortcut `G` then `B`), once **Git** is turned on in **Settings -> Features**
+(off by default, offered in Settings -> Keys as soon as a GitHub key is there; the graphs in conversations work either way).
 
 - **On this server**: every git repository found under the files root, once (folders like `node_modules` are
   skipped), with the commits not pushed yet (↑) or not pulled (↓), the changed files, its last commit and its

@@ -20,6 +20,6 @@ in a page): use it and they look like the rest of the app, in dark and light. Se
 
 After adding or editing an extension: **Settings -> Extensions -> Reload**.
 
-Guides (in the app: Settings -> Docs): "Dashboard widgets" and "Page extensions".
+Guides (in the app: Docs, book icon at the bottom of the sidebar): "Dashboard widgets" and "Page extensions".
 Quickest way: open a session and ask Claude "create a widget that shows ..." - the
 `maxxing-extension` skill knows the format.

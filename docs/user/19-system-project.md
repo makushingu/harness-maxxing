@@ -22,7 +22,7 @@ keys: those go to Settings -> Keys.
 ## Starter packs
 
 Ready-made projects with their topics and instructions: `ecommerce`, `affiliate`, `creator`,
-`apps`, `second-brain`, `freelance`. Add one from Settings -> Starter pack or by asking in
+`apps`, `second-brain`, `freelance`. Add one from Settings -> Projects or by asking in
 `system/harness`. An existing project is never overwritten: only missing files are added.
 
 ## Jobs linked to these topics

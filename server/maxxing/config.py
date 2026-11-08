@@ -78,6 +78,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "maxxing_mode": False,             # Settings -> Features (beta): a finished session comes to the front (Sessions page)
     "health_feed": False,              # server health problems also in the Notifications feed (`maxxing init`: on when new)
     "agents_page": False,              # Settings -> Features: the Agents page (lasting roles of a topic, with triggers)
+                                       # (`maxxing init`: on for new installs since 2.0.0a132)
     "team_page": False,                # Settings -> Features: the Team page (chats between people) and its sidebar entry
     "tasks_page": False,               # Settings -> Features: the Tasks page, its sidebar entry and dashboard widget
                                        # (`maxxing init`: on for installs made before Tasks became optional)
@@ -85,7 +86,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "infra_page": False,               # Settings -> Features: the Infra page (sites, databases, buckets, domains, servers)
     "infra_refresh_min": 15,
     "result_line_hidden": [],          # Sessions: parts of the line under each answer that are hidden (cost, tokens...)           # Infra: background refresh period (minutes) while the page is on
-    "donation_hidden": False,          # Settings -> Support: hide the donation links shown elsewhere in the app
+    "donation_hidden": False,          # Settings -> About: hide the donation links shown elsewhere in the app
     "mail_page": False,                # Settings -> Features: the E-mail page (IMAP/SMTP mailboxes)
     "sidebar_order": [],               # sidebar: the pages in the order the user dragged them (routes; empty = default)
     "dashboard": {"order": [], "hidden": []},

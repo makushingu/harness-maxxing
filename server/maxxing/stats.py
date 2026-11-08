@@ -1,4 +1,4 @@
-"""Token and cost statistics over the sessions (Settings -> Stats). See docs/dev/API.md#stats.
+"""Token and cost statistics over the sessions (Settings -> Usage). See docs/dev/API.md#stats.
 
 Every turn adds its usage to the session meta (`tokens`, `days`: sessions/store.add_usage). Sessions
 created before those counters existed are backfilled once from their log (the raw Claude `result`

@@ -5,7 +5,7 @@ section: Getting started
 
 Coming from Hermes, Claude Code, OpenClaw or any other agent? Bring what it knows about you -
 projects, topics, memory, skills, to-dos, scheduled jobs - in a few minutes. Onboarding step 3, or
-Settings -> **Import** at any time.
+Settings -> Projects -> **Import** at any time.
 
 ## 1. Ask your old agent for a zip
 

@@ -1,5 +1,5 @@
 // Starter packs: ready-made projects for a kind of work (topics with a playbook, no fake data).
-// PackCards = the grid (Settings -> Starter pack: one "Add" per pack, plus the default projects). PackChooser = onboarding (all / choose / none).
+// PackCards = the grid (Settings -> Projects: one "Add" per pack, plus the default projects). PackChooser = onboarding (all / choose / none).
 import * as React from 'react'
 import { Check, Clock, Plus, RotateCcw } from 'lucide-react'
 import { useInstallPack, usePacks } from '@/lib/queries'
@@ -64,7 +64,7 @@ function useAdd() {
   return { add, pending: install.isPending, variables: install.variables }
 }
 
-/** Settings -> Starter pack: every pack with its own Add button (a pack can be added several times), and the
+/** Settings -> Projects: every pack with its own Add button (a pack can be added several times), and the
  *  default projects with "Put back". */
 export function PackCards() {
   const t = useT()

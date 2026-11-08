@@ -9,7 +9,8 @@ little character as its face, and it starts by itself when something happens: a 
 notification, a message in its Telegram thread, or another agent handing it work. Every start is a new session,
 kept like any other, within limits you set (on/off, a daily budget, runs per hour).
 
-Agents are **off by default**: turn them on in **Settings -> Features -> Agents**. An **Agents** entry appears in the
+Agents are **on for a new install** (since 2.0.0a132; an older install keeps what it had): switch them on or off in
+**Settings -> Features -> Agents**. An **Agents** entry appears in the
 sidebar, with the number of results to read. While Agents is off, Telegram still starts agents, but schedules,
 feed and webhook events do not: schedule runs are skipped (the run says so), and the events that come meanwhile are
 skipped when you turn it back on (each agent says how many in its thread).

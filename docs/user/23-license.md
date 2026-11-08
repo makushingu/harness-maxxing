@@ -73,19 +73,19 @@ time: the one of Settings → Profile → Harness Maxxing team, if any).
 ## Donations
 
 Harness Maxxing is free; donations fund its development. The **Donate** links carry a hand-and-heart icon in the app's
-accent colour: **Settings → Support** (last in the list of Settings), at the bottom of **What's new**,
-after a **Feedback** is sent and in **Settings → License**. They are only links: they open
+accent colour: **Settings → About** (last in the list of Settings), at the bottom of **What's new** and
+after a **Feedback** is sent. They are only links: they open
 [harness-maxxing.com/donation](https://harness-maxxing.com/donation) in a new tab (in the interface language: pay with
-Lightning or Bitcoin), and the app never talks to a payment service. **Settings → Support → Hide the Donate buttons**
-removes them for every browser of the server (the Support page stays).
+Lightning or Bitcoin), and the app never talks to a payment service. **Settings → About → Hide the Donate buttons**
+removes them for every browser of the server (the About page keeps its Support card).
 
 ## Enterprise key (optional)
 
 Only companies in one of the cases above need a key; nobody else has anything to do. Give it in
-**Settings → License** (or in the onboarding step **About you**, box "I have an Enterprise license key"), or
+**Settings → About** (or in the onboarding step **About you**, box "I have an Enterprise license key"), or
 `maxxing license activate`. The key is checked by `api.harness-maxxing.com` and counted on this server (one key =
 one server). It changes nothing in how Harness Maxxing works: the code and the updates keep coming from GitHub.
-**Remove the key** (Settings → License, or `maxxing license remove`) frees its place for another server.
+**Remove the key** (Settings → About, or `maxxing license remove`) frees its place for another server.
 
 | Command | What it does |
 |---|---|

@@ -385,7 +385,7 @@ def usage(force: bool = False) -> dict:
     from . import health
     u = health.usage(force)
     if not u.get("available"):
-        return {"title": t("Claude usage"), "link": "/settings/stats", "status": "warn", "blocks": [
+        return {"title": t("Claude usage"), "link": "/settings/usage", "status": "warn", "blocks": [
             {"type": "markdown", "text": _usage_reason(u)}]}
     blocks = []
     for key, label in (("five_hour", "5-hour window"), ("seven_day", "7-day window")):

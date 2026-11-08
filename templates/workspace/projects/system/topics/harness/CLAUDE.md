@@ -85,7 +85,7 @@ update: nothing to ask the product's authors.
 ## Starter packs
 
 Ready-made projects with their topics, instructions and memory: `ecommerce`, `affiliate`,
-`creator`, `apps`, `second-brain`, `freelance` (also in Settings -> Starter pack).
+`creator`, `apps`, `second-brain`, `freelance` (also in Settings -> Projects).
 - "Add the e-commerce pack": run `maxxing packs list` (ids and what each one contains), then
   `maxxing packs add <id>` with the matching id. If the request is vague, show the list and ask.
 - Adding a pack always creates a new project (`ecommerce-2` when `ecommerce` exists); nothing is

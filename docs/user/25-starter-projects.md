@@ -21,7 +21,7 @@ give are written into the topic's `memory.md`, so the project becomes yours from
 
 - **At the first sign-in**: the onboarding step "Your projects" offers **Install all**, **Choose** (tick the
   cards) or **None**. You can also create your own project there.
-- **Any time later**: **Settings -> Starter pack**, then **Add** on a card.
+- **Any time later**: **Settings -> Projects**, then **Add** on a card.
 - **By asking**: in `system/harness`, say "add the freelance pack".
 - **From the server**: `maxxing packs list`, then `maxxing packs add freelance` (several ids at once work).
 

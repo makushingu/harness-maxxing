@@ -34,7 +34,7 @@ It asks three questions (access mode, domain, restore a backup), then clones the
 `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
 Harness Maxxing is free under a fair source license: see [License](license).
 
-No license key is asked. A company that needs an Enterprise key gives it after the install, in Settings → License
+No license key is asked. A company that needs an Enterprise key gives it after the install, in Settings → About
 (or the onboarding step About you); see [License](license).
 
 After the questions the installer runs unattended with a live progress display. Voice messages are enabled with the
@@ -179,7 +179,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=d
 |---|---|---|
 | `REPO`, `BRANCH` | `makushingu/harness-maxxing`, `stable` | the git repository and branch the code and the updates come from (`stable` = published versions, `main` = work in progress) |
 | `GH_TOKEN` | – | a read token, only for a private fork or mirror (`REPO=owner/name`) |
-| `LICENSE` | – | optional: an Enterprise key, recorded at the end (same as Settings → License, see [License](license)) |
+| `LICENSE` | – | optional: an Enterprise key, recorded at the end (same as Settings → About, see [License](license)) |
 | `LICENSE_API` | `https://api.harness-maxxing.com` | license server (checks an Enterprise key) |
 | `INSTALL_DIR` | `/opt/claude-maxxing` | code + Python environment |
 | `WORKSPACE` | `/root/maxxing` | your workspace |
@@ -204,7 +204,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=d
 ## Restore on a new server
 
 Moving to a new server? Install with your backup repository (with an Enterprise key, first free it on the old
-server: Settings → License → Remove the key, see [License](license)):
+server: Settings → About → Remove the key, see [License](license)):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash

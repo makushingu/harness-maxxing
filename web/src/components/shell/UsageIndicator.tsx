@@ -51,7 +51,7 @@ export function UsageLines({ collapsed, className, visible }: { collapsed?: bool
   if (!p) return null
   return (
     <Tooltip content={collapsed ? p.details : null} side="right">
-      <Link to="/settings/stats" className={cn('grid gap-2.5', className)} aria-label={p.title}>
+      <Link to="/settings/usage" className={cn('grid gap-2.5', className)} aria-label={p.title}>
         {p.rows.map((r) =>
           collapsed ? (
             <ProgressBar key={r.key} value={used(r.w)} tone={tone(r.w)} label={r.label} className="h-1 w-8" />

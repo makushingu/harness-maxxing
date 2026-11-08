@@ -7,7 +7,7 @@ description: Add, connect, check or remove an MCP server for Claude Code in Harn
 
 Harness lists every MCP server of Claude Code in **Settings -> MCP**: where it applies (every session, or one
 topic), its state (Connected / To connect / Error / To approve) and the buttons Connect and Remove.
-Docs: `docs/user/28-mcp.md` (Settings -> Docs -> MCP servers).
+Docs: `docs/user/28-mcp.md` (Docs -> MCP servers).
 
 ## Where to add it
 - Only the topic that needs it (most cases: an ads account for the `ads` topic): `--where projects/<p>/topics/<t>`.

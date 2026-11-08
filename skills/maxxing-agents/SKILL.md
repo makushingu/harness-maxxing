@@ -18,7 +18,7 @@ workspace CLAUDE.md / memory.md above it. **The turn's working directory is the 
 (`drafts/`, `plans/x.md`) lands in `agents/<agent>/`, and the topic's own folders are `../..` from there. When the
 role must work on the topic's files, write their full path in the role (or tell it to `cd
 {{WORKSPACE}}/projects/<project>/topics/<topic>` first) and, with the sandbox on, list them in `--writable`. The page is **Agents** (Settings -> Features -> Agents must be on).
-Docs: `docs/user/30-agents.md` (Settings -> Docs -> Agents).
+Docs: `docs/user/30-agents.md` (Docs -> Agents).
 
 ## Create one when the user asks ("I want an agent that…")
 Do it from the session with the CLI; never send the user to the UI. First look at the ready-made agents
