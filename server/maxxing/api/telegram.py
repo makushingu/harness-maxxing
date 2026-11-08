@@ -27,6 +27,10 @@ class ForgetIn(BaseModel):
     password: str | None = None         # the current password: needed to unlink while two-step sign-in is on
 
 
+class LinkIn(BaseModel):
+    password: str | None = None         # the current password: a new link replaces the chat that gets the two-step requests
+
+
 class WebhookIn(BaseModel):
     token: str | None = None
 
@@ -61,7 +65,8 @@ async def get_status():
 
 
 async def _password_if_two_step(request: Request, password: str | None) -> None:
-    """Unlinking or changing the bot turns two-step sign-in off: same rule as turning it off in Settings."""
+    """Unlinking, changing the bot or linking another chat takes two-step sign-in away from the linked chat: same
+    rule as turning it off in Settings."""
     if twofactor.enabled():
         from .auth import _check_current
         await _check_current(request, password or "")
@@ -88,7 +93,8 @@ async def remove_webhook(body: WebhookIn):
 
 
 @router.post("/link")
-async def new_link():
+async def new_link(request: Request, body: LinkIn | None = None):
+    await _password_if_two_step(request, body.password if body else None)
     try:
         link = gateway.new_link()
     except ValueError as e:

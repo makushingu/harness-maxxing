@@ -1034,7 +1034,7 @@ export const en = {
   'telegram.unlink': 'Disconnect Telegram',
   'telegram.unlinkDesc': 'Forgets the bot token, the linked chat and the threads. Sessions stay in the web UI.',
   'telegram.unlinkConfirm': 'Disconnect Telegram?',
-  'telegram.twoStepPassword': 'Two-step sign-in is on: unlinking or changing the bot turns it off, so your current password is needed.',
+  'telegram.twoStepPassword': 'Two-step sign-in is on: unlinking, changing the bot or linking another chat takes it away from this chat, so your current password is needed.',
   'telegram.topicsOffDesc': 'Everything works in the main chat. To get one thread per session, turn on Threaded Mode for the bot:',
   'telegram.topicsStillOff': 'Threads are still off for this bot: check Threaded Mode in @BotFather.',
   'telegram.retry': 'Retry',

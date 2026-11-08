@@ -190,12 +190,25 @@ export function LinkPanel({ status, intro }: { status: TelegramStatus; intro?: R
   const left = useSecondsLeft(link)
   const expired = !!link && (link.expired || left === 0)
   // the status follows the link live (bus); this poll is the fallback while a code waits for /start
+  const [password, setPassword] = React.useState('')
+  const [pwError, setPwError] = React.useState<string>()
+  const twoStep = !!status.settings?.two_factor && !!status.chat   // the new chat would get the two-step requests
+  const go = () => {
+    setPwError(undefined)
+    if (twoStep && !password) return setPwError(t('security.currentRequired'))
+    start.mutate(twoStep ? { password } : undefined, {
+      onError: (e) => {
+        if (e instanceof ApiError && e.code === 'bad_password') setPwError(t('security.currentWrong'))
+        else toast.error(errorMessage(e))
+      },
+    })
+  }
   const poll = useTelegramLink(!!link && !expired)
   React.useEffect(() => {
     if (poll.data?.linked && !poll.data.pending) qc.invalidateQueries({ queryKey: qk.telegram.all })
   }, [poll.data, qc])
   const newLink = (
-    <Button loading={start.isPending} variant={link ? 'outline' : 'default'} onClick={() => start.mutate()}>
+    <Button loading={start.isPending} variant={link ? 'outline' : 'default'} onClick={go}>
       <Link2 /> {link ? t('telegram.newLink') : t('telegram.link')}
     </Button>
   )
@@ -203,6 +216,11 @@ export function LinkPanel({ status, intro }: { status: TelegramStatus; intro?: R
     return (
       <div className="grid gap-3 mx-unfold">
         {expired ? <Callout tone="warning" title={t('telegram.expired')}>{t('telegram.expiredDesc')}</Callout> : intro}
+        {twoStep && (
+          <FormField label={t('security.current')} error={pwError} hint={t('telegram.twoStepPassword')}>
+            <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          </FormField>
+        )}
         <div>{newLink}</div>
       </div>
     )
@@ -236,7 +254,7 @@ export function LinkPanel({ status, intro }: { status: TelegramStatus; intro?: R
         </p>
         <p className="text-xs text-muted-foreground">{t('telegram.startEarly')}</p>
         <div>
-          <Button variant="ghost" size="sm" loading={start.isPending} onClick={() => start.mutate()}>
+          <Button variant="ghost" size="sm" loading={start.isPending} onClick={go}>
             <RefreshCw /> {t('telegram.newLink')}
           </Button>
         </div>

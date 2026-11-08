@@ -605,7 +605,8 @@ def test_retries_need_the_tick(org, monkeypatch):
     monkeypatch.setitem(sys.modules, "maxxing.telegram.gateway", gw)
     import maxxing.telegram as tpkg
     monkeypatch.setattr(tpkg, "gateway", gw, raising=False)
-    j = crons.create_job({"name": "Flaky", "command": "echo oops; exit 2", "retries": 2})
+    # no catch-up: tick() an hour ahead must not make up for the default 05:00 slot (run between ~4 and 5 a.m.)
+    j = crons.create_job({"name": "Flaky", "command": "echo oops; exit 2", "retries": 2, "catch_up": False})
     r = crons.run_job(j["id"])
     assert "retry_at" not in r and telegram and telegram[-1].startswith("FAILED")   # final at once
     monkeypatch.setattr(crons, "spawn_run", lambda *a, **k: None)

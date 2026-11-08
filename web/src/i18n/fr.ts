@@ -1022,7 +1022,7 @@ export const fr: Record<keyof typeof en, string> = {
   'telegram.unlink': 'Déconnecter Telegram',
   'telegram.unlinkDesc': 'Oublie le jeton du bot, la conversation liée et les fils. Les sessions restent dans l’interface web.',
   'telegram.unlinkConfirm': 'Déconnecter Telegram ?',
-  'telegram.twoStepPassword': 'La connexion en deux étapes est active : délier ou changer de bot la coupe, le mot de passe actuel est donc demandé.',
+  'telegram.twoStepPassword': 'La connexion en deux étapes est active : délier, changer de bot ou lier une autre conversation la retire à celle-ci, le mot de passe actuel est donc demandé.',
   'telegram.topicsOffDesc': 'Tout fonctionne dans la conversation principale. Pour avoir un fil par session, activez le Threaded Mode du bot :',
   'telegram.topicsStillOff': 'Les fils sont toujours désactivés pour ce bot : vérifiez le Threaded Mode dans @BotFather.',
   'telegram.retry': 'Réessayer',
