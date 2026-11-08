@@ -275,7 +275,8 @@ call it), only the API and the page are cut.
   cached), `setup()` (root: apt `bubblewrap socat` + the profile; `maxxing agents sandbox-setup`), `secret_paths()`,
   `mode(requested)` (bypass -> acceptEdits for a sandboxed turn), `settings(path, a)` (the `sandbox` block +
   `permissions.deny` on secrets + `allow Bash(maxxing:*)` / `WebFetch(domain:..)` + `hooks.PreToolUse` when `rules`),
-  `add_dirs`, `merge(base, extra)` (`spawn.settings_args`), `check_rules` / `hook(path)` (`python -m
+  `add_dirs`, `merge(base, extra)` (`spawn.settings_args`: over 64 KiB, the JSON goes in
+  `STATE/settings/<sha256>.json`, 0600, a week unused then removed: one argument is at most 128 KiB), `check_rules` / `hook(path)` (`python -m
   maxxing.agent_guard hook <agent path>`, deny + reason), `sandboxed_turn()` (cgroup `maxxing-<sid8>.service` of a
   sandboxed agent session), `locked_paths(path)` (`denyWrite` + `Edit` deny: the agent's `agent.json`, `CLAUDE.md`,
   `.claude/` and its topic's `.claude/`, plus an existing `.mcp.json` of either) and `check_cli(argv)` (`CLI_ALLOWED` in a sandboxed

@@ -355,10 +355,11 @@ def update_account(acc_id: str, data: dict, password: str | None = None) -> tupl
     new = {**cur, **changes}
     result = None
     server_change = any(new.get(k) != cur.get(k) for k in ("imap_host", "imap_port", "imap_tls", "smtp_host", "smtp_port", "smtp_tls", "username"))
-    # the stored password only goes back to the servers it was given for: a new server or user name needs it again
-    # (else a stolen session would point the mailbox at its own server and receive the password at the test)
-    if not password and any(new.get(k) != cur.get(k) for k in ("imap_host", "smtp_host", "username")):
-        raise MailError("invalid", "type the password again to change the server or the user name")
+    # the stored password only goes back to the servers it was given for, the way it was given: a new server, port,
+    # security or user name needs it again (else a stolen session would point the mailbox at its own server, or turn
+    # the encryption off, and receive the password at the test)
+    if not password and server_change:
+        raise MailError("invalid", "type the password again to change the server, the port, the security or the user name")
     if password or server_change:
         pw = password or vault.get(cur.get("password_key") or "") or ""
         result = test(new, pw)

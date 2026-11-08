@@ -310,6 +310,12 @@ def test_cron_trigger_goes_through_the_agent(client, topic, monkeypatch):
     assert r["ok"] and r["session_id"]
     assert client.get(f"/api/sessions/{r['session_id']}").json()["source"] == "agent"
     assert any(m["kind"] == "run" and m["trigger"] == f"cron:{job['id']}" for m in agents.thread(A))
+    n = len(_calls())
+    assert client.put("/api/settings", json={"agents_page": False}).status_code == 200   # Agents off: nothing starts
+    r1 = crons.run_job(job["id"])
+    assert r1["ok"] and r1["session_id"] is None and "Agents is switched off" in r1["output_tail"]
+    assert len(_calls()) == n
+    _on(client)
     client.patch("/api/agents/acme/blog/writer", json={"enabled": False})
     r2 = crons.run_job(job["id"])
     assert r2["ok"] and r2["session_id"] is None and "switched off" in r2["output_tail"]

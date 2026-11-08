@@ -180,21 +180,32 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           <Sensitive length={6}>{x.agent_name}</Sensitive> · {shortDate(x.at, lang)}
         </span>
       </div>
-      <div className="grid gap-0.5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
         <span className="truncate">
           <span className="text-muted-foreground">{t('mail.to')} </span>
           <Sensitive length={10}>{to.join(', ')}</Sensitive>
         </span>
+        {!!x.bcc?.length && (
+          <span className="truncate" data-testid="mail-outbox-bcc">
+            <span className="text-muted-foreground">{t('mail.compose.bcc')} </span>
+            <Sensitive length={10}>{x.bcc.join(', ')}</Sensitive>
+          </span>
+        )}
         <span className="truncate font-medium">
           <Sensitive length={10}>{x.subject || t('mail.noSubject')}</Sensitive>
         </span>
         {x.text && (
-          <p className={cn('text-xs break-words whitespace-pre-line text-muted-foreground', !all && 'line-clamp-3')}>
+          <p className={cn('text-xs wrap-anywhere whitespace-pre-line text-muted-foreground', !all && 'line-clamp-3')}>
             <Sensitive block>{x.text}</Sensitive>
           </p>
         )}
         {long && !all && (
-          <button type="button" className="justify-self-start text-xs text-primary hover:underline" onClick={() => setAll(true)} data-testid="mail-outbox-all">
+          <button
+            type="button"
+            className="justify-self-start text-xs text-primary hover:underline pointer-coarse:-mx-2 pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:px-2"
+            onClick={() => setAll(true)}
+            data-testid="mail-outbox-all"
+          >
             {t('mail.outbox.showAll')}
           </button>
         )}

@@ -1181,3 +1181,32 @@ def test_two_connections_with_the_same_label_keep_both_servers(org, monkeypatch,
         t.join()
     assert sorted(s["name"] for s in out) == ["web", "web-2"]
     assert sorted((s["name"], s["host"]) for s in registry.servers()) == sorted((s["name"], s["host"]) for s in out)
+
+
+def test_a_lone_surrogate_is_refused_by_every_infra_route(client, org):
+    client.put("/api/settings", json={"infra_page": True})
+    for url, body in (("/api/infra/annotate", {"id": "site:local:a.example.com", "note": "a\ud800"}),
+                      ("/api/infra/annotate", {"id": "site:local:\ud800", "project": "acme"}),
+                      ("/api/infra/servers/rename", {"name": "shop", "label": "\ud800"}),
+                      ("/api/infra/servers/remove", {"name": "\ud800"}),
+                      ("/api/infra/servers/connect", {"host": "203.0.113.5", "label": "\ud800"}),
+                      ("/api/infra/domains", {"name": "\ud800.com"}),
+                      ("/api/infra/domains/remove", {"name": "\ud800.com"})):
+        r = client.post(url, content=json.dumps(body),  # httpx refuses a surrogate in json=
+                        headers={"content-type": "application/json"})
+        assert r.status_code == 422, (url, r.status_code)
+    assert client.get("/api/infra").status_code == 200
+
+
+def test_a_note_made_during_a_refresh_stays(org, monkeypatch):
+    monkeypatch.setenv("MAXXING_INFRA_CHECKS", "0")
+    monkeypatch.setattr(providers, "cloudflare", lambda: CF)
+    monkeypatch.setattr(providers, "hostinger", lambda: {"connected": False, "key": None})
+
+    def slow_probe(opts):                       # the owner annotates while the servers are probed
+        registry.annotate("site:local:shop.example.com", project="acme", note="late")
+        return _probes(str(org.ws))["local"]
+    monkeypatch.setattr(infra, "probe_local", slow_probe)
+    infra.refresh()
+    r = next(r for r in infra.load_snapshot()["resources"] if r["id"] == "site:local:shop.example.com")
+    assert r["note"] == "late" and r["project"] == "acme"

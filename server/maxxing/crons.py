@@ -27,6 +27,7 @@ configured time zone.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import fcntl
 import json
@@ -160,8 +161,8 @@ def _parse_field(text: str, lo: int, hi: int, names: list[str] | None, what: str
         elif "-" in part:
             x, y = part.split("-", 1)
             a, b = _value(x, lo, hi, names, what), _value(y, lo, hi, names, what)
-            if names is DAYS and b == 0 and y.lower() == "sun":
-                b = 7                                   # "mon-sun" ends on Sunday, like "1-7"
+            if names is DAYS and b == 0 and a > 0 and y.lower() == "sun":
+                b = 7                                   # "mon-sun" ends on Sunday, like "1-7" ("sun-sun" is Sunday)
             if a > b:
                 raise CronError(f"{what}: range {x}-{y} is reversed")
         else:
@@ -571,6 +572,11 @@ def _clean(job: dict) -> dict:
         raise CronError(f"retries must be between 0 and {MAX_SHELL_RETRIES}", "invalid_retries")
     for s in ("command", "topic_path", "prompt", "model", "permission_mode"):
         j[s] = str(j[s] or "")
+    for s in ("name", "command", "topic_path", "prompt", "model"):
+        try:                                            # a lone surrogate: jobs.json and the crontab cannot hold it
+            j[s].encode("utf-8")
+        except UnicodeEncodeError:
+            raise CronError(f"{s} is not valid text", f"invalid_{s.split('_')[0]}") from None
     if j["permission_mode"] not in PERMISSION_MODES:
         raise CronError("permission_mode must be bypass, acceptEdits, default or empty", "invalid_permission_mode")
     if j["kind"] == "shell":
@@ -662,9 +668,7 @@ def create_job(fields: dict) -> dict:
         j.update(id=new_id(), created=now, updated=now)
         while any(x["id"] == j["id"] for x in jobs):
             j["id"] = new_id()
-        jobs.append({k: j[k] for k in _STORED})
-        sync_crontab(jobs)
-        _save_raw(jobs)
+        _commit(jobs, jobs + [{k: j[k] for k in _STORED}])
     return get_job(j["id"])  # type: ignore[return-value]
 
 
@@ -705,15 +709,25 @@ def update_job(cid: str, fields: dict) -> dict | None:
                 if not j["once_at"]:
                     new.pop("done_at", None)
                     new.pop("missed", None)
-                jobs[i] = new
                 if j["enabled"] != bool(cur.get("enabled", True)):
                     _drop_retry(cid)                   # switched off or back on: a waiting retry is cancelled
-                sync_crontab(jobs)
-                _save_raw(jobs)
+                _commit(jobs, jobs[:i] + [new] + jobs[i + 1:])
                 break
         else:
             return None
     return get_job(cid)
+
+
+def _commit(old: list[dict], new: list[dict], reason: str = "removed") -> None:
+    """The crontab, then jobs.json (under _lock): when jobs.json cannot be written (disk full), the crontab goes back
+    to the jobs still saved, so both keep agreeing."""
+    sync_crontab(new)
+    try:
+        _save_raw(new, reason)
+    except BaseException:
+        with contextlib.suppress(Exception):
+            sync_crontab(old)
+        raise
 
 
 def delete_job(cid: str) -> bool:
@@ -722,8 +736,7 @@ def delete_job(cid: str) -> bool:
         rest = [j for j in jobs if j["id"] != cid]
         if len(rest) == len(jobs):
             return False
-        sync_crontab(rest)
-        _save_raw(rest, "deleted")
+        _commit(jobs, rest, "deleted")
         _forget_job(cid)
     return True
 
@@ -1281,6 +1294,9 @@ def _claude_turn(job: dict) -> dict:
     env = {"MAXXING_CRON_ID": job["id"], "MAXXING_CRON_NAME": job["name"]}
     smap_path = _dir() / "sessions.json"
     silent = {"silent_ok": True} if job.get("notify") == "always" else {}   # else the answer stays the full report
+    if agents.is_agent_path(job["topic_path"]) and not agents.feature_on():   # Agents switched off: no turn costs
+        return {"ok": True, "text": "skipped: Agents is switched off (Settings -> Features)", "session_id": None,
+                "error": "", "timed_out": False, "skipped": True}
     sid = None
     if job.get("reuse_session"):
         prev = (config.read_json(smap_path, {}) or {}).get(job["id"])

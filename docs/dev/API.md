@@ -611,8 +611,8 @@ Mail calls run on their own pool of 8 threads; a server that timed out is not tr
 | POST | `/api/mail/{id}/draft` | as `/send` | `{folder, uid}`: filed in Drafts, replacing `draft` |
 | POST | `/api/mail/refresh` | `{account?}` | `[{account, ok, error?, new, started}]`: check the mailbox(es) now (`mail/poll.py`); new mail starts the agents watching it |
 | GET | `/api/mail/all?limit=100&before=` | – | `{messages: [{account, address, folder, uid, message_id, from, from_verified, subject, date, snippet, seen, attachments, seen_by}], checks: {<id>: {at, ok, error}}}`: the newest mail of every mailbox as the checks saw it (cache, not live) |
-| GET | `/api/mail/outbox?account=` | – | `[{id, account, agent, agent_name, avatar, at, to, cc, subject, text, files, draft: {folder, uid}, why, event_id, note}]`: messages written by agents waiting for the owner's OK |
-| POST | `/api/mail/outbox/{id}/send\|deny` | – | `{id, status: sent\|refused}` (once; also the buttons of its Notifications event, ref `mailsend:<id>`) |
+| GET | `/api/mail/outbox?account=` | – | `[{id, account, agent, agent_name, avatar, at, to, cc, bcc, subject, text, text_cut, files, draft: {folder, uid}, why, event_id, note}]`: messages written by agents waiting for the owner's OK |
+| POST | `/api/mail/outbox/{id}/send\|deny` | – | `{id, status: sent\|refused}` (once; also the buttons of its Notifications event, ref `mailsend:<id>`); a text longer than the page shows (`text_cut`): 400 `too_long` (send it from its draft) |
 
 Since the agents' e-mail (lot 2): `MailAccount` also has `poll_min` (5\|10\|30\|60 minutes between checks, default 10,
 PATCH-able), `auth_servers` (host names whose `Authentication-Results` are trusted, set by the owner, PATCH-able),

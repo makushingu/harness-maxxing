@@ -181,8 +181,25 @@ CLAUDE_BACK = ("skills", "shell-snapshots", "session-env", ".cc-writes")   # in 
 # unless one sets something that looks like a secret (`export API_TOKEN=...`: those belong in the Keys vault)
 SHELL_RC = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".bash_aliases", ".bash_logout", ".zshrc",
             ".zshenv", ".zprofile", ".inputrc")
-SECRET_SET = re.compile(r"^\s*(?:export\s+|declare\s+-x\s+)?(?:[A-Z0-9]+_)*(?:KEY|APIKEY|TOKEN|SECRET|PASS|PASSWD|"
-                        r"PASSWORD|PWD|CREDENTIALS?|AUTH|PAT|DSN)(?:_[A-Z0-9]+)*=\S", re.M)
+# a name with one of these anywhere (PGPASSWORD, github_token), or one of SECRET_PARTS as a whole `_` part (NPM_KEY)
+SECRET_WORDS = ("TOKEN", "SECRET", "PASSWORD", "PASSWD", "APIKEY", "CREDENTIAL")
+SECRET_PARTS = {"KEY", "PASS", "PWD", "AUTH", "PAT", "DSN"}
+# `NAME=value` (export, readonly, declare -x...), fish's `set -x NAME value`, a URL with a password (DATABASE_URL)
+SECRET_SET = re.compile(r"^[ \t]*(?:(?:export|readonly|local|declare[ \t]+-\w+|typeset[ \t]+-\w+)[ \t]+)*(\w+)=\S"
+                        r"|^[ \t]*set[ \t]+-\w+[ \t]+(\w+)[ \t]+\S|(://)[^/\s:@]{1,256}:[^@\s/]{1,256}@", re.M)
+
+
+def sets_a_secret(text: str) -> bool:
+    """A shell settings file that sets something looking like a secret (those belong in the Keys vault)."""
+    for m in SECRET_SET.finditer(text):
+        if m[3]:
+            return True
+        name = (m[1] or m[2]).upper()
+        if any(w in name for w in SECRET_WORDS) or SECRET_PARTS & set(name.split("_")):
+            return True
+    return False
+
+
 # a link of the home folder into these is a tool, left readable
 TOOL_ROOTS = tuple(Path(p) for p in ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/opt", "/snap", "/nix"))
 TOOLS = ("node", "npm", "npx", "uv", "python3", "python", "git", "bun", "deno", "pnpm", "go")
@@ -236,7 +253,7 @@ def _home_kept() -> set[Path]:
         rc = home / n
         try:
             if rc.is_file() and not rc.is_symlink() and rc.stat().st_size < 1_000_000 \
-                    and not SECRET_SET.search(rc.read_text(encoding="utf-8", errors="replace")):
+                    and not sets_a_secret(rc.read_text(encoding="utf-8", errors="replace")):
                 kept.add(rc)
         except OSError:
             pass
@@ -249,7 +266,13 @@ def _home_kept() -> set[Path]:
             continue
         root = p.parent.parent if p.parent.name == "bin" else p.parent    # ~/.nvm/versions/node/v22, ~/.hermes/node
         kept.add(root if root not in (h, h / ".local") else p.parent)
-    return {k.resolve() for k in kept}
+    out = set()
+    for k in kept:
+        try:
+            out.add(k.resolve())
+        except (OSError, RuntimeError):             # a link in a loop: not kept
+            pass
+    return out
 
 
 def home_wall() -> list[str]:
@@ -273,7 +296,11 @@ def home_wall() -> list[str]:
         for k in kids:
             if k == home / ".local" / "share":
                 continue
-            r = k.resolve()
+            try:
+                r = k.resolve()
+            except (OSError, RuntimeError):         # a link in a loop (Python < 3.13 raises RuntimeError)
+                out.append(str(k))
+                continue
             if k.is_symlink():                      # inside the home folder: its target is an entry of its own
                 if r not in kept and h not in r.parents and r != h and r != Path("/") \
                         and not any(r == t or t in r.parents for t in TOOL_ROOTS):

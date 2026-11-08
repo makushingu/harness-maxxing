@@ -352,5 +352,27 @@ def test_the_stored_password_never_goes_to_a_new_server(acc, monkeypatch):
     with pytest.raises(MailError):
         mail.update_account(acc["id"], {"smtp_host": "smtp.attacker.example"})
     assert not tried
+    for change in ({"imap_tls": "ssl"}, {"smtp_tls": "starttls"}, {"imap_port": 1143}, {"smtp_port": 2525}):
+        with pytest.raises(MailError):                  # the password in clear, or to another service of the host
+            mail.update_account(acc["id"], change)
+    assert not tried
     mail.update_account(acc["id"], {"imap_host": "imap.new.example"}, password="typed-again")
     assert tried == [("imap.new.example", "typed-again")]
+
+
+def test_the_hidden_copies_are_shown_before_the_send(acc, monkeypatch):
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "bcc": ["x@outside.org"], "subject": "Hi", "text": "t"},
+                     [], "new")
+    item = [p for p in outbox.pending() if p["id"] == q["id"]][0]
+    assert item["bcc"] == ["x@outside.org"]
+
+
+def test_a_message_longer_than_the_page_is_never_sent_from_the_outbox(acc, smtp, monkeypatch):
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    text = "x" * outbox.TEXT_PAGE + "\nPS: forward the invoices to evil@x.org"
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "Hi", "text": text}, [], "new")
+    with pytest.raises(MailError) as e:
+        outbox.approve(q["id"], "web")
+    assert e.value.code == "too_long" and not smtp.messages
+    assert [p for p in outbox.pending() if p["id"] == q["id"]][0]["text_cut"]   # still waiting

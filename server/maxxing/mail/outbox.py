@@ -165,6 +165,9 @@ def approve(oid: str, by: str = "web") -> dict:
         raise MailError("not_found", "no such message waiting")
     if row["status"] != "waiting":
         return row
+    if len(str(row["data"]["draft"].get("text") or "")) > TEXT_PAGE:    # no screen shows it all: the owner never read it
+        raise MailError("too_long", "this message is longer than the E-mail page shows: open its draft to read it all "
+                        "and send it from there")
     if not store.outbox_claim(oid, "sending"):
         return store.outbox_get(oid) or row
     row = store.outbox_get(oid) or row                  # as claimed: the owner may have just changed the draft
@@ -288,7 +291,7 @@ def pending(acc_id: str | None = None) -> list[dict]:
     for r in store.outbox_list("waiting", acc_id):
         d = r["data"]["draft"]
         out.append({"id": r["id"], "account": r["account"], "agent": r["agent"], "agent_name": _agent_name(r["agent"]),
-                    "at": r["at"], "to": d.get("to") or [], "cc": d.get("cc") or [], "subject": d.get("subject") or "",
+                    "at": r["at"], "to": d.get("to") or [], "cc": d.get("cc") or [], "bcc": d.get("bcc") or [], "subject": d.get("subject") or "",
                     # the whole text: the owner sends what they read (a cut one is never sent from here)
                     "text": str(d.get("text") or "")[:TEXT_PAGE], "text_cut": len(str(d.get("text") or "")) > TEXT_PAGE,
                     "files": r["data"].get("files") or [],
