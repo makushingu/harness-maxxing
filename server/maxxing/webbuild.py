@@ -152,8 +152,11 @@ def _lock():
 def _node_env() -> tuple[Path | None, dict[str, str]]:
     from . import deps
     node = deps.node_bin()
-    env = {**os.environ, "CI": "1", "NODE_ENV": "production", "npm_config_update_notifier": "false"}
-    env.pop("MAXXING_WEB_DIST", None)
+    # only what npm and node need: the install scripts of dependencies never see the server's keys
+    keep = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "NODE_OPTIONS", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+            "http_proxy", "https_proxy", "no_proxy")
+    env = {k: v for k, v in os.environ.items() if k in keep or k.startswith("npm_config_")}
+    env.update({"CI": "1", "NODE_ENV": "production", "npm_config_update_notifier": "false"})
     if node:
         env["PATH"] = f"{node.parent}:{env.get('PATH', '/usr/bin:/bin')}"
     return node, env
@@ -221,8 +224,8 @@ def build(code: Path | None = None, out: Path | None = None, share_from: Path | 
         if not ok:
             return {"ok": False, "skipped": ok is None, "error": err, "seconds": round(time.monotonic() - t0)}
         say("checking the types (tsc)")
-        # a borrowed node_modules also holds the code directory's incremental state: check everything again
-        ok, msg = _run([str(node), "node_modules/typescript/bin/tsc", "-b", *(["--force"] if share_from else [])],
+        # always a full check: tsc's incremental state may come from another tree (a borrowed node_modules)
+        ok, msg = _run([str(node), "node_modules/typescript/bin/tsc", "-b", "--force"],
                        web, env, 600)
         if not ok:
             return {"ok": False, "error": "type errors:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}

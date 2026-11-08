@@ -224,3 +224,14 @@ def test_leftovers_of_a_killed_build_are_swept(ui):
     os.utime(old, (1, 1))
     _edit(ui["clone"])
     assert webbuild.build()["ok"] and not old.exists()
+
+
+def test_the_build_stamp_is_never_served(ui):
+    from fastapi.testclient import TestClient
+    from maxxing.app import create_app
+    _edit(ui["clone"])
+    assert run_cli("custom", "build") == 0
+    webbuild.forget()
+    assert (webbuild.active_dist() / webbuild.STAMP).is_file()
+    r = TestClient(create_app()).get("/" + webbuild.STAMP)
+    assert "commit" not in r.text and "built_at" not in r.text

@@ -10,7 +10,10 @@ we serve).
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -18,6 +21,8 @@ from . import config
 
 PHOTO_MAX = 512 * 1024
 VERSION = re.compile(r"[0-9a-f]{16}")
+_busy: set[str] = set()                     # fetches in flight: a second request for the same photo waits for none
+_busy_lock = threading.Lock()
 _failed: dict[str, float] = {}              # "<pid>-<version>" -> when a fetch failed (asked again after RETRY_S)
 RETRY_S = 600
 
@@ -82,17 +87,34 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
         key = f"{pid}-{version}"
         if time.time() - _failed.get(key, 0) < RETRY_S:
             return None
-        from . import teampeer
-        data = teampeer.fetch_photo(pid, version)
-        if not data or not sniff(data) or hashlib.sha256(data).hexdigest()[:16] != version:
-            _failed[key] = time.time()
-            return None
-        d.mkdir(parents=True, exist_ok=True)
-        for old in d.glob(f"{pid}-*"):          # one version per person
-            old.unlink(missing_ok=True)
-        tmp = d / f".{pid}-{version}.part"
-        tmp.write_bytes(data)
-        tmp.replace(p)
-    with open(p, "rb") as f:
-        mime = sniff(f.read(16))
+        with _busy_lock:
+            if key in _busy:                    # another request is fetching it: no second download
+                return None
+            _busy.add(key)
+        try:
+            from . import teampeer
+            data = teampeer.fetch_photo(pid, version)
+            if not data or not sniff(data) or hashlib.sha256(data).hexdigest()[:16] != version:
+                _failed[key] = time.time()
+                return None
+            d.mkdir(parents=True, exist_ok=True)
+            for old in d.glob(f"{pid}-*"):      # one version per person
+                if old.name != p.name:
+                    old.unlink(missing_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=d, prefix=f".{pid}-", suffix=".part")
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(data)
+                os.replace(tmp, p)
+            except OSError:
+                Path(tmp).unlink(missing_ok=True)
+                return None
+        finally:
+            with _busy_lock:
+                _busy.discard(key)
+    try:
+        with open(p, "rb") as f:
+            mime = sniff(f.read(16))
+    except OSError:                             # replaced by a newer version meanwhile
+        return None
     return (p, mime) if mime else None

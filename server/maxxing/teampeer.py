@@ -895,6 +895,9 @@ def photo_for(frm: str, scope: str) -> tuple[Path, str]:
     return found
 
 
+PHOTO_DEADLINE = 20                                     # seconds for the whole photo, not per read
+
+
 def fetch_photo(person: str, version: str) -> bytes | None:
     """The photo of a person (id) from its server: signed GET with its contact key, else one of its group keys.
     None on any failure."""
@@ -916,9 +919,10 @@ def fetch_photo(person: str, version: str) -> bytes | None:
             if r.status_code != 200:
                 return None
             data = bytearray()
+            end = time.monotonic() + PHOTO_DEADLINE
             for chunk in r.iter_bytes(1 << 16):
                 data += chunk
-                if len(data) > profile_photo.PHOTO_MAX:
+                if len(data) > profile_photo.PHOTO_MAX or time.monotonic() > end:
                     return None
             return bytes(data)
     except (httpx.HTTPError, PeerError, OSError):

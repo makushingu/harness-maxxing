@@ -132,3 +132,21 @@ def test_a_contacts_photo_is_fetched_once_per_version_and_checked(client, monkey
     http.data = JPEG
     assert client.get(url2).status_code == 200
     assert sorted(p.name for p in (config.STATE / "team" / "photos").iterdir()) == [f"{teampeer.pid(LEA)}-{v2}"]
+
+
+def test_a_slow_or_doubled_photo_fetch_never_holds_the_server(client, monkeypatch):
+    v = hashlib.sha256(PNG).hexdigest()[:16]
+    _contact(monkeypatch, photo=v)
+    http = _Http(PNG)
+    monkeypatch.setattr(teampeer, "_http", lambda: http)
+    monkeypatch.setattr(profile_photo, "_failed", {})
+    url = f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}"
+    key = f"{teampeer.pid(LEA)}-{v}"
+    profile_photo._busy.add(key)                 # already being fetched by another request: no second download
+    try:
+        assert client.get(url).status_code == 404 and http.calls == []
+    finally:
+        profile_photo._busy.discard(key)
+    monkeypatch.setattr(teampeer, "PHOTO_DEADLINE", -1)     # past the deadline for the whole photo: dropped
+    assert client.get(url).status_code == 404 and len(http.calls) == 1
+    assert not (config.STATE / "team" / "photos").exists() or not any((config.STATE / "team" / "photos").iterdir())
