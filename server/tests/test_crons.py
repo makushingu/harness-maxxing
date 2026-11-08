@@ -42,6 +42,7 @@ def test_sunday_ends_a_weekday_range():
     assert crons.parse("0 9 * * mon-sun").dows == crons.parse("0 9 * * 1-7").dows == set(range(7))
     assert crons.parse("0 10 * * sat-sun").dows == {6, 0}
     assert crons.parse("0 9 * * sun-sat").dows == set(range(7))
+    assert crons.parse("0 9 * * sun-sun").dows == crons.parse("0 9 * * 0-0").dows == {0}   # Sunday only
 
 
 def test_a_refused_crontab_leaves_the_jobs_unchanged(monkeypatch):

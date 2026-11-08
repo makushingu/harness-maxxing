@@ -160,8 +160,8 @@ def _parse_field(text: str, lo: int, hi: int, names: list[str] | None, what: str
         elif "-" in part:
             x, y = part.split("-", 1)
             a, b = _value(x, lo, hi, names, what), _value(y, lo, hi, names, what)
-            if names is DAYS and b == 0 and y.lower() == "sun":
-                b = 7                                   # "mon-sun" ends on Sunday, like "1-7"
+            if names is DAYS and b == 0 and a > 0 and y.lower() == "sun":
+                b = 7                                   # "mon-sun" ends on Sunday, like "1-7" ("sun-sun" is Sunday)
             if a > b:
                 raise CronError(f"{what}: range {x}-{y} is reversed")
         else:
