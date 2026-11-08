@@ -1294,6 +1294,9 @@ def _claude_turn(job: dict) -> dict:
     env = {"MAXXING_CRON_ID": job["id"], "MAXXING_CRON_NAME": job["name"]}
     smap_path = _dir() / "sessions.json"
     silent = {"silent_ok": True} if job.get("notify") == "always" else {}   # else the answer stays the full report
+    if agents.is_agent_path(job["topic_path"]) and not agents.feature_on():   # Agents switched off: no turn costs
+        return {"ok": True, "text": "skipped: Agents is switched off (Settings -> Features)", "session_id": None,
+                "error": "", "timed_out": False, "skipped": True}
     sid = None
     if job.get("reuse_session"):
         prev = (config.read_json(smap_path, {}) or {}).get(job["id"])
