@@ -3,7 +3,7 @@ import { api, seg } from '../api'
 import type { AgentGroup, AgentGroupInput, AgentGroupMessage, Ok } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
-import { agentDraftKey, forgetDraft } from '../drafts'
+import { agentDraftKey, forgetDraft, pruneAgentDrafts } from '../drafts'
 
 // Agent groups (on the Agents page): the owner talks to 2-6 agents of one project, who answer in turn.
 // The bus topic `agent-groups` refreshes the list and the groups, `agent-groups:<path>` one group and its messages.
@@ -27,7 +27,15 @@ export const groupRoute = (g: Pick<AgentGroup, 'project' | 'name'>) => `/agents/
 export const newGroupRoute = (project?: string) => `/agents/groups/new${project ? `?project=${encodeURIComponent(project)}` : ''}`
 
 export function useAgentGroups(enabled = true) {
-  return useQuery({ queryKey: groupKeys.list, queryFn: () => api.get<{ groups: AgentGroup[] }>('/api/agent-groups').then((r) => r.groups), enabled })
+  return useQuery({
+    queryKey: groupKeys.list,
+    queryFn: () =>
+      api.get<{ groups: AgentGroup[] }>('/api/agent-groups').then((r) => {
+        pruneAgentDrafts('group', r.groups.map((x) => x.path))
+        return r.groups
+      }),
+    enabled,
+  })
 }
 export function useAgentGroup(path: string | null) {
   return useQuery({ queryKey: groupKeys.one(path || ''), queryFn: () => api.get<AgentGroup>(groupUrl(path!)), enabled: !!path })

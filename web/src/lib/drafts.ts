@@ -32,3 +32,26 @@ export function forgetDraft(key: string) {
 
 /** Draft key of an agent's box (`agent:<path>`) or a group's (`group:<path>`): never a session's (its id or `new:<path>`). */
 export const agentDraftKey = (kind: 'agent' | 'group', path: string) => `${kind}:${path}`
+
+/** The drafts of the agents (`kind` 'agent') or groups ('group') not in `paths` (the full list the server just gave):
+ *  gone from another browser, or with their topic or project. An empty list prunes nothing (a folder that could not
+ *  be read must not wipe every draft). */
+export function pruneAgentDrafts(kind: 'agent' | 'group', paths: string[]) {
+  if (!paths.length) return
+  try {
+    const keep = new Set(paths)
+    const head = `mx-draft:${kind}:`
+    const gone = new Set<string>()
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (!k?.startsWith(head)) continue
+      const rest = k.slice(head.length)
+      const part = PARTS.find((p) => p && rest.endsWith(p)) || ''
+      const path = rest.slice(0, rest.length - part.length)
+      if (!keep.has(path)) gone.add(path)
+    }
+    for (const path of gone) forgetDraft(agentDraftKey(kind, path))
+  } catch {
+    /* private mode */
+  }
+}

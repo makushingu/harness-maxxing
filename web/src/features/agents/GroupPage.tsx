@@ -357,7 +357,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
         data-testid="group-thread"
         data-thread
       >
-        <AnswerContext>
+        <AnswerContext owner={{ group: g.path }}>
           <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
             {isLoading ? (
               [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
@@ -375,7 +375,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
           </div>
         </AnswerContext>
       </div>
-      <QuotePill scope={box} selector="[data-quote]" onQuote={(q) => composer.current?.quote(q)} />
+      <QuotePill scope={box} selector="[data-quote]" onQuote={(q, el) => composer.current?.quote(q, quotedFrom(el, members))} />
       <Composer key={g.path} group={g} ref={composer} first={!said} />
     </div>
   )
@@ -569,7 +569,16 @@ const GroupMessage = React.memo(function GroupMessage({
 })
 
 /* ---------------------------------------------------------------- The box */
-export type ComposerApi = { mention: (slug: string) => void; quote: (text: string) => void }
+/** What the box gets: a member to @mention, a quoted selection (`from`: the member that wrote it, null = the owner). */
+export type ComposerApi = { mention: (slug: string) => void; quote: (text: string, from: string | null) => void }
+
+/** Who wrote the quoted message `el`: null for the owner's, else the member's name (its folder name if gone). */
+function quotedFrom(el: Element, members: AgentGroup['members']): string | null {
+  const m = el.closest('[data-kind]')
+  if (m?.getAttribute('data-kind') === 'mine') return null
+  const slug = m?.getAttribute('data-author') || ''
+  return members.find((x) => slugOf(x.path) === slug)?.display_name || slug || 'an agent'
+}
 
 /** The `@word` being typed just before the caret (start of the text or after a space / bracket), else null. */
 function mentionAt(text: string, caret: number): { start: number; q: string } | null {
@@ -652,6 +661,8 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     placeAt.current = null
   }, [text])
   // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
+  // The voice button hands the text over with the handler of the render where recording stopped: it goes through
+  // `voice`, the handler of the last render, so what was typed or attached meanwhile is neither lost nor sent stale.
   const onVoice = (heard: string, autoSend: boolean) => {
     if (autoSend && !busy) return submit(heard)
     const next = insertAtCaret(input.current, text, heard)
@@ -659,11 +670,14 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     setCaret(next.caret)
     placeAt.current = next.caret
   }
+  const voice = React.useRef(onVoice)
+  voice.current = onVoice
+  const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
   React.useImperativeHandle(ref, () => ({
     mention: (slug: string) => insert(slug),
     // a selection quoted from the conversation: a Markdown quote at the end of the text, the message goes after it
-    quote: (q: string) => {
-      const next = withQuote(text, q)
+    quote: (q: string, from: string | null) => {
+      const next = withQuote(text, q, from)
       setText(next)
       setCaret(next.length)
       placeAt.current = next.length
@@ -683,7 +697,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     files.clear()
     // mutateAsync: its answer arrives even once this box is gone (another group opened): the message never stays
     // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
-    say.mutateAsync({ path: g.path, text: v, attachments: files.paths }).catch(() => bringBackDraft(key, v, kept))
+    say.mutateAsync({ path: g.path, text: v, attachments: files.paths }).catch((e) => bringBackDraft(key, v, kept, t, e))
   }
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
@@ -778,7 +792,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="group-text"
             />
-            <VoiceButton onTranscript={onVoice} />
+            <VoiceButton onTranscript={onTranscript} />
             <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
               <Send />
             </Button>

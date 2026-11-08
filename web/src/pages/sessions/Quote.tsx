@@ -1,17 +1,17 @@
 // Quote: selecting text inside ONE reply of Claude (thread or side-question answer) shows a small "Quote"
 // pill above the selection (below it on touch, clear of the native menu); clicking it puts the text in the
-// composer's quotes card. Hidden on Escape, scroll, a click elsewhere or an empty selection. `selector` names the
-// messages that can be quoted (agents and groups: their messages, `[data-kind]`).
+// composer's quotes card (with the quoted message element). Hidden on Escape, scroll, a click elsewhere or an empty
+// selection. `selector` names the messages that can be quoted (agents and groups: their messages, `[data-quote]`).
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { Quote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 
-type Pill = { x: number; y: number; below: boolean; text: string }
+type Pill = { x: number; y: number; below: boolean; text: string; from: Element }
 
 /** Reply the selection lies entirely in (an element matching `selector` inside `scope`), or null. */
-function selectedReply(scope: HTMLElement | null, selector: string): { text: string; rect: DOMRect } | null {
+function selectedReply(scope: HTMLElement | null, selector: string): { text: string; rect: DOMRect; from: Element } | null {
   const sel = window.getSelection()
   if (!scope || !sel || sel.isCollapsed || !sel.rangeCount) return null
   const range = sel.getRangeAt(0)
@@ -21,10 +21,10 @@ function selectedReply(scope: HTMLElement | null, selector: string): { text: str
   const text = sel.toString().trim()
   if (!text) return null
   const rects = range.getClientRects()
-  return { text, rect: rects.length ? range.getBoundingClientRect() : (reply as HTMLElement).getBoundingClientRect() }
+  return { from: reply, text, rect: rects.length ? range.getBoundingClientRect() : (reply as HTMLElement).getBoundingClientRect() }
 }
 
-export function QuotePill({ scope, onQuote, selector = '.mx-assistant' }: { scope: React.RefObject<HTMLElement | null>; onQuote: (text: string) => void; selector?: string }) {
+export function QuotePill({ scope, onQuote, selector = '.mx-assistant' }: { scope: React.RefObject<HTMLElement | null>; onQuote: (text: string, from: Element) => void; selector?: string }) {
   const t = useT()
   const [pill, setPill] = React.useState<Pill | null>(null)
 
@@ -40,7 +40,7 @@ export function QuotePill({ scope, onQuote, selector = '.mx-assistant' }: { scop
       const below = touch || rect.top < 56
       const x = Math.min(Math.max(rect.left + rect.width / 2, 56), window.innerWidth - 56)
       const y = below ? Math.min(rect.bottom + 8, window.innerHeight - 48) : rect.top - 8
-      setPill({ x, y, below, text: hit.text })
+      setPill({ x, y, below, text: hit.text, from: hit.from })
     }
     const later = (ms: number) => {
       window.clearTimeout(timer)
@@ -106,7 +106,7 @@ export function QuotePill({ scope, onQuote, selector = '.mx-assistant' }: { scop
         onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
-          onQuote(pill.text)
+          onQuote(pill.text, pill.from)
           setPill(null)
         }}
         className={cn(

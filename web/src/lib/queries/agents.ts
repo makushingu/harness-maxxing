@@ -6,7 +6,7 @@ import type {
 } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
-import { agentDraftKey, forgetDraft } from '../drafts'
+import { agentDraftKey, forgetDraft, pruneAgentDrafts } from '../drafts'
 
 // Agents (Settings -> Features -> agents_page): lasting roles living in a topic folder, with triggers.
 // The bus topic `agents` refreshes every key below (BUS_KEYS); creating or deleting one also changes the workspace tree.
@@ -40,7 +40,15 @@ export function agentRunRoute(path: string, sid: string): string {
 }
 
 export function useAgents(enabled = true) {
-  return useQuery({ queryKey: agentKeys.list, queryFn: () => api.get<AgentsPayload>('/api/agents'), enabled })
+  return useQuery({
+    queryKey: agentKeys.list,
+    queryFn: () =>
+      api.get<AgentsPayload>('/api/agents').then((r) => {
+        pruneAgentDrafts('agent', r.agents.map((x) => x.path))
+        return r
+      }),
+    enabled,
+  })
 }
 /** The gallery of ready-made agents (texts in `lang`; `keys_present` = its suggested keys found in the vault). */
 export function useAgentTemplates(lang: string, enabled = true) {

@@ -41,6 +41,8 @@ import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/
 import { AnswerContext, AnswerText } from './answer'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+/** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
+const clickToLoad = () => null
 
 /** A result longer than this is folded (the first lines and "Read all"). */
 const FOLD_CHARS = 700
@@ -166,7 +168,8 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
         }
       />
       <div className="flex min-h-0 flex-1">
-        <Conversation agent={a} />
+        {/* keyed: a reply started on one agent never goes with a message to another */}
+        <Conversation key={a.path} agent={a} />
         {wide && (
           <aside className="w-[360px] shrink-0 overflow-y-auto border-l" data-testid="agent-profile">
             <Profile agent={a} />
@@ -278,7 +281,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
         data-testid="agent-thread"
         data-thread
       >
-        <AnswerContext>
+        <AnswerContext owner={{ agent: a.path }}>
           <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
             {isLoading ? (
               [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
@@ -308,7 +311,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
           </div>
         </AnswerContext>
       </div>
-      <QuotePill scope={box} selector="[data-quote]" onQuote={(q) => composer.current?.quote(q)} />
+      <QuotePill scope={box} selector="[data-quote]" onQuote={(q, el) => composer.current?.quote(q, isOwnRun(el) ? null : a.display_name)} />
       <Composer key={a.path} ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
@@ -490,8 +493,14 @@ function ThreadMessage({
 
 const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
 
-/** What the conversation hands to the box: a quoted selection. */
-type AgentComposerApi = { quote: (text: string) => void }
+/** A message of the owner (a run he started, right-aligned), not something the agent wrote. */
+const isOwnRun = (el: Element) => {
+  const m = el.closest('[data-kind]')
+  return m?.getAttribute('data-kind') === 'run' && m.classList.contains('ml-auto')
+}
+
+/** What the conversation hands to the box: a quoted selection (`from`: the agent that wrote it, null = the owner). */
+type AgentComposerApi = { quote: (text: string, from: string | null) => void }
 
 function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
@@ -499,10 +508,21 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
-  const putText = (pasted: string, start: number, end: number) => {
-    setText((cur) => cur.slice(0, Math.min(start, cur.length)) + pasted + cur.slice(Math.min(end, cur.length)))
-    input.current?.focus()
-  }
+  // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
+  const placeAt = React.useRef<number | null>(null)
+  const putText = (pasted: string, start: number, end: number) =>
+    setText((cur) => {
+      const from = Math.min(start, cur.length)
+      placeAt.current = from + pasted.length
+      return cur.slice(0, from) + pasted + cur.slice(Math.min(end, cur.length))
+    })
+  React.useLayoutEffect(() => {
+    const el = input.current
+    if (placeAt.current == null || !el) return
+    el.focus()
+    el.setSelectionRange(placeAt.current, placeAt.current)
+    placeAt.current = null
+  }, [text])
   const files = useAttachments(a.path, undefined, { draftKey: key, putText })
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
@@ -515,8 +535,8 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
     })
   // A selection quoted from the conversation: a Markdown quote at the end of the text, the reply goes after it.
   React.useImperativeHandle(ref, () => ({
-    quote: (q: string) => {
-      const next = withQuote(text, q)
+    quote: (q: string, from: string | null) => {
+      const next = withQuote(text, q, from)
       setText(next)
       caretTo(next.length)
     },
@@ -547,20 +567,25 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
           if (alive.current) onCancelReply()
           return
         }
-        bringBackDraft(key, v, kept)
+        bringBackDraft(key, v, kept, t)
         toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
       },
       // The reply target stays with the text, so sending again still goes on with the same session.
-      () => bringBackDraft(key, v, kept),
+      (e) => bringBackDraft(key, v, kept, t, e),
     )
   }
   // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
+  // The voice button hands the text over with the handler of the render where recording stopped: it goes through
+  // `voice`, the handler of the last render, so what was typed or attached meanwhile is neither lost nor sent stale.
   const onVoice = (heard: string, autoSend: boolean) => {
     if (autoSend && !busy) return submit(heard)
     const next = insertAtCaret(input.current, text, heard)
     setText(next.text)
     caretTo(next.caret)
   }
+  const voice = React.useRef(onVoice)
+  voice.current = onVoice
+  const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
       <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
@@ -602,7 +627,7 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <VoiceButton onTranscript={onVoice} />
+            <VoiceButton onTranscript={onTranscript} />
             <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
@@ -914,7 +939,9 @@ function MemoryEditor({ agent: a }: { agent: AgentDetail }) {
         <div className="rounded-xl border bg-card p-4">
           <Sensitive block>
             <React.Suspense fallback={<pre className="text-sm whitespace-pre-wrap">{content}</pre>}>
-              <Markdown className="text-sm">{content}</Markdown>
+              <Markdown className="text-sm" localImage={clickToLoad}>
+                {content}
+              </Markdown>
             </React.Suspense>
           </Sensitive>
         </div>
