@@ -51,7 +51,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "permission_mode": "bypass",          # bypass | acceptEdits | default
     # A turn that ends above this context (tokens) is followed by a summary turn and a fresh thread seeded with it
     # (the same as "Compact"): long sessions stop re-sending their whole history. 0 = off.
-    "auto_compact_tokens": 400000,
+    "auto_compact_tokens": 300000,
     # Idle compaction: a message that comes back to a session after its prompt cache expired (last call more than
     # idle_compact_after_s ago) with a context of at least idle_compact_tokens is preceded by the same summary turn:
     # the history would be re-sent uncached anyway. 0 = off; a lower non-zero value is raised to 20000.

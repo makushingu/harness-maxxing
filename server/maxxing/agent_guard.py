@@ -400,6 +400,32 @@ def topic_edit_denied(path: str) -> list[str]:
     return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / d}/**)" for d in (".claude", "attachments")]
 
 
+def _overlaps(p: Path, q: Path) -> bool:
+    return p == q or q in p.parents or p in q.parents
+
+
+def media_roots(path: str, a: dict | None = None) -> list[str]:
+    """The folders whose files the agent's answers may show on its page (links, thumbnails, players): its own folder
+    and its `writable` folders. One that is, holds or sits in a secret or private path is left out (the web page
+    never previews it, the files API checks the real path with `within`). Never the whole files root."""
+    if a is None:
+        from . import agents
+        a = agents.load(path)
+    folder = config.workspace() / path
+    cands = [str(folder)] + writable_dirs(path, a)
+    banned = [Path(p) for p in secret_paths() + private_paths(path) if "*" not in p]
+    banned += [b.resolve() for b in banned]
+    out: list[str] = []
+    for c in cands:
+        p = Path(c)
+        real = p.resolve()
+        if real == Path(real.anchor) or any(_overlaps(p, b) or _overlaps(real, b) for b in banned):
+            continue
+        if c not in out:
+            out.append(c)
+    return out
+
+
 def mode(requested: str) -> str:
     """Permission mode of a sandboxed turn: never bypass (Claude Code lets every domain through in bypass)."""
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"

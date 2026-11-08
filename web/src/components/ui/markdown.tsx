@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { CodeBlock } from './code-block'
 import { Diagram } from './diagram'
 import { useT, withGroups } from '@/i18n'
+import { FILE_HREF, fileHrefPath } from '@/features/files/viewerStore'
 
 // ```git blocks: the live graph of a repository (features/git), loaded the first time one shows up.
 const GitBlock = React.lazy(withGroups(['git'], () => import('@/features/git/GitBlock')))
@@ -99,6 +100,9 @@ export type MarkdownProps = {
   onLink?: (href: string) => (() => void) | null
   /** Extra component overrides. */
   components?: Components
+  /** A picture of this site -> the URL to load at once, or null: it waits for a click like a remote one (default: all
+   *  load as written). A text from outside (an agent's answer) could embed `![](/api/...)`, a GET with the owner's cookies. */
+  localImage?: (src: string) => string | null
 }
 
 /**
@@ -109,7 +113,7 @@ export type MarkdownProps = {
  */
 // Memoized: a parent that re-renders for something else (a dictionary group arriving re-renders every `useT` user)
 // reuses the parsed tree instead of parsing and highlighting the whole text again.
-export const Markdown = React.memo(function Markdown({ children, className, onLink, components }: MarkdownProps) {
+export const Markdown = React.memo(function Markdown({ children, className, onLink, components, localImage }: MarkdownProps) {
   // Re-render once the grammars are there - only the messages that have something to highlight (the others would
   // parse their whole text again for the same output).
   React.useSyncExternalStore(subscribeLowlight, FENCE_LANG.test(children) ? lowlightReady : noHighlight)
@@ -118,10 +122,15 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
       a({ href = '', children: c, node: _n, ...rest }) {
         if (!SAFE_URL.test(href)) return <span>{c}</span>
         const handler = onLink?.(href)
+        // a link to a file of the conversation: its title is the real path (the text may say anything); refused by
+        // onLink (outside what the answer may open: an agent's scope) it is plain text, out of the file menus too
+        const file = href.startsWith(FILE_HREF) ? (fileHrefPath(href) ?? '') : undefined
+        if (file !== undefined && !handler) return <span title={file}>{c}</span>
         if (handler)
           return (
             <a
               href={href}
+              title={file}
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
@@ -175,11 +184,13 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
       img({ src, alt }) {
         const s = typeof src === 'string' ? src : ''
         if (!SAFE_URL.test(s) || /^mailto:/i.test(s)) return null
-        return EXTERNAL.test(s) ? <RemoteImage src={s} alt={alt || ''} /> : <img src={s} alt={alt || ''} loading="lazy" />
+        if (EXTERNAL.test(s)) return <RemoteImage src={s} alt={alt || ''} />
+        const local = localImage ? localImage(s) : s
+        return local === null ? <RemoteImage src={s} alt={alt || ''} /> : <img src={local} alt={alt || ''} loading="lazy" />
       },
       ...components,
     }),
-    [onLink, components],
+    [onLink, components, localImage],
   )
   // Parsing is one blocking pass: a huge text (a 2 MB .md, a giant table) would freeze the page for seconds.
   if (children.length > MAX_MARKDOWN)

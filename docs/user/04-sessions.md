@@ -296,7 +296,7 @@ When a conversation gets long, the context fills up and answers get slower and m
 | **Compact** | Claude summarizes the conversation, then continues **in the same session** with a fresh context seeded by the summary. The history stays visible. |
 | **Hand off** | Creates a **new session** seeded with a summary of this one; the old one is archived. Good when the work changes direction. You can write in the new session right away: your message waits for the summary, then runs with it. |
 
-**Automatic compaction** (Settings -> Claude, 400k tokens by default): when a turn ends with more context than the
+**Automatic compaction** (Settings -> Claude, 300k tokens by default): when a turn ends with more context than the
 threshold, Harness compacts the session by itself before your next message - a note in the conversation says so.
 Long sessions then stop re-sending their whole history on every call, which roughly halves the tokens they use.
 Pick a higher threshold (or Off) for a session that needs every detail of a very long exchange. A single long turn
