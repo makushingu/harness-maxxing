@@ -151,7 +151,7 @@ export function StatusFooter({ collapsed, touch, onInstall }: { collapsed?: bool
   const keyboard = typeof window !== 'undefined' && window.matchMedia('(any-pointer: fine)').matches // shortcuts need a keyboard
   const area = cn(
     'rounded-md px-2.5 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-    touch && 'py-2.5 active:bg-accent',
+    touch && 'min-h-10 py-2.5 active:bg-accent',
   )
   return (
     <div
