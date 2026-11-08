@@ -200,7 +200,12 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           </p>
         )}
         {long && !all && (
-          <button type="button" className="justify-self-start text-xs text-primary hover:underline" onClick={() => setAll(true)} data-testid="mail-outbox-all">
+          <button
+            type="button"
+            className="justify-self-start text-xs text-primary hover:underline pointer-coarse:-mx-2 pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:px-2"
+            onClick={() => setAll(true)}
+            data-testid="mail-outbox-all"
+          >
             {t('mail.outbox.showAll')}
           </button>
         )}
