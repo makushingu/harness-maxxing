@@ -68,7 +68,8 @@ The fastest way: ask Claude in a session, "create a dashboard widget that shows 
 ```
 
 The id (folder name) is a lowercase slug: letters, digits, dashes. Reserved ids: `activity`,
-`tasks`, `day`, `crons`, `server`, `backup`, `telegram`, `shopify`, `usage`, `customize`.
+`tasks`, `day`, `crons`, `server`, `backup`, `telegram`, `shopify`, `usage`, `customize`. A folder whose name is
+not valid UTF-8 is ignored.
 
 ### 2. manifest.json
 
@@ -136,7 +137,7 @@ Block =
 ```
 
 `link` makes the card title clickable (an app route like `/tasks` or an `https://` URL). Unknown
-block types are ignored.
+block types are ignored. A card larger than 1 MB (as JSON) is shown as an error.
 
 Example list + chart:
 

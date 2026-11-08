@@ -4,7 +4,26 @@ import { useSessions, useTelegram, useTelegramSettings, useTelegramSync, useTele
 import { useLang, useT } from '@/i18n'
 import { fmtRelative } from '@/lib/format'
 import type { Session, TelegramMode, TelegramSettings, TelegramStatus, TelegramTestResult } from '@/lib/types'
-import { Badge, Button, Segmented, Sensitive, Skeleton, StatusDot, Switch, confirm, toast } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  FormField,
+  SecretInput,
+  Segmented,
+  Sensitive,
+  Skeleton,
+  StatusDot,
+  Switch,
+  confirm,
+  toast,
+} from '@/components/ui'
+import { errorMessage, isApiError } from '@/lib/api'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
 import { ChangeBot, LinkPanel, TelegramErrors, TelegramSetup, ThreadList, TokenRejected, TopicsNotice, telegramStage, tokenRejected } from '@/features/telegram/TelegramSetup'
 import { Callout, OptionCard, SettingRow } from '@/features/common'
@@ -47,20 +66,60 @@ function ModeCard({ status: s }: { status: TelegramStatus }) {
   )
 }
 
-function DisconnectCard() {
+/** Unlinking turns two-step sign-in off: while it is on, the current password is asked, as to turn it off. */
+function DisconnectCard({ twoStep }: { twoStep: boolean }) {
   const t = useT()
   const unlink = useTelegramUnlink()
+  const [ask, setAsk] = React.useState(false)
+  const [password, setPassword] = React.useState('')
+  const [pwError, setPwError] = React.useState<string>()
+  const close = () => {
+    setAsk(false)
+    setPassword('')
+    setPwError(undefined)
+  }
+  const onError = (e: unknown) => (isApiError(e, 'bad_password') ? setPwError(t('security.currentWrong')) : toast.error(errorMessage(e)))
   return (
     <SettingsCard danger title={t('telegram.unlink')} description={t('telegram.unlinkDesc')}>
       <Button
         variant="destructive"
         loading={unlink.isPending}
         onClick={async () => {
-          if (await confirm({ title: t('telegram.unlinkConfirm'), description: t('telegram.unlinkDesc'), destructive: true, confirmText: t('telegram.unlink') })) unlink.mutate()
+          if (twoStep) return setAsk(true)
+          if (await confirm({ title: t('telegram.unlinkConfirm'), description: t('telegram.unlinkDesc'), destructive: true, confirmText: t('telegram.unlink') })) unlink.mutate(undefined, { onError })
         }}
       >
         <Unlink /> {t('telegram.unlink')}
       </Button>
+      <Dialog open={ask} onOpenChange={(o) => !o && close()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('telegram.unlinkConfirm')}</DialogTitle>
+            <DialogDescription>{t('telegram.twoStepPassword')}</DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!password) return setPwError(t('security.currentRequired'))
+              unlink.mutate(password, { onSuccess: close, onError })
+            }}
+          >
+            <FormField label={t('security.current')} error={pwError}>
+              <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus />
+            </FormField>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={close}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" variant="destructive" loading={unlink.isPending}>
+                {t('telegram.unlink')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </SettingsCard>
   )
 }
@@ -83,7 +142,7 @@ export function TelegramSection() {
         <SettingsCard title={t('telegram.setup')} description={t('telegram.setupDesc')}>
           <TelegramSetup />
         </SettingsCard>
-        {s.configured && <DisconnectCard />}
+        {s.configured && <DisconnectCard twoStep={!!s.settings?.two_factor} />}
       </SectionStack>
     )
   const set = (patch: Partial<TelegramSettings>) => save.mutate(patch)
@@ -251,7 +310,7 @@ export function TelegramSection() {
         </SettingsCard>
       )}
 
-      <DisconnectCard />
+      <DisconnectCard twoStep={!!s.settings?.two_factor} />
     </SectionStack>
   )
 }

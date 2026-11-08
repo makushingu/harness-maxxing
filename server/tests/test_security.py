@@ -104,6 +104,31 @@ def test_parallel_attempts_count_up_front_and_old_entries_are_pruned(mx):
     security._fails.clear()
 
 
+
+def test_an_attempt_never_goes_through_every_client_with_failures(mx, monkeypatch):
+    class Counted(list):
+        reads = 0
+
+        def __getitem__(self, i):
+            Counted.reads += 1
+            return super().__getitem__(i)
+
+        def __iter__(self):
+            Counted.reads += 1
+            return super().__iter__()
+
+    security._fails.clear()
+    old = time.time() - security.FAIL_WINDOW - 60               # out of the window, still kept for the hour
+    for i in range(5000):
+        security._fails[f"10.0.{i // 256}.{i % 256}"] = Counted([old])
+    Counted.reads = 0
+    assert security.begin_attempt("1.2.3.4")[0] is None
+    assert Counted.reads < 10
+    monkeypatch.setattr(security, "FAILS_KEYS_MAX", 100)
+    security.begin_attempt("1.2.3.5")
+    assert len(security._fails) == 100 and "1.2.3.5" in security._fails
+    security._fails.clear()
+
 # ---- file-site token -------------------------------------------------------------------------
 def _site_url(client, path: Path) -> str:
     return client.get("/api/files/site-url", params={"path": str(path)}).json()["url"]

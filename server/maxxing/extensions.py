@@ -362,15 +362,27 @@ def _import(ext: Extension) -> ModuleType:
     return mod
 
 
+def _folders(r: Path) -> list[Path]:
+    """The extension folders. A name that is not UTF-8 is skipped: it would make every list of extensions a 500."""
+    out = []
+    for d in sorted(r.iterdir()):
+        if not d.is_dir() or d.name.startswith((".", "_")):
+            continue
+        try:
+            d.name.encode()
+        except UnicodeEncodeError:
+            continue
+        out.append(d)
+    return out
+
+
 def _signature() -> tuple:
     """Folder names + mtimes of manifest/api/page/widget.html/agents-view.html: a change triggers a rescan (hot reload)."""
     r = root()
     if not r.is_dir():
         return ()
     out = []
-    for d in sorted(r.iterdir()):
-        if not d.is_dir() or d.name.startswith((".", "_")):
-            continue
+    for d in _folders(r):
         stamps = []
         for f in ("manifest.json", "api.py", "page.js", "widget.html", "agents-view.html"):
             try:
@@ -394,7 +406,7 @@ def scan(only_if_stale: bool = False) -> list[Extension]:
                 if _scanned and sig == _last_sig:
                     return list(_registry.values())
         if r.is_dir():
-            for d in sorted(p for p in r.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
+            for d in _folders(r):
                 exts[d.name] = _load_one(d)
     with _lock:
         _registry.clear()
@@ -448,6 +460,9 @@ def make_ctx(ext: Extension) -> dict[str, Any]:
                        "public_url": cfg.get("public_url", "")}}
 
 
+CARD_MAX = 1_000_000
+
+
 def clean_card(card: Any) -> dict:
     """Validate a Card returned by extension code (raises ValueError with a readable reason)."""
     if not isinstance(card, dict):
@@ -460,9 +475,11 @@ def clean_card(card: Any) -> dict:
     if out.get("status") not in (None, "ok", "warn", "error"):
         out.pop("status")
     try:                                               # JSON serialisable as the answer is (NaN/inf, a lone surrogate:
-        json.dumps(out, allow_nan=False, ensure_ascii=False).encode("utf-8")   # this card fails, not the whole dashboard)
+        size = len(json.dumps(out, allow_nan=False, ensure_ascii=False).encode("utf-8"))   # this card fails, not the whole dashboard)
     except UnicodeEncodeError:
         raise ValueError("card text is not valid UTF-8 (lone surrogate)") from None
+    if size > CARD_MAX:                                # kept in memory and sent on every refresh of the dashboard
+        raise ValueError(f"card is too big ({size // 1024} KB, max {CARD_MAX // 1024} KB)")
     return out
 
 

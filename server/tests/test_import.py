@@ -137,6 +137,28 @@ def test_names_that_give_the_same_folder_stay_apart(client, mx):
     assert "two" in (mx["ws"] / "projects/acme/topics/my-blog-2/memory.md").read_text()
 
 
+def test_a_renamed_folder_never_lands_in_an_unrelated_existing_one(client, mx):
+    (mx["ws"] / "projects/my-blog-2").mkdir(parents=True)
+    (mx["ws"] / "projects/my-blog-2/CLAUDE.md").write_text("# Mine\n")
+    p = _upload(client, _zip({"projects/My Blog/CLAUDE.md": "# A\n\nRules A\n",
+                              "projects/my-blog/CLAUDE.md": "# B\n\nRules B\n"}, top="")).json()
+    assert [x["name"] for x in p["projects"]] == ["my-blog", "my-blog-3"]
+    client.post(f"/api/import/{p['id']}/apply")
+    assert (mx["ws"] / "projects/my-blog-2/CLAUDE.md").read_text() == "# Mine\n"
+    assert "Rules B" in (mx["ws"] / "projects/my-blog-3/CLAUDE.md").read_text()
+
+
+def test_skills_that_give_the_same_folder_stay_apart(client, mx):
+    p = _upload(client, _zip({"skills/My Skill/SKILL.md": "---\nname: a\n---\nA\n",
+                              "skills/my-skill/SKILL.md": "---\nname: b\n---\nB\n",
+                              "skills/my-skill/x.md": "b file\n"}, top="")).json()
+    client.post(f"/api/import/{p['id']}/apply")
+    sk = mx["ws"] / ".claude/skills"
+    assert sorted(f.name for f in (sk / "my-skill").iterdir()) == ["SKILL.md"]
+    assert sorted(f.name for f in (sk / "my-skill-2").iterdir()) == ["SKILL.md", "x.md"]
+    assert {(sk / d / "SKILL.md").read_text()[-2] for d in ("my-skill", "my-skill-2")} == {"A", "B"}
+
+
 def test_slug():
     assert importer.slug("Café Crème !") == "cafe-creme" and importer.slug("***") == "imported"
 

@@ -164,7 +164,7 @@ def test_password_change_and_unlink_forget_browsers(tg):
         assert r.status_code == 200
         assert not twofactor.device_trusted(old)                   # other browsers ask again
         assert twofactor.device_trusted(c.cookies.get(twofactor.DEVICE_COOKIE))   # not this one
-        assert c.delete("/api/telegram", headers=H).status_code == 200
+        assert c.request("DELETE", "/api/telegram", json={"password": PW}, headers=H).status_code == 200
         assert not twofactor.is_on()
 
 
@@ -257,7 +257,12 @@ def test_unlinking_telegram_with_two_step_on_sends_a_notice(tg):
         cid = _login(c)["two_factor"]["challenge"]
         twofactor.decide(cid, True)
         c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H)
-        assert c.delete("/api/telegram", headers=H).status_code == 200
+        assert c.delete("/api/telegram", headers=H).status_code == 401              # the password, as to turn it off
+        assert c.request("DELETE", "/api/telegram", json={"password": "wrong"}, headers=H).status_code == 401
+        r = c.post("/api/telegram/token", json={"token": "123456789:" + "y" * 35}, headers=H)
+        assert r.status_code == 401 and "bad_password" in r.text
+        assert twofactor.is_on()
+        assert c.request("DELETE", "/api/telegram", json={"password": PW}, headers=H).status_code == 200
         assert not twofactor.is_on()
         assert any("unlinked" in t for t in _notices(tg)), tg.calls
         assert any("Telegram unlinked" in e["title"] for e in feed.list_events()["events"])

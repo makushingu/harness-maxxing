@@ -13,6 +13,9 @@ back. Paths can be redirected for tests: MAXXING_CADDY_DIR, MAXXING_CADDY_BIN, M
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
+import functools
 import os
 import re
 import shlex
@@ -88,6 +91,22 @@ def _reload() -> tuple[int, str]:
         return 1, str(e)
 
 
+@contextlib.contextmanager
+def _sites_lock():
+    """One add or remove at a time: _apply puts back the files it read, which would undo a change made meanwhile."""
+    with open(config.state_dir("infra") / "caddy.lock", "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+
+
+def _locked(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _sites_lock():
+            return fn(*args, **kwargs)
+    return wrapper
+
+
 def _apply(changes: dict[Path, str | None]) -> None:
     """Write (or delete, value None) the files, validate, reload; put everything back on any failure."""
     before = {p: (p.read_text() if p.exists() else None) for p in changes}
@@ -149,7 +168,7 @@ HARNESS_COOKIE_NAME = r"mx_[A-Za-z0-9_]+"
 HARNESS_COOKIE_RE = HARNESS_COOKIE_NAME + r"=[^;]*;?\s*"       # one Harness cookie in a Cookie header (Caddy regex)
 # a Set-Cookie of a Harness cookie: browsers trim spaces and tabs around the name ("mx_session =x" is mx_session)
 HARNESS_SET_COOKIE_RE = r"^[ \t]*" + HARNESS_COOKIE_NAME + r"[ \t]*=.*$"
-SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")      # written as is in a Caddy file: no space, quote, newline
+SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_./-]+\Z")      # written as is in a Caddy file: no space, quote, newline
 
 
 def _block(name: str, root: str | None, port: int | None, upstream_host: str | None, keep_prefix: bool, sandbox: bool) -> str:
@@ -180,6 +199,7 @@ def check_name(name: str, project: str | None = None) -> None:
         raise CaddyError("the project may only use letters, digits, '.', '_', '-' and '/'", "invalid_project")
 
 
+@_locked
 def add_site(name: str, root: str | None = None, port: int | None = None, host: str | None = None,
              project: str | None = None, keep_prefix: bool = False, upstream_host: str | None = None,
              kind: str = "site") -> dict:
@@ -258,6 +278,7 @@ def list_sites() -> list[dict]:
     return out
 
 
+@_locked
 def remove_site(name: str) -> dict:
     f = next((d / f"{name}.caddy" for d in (paths_dir(), sites_dir()) if (d / f"{name}.caddy").exists()), None)
     if not NAME_RE.match(name or "") or f is None:

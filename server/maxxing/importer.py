@@ -183,22 +183,25 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     root = workspace.root()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     projects: dict[str, dict] = {}
+    skills: dict[str, dict] = {}
     items: list[dict] = []
     secrets_found: list[dict] = []
     renamed: list[dict] = []
 
-    def unique(raw: str, taken: dict[str, dict]) -> str:
+    def unique(raw: str, taken: dict[str, dict], on_disk: Path) -> str:
         """Each source folder gets its own name: "Блог" and "Продажи" (or "My Blog" and "my-blog") both slug
-        to one name, and the second CLAUDE.md would overwrite the first."""
+        to one name, and the second CLAUDE.md would overwrite the first. Only the plain name merges into a folder
+        already in `on_disk`: a "-2" picked here never lands in an unrelated existing one."""
         base = name = slug(raw)
         n = 2
-        while name in taken and taken[name]["source"] != raw:
+        while ((name in taken and taken[name]["source"] != raw)
+               or (name != base and name not in taken and (on_disk / name).exists())):
             name = f"{base[:44].rstrip('-')}-{n}"
             n += 1
         return name
 
     def proj(raw: str) -> dict:
-        name = unique(raw, projects)
+        name = unique(raw, projects, root / "projects")
         if name not in projects:
             projects[name] = {"name": name, "source": raw, "exists": (root / "projects" / name).is_dir(), "topics": {}}
             if name != raw:
@@ -215,7 +218,7 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
         if parts[0] == "projects" and len(parts) >= 3:
             pr = proj(parts[1])
             if parts[2] == "topics" and len(parts) >= 5:
-                tname = unique(parts[3], pr["topics"])
+                tname = unique(parts[3], pr["topics"], root / "projects" / pr["name"] / "topics")
                 if tname not in pr["topics"]:
                     pr["topics"][tname] = {"name": tname, "source": parts[3], "files": 0,
                                            "exists": (root / "projects" / pr["name"] / "topics" / tname).is_dir()}
@@ -228,7 +231,9 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
                 dest = PurePosixPath("projects", pr["name"], *parts[2:])
                 data_kind = "project"
         elif parts[0] == "skills" and len(parts) >= 3:
-            dest = PurePosixPath(".claude", "skills", slug(parts[1]), *parts[2:])
+            sname = unique(parts[1], skills, root / ".claude" / "skills")
+            skills.setdefault(sname, {"source": parts[1]})
+            dest = PurePosixPath(".claude", "skills", sname, *parts[2:])
             data_kind = "skill"
         elif len(parts) == 1 and parts[0] in MEMORY_NAMES:
             dest = PurePosixPath("memory.md")

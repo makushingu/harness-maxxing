@@ -35,7 +35,7 @@ export function useTouchZoom(ref: React.RefObject<HTMLElement | null>, handlers:
     const el = ref.current
     if (!el) return
     el.setAttribute(PINCH_ATTR, '')
-    let pinch: { d0: number; mid: Pt } | null = null
+    let pinch: { d0: number; mid: Pt; scale: number } | null = null
     let one: { id: number; x0: number; y0: number; x: number; y: number; t0: number; moved: boolean; samples: { x: number; y: number; t: number }[] } | null = null
     /** More than one finger touched since the last time all were up: no tap. */
     let multi = false
@@ -73,7 +73,7 @@ export function useTouchZoom(ref: React.RefObject<HTMLElement | null>, handlers:
         const [a, b] = [e.touches[0], e.touches[1]]
         const mid = midOf(a, b)
         if (h.current.pinchStart?.(mid) === false) return
-        pinch = { d0: dist(a, b), mid }
+        pinch = { d0: dist(a, b), mid, scale: 1 }
         if (e.cancelable) e.preventDefault()
       } else if (e.touches.length === 1) {
         multi = false
@@ -86,7 +86,8 @@ export function useTouchZoom(ref: React.RefObject<HTMLElement | null>, handlers:
       if (pinch && e.touches.length >= 2) {
         const [a, b] = [e.touches[0], e.touches[1]]
         pinch.mid = midOf(a, b)
-        queued = { scale: dist(a, b) / pinch.d0, mid: pinch.mid }
+        pinch.scale = dist(a, b) / pinch.d0
+        queued = { scale: pinch.scale, mid: pinch.mid }
         if (!frame) frame = requestAnimationFrame(flush)
         return
       }
@@ -105,6 +106,12 @@ export function useTouchZoom(ref: React.RefObject<HTMLElement | null>, handlers:
     }
     const onEnd = (e: TouchEvent) => {
       if (pinch && e.touches.length < 2) endPinch()
+      else if (pinch) {
+        // A third finger was down and one of the pair left: the new pair goes on from the scale reached.
+        const [a, b] = [e.touches[0], e.touches[1]]
+        pinch.d0 = dist(a, b) / pinch.scale
+        pinch.mid = midOf(a, b)
+      }
       if (e.touches.length === 1) {
         // One finger stays after a pinch: it pans from where it is (never a tap).
         startOne(e.touches[0], true)
@@ -121,7 +128,9 @@ export function useTouchZoom(ref: React.RefObject<HTMLElement | null>, handlers:
         const first = s[0]
         const last = s[s.length - 1]
         const dt = last.t - first.t
-        h.current.panEnd?.(dt > 0 ? (last.x - first.x) / dt : 0, dt > 0 ? (last.y - first.y) / dt : 0)
+        // A finger held still before it lifts throws nothing: the last moves are old.
+        const live = dt > 0 && performance.now() - last.t <= 100
+        h.current.panEnd?.(live ? (last.x - first.x) / dt : 0, live ? (last.y - first.y) / dt : 0)
         return
       }
       if (e.type === 'touchcancel' || Date.now() - o.t0 > TAP_MS) return (lastTap = null)

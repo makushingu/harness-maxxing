@@ -138,6 +138,8 @@ def test_clean_card():
     c = extensions.clean_card({"title": "t", "status": "purple", "junk": 1,
                                "blocks": [{"type": "stat", "label": "a", "value": 1}, {"type": "iframe"}, 3]})
     assert c == {"title": "t", "blocks": [{"type": "stat", "label": "a", "value": 1}]}
+    with pytest.raises(ValueError, match="too big"):
+        extensions.clean_card({"blocks": [{"type": "markdown", "text": "x" * 2_000_000}]})
 
 
 def test_pin_page_in_sidebar(client, org):
@@ -355,6 +357,14 @@ def test_a_lone_surrogate_in_a_manifest_marks_only_that_extension(client, org):
     assert r.status_code == 200
     d = {x["id"]: x for x in r.json()}
     assert d["good"]["error"] is None and "invalid text" in d["bad"]["error"]
+
+
+def test_a_folder_name_that_is_not_utf8_never_breaks_the_lists(client, org):
+    _ext(org, "good", {"type": "widget"}, "def card(ctx): return {'blocks': []}\n")
+    (extensions.root() / "bad\udcff").mkdir()
+    r = client.get("/api/extensions")
+    assert r.status_code == 200 and [x["id"] for x in r.json()] == ["good"]
+    assert client.get("/api/dashboard").status_code == 200
 
 
 def test_too_deeply_nested_json_in_or_out_of_handle_is_handled(client, org):
