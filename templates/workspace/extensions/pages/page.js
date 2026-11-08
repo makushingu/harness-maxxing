@@ -1,5 +1,5 @@
 // "Your pages": what a page extension is, and examples that open a session with the request already typed.
-// This page is itself an extension (extensions/pages/): delete it in Settings -> Extensions when you no longer need it.
+// This page is itself an extension (extensions/pages/): switch it off in Settings -> Pages when you no longer need it.
 
 const TEXT = {
   en: {

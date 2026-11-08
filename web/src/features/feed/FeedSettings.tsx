@@ -47,7 +47,7 @@ export function FeedSettingsCards() {
 
   return (
     <div className="grid gap-6">
-      <SettingsCard title={t('feed.title')} description={t('feed.settingsDesc')}>
+      <SettingsCard title={t('feed.settingsTitle')} description={t('feed.settingsDesc')}>
         <SettingRow label={t('feed.telegram')} description={t('feed.telegramDesc')} htmlFor="mx-feed-tg">
           <Switch id="mx-feed-tg" checked={data?.telegram ?? true} disabled={!data} onCheckedChange={(v) => save.mutate({ telegram: v })} />
         </SettingRow>

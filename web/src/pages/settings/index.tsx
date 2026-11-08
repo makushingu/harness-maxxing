@@ -16,10 +16,13 @@ import { BackupSection } from './sections/Backup'
 import { VoiceSection } from './sections/Voice'
 import { KeysSection } from './sections/Keys'
 import { McpSection } from './sections/Mcp'
-import { ExtensionsSection } from './sections/Extensions'
+import { PagesSection, WidgetsSection } from './sections/Extensions'
 import { SystemSection } from './sections/System'
 import { TrashSection } from './sections/Trash'
-import { ProjectsSection } from './sections/Projects'
+import { TemplatesSection } from './sections/Templates'
+import { ImportSection } from './sections/Import'
+import { AppearanceSection } from './sections/Appearance'
+import { SkillsSection } from './sections/Skills'
 import { NotificationsSection } from './sections/Notifications'
 import { UsageSection } from './sections/Usage'
 import { AboutSection } from './sections/About'
@@ -31,6 +34,8 @@ const CronsSection = React.lazy(() => import('@/pages/crons'))
 
 const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   general: GeneralSection,
+  appearance: AppearanceSection,
+  skills: SkillsSection,
   profile: ProfileSection,
   features: FeaturesSection,
   notifications: NotificationsSection,
@@ -44,8 +49,10 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   backup: BackupSection,
   keys: KeysSection,
   mcp: McpSection,
-  extensions: ExtensionsSection,
-  packs: ProjectsSection,
+  widgets: WidgetsSection,
+  pages: PagesSection,
+  templates: TemplatesSection,
+  import: ImportSection,
   trash: TrashSection,
   system: SystemSection,
   updates: UpdatesSection,

@@ -34,6 +34,7 @@ ROUTERS = [
     "feed",
     "hooks",
     "packs",
+    "skills",
     "git",
     "mcp",
     "infra",

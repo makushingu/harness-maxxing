@@ -125,7 +125,7 @@ def _first_steps() -> list[dict]:
         items.append({"icon": "graduation-cap", "title": t("Take the tutorial"), "subtitle": t("4 short lessons, at your pace"),
                       "href": f"/sessions?path={tutorial}&new=1"})
     items.append({"icon": "folder-plus", "title": t("Add a starter project"),
-                  "subtitle": t("Online store, creator, freelance... ready to use"), "href": "/settings/packs"})
+                  "subtitle": t("Online store, creator, freelance... ready to use"), "href": "/settings/templates"})
     return [{"type": "markdown", "text": t("Welcome! Everything starts with a session: Claude works in a topic, "
                                            "with its memory, on your server.")},
             {"type": "list", "grid": True, "items": items}]

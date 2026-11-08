@@ -335,7 +335,7 @@ def after_update() -> dict | None:
         names = [x.get("name") or x.get("title") for x in rep["extensions"] + rep["checks"] if not x["ok"]]
         title = f"After the update to {m['to']}: {rep['problems']} thing(s) to fix"
         body = "Not working any more: " + ", ".join(names[:5]) + ". Ask Harness to fix it (Settings -> System)."
-        feed.system(title, body, "warning", "system", "/settings/system")
+        feed.system(title, body, "warning", "system", "/settings/updates")
         from .telegram import gateway
         gateway.system_alert(f"{title}\n{body}")
     notes = upgrade_notes_to_apply(m.get("from") or "", m.get("to") or "") if m.get("smart") else []

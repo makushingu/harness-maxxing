@@ -9,7 +9,7 @@ Telegram, together with the files, tasks, scheduled jobs and memory that make th
 
 Everything runs on your server, with your own Claude account or API key. Nothing else leaves it except
 an anonymous daily counter (version, system, health codes; no name, no IP, no content), which you can turn off
-in Settings → Profile - see [License](license#saying-hello-optional).
+in Settings → About - see [License](license#saying-hello-optional).
 
 ## Concepts
 
@@ -66,7 +66,7 @@ missing and never re-create a project or topic you deleted.
 - **Backup**: your memory pushed every day to a private GitHub repository.
 - **Dashboard and extensions**: built-in widgets plus your own widgets and pages.
 - **Starter projects**: ready-made projects for an online store, an affiliate site, a content creator, apps, a
-  second brain or a freelance business - their topics already know the job (Settings -> Projects).
+  second brain or a freelance business - their topics already know the job (Settings -> Templates).
 - **Notifications**: a feed next to the widgets (and a Telegram thread if you want) for cron jobs, sales,
   orders, deployments and your scripts - Stripe, Shopify, GitHub or any webhook, or `maxxing feed post`.
 - **Your look**: light or dark, six accent colors (the logo follows), a neutral or tinted background,

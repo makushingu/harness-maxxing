@@ -35,7 +35,7 @@ exported as a patch in `<workspace>/customizations/`. Both are part of the memor
 
 ## Smart updates
 
-**Before**: Settings -> System shows what the next update does to *your* server - tested on a throw-away
+**Before**: Settings -> Updates shows what the next update does to *your* server - tested on a throw-away
 copy, nothing changed yet (`maxxing update --preflight` on the server). Each customization **carries
 over**, carries over on code that changed (checked after), is **now included** in the product (Harness
 offers to drop it), or **must be adapted**. Unsaved edits, edits of the interface files and extensions the
@@ -58,7 +58,7 @@ update: `maxxing custom save "..." --why "..." --check "<command>"`, or later `m
 
 ## Careful updates
 
-`maxxing update` (or the topic `system/harness` (`system/update` on older servers), or Settings -> System) keeps you safe:
+`maxxing update` (or the topic `system/harness` (`system/update` on older servers), or Settings -> Updates) keeps you safe:
 
 1. Unsaved edits of the code are saved as a customization first - nothing is ever lost. Edits of the
    pre-built interface (`web/`) cannot be customizations: they are set aside (`git stash`) instead of
@@ -66,7 +66,7 @@ update: `maxxing custom save "..." --why "..." --check "<command>"`, or later `m
 2. Your customizations are replayed on top of the new version.
 3. **No conflict**: the update finishes ("N customizations carried over").
 4. **Conflict** (the new version changed the same lines): **nothing changes**, the current version
-   keeps running, and Settings -> System shows "Update waits for Harness". In the topic
+   keeps running, and Settings -> Updates shows "Update waits for Harness". In the topic
    `system/harness` (`system/update` on older servers), Claude reads `CUSTOMIZATIONS.md`, adapts each customization to the new code,
    and finishes the update (`maxxing update --resume`). If a customization is no longer needed
    (the product now does it), Claude tells you and drops it.
@@ -85,7 +85,7 @@ keeps the version to roll back to and the upgrade notes of the release.
 
 ## Automatic updates
 
-Off by default. Settings -> System -> **Update by itself when nobody is here**: when a new version is out, nobody
+Off by default. Settings -> Updates -> **Update by itself when nobody is here**: when a new version is out, nobody
 is on the interface and nothing runs (no turn, no queued message, no scheduled job, nothing for 10 minutes), and
 the update is "simple" (no customization to adapt, no unsaved change, no upgrade note asking for something),
 Harness runs `maxxing update` by itself and restarts for a few seconds. Otherwise it waits and tells you in the

@@ -73,6 +73,12 @@ export function NotificationsSection() {
           <SettingRow label={t('notify.sound')} description={t('notify.soundDesc')} htmlFor="mx-notify-sound">
             <Switch id="mx-notify-sound" checked={notifySound} disabled={!notifyDone && !(settings?.team_page && notifyTeam)} onCheckedChange={(v) => setNotify({ notifySound: v })} />
           </SettingRow>
+          <SettingRow label={t('notify.pulse')} description={t('notify.pulseDesc')} htmlFor="mx-badge-pulse">
+            <span className="flex items-center gap-3">
+              <CountBadge count={1} />
+              <Switch id="mx-badge-pulse" checked={badgePulse} onCheckedChange={(v) => setNotify({ badgePulse: v })} />
+            </span>
+          </SettingRow>
         </div>
         {notifyDone && perm === 'denied' && (
           <Callout tone="warning" className="mt-4">
@@ -84,14 +90,6 @@ export function NotificationsSection() {
             {t('notify.unsupported')}
           </Callout>
         )}
-      </SettingsCard>
-      <SettingsCard title={t('notify.badgeTitle')} description={t('notify.badgeDesc')}>
-        <SettingRow label={t('notify.pulse')} description={t('notify.pulseDesc')} htmlFor="mx-badge-pulse">
-          <span className="flex items-center gap-3">
-            <CountBadge count={1} />
-            <Switch id="mx-badge-pulse" checked={badgePulse} onCheckedChange={(v) => setNotify({ badgePulse: v })} />
-          </span>
-        </SettingRow>
       </SettingsCard>
       <FeedSettingsCards />
     </SectionStack>

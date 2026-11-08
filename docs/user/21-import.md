@@ -5,7 +5,7 @@ section: Getting started
 
 Coming from Hermes, Claude Code, OpenClaw or any other agent? Bring what it knows about you -
 projects, topics, memory, skills, to-dos, scheduled jobs - in a few minutes. Onboarding step 3, or
-Settings -> Projects -> **Import** at any time.
+**Settings -> Import** at any time.
 
 ## 1. Ask your old agent for a zip
 
@@ -59,3 +59,9 @@ maxxing import --prompt openclaw          # the prompt for your old agent
 maxxing import export.zip --dry-run       # what would be imported
 maxxing import export.zip                 # import (same rules as the UI)
 ```
+
+## Other imports
+
+**Settings -> Import** also points to the two other ways in: a **memory backup** of another server (moving to a new
+server: Settings -> Backup, see [Backup](backup)) and an **agent file** `.md` in the Claude Code format (Agents
+page -> New agent -> Import, see [Agents](agents)).

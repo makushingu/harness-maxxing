@@ -31,7 +31,7 @@ A session at the workspace root only gets the global level.
 | `system` | `tutorial`, `help`, `harness` | Harness Maxxing itself: interactive 5-minute lessons (delete the topic when done, never re-created), answers from the installed docs + server administration, updates + workspace upgrade notes + extensions + starter packs |
 
 Starter packs (`ecommerce`, `affiliate`, `creator`, `apps`, `second-brain`, `freelance`) can be added
-any time from Settings -> Projects or by asking in `system/harness`.
+any time from Settings -> Templates or by asking in `system/harness`.
 
 When the user asks how to do something in Harness Maxxing, the answer is in the product docs
 (`{{CODE_DIR}}/docs/user/`); the topic `system/help` is dedicated to that.
@@ -96,7 +96,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing cron list\|sync\|run <id>` | scheduled jobs |
 | `maxxing backup run\|status\|restore` | memory backup to a private GitHub repo |
 | `maxxing telegram status\|test` | Telegram bridge |
-| `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory (Settings -> Projects -> Import does the same) |
+| `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory (Settings -> Import does the same) |
 | `maxxing keys list\|get\|set\|delete` | the Keys vault from a script: `printf %s "$V" \| maxxing keys set NAME` (value on stdin); scripts read keys as env vars (`$NAME`) |
 | `maxxing packs list\|add <id>` | starter packs: ready-made projects (only missing files are added) |
 | `maxxing infra status\|list\|site\|db\|bucket\|server` | where every site / database / bucket / domain / server is; create them on this server the standard way |

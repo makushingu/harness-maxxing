@@ -769,6 +769,18 @@ pack is `basics` (`basics: true`, topics as `project/topic`): the default worksp
 | GET | `/api/packs` | - | `{packs: Pack[]}` |
 | POST | `/api/packs/{id}/install` | - | `{ok, pack, project, created_files, jobs[]}` - adds the pack as a new project (`<project>`, or `<project>-2`, `-3`... when taken; its title lines renamed), sets the emoji, creates the pack's jobs disabled (`"<job> (<project>)"` for a copy). `basics`: copies the missing files of the default projects, `project` = `""`; `404 unknown_pack` |
 
+## Skills
+Read-only list of the skills Claude Code sees (Settings -> Skills, `maxxing/skills.py`): only the front matter of each
+`<folder>/SKILL.md` is read (first 6 000 characters), nothing is written.
+`Skill = {name, folder, description, origin, path, hidden, project?, topic?}`: `origin` = `product` (a shipped skill in
+`<claude_dir>/skills`, rewritten by every update), `user` (the other folders there), `workspace` (`<workspace>/.claude/skills`),
+`project` (`projects/<p>/.claude/skills`, with `project`), `topic` (`projects/<p>/topics/<t>/.claude/skills`, with `project`
+and `topic`); `name` falls back to the folder; `hidden` = `disable-model-invocation: true`; `path` = the `SKILL.md`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/skills` | - | `{skills: Skill[]}` (product and user first, then workspace, then project by project, its topics after it) |
+
 ## Search
 
 One SQLite FTS5 index (`<state>/search.db`, `maxxing/search.py`) over session messages, workspace text

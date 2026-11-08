@@ -44,7 +44,7 @@ extensions, and installs starter packs.
 7. **Record** - update "Last applied upgrade notes" in this topic's memory.md to the installed
    version, with the date and one line per note applied. Then give a short report.
 
-The Update button (Settings -> System) runs the same preflight first. When it is simple it updates by
+The Update button (Settings -> Updates) runs the same preflight first. When it is simple it updates by
 itself, then the server verifies and opens a session here to apply the upgrade notes (steps 5-7). When
 something must be adapted, "Update with Harness" opens a session here with the preflight and the steps: adapt
 each customization to its INTENT on the new code, never just pick a side.
@@ -76,7 +76,7 @@ update: nothing to ask the product's authors.
 - Clarify what the user wants to see (data source, refresh rate, size) in one or two questions,
   then build the smallest version that works, test it (`curl` the widget/API through
   `maxxing status` URL or call `api.py` directly with Python), and tell the user where to look
-  (Dashboard, or the page in the sidebar). Reload: Settings -> Extensions -> Reload (automatic on
+  (Dashboard, or the page in the sidebar). Reload: Settings -> Widgets (or Pages) -> Rescan (automatic on
   file change).
 - Secrets the extension needs (API keys) go to Settings -> Keys and are read with `ctx.secret(name)`,
   never hard-coded.
@@ -85,7 +85,7 @@ update: nothing to ask the product's authors.
 ## Starter packs
 
 Ready-made projects with their topics, instructions and memory: `ecommerce`, `affiliate`,
-`creator`, `apps`, `second-brain`, `freelance` (also in Settings -> Projects).
+`creator`, `apps`, `second-brain`, `freelance` (also in Settings -> Templates).
 - "Add the e-commerce pack": run `maxxing packs list` (ids and what each one contains), then
   `maxxing packs add <id>` with the matching id. If the request is vague, show the list and ask.
 - Adding a pack always creates a new project (`ecommerce-2` when `ecommerce` exists); nothing is

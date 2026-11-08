@@ -4,7 +4,9 @@ section: Extending
 # Dashboard widgets
 
 The **Dashboard** is a grid of cards. Drag to reorder, hide the ones you do not need (layout menu),
-refresh a card with its refresh button.
+refresh a card with its refresh button. **Settings -> Widgets** lists the widgets your extensions bring (switch one
+off, **Rescan** after a change) and its **Customize the dashboard** button opens the dashboard in edit mode. Widgets
+shared by other users are on the website: [harness-maxxing.com/community](https://harness-maxxing.com/community).
 
 Cards build themselves as they appear: numbers count up to their value, lists and tables rise in row by row,
 chart bars grow and lines draw, progress bars fill, and **Today's schedule** opens each job's line and drops its
@@ -170,7 +172,7 @@ ctx = {'id': 'disk-usage', 'workspace': '/root/maxxing', 'state_dir': tempfile.m
 print(json.dumps(api.card(ctx), indent=2))"
 ```
 
-Then **Settings -> Extensions -> Reload**. The widget appears on the dashboard. If something is
+Then **Settings -> Widgets -> Rescan**. The widget appears on the dashboard. If something is
 wrong (invalid manifest, import error, exception in `card`), the error is shown on the extension's
 row and on the card; the rest of the dashboard keeps working.
 

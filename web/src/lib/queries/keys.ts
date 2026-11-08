@@ -22,6 +22,7 @@ export const qk = {
   },
   tasks: ['tasks'] as const,
   packs: ['workspace', 'packs'] as const,
+  skills: ['workspace', 'skills'] as const,
   crons: {
     all: ['crons'] as const,
     list: ['crons', 'list'] as const,

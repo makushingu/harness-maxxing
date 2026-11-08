@@ -220,7 +220,7 @@ workspace. See [Backup](backup).
 - **Update**: `maxxing update` (or `... | bash -s -- --update`). It pulls the new version, replays
   your [customizations](customizing) on top, syncs dependencies, refreshes skills and templates
   (never your files), restarts the service, checks it answers (otherwise it rolls back) and prints
-  what changed. Also available in Settings -> System and in the topic `system/harness` (`system/update` on older servers).
+  what changed. Also available in Settings -> Updates and in the topic `system/harness` (`system/update` on older servers).
 - **Uninstall**: `maxxing uninstall` (or `... | bash -s -- --uninstall`) removes the service,
   Caddy site, crontab block, product skills and the `maxxing` command. Add `--purge` to also
   delete the code, the state directory and every external component the installer added (`deps.toml`: uv, Node.js,

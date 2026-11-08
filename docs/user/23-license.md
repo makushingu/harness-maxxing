@@ -29,13 +29,13 @@ The full text is the `LICENSE` file in the code folder (`/opt/claude-maxxing/LIC
 
 ## Saying hello (optional)
 
-Nobody has to tell us anything. **Settings → Profile** has a card **Harness Maxxing team** with three choices, all
+Nobody has to tell us anything. **Settings → About** has a card **Stay in touch** with three choices, all
 optional (the onboarding step **About you** only asks for the email):
 
 | Choice | What is sent to `api.harness-maxxing.com` |
 |---|---|
 | **Help count the installations (anonymous)** - checked by default | once a day: a random number the server got the first time, the Harness Maxxing version, the system (for example `Ubuntu 24.04`, `x86_64`) and up to 10 short health codes (see below). Nothing else: no name, no email, no IP or server name, no file path, no content. |
-| **Email** | your email, your pseudo (Settings → Profile) and the interface language, so we can warn you about a security issue or a breaking change. Never shared, never sold. |
+| **Email** | your email, your pseudo (Settings → About) and the interface language, so we can warn you about a security issue or a breaking change. Never shared, never sold. |
 | **Also send me the product news** (needs an email) | the same, plus a few product emails a month at most. |
 
 The health codes tell us whether servers run well, never what they do: `service_ok` / `service_down` (the Harness
@@ -44,7 +44,7 @@ rolled back), `telegram_on`, `backup_on`, and the codes of the health panel's wa
 `cron_failed`, `login_failures`, `backup_never`, `backup_old`, `backup_failed`). The country is guessed by our
 hosting provider from the connection; the IP address itself is never stored.
 
-**Turning the counter off**: uncheck **Help count the installations** in Settings → Profile. To make sure it stays
+**Turning the counter off**: uncheck **Help count the installations** in Settings → About. To make sure it stays
 off whatever the setting (for a fleet of servers, an image), set `MAXXING_NO_TELEMETRY=1` (or the common
 `DO_NOT_TRACK=1`) in the service environment: `systemctl edit claude-maxxing`, add
 
@@ -68,7 +68,7 @@ team: pick **Bug**, **Idea** or **Other**, write your message and give your emai
 spam away and lets us answer you (a confirmation is sent there). The server sends to `api.harness-maxxing.com`
 your email, your message, its type, the Harness Maxxing version, the interface language and your pseudo (Settings →
 Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
-time: the one of Settings → Profile → Harness Maxxing team, if any).
+time: the one of Settings → About → Stay in touch, if any).
 
 ## Donations
 
