@@ -441,6 +441,9 @@ def make_ctx(ext: Extension) -> dict[str, Any]:
                        "public_url": cfg.get("public_url", "")}}
 
 
+CARD_MAX = 1_000_000
+
+
 def clean_card(card: Any) -> dict:
     """Validate a Card returned by extension code (raises ValueError with a readable reason)."""
     if not isinstance(card, dict):
@@ -453,9 +456,11 @@ def clean_card(card: Any) -> dict:
     if out.get("status") not in (None, "ok", "warn", "error"):
         out.pop("status")
     try:                                               # JSON serialisable as the answer is (NaN/inf, a lone surrogate:
-        json.dumps(out, allow_nan=False, ensure_ascii=False).encode("utf-8")   # this card fails, not the whole dashboard)
+        size = len(json.dumps(out, allow_nan=False, ensure_ascii=False).encode("utf-8"))   # this card fails, not the whole dashboard)
     except UnicodeEncodeError:
         raise ValueError("card text is not valid UTF-8 (lone surrogate)") from None
+    if size > CARD_MAX:                                # kept in memory and sent on every refresh of the dashboard
+        raise ValueError(f"card is too big ({size // 1024} KB, max {CARD_MAX // 1024} KB)")
     return out
 
 

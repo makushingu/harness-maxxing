@@ -137,7 +137,7 @@ Block =
 ```
 
 `link` makes the card title clickable (an app route like `/tasks` or an `https://` URL). Unknown
-block types are ignored.
+block types are ignored. A card larger than 1 MB (as JSON) is shown as an error.
 
 Example list + chart:
 

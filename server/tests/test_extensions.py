@@ -138,6 +138,8 @@ def test_clean_card():
     c = extensions.clean_card({"title": "t", "status": "purple", "junk": 1,
                                "blocks": [{"type": "stat", "label": "a", "value": 1}, {"type": "iframe"}, 3]})
     assert c == {"title": "t", "blocks": [{"type": "stat", "label": "a", "value": 1}]}
+    with pytest.raises(ValueError, match="too big"):
+        extensions.clean_card({"blocks": [{"type": "markdown", "text": "x" * 2_000_000}]})
 
 
 def test_pin_page_in_sidebar(client, org):
