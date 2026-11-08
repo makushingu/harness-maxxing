@@ -23,7 +23,7 @@ included.
 3. You see their request with a fingerprint like `7F3A-91C2`; they see the same one. Check it with them (by
    phone or another app), then **Accept**.
 
-> **Connect only with people you trust.** A contact can send you messages and files, and see your name and avatar.
+> **Connect only with people you trust.** A contact can send you messages and files, and see your name and avatar (the pseudo, photo, color and emoji of Settings -> Profile; a photo stays on your server, their server asks it with a signed request and keeps a copy).
 > Nothing they write ever reaches Claude by itself, but read what you forward to a session.
 
 Both servers need a **public address** (Harness installed with a domain, `https://`). Team does not work through
