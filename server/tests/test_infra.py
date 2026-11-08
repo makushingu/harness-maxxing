@@ -1196,3 +1196,17 @@ def test_a_lone_surrogate_is_refused_by_every_infra_route(client, org):
                         headers={"content-type": "application/json"})
         assert r.status_code == 422, (url, r.status_code)
     assert client.get("/api/infra").status_code == 200
+
+
+def test_a_note_made_during_a_refresh_stays(org, monkeypatch):
+    monkeypatch.setenv("MAXXING_INFRA_CHECKS", "0")
+    monkeypatch.setattr(providers, "cloudflare", lambda: CF)
+    monkeypatch.setattr(providers, "hostinger", lambda: {"connected": False, "key": None})
+
+    def slow_probe(opts):                       # the owner annotates while the servers are probed
+        registry.annotate("site:local:shop.example.com", project="acme", note="late")
+        return _probes(str(org.ws))["local"]
+    monkeypatch.setattr(infra, "probe_local", slow_probe)
+    infra.refresh()
+    r = next(r for r in infra.load_snapshot()["resources"] if r["id"] == "site:local:shop.example.com")
+    assert r["note"] == "late" and r["project"] == "acme"

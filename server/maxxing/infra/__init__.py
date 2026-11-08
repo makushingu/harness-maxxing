@@ -334,6 +334,26 @@ def _source_state(cf: dict, hst: dict) -> dict:
     return {"cloudflare": cfs, "hostinger": hs}
 
 
+def _annotations_since(res: list[dict], reg: dict) -> None:
+    """A note, project, hidden flag or server name changed while the refresh ran (the page already shows it, through
+    snapshot.json): the snapshot it writes keeps it, not the registry read at its start."""
+    now = registry.load()
+    labels = {s.get("name"): s.get("label") or "" for s in reg.get("servers") or []}
+    for r in res:
+        old, new = reg["resources"].get(r["id"]) or {}, now["resources"].get(r["id"]) or {}
+        if old.get("project") != new.get("project"):
+            r["project"] = new.get("project")
+        if old.get("note") != new.get("note"):
+            r["note"] = new.get("note") or ""
+        if old.get("hidden") != new.get("hidden"):
+            r["hidden"] = bool(new.get("hidden"))
+    for s in now.get("servers") or []:
+        if s.get("name") in labels and labels[s["name"]] != (s.get("label") or ""):
+            for r in res:
+                if r["id"] == f"server:{s['name']}":
+                    r["name"] = s.get("label") or s["name"]
+
+
 def refresh() -> dict | None:
     """Gather everything and save the snapshot. Returns it (None when a refresh is already running)."""
     global _last_error
@@ -404,6 +424,7 @@ def refresh() -> dict | None:
                             **platforms.source_state(plat)},
                 "resources": res}
         with snapshot_lock:
+            _annotations_since(res, reg)
             config.write_json(snapshot_path(), snap)
         _alerts(res, prev)
         _last_error = None
