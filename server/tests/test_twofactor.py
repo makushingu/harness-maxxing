@@ -266,3 +266,21 @@ def test_unlinking_telegram_with_two_step_on_sends_a_notice(tg):
         assert not twofactor.is_on()
         assert any("unlinked" in t for t in _notices(tg)), tg.calls
         assert any("Telegram unlinked" in e["title"] for e in feed.list_events()["events"])
+
+
+def test_linking_another_chat_with_two_step_on_needs_the_password(tg):
+    from maxxing.telegram import gateway
+    cfg = config.load_config()
+    cfg["telegram"]["bot_username"] = "mx_test_bot"
+    config.save_config(cfg)
+    _on()
+    with TestClient(_app()) as c:
+        cid = _login(c)["two_factor"]["challenge"]
+        twofactor.decide(cid, True)
+        c.post("/api/auth/two-factor", json={"challenge": cid}, headers=H)
+        assert c.post("/api/telegram/link", headers=H).status_code == 401           # the new chat would get the requests
+        r = c.post("/api/telegram/link", json={"password": "wrong"}, headers=H)
+        assert r.status_code == 401 and "bad_password" in r.text
+        assert gateway.load_state().get("link") is None
+        r = c.post("/api/telegram/link", json={"password": PW}, headers=H)
+        assert r.status_code == 200 and r.json()["code"]
