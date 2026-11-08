@@ -24,7 +24,9 @@ export function useTelegramToken() {
 }
 export function useTelegramLinkStart() {
   const qc = useQueryClient()
-  return useMut(() => api.post<TelegramLinkStart>('/api/telegram/link'), {
+  // the current password: a new link replaces the chat that gets the two-step requests
+  return useMut((b: { password?: string } | void) => api.post<TelegramLinkStart>('/api/telegram/link', b || {}), {
+    errorToast: false,
     // the new code shows at once (the status query carries it, so leaving the page does not lose it)
     onSuccess: (l) => {
       const link = { ...l, expired: false }
