@@ -31,6 +31,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldHalf,
+  ShieldQuestion,
   SlidersHorizontal,
   Smile,
   SquarePen,
@@ -1706,6 +1707,7 @@ function TreeDialogs({ state, onClose, onTopicCreated }: { state: DialogState; o
           patchTopic.mutate({ project: state.topic.project, topic: state.topic.name, permission_mode: mode })
           onClose()
         }}
+        onRules={(rules) => patchTopic.mutateAsync({ project: state.topic.project, topic: state.topic.name, allowed_tools: rules })}
       />
     )
   if (state.kind === 'project' || state.kind === 'topic')
@@ -1747,18 +1749,31 @@ function TreeDialogs({ state, onClose, onTopicCreated }: { state: DialogState; o
 const EMOJI_PICKS = ['🛒', '📦', '💼', '🏢', '🚀', '💡', '🧠', '📈', '💰', '🛍️', '☕', '🍕', '🎨', '🎬', '🎵', '📸', '✍️', '📚', '🎓', '🧪', '💻', '🛠️', '⚙️', '🤖', '🌐', '📱', '🎮', '🏠', '❤️', '⭐', '🔥', '🌱', '🐾', '✈️', '⚽', '🏛️', '⚖️', '🩺', '📣', '🗂️']
 
 /** The topic's own permission mode for Claude turns ("" = the global setting); saved on click. */
-function PermissionDialog({ topic, onClose, onSelect }: { topic: Topic; onClose: () => void; onSelect: (mode: '' | PermissionMode) => void }) {
+function PermissionDialog({ topic, onClose, onSelect, onRules }: { topic: Topic; onClose: () => void; onSelect: (mode: '' | PermissionMode) => void; onRules: (rules: string[]) => Promise<unknown> }) {
   const t = useT()
   const cur = topic.permission_mode || ''
+  const [rules, setRules] = React.useState(topic.allowed_tools || [])
+  const [busy, setBusy] = React.useState<string | null>(null)
+  const remove = async (rule: string) => {
+    const next = rules.filter((r) => r !== rule)
+    setBusy(rule)
+    try {
+      await onRules(next)
+      setRules(next)
+    } finally {
+      setBusy(null)
+    }
+  }
   const modes: { id: '' | PermissionMode; icon: typeof ShieldAlert; title: string; desc: string }[] = [
     { id: '', icon: SlidersHorizontal, title: t('sessions.permission.inherit'), desc: t('sessions.permission.inheritDesc') },
     { id: 'bypass', icon: ShieldAlert, title: t('claude.mode.bypass'), desc: t('claude.mode.bypassDesc') },
     { id: 'acceptEdits', icon: ShieldHalf, title: t('claude.mode.acceptEdits'), desc: t('claude.mode.acceptEditsDesc') },
+    { id: 'ask', icon: ShieldQuestion, title: t('claude.mode.ask'), desc: t('claude.mode.askDesc') },
     { id: 'default', icon: ShieldCheck, title: t('claude.mode.default'), desc: t('claude.mode.defaultDesc') },
   ]
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent data-testid="permission-dialog">
+      <DialogContent data-testid="permission-dialog" className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('sessions.permission.title', { name: topic.name })}</DialogTitle>
           <DialogDescription>{t('sessions.permission.desc')}</DialogDescription>
@@ -1768,6 +1783,20 @@ function PermissionDialog({ topic, onClose, onSelect }: { topic: Topic; onClose:
             <OptionCard key={m.id || 'inherit'} name="topic-permission" value={m.id || 'inherit'} selected={cur === m.id} onSelect={() => onSelect(m.id)} icon={m.icon} title={m.title} description={m.desc} />
           ))}
         </div>
+        {(rules.length > 0 || cur === 'ask') && (
+          <div className="grid gap-1.5" data-testid="topic-allowed-rules">
+            <p className="text-[13px] font-medium">{t('approval.rules')}</p>
+            {rules.length === 0 && <p className="text-xs text-muted-foreground">{t('approval.rulesNone')}</p>}
+            {rules.map((r) => (
+              <div key={r} className="flex min-w-0 items-center gap-2 rounded-md border px-2 py-1">
+                <code className="min-w-0 flex-1 truncate font-mono text-[12px]" title={r}>{r}</code>
+                <Button size="icon-sm" variant="ghost" aria-label={t('approval.ruleRemove')} title={t('approval.ruleRemove')} loading={busy === r} disabled={!!busy} onClick={() => void remove(r)}>
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

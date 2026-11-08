@@ -536,7 +536,7 @@ DEFAULTS: dict[str, Any] = {
     "once_at": "", "delete_after": False,     # one-time job: its date (then `schedule` is ""), removed once it ran
     "catch_up": True, "retries": 0,           # make up for a missed run; automatic retries of a shell job
 }
-PERMISSION_MODES = ("", "bypass", "acceptEdits", "default")
+PERMISSION_MODES = ("", "bypass", "acceptEdits", "default", "ask")
 
 
 def _clean(job: dict) -> dict:
@@ -578,7 +578,7 @@ def _clean(job: dict) -> dict:
         except UnicodeEncodeError:
             raise CronError(f"{s} is not valid text", f"invalid_{s.split('_')[0]}") from None
     if j["permission_mode"] not in PERMISSION_MODES:
-        raise CronError("permission_mode must be bypass, acceptEdits, default or empty", "invalid_permission_mode")
+        raise CronError("permission_mode must be bypass, acceptEdits, default, ask or empty", "invalid_permission_mode")
     if j["kind"] == "shell":
         if not j["command"].strip():
             raise CronError("a shell job needs a command", "invalid_command")

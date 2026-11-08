@@ -27,6 +27,7 @@ class PatchIn(BaseModel):
 
 class TopicPatchIn(PatchIn):
     permission_mode: str | None = None    # "" = the global setting
+    allowed_tools: list[str] | None = None   # the topic's "Always allow" rules (the whole list: removes too)
 
 
 class ProjectPatchIn(PatchIn):
@@ -84,7 +85,8 @@ async def create_topic(project: str, body: CreateIn):
 
 @router.patch("/projects/{project}/topics/{topic}")
 async def patch_topic(project: str, topic: str, body: TopicPatchIn):
-    return await _call(workspace.update_topic, project, topic, body.name, body.description, body.permission_mode)
+    return await _call(workspace.update_topic, project, topic, body.name, body.description, body.permission_mode,
+                       body.allowed_tools)
 
 
 @router.delete("/projects/{project}/topics/{topic}")

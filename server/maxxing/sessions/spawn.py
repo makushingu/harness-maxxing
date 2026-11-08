@@ -120,10 +120,11 @@ def auth_env(secrets: dict | None = None, keys: list[str] | None = None) -> dict
 
 
 def permission_args(mode: str) -> tuple[list[str], dict[str, str]]:
-    """CLI flags + env for a permission mode (bypass | acceptEdits | default)."""
+    """CLI flags + env for a permission mode (bypass | acceptEdits | default | ask). `ask` = default + the approval
+    tool (runner.approval_args): what is not pre-allowed waits for the user's Allow / Deny instead of being refused."""
     if mode == "acceptEdits":
         return ["--permission-mode", "acceptEdits"], {}
-    if mode == "default":
+    if mode in ("default", "ask"):
         return ["--permission-mode", "default"], {}
     if mode == "plan":                                       # read-only: explore, then propose a plan
         return ["--permission-mode", "plan"], {}
@@ -187,10 +188,13 @@ def agents_args(cfg: dict, extra: str = "") -> list[str]:
     return ["--append-system-prompt", "\n\n".join(parts)] if parts else []
 
 
-def settings_args(cfg: dict, extra: dict | None = None) -> list[str]:
+def settings_args(cfg: dict, extra: dict | None = None, allow: list[str] | None = None) -> list[str]:
     """`--settings` for the turn: deny rules (they apply in every permission mode, bypass included, and add to
-    the user's own settings files), + `extra` (an agent's sandbox and hooks, agent_guard.settings). One flag only."""
+    the user's own settings files), + `allow` (the topic's "Always allow" rules: they pass without asking; deny
+    rules still win), + `extra` (an agent's sandbox and hooks, agent_guard.settings). One flag only."""
     s: dict = {"permissions": {"deny": deny_rules(cfg)}}
+    if allow:
+        s["permissions"]["allow"] = list(allow)
     if extra:
         from maxxing import agent_guard
         s = agent_guard.merge(s, extra)

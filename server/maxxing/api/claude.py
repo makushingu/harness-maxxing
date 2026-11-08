@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/claude", tags=["claude"], dependencies=[Depends(
 TEST_MODEL = "claude-haiku-4-5-20251001"
 TEST_PROMPT = "Reply with the single word: ok"
 TEST_TIMEOUT_S = 90
-PERMISSION_MODES = ("bypass", "acceptEdits", "default")
+PERMISSION_MODES = ("bypass", "acceptEdits", "default", "ask")
 SECRET_FOR = {"oauth_token": "claude_oauth_token", "api_key": "anthropic_api_key"}
 _version_cache: dict[str, tuple[float, str | None]] = {}
 
@@ -234,7 +234,7 @@ async def settings(body: SettingsIn):
     if body.permission_mode is not None:
         if body.permission_mode not in PERMISSION_MODES:
             raise HTTPException(400, detail={"error": "invalid",
-                                             "message": "permission_mode: bypass, acceptEdits or default"})
+                                             "message": "permission_mode: bypass, acceptEdits, default or ask"})
         changes["permission_mode"] = body.permission_mode
     if body.auto_compact_tokens is not None:
         changes["auto_compact_tokens"] = body.auto_compact_tokens

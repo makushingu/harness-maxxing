@@ -285,6 +285,7 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
                 { value: '__inherit', label: t('crons.permissionInherit') },
                 { value: 'bypass', label: t('claude.mode.bypass') },
                 { value: 'acceptEdits', label: t('claude.mode.acceptEdits') },
+                { value: 'ask', label: t('claude.mode.ask') },
                 { value: 'default', label: t('claude.mode.default') },
               ]}
               className="sm:max-w-sm"
