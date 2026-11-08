@@ -452,6 +452,10 @@ def checked_attachments(base: Path, files: list[str] | None) -> list[str]:
     for f in files:
         p = str(f or "")
         name = os.path.basename(p)
+        try:
+            os.fsencode(p)
+        except UnicodeEncodeError:                  # a lone surrogate: no file can have that name
+            raise AgentError(400, "bad_attachment", "Attachment not found") from None
         rel = os.path.relpath(p, top) if os.path.isabs(p) and "\0" not in p else ".."
         # under attachments/ and no symbolic link below it (the workspace itself may sit behind one)
         if os.path.normpath(p) != p or rel == ".." or rel.startswith("../") or \
