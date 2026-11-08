@@ -61,6 +61,21 @@ def test_a_refused_crontab_leaves_the_jobs_unchanged(monkeypatch):
     assert crons.jobs_path().read_text() == before
 
 
+@pytest.mark.parametrize("field", ["name", "command"])
+def test_a_lone_surrogate_is_refused_before_the_crontab(monkeypatch, field):
+    keep = crons.create_job({"name": "Keep", "schedule": "@hourly", "command": "true"})
+    before = crons.jobs_path().read_text()
+    written = []
+    monkeypatch.setattr(crons, "write_crontab", written.append)
+    job = {"name": "New", "schedule": "@hourly", "command": "true", field: "a\ud800b"}
+    with pytest.raises(crons.CronError) as e:
+        crons.create_job(job)
+    assert e.value.code == f"invalid_{field}"
+    with pytest.raises(crons.CronError):
+        crons.update_job(keep["id"], {field: "a\ud800b"})
+    assert not written and crons.jobs_path().read_text() == before
+
+
 def test_next_runs_timezone():
     after = ts(2026, 7, 1, 4, 30)                                   # 06:30 in Paris (UTC+2)
     assert crons.next_runs("0 5 * * *", 2, after, PARIS) == [ts(2026, 7, 2, 3), ts(2026, 7, 3, 3)]

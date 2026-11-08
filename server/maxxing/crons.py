@@ -571,6 +571,11 @@ def _clean(job: dict) -> dict:
         raise CronError(f"retries must be between 0 and {MAX_SHELL_RETRIES}", "invalid_retries")
     for s in ("command", "topic_path", "prompt", "model", "permission_mode"):
         j[s] = str(j[s] or "")
+    for s in ("name", "command", "topic_path", "prompt", "model"):
+        try:                                            # a lone surrogate: jobs.json and the crontab cannot hold it
+            j[s].encode("utf-8")
+        except UnicodeEncodeError:
+            raise CronError(f"{s} is not valid text", f"invalid_{s.split('_')[0]}") from None
     if j["permission_mode"] not in PERMISSION_MODES:
         raise CronError("permission_mode must be bypass, acceptEdits, default or empty", "invalid_permission_mode")
     if j["kind"] == "shell":
