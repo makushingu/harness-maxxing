@@ -37,8 +37,9 @@ import { GroupForm, claudeTopic } from './GroupForm'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
 import { MentionChip, mentionComponents, mentionNodes, namedIn, useMentionMap, type MentionMap } from './mentions'
-import { AttachButton, AttachList, agentDraftKey, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { QuotePill } from '@/pages/sessions/Quote'
+import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
 import { AnswerContext, AnswerText } from './answer'
@@ -374,7 +375,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
           </div>
         </AnswerContext>
       </div>
-      <QuotePill scope={box} selector="[data-kind]" onQuote={(q) => composer.current?.quote(q)} />
+      <QuotePill scope={box} selector="[data-quote]" onQuote={(q) => composer.current?.quote(q)} />
       <Composer key={g.path} group={g} ref={composer} first={!said} />
     </div>
   )
@@ -517,7 +518,7 @@ const GroupMessage = React.memo(function GroupMessage({
         {m.text && (
           <div className="relative min-w-0 rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" onContextMenu={onContextMenu} {...touch}>
             {menu}
-            <p className="whitespace-pre-wrap break-words">
+            <p className="whitespace-pre-wrap break-words" data-quote>
               <Sensitive block>{mentionNodes(m.text, names, 'primary')}</Sensitive>
             </p>
           </div>
@@ -544,7 +545,7 @@ const GroupMessage = React.memo(function GroupMessage({
           {m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
         </div>
         <div className="grid min-w-0">
-          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
+          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
             <Sensitive block>
               <AnswerText text={m.text} components={chips} />
             </Sensitive>
@@ -588,8 +589,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const touch = useCompact()
   const say = useGroupSay()
   const key = agentDraftKey('group', g.path)
-  const draft = useDraftText(key)
-  const { text, setText } = draft
+  const { text, setText } = useDraftText(key)
   const [caret, setCaret] = React.useState(0)
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
@@ -609,6 +609,8 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     if (focus) input.current?.focus()
   }, [focus])
   const ready = g.members.filter((m) => m.exists).length >= 2
+  // Nothing can be sent now (fewer than 2 members, files uploading, a send in flight): a dictation then waits in the box.
+  const busy = files.uploading || !ready || say.isPending
   const names = useMentionMap(g.members)
   const to = namedIn(text, names, g.members.filter((m) => m.exists))
 
@@ -649,9 +651,9 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     el.setSelectionRange(placeAt.current, placeAt.current)
     placeAt.current = null
   }, [text])
-  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically").
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
   const onVoice = (heard: string, autoSend: boolean) => {
-    if (autoSend && !files.uploading) return submit(heard)
+    if (autoSend && !busy) return submit(heard)
     const next = insertAtCaret(input.current, text, heard)
     setText(next.text)
     setCaret(next.caret)
@@ -673,28 +675,15 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const submit = (heard?: string) => {
     const typed = text.trim()
     const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
-    if ((!v && !files.paths.length) || files.uploading || !ready || say.isPending) return
+    if ((!v && !files.paths.length) || busy) return
     const kept = files.atts
-    draft.hold()
-    files.hold()
+    files.dismissNotices()
     setText('')
     setCaret(0)
-    files.restore([])
-    say.mutate(
-      { path: g.path, text: v, attachments: files.paths },
-      {
-        onSuccess: () => {
-          draft.release(true)
-          files.release(true)
-        },
-        onError: () => {
-          draft.release(false)
-          files.release(false)
-          setText(v)
-          files.restore(kept)
-        },
-      },
-    )
+    files.clear()
+    // mutateAsync: its answer arrives even once this box is gone (another group opened): the message never stays
+    // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
+    say.mutateAsync({ path: g.path, text: v, attachments: files.paths }).catch(() => bringBackDraft(key, v, kept))
   }
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return

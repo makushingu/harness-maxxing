@@ -67,8 +67,8 @@ Write a message as in any chat. Who answers depends on the names in it:
 with it, the others see their paths in the conversation.
 
 **The box** works like a session's and an agent's: a long or structured paste becomes an attached file (**Paste as
-text**, or Ctrl/⌘+Shift+V, keeps it as text), the draft and its files stay after a reload until sent, the microphone
-dictates at the cursor, Enter sends (a new line on a phone), Shift+Enter goes to a new line, Esc leaves the box.
+text**, or Ctrl/⌘+Shift+V, keeps it as text), the draft and its uploaded files stay after a reload (a file still
+uploading does not), a message that could not be sent comes back into the box, the microphone dictates at the cursor, Enter sends (a new line on a phone), Shift+Enter goes to a new line, Esc leaves the box.
 Select text in the conversation and click **Quote** to quote it in your message. The members' answers open file links
 in the preview, show images and videos as thumbnails and audio with a player, and have a copy menu.
 

@@ -129,8 +129,9 @@ The page is a **conversation** with the agent, like a contact in a chat app:
   a session. They are saved in the agent's folder, under `attachments/`, and the agent reads them; with the sandbox
   that folder is read only for the agent. A message can be only files.
 - **The box works like a session's**: a long or structured paste (JSON, CSV, logs, a very long text) becomes an
-  attached file (**Paste as text** in the notice, or Ctrl/⌘+Shift+V, keeps it as text); what you type and attach is
-  kept if you reload or leave the page, until it is sent; the microphone dictates at the cursor; Enter sends,
+  attached file (**Paste as text** in the notice, or Ctrl/⌘+Shift+V, keeps it as text); what you type and the files
+  already uploaded are kept if you reload or leave the page (a file still uploading is not), and a message that could
+  not be sent comes back into the box; the microphone dictates at the cursor; Enter sends,
   Shift+Enter goes to a new line (on a phone Enter is a new line and the button sends), Ctrl/⌘+Enter sends, Esc leaves
   the box (or cancels a reply). Select text in the conversation and click **Quote**: it goes into your message as a
   quote.

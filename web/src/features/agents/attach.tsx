@@ -2,8 +2,8 @@
 // - files attached (button, paste, drop), uploaded at once (with progress) into the agent's folder
 //   (<agent>/attachments/) or the group's (<group>/attachments/), sent as their paths; long or structured pasted
 //   text becomes a file too (pages/sessions/pasteAsFile.ts; Ctrl/⌘+Shift+V or the toast keep it as text);
-// - the draft (text and uploaded files) kept in this browser under `mx-draft:agent:<path>` / `mx-draft:group:<path>`
-//   until the message is sent;
+// - the draft (text and uploaded files) kept in this browser under `mx-draft:agent:<path>` / `mx-draft:group:<path>`;
+//   a message being sent leaves it at once and comes back (before what was typed meanwhile) if the send fails;
 // - the same keys: Enter sends (a newline on a touch keyboard), Shift+Enter = newline, Ctrl/⌘+Enter sends, Esc leaves.
 import * as React from 'react'
 import { Paperclip } from 'lucide-react'
@@ -13,6 +13,7 @@ import { uploadAttachment } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { AttachmentChip, fromDraftAtt, toDraftAtts, type Att } from '@/pages/sessions/Composer'
+import type { DraftAtt } from '@/pages/sessions/store'
 import { loadAtts, loadDraft, saveAtts, saveDraft } from '@/pages/sessions/store'
 import { pastedFile, pastedName } from '@/pages/sessions/pasteAsFile'
 import { quotesMarkdown } from '@/pages/sessions/util'
@@ -20,53 +21,65 @@ import { quotesMarkdown } from '@/pages/sessions/util'
 /** Files a message (the server's agents.ATTACH_MAX). */
 export const MAX_FILES = 10
 
-/** Draft key of an agent's box (`agent:<path>`) or a group's (`group:<path>`): never a session's (its id or `new:<path>`). */
-export const agentDraftKey = (kind: 'agent' | 'group', path: string) => `${kind}:${path}`
-
-/** Keeps a draft stored until the message is sent: `hold` when it leaves, `release(sent)` when the server answered
- *  (sent: what is in the box now is stored; refused: the box gets the message back, stored with it). */
-function useHeld(store: () => void) {
-  const held = React.useRef(false)
-  const save = React.useRef(store)
-  save.current = store
-  const hold = React.useCallback(() => {
-    held.current = true
-  }, [])
-  const release = React.useCallback((sent: boolean) => {
-    held.current = false
-    if (sent) save.current()
-  }, [])
-  return { held, hold, release }
+/** What a failed send brings back into the box of draft `key` (text first, then what was typed meanwhile; its
+ *  uploaded files after those already there). The box of that key when one is open, else its stored draft: the
+ *  answer may come after the box closed (another agent opened), even after it opened again. */
+const textBack = new Map<string, (text: string) => void>()
+const attsBack = new Map<string, (atts: DraftAtt[]) => void>()
+const joinBack = (back: string, cur: string) => [back, cur.trim()].filter(Boolean).join('\n\n')
+const mergeAtts = <A extends { path: string | null }>(cur: A[], back: A[]) => [...cur, ...back.filter((b) => !cur.some((c) => c.path === b.path))]
+export function bringBackDraft(key: string, text: string, atts: Att[]) {
+  const files = toDraftAtts(atts)
+  if (text) {
+    const open = textBack.get(key)
+    if (open) open(text)
+    else saveDraft(key, joinBack(text, loadDraft(key)))
+  }
+  if (files.length) {
+    const open = attsBack.get(key)
+    if (open) open(files)
+    else saveAtts(key, mergeAtts(loadAtts(key), files))
+  }
+}
+/** `fn` is how the open box of `key` takes back a failed send. */
+function useBringBack<T>(on: Map<string, (v: T) => void>, key: string | undefined, fn: (v: T) => void) {
+  const live = React.useRef(fn)
+  live.current = fn
+  React.useEffect(() => {
+    if (!key) return
+    const f = (v: T) => live.current(v)
+    on.set(key, f)
+    return () => {
+      if (on.get(key) === f) on.delete(key)
+    }
+  }, [on, key])
 }
 
-/** The text of the message being written, stored with `key` (localStorage, like a session's draft). */
+/** The text of the message being written, stored with `key` (localStorage, like a session's draft). Sent, the box
+ *  is emptied (and so its draft): a send that fails comes back through `bringBackDraft`. */
 export function useDraftText(key: string) {
   const [text, setText] = React.useState(() => loadDraft(key))
   const live = React.useRef({ text, key })
   live.current = { text, key }
   const unsaved = React.useRef(false)
-  const { held, hold, release } = useHeld(() => {
-    saveDraft(live.current.key, live.current.text)
-    unsaved.current = false
-  })
+  useBringBack(textBack, key, (back: string) => setText((cur) => joinBack(back, cur)))
   const loaded = React.useRef(true) // just read from the draft: nothing to store yet
   React.useEffect(() => {
     if (loaded.current) {
       loaded.current = false
       return
     }
-    if (held.current) return
     unsaved.current = true
     const id = setTimeout(() => {
       saveDraft(key, text)
       unsaved.current = false
     }, 250)
     return () => clearTimeout(id)
-  }, [text, key, held])
+  }, [text, key])
   // The page goes away (reload, update, closed tab) or the box closes: the text typed in the last 250 ms is kept too.
   React.useEffect(() => {
     const flush = () => {
-      if (!unsaved.current || held.current) return
+      if (!unsaved.current) return
       saveDraft(live.current.key, live.current.text)
       unsaved.current = false
     }
@@ -78,8 +91,8 @@ export function useDraftText(key: string) {
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', onHidden)
     }
-  }, [held])
-  return { text, setText, hold, release }
+  }, [])
+  return { text, setText }
 }
 
 /** `heard` (a dictation) put at the caret of `el` in `text`, with a space on each side when needed. */
@@ -102,24 +115,32 @@ export function useAttachments(path: string, url?: string, opts: { draftKey?: st
   const t = useT()
   const { draftKey } = opts
   const [atts, setAtts] = React.useState<Att[]>(() => (draftKey ? loadAtts(draftKey).map(fromDraftAtt) : []))
-  const kept = React.useRef(atts)
-  kept.current = atts
-  const { held, hold, release } = useHeld(() => draftKey && saveAtts(draftKey, toDraftAtts(kept.current)))
   React.useEffect(() => {
-    if (draftKey && !held.current) saveAtts(draftKey, toDraftAtts(atts))
-  }, [atts, draftKey, held])
+    if (draftKey) saveAtts(draftKey, toDraftAtts(atts))
+  }, [atts, draftKey])
+  useBringBack(attsBack, draftKey, (back: DraftAtt[]) => setAtts((cur) => mergeAtts(cur, back.map(fromDraftAtt))))
   const putText = React.useRef(opts.putText)
   putText.current = opts.putText
   const ctrls = React.useRef(new Map<string, AbortController>())
   const previews = React.useRef(new Set<string>())
+  // "Paste as text" notices of this box: gone with it, or once its message is sent (their file left the box).
+  const notices = React.useRef(new Set<string | number>())
+  const alive = React.useRef(true)
+  const dismissNotices = React.useCallback(() => {
+    for (const id of notices.current) toast.dismiss(id)
+    notices.current.clear()
+  }, [])
   React.useEffect(() => {
+    alive.current = true
     const live = previews.current
     const up = ctrls.current
     return () => {
+      alive.current = false
+      dismissNotices()
       for (const c of up.values()) c.abort()
       for (const p of live) URL.revokeObjectURL(p)
     }
-  }, [])
+  }, [dismissNotices])
   const count = React.useRef(0)
   count.current = atts.length
   /** Uploads `all` (up to MAX_FILES in the message): the local ids of those taken. */
@@ -165,8 +186,8 @@ export function useAttachments(path: string, url?: string, opts: { draftKey?: st
       return a.filter((y) => y.lid !== lid)
     })
   }
-  /** Back to a list of saved files (a message that could not be sent keeps them). */
-  const restore = (kept: Att[]) => setAtts(kept)
+  /** The message is sent: its files leave the box (a failed send brings them back: `bringBackDraft`). */
+  const clear = () => setAtts([])
   const uploading = atts.some((a) => !a.path && !a.error)
   const paths = atts.filter((a) => a.path && !a.error).map((a) => a.path!)
   // Ctrl+Shift+V / ⌘⇧V just before the paste: kept as text whatever it is.
@@ -186,15 +207,18 @@ export function useAttachments(path: string, url?: string, opts: { draftKey?: st
     const el = e.currentTarget
     const at = [el.selectionStart, el.selectionEnd]
     const [lid] = add([new File([pasted], pastedName(as.ext), { type: as.type })])
-    void loadGroups(['paste']).then(() =>
-      toast.action(t('paste.asFile'), t('paste.asFileHint'), {
+    void loadGroups(['paste']).then(() => {
+      if (!alive.current) return
+      const id = toast.action(t('paste.asFile'), t('paste.asFileHint'), {
         label: t('paste.asText'),
         onClick: () => {
+          notices.current.delete(id)
           remove(lid)
           putText.current?.(pasted, at[0], at[1])
         },
-      }),
-    )
+      })
+      notices.current.add(id)
+    })
   }
   /** The keys of the box, as in a session: 'send' (Enter, Ctrl/⌘+Enter; on a touch keyboard Enter is a newline and
    *  the button sends), 'escape', or null (default handling). Notes Ctrl/⌘+Shift+V for `onPaste`. */
@@ -223,7 +247,7 @@ export function useAttachments(path: string, url?: string, opts: { draftKey?: st
       add(files)
     },
   }
-  return { atts, add, remove, restore, uploading, paths, onPaste, keyAction, dropProps, hold, release }
+  return { atts, add, remove, clear, uploading, paths, onPaste, keyAction, dropProps, dismissNotices }
 }
 
 export function AttachList({ atts, onRemove }: { atts: Att[]; onRemove: (lid: string) => void }) {

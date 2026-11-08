@@ -29,3 +29,6 @@ export function forgetDraft(key: string) {
     /* private mode */
   }
 }
+
+/** Draft key of an agent's box (`agent:<path>`) or a group's (`group:<path>`): never a session's (its id or `new:<path>`). */
+export const agentDraftKey = (kind: 'agent' | 'group', path: string) => `${kind}:${path}`

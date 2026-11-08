@@ -6,6 +6,7 @@ import type {
 } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
+import { agentDraftKey, forgetDraft } from '../drafts'
 
 // Agents (Settings -> Features -> agents_page): lasting roles living in a topic folder, with triggers.
 // The bus topic `agents` refreshes every key below (BUS_KEYS); creating or deleting one also changes the workspace tree.
@@ -120,7 +121,10 @@ export function usePatchAgent({ errorToast = true }: { errorToast?: boolean } = 
   })
 }
 export function useDeleteAgent() {
-  return useMut((path: string) => api.del<Ok>(agentUrl(path)), { invalidate: inv })
+  return useMut((path: string) => api.del<Ok>(agentUrl(path)), {
+    onSuccess: (_r, path) => forgetDraft(agentDraftKey('agent', path)),
+    invalidate: inv,
+  })
 }
 export function useRunAgent() {
   return useMut(

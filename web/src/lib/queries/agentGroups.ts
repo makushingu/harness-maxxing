@@ -3,6 +3,7 @@ import { api, seg } from '../api'
 import type { AgentGroup, AgentGroupInput, AgentGroupMessage, Ok } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
+import { agentDraftKey, forgetDraft } from '../drafts'
 
 // Agent groups (on the Agents page): the owner talks to 2-6 agents of one project, who answer in turn.
 // The bus topic `agent-groups` refreshes the list and the groups, `agent-groups:<path>` one group and its messages.
@@ -77,6 +78,7 @@ export function useDeleteGroup() {
     onSuccess: (_r, { path }) => {
       qc.removeQueries({ queryKey: groupKeys.one(path) })
       qc.removeQueries({ queryKey: groupKeys.messages(path) })
+      forgetDraft(agentDraftKey('group', path))
     },
     invalidate: inv,
   })

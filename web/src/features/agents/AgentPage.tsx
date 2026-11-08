@@ -33,8 +33,9 @@ import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ThreadApprovalBody, useThreadApprovals } from './approvals'
-import { AttachButton, AttachList, agentDraftKey, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { QuotePill } from '@/pages/sessions/Quote'
+import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
 import { AnswerContext, AnswerText } from './answer'
@@ -307,7 +308,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
           </div>
         </AnswerContext>
       </div>
-      <QuotePill scope={box} selector="[data-kind]" onQuote={(q) => composer.current?.quote(q)} />
+      <QuotePill scope={box} selector="[data-quote]" onQuote={(q) => composer.current?.quote(q)} />
       <Composer key={a.path} ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
@@ -393,7 +394,7 @@ function ThreadMessage({
           {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
           <div className="relative rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" onContextMenu={onContextMenu} {...touch}>
             {menu}
-            <p className="whitespace-pre-wrap break-words">
+            <p className="whitespace-pre-wrap break-words" data-quote>
               <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
             </p>
           </div>
@@ -455,7 +456,7 @@ function ThreadMessage({
           <ThreadApprovalBody m={m} live={live} decided={decided} />
         ) : m.text ? (
           <div className="grid min-w-0">
-            <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')}>
+            <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
               <Sensitive block>
                 <AnswerText text={m.text} />
               </Sensitive>
@@ -496,8 +497,7 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
   const t = useT()
   const run = useRunAgent()
   const key = agentDraftKey('agent', a.path)
-  const draft = useDraftText(key)
-  const { text, setText } = draft
+  const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
   const putText = (pasted: string, start: number, end: number) => {
     setText((cur) => cur.slice(0, Math.min(start, cur.length)) + pasted + cur.slice(Math.min(end, cur.length)))
@@ -522,42 +522,41 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
     },
   }))
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
+  // Nothing can be sent now (files uploading, a send in flight): a dictation then waits in the box.
+  const busy = files.uploading || !a.enabled || run.isPending
+  const alive = React.useRef(true)
+  React.useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
   const submit = (heard?: string) => {
     const typed = text.trim()
     const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
-    if ((!v && !files.paths.length) || files.uploading || !a.enabled || run.isPending) return
+    if ((!v && !files.paths.length) || busy) return
     const kept = files.atts
-    draft.hold()
-    files.hold()
+    files.dismissNotices()
     setText('')
-    files.restore([])
-    const back = () => {
-      draft.release(false)
-      files.release(false)
-      setText(v)
-      files.restore(kept)
-    }
-    run.mutate(
-      { path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths },
-      {
-        onSuccess: (r) => {
-          if (r.started) {
-            draft.release(true)
-            files.release(true)
-            onCancelReply()
-          } else {
-            back()
-            toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
-          }
-        },
-        // The reply target stays with the text, so sending again still goes on with the same session.
-        onError: back,
+    files.clear()
+    // mutateAsync: its answer arrives even once this box is gone (another agent opened): the message never stays
+    // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
+    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths }).then(
+      (r) => {
+        if (r.started) {
+          if (alive.current) onCancelReply()
+          return
+        }
+        bringBackDraft(key, v, kept)
+        toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
       },
+      // The reply target stays with the text, so sending again still goes on with the same session.
+      () => bringBackDraft(key, v, kept),
     )
   }
-  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically").
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
   const onVoice = (heard: string, autoSend: boolean) => {
-    if (autoSend && !files.uploading) return submit(heard)
+    if (autoSend && !busy) return submit(heard)
     const next = insertAtCaret(input.current, text, heard)
     setText(next.text)
     caretTo(next.caret)
