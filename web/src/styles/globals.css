@@ -290,7 +290,10 @@ html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 @keyframes mx-label-in { from { opacity: 0; transform: translateX(-6px); } }
 .mx-side[data-unfold='open'] .mx-side-body :is(.truncate, kbd) { animation: mx-label-in 200ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 .mx-side[data-unfold='closing'] .mx-side-body :is(.truncate, kbd) { opacity: 0; transition: opacity 120ms ease-out; }
+/* Ring meters (Meter.tsx RingArc): the arc glides to its new length, its colour fades over. */
+.mx-arc { transition: stroke-dasharray 500ms ease-out, stroke 400ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
+  .mx-arc { transition: none; }
   .mx-side, .mx-side-body :is(.truncate, kbd) { transition: none !important; animation: none !important; }
 }
 .mx-cv { content-visibility: auto; contain-intrinsic-size: auto 44px; }

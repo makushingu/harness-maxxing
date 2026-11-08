@@ -77,6 +77,7 @@ export const fr: Record<keyof typeof en, string> = {
   'touchHome.session': "Dernière session",
   'touchHome.dashboard': "Accueil",
   'shell.openSessions': "Sessions",
+  'shell.railEmpty': "Aucune session pour l’instant.",
   'shell.openApp': "Menu",
   'shell.goTo': "Aller à",
   'shell.searchAll': "Rechercher partout",

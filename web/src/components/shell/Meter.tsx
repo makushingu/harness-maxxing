@@ -43,3 +43,39 @@ export function MeterValue({ pct, tone, render, className }: { pct: number; tone
   const n = Math.round(useTween(pct))
   return <span className={cn('tabular-nums', fade, tone ? toneText(tone) : 'text-foreground', className)}>{render ? render(n) : `${n}%`}</span>
 }
+
+const toneStroke = (tone: MeterTone) => (tone === 'error' ? 'stroke-destructive' : tone === 'warn' ? 'stroke-warning' : 'stroke-primary')
+
+/** One arc of a ring meter (`pathLength` 100: the dash is the percentage), drawn clockwise from 12 o'clock. */
+export function RingArc({ r, width, pct, tone, size }: { r: number; width: number; pct: number; tone: MeterTone; size: number }) {
+  const v = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0
+  const c = size / 2
+  return (
+    <>
+      <circle cx={c} cy={c} r={r} fill="none" strokeWidth={width} className="stroke-muted" />
+      <circle
+        cx={c}
+        cy={c}
+        r={r}
+        fill="none"
+        strokeWidth={width}
+        strokeLinecap="round"
+        pathLength={100}
+        // a round cap on a 0 % arc still draws a dot: no dash at all then
+        strokeDasharray={v > 0.5 ? `${v} 100` : '0 100'}
+        transform={`rotate(-90 ${c} ${c})`}
+        className={cn('mx-arc', toneStroke(tone))} // .mx-arc (globals.css): length glides 500 ms, colour fades 400 ms
+      />
+    </>
+  )
+}
+
+/** The folded bar's tiny meter: icon (colour fading with the level) over / beside a short thin bar. */
+export function MiniMeter({ icon, pct, tone, label, className }: { icon: LucideIcon; pct: number; tone: MeterTone; label: string; className?: string }) {
+  return (
+    <span className={cn('flex items-center gap-1', className)}>
+      <MeterIcon icon={icon} tone={tone} className="size-3" />
+      <MeterBar pct={pct} tone={tone} label={label} className="h-[3px] w-5 bg-muted-foreground/15" />
+    </span>
+  )
+}

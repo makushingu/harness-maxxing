@@ -11,7 +11,8 @@ import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
 import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
-import { StatusLine } from './HealthIndicator'
+import { StatusBlock } from './HealthIndicator'
+import { SessionsRail } from './SessionsRail'
 import { HelpMenu } from './HelpMenu'
 import { UpdateIndicator } from './UpdateIndicator'
 import { useDragOrder } from './dragOrder'
@@ -38,7 +39,7 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   const open = useTeamUI((s) => s.open)
   const setOpen = useTeamUI((s) => s.setOpen)
   const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
-  if (collapsed) return unread ? <span className="absolute top-0.5 right-1 flex size-4 items-center justify-center"><CountDot tone="unread" /></span> : null
+  if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return (
     <span className="flex items-center gap-1">
       <span
@@ -66,7 +67,7 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
 function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const n = useAgentsAttention()
-  if (collapsed) return n ? <span className="absolute top-0.5 right-1 flex size-4 items-center justify-center"><CountDot tone="unread" /></span> : null
+  if (collapsed) return n ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return (
     <span className="empty:hidden">
       <CountBadge count={n} title={t('nav.agentsUnread', { count: n })} />
@@ -117,8 +118,15 @@ function ResizeEdge({ side }: { side: React.RefObject<HTMLDivElement | null> }) 
   )
 }
 
+/** Folded bar: where a counter dot sits on a 44 px icon row (top-right corner of the icon). */
+const FOLDED_DOT = 'absolute top-1 right-1 flex size-4 items-center justify-center'
+/** The active page's marker on the bar's left edge (the folded rows sit 10 px from it, the unfolded ones 12 px). */
+const activeMark = (collapsed: boolean) => cn('absolute top-2 bottom-2 w-[3px] rounded-r-full bg-primary', collapsed ? '-left-2.5 top-2.5 bottom-2.5' : '-left-3')
+
 /** Width of the folded icon bar (the page always keeps this room when the bar is not pinned). */
-const FOLDED_W = 60
+const FOLDED_W = 64
+/** Width of the second column (the sessions) shown beside the unfolded bar. */
+const RAIL_W = 272
 /** Unfold / fold animation (keep in sync with the `duration-200` of the aside and the CSS of `.mx-side`). */
 const UNFOLD_MS = 200
 /** Delay before folding back once the pointer (or the keyboard focus) left the bar. */
@@ -138,6 +146,12 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   const focus = React.useRef(false)
   // After Esc or un-pinning: stay folded until the pointer leaves and comes back, or the focus moves.
   const blocked = React.useRef(false)
+  // Focus we move or Radix gives back (a menu closing, Esc) must not unfold the bar again.
+  const ignoreFocusUntil = React.useRef(0)
+  // Esc folded the bar from the keyboard: once folded, put the focus back on the bar if its element went away (pin).
+  const refocus = React.useRef(false)
+  // Last pointer position: after a menu closes with Esc, is the pointer still over the bar?
+  const pointer = React.useRef<{ x: number; y: number } | null>(null)
 
   const clear = () => {
     window.clearTimeout(timer.current)
@@ -174,6 +188,43 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   }, [enabled])
   React.useEffect(() => clear, [])
 
+  React.useEffect(() => {
+    if (!enabled) return
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') pointer.current = { x: e.clientX, y: e.clientY }
+    }
+    // Esc closing a menu the bar opened (Help, status panel: rendered in a portal): Radix gives the focus back to
+    // its button, which must not keep the bar open; fold unless the pointer is still over the bar.
+    const onKey = (e: KeyboardEvent) => {
+      const el = side.current
+      if (e.key !== 'Escape' || !el || el.contains(e.target as Node) || !el.querySelector('[aria-expanded="true"]')) return
+      const r = el.getBoundingClientRect()
+      const p = pointer.current
+      hover.current = !!p && p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom
+      focus.current = false
+      ignoreFocusUntil.current = performance.now() + 400
+      if (!hover.current) fold(0) // waits for the menu to be closed, then folds
+    }
+    document.addEventListener('pointermove', onMove, { passive: true })
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('keydown', onKey, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled])
+
+  React.useEffect(() => {
+    if (phase !== 'closed' || !refocus.current) return
+    refocus.current = false
+    const el = side.current
+    const a = document.activeElement
+    if (!el || (a && a !== document.body && el.contains(a))) return
+    // the focused element only exists unfolded (the pin button): the bar's first link (the logo) takes the focus
+    ignoreFocusUntil.current = performance.now() + 400
+    el.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus()
+  }, [phase, side])
+
   const props = {
     onPointerEnter: (e: React.PointerEvent) => {
       if (e.pointerType === 'touch') return
@@ -189,7 +240,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     onFocus: (e: React.FocusEvent) => {
       // Keyboard focus only: a mouse click on a row must not keep the bar open once the pointer leaves.
       const el = e.target as HTMLElement
-      if (!side.current?.contains(el) || !el.matches(':focus-visible')) return
+      if (!side.current?.contains(el) || !el.matches(':focus-visible') || performance.now() < ignoreFocusUntil.current) return
       focus.current = true
       blocked.current = false
       open()
@@ -207,10 +258,20 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       blocked.current = true
       hover.current = false
       focus.current = false
+      if (side.current?.contains(document.activeElement)) refocus.current = true
       fold(0)
     },
   }
-  return { phase: enabled ? phase : 'closed', props } as const
+  /** A session was picked in the second column: fold now, stay folded until the pointer comes back. */
+  const dismiss = () => {
+    if (!enabled) return
+    blocked.current = true
+    hover.current = false
+    focus.current = false
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    fold(0)
+  }
+  return { phase: enabled ? phase : 'closed', props, dismiss } as const
 }
 
 export function Sidebar() {
@@ -250,7 +311,7 @@ export function Sidebar() {
         >
           {({ isActive }) => (
             <>
-              {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
+              {isActive && <span aria-hidden className={activeMark(collapsed)} />}
               <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
               {!collapsed && <span className="flex-1 truncate">{label}</span>}
               {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
@@ -258,11 +319,11 @@ export function Sidebar() {
               {showBadge &&
                 (collapsed ? (
                   badge.unread ? (
-                    <span onClick={showSessions('unread')} title={t('sessions.showUnread', { count: badge.unread })} className="absolute top-0.5 right-1 flex size-4 cursor-pointer items-center justify-center">
+                    <span onClick={showSessions('unread')} title={t('sessions.showUnread', { count: badge.unread })} className={cn(FOLDED_DOT, 'cursor-pointer')}>
                       <CountDot tone="unread" />
                     </span>
                   ) : (
-                    <span onClick={showSessions('running')} title={t('sessions.showRunning', { count: badge.running })} className="absolute top-0.5 right-1 flex size-4 cursor-pointer items-center justify-center">
+                    <span onClick={showSessions('running')} title={t('sessions.showRunning', { count: badge.running })} className={cn(FOLDED_DOT, 'cursor-pointer')}>
                       <CountDot tone="running" />
                     </span>
                   )
@@ -294,7 +355,7 @@ export function Sidebar() {
       >
         {({ isActive }) => (
           <>
-            {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-primary" />}
+            {isActive && <span aria-hidden className={activeMark(collapsed)} />}
             <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
             {!collapsed && <span className="flex-1 truncate">{e.ext.name}</span>}
           </>
@@ -333,16 +394,16 @@ export function Sidebar() {
         data-unfold={pinned ? 'pinned' : unfold.phase}
         data-expanded={collapsed ? 'false' : 'true'}
         className={cn(
-          'mx-side absolute inset-y-0 left-0 flex flex-col border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]',
+          'mx-side absolute inset-y-0 left-0 flex border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]',
           !pinned && 'overflow-hidden transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
           unfold.phase === 'open' && !pinned && 'shadow-2xl',
         )}
-        style={{ width: pinned ? '100%' : unfold.phase === 'open' ? width : FOLDED_W }}
+        style={{ width: pinned ? '100%' : unfold.phase === 'open' ? width + RAIL_W : FOLDED_W }}
         aria-label={t('shell.navigation')}
       >
        <KeepTooltipShape.Provider value>
         {/* Laid out at its final width while the bar unfolds or folds: the edge of the bar reveals it, nothing wraps. */}
-        <div className="mx-side-body flex h-full min-h-0 flex-col" style={{ width: pinned ? '100%' : collapsed ? FOLDED_W : width }}>
+        <div className="mx-side-body flex h-full min-h-0 shrink-0 flex-col" style={{ width: pinned ? '100%' : collapsed ? FOLDED_W : width }}>
       {pinned && <ResizeEdge side={side} />}
       {/* Logo + pin button (shown once the bar is unfolded or pinned). */}
       <div className={cn('flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
@@ -378,11 +439,11 @@ export function Sidebar() {
             data-tour="palette"
             className={cn(
               'flex h-9 w-full items-center gap-2 rounded-md border bg-background/60 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20',
-              collapsed && 'justify-center px-0',
+              collapsed && 'h-11 justify-center px-0',
             )}
             aria-label={t('palette.open')}
           >
-            <Search className="size-4 shrink-0" />
+            <Search className={cn('shrink-0', collapsed ? 'size-5' : 'size-4')} />
             {!collapsed && (
               <>
                 <span className="flex-1 truncate text-left">{t('palette.search')}</span>
@@ -408,13 +469,22 @@ export function Sidebar() {
       <div className="flex-1" />
 
       <div className={block('border-t border-sidebar-border')}>
-        <UpdateIndicator collapsed={collapsed} />
+        {/* folded: a 44 px target and a bigger icon, like the rows (UpdateIndicator keeps its own small look) */}
+        <div className={cn('empty:hidden', collapsed && '[&>*]:h-11 [&_svg]:size-5 [&>*>span:first-child]:size-6')}>
+          <UpdateIndicator collapsed={collapsed} />
+        </div>
         <HelpMenu collapsed={collapsed} />
         {end.map((item) => navItem(item, entries.length))}
       </div>
 
-      <StatusLine collapsed={collapsed} />
+      <StatusBlock collapsed={collapsed} />
         </div>
+        {/* Unfolded over the page: a second column with the sessions (running, unread, recent), one click away. */}
+        {unfolded && (
+          <div data-testid="sessions-rail" className="h-full min-h-0 shrink-0 border-l border-sidebar-border" style={{ width: RAIL_W }}>
+            <SessionsRail onPick={unfold.dismiss} />
+          </div>
+        )}
        </KeepTooltipShape.Provider>
       </aside>
     </div>

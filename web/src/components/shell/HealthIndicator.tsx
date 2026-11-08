@@ -4,13 +4,13 @@ import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Dow
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useT } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { useUI, type Theme } from '@/stores/ui'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
-import { MeterBar, MeterIcon, MeterValue } from './Meter'
-import { usePlanPct, UsageLines } from './UsageIndicator'
+import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
+import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -95,7 +95,7 @@ function IssueList({ issues }: { issues: Health['issues'] }) {
   )
 }
 
-const meterTone = (pct: number) => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
+const meterTone = (pct: number): MeterTone => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
 
 /** CPU, RAM and disk side by side (the status panel): icon and name, the figure counting to its new value, a thin
  *  bar; the bars with every detail are in Settings -> System. 75 % warning, 90 % critical: the colour fades over and
@@ -159,36 +159,108 @@ export function useStatusLine(visible?: boolean) {
   return { tone, health, plan: pct === null ? null : t('shell.claudePct', { pct }), label: pct === null ? health : `${health} · ${t('shell.claudePct', { pct })}` }
 }
 
-/** The sidebar's last line: one dot coloured by the health and "All good · Claude 47 %" (folded: the dot alone).
- *  A click opens the status panel. */
-export function StatusLine({ collapsed }: { collapsed?: boolean }) {
+/** CPU / RAM / disk as the meters need them (null while the health loads). */
+function useHealthRows() {
+  const t = useT()
+  const { data: h } = useHealth()
+  if (!h) return null
+  const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
+  return [
+    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct, icon: Cpu },
+    { key: 'mem', label: t('health.ram'), pct: mem, icon: MemoryStick },
+    { key: 'disk', label: t('health.disk'), pct: h.disk.pct, icon: HardDrive },
+  ].map((r) => ({ ...r, tone: meterTone(r.pct) }))
+}
+
+const alertBg = { error: 'bg-destructive/10 text-destructive', warn: 'bg-warning/10 text-warning' } as const
+const alertHover = {
+  error: 'hover:bg-destructive/15 group-hover:bg-destructive/15 data-[state=open]:bg-destructive/15',
+  warn: 'hover:bg-warning/15 group-hover:bg-warning/15 data-[state=open]:bg-warning/15',
+} as const
+
+/** The bottom of the sidebar: Claude above CPU / RAM / disk.
+ *  - Folded bar: the Claude ring, then three tiny meters (icon + short bar) and the health dot.
+ *  - Unfolded / pinned: the ring with "Claude · Max" and "5 h 47 % · Semaine 12 %", then (when something needs
+ *    attention) the "2 problems" line in its alert colour, then CPU / RAM / disk in three columns.
+ *  The meters (with the dot / the problems line) open the status panel (issues, theme, presentation mode); the
+ *  Claude entry leads to Settings -> Stats. Same two elements folded or not, so the keyboard focus survives folding. */
+export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
   const s = useStatusLine()
-  const alert = s.tone === 'error' || s.tone === 'warn'
+  const rows = useHealthRows()
+  const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
   // the panel's links (System, Stats) lead away: close it when the page changes
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
   useEffect(() => setOpen(false), [pathname])
+  const lang = useLang()
+  const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
+  const label = [s.health, ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
+  const tip = (
+    <span className="grid gap-0.5 text-xs">
+      <span className="font-medium">{s.health}</span>
+      {rows?.map((r) => (
+        <span key={r.key} className="tabular-nums">
+          {r.label} {pct(r.pct)}
+        </span>
+      ))}
+    </span>
+  )
   return (
-    <div className={cn('border-t border-sidebar-border px-3 pt-2 pb-[calc(0.5rem+var(--safe-bottom))]', collapsed && 'flex justify-center px-2.5')}>
+    <div
+      data-testid="sidebar-status"
+      className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.5rem+var(--safe-bottom))]', collapsed && 'justify-items-center gap-0.5 px-2')}
+    >
+      <ClaudeStatus collapsed={collapsed} />
       <Popover open={open} onOpenChange={setOpen}>
-        <Tooltip content={collapsed ? s.label : null} side="right">
+        <Tooltip content={collapsed ? tip : null} side="right">
           <PopoverTrigger
             data-tour="health"
             data-testid="status-line"
-            aria-label={s.label}
+            aria-label={label}
             className={cn(
-              'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
-              alert && (s.tone === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'),
-              collapsed && 'size-9 justify-center px-0',
+              'group grid w-full min-w-0 gap-1.5 rounded-md px-1.5 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
+              collapsed && 'w-11 justify-items-center gap-1 px-0 py-2',
+              collapsed && alert && cn(alertBg[alert], alertHover[alert]),
             )}
           >
-            <span className="flex size-4 shrink-0 items-center justify-center">
-              <LiveDot tone={s.tone} />
-            </span>
-            {!collapsed && (
-              <span className="min-w-0 flex-1 truncate">
-                {s.health}
-                {s.plan && <span className="text-muted-foreground"> · <Sensitive length={3}>{s.plan}</Sensitive></span>}
+            {!collapsed && alert && (
+              // keeps its alert colour when the block is hovered (a stronger tint, not the grey of a plain row)
+              <span className={cn('-mx-0.5 flex min-w-0 items-center gap-2 rounded px-1.5 py-1 text-[13px] font-medium transition-colors', alertBg[alert], alertHover[alert])}>
+                <span className="flex size-4 shrink-0 items-center justify-center">
+                  <LiveDot tone={alert} />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{s.health}</span>
+                <ChevronRight className="size-3.5 shrink-0" />
+              </span>
+            )}
+            {!rows ? (
+              <Skeleton className={collapsed ? 'h-10 w-8' : 'h-8'} />
+            ) : collapsed ? (
+              <>
+                {rows.map((r) => (
+                  <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
+                ))}
+                <span className="mt-1 flex size-3 items-center justify-center">
+                  <LiveDot tone={s.tone} />
+                </span>
+              </>
+            ) : (
+              <span className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-x-3" data-testid="sidebar-meters">
+                {rows.map((r) => (
+                  <span key={r.key} className="grid min-w-0 gap-1">
+                    <span className="flex min-w-0 items-center gap-1.5 text-xs">
+                      <MeterIcon icon={r.icon} tone={r.tone} />
+                      <Sensitive length={3}>
+                        <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
+                      </Sensitive>
+                    </span>
+                    <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
+                  </span>
+                ))}
+                {/* all good: the green dot sits at the end of the meters (problems: in their line above) */}
+                <span className="flex size-4 items-center justify-center" title={alert ? undefined : s.health}>
+                  {!alert && <LiveDot tone={s.tone} />}
+                </span>
               </span>
             )}
           </PopoverTrigger>
