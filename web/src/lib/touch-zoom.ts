@@ -121,7 +121,9 @@ export function useTouchZoom(ref: React.RefObject<HTMLElement | null>, handlers:
         const first = s[0]
         const last = s[s.length - 1]
         const dt = last.t - first.t
-        h.current.panEnd?.(dt > 0 ? (last.x - first.x) / dt : 0, dt > 0 ? (last.y - first.y) / dt : 0)
+        // A finger held still before it lifts throws nothing: the last moves are old.
+        const live = dt > 0 && performance.now() - last.t <= 100
+        h.current.panEnd?.(live ? (last.x - first.x) / dt : 0, live ? (last.y - first.y) / dt : 0)
         return
       }
       if (e.type === 'touchcancel' || Date.now() - o.t0 > TAP_MS) return (lastTap = null)
