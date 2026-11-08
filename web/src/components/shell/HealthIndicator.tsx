@@ -44,11 +44,11 @@ export function HealthSummary({ compact }: { compact?: boolean }) {
         <span className="text-sm font-semibold">{tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })}</span>
       </div>
       {h.issues.length > 0 && (
-        <ul className="grid gap-1.5">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {h.issues.map((i) => (
             <li key={i.id || i.code} className={cn('group flex items-start gap-2 text-[13px]', i.seen && 'text-muted-foreground')}>
               {i.seen ? <Check className="mt-0.5 size-3.5 shrink-0" /> : i.level === 'error' ? <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : i.level === 'warn' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" /> : <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />}
-              <span className="min-w-0 flex-1">{i.text}</span>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{i.text}</span>
               {i.id && (
                 <Tooltip content={i.seen ? t('health.unsee') : t('health.seenHint')}>
                   <button
