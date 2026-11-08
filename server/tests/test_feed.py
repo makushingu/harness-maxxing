@@ -361,6 +361,15 @@ def test_source_counts_are_not_recomputed_while_the_feed_is_unchanged(client, mx
     assert len(calls) == 3
 
 
+def test_the_feed_filtered_by_source_is_read_in_index_order(client, mx):
+    feed.post("one", "", "info", "crons")
+    with feed._conn() as c:
+        for where, args in (("source=?", ("crons",)), ("source=? AND id<?", ("crons", 10))):
+            plan = " ".join(r[-1] for r in c.execute(
+                f"EXPLAIN QUERY PLAN SELECT * FROM events WHERE {where} ORDER BY id DESC LIMIT 51", args))
+            assert "TEMP B-TREE" not in plan and "events_src_id" in plan, plan
+
+
 def test_the_pending_count_is_kept_indexed_and_left_out_of_later_pages(client, mx, monkeypatch):
     for n in range(3):
         feed.post(f"plain {n}")

@@ -130,6 +130,8 @@ def _open(path: Path, key: str) -> sqlite3.Connection:
                 if col not in have:
                     c.execute(f"ALTER TABLE events ADD COLUMN {col} {kind}")
             c.execute("CREATE INDEX IF NOT EXISTS events_ref ON events(ref) WHERE ref IS NOT NULL")
+            # the feed filtered by source, newest first: read in index order, never the whole source sorted
+            c.execute("CREATE INDEX IF NOT EXISTS events_src_id ON events(source, id)")
             # agent_alerts (the agents list), and the alerts waiting for a click (`pending` of list_events)
             c.execute("CREATE INDEX IF NOT EXISTS events_agent ON events(agent) WHERE agent IS NOT NULL")
             c.execute("CREATE INDEX IF NOT EXISTS events_pending ON events(at) "
