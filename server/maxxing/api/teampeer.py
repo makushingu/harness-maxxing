@@ -74,3 +74,12 @@ async def file(fid: str, request: Request):
     return FileResponse(f["path"], media_type="application/octet-stream",
                         headers={"Content-Disposition": downloads.content_disposition(str(f["name"])),
                                  "X-Content-Type-Options": "nosniff"})
+
+
+@router.get("/photo")
+async def photo(request: Request):
+    """Our profile photo, for a contact or a member of a shared group (see teampeer.photo_for)."""
+    _on()
+    frm, scope = await _call(teampeer.verify, "GET", "/api/team-peer/photo", dict(request.headers), b"", _ip(request))
+    path, mime = await _call(teampeer.photo_for, frm, scope)
+    return FileResponse(path, media_type=mime, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})

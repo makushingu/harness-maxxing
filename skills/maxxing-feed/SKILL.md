@@ -8,7 +8,7 @@ description: Send things to the Harness Maxxing notifications feed (dashboard pa
 The feed is the place for "tell me when X happens". It shows next to the dashboard widgets (bell on a
 phone, page /feed) and, per source, in the Telegram thread **Notifications** where the bot posts by
 itself (no Claude involved, instant, free). Prefer it to chat messages for anything recurring.
-Docs: `docs/user/24-feed.md` (Settings -> Docs -> Notifications).
+Docs: `docs/user/24-feed.md` (Docs -> Notifications).
 
 ## Pick the way in
 | The thing to watch | Do this |

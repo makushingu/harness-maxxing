@@ -3,6 +3,7 @@ agent's answers stay in the agent's folders (api/files.py confined), even throug
 The folders come from GET .../media-roots (agent_guard.media_roots, agent_rooms.media_roots)."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
 
@@ -67,6 +68,9 @@ def test_no_within_is_the_old_behaviour(client, area):
     assert client.get("/api/files/raw", params={"path": f"{agent}/out/../../private/photo.png"}).status_code == 200
     r = client.post("/api/files/stat", json={"paths": [str(agent / "out" / "leak.png")]}).json()
     assert r["mtimes"][str(agent / "out" / "leak.png")] is not None
+    bad = client.post("/api/files/stat", headers={"content-type": "application/json"},
+                      content=json.dumps({"paths": [f"{root}/a\ud800", str(agent / "out" / "leak.png")]}))
+    assert bad.status_code == 200 and list(bad.json()["mtimes"]) == [str(agent / "out" / "leak.png")]
 
 
 def test_media_roots_of_an_agent_and_a_group(client, topic, mx):

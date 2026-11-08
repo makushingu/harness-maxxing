@@ -188,7 +188,7 @@ export function CommandPalette() {
         group: settings,
         icon: s.icon,
         keywords: s.keywords?.split(' '),
-        perform: ({ navigate }) => navigate(s.id === 'docs' ? '/docs' : `/settings/${s.id}`),
+        perform: ({ navigate }) => navigate(`/settings/${s.id}`),
       })),
     ]
     for (const p of ws?.projects || [])

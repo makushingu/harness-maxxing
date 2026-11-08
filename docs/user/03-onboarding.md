@@ -8,7 +8,7 @@ The first visit happens through the **one-time setup link** printed by the insta
 it private. Lost it? Run `maxxing setup-link` on the server.
 
 The setup link first asks for the UI password (8 characters minimum, stored hashed with scrypt).
-Then the wizard has eight steps. You can leave and come back: it resumes where you stopped, and
+Then the wizard has nine steps. You can leave and come back: it resumes where you stopped, and
 every step also exists in Settings.
 
 1. **Language & time zone** – English or French, and the time zone used by scheduled jobs.
@@ -24,11 +24,15 @@ every step also exists in Settings.
    Claude finishes the job (tasks, scheduled jobs, keys to add). See [Import](import).
 5. **First project & topic** – a starter project `general` with a topic `inbox` already exists;
    create your own (for example `acme` / `blog`).
-6. **Telegram** (optional) – connect a bot to talk to your sessions from the phone. See
+6. **Your pages** (optional) – *What will you use?* Sessions, Files and Notifications are always there; switch on
+   the other pages you need now (Agents is on already; Tasks, Team, E-mail, Infra, Git are off). The same rows
+   as Settings → Features, where you change them any time. See [Settings](settings-and-keys#features).
+7. **Telegram** (optional) – connect a bot to talk to your sessions from the phone. See
    [Telegram](telegram).
-7. **Memory backup** (optional, recommended) – a private GitHub repository receiving your memory
+8. **Memory backup** (optional, recommended) – a private GitHub repository receiving your memory
    every day. See [Backup](backup).
-8. **Ready** – a short tour of the interface.
+9. **Ready** – a short tour of the interface, and **Tell me when a session finishes** (a browser notification when
+   Claude is done and the tab is not in front; also in Settings → Features).
 
 ## After the wizard: the tutorial
 

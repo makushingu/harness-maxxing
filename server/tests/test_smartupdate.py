@@ -94,19 +94,19 @@ def test_review_when_a_customization_touches_changed_code(code):
 
 def test_web_edits_are_reported_then_set_aside(code, capsys):
     clone, work = code["clone"], code["work"]
-    (work / "web").mkdir()
-    (work / "web/app.js").write_text("ui = 1\n")
+    (work / "web" / "dist").mkdir(parents=True)
+    (work / "web/dist/app.js").write_text("ui = 1\n")
     _git("add", "-A", cwd=work)
     _git("commit", "-q", "-m", "web", cwd=work)
     _git("push", "-q", "origin", "main", cwd=work)
     _git("pull", "-q", "origin", "main", cwd=clone)
-    (clone / "web/app.js").write_text("ui = 2  # edited by hand\n")
+    (clone / "web/dist/app.js").write_text("ui = 2  # edited by hand\n")
     _upstream_release(work, "1.1.0", extra="feature.txt")
     rep = smartupdate.preflight()
-    assert rep["web_changes"] == ["web/app.js"] and rep["verdict"] == "adapt"
+    assert rep["web_changes"] == ["web/dist/app.js"] and rep["verdict"] == "adapt"
     assert run_cli("update") == 0                                         # no longer blocked
     assert "set aside (git stash)" in capsys.readouterr().out
-    assert (clone / "feature.txt").exists() and (clone / "web/app.js").read_text() == "ui = 1\n"
+    assert (clone / "feature.txt").exists() and (clone / "web/dist/app.js").read_text() == "ui = 1\n"
     stash = subprocess.run(["git", "-C", str(clone), "stash", "list"], capture_output=True, text=True).stdout
     assert "edits of the web UI" in stash and customs.list_customs() == []
 

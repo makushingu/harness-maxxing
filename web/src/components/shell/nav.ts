@@ -31,8 +31,10 @@ export type NavItem = {
   /** g + key */
   key: string
   end?: boolean
-  /** shown only when this setting is on (Settings -> Features); hidden while the settings load */
+  /** shown only when this setting is on (Settings -> Features); hidden while the settings load unless `defaultOn` */
   setting?: FeatureSetting
+  /** shown while the settings load (the page is on by default) */
+  defaultOn?: boolean
   /** sidebar block: the pages (the user may reorder them by dragging, with the pinned extension pages), or Settings, always last */
   group: NavGroup
 }
@@ -49,7 +51,7 @@ export const NAV: NavItem[] = [
   { to: '/', label: 'nav.home', icon: LayoutDashboard, key: 'd', end: true, group: 'main' },
   { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's', group: 'main' },
   { to: '/agents', label: 'nav.agents', icon: Bot, key: 'a', setting: 'agents_page', group: 'main' },
-  { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page', group: 'main' },
+  { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page', defaultOn: true, group: 'main' },
   { to: '/team', label: 'nav.team', icon: UsersRound, key: 'm', setting: 'team_page', group: 'main' },
   { to: '/mail', label: 'nav.mail', icon: Mail, key: 'e', setting: 'mail_page', group: 'main' },
   { to: '/infra', label: 'nav.infra', icon: Network, key: 'i', setting: 'infra_page', group: 'main' },
@@ -80,6 +82,11 @@ export function orderEntries(items: NavItem[], pins: PinnedPage[], order: string
   return out
 }
 
+/** `items` in the user's order (settings `sidebar_order`), Settings last: the list of Settings -> Features. */
+export function orderNav(items: NavItem[], order: string[] | undefined): NavItem[] {
+  return [...orderEntries(items, [], order).map((e) => e.page!), ...items.filter((n) => n.group !== 'main')]
+}
+
 /** The page extensions pinned to the sidebar, in their pin order. */
 export function usePinnedPages(): PinnedPage[] {
   const { data } = useExtensions()
@@ -92,13 +99,13 @@ export function usePinnedPages(): PinnedPage[] {
 /** The pages shown on this install (optional ones only once switched on). */
 function usePages(): { pages: NavItem[]; order: string[] | undefined } {
   const { data: s } = useSettings()
-  return { pages: NAV.filter((n) => !n.setting || !!s?.[n.setting]), order: s?.sidebar_order }
+  return { pages: NAV.filter((n) => !n.setting || (s ? !!s[n.setting] : !!n.defaultOn)), order: s?.sidebar_order }
 }
 
 /** The pages shown on this install, in the user's order, Settings last (touch menu, palette, shortcuts). */
 export function useNav(): NavItem[] {
   const { pages, order } = usePages()
-  return [...orderEntries(pages, [], order).map((e) => e.page!), ...pages.filter((n) => n.group !== 'main')]
+  return orderNav(pages, order)
 }
 
 /** The sidebar's list: pages and pinned extension pages mixed in the user's order, then the `end` items (Settings). */

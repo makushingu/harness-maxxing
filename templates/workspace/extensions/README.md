@@ -18,8 +18,8 @@ extensions/
 Pages and HTML widgets get the app's UI kit (`ui-card`, `ui-btn`, `ui-input`, `ui-badge`... and `ctx.icon(name)`
 in a page): use it and they look like the rest of the app, in dark and light. See the "Page extensions" guide.
 
-After adding or editing an extension: **Settings -> Extensions -> Reload**.
+After adding or editing an extension: **Settings -> Widgets** (or **Pages**) **-> Rescan**.
 
-Guides (in the app: Settings -> Docs): "Dashboard widgets" and "Page extensions".
+Guides (in the app: Docs, book icon at the bottom of the sidebar): "Dashboard widgets" and "Page extensions".
 Quickest way: open a session and ask Claude "create a widget that shows ..." - the
 `maxxing-extension` skill knows the format.

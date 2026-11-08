@@ -8,7 +8,7 @@ module – no build step – plus an optional Python API.
 
 Where it appears: every page is listed under **Extensions** in the sidebar (the `/x` page). Click the
 **pin** at the top right of a page (or on the Extensions page, or turn on **In the sidebar** in
-Settings -> Extensions) to give it its own sidebar entry, right below Extensions; click it again to unpin.
+Settings -> Pages) to give it its own sidebar entry, right below Extensions; click it again to unpin.
 
 ```
 /root/maxxing/extensions/notes-board/
@@ -22,7 +22,7 @@ these steps.
 
 A new install comes with one page, **Your pages** (`extensions/pages/`): what a page extension is, and
 examples (client file, order tracker, invoices...) that open a session with the request already typed. It is
-an ordinary extension: delete its folder, or turn it off in Settings -> Extensions, when you no longer need it
+an ordinary extension: delete its folder, or turn it off in Settings -> Pages, when you no longer need it
 - updates do not bring it back.
 
 ## 1. manifest.json
@@ -33,7 +33,7 @@ an ordinary extension: delete its folder, or turn it off in Settings -> Extensio
 
 `name` can also be `{"en": "Notes board", "fr": "Tableau de notes"}`: the app shows the one of its language.
 `"api": 1` (optional, default 1) is the version of the extension contract the page is written for: if a future
-release stops supporting it, the update preflight says so before you update (Settings -> System).
+release stops supporting it, the update preflight says so before you update (Settings -> Updates).
 
 ## 2. api.py (optional)
 
@@ -170,7 +170,7 @@ get the same kit. Inputs of the kit are 16 px on phones (no zoom on iPhone).
 - Python side: call `handle()` directly (see the test snippet in
   [Dashboard widgets](dashboard-widgets), with `api.handle(ctx, "GET", "notes", {}, None)`).
 - JavaScript syntax: `node --check page.js` if Node is installed.
-- **Settings -> Extensions -> Reload**, then open the page from the sidebar (Extensions, or its own entry once pinned). Errors appear on the
+- **Settings -> Pages -> Rescan**, then open the page from the sidebar (Extensions, or its own entry once pinned). Errors appear on the
   extension's row.
 
 
@@ -221,7 +221,7 @@ what it does, then installs it.
 > **Runs code on the server**. Read the code first, and install only what comes from someone you trust.
 
 To install one by hand, copy its folder to `/root/maxxing/extensions/<id>/` (for example with `git clone`), then
-**Settings -> Extensions -> Reload**. If it ships a skill, link it once so Claude always reads the current one
+**Settings -> Pages -> Rescan**. If it ships a skill, link it once so Claude always reads the current one
 (a `git pull` of the extension updates it too):
 `ln -s /root/maxxing/extensions/<id>/skill/<name> /root/maxxing/.claude/skills/<name>`. To remove it, delete the
 folder and that link.

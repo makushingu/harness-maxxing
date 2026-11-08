@@ -66,7 +66,7 @@ def _app_csp(index: Path) -> str:
         st = index.stat()
     except OSError:
         return _SPA_CSP.decode()
-    key = (st.st_mtime_ns, st.st_size)
+    key = (str(index), st.st_mtime_ns, st.st_size)
     if _csp_cache.get("key") != key:
         hashes = " ".join(f"'sha256-{base64.b64encode(hashlib.sha256(m).digest()).decode()}'"
                           for m in _INLINE_SCRIPT.findall(index.read_bytes()))
@@ -259,18 +259,20 @@ def _index_gz(index: Path) -> bytes | None:
         st = index.stat()
     except OSError:
         return None
-    key = (st.st_mtime_ns, st.st_size)
+    key = (str(index), st.st_mtime_ns, st.st_size)
     if _index_gz_cache.get("key") != key:
         _index_gz_cache.update(key=key, body=gzip.compress(index.read_bytes(), 6))
     return _index_gz_cache["body"]
 
 
 def _mount_spa(app: FastAPI) -> None:
-    dist: Path = config.WEB_DIST
-    index = dist / "index.html"
+    from . import webbuild
 
     @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     async def spa(path: str, request: Request):
+        # the shipped web/dist, or this server's own build of its customized UI (webbuild.py)
+        dist: Path = webbuild.cached_dist() or await asyncio.to_thread(webbuild.active_dist)
+        index = dist / "index.html"
         if path.startswith("api/"):
             raise HTTPException(404, detail={"error": "not_found", "message": path})
         try:
@@ -279,7 +281,9 @@ def _mount_spa(app: FastAPI) -> None:
         except (ValueError, OSError):  # a NUL byte or a name longer than the filesystem allows: no such file
             found = False
         # /index.html is the app page: same no-store answer and CSP as `/`, never cached as a plain file.
-        if path and path != "index.html" and found and dist.resolve() in f.parents:
+        # dot files (the build stamp of webbuild.py) are never served
+        hidden = any(part.startswith(".") for part in path.split("/"))
+        if path and path != "index.html" and found and not hidden and dist.resolve() in f.parents:
             # PWA files: the service worker, its manifest and the offline page must be revalidated on every
             # load (a stale sw.js would pin users to an old build); hashed assets never change.
             if path in _PWA_TYPES:

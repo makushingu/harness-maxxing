@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { ArrowDown, ArrowUp, Bell, Check, ExternalLink, Eye, EyeOff, GripVertical, LayoutDashboard, Pencil, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { useDashboard, useFeed, useFillPendingWidgets, useRefreshWidget, useSaveLayout } from '@/lib/queries'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useUI } from '@/stores/ui'
 import { useMediaQuery } from '@/stores/media'
 import { FeedPanel } from '@/features/feed/FeedItems'
@@ -262,6 +262,13 @@ export default function DashboardPage() {
   const ids = visible.map((w) => w.id)
   useGridFlip(gridRef, ids, `${ids.join(',')}|${panel}|${!!edit}`)
   const startEdit = () => setEdit({ order: widgets.map((w) => w.id), hidden: new Set(widgets.filter((w) => w.hidden).map((w) => w.id)) })
+  // /?edit=1 (Settings -> Widgets -> Customize the dashboard): opens straight in edit mode, once the widgets are known
+  const [params, setParams] = useSearchParams()
+  React.useEffect(() => {
+    if (params.get('edit') !== '1' || !data) return
+    startEdit()
+    setParams((p) => (p.delete('edit'), p), { replace: true })
+  }, [params, data]) // eslint-disable-line react-hooks/exhaustive-deps
   useRegisterCommands('dashboard', [{ id: 'dash:edit', title: t('dash.edit'), group: t('nav.dashboard'), icon: Pencil, perform: startEdit }], [t, widgets])
 
   const actions = edit ? (

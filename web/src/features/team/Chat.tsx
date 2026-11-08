@@ -680,6 +680,7 @@ function MessageRow({
       )}
       <div className={cn('flex min-w-0 flex-1 gap-2', right && 'flex-row-reverse')}>
         {!right && <span className="w-7 shrink-0 self-end">{(showAvatar || card) && <Avatar profile={author} size="md" />}</span>}
+        {right && <span className="w-7 shrink-0 self-end">{showAvatar && <Avatar profile={author} size="md" />}</span>}
         <div className={cn('flex min-w-0 flex-col', card ? 'flex-1' : 'max-w-[85%]', right && 'items-end')}>
           {(showName || card) && (
             <span className="mb-1 flex min-w-0 max-w-full items-baseline gap-2 px-1 text-[12px]">

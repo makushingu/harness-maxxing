@@ -5,6 +5,37 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.132 - 2026-11-08
+
+- Settings: `web/src/pages/settings/sections.ts` = 6 groups; new sections `appearance`, `skills`, `widgets`, `pages`,
+  `templates`, `import`, `updates`; `support` removed (donations card in `about`). Redirects: `stats` -> `usage`,
+  `license` / `support` -> `about`, `docs`, `packs` / `projects` -> `templates`, `extensions` -> `widgets`. Features =
+  one `FeaturePages` list in sidebar order (`core` rows always on, `sub` rows for the session options).
+  `CommunityLink` at the bottom of Widgets, Pages, Skills (no in-app library).
+- Skills: `maxxing/skills.py` + `GET /api/skills` (read only, 6 KB of front matter per `SKILL.md`, origins product /
+  user / workspace / project / topic).
+- Profile photo: `maxxing/profile_photo.py`, `<state>/profile/photo` (JPEG / PNG / WebP by magic bytes, <= 512 KB,
+  cropped to 256 px by the browser), `profile.photo` = first 16 hex of its SHA-256; `/api/settings/profile/photo`
+  (GET / PUT / DELETE). Team: the profile sent to peers carries `photo`; a contact's photo = signed GET
+  `/api/team-peer/photo` (contact or shared group key, pending requests refused), cached in
+  `<state>/team/photos/<pid>-<version>` behind `/api/team/people/{id}/photo`; one deadline for the whole download
+  (`teampeer.PHOTO_DEADLINE`), one fetch at a time per photo, hash checked. Older servers ignore the field. Emoji
+  picker `frimousse`, data `emojibase-data` 16.0.3 copied into `dist/emojibase/{en,fr}/` by the vite plugin
+  `emojiData` (no CDN).
+- `maxxing init`: `agents_page` and `usage_widget` written once (true on a new install, false on an existing one).
+  `maxxing status`: `Pages` line (`cmd_core.OPTIONAL_PAGES`, `pages` in `--json`).
+- Customizable UI: `maxxing/webbuild.py` builds `web/src` into `<state>/web-dist` (`npm ci` once per lockfile with a
+  reduced env, `tsc -b --force`, `vite build --outDir`), stamp `.maxxing-build.json` (`source_key`, never served:
+  `spa()` refuses dot files); served only when the stamp matches the sources on disk (`cached_dist` /
+  `active_dist`), else the shipped `web/dist`; `web-dist.prev` for rollbacks. `customs.save` refuses only
+  `web/dist`; `customs.web_leftovers()`. `maxxing custom build [--force] [--json]`; `maxxing custom` shows the UI
+  state and "Old UI edits". `maxxing update` stashes only `web/dist`, rebuilds after replaying customizations
+  (`_rebuild_web_ui`; failure = warning, shipped UI, never a rollback). Preflight `ui_build` in the worktree (shares
+  `node_modules` when the lockfile matches, never installs: `unchecked` otherwise; failure -> verdict `adapt`).
+  Doctor check `web`. Skill `maxxing-customize` §1b.
+- Templates: workspace `CLAUDE.md` (Customizing level 0, "Use what Harness already has", "Safety with shared code
+  and data"), help / harness / tutorial topics, `extensions/README.md`, `extensions/pages/page.js` -> upgrade note.
+
 ## 2.0.0-alpha.131 - 2026-11-08
 
 - Released from `main` ("Urgent fixes" path). `auto_compact_tokens` default 400000 -> 300000 (`config.py`; the

@@ -287,7 +287,7 @@ def copy_templates(ws: Path) -> list[str]:
         seeded |= {"projects/general", "projects/general/topics/inbox"}   # installed before 2.0.0a2
     variables = template_vars(ws)
     # Workspaces made before 2.0.0a33 keep their layout (system/update, server, tasks... and the tutorial project):
-    # the 2.0.0a33 system topics are not added next to them (Settings -> Projects adds the starter packs).
+    # the 2.0.0a33 system topics are not added next to them (Settings -> Templates adds the starter packs).
     if (ws / "projects/system/topics/update").is_dir() or (ws / "projects/tutorial").is_dir():
         seeded |= {"projects/system/topics/tutorial", "projects/system/topics/harness"}
         skip_new = {"projects/system/topics/tutorial", "projects/system/topics/harness"}
@@ -547,6 +547,12 @@ def do_init(a: argparse.Namespace) -> dict:
     if "tasks_page" not in raw:                   # Tasks became optional, off for new installs; older
         old = _install_state()                    # ones keep the page they had
         raw["tasks_page"] = bool(old.get("version") or old.get("initialized") or old.get("default_crons"))
+    if "agents_page" not in raw:                  # 2.0.0a132: Agents on for new installs; older ones keep
+        old = _install_state()                    # what they had (off unless switched on)
+        raw["agents_page"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
+    if "usage_widget" not in raw:                 # 2.0.0a132: plan usage shown on new installs; older ones keep
+        old = _install_state()                    # what they had (off unless switched on)
+        raw["usage_widget"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
     from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
     register.migrate(raw)
     config.write_json(config.config_path(), raw)
@@ -1384,9 +1390,20 @@ def check_skills() -> Check:
 
 
 def check_web() -> Check:
-    if (config.WEB_DIST / "index.html").is_file():
-        return _c("web", OK, "web UI build present")
-    return _c("web", FAIL, "web UI build missing", str(config.WEB_DIST), "maxxing update (web/dist is shipped in the repo)")
+    if not (config.WEB_DIST / "index.html").is_file():
+        return _c("web", FAIL, "web UI build missing", str(config.WEB_DIST),
+                  "maxxing update (web/dist is shipped in the repo)")
+    from . import webbuild
+    try:
+        st = webbuild.status()
+    except Exception as e:  # noqa: BLE001 - doctor never fails on a check
+        return _c("web", WARN, "web UI build present, customizations not checked", str(e)[:200])
+    if st["customized"] and not st["built"]:
+        return _c("web", WARN, "your web UI customizations are not built - the standard interface is shown",
+                  ", ".join(st["customized"][:4]), "maxxing custom build")
+    if st["customized"]:
+        return _c("web", OK, f"customized web UI built ({len(st['customized'])} file(s) changed)", st["served"])
+    return _c("web", OK, "web UI build present")
 
 
 def check_git(fetch: bool = True) -> Check:
@@ -1916,7 +1933,7 @@ def _update_code(a) -> int:
         return 1
     from . import license
     if license.enabled():                              # fair source: an install still on archives moves to git first
-        dirty = [f for f in customs.dirty_files() if not f.startswith("web/")]
+        dirty = [f for f in customs.dirty_files() if not f.startswith("web/dist/")]
         if dirty:                                      # the move needs a clean tree: keep them as a customization
             try:
                 it = customs.save("Unsaved changes found by the update",
@@ -1999,16 +2016,17 @@ def _update_code(a) -> int:
                     return 3
             if len(todo) > included:
                 line(OK, f"{len(todo) - included} customization(s) carried to branch {branch}")
-    web = [f for f in customs.dirty_files() if f.startswith("web/")]
-    if web:                                            # the pre-built UI cannot be a customization: kept aside
-        code, out = customs.git("stash", "push", "-u", "-q", "-m",
-                                f"maxxing update {time.strftime('%Y-%m-%d %H:%M')}: edits of the web UI", "--", "web/")
+    web = [f for f in customs.dirty_files() if f.startswith("web/dist/")]
+    if web:                                            # the shipped build is never a customization: kept aside (the
+        code, out = customs.git("stash", "push", "-u", "-q", "-m",  # sources under web/ are saved like the rest)
+                                f"maxxing update {time.strftime('%Y-%m-%d %H:%M')}: edits of the web UI", "--", "web/dist")
         if code != 0:
-            line(FAIL, "edits of the pre-built web UI cannot be set aside", out.strip()[-300:])
+            line(FAIL, "edits of the shipped web build cannot be set aside", out.strip()[-300:])
             return 1
         _UPDATE_CTX["stashed"] = True
-        line(WARN, f"{len(web)} edit(s) of the pre-built web UI set aside (git stash) - they cannot be carried over",
-             f"Claude: rebuild what they did as an extension (git -C {config.CODE} stash show -p stash@{{0}})")
+        line(WARN, f"{len(web)} edit(s) of the shipped web build (web/dist) set aside (git stash) - a build is never "
+                   "carried over", f"Claude: redo them in the sources under web/ (skill maxxing-customize; "
+                   f"git -C {config.CODE} stash show -p stash@{{0}})")
     dirty = customs.dirty_files()
     if dirty:                                          # never lose a change made in the code directory
         try:
@@ -2068,7 +2086,7 @@ def _update_code(a) -> int:
                  "conflicting files: " + (", ".join(files) or "?"))
             print(f"\nFor Claude (topic {update_topic()}, skill maxxing-customize):"
                   f"\n  cd {config.CODE} && "
-                  + ('git stash push -u -q -m "maxxing update: edits of the web UI" -- web/ && ' if web_back else "")
+                  + ('git stash push -u -q -m "maxxing update: edits of the web UI" -- web/dist && ' if web_back else "")
                   + (f"git checkout {branch} && " if switched else "") + f"git rebase origin/{branch}"
                   "\n  # adapt each conflicting file so the customization still does what CUSTOMIZATIONS.md says"
                   "\n  git add <files> && GIT_EDITOR=true git rebase --continue      # repeat until done"
@@ -2133,12 +2151,14 @@ def _update_finish(a, old: str) -> int:
     if a.no_restart:
         customs.clear_pending()
         _mark_updated(new_version, a)                  # checked when the server next starts
+        _rebuild_web_ui()
         return 0
     code, out = systemctl("is-enabled", SERVICE, timeout=10)
     if code == 127 or not UNIT_PATH.exists():
         line(INFO, "service not installed - restart `maxxing serve` yourself")
         customs.clear_pending()
         _mark_updated(new_version, a)
+        _rebuild_web_ui()
         return 0
     code, out = systemctl("restart", SERVICE, timeout=60)
     if code != 0 or not _healthy(new_version):
@@ -2150,8 +2170,26 @@ def _update_finish(a, old: str) -> int:
     line(OK, f"service {SERVICE} restarted ({new_version} answers)")
     customs.clear_pending()
     _mark_updated(new_version, a)
+    _rebuild_web_ui()                                  # after the health check: the standard UI is served meanwhile
     _deps_background_update()
     return 0
+
+
+def _rebuild_web_ui() -> None:
+    """The customized web UI is built again on the new code (webbuild.py), once the new version runs (the standard
+    interface is served during the build). A failure never undoes the update: the standard interface stays until
+    Claude adapts the customization (`maxxing custom build`)."""
+    from . import webbuild
+    files = webbuild.customized_files()
+    if not files:
+        return
+    r = webbuild.build()
+    if r["ok"]:
+        line(OK, f"your customized web UI rebuilt on the new version ({r['seconds']} s)")
+    else:
+        line(WARN, "your web UI customizations do not build on the new version - the standard interface is shown "
+                   "meanwhile", f"Claude (topic {update_topic()}, skill maxxing-customize): adapt them, then "
+                   f"maxxing custom build | {r['error'].strip().splitlines()[-1][:200] if r['error'].strip() else ''}")
 
 
 def _deps_core_update() -> None:
@@ -2220,8 +2258,16 @@ def cmd_update_preflight(a) -> int:
         line(WARN if rep.get("unsaved_overlap") else INFO, f"{len(rep['unsaved'])} unsaved change(s): saved as a "
              "customization by the update", ", ".join(rep["unsaved"][:6]))
     if rep.get("web_changes"):
-        line(WARN, f"{len(rep['web_changes'])} edit(s) of the pre-built web UI: set aside by the update "
-             "(rebuild them as an extension)", ", ".join(rep["web_changes"][:4]))
+        line(WARN, f"{len(rep['web_changes'])} edit(s) of the shipped web build (web/dist): set aside by the update "
+             "(redo them in the sources under web/)", ", ".join(rep["web_changes"][:4]))
+    ui = rep.get("ui_build") or {}
+    if ui.get("status") == "ok":
+        line(OK, f"your customized web UI builds on the new version ({ui.get('seconds')} s)")
+    elif ui.get("status") == "unchecked":
+        line(INFO, "your customized web UI: checked during the update (the new version changes its build tools)")
+    elif ui.get("status") == "failed":
+        line(FAIL, "your customized web UI does not build on the new version - must be adapted",
+             (ui.get("error") or "").strip().splitlines()[-1][:200] if (ui.get("error") or "").strip() else "")
     for e in rep.get("extensions", []):
         line(FAIL, f"extension {e['id']}: {e['reason']}")
     for n in rep.get("notes", []):
@@ -2230,7 +2276,7 @@ def cmd_update_preflight(a) -> int:
         line(OK, "verdict: simple - `maxxing update` (or the Update button) does it all")
     elif rep["verdict"] == "adapt":
         line(WARN, "verdict: some changes need adapting first",
-             f"Settings -> System -> Update with Harness, or the topic {update_topic()}: say \"update\"")
+             f"Settings -> Updates -> Update with Harness, or the topic {update_topic()}: say \"update\"")
     return 0
 
 
@@ -2325,6 +2371,11 @@ def _cfg_update(p: argparse.ArgumentParser) -> None:
 
 
 # ---- status --------------------------------------------------------------------------------
+# optional pages (Settings -> Features): a session reads them here to offer one that is off before building a substitute
+OPTIONAL_PAGES = (("agents_page", "Agents"), ("tasks_page", "Tasks"), ("team_page", "Team"), ("mail_page", "E-mail"),
+                  ("infra_page", "Infra"), ("git_page", "Git"))
+
+
 def collect_status() -> dict:
     cfg = config.load_config()
     code, out = systemctl("is-active", SERVICE, timeout=10)
@@ -2341,6 +2392,7 @@ def collect_status() -> dict:
         "workspace": cfg["workspace"],
         "state": str(config.STATE),
         "code": str(config.CODE),
+        "pages": {name: bool(cfg.get(key)) for key, name in OPTIONAL_PAGES},
     }
 
 
@@ -2361,6 +2413,9 @@ def cmd_status(a) -> int:
         ("Workspace", s["workspace"]),
         ("State", s["state"]),
         ("Code", s["code"]),
+        ("Pages", "on: " + (", ".join(n for n, on in s["pages"].items() if on) or "none")
+         + " · off: " + (", ".join(n for n, on in s["pages"].items() if not on) or "none")
+         + "   (Settings -> Features)"),
     ]
     for k, v in rows:
         print(f"{k:<10} {v}")

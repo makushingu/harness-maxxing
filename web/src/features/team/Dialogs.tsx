@@ -8,6 +8,7 @@ import { useT } from '@/i18n'
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label, Segmented, Textarea, toast } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { Avatar } from '@/features/profile/Avatar'
+import { EmojiPicker } from '@/features/profile/EmojiPicker'
 import { friendsOf, PersonAvatar, personOf, usePresence } from './people'
 
 /* ------------------------------------------------------------------------------------------------ to a session */
@@ -300,7 +301,7 @@ export function NewChatDialog({
             </div>
             {group && (
               <div className="flex gap-2 animate-in fade-in-0 slide-in-from-top-1">
-                <Input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🚀" className="w-14 text-center" maxLength={8} aria-label="Emoji" />
+                <EmojiPicker value={emoji} onChange={setEmoji} label="Emoji" />
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
               </div>
             )}
@@ -360,7 +361,7 @@ export function GroupDialog({ open, onOpenChange, team, chat }: { open: boolean;
           <DialogDescription>{t('team.group.manageDesc')}</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Input value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🚀" className="w-14 text-center" maxLength={8} aria-label="Emoji" />
+          <EmojiPicker value={emoji} onChange={setEmoji} label="Emoji" />
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
         </div>
         <div className="flex max-h-[min(50vh,380px)] flex-col gap-0.5 overflow-y-auto">

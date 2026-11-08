@@ -3,7 +3,7 @@ section: Using Harness Maxxing
 ---
 # Files
 
-The **Files** page browses the server from the *files root* (Settings -> General, default `/root`).
+The **Files** page browses the server from the *files root* (Settings -> System, default `/root`).
 Nothing outside that folder is reachable from the UI.
 
 ## Browse

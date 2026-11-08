@@ -40,7 +40,7 @@ export function UpdateIndicator({ collapsed }: { collapsed?: boolean }) {
           {inner}
         </button>
       ) : (
-        <Link to="/settings/system" className={cn(row, collapsed && 'justify-center px-0')} aria-label={label}>
+        <Link to="/settings/updates" className={cn(row, collapsed && 'justify-center px-0')} aria-label={label}>
           {inner}
         </Link>
       )}

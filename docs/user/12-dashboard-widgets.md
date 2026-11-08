@@ -4,7 +4,9 @@ section: Extending
 # Dashboard widgets
 
 The **Dashboard** is a grid of cards. Drag to reorder, hide the ones you do not need (layout menu),
-refresh a card with its refresh button.
+refresh a card with its refresh button. **Settings -> Widgets** lists the widgets your extensions bring (switch one
+off, **Rescan** after a change) and its **Customize the dashboard** button opens the dashboard in edit mode. Widgets
+shared by other users are on the website: [harness-maxxing.com/community](https://harness-maxxing.com/community).
 
 Cards build themselves as they appear: numbers count up to their value, lists and tables rise in row by row,
 chart bars grow and lines draw, progress bars fill, and **Today's schedule** opens each job's line and drops its
@@ -33,7 +35,7 @@ that shows ...". Hide the card with **Edit layout** once you have yours.
 | Telegram | bot and link status |
 | Shopify | revenue today and over 7 days (vs the week before), orders today, orders to ship, 14-day revenue chart, latest orders — once a store is connected (below); beyond 5000 orders in 14 days it warns that older days are incomplete |
 | Make it yours | how to get your own widgets, with examples that open a session ready to send |
-| Claude usage | *off by default* (Settings -> Features): plan usage windows, the same as the bars at the bottom of the sidebar (read from the last Claude answer; when none came for 10 minutes it asks an undocumented Anthropic endpoint, which may stop working; when that endpoint fails or asks to wait, the last figures read from Claude stay shown). |
+| Claude usage | *on for new installs* (Settings -> Usage -> Show plan usage): plan usage windows, the same as the bars at the bottom of the sidebar (read from the last Claude answer; when none came for 10 minutes it asks an undocumented Anthropic endpoint, which may stop working; when that endpoint fails or asks to wait, the last figures read from Claude stay shown). |
 
 ## Connect a Shopify store
 
@@ -170,7 +172,7 @@ ctx = {'id': 'disk-usage', 'workspace': '/root/maxxing', 'state_dir': tempfile.m
 print(json.dumps(api.card(ctx), indent=2))"
 ```
 
-Then **Settings -> Extensions -> Reload**. The widget appears on the dashboard. If something is
+Then **Settings -> Widgets -> Rescan**. The widget appears on the dashboard. If something is
 wrong (invalid manifest, import error, exception in `card`), the error is shown on the extension's
 row and on the card; the rest of the dashboard keeps working.
 

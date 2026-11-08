@@ -5,10 +5,10 @@ import asyncio
 from typing import Any, Callable, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from .. import team, teampeer
+from .. import profile_photo, team, teampeer
 from ..security import require_auth
 from ..sessions import service
 from ..sessions.service import SessionError
@@ -245,3 +245,13 @@ async def answer(body: AnswerIn):
 async def remove(body: AddressIn):
     await _call(teampeer.forget, body.address)
     return {"ok": True}
+
+
+@router.get("/people/{person}/photo")
+async def person_photo(person: str, v: str = ""):
+    """A contact's profile photo, fetched from its server once per version (`v`) and kept here."""
+    found = await asyncio.to_thread(profile_photo.cached, person, v)
+    if not found:
+        raise HTTPException(404, detail={"error": "not_found", "message": "No photo"})
+    return FileResponse(found[0], media_type=found[1], headers={
+        "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})

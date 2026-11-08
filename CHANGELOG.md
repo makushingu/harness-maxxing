@@ -3,6 +3,40 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.132 - 2026-11-08
+
+Changed:
+- **Settings in six blocks**: General (General, **Appearance**, Profile, Security, Features), Claude (Claude, Memory,
+  **Skills**, MCP, Keys, Usage), Automate (Crons, Notifications, Telegram, Voice), Extensions (**Widgets**, **Pages**),
+  Workspace (**Templates**, **Import**, Backup, Trash) and Server (System, **Updates**, About). Cards were retitled and
+  merged so each setting has one place. Old links (Stats, License, Support, Docs, Starter pack, Projects,
+  Extensions) open the new section.
+- **Appearance** groups colours, layout and fonts. **Features** lists every page of the sidebar in its order:
+  Dashboard, Sessions and Files are always there, the session options sit under Sessions.
+- **Updates** has its own section (version, Update button, history). **About** shows the version, the links to the
+  docs, GitHub and the community, the Enterprise license and the donations, with the switch that hides the Donate
+  buttons.
+- **Skills**: Settings -> Skills lists every skill Claude can use (shipped, yours, the workspace's, a project's or a
+  topic's), to open, change with Claude or share.
+- A link to the community at the bottom of Widgets, Pages and Skills.
+- New installs start with the Agents page on and the plan usage shown; existing installs keep what they had. The
+  first run has a step for the optional pages, and Git is offered when a GitHub key is added.
+- `maxxing status` shows which optional pages are on (line **Pages**).
+- The workspace instructions tell Claude to point to a setting first, to use a page Harness already has (and say
+  how to switch it on) rather than build a substitute, and how to stay safe with shared extensions, skills and data.
+
+Added:
+- **Profile photo**: a picture (JPEG, PNG or WebP) or an emoji, picked in Settings -> Profile. It stays on your
+  server and your Team contacts see it next to your messages.
+- **Customize the interface itself**: Claude can now change the web interface's sources on your server. `maxxing
+  custom build` builds it (served at once, no restart) and every update rebuilds it after replaying your
+  customizations. If a new version no longer builds with them, the update still goes through on the standard
+  interface and tells you, and the preview before an update says so first. Interface edits that older updates set
+  aside are listed by `maxxing custom`: Claude can put them back properly.
+
+Fixed:
+- Settings paths named in the docs, the guided tour, the update and web server messages and the agent templates.
+
 ## 2.0.0-alpha.131 - 2026-11-08
 
 Changed:

@@ -7,7 +7,7 @@ The **Infra page** answers "where is what, and is it working?": every site, data
 on this server, on your other servers, on Cloudflare and on Hostinger - with its status, its links (this domain ->
 this server -> this site -> this app -> this repository) and the Harness project it belongs to.
 
-It is **off by default**: turn it on in **Settings -> Features -> Infra page**. An **Infra** entry appears in the
+It is **off by default**: turn it on in **Settings -> Features -> Infra**. An **Infra** entry appears in the
 sidebar (shortcut G then I).
 
 ## How it works

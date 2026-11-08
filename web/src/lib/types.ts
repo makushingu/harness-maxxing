@@ -735,7 +735,8 @@ export type BackupRestoreResult = { ok: boolean; files: number; restored: string
 
 /* ---------------------------------------------------------------- Profile (pseudo) */
 export type ProfileColor = 'clay' | 'blue' | 'violet' | 'green' | 'amber' | 'rose' | 'teal' | 'zinc'
-export type Profile = { name: string; color: ProfileColor | ''; emoji: string }
+/** `photo`: version of the profile photo ("" = none); `photo_url`: where to show it (wins over emoji and initials). */
+export type Profile = { name: string; color: ProfileColor | ''; emoji: string; photo?: string; photo_url?: string }
 /** Saying hello to the authors (all optional): anonymous counter, email (+ product news). */
 export type LicenseState = { has_key: boolean; key_hint: string; kind?: string | null; email?: string | null; max_servers?: number | null; expires_at?: number | null; activated_at?: number | null; enabled: boolean; moved_to_git?: number | null }
 export type RegisterState = { count: boolean; /** MAXXING_NO_TELEMETRY / DO_NOT_TRACK set on the server: counter off whatever `count`. */ count_blocked: boolean; email: string; news: boolean; asked: boolean; registered: boolean; error: string; synced_at: number }
@@ -768,7 +769,7 @@ export type Settings = {
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
   result_line_hidden?: ResultField[]
-  /** Settings -> Support: hide the donation links of What's new, Feedback and License (every browser). */
+  /** Settings -> About: hide the donation links of What's new, Feedback and License (every browser). */
   donation_hidden?: boolean
 }
 export type ResultField = 'model' | 'duration' | 'cost' | 'tokens' | 'cache'
@@ -857,6 +858,8 @@ export type Preflight = {
   unsaved: string[]
   unsaved_overlap?: string[]
   web_changes: string[]
+  /** the customized web UI built on the new version (only when a customization changes it) */
+  ui_build?: { status: 'ok' | 'failed' | 'unchecked'; error: string; seconds?: number }
   extensions: { id: string; name: string; api: number; reason: string }[]
   notes: { version: string }[]
 }

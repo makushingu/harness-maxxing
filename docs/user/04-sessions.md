@@ -208,7 +208,7 @@ into another app, the content arrives as plain text (a file as its path).
   with a **Claude subscription** (Pro, Max or Ultra) it is **not billed** - it only shows how much you used; signed in with
   an **API key** it is billed to your Anthropic account. The tooltip says which case applies to your server.
 - **Choose what the line shows**: click the ⚙ at its end (it appears on hover; always there on a touch screen),
-  or **Settings → General → Line under each answer**. The choice applies to every device; hiding the cost also
+  or **Settings → Features → Line under each answer**. The choice applies to every device; hiding the cost also
   hides the session total in the header.
 
 ## Plan mode

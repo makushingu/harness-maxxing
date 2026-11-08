@@ -1,4 +1,4 @@
-"""Token and cost statistics (Settings -> Stats). See docs/dev/API.md#stats."""
+"""Token and cost statistics (Settings -> Usage). See docs/dev/API.md#stats."""
 from __future__ import annotations
 
 import asyncio

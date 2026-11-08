@@ -29,7 +29,7 @@ The full text is the `LICENSE` file in the code folder (`/opt/claude-maxxing/LIC
 
 ## Saying hello (optional)
 
-Nobody has to tell us anything. **Settings → Profile** has a card **Harness Maxxing team** with three choices, all
+Nobody has to tell us anything. **Settings → Profile** has a card **Stay in touch** with three choices, all
 optional (the onboarding step **About you** only asks for the email):
 
 | Choice | What is sent to `api.harness-maxxing.com` |
@@ -68,24 +68,24 @@ team: pick **Bug**, **Idea** or **Other**, write your message and give your emai
 spam away and lets us answer you (a confirmation is sent there). The server sends to `api.harness-maxxing.com`
 your email, your message, its type, the Harness Maxxing version, the interface language and your pseudo (Settings →
 Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
-time: the one of Settings → Profile → Harness Maxxing team, if any).
+time: the one of Settings → Profile → Stay in touch, if any).
 
 ## Donations
 
 Harness Maxxing is free; donations fund its development. The **Donate** links carry a hand-and-heart icon in the app's
-accent colour: **Settings → Support** (last in the list of Settings), at the bottom of **What's new**,
-after a **Feedback** is sent and in **Settings → License**. They are only links: they open
+accent colour: **Settings → About** (last in the list of Settings), at the bottom of **What's new** and
+after a **Feedback** is sent. They are only links: they open
 [harness-maxxing.com/donation](https://harness-maxxing.com/donation) in a new tab (in the interface language: pay with
-Lightning or Bitcoin), and the app never talks to a payment service. **Settings → Support → Hide the Donate buttons**
-removes them for every browser of the server (the Support page stays).
+Lightning or Bitcoin), and the app never talks to a payment service. **Settings → About → Hide the Donate buttons**
+removes them for every browser of the server (the About page keeps its Support card).
 
 ## Enterprise key (optional)
 
 Only companies in one of the cases above need a key; nobody else has anything to do. Give it in
-**Settings → License** (or in the onboarding step **About you**, box "I have an Enterprise license key"), or
+**Settings → About** (or in the onboarding step **About you**, box "I have an Enterprise license key"), or
 `maxxing license activate`. The key is checked by `api.harness-maxxing.com` and counted on this server (one key =
 one server). It changes nothing in how Harness Maxxing works: the code and the updates keep coming from GitHub.
-**Remove the key** (Settings → License, or `maxxing license remove`) frees its place for another server.
+**Remove the key** (Settings → About, or `maxxing license remove`) frees its place for another server.
 
 | Command | What it does |
 |---|---|

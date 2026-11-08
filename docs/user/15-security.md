@@ -152,7 +152,7 @@ scans for secret formats and refuses to push to a public repository.
 
 ## Files
 
-The Files page and API only reach the *files root* (Settings -> General). Deleted files go to the
+The Files page and API only reach the *files root* (Settings -> System). Deleted files go to the
 trash.
 
 - Files open in the browser can never run scripts with your session: anything other than images,

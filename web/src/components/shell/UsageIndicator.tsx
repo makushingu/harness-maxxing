@@ -63,7 +63,7 @@ export function usePlanPct(visible?: boolean): number | null {
 }
 
 /** The plan in the status panel: a "Claude · Max  >" heading, then one line per window (icon, "5 h", "23 % used"
- *  counting to its new value) over a full-width bar; a link to Settings -> Stats (folded: the thin bars only).
+ *  counting to its new value) over a full-width bar; a link to Settings -> Usage (folded: the thin bars only).
  *  Bars glide and change colour smoothly (70 % warning, 90 % critical), the icon pops when the level changes. */
 export function UsageLines({ collapsed, className, visible }: { collapsed?: boolean; className?: string; visible?: boolean }) {
   const t = useT()
@@ -71,7 +71,7 @@ export function UsageLines({ collapsed, className, visible }: { collapsed?: bool
   if (!p) return null
   return (
     <Tooltip content={collapsed ? p.details : null} side="right">
-      <Link to="/settings/stats" className={cn('grid gap-2.5', className)} aria-label={p.title} data-testid="status-claude">
+      <Link to="/settings/usage" className={cn('grid gap-2.5', className)} aria-label={p.title} data-testid="status-claude">
         {!collapsed && (
           <span className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
             {p.plan ? `Claude · ${p.plan}` : 'Claude'} <ChevronRight className="size-3.5 shrink-0" />
@@ -195,7 +195,7 @@ function ClaudeMark({ className, style }: { className?: string; style?: CSSPrope
 
 /** The sidebar's Claude quota entry (under CPU / RAM / disk): the ring (Claude's sparkle faint inside it) alone in the
  *  folded bar, with "Claude quota · Max" and "5 h 47 % · Week 12 %" beside it once unfolded; the quota and its resets in a
- *  tooltip; a link to Settings -> Stats. The ring keeps its size and place in both states (only the text around it
+ *  tooltip; a link to Settings -> Usage. The ring keeps its size and place in both states (only the text around it
  *  changes), and it is the same link, so the keyboard focus survives folding. Nothing without plan usage. */
 export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
@@ -215,7 +215,7 @@ export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
   return (
     <Tooltip content={tip} side="right">
       <Link
-        to="/settings/stats"
+        to="/settings/usage"
         aria-label={label}
         data-testid="status-claude"
         className={cn(
