@@ -156,7 +156,8 @@ also cancels every request still waiting, even one you allowed by mistake.
 
 Turning it on sends a first request: it is only switched on once you approved it, so a bot that does not
 answer cannot lock you out. Turning it off from the web UI asks for the current password and posts a notice in
-the *Alerts* thread and the notifications feed; unlinking Telegram turns it off too, with the same notice.
+the *Alerts* thread and the notifications feed; unlinking Telegram or changing the bot turns it off too, so they
+ask for the current password as well, with the same notice.
 
 **Telegram does not answer** (bot deleted, Telegram down, phone lost): on the server, over SSH,
 

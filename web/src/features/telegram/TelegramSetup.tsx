@@ -55,20 +55,27 @@ export function TokenForm({ onDone, onCancel, autoFocus }: { onDone?: () => void
   const [token, setToken] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
   const [webhook, setWebhook] = React.useState(false)
+  const [password, setPassword] = React.useState('')
+  const [pwError, setPwError] = React.useState<string>()
+  const twoStep = !!useTelegram().data?.settings?.two_factor     // a new bot turns it off: the password, as in Security
   const save = useTelegramToken()
   const unhook = useTelegramRemoveWebhook()
   const submit = (tok: string) => {
     setError(null)
+    setPwError(undefined)
     setWebhook(false)
-    save.mutate(tok, {
+    if (twoStep && !password) return setPwError(t('security.currentRequired'))
+    save.mutate(twoStep ? { token: tok, password } : { token: tok }, {
       onSuccess: (r) => {
         if (!r.ok) return setError(r.error || t('telegram.tokenInvalid'))
         setToken('')
+        setPassword('')
         onDone?.()
       },
       onError: (e) => {
         const code = e instanceof ApiError ? e.code : ''
         if (code === 'webhook_set') return setWebhook(true)
+        if (code === 'bad_password') return setPwError(t('security.currentWrong'))
         const known = SETUP_ERRORS.find((c) => c === code)
         setError(known ? t(`telegram.err.${known}`) : errorMessage(e))
       },
@@ -87,6 +94,11 @@ export function TokenForm({ onDone, onCancel, autoFocus }: { onDone?: () => void
       <FormField label={t('telegram.token')} error={error || undefined} hint={t('telegram.tokenHint')}>
         <SecretInput value={token} autoFocus={autoFocus} onChange={(e) => setToken(e.target.value)} placeholder="123456789:AA…" />
       </FormField>
+      {twoStep && (
+        <FormField label={t('security.current')} error={pwError} hint={t('telegram.twoStepPassword')}>
+          <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        </FormField>
+      )}
       {webhook && (
         <Callout
           tone="warning"

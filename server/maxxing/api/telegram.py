@@ -20,6 +20,11 @@ router = APIRouter(prefix="/api/telegram", tags=["telegram"], dependencies=[Depe
 
 class TokenIn(BaseModel):
     token: str
+    password: str | None = None         # the current password: needed to change the bot while two-step sign-in is on
+
+
+class ForgetIn(BaseModel):
+    password: str | None = None         # the current password: needed to unlink while two-step sign-in is on
 
 
 class WebhookIn(BaseModel):
@@ -55,8 +60,17 @@ async def get_status():
     return gateway.status()
 
 
+async def _password_if_two_step(request: Request, password: str | None) -> None:
+    """Unlinking or changing the bot turns two-step sign-in off: same rule as turning it off in Settings."""
+    if twofactor.enabled():
+        from .auth import _check_current
+        await _check_current(request, password or "")
+
+
 @router.post("/token")
-async def set_token(body: TokenIn):
+async def set_token(body: TokenIn, request: Request):
+    if body.token.strip() != (gateway.token() or ""):
+        await _password_if_two_step(request, body.password)
     try:
         bot = await gateway.set_token(body.token)
     except ValueError as e:
@@ -122,7 +136,8 @@ async def test():
 
 
 @router.delete("")
-async def forget(request: Request):
+async def forget(request: Request, body: ForgetIn | None = None):
+    await _password_if_two_step(request, body.password if body else None)
     was_on = twofactor.enabled()
     if was_on:                      # unlinking turns two-step sign-in off: say so while the bridge still answers
         await asyncio.to_thread(twofactor.notify, "unlinked", True)

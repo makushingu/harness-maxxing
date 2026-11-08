@@ -19,7 +19,8 @@ export function useTelegramLink(poll: boolean) {
 }
 const inv = [qk.telegram.all, qk.onboarding] as const
 export function useTelegramToken() {
-  return useMut((token: string) => api.post<TelegramTokenResult>('/api/telegram/token', { token }), { invalidate: inv, errorToast: false })
+  // the current password: needed to change the bot while two-step sign-in is on
+  return useMut((b: { token: string; password?: string }) => api.post<TelegramTokenResult>('/api/telegram/token', b), { invalidate: inv, errorToast: false })
 }
 export function useTelegramLinkStart() {
   const qc = useQueryClient()
@@ -50,5 +51,5 @@ export function useTelegramTest() {
   return useMut(() => api.post<TelegramTestResult>('/api/telegram/test'), { invalidate: [qk.telegram.status] })
 }
 export function useTelegramUnlink() {
-  return useMut(() => api.del<Ok>('/api/telegram'), { invalidate: inv })
+  return useMut((password?: string) => api.del<Ok>('/api/telegram', { body: password ? { password } : undefined }), { invalidate: inv, errorToast: false })
 }
