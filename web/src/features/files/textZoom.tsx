@@ -107,18 +107,32 @@ export function MarkdownReader({ content, path, className, testId }: { content: 
     const r = root()
     if (!b || !r) return null
     const top = b.scrollTop
+    // Called on every scrolled frame: blocks and headings follow each other down the page, so a binary search
+    // reads a few of them, never every one above the reader.
+    const base = b.getBoundingClientRect().top - top
+    const yOf = (el: Element) => el.getBoundingClientRect().top - base
+    const firstAfter = (els: Element[], past: (el: Element) => boolean) => {
+      let lo = 0
+      let hi = els.length
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (past(els[mid])) hi = mid
+        else lo = mid + 1
+      }
+      return lo
+    }
     const blocks = [...r.children]
     let block: ReadPos['block']
-    for (let i = 0; i < blocks.length; i++) {
+    const i = firstAfter(blocks, (el) => el.getBoundingClientRect().bottom - base > top + 1)
+    if (i < blocks.length) {
       const rect = blocks[i].getBoundingClientRect()
-      const at = y(blocks[i])
-      if (at + rect.height > top + 1) {
-        block = { i, r: rect.height ? Math.max(0, (top - at) / rect.height) : 0 }
-        break
-      }
+      block = { i, r: rect.height ? Math.max(0, (top - (rect.top - base)) / rect.height) : 0 }
     }
-    const hs = [...r.querySelectorAll(HEADS)].map(y)
-    return { view: 'md', frac: b.scrollHeight > b.clientHeight ? top / (b.scrollHeight - b.clientHeight) : 0, block, h: headingAt(hs, top, b.scrollHeight) }
+    const heads = [...r.querySelectorAll(HEADS)]
+    const k = firstAfter(heads, (el) => yOf(el) > top) - 1        // the last heading at or above the top
+    const near = k < 0 ? [] : [yOf(heads[k]), ...(k + 1 < heads.length ? [yOf(heads[k + 1])] : [])]
+    const h = k < 0 ? undefined : headingAt(near, top, b.scrollHeight)
+    return { view: 'md', frac: b.scrollHeight > b.clientHeight ? top / (b.scrollHeight - b.clientHeight) : 0, block, h: h && { ...h, i: k } }
   }, [])
   const apply = React.useCallback((pos: ReadPos) => {
     const b = box.current
