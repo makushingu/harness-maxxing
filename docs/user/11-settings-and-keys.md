@@ -33,13 +33,12 @@ two blocks):
 | | **Trash** | deleted sessions, topics and files, restore them or empty the trash |
 | **Server** | **System** | health, services (start/stop/restart), logs, and the **address of the server**: public URL and files root (the folder the file viewer can show) |
 | | **Updates** | the installed version, **Check** and **Update** (with the smart update preflight), **Automatic update**, **What's new** (also shown once after each update; the main new features have a **Show me** button that takes you to them and highlights them), then every version of Harness Maxxing, newest first, with a search |
-| | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)) |
-| | **Support** | the last section: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
+| | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)), **Support**: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
 
 The docs are not in Settings: open them with the book icon at the bottom of the sidebar (in the ⊞ menu on a phone).
 The community catalogue (widgets, pages, skills shared by other users) is on the website,
 [harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages and Skills link to it.
-Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` opens **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
+Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support` open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
 **Widgets**, `/settings/docs` opens the docs.
 
 ## Features

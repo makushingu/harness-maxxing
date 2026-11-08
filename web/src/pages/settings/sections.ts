@@ -1,7 +1,7 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
 // Sections are grouped under headings in the left column (and in the phone tabs, in the same order).
 // Old ids keep working: SECTION_MOVED sends them to the section that took their content.
-import { UserRound, BarChart3, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, HandHeart, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
+import { UserRound, BarChart3, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
 export type SettingsSectionId =
@@ -10,7 +10,7 @@ export type SettingsSectionId =
   | 'crons' | 'notifications' | 'telegram' | 'voice'
   | 'widgets' | 'pages'
   | 'templates' | 'import' | 'backup' | 'trash'
-  | 'system' | 'updates' | 'about' | 'support'
+  | 'system' | 'updates' | 'about'
 
 export type SettingsGroupId = 'general' | 'claude' | 'automate' | 'extensions' | 'workspace' | 'server'
 
@@ -47,14 +47,14 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId; group: SettingsGroupId;
   { id: 'trash', group: 'workspace', label: 'settings.trash', description: 'settings.trash.desc', icon: Trash2, keywords: 'deleted restore recycle bin undo corbeille' },
   { id: 'system', group: 'server', label: 'settings.system', description: 'settings.system.desc', icon: Server, keywords: 'health services logs cpu ram disk public address url files root' },
   { id: 'updates', group: 'server', label: 'settings.updates', description: 'settings.updates.desc', icon: History, keywords: 'update upgrade version check automatic changelog what is new release notes history' },
-  { id: 'about', group: 'server', label: 'settings.about', description: 'settings.about.desc', icon: Info, keywords: 'about license licence enterprise company key business fair source docs github community' },
-  { id: 'support', group: 'server', label: 'settings.support', description: 'settings.support.desc', icon: HandHeart, keywords: 'support donate donation sponsor bitcoin lightning hide donate buttons' },
+  { id: 'about', group: 'server', label: 'settings.about', description: 'settings.about.desc', icon: Info, keywords: 'about license licence enterprise company key business fair source docs github community support donate donation sponsor bitcoin lightning' },
 ]
 
 /** Sections that moved (old links, bookmarks, notifications): old id -> where its content is now. */
 export const SECTION_MOVED: Record<string, string> = {
   stats: '/settings/usage',
   license: '/settings/about',
+  support: '/settings/about',
   docs: '/docs',
   packs: '/settings/templates',
   projects: '/settings/templates',

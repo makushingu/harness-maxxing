@@ -26,7 +26,6 @@ import { SkillsSection } from './sections/Skills'
 import { NotificationsSection } from './sections/Notifications'
 import { UsageSection } from './sections/Usage'
 import { AboutSection } from './sections/About'
-import { SupportSection } from './sections/Support'
 import { MemorySection } from './sections/Memory'
 import { UpdatesSection } from './sections/Updates'
 
@@ -42,7 +41,6 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   notifications: NotificationsSection,
   usage: UsageSection,
   about: AboutSection,
-  support: SupportSection,
   memory: MemorySection,
   security: SecuritySection,
   claude: ClaudeSection,

@@ -1,10 +1,12 @@
-// Settings -> About (2.0.0a132, was License): the version and the useful links, then the optional Enterprise key.
+// Settings -> About (2.0.0a132, was License + Support): the version and the useful links, the optional Enterprise key, then the donation link and the switch that hides the other donation mentions (`donation_hidden`).
 import * as React from 'react'
 import { Link } from 'react-router'
-import { BookOpen, ExternalLink, GitBranch, KeyRound, Users } from 'lucide-react'
-import { useLicense, useRemoveLicense, useVersion } from '@/lib/queries'
+import { BookOpen, ExternalLink, GitBranch, HandHeart, KeyRound, Users } from 'lucide-react'
+import { useLicense, useRemoveLicense, useSaveSettings, useSettings, useVersion } from '@/lib/queries'
 import { useLang, useT } from '@/i18n'
-import { Button, Skeleton } from '@/components/ui'
+import { Button, Skeleton, Switch } from '@/components/ui'
+import { SettingRow } from '@/features/common'
+import { donationUrl } from '@/features/donation/Donation'
 import { ENTERPRISE_URL, LICENSE_URL, LicenseKeyField, WhoNeedsAKey } from '@/features/license/LicenseKey'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -17,6 +19,8 @@ export function AboutSection() {
   const { data: v } = useVersion()
   const { data: lic } = useLicense()
   const remove = useRemoveLicense()
+  const { data: s } = useSettings()
+  const save = useSaveSettings()
   const [key, setKey] = React.useState('')
   const kind = lic?.kind === 'beta' ? t('system.licenseKind.beta') : lic?.kind === 'gift' ? t('system.licenseKind.gift') : lic?.kind === 'enterprise' ? t('system.licenseKind.enterprise') : t('system.licenseKind.paid')
   return (
@@ -83,7 +87,25 @@ export function AboutSection() {
           )}
         </div>
       </SettingsCard>
-
+      <SettingsCard title={t('donation.title')} description={t('donation.desc')}>
+        <div className="grid gap-4">
+          <p className="max-w-2xl text-sm text-muted-foreground">{t('donation.body')}</p>
+          <div>
+            <Button size="sm" asChild>
+              <a href={donationUrl(lang)} target="_blank" rel="noopener">
+                <HandHeart /> {t('donation.donate')} <ExternalLink />
+              </a>
+            </Button>
+          </div>
+          {s && (
+            <div className="border-t">
+              <SettingRow label={t('donation.hide')} description={t('donation.hideDesc')} htmlFor="donation-hidden">
+                <Switch id="donation-hidden" checked={!!s.donation_hidden} onCheckedChange={(on) => save.mutate({ donation_hidden: on })} />
+              </SettingRow>
+            </div>
+          )}
+        </div>
+      </SettingsCard>
     </SectionStack>
   )
 }
