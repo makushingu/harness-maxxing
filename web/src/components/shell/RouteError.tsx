@@ -3,6 +3,7 @@ import { FileQuestion, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useT } from '@/i18n'
 import { Button, EmptyState } from '@/components/ui'
 import { useDocumentTitle } from './Page'
+import { BootReady } from '@/lib/bootLoader'
 
 /** Route-level error boundary (chunk load failure after an update, render crash, 404). */
 export function RouteError() {
@@ -14,6 +15,7 @@ export function RouteError() {
   if (import.meta.env.DEV) console.error(err)
   return (
     <div className="flex min-h-[70vh] flex-1 items-center justify-center p-6">
+      <BootReady />
       <EmptyState
         icon={notFound ? FileQuestion : TriangleAlert}
         tone={notFound ? 'default' : 'error'}

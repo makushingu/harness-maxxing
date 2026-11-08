@@ -1,5 +1,5 @@
 // sRGB values of the accent colors (globals.css defines them in oklch). Used where CSS variables cannot reach:
-// the favicon (an image) and the splash painted before the stylesheet. index.html keeps a copy - change both.
+// the favicon (an image) and the boot loader painted before the stylesheet. index.html keeps a copy - change both.
 import type { Accent } from '@/stores/ui'
 
 export const ACCENT_HEX: Record<'light' | 'dark', Record<Accent, string>> = {

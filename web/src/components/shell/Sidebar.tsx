@@ -574,7 +574,7 @@ export function Sidebar() {
           )}
           aria-label="Harness Maxxing"
         >
-          <Logo collapsed={collapsed} />
+          <Logo collapsed={collapsed} boot />
         </NavLink>
         {!collapsed && !tablet && (
           <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
@@ -595,7 +595,7 @@ export function Sidebar() {
       {/* Top row: folded, the notifications bell alone; unfolded, the search field (Ctrl K) with the bell on its right
           (the same element, moved by `order`, so its focus survives). The rows below sit at the same height in both
           states. */}
-      <div className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
+      <div data-boot-rv className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
         <NotificationsBell collapsed={collapsed} />
         {!collapsed && (
           <button

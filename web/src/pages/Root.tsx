@@ -12,6 +12,7 @@ import { useT } from '@/i18n'
 import { Button, EmptyState } from '@/components/ui'
 import { LogoMark } from '@/components/shell/Logo'
 import { WifiOff } from 'lucide-react'
+import { BootReady } from '@/lib/bootLoader'
 
 const PUBLIC = ['/setup', '/login']
 
@@ -35,6 +36,7 @@ export function Root() {
   if (isError && !data)
     return (
       <div className="flex h-dvh items-center justify-center p-6">
+        <BootReady />
         <EmptyState
           icon={WifiOff}
           tone="error"
@@ -70,7 +72,7 @@ export function Root() {
   return <Outlet />
 }
 
-/** Neutral boot screen: same footprint as the splash in index.html, so the logo never moves or blinks. */
+/** Neutral boot screen (under the boot loader of index.html on the first load; later route loads show it alone). */
 export function AuthLayoutFallback() {
   return (
     <div className="flex h-dvh items-center justify-center">

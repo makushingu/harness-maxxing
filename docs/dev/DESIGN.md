@@ -300,8 +300,13 @@ group of the user menu, the palette and Settings › General. The closing card l
   cards (2-D FLIP, transform only, 340 ms). The whole build of a card stays under ~0.9 s.
 - A page is fully on screen within ~0.5 s of its data: a stagger never delays the last item by more than
   ~200 ms (cap `--i`), and an entrance does not replay when the user comes back to a page.
-- First load: `index.html` sets `html[data-boot]` and paints a splash inside `#root`; `AppShell` removes
-  the attribute after 1.3 s. Boot-only animations are scoped to it (`.mx-boot-side`, `.mx-boot-item`).
+- First load: the boot loader of `index.html` (`#mxb` / `#mxl`) builds the logo from its pixels, one batch per
+  boot step (`mxStep(1)` HTML parsed, `(2)` in `main.tsx`, `(3)` from `lib/bootLoader.ts`: `AppShell` once its
+  first queries have answered, at most 4 s; sign-in, setup, onboarding and error screens at once; forced after
+  8 s / 30 s). Step 3 flies the logo onto the first visible `[data-boot-logo]` (`LogoMark boot`) and sets
+  `html[data-boot='reveal']`: the interface opens around it, each `.mx-boot-item`, `.mx-card-in` and
+  `[data-boot-rv]` waiting `--bd` (distance to the logo / 3.2 + 60 ms), inherited by its charts and gauges;
+  while `'load'`, the animations of `#main` wait paused. Reduced motion: a 160 ms fade.
 - Never use `backdrop-filter` / `backdrop-blur` anywhere: it is expensive on Windows and integrated GPUs and
   makes text look soft. Use an opaque or near-opaque background.
 - Entrance animations run once: the session tree animates only nodes mounted during its first reveal

@@ -24,6 +24,7 @@ import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
 import { useNav } from './nav'
 import { RouteProgress } from './RouteProgress'
+import { useBootReadyWhenIdle } from '@/lib/bootLoader'
 import { useTeamUI } from '@/features/team/store'
 
 // Rarely-used overlays are separate chunks: they are fetched when the browser is idle (or at first use),
@@ -66,14 +67,6 @@ function usePrefetch() {
     const h = setTimeout(run, 2000)
     return () => clearTimeout(h)
   }, [qc])
-}
-
-/** First load only: the entrance animations of the shell are driven by html[data-boot] (index.html). */
-function useBootEntrance() {
-  React.useEffect(() => {
-    const id = setTimeout(() => document.documentElement.removeAttribute('data-boot'), 1300)
-    return () => clearTimeout(id)
-  }, [])
 }
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
@@ -226,7 +219,7 @@ export function AppShell() {
   const bus = useGlobalBus(true)
   useSyncLanguage()
   useShareLook()
-  useBootEntrance()
+  useBootReadyWhenIdle()
   usePrefetch()
   useDoneNotifier()
   const main = React.useRef<HTMLElement>(null)

@@ -33,4 +33,7 @@ initPWA()
 // A language change loads its dictionary (useT re-renders once it is there); the active one is loaded before the
 // first render, so a French UI never flashes English.
 useUI.subscribe((s) => void loadLanguage(s.language))
-void loadLanguage(useUI.getState().language).then(() => createRoot(document.getElementById('root')!).render(<App />))
+void loadLanguage(useUI.getState().language).then(() => {
+  window.mxStep?.(2) // boot loader (index.html): the app code runs
+  createRoot(document.getElementById('root')!).render(<App />)
+})

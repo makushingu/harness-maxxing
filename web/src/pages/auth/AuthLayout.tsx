@@ -4,6 +4,7 @@ import { useUI } from '@/stores/ui'
 import { LANGUAGES, useT } from '@/i18n'
 import { LogoMark } from '@/components/shell/Logo'
 import { useDocumentTitle } from '@/components/shell/Page'
+import { useBootReady } from '@/lib/bootLoader'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger, Button } from '@/components/ui'
 import type { Language } from '@/lib/types'
 
@@ -34,6 +35,7 @@ export function LanguageMenu() {
 /** Centered card layout for /setup and /login. */
 export function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }) {
   useDocumentTitle(title)
+  useBootReady()
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden px-4 pt-[var(--safe-top)] pb-[var(--safe-bottom)]">
       <div
@@ -47,7 +49,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
       <main className="relative flex flex-1 items-start justify-center pt-[6vh] md:items-center md:pt-0">
         <div className="w-full max-w-[400px] animate-in">
           <div className="mb-6 flex flex-col items-center gap-4 text-center">
-            <LogoMark className="size-11" />
+            <LogoMark className="size-11" boot />
             <div className="grid gap-1.5">
               <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
               {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}

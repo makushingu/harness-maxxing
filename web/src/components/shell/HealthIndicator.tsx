@@ -207,7 +207,7 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
     </span>
   )
   return (
-    <div data-testid="sidebar-status" className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
+    <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
       <Popover open={open} onOpenChange={setOpen}>
         <Tooltip content={collapsed ? tip : null} side="right">
           <PopoverTrigger

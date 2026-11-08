@@ -12,6 +12,7 @@ import { useT, type TKey } from '@/i18n'
 import type { Language, OnboardingState } from '@/lib/types'
 import { Badge, Button, Checkbox, Input, Label, Sensitive, Skeleton, Switch, toast } from '@/components/ui'
 import { errorMessage } from '@/lib/api'
+import { useBootReady } from '@/lib/bootLoader'
 import { LogoMark } from '@/components/shell/Logo'
 import { useDocumentTitle } from '@/components/shell/Page'
 import { RegionFields } from '@/features/general/RegionFields'
@@ -53,6 +54,7 @@ function stepDone(id: StepId, o: OnboardingState | undefined): boolean {
 
 export default function OnboardingPage() {
   const t = useT()
+  useBootReady()
   useDocumentTitle(t('onb.title'))
   const [params, setParams] = useSearchParams()
   const { data: onboarding } = useOnboarding()
@@ -81,7 +83,7 @@ export default function OnboardingPage() {
         {/* Stepper */}
         <aside className="md:sticky md:top-12 md:self-start">
           <div className="mb-6 flex items-center gap-2.5 md:mb-10">
-            <LogoMark />
+            <LogoMark boot />
             <span className="text-[15px] font-semibold tracking-tight">Harness Maxxing</span>
           </div>
           {/* Mobile: compact progress */}

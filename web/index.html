@@ -34,7 +34,7 @@
           var a = hex.dark[s.accent] ? s.accent : 'blue';
           r.dataset.accent = a;
           r.dataset.tint = s.tint === 'tinted' ? 'tinted' : 'neutral';
-          // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, splash, installed app
+          // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, installed app
           // (manifest icons and launch screen) and the iOS home-screen icon.
           var icon = document.querySelector('link[rel="icon"]');
           if (icon) icon.href = '/icons/logo-' + a + '.svg';
@@ -42,13 +42,14 @@
           if (manifest) manifest.href = '/manifest-' + a + '.webmanifest';
           var touch = document.querySelector('link[rel="apple-touch-icon"]');
           if (touch) touch.href = '/icons/apple-touch-icon-' + a + '.png';
-          window.__mxLogo = '/icons/logo-' + a + '.svg';
           // Fonts (copy of src/lib/fonts.ts stacks).
           var sans = {"geist": "'Geist Variable', ui-sans-serif, system-ui, sans-serif", "plex": "'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif", "dmsans": "'DM Sans Variable', ui-sans-serif, system-ui, sans-serif", "manrope": "'Manrope Variable', ui-sans-serif, system-ui, sans-serif", "jakarta": "'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif", "grotesk": "'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif", "outfit": "'Outfit Variable', ui-sans-serif, system-ui, sans-serif", "sora": "'Sora Variable', ui-sans-serif, system-ui, sans-serif", "nunito": "'Nunito Sans Variable', ui-sans-serif, system-ui, sans-serif", "quicksand": "'Quicksand Variable', ui-sans-serif, system-ui, sans-serif", "comfortaa": "'Comfortaa Variable', ui-sans-serif, system-ui, sans-serif", "rubik": "'Rubik Variable', ui-sans-serif, system-ui, sans-serif", "sourceserif": "'Source Serif 4 Variable', ui-serif, Georgia, 'Times New Roman', serif", "lora": "'Lora Variable', ui-serif, Georgia, 'Times New Roman', serif", "newsreader": "'Newsreader Variable', ui-serif, Georgia, 'Times New Roman', serif", "fraunces": "'Fraunces Variable', ui-serif, Georgia, 'Times New Roman', serif", "garamond": "'EB Garamond Variable', ui-serif, Georgia, 'Times New Roman', serif", "atkinson": "'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif", "lexend": "'Lexend Variable', ui-sans-serif, system-ui, sans-serif", "jetbrainsui": "'JetBrains Mono Variable', ui-monospace, monospace", "martian": "'Martian Mono Variable', ui-monospace, monospace", "system": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"};
           var mono = {"jetbrains": "'JetBrains Mono Variable', ui-monospace, monospace", "fira": "'Fira Code Variable', ui-monospace, monospace", "geist": "'Geist Mono Variable', ui-monospace, monospace", "cascadia": "'Cascadia Code Variable', ui-monospace, monospace", "sourcecode": "'Source Code Pro Variable', ui-monospace, monospace", "victor": "'Victor Mono Variable', ui-monospace, monospace", "martian": "'Martian Mono Variable', ui-monospace, monospace", "roboto": "'Roboto Mono Variable', ui-monospace, monospace", "redhat": "'Red Hat Mono Variable', ui-monospace, monospace", "atkinsonmono": "'Atkinson Hyperlegible Mono Variable', ui-monospace, monospace"};
           if (sans[s.font]) r.style.setProperty('--mx-font-sans', sans[s.font]);
           if (mono[s.monoFont]) r.style.setProperty('--mx-font-mono', mono[s.monoFont]);
           r.style.setProperty('--mx-splash-accent', hex[dark ? 'dark' : 'light'][a]);
+          // The boot logo's gradient in the accent (copy of the stops of public/icons/logo-<accent>.svg).
+          window.__mxGrads = { blue: ['#2d6efd', '#0ec7f7'], clay: ['#fdbe2d', '#f7400e'], violet: ['#e82dfd', '#6f0ef7'], green: ['#2dfd38', '#72f70e'], amber: ['#f6fd2d', '#f78e0e'], rose: ['#fd682d', '#f70e3d'] };
           r.dataset.density = s.density || 'comfortable';
           // Touch layout (copy of src/stores/media.ts isCompact): phones, tablets and narrow windows.
           var narrow = matchMedia('(max-width: 767px)').matches;
@@ -56,8 +57,9 @@
           if (narrow || s.layout === 'touch' || (touch && s.layout !== 'desktop')) r.dataset.compact = '';
           if (s.language) r.lang = s.language;
         } catch (e) {}
-        // First load: lets the shell animate in (removed by AppShell once the entrance is over).
-        document.documentElement.dataset.boot = '';
+        // First load: 'load' while the boot logo builds itself (the app renders underneath, its entrance paused),
+        // 'reveal' while the interface opens around the logo, then removed (the loader script below).
+        document.documentElement.dataset.boot = 'load';
         // Start the auth check now, in parallel with the JS download (consumed once by fetchAuthState).
         try {
           window.__mxAuth = fetch('/api/auth/state', { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
@@ -72,6 +74,7 @@
                 r.classList.toggle('dark', l.theme === 'dark' || (l.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
                 r.dataset.accent = l.accent;
                 r.dataset.tint = l.tint;
+                if (window.mxAccent) window.mxAccent(l.accent);
               }
               return a;
             })
@@ -80,22 +83,138 @@
       })();
     </script>
     <style>
-      /* Splash painted before any JS: same footprint as AuthLayoutFallback (the logo does not move or flash). */
+      /* Boot loader, painted before any JS: the logo builds itself from its 58 pixels, one batch per boot step
+         (HTML parsed, app code running, first data in), then flies to its place in the interface. */
       html { background: #fff; }
       html.dark { background: #09090b; }
-      .mx-splash { display: flex; height: 100dvh; align-items: center; justify-content: center; }
-      .mx-splash img { width: 48px; height: 48px; animation: mx-splash 1.6s ease-in-out infinite; }
-      @keyframes mx-splash { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+      #mxb { position: fixed; inset: 0; z-index: 60; background: #fff; transition: opacity .45s ease-out; }
+      html.dark #mxb { background: #09090b; }
+      #mxb.o { opacity: 0; pointer-events: none; }
+      #mxl { position: fixed; z-index: 61; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; pointer-events: none; }
+      #mxl svg { width: 100%; height: 100%; display: block; overflow: visible; }
+      #mxl .tile { transform-box: fill-box; transform-origin: center; animation: mxb-t .45s cubic-bezier(.16,1,.3,1) .1s backwards; }
+      #mxl .c { transform-box: fill-box; transform-origin: center; transform: scale(.8); opacity: 0; transition: transform .32s cubic-bezier(.16,1,.3,1), opacity .2s ease-out; }
+      #mxl .c.on { opacity: 1; }
+      #mxl .g { fill: #1d1e24; opacity: .07; transform-box: fill-box; transform-origin: center; transform: scale(.8); animation: mxb-g 1.4s ease-in-out infinite; animation-delay: var(--d); }
+      #mxl.w .c { transform: scale(1.03); }
+      #mxl.w .g { display: none; }
+      #mxl .e, #mxl .m, #mxl .sol { opacity: 0; transition: opacity .25s ease-out; }
+      #mxl .sol { transition-duration: .18s; transition-delay: .12s; }
+      #mxl.w .e, #mxl.w .m, #mxl.w .sol { opacity: 1; }
+      #mxl .m path { stroke-dasharray: 600; stroke-dashoffset: 600; transition: stroke-dashoffset .5s cubic-bezier(.16,1,.3,1) .05s; }
+      #mxl.w .m path { stroke-dashoffset: 0; }
+      #mxl .sh { filter: drop-shadow(0 18px 30px rgba(0,0,0,.45)); }
+      html:not(.dark) #mxl .sh { filter: drop-shadow(0 14px 26px rgba(0,0,0,.16)); }
+      @keyframes mxb-t { from { opacity: 0; transform: scale(.86); } }
+      @keyframes mxb-g { 50% { opacity: .16; } }
+      @media (prefers-reduced-motion: reduce) {
+        #mxl .c, #mxl .m path { transition: none; }
+        #mxl .g, #mxl .tile { animation: none; }
+        #mxb, #mxl { transition: opacity .16s linear; }
+        #mxl.o { opacity: 0; }
+      }
     </style>
   </head>
   <body>
-    <div id="root">
-      <div class="mx-splash" aria-hidden="true">
-        <!-- no src in the markup: the browser would fetch (and might show) the blue logo before the accent one -->
-        <img id="mx-splash-logo" alt="" width="48" height="48" />
-        <script>document.getElementById('mx-splash-logo').src = window.__mxLogo || '/icons/logo-blue.svg';</script>
-      </div>
-    </div>
+    <div id="root"></div>
+    <div id="mxb" aria-hidden="true"></div>
+    <div id="mxl" aria-hidden="true"></div>
+    <script>
+      // Boot loader (see the style above). window.mxStep(n): 1 = HTML parsed (below), 2 = app code running (main.tsx),
+      // 3 = first screen ready (src/lib/bootLoader.ts). Step 3 merges the pixels, flies the logo onto the first visible
+      // [data-boot-logo] (sidebar or sign-in page; a fade when there is none) and opens the interface around it
+      // (html[data-boot='reveal'], globals.css): each block waits in proportion to its distance from the logo.
+      (function () {
+        var d = document, R = d.documentElement, box = d.getElementById('mxl'), ov = d.getElementById('mxb'), cells = [], r = '', k,
+          X = [110, 154, 190, 234, 270, 314, 350, 394], Y = [96, 136, 178, 209, 240, 288, 336],
+          rm = matchMedia('(prefers-reduced-motion: reduce)').matches, shown = -1, ended = 0;
+        function cell(x, y, w, h, b) { cells.push({ x: x, y: y, w: w, h: h, b: b }); }
+        // The real logo path cut into its pixels: body (2 batches of rows), arms, legs.
+        for (var j = 0; j < 6; j++) for (var i = 0; i < 7; i++) cell(X[i], Y[j], X[i + 1] - X[i], Y[j + 1] - Y[j], j < 3 ? 0 : 1);
+        [[36, 73], [73, 110], [394, 431], [431, 468]].forEach(function (a) { cell(a[0], 178, a[1] - a[0], 31, 1); cell(a[0], 209, a[1] - a[0], 31, 1); });
+        [110, 190, 270, 350].forEach(function (x) { cell(x, 336, 44, 39, 2); cell(x, 375, 44, 39, 2); });
+        cells.forEach(function (c, n) {
+          c.k = n; c.o = c.x + c.y * 1.6 + ((n * 37) % 11) * 14; // pop order: top-left to bottom-right, a little jitter
+          r += '<rect class="g" x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" style="--d:' + (c.x + c.y) * 2 + 'ms"/>' +
+            '<rect class="c" id="mc' + n + '" x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" fill="url(#mxg)"/>';
+        });
+        var g = (window.__mxGrads || {})[R.dataset.accent] || ['#2d6efd', '#0ec7f7'];
+        box.innerHTML = '<svg viewBox="0 0 512 512"><defs><linearGradient id="mxg" x1="40" y1="96" x2="470" y2="414" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="' + g[0] + '"/><stop offset="1" stop-color="' + g[1] + '"/></linearGradient><clipPath id="mxc"><rect width="512" height="512" rx="112"/></clipPath></defs>' +
+          '<g class="sh"><rect class="tile" width="512" height="512" rx="112" fill="#faf9f4"/></g><g clip-path="url(#mxc)">' + r +
+          '<path class="sol" fill="url(#mxg)" d="M110 96H394V178H468V240H394V414H350V336H314V414H270V336H234V414H190V336H154V414H110V240H36V178H110Z"/>' +
+          '<g class="e" fill="#1d1e24"><rect x="151" y="136" width="38" height="38"/><rect x="315" y="136" width="38" height="38"/></g>' +
+          '<g class="m" fill="none" stroke="#1d1e24"><path d="M110 243Q246 264 380 232" stroke-width="15"/><path d="M384 227Q452 168 540 86" stroke-width="9" stroke-linecap="round"/><rect x="-9" y="-12" width="18" height="24" rx="5" stroke="#d6d9df" stroke-width="4" transform="translate(381 231) rotate(-32)"/></g></g></svg>';
+        // The early auth check may switch a browser that never picked a look to the server's accent.
+        window.mxAccent = function (a) {
+          var s = d.querySelectorAll('#mxg stop'), c = (window.__mxGrads || {})[a];
+          if (c && s.length) { s[0].setAttribute('stop-color', c[0]); s[1].setAttribute('stop-color', c[1]); }
+        };
+        function batch(n, st) {
+          var list = cells.filter(function (c) { return c.b === n; }).sort(function (a, b) { return a.o - b.o; });
+          list.forEach(function (c, i) { setTimeout(function () { d.getElementById('mc' + c.k).classList.add('on'); }, i * st); });
+          return list.length * st + 120;
+        }
+        // While waiting the pixels pop one by one (16 ms); once the data is in, what is missing lands at once (6 ms).
+        function upto(n, st) { var t = 0; while (shown < n) { shown++; t = Math.max(t, batch(shown, st || 16)); } return t; }
+        // Never stuck: the first screen gets 8 s once the app code runs, the page 30 s in all.
+        var safety = setTimeout(function () { window.mxStep(3); }, 30000);
+        window.mxStep = function (n) {
+          if (ended) return;
+          if (n < 3) {
+            upto(n - 1);
+            if (n === 2) { clearTimeout(safety); safety = setTimeout(function () { window.mxStep(3); }, 8000); }
+            return;
+          }
+          ended = 1; clearTimeout(safety);
+          var t = upto(2, 6);
+          setTimeout(function () { box.classList.add('w'); }, t);
+          setTimeout(fly, t + 140);
+        };
+        function target() {
+          var l = d.querySelectorAll('[data-boot-logo]');
+          for (var i = 0; i < l.length; i++) {
+            var b = l[i].getBoundingClientRect();
+            if (b.width > 4 && b.right > 0 && b.bottom > 0 && b.left < innerWidth && b.top < innerHeight) return l[i];
+          }
+          return null;
+        }
+        function reveal(z) {
+          // Every block of the first screen waits in proportion to its distance from the logo (A -> Z cascade).
+          var ox = z ? z.left + z.width / 2 : 0, oy = z ? z.top + z.height / 2 : 0, els = d.querySelectorAll('.mx-boot-item,.mx-card-in,[data-boot-rv]');
+          for (var i = 0; i < els.length; i++) {
+            var b = els[i].getBoundingClientRect();
+            els[i].style.setProperty('--bd', Math.round(60 + Math.hypot(Math.max(b.left - ox, 0, ox - b.right), Math.max(b.top - oy, 0, oy - b.bottom)) / 3.2) + 'ms');
+          }
+          R.dataset.boot = 'reveal';
+          setTimeout(function () {
+            R.removeAttribute('data-boot');
+            for (var i = 0; i < els.length; i++) els[i].style.removeProperty('--bd');
+          }, 2200);
+        }
+        function fly() {
+          var el = target(), a = box.getBoundingClientRect(), z = el && el.getBoundingClientRect();
+          reveal(z);
+          ov.classList.add('o');
+          if (rm || !z) {
+            box.classList.add('o');
+            box.animate([{ opacity: 1 }, { opacity: 0, transform: rm ? 'none' : 'scale(.92)' }], { duration: rm ? 160 : 300, easing: 'ease-out', fill: 'forwards' });
+            setTimeout(function () { box.remove(); ov.remove(); }, rm ? 200 : 480);
+            return;
+          }
+          // X and Y on different curves: the logo travels on a soft arc, not a straight line.
+          var sv = box.firstChild, dx = z.left + z.width / 2 - (a.left + a.width / 2), dy = z.top + z.height / 2 - (a.top + a.height / 2), s = z.width / a.width;
+          el.style.visibility = 'hidden';
+          box.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(' + dx + 'px)' }], { duration: 620, easing: 'cubic-bezier(.55,0,.25,1)', fill: 'forwards' });
+          var land = sv.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(' + dy + 'px) scale(' + s + ')' }], { duration: 620, easing: 'cubic-bezier(.3,0,.2,1)', fill: 'forwards' });
+          var sh = box.querySelector('.sh');
+          sh.animate([{ filter: getComputedStyle(sh).filter }, { filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }], { duration: 620, fill: 'forwards' });
+          // Handover once the last frame of the flight is in place: the real logo shows in the same paint.
+          land.onfinish = function () { el.style.visibility = ''; box.remove(); };
+          setTimeout(function () { ov.remove(); }, 700);
+        }
+        window.mxStep(1);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
