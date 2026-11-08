@@ -66,6 +66,12 @@ Write a message as in any chat. Who answers depends on the names in it:
 `attachments/` folder, which every member reads (and none writes); the members who answer that message get them
 with it, the others see their paths in the conversation.
 
+**The box** works like a session's and an agent's: a long or structured paste becomes an attached file (**Paste as
+text**, or Ctrl/⌘+Shift+V, keeps it as text), the draft and its files stay after a reload until sent, the microphone
+dictates at the cursor, Enter sends (a new line on a phone), Shift+Enter goes to a new line, Esc leaves the box.
+Select text in the conversation and click **Quote** to quote it in your message. The members' answers open file links
+in the preview, show images and videos as thumbnails and audio with a player, and have a copy menu.
+
 While you type `@`, the members are suggested with their face (type a few letters of the `@name` or of the name).
 In the conversation every `@name` shows as a small badge with the member's face and name, and the line **To:** above
 the box shows who your message goes to before you send it. A member's `@name` is its folder name; when two
