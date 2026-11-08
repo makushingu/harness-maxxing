@@ -266,7 +266,7 @@ def test_two_mailboxes_added_at_once_are_both_kept(client, monkeypatch):
     assert {a["address"] for a in mail.list_accounts()} == {"a@example.com", "b@example.com"}
     a = mail.get_account("a@example.com")
     with cf.ThreadPoolExecutor(2) as ex:                         # a change tested while the mailbox is removed
-        f = ex.submit(mail.update_account, a["id"], {"imap_port": 2}, None)
+        f = ex.submit(mail.update_account, a["id"], {"imap_port": 2}, PW)
         time.sleep(0.1)
         mail.delete_account(a["id"])
         with pytest.raises(MailError) as e:

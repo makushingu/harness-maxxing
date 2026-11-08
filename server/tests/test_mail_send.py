@@ -352,5 +352,10 @@ def test_the_stored_password_never_goes_to_a_new_server(acc, monkeypatch):
     with pytest.raises(MailError):
         mail.update_account(acc["id"], {"smtp_host": "smtp.attacker.example"})
     assert not tried
+    for change in ({"imap_tls": "ssl"}, {"smtp_tls": "starttls"}, {"imap_port": 1143}, {"smtp_port": 2525}):
+        with pytest.raises(MailError):                  # the password in clear, or to another service of the host
+            mail.update_account(acc["id"], change)
+    assert not tried
     mail.update_account(acc["id"], {"imap_host": "imap.new.example"}, password="typed-again")
     assert tried == [("imap.new.example", "typed-again")]
+
