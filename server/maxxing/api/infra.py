@@ -7,10 +7,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from .. import config, infra
 from ..infra import caddy, connect, registry
@@ -73,7 +73,21 @@ async def refresh():
     return {"started": infra.refresh_in_background(), "refreshing": True}
 
 
-class AnnotateIn(BaseModel):
+class _Text(BaseModel):
+    """A lone surrogate ("\\ud800" is valid JSON) cannot be written as UTF-8 to infra.json: a 422, not a 500."""
+
+    @field_validator("*")
+    @classmethod
+    def _utf8(cls, v: Any) -> Any:
+        if isinstance(v, str) and not v.isascii():
+            try:
+                v.encode("utf-8")
+            except UnicodeEncodeError:
+                raise ValueError("text cut inside a character (lone surrogate)") from None
+        return v
+
+
+class AnnotateIn(_Text):
     id: str
     project: Optional[str] = None
     note: Optional[str] = None
@@ -117,7 +131,7 @@ def _after_server_change() -> None:
         infra.mark_stale()                             # a refresh is running: the loop does another one after it
 
 
-class ConnectIn(BaseModel):
+class ConnectIn(_Text):
     id: Optional[str] = None          # server:hostinger:<id>
     host: Optional[str] = None        # or any server by address
     user: str = "root"
@@ -148,7 +162,7 @@ async def connect_server(body: ConnectIn):
     return {"connected": True, **{k: s.get(k) for k in ("name", "label", "host", "user", "port", "via")}}
 
 
-class ServerIn(BaseModel):
+class ServerIn(_Text):
     name: str
     label: Optional[str] = None
 
@@ -187,7 +201,7 @@ async def remove_server(body: ServerIn):
     return {"removed": body.name}
 
 
-class DomainIn(BaseModel):
+class DomainIn(_Text):
     name: str
 
 
