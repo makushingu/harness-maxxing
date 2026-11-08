@@ -34,8 +34,8 @@ export function useTween(target: number, ms = 500): number {
   return shown
 }
 
-/** A one-shot "pop" (scale 1 -> 1.15 -> 1, 600 ms) of the element each time `key` changes after the first render:
- *  an icon whose colour just crossed a threshold. Nothing under prefers-reduced-motion. */
+/** A one-shot gentle "breath" (scale 1 -> 1.08 -> 1, 700 ms, ease-in-out) of the element each time `key` changes
+ *  after the first render: an icon whose colour just crossed a threshold. Nothing under prefers-reduced-motion. */
 export function usePulseOnChange<T extends Element>(key: unknown, ref: RefObject<T | null>) {
   const prev = useRef(key)
   useEffect(() => {
@@ -43,6 +43,6 @@ export function usePulseOnChange<T extends Element>(key: unknown, ref: RefObject
     prev.current = key
     const el = ref.current
     if (!el || reducedMotion() || typeof el.animate !== 'function') return
-    el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.15)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 600, easing: 'ease-out' })
+    el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)', offset: 0.45 }, { transform: 'scale(1)' }], { duration: 700, easing: 'cubic-bezier(0.37, 0, 0.63, 1)' })
   }, [key, ref])
 }

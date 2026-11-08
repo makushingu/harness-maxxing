@@ -6,8 +6,9 @@ import { usePulseOnChange, useTween } from '@/lib/useTween'
 /** A meter's level: under the warning threshold, warning, critical. */
 export type MeterTone = 'warn' | 'error' | undefined
 
-/** Colour changes fade (400 ms); the width glides (500 ms ease-out); both instant under reduced motion. */
-const fade = 'transition-colors duration-[400ms] ease-out motion-reduce:transition-none'
+/** Colour changes fade (500 ms, like the width: a level change reads as one calm move, no flash); the width glides
+ *  (500 ms ease-out); both instant under reduced motion. */
+const fade = 'transition-colors duration-500 ease-out motion-reduce:transition-none'
 const barMotion = 'transition-[width,background-color] duration-500 ease-out motion-reduce:transition-none'
 
 export const toneText = (tone: MeterTone) => (tone === 'error' ? 'text-destructive' : tone === 'warn' ? 'text-warning' : 'text-muted-foreground')

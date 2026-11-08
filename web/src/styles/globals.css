@@ -286,15 +286,39 @@ html[data-kbd] {
 html[data-boot] .mx-boot-side { animation: mx-slide-right 340ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 html[data-boot] .mx-boot-item { animation: mx-slide-right 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 30ms); }
 html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
-/* Folding sidebar (Sidebar.tsx): labels slide in while the bar unfolds over the page, fade while it folds back. */
-@keyframes mx-label-in { from { opacity: 0; transform: translateX(-6px); } }
-.mx-side[data-unfold='open'] .mx-side-body :is(.truncate, kbd) { animation: mx-label-in 200ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
-.mx-side[data-unfold='closing'] .mx-side-body :is(.truncate, kbd) { opacity: 0; transition: opacity 120ms ease-out; }
+/* Folding sidebar (Sidebar.tsx). The bar unfolds over the page in 300 ms and folds back in 220 ms on one soft ease;
+   its shadow fades in a little slower than the width so the edge never "pops". Its content is laid out at the final
+   width and revealed by the moving edge; the labels (and what only exists unfolded: `.mx-side-reveal`) fade in a
+   beat later, staggered down the list by the rows' --i (capped), with a tiny slide; they fade out first when it
+   folds. Rows keep their folded height (44 px) while unfolded over the page, so nothing moves vertically. */
+.mx-side { --mx-side-ease: cubic-bezier(0.22, 1, 0.36, 1); box-shadow: 0 0 0 0 transparent; }
+.mx-side:is([data-unfold='open'], [data-unfold='closing'], [data-unfold='closed']) {
+  transition: width 220ms var(--mx-side-ease), box-shadow 200ms ease-out;
+}
+.mx-side[data-unfold='open'] {
+  transition: width 300ms var(--mx-side-ease), box-shadow 420ms ease-out;
+  box-shadow: 12px 0 32px -14px rgb(0 0 0 / 0.18), 2px 0 8px -4px rgb(0 0 0 / 0.06);
+}
+.dark .mx-side[data-unfold='open'] { box-shadow: 14px 0 36px -14px rgb(0 0 0 / 0.55), 2px 0 10px -4px rgb(0 0 0 / 0.3); }
+.mx-side:is([data-unfold='open'], [data-unfold='closing']) .mx-nav-row { height: 2.75rem; }
+@keyframes mx-label-in { from { opacity: 0; transform: translateX(-3px); } }
+@keyframes mx-rail-in { from { opacity: 0; transform: translateX(-8px); } }
+.mx-side[data-unfold='open'] .mx-side-body :is(.truncate, kbd, .mx-side-reveal) {
+  animation: mx-label-in 280ms var(--mx-side-ease) backwards;
+  animation-delay: calc(70ms + min(var(--i, 0), 8) * 14ms);
+}
+.mx-side[data-unfold='open'] .mx-side-rail { animation: mx-rail-in 340ms var(--mx-side-ease) 60ms backwards; }
+.mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 0; transition: opacity 130ms ease-out; }
+/* A critical status dot breathes slowly instead of the hard `animate-ping`. */
+@keyframes mx-soft-ping { 0% { transform: scale(1); opacity: 0.45; } 70%, 100% { transform: scale(2.2); opacity: 0; } }
+.mx-soft-ping { animation: mx-soft-ping 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
 /* Ring meters (Meter.tsx RingArc): the arc glides to its new length, its colour fades over. */
-.mx-arc { transition: stroke-dasharray 500ms ease-out, stroke 400ms ease-out; }
+.mx-arc { transition: stroke-dasharray 500ms ease-out, stroke 500ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .mx-arc { transition: none; }
-  .mx-side, .mx-side-body :is(.truncate, kbd) { transition: none !important; animation: none !important; }
+  .mx-side, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal) { transition: none !important; animation: none !important; }
+  .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 1; }
+  .mx-soft-ping { animation: none; opacity: 0; }
 }
 .mx-cv { content-visibility: auto; contain-intrinsic-size: auto 44px; }
 .mx-cv-tile { content-visibility: auto; contain-intrinsic-size: auto 150px; }

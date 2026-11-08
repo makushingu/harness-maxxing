@@ -7,7 +7,10 @@ import { cn } from '@/lib/utils'
 /** A sidebar row (pages, extensions, Help / Feedback / Settings): one look everywhere; `collapsed` = the folded icon bar. */
 export const navRow = (collapsed: boolean, active?: boolean) =>
   cn(
-    'group relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+    // `mx-nav-row`: 44 px tall while the bar is unfolded over the page too (globals.css), so no row moves when it
+    // unfolds; the icon eases between its folded (22 px) and unfolded (18 px) size instead of jumping.
+    'mx-nav-row group relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+    '[&>svg]:transition-[width,height] [&>svg]:duration-300 [&>svg]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:[&>svg]:transition-none',
     active && 'bg-accent text-foreground',
     // folded icon bar: 44 px square targets, bigger icons (whatever size the row's own icon asks for)
     collapsed && 'h-11 justify-center px-0 [&>svg]:size-[22px]',

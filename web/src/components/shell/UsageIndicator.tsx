@@ -28,9 +28,9 @@ export function usePlanUsage(visible?: boolean) {
     w.resets_at ? t('usage.resets', { at: fmtDate(w.resets_at, lang, undefined, { dateStyle: undefined, timeStyle: undefined, weekday: 'short', hour: '2-digit', minute: '2-digit' }) }) : null
   const noFive = !u.five_hour && u.plan === 'Ultra' // verified Ultra accounts have no 5-hour window
   const title = u.plan ? t('usage.titlePlan', { plan: u.plan }) : t('usage.title')
-  const details = (
-    <div className="grid gap-1.5 text-xs">
-      <span className="font-medium">{title}</span>
+  /** the details without their title (the sidebar's Claude entry puts its own "Claude quota" heading on top) */
+  const lines = (
+    <>
       {noFive && <span>{t('usage.noFiveHour')}</span>}
       {rows.map((r) => (
         <span key={r.key} className="tabular-nums">
@@ -39,9 +39,15 @@ export function usePlanUsage(visible?: boolean) {
         </span>
       ))}
       {u.source === 'turn' && u.seen_at && <span className="max-w-60 opacity-70">{t('usage.seen', { when: fmtRelative(u.seen_at, lang) })}</span>}
+    </>
+  )
+  const details = (
+    <div className="grid gap-1.5 text-xs">
+      <span className="font-medium">{title}</span>
+      {lines}
     </div>
   )
-  return { rows, title, details, plan: u.plan || null }
+  return { rows, title, details, lines, plan: u.plan || null }
 }
 
 const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)))
@@ -174,30 +180,62 @@ export function ClaudeRing({
   )
 }
 
-/** The sidebar's Claude entry: the ring (folded bar: alone, centred), plus "Claude · Max" and "5 h 47 % · Semaine
- *  12 %" once the bar is unfolded; the plan details in a tooltip; a link to Settings -> Stats. Nothing without plan
- *  usage. The same link in both states, so the keyboard focus survives folding. */
+/** A small eight-ray sparkle in Claude's terracotta: marks the ring as the Claude quota in the folded bar (a generic
+ *  glyph drawn here, not Anthropic's logo). */
+export function ClaudeMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden className={cn('size-2.5 shrink-0', className)} fill="none" stroke="#D97757" strokeLinecap="round">
+      <path d="M6 1v10M1 6h10" strokeWidth={1.7} />
+      <path d="M2.6 2.6l6.8 6.8M9.4 2.6l-6.8 6.8" strokeWidth={1.3} />
+    </svg>
+  )
+}
+
+/** The sidebar's Claude quota entry (under CPU / RAM / disk): the ring, with a tiny "✳ Claude" under it in the folded
+ *  bar, or "Claude quota · Max" and "5 h 47 % · Week 12 %" beside it once unfolded; the quota and its resets in a
+ *  tooltip; a link to Settings -> Stats. The ring keeps its size and place in both states (only the text around it
+ *  changes), and it is the same link, so the keyboard focus survives folding. Nothing without plan usage. */
 export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
+  const t = useT()
   const lang = useLang()
   const c = useClaudeRing()
   if (!c) return null
   const pctText = (n: number) => (lang === 'en' ? `${n}%` : `${n} %`)
-  const label = [c.title, ...c.rows.map((r) => `${r.label} ${pctText(used(r.w))}`)].join(' · ')
+  const heading = c.plan ? `${t('shell.claudeQuota')} · ${c.plan}` : t('shell.claudeQuota')
+  const summary = c.rows.map((r, i) => `${i ? r.label.toLowerCase() : r.label} ${pctText(used(r.w))}`).join(' · ')
+  const label = lang === 'en' ? `${heading}: ${summary}` : `${heading} : ${summary}`
+  const tip = (
+    <div className="grid gap-1.5 text-xs">
+      <span className="flex items-center gap-1.5 font-medium">
+        <ClaudeMark />
+        {heading}
+      </span>
+      {c.lines}
+    </div>
+  )
   return (
-    <Tooltip content={c.details} side="right">
+    <Tooltip content={tip} side="right">
       <Link
         to="/settings/stats"
         aria-label={label}
         data-testid="status-claude"
         className={cn(
-          'flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-          collapsed && 'justify-center px-0',
+          'flex h-[58px] min-w-0 items-start gap-2.5 rounded-md px-0.5 pt-1 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+          collapsed && 'w-11 flex-col items-center gap-0.5 px-0',
         )}
       >
-        <ClaudeRing pct={c.main.pct} tone={c.main.tone} second={c.second} size={collapsed ? 40 : 36} />
-        {!collapsed && (
-          <span className="grid min-w-0 flex-1 gap-0.5 leading-tight">
-            <span className="truncate text-[13px] font-medium text-foreground">{c.plan ? `Claude · ${c.plan}` : 'Claude'}</span>
+        <ClaudeRing pct={c.main.pct} tone={c.main.tone} second={c.second} size={36} />
+        {collapsed ? (
+          <span className="flex items-center gap-0.5 text-[9.5px] leading-3 font-medium tracking-tight text-muted-foreground">
+            <ClaudeMark className="size-2" />
+            Claude
+          </span>
+        ) : (
+          <span className="mx-side-reveal grid h-9 min-w-0 flex-1 content-center gap-0.5 leading-tight">
+            <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-foreground">
+              <ClaudeMark />
+              <span className="truncate">{heading}</span>
+            </span>
             <span className="truncate text-[11.5px] whitespace-nowrap text-muted-foreground">
               <Sensitive length={8}>
               {c.rows.map((r, i) => (

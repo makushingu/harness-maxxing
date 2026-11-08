@@ -1,14 +1,15 @@
 import * as React from 'react'
-import { NavLink } from 'react-router'
-import { PanelLeftClose, PanelRight, Pin, Search } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router'
+import { Bell, PanelLeftClose, PanelRight, Pin, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
-import { useAgentsAttention, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
+import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
 import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
+import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@/components/ui'
+import { FeedPanel } from '@/features/feed/FeedItems'
 import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
 import { StatusBlock } from './HealthIndicator'
@@ -75,6 +76,66 @@ function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
   )
 }
 
+/** The notifications bell, at the top of the bar: folded, an icon with a dot while something is unread; unfolded, the
+ *  same icon (same place) with its count. Opens the dashboard's notifications panel beside the bar; the bar stays open
+ *  while it is (its trigger has aria-expanded), and it closes when a link of it changes the page. */
+function NotificationsBell({ collapsed }: { collapsed: boolean }) {
+  const t = useT()
+  const { data } = useFeed()
+  const unread = data?.unread ?? 0
+  const [open, setOpen] = React.useState(false)
+  const { pathname } = useLocation()
+  React.useEffect(() => setOpen(false), [pathname])
+  // the panel opens beside the whole bar (its right edge, past the sessions column when unfolded), not over it
+  const trigger = React.useRef<HTMLButtonElement>(null)
+  const [offset, setOffset] = React.useState(10)
+  const onOpenChange = (next: boolean) => {
+    const el = trigger.current
+    const edge = el?.closest('[data-testid=sidebar]')?.getBoundingClientRect().right
+    if (next && el && edge) setOffset(Math.max(10, Math.round(edge - el.getBoundingClientRect().right + 8)))
+    setOpen(next)
+  }
+  const label = unread ? `${t('feed.title')} · ${t('feed.unreadCount', { count: unread })}` : t('feed.title')
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <Tooltip content={open ? null : label} side="right">
+        <PopoverTrigger
+          ref={trigger}
+          data-testid="sidebar-bell"
+          aria-label={label}
+          className={cn(navRow(collapsed), 'data-[state=open]:bg-accent data-[state=open]:text-foreground', !collapsed && 'w-10 shrink-0 justify-center px-0')}
+        >
+          <Bell className="size-[18px] shrink-0" strokeWidth={1.9} />
+          {unread > 0 &&
+            (collapsed ? (
+              <span className={FOLDED_DOT}>
+                <CountDot tone="unread" />
+              </span>
+            ) : (
+              <span className="mx-side-reveal absolute top-0 -right-1.5">
+                <CountBadge count={unread} className="h-4 min-w-4 text-[10px]" />
+              </span>
+            ))}
+        </PopoverTrigger>
+      </Tooltip>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={offset}
+        className="w-96 overflow-hidden p-0"
+        data-testid="sidebar-feed"
+        // focus the panel itself, not its first button (whose tooltip would pop up and eat the first Esc)
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          ;(e.currentTarget as HTMLElement | null)?.focus()
+        }}
+      >
+        <FeedPanel className="max-h-[min(34rem,calc(100dvh-2rem))] rounded-none border-0 bg-transparent" />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /** Right edge: drag to resize the expanded sidebar (double-click: default width). */
 function ResizeEdge({ side }: { side: React.RefObject<HTMLDivElement | null> }) {
   const t = useT()
@@ -127,8 +188,8 @@ const activeMark = (collapsed: boolean) => cn('absolute top-2 bottom-2 w-[3px] r
 const FOLDED_W = 64
 /** Width of the second column (the sessions) shown beside the unfolded bar. */
 const RAIL_W = 272
-/** Unfold / fold animation (keep in sync with the `duration-200` of the aside and the CSS of `.mx-side`). */
-const UNFOLD_MS = 200
+/** Fold animation (keep in sync with the CSS of `.mx-side` in globals.css: 300 ms to unfold, 220 ms to fold). */
+const FOLD_MS = 220
 /** Delay before folding back once the pointer (or the keyboard focus) left the bar. */
 const FOLD_DELAY_MS = 250
 
@@ -171,7 +232,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       }
       if (reducedMotion()) return setPhase('closed')
       setPhase((p) => (p === 'open' ? 'closing' : p))
-      timer.current = window.setTimeout(() => setPhase((p) => (p === 'closing' ? 'closed' : p)), UNFOLD_MS)
+      timer.current = window.setTimeout(() => setPhase((p) => (p === 'closing' ? 'closed' : p)), FOLD_MS)
     }
     if (delay) timer.current = window.setTimeout(tick, delay)
     else tick()
@@ -220,7 +281,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     const el = side.current
     const a = document.activeElement
     if (!el || (a && a !== document.body && el.contains(a))) return
-    // the focused element only exists unfolded (the pin button): the bar's first link (the logo) takes the focus
+    // the focused element only exists unfolded (search, pin): the bar's first control (the bell) takes the focus
     ignoreFocusUntil.current = performance.now() + 400
     el.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus()
   }, [phase, side])
@@ -394,9 +455,9 @@ export function Sidebar() {
         data-unfold={pinned ? 'pinned' : unfold.phase}
         data-expanded={collapsed ? 'false' : 'true'}
         className={cn(
+          // width and shadow move in globals.css (`.mx-side[data-unfold]`): soft, a bit longer to open than to fold
           'mx-side absolute inset-y-0 left-0 flex border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]',
-          !pinned && 'overflow-hidden transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
-          unfold.phase === 'open' && !pinned && 'shadow-2xl',
+          !pinned && 'overflow-hidden',
         )}
         style={{ width: pinned ? '100%' : unfold.phase === 'open' ? width + RAIL_W : FOLDED_W }}
         aria-label={t('shell.navigation')}
@@ -405,57 +466,27 @@ export function Sidebar() {
         {/* Laid out at its final width while the bar unfolds or folds: the edge of the bar reveals it, nothing wraps. */}
         <div className="mx-side-body flex h-full min-h-0 shrink-0 flex-col" style={{ width: pinned ? '100%' : collapsed ? FOLDED_W : width }}>
       {pinned && <ResizeEdge side={side} />}
-      {/* Logo + pin button (shown once the bar is unfolded or pinned). */}
-      <div className={cn('flex h-14 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
-        <NavLink
-          to="/"
-          className="min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Harness Maxxing"
-        >
-          <Logo collapsed={collapsed} className={cn(collapsed && 'justify-center')} />
-        </NavLink>
-        {!tablet && !collapsed && (
-          <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="sidebar-pin"
-              aria-pressed={pinned}
-              className="size-8 shrink-0 text-muted-foreground"
-              onClick={toggle}
-              aria-label={pinLabel}
-            >
-              {pinned ? <PanelLeftClose /> : <Pin />}
-            </Button>
-          </Tooltip>
-        )}
-      </div>
-
-      <div className={cn('px-3 pb-2', collapsed && 'px-2.5')}>
-        <Tooltip content={collapsed ? t('palette.open') : null} side="right">
+      {/* Top row: the notifications bell (same place folded or not), then, unfolded, the search field (Ctrl K). Folded,
+          the bell alone: the rows below sit at the same height in both states. */}
+      <div className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
+        <NotificationsBell collapsed={collapsed} />
+        {!collapsed && (
           <button
             type="button"
             onClick={openPalette}
             data-tour="palette"
-            className={cn(
-              'flex h-9 w-full items-center gap-2 rounded-md border bg-background/60 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20',
-              collapsed && 'h-11 justify-center px-0',
-            )}
+            className="mx-side-reveal flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-background/60 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
             aria-label={t('palette.open')}
           >
-            <Search className={cn('shrink-0', collapsed ? 'size-5' : 'size-4')} />
-            {!collapsed && (
-              <>
-                <span className="flex-1 truncate text-left">{t('palette.search')}</span>
-                <Kbd>{MOD} K</Kbd>
-              </>
-            )}
+            <Search className="size-4 shrink-0" />
+            <span className="flex-1 truncate text-left">{t('palette.search')}</span>
+            <Kbd>{MOD} K</Kbd>
           </button>
-        </Tooltip>
+        )}
       </div>
 
       {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short); Help and
-          Settings stay at the bottom, then the status line. */}
+          Settings stay at the bottom, then CPU / RAM / disk, the Claude quota and the logo. */}
       <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
         <nav aria-label={t('shell.navigation')} className={block()}>
           {drag.order.map((to, idx) => {
@@ -478,10 +509,37 @@ export function Sidebar() {
       </div>
 
       <StatusBlock collapsed={collapsed} />
+
+      {/* The logo at the very bottom (a link to the dashboard; the mark keeps its place folded or not), and the pin
+          button beside it once unfolded. */}
+      <div className="flex items-center gap-1.5 px-3 pt-1 pb-[calc(0.5rem+var(--safe-bottom))]">
+        <NavLink
+          to="/"
+          className={cn('flex h-11 min-w-0 flex-1 items-center rounded-md px-1.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring', collapsed && 'w-10 flex-none justify-center px-0')}
+          aria-label="Harness Maxxing"
+        >
+          <Logo collapsed={collapsed} />
+        </NavLink>
+        {!collapsed && !tablet && (
+          <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="sidebar-pin"
+              aria-pressed={pinned}
+              className="mx-side-reveal size-8 shrink-0 text-muted-foreground"
+              onClick={toggle}
+              aria-label={pinLabel}
+            >
+              {pinned ? <PanelLeftClose /> : <Pin />}
+            </Button>
+          </Tooltip>
+        )}
+      </div>
         </div>
         {/* Unfolded over the page: a second column with the sessions (running, unread, recent), one click away. */}
         {unfolded && (
-          <div data-testid="sessions-rail" className="h-full min-h-0 shrink-0 border-l border-sidebar-border" style={{ width: RAIL_W }}>
+          <div data-testid="sessions-rail" className="mx-side-rail h-full min-h-0 shrink-0 border-l border-sidebar-border" style={{ width: RAIL_W }}>
             <SessionsRail onPick={unfold.dismiss} />
           </div>
         )}

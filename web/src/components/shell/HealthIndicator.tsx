@@ -178,12 +178,13 @@ const alertHover = {
   warn: 'hover:bg-warning/15 group-hover:bg-warning/15 data-[state=open]:bg-warning/15',
 } as const
 
-/** The bottom of the sidebar: Claude above CPU / RAM / disk.
- *  - Folded bar: the Claude ring, then three tiny meters (icon + short bar) and the health dot.
- *  - Unfolded / pinned: the ring with "Claude · Max" and "5 h 47 % · Semaine 12 %", then (when something needs
- *    attention) the "2 problems" line in its alert colour, then CPU / RAM / disk in three columns.
- *  The meters (with the dot / the problems line) open the status panel (issues, theme, presentation mode); the
- *  Claude entry leads to Settings -> Stats. Same two elements folded or not, so the keyboard focus survives folding. */
+/** The bottom of the sidebar: CPU / RAM / disk, then the Claude quota under them.
+ *  - Folded bar: three tiny meters (icon + short bar) and the health dot, then the Claude ring marked "✳ Claude".
+ *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
+ *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
+ *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
+ *  status panel (issues, theme, presentation mode); the Claude entry leads to Settings -> Stats. Same two elements
+ *  folded or not, so the keyboard focus survives folding. */
 export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
   const s = useStatusLine()
   const rows = useHealthRows()
@@ -206,11 +207,7 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
     </span>
   )
   return (
-    <div
-      data-testid="sidebar-status"
-      className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.5rem+var(--safe-bottom))]', collapsed && 'justify-items-center gap-0.5 px-2')}
-    >
-      <ClaudeStatus collapsed={collapsed} />
+    <div data-testid="sidebar-status" className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2', collapsed && 'justify-items-center px-2')}>
       <Popover open={open} onOpenChange={setOpen}>
         <Tooltip content={collapsed ? tip : null} side="right">
           <PopoverTrigger
@@ -218,50 +215,51 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
             data-testid="status-line"
             aria-label={label}
             className={cn(
-              'group grid w-full min-w-0 gap-1.5 rounded-md px-1.5 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
-              collapsed && 'w-11 justify-items-center gap-1 px-0 py-2',
+              'group grid h-[66px] w-full min-w-0 content-center gap-1.5 rounded-md px-1.5 text-left outline-none transition-colors duration-300 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
+              collapsed && 'w-11 justify-items-center px-0',
               collapsed && alert && cn(alertBg[alert], alertHover[alert]),
             )}
           >
-            {!collapsed && alert && (
-              // keeps its alert colour when the block is hovered (a stronger tint, not the grey of a plain row)
-              <span className={cn('-mx-0.5 flex min-w-0 items-center gap-2 rounded px-1.5 py-1 text-[13px] font-medium transition-colors', alertBg[alert], alertHover[alert])}>
-                <span className="flex size-4 shrink-0 items-center justify-center">
-                  <LiveDot tone={alert} />
-                </span>
-                <span className="min-w-0 flex-1 truncate">{s.health}</span>
-                <ChevronRight className="size-3.5 shrink-0" />
-              </span>
-            )}
             {!rows ? (
-              <Skeleton className={collapsed ? 'h-10 w-8' : 'h-8'} />
+              <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
             ) : collapsed ? (
               <>
                 {rows.map((r) => (
                   <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
                 ))}
-                <span className="mt-1 flex size-3 items-center justify-center">
+                <span className="mt-0.5 flex size-3 items-center justify-center">
                   <LiveDot tone={s.tone} />
                 </span>
               </>
             ) : (
-              <span className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-x-3" data-testid="sidebar-meters">
-                {rows.map((r) => (
-                  <span key={r.key} className="grid min-w-0 gap-1">
-                    <span className="flex min-w-0 items-center gap-1.5 text-xs">
-                      <MeterIcon icon={r.icon} tone={r.tone} />
-                      <Sensitive length={3}>
-                        <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
-                      </Sensitive>
-                    </span>
-                    <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
+              <>
+                {/* the health line: its alert colour while something needs attention (a stronger tint on hover) */}
+                <span
+                  className={cn(
+                    'mx-side-reveal -mx-0.5 flex h-6 min-w-0 items-center gap-2 rounded px-1.5 text-xs font-medium transition-colors duration-500',
+                    alert ? cn(alertBg[alert], alertHover[alert]) : 'text-muted-foreground',
+                  )}
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <LiveDot tone={s.tone} />
                   </span>
-                ))}
-                {/* all good: the green dot sits at the end of the meters (problems: in their line above) */}
-                <span className="flex size-4 items-center justify-center" title={alert ? undefined : s.health}>
-                  {!alert && <LiveDot tone={s.tone} />}
+                  <span className="min-w-0 flex-1 truncate">{s.health}</span>
+                  <ChevronRight className="size-3.5 shrink-0 opacity-70" />
                 </span>
-              </span>
+                <span className="mx-side-reveal grid grid-cols-3 items-center gap-x-3" data-testid="sidebar-meters">
+                  {rows.map((r) => (
+                    <span key={r.key} className="grid min-w-0 gap-1">
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs">
+                        <MeterIcon icon={r.icon} tone={r.tone} />
+                        <Sensitive length={3}>
+                          <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
+                        </Sensitive>
+                      </span>
+                      <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
+                    </span>
+                  ))}
+                </span>
+              </>
             )}
           </PopoverTrigger>
         </Tooltip>
@@ -269,19 +267,20 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
           <StatusPanel />
         </PopoverContent>
       </Popover>
+      <ClaudeStatus collapsed={collapsed} />
     </div>
   )
 }
 
 const dotTone = { ok: 'bg-success', warn: 'bg-warning', error: 'bg-destructive', idle: 'bg-muted-foreground/50' } as const
 
-/** The status line's dot (also alone in the folded bar): its colour fades over (400 ms) when the health changes,
- *  a ping ring while something is critical; instant / still under reduced motion. */
+/** The status line's dot (also alone in the folded bar): its colour fades over (500 ms) when the health changes,
+ *  a slow soft ring breathes out of it while something is critical; instant / still under reduced motion. */
 function LiveDot({ tone }: { tone: keyof typeof dotTone }) {
   return (
     <span className="relative inline-flex size-2 shrink-0" aria-hidden>
-      <span className={cn('absolute inline-flex size-full rounded-full opacity-0 transition-opacity duration-[400ms] motion-reduce:transition-none', dotTone[tone], tone === 'error' && 'animate-ping opacity-60 motion-reduce:animate-none')} />
-      <span className={cn('relative inline-flex size-full rounded-full transition-colors duration-[400ms] ease-out motion-reduce:transition-none', dotTone[tone])} />
+      <span className={cn('absolute inline-flex size-full rounded-full opacity-0', dotTone[tone], tone === 'error' && 'mx-soft-ping')} />
+      <span className={cn('relative inline-flex size-full rounded-full transition-colors duration-500 ease-out motion-reduce:transition-none', dotTone[tone])} />
     </span>
   )
 }

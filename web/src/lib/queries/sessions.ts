@@ -229,6 +229,13 @@ export function takeEarlyTail(id: string): Promise<SessionEventsBackPage> | unde
   return e && Date.now() - e.at < 15_000 ? e.p : undefined
 }
 
+/** The tail started by `prefetchTail`, without consuming it (the sidebar's session preview reads the same load the
+ *  thread then opens with). */
+export function peekEarlyTail(id: string): Promise<SessionEventsBackPage> | undefined {
+  const e = earlyTails.get(id)
+  return e && Date.now() - e.at < 15_000 ? e.p : undefined
+}
+
 /** Events strictly before byte `before` ("Show earlier messages"). `reset` = the log was rewritten. */
 export function fetchBefore(id: string, before: number, limit = 200, signal?: AbortSignal): Promise<SessionEventsBackPage> {
   return api.get<SessionEventsBackPage>(`/api/sessions/${seg(id)}/events`, { before, limit }, { signal })

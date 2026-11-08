@@ -12,8 +12,45 @@ import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
 import { Sensitive, StatusDot } from '@/components/ui'
+import { SessionPreviewCard } from './SessionPreview'
 
 const MAX_ROWS = 15
+/** Hover intent before the preview card shows; once shown, another row switches it at once. */
+const PREVIEW_DELAY_MS = 250
+const PREVIEW_SWITCH_MS = 70
+/** Grace to cross from a row to the card (or to the next row) before the card goes. */
+const PREVIEW_CLOSE_MS = 140
+
+const canHover = () => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+
+/** The preview card's state: which row, opened after a short hover intent (mouse) or at once (keyboard focus). */
+function usePreview() {
+  const [at, setAt] = React.useState<{ id: string; el: HTMLElement } | null>(null)
+  const openTimer = React.useRef<number | undefined>(undefined)
+  const closeTimer = React.useRef<number | undefined>(undefined)
+  const shown = React.useRef(false)
+  shown.current = at !== null
+  const stop = () => {
+    window.clearTimeout(openTimer.current)
+    window.clearTimeout(closeTimer.current)
+  }
+  React.useEffect(() => stop, [])
+  return React.useMemo(() => {
+    const show = (id: string, el: HTMLElement, delay: number) => {
+      window.clearTimeout(openTimer.current)
+      window.clearTimeout(closeTimer.current)
+      if (!delay) setAt({ id, el })
+      // card already up: follow the pointer after a short beat (rows only crossed on the way are not loaded)
+      else openTimer.current = window.setTimeout(() => setAt({ id, el }), shown.current ? PREVIEW_SWITCH_MS : delay)
+    }
+    const hide = (delay = PREVIEW_CLOSE_MS) => {
+      stop()
+      if (delay) closeTimer.current = window.setTimeout(() => setAt(null), delay)
+      else setAt(null)
+    }
+    return { at, show, hide, keep: stop }
+  }, [at])
+}
 
 /** "project / topic" of a session path (no import from the Sessions page: the shell stays in the core chunk). */
 function whereOf(path: string, root: string): string {
@@ -36,6 +73,8 @@ export function SessionsRail({ onPick }: { onPick?: () => void }) {
   const listRef = React.useRef<HTMLDivElement>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const root = t('sessions.root')
+  const railRef = React.useRef<HTMLDivElement>(null)
+  const preview = usePreview()
 
   // Relative times stay true while the rail is open.
   const [, tick] = React.useReducer((n: number) => n + 1, 0)
@@ -95,10 +134,16 @@ export function SessionsRail({ onPick }: { onPick?: () => void }) {
     }
   }
 
+  const shownSession = preview.at ? groups.flatMap((g) => g.items).find((s) => s.id === preview.at!.id) : undefined
   let i = 0
   const empty = !isPending && groups.length === 0
   return (
-    <div className="flex h-full min-h-0 w-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground" data-testid="sessions-rail">
+    <div
+      ref={railRef}
+      onPointerLeave={(e) => e.pointerType !== 'touch' && preview.hide()}
+      className="flex h-full min-h-0 w-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+      data-testid="sessions-rail"
+    >
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
         <h2 className="truncate text-sm font-semibold">{t('shell.openSessions')}</h2>
         <Link
@@ -125,7 +170,7 @@ export function SessionsRail({ onPick }: { onPick?: () => void }) {
           />
         </label>
       </div>
-      <div ref={listRef} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" role="navigation" aria-label={t('shell.openSessions')}>
+      <div ref={listRef} onKeyDown={onListKey} onScroll={() => preview.at && preview.hide(0)} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" role="navigation" aria-label={t('shell.openSessions')}>
         {empty && <p className="px-2 py-6 text-center text-xs text-muted-foreground">{q.trim() ? t('common.noResults') : t('shell.railEmpty')}</p>}
         {groups.map((g) => (
           <section key={g.key} aria-label={g.title} className="mt-1 first:mt-0">
@@ -137,9 +182,15 @@ export function SessionsRail({ onPick }: { onPick?: () => void }) {
                   <li key={s.id}>
                     <Link
                       to={sessionHref(s)}
-                      onClick={() => onPick?.()}
+                      onClick={() => {
+                        preview.hide(0)
+                        onPick?.()
+                      }}
+                      onPointerEnter={(e) => e.pointerType === 'mouse' && canHover() && preview.show(s.id, e.currentTarget, PREVIEW_DELAY_MS)}
+                      onPointerLeave={(e) => e.pointerType === 'mouse' && preview.hide()}
+                      onFocus={(e) => e.currentTarget.matches(':focus-visible') && preview.show(s.id, e.currentTarget, 0)}
+                      onBlur={() => preview.hide(0)}
                       data-rail-row={s.id}
-                      title={s.title}
                       style={{ animation: 'mx-label-in 120ms cubic-bezier(0.16, 1, 0.3, 1) backwards', animationDelay: `${Math.min(n, 10) * 12}ms` }}
                       className={cn(
                         'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 outline-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
@@ -178,6 +229,16 @@ export function SessionsRail({ onPick }: { onPick?: () => void }) {
           </section>
         ))}
       </div>
+      {shownSession && preview.at && railRef.current && (
+        <SessionPreviewCard
+          session={shownSession}
+          anchor={preview.at.el}
+          rail={railRef.current}
+          root={root}
+          onPointerEnter={preview.keep}
+          onPointerLeave={() => preview.hide()}
+        />
+      )}
     </div>
   )
 }
