@@ -266,7 +266,13 @@ def _home_kept() -> set[Path]:
             continue
         root = p.parent.parent if p.parent.name == "bin" else p.parent    # ~/.nvm/versions/node/v22, ~/.hermes/node
         kept.add(root if root not in (h, h / ".local") else p.parent)
-    return {k.resolve() for k in kept}
+    out = set()
+    for k in kept:
+        try:
+            out.add(k.resolve())
+        except (OSError, RuntimeError):             # a link in a loop: not kept
+            pass
+    return out
 
 
 def home_wall() -> list[str]:
@@ -290,7 +296,11 @@ def home_wall() -> list[str]:
         for k in kids:
             if k == home / ".local" / "share":
                 continue
-            r = k.resolve()
+            try:
+                r = k.resolve()
+            except (OSError, RuntimeError):         # a link in a loop (Python < 3.13 raises RuntimeError)
+                out.append(str(k))
+                continue
             if k.is_symlink():                      # inside the home folder: its target is an entry of its own
                 if r not in kept and h not in r.parents and r != h and r != Path("/") \
                         and not any(r == t or t in r.parents for t in TOOL_ROOTS):

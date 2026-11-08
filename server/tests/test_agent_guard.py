@@ -456,3 +456,22 @@ def test_shell_settings_with_a_secret_stay_hidden():
     for text in ('export PATH="$HOME/.local/bin:$PATH"\nalias ll="ls -l"\n', "export KEYBOARD=fr\n",
                  "export EDITOR=vim\nPS1='\\u@\\h'\n", "export URL=https://example.com/a:b\n", "x" * 200_000 + "\n"):
         assert not agent_guard.sets_a_secret(text), text
+
+
+def test_a_link_in_a_loop_in_the_home_folder_is_hidden(monkeypatch, tmp_path):
+    from maxxing import agent_guard, config
+    home = tmp_path / "home"
+    (home / "maxxing").mkdir(parents=True)
+    (home / "loop").symlink_to("loop")
+    (home / ".gitconfig").symlink_to(".gitconfig")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(config, "workspace", lambda: home / "maxxing")
+    monkeypatch.setattr(config, "claude_dir", lambda: home / ".claude")
+    real = Path.resolve
+
+    def resolve(self, strict=False):                # Python < 3.13 raises on a loop, 3.13 does not
+        if self.name in ("loop", ".gitconfig"):
+            raise RuntimeError(f"Symlink loop from {self!r}")
+        return real(self, strict)
+    monkeypatch.setattr(Path, "resolve", resolve)
+    assert str(home / "loop") in agent_guard.home_wall()
