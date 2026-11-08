@@ -180,7 +180,7 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           <Sensitive length={6}>{x.agent_name}</Sensitive> · {shortDate(x.at, lang)}
         </span>
       </div>
-      <div className="grid gap-0.5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
         <span className="truncate">
           <span className="text-muted-foreground">{t('mail.to')} </span>
           <Sensitive length={10}>{to.join(', ')}</Sensitive>
@@ -195,7 +195,7 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           <Sensitive length={10}>{x.subject || t('mail.noSubject')}</Sensitive>
         </span>
         {x.text && (
-          <p className={cn('text-xs break-words whitespace-pre-line text-muted-foreground', !all && 'line-clamp-3')}>
+          <p className={cn('text-xs wrap-anywhere whitespace-pre-line text-muted-foreground', !all && 'line-clamp-3')}>
             <Sensitive block>{x.text}</Sensitive>
           </p>
         )}
