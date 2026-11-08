@@ -148,6 +148,17 @@ def test_a_renamed_folder_never_lands_in_an_unrelated_existing_one(client, mx):
     assert "Rules B" in (mx["ws"] / "projects/my-blog-3/CLAUDE.md").read_text()
 
 
+def test_skills_that_give_the_same_folder_stay_apart(client, mx):
+    p = _upload(client, _zip({"skills/My Skill/SKILL.md": "---\nname: a\n---\nA\n",
+                              "skills/my-skill/SKILL.md": "---\nname: b\n---\nB\n",
+                              "skills/my-skill/x.md": "b file\n"}, top="")).json()
+    client.post(f"/api/import/{p['id']}/apply")
+    sk = mx["ws"] / ".claude/skills"
+    assert sorted(f.name for f in (sk / "my-skill").iterdir()) == ["SKILL.md"]
+    assert sorted(f.name for f in (sk / "my-skill-2").iterdir()) == ["SKILL.md", "x.md"]
+    assert {(sk / d / "SKILL.md").read_text()[-2] for d in ("my-skill", "my-skill-2")} == {"A", "B"}
+
+
 def test_slug():
     assert importer.slug("Café Crème !") == "cafe-creme" and importer.slug("***") == "imported"
 

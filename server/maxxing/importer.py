@@ -183,6 +183,7 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     root = workspace.root()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     projects: dict[str, dict] = {}
+    skills: dict[str, dict] = {}
     items: list[dict] = []
     secrets_found: list[dict] = []
     renamed: list[dict] = []
@@ -230,7 +231,9 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
                 dest = PurePosixPath("projects", pr["name"], *parts[2:])
                 data_kind = "project"
         elif parts[0] == "skills" and len(parts) >= 3:
-            dest = PurePosixPath(".claude", "skills", slug(parts[1]), *parts[2:])
+            sname = unique(parts[1], skills, root / ".claude" / "skills")
+            skills.setdefault(sname, {"source": parts[1]})
+            dest = PurePosixPath(".claude", "skills", sname, *parts[2:])
             data_kind = "skill"
         elif len(parts) == 1 and parts[0] in MEMORY_NAMES:
             dest = PurePosixPath("memory.md")

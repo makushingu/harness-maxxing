@@ -32,7 +32,7 @@ files kept aside for Claude, and files refused. Press **Import**.
   `## Imported (date)` section at the end; any other existing file is kept and the imported copy is
   saved next to it as `<name> (imported).<ext>`; an existing skill is kept and the imported one is
   saved as `<name>-imported`.
-- Folder names are turned into valid names (`Coffee Shop` -> `coffee-shop`); two folders that would get the same name are kept apart (`my-blog`, `my-blog-2`), and a name with no Latin letter becomes `imported`, `imported-2`...
+- Folder names are turned into valid names (`Coffee Shop` -> `coffee-shop`); two folders (projects, topics or skills) that would get the same name are kept apart (`my-blog`, `my-blog-2`, skipping a `my-blog-2` that already exists), and a name with no Latin letter becomes `imported`, `imported-2`...
 - **Files containing a key or a token are refused** (reported by type, never by value). Add your
   keys in Settings -> Keys. Files up to 5 MB are checked, 50 MB of them per archive at most: past that, the
   remaining ones are skipped and listed (they could not be checked).
