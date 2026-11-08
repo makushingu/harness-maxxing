@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldCheck, ShieldHalf } from 'lucide-react'
+import { ShieldAlert, ShieldCheck, ShieldHalf, ShieldQuestion } from 'lucide-react'
 import { useClaudeSettings, useClaudeStatus } from '@/lib/queries'
 import type { PermissionMode } from '@/lib/types'
 import { useLang, useT } from '@/i18n'
@@ -32,6 +32,7 @@ export function ClaudeDefaults() {
   const modes: { id: PermissionMode; icon: typeof ShieldAlert; title: string; desc: string; badge?: string }[] = [
     { id: 'bypass', icon: ShieldAlert, title: t('claude.mode.bypass'), desc: t('claude.mode.bypassDesc'), badge: t('claude.mode.recommendedVps') },
     { id: 'acceptEdits', icon: ShieldHalf, title: t('claude.mode.acceptEdits'), desc: t('claude.mode.acceptEditsDesc') },
+    { id: 'ask', icon: ShieldQuestion, title: t('claude.mode.ask'), desc: t('claude.mode.askDesc') },
     { id: 'default', icon: ShieldCheck, title: t('claude.mode.default'), desc: t('claude.mode.defaultDesc') },
   ]
   return (

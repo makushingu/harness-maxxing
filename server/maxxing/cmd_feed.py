@@ -75,14 +75,14 @@ def _run(a) -> int:
     from .feed import FeedError
     try:
         if a.feed_cmd == "post":
-            from . import agent_guard
+            from . import agent_guard, agents
             turn = agent_guard.agent_turn()         # from the turn's own session, not its (changeable) environment
             loop = _self_trigger(turn["path"], feed.clean_source(a.source))
             if loop:
                 print(loop, file=sys.stderr)
                 return 2
             ev = feed.post(a.title, a.body, a.level, a.source, a.url, dedupe=a.dedupe, group=a.group,
-                           notify=not a.quiet, hops=turn["depth"] + 1 if turn["path"] else 0)
+                           notify=not a.quiet and not (turn["path"] and agents.silent(turn["path"])), hops=turn["depth"] + 1 if turn["path"] else 0)
             if a.json:
                 print(json.dumps({"event": ev, "duplicate": ev is None}))
             else:

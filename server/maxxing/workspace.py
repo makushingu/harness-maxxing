@@ -228,6 +228,7 @@ def _topic_obj(project: str, name: str, stats: dict, threads: dict) -> dict:
     return {"name": name, "project": project, "path": path,
             "description": read_description(folder),
             "permission_mode": mode if mode in PERMISSION_MODES else "",
+            "allowed_tools": topic_allowed_tools(path),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0), "running": st.get("running", 0),
             "unread": st.get("unread", 0), "telegram_thread": thread if isinstance(thread, int) else None,
             "agents": _agents_of(project, name, stats)}
@@ -303,7 +304,7 @@ def _rename_in_order(names: list, old: str, new: str) -> list:
 
 # ---- folder settings: project emoji, topic permission mode (<folder>/.maxxing.json: moves with the folder) ----
 META_FILE = ".maxxing.json"
-PERMISSION_MODES = ("bypass", "acceptEdits", "default")
+PERMISSION_MODES = ("bypass", "acceptEdits", "default", "ask")
 
 
 def _parse_meta(f: Path) -> dict:
@@ -319,7 +320,7 @@ def _folder_meta(folder: Path) -> dict:
     return copy.deepcopy(_cached(folder / META_FILE, _parse_meta))
 
 
-def _set_folder_meta(folder: Path, key: str, value: str) -> None:
+def _set_folder_meta(folder: Path, key: str, value: str | list) -> None:
     meta = _folder_meta(folder)
     if value:
         meta[key] = value
@@ -350,10 +351,57 @@ def topic_permission_mode(path: str) -> str:
     return mode if mode in PERMISSION_MODES else ""
 
 
+ALLOWED_MAX = 100             # "Always allow" rules of a topic
+RULE_MAX = 500
+
+
+def topic_allowed_tools(path: str) -> list[str]:
+    """The topic's "Always allow" rules (Claude Code permission rules such as `Bash(git status)`, `WebFetch(domain:x)`,
+    `Write`), added from an Allow of a session in mode ask. They pass without asking in modes ask and default.
+    `.maxxing.json` is out of Claude's reach (deny rule): a session cannot allow itself more."""
+    from . import agents
+    if agents.is_agent_path(path):
+        return []
+    try:
+        rules = _folder_meta(topic_dir(path)).get("allowed_tools")
+    except (ValueError, OSError):
+        return []
+    return [r for r in rules if isinstance(r, str) and r][:ALLOWED_MAX] if isinstance(rules, list) else []
+
+
+def check_allowed_tools(rules: list) -> list[str]:
+    out: list[str] = []
+    for r in rules:
+        r = r.strip() if isinstance(r, str) else ""
+        if not r or len(r) > RULE_MAX or any(c in r for c in "\x00\n\r"):
+            raise WorkspaceError(400, "bad_rule", "allowed_tools: one Claude Code rule per entry, one line each")
+        if r not in out:
+            out.append(r)
+    if len(out) > ALLOWED_MAX:
+        raise WorkspaceError(400, "too_many_rules", f"allowed_tools: at most {ALLOWED_MAX} rules")
+    return out
+
+
+def add_topic_allowed_tool(path: str, rule: str) -> list[str]:
+    """Adds one rule to a topic (an "Always allow" of a request). Returns the topic's rules."""
+    d = topic_dir(path)
+    if not d.is_dir():
+        raise WorkspaceError(404, "not_found", f"Topic {path} not found")
+    with _allowed_lock:
+        rules = topic_allowed_tools(path)
+        rules = check_allowed_tools(rules + [rule])
+        _set_folder_meta(d, "allowed_tools", rules)
+    _changed("updated", "topic", path)
+    return rules
+
+
+_allowed_lock = config.ProcessLock("topic-allowed-tools")
+
+
 def check_permission_mode(value: str) -> str:
     v = (value or "").strip()
     if v and v not in PERMISSION_MODES:
-        raise WorkspaceError(400, "bad_permission_mode", "permission_mode: bypass, acceptEdits, default or empty")
+        raise WorkspaceError(400, "bad_permission_mode", "permission_mode: bypass, acceptEdits, default, ask or empty")
     return v
 
 
@@ -482,13 +530,16 @@ def update_project(project: str, name: str | None = None, description: str | Non
 
 
 def update_topic(project: str, topic: str, name: str | None = None, description: str | None = None,
-                 permission_mode: str | None = None) -> dict:
+                 permission_mode: str | None = None, allowed_tools: list | None = None) -> dict:
     d = project_dir(check_slug(project)) / "topics" / check_slug(topic)
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
     check_description(description)
     if permission_mode is not None:
         _set_folder_meta(d, "permission_mode", check_permission_mode(permission_mode))
+    if allowed_tools is not None:
+        with _allowed_lock:
+            _set_folder_meta(d, "allowed_tools", check_allowed_tools(allowed_tools))
     new = topic
     if name and name != topic:
         new = check_slug(name)

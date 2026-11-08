@@ -43,7 +43,9 @@ def _configure(p) -> None:
     s.add_argument("agent")
     s.add_argument("text", nargs="+")
     s.add_argument("--json", action="store_true")
-    for name, hlp in (("on", "switch an agent on"), ("off", "switch an agent off")):
+    for name, hlp in (("on", "switch an agent on"), ("off", "switch an agent off"),
+                      ("silent", "the agent works without notifying you (no Telegram, alerts read, nothing unread)"),
+                      ("loud", "the agent notifies you again")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("agent")
     s = sub.add_parser("templates", help="the ready-made agents (gallery of New agent)")
@@ -196,7 +198,7 @@ def _list(a) -> int:
                 print(f"{x['path']}  {x['display_name']}")
         return 0
     if a.json:
-        print(json.dumps([{k: x.get(k) for k in ("path", "display_name", "enabled", "telegram", "approvals",
+        print(json.dumps([{k: x.get(k) for k in ("path", "display_name", "enabled", "silent", "telegram", "approvals",
                                                   "limits", "triggers", "cost_today", "runs_last_hour")}
                           for x in rows], indent=2))
         return 0
@@ -475,6 +477,10 @@ def _handler(a) -> int:
         agents.update(path, {"enabled": a.agents_cmd == "on"})
         print(f"{path}: {a.agents_cmd}")
         return 0
+    if a.agents_cmd in ("silent", "loud"):
+        agents.update(path, {"silent": a.agents_cmd == "silent"})
+        print(f"{path}: {a.agents_cmd}")
+        return 0
     if a.agents_cmd == "export":
         from . import agent_format
         md = agent_format.export_md(path)
@@ -502,7 +508,7 @@ def _handler(a) -> int:
         except OSError:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
-                                                    "approvals", "trust_outside", "keys", "telegram", "sandbox", "domains",
+                                                    "approvals", "trust_outside", "keys", "telegram", "silent", "sandbox", "domains",
                                                     "writable", "rules", "subagent", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],

@@ -279,6 +279,9 @@ class Runner:
                                     session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
+        ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session
+        if ask:
+            mode = "default"
         if agent.get("sandbox"):                        # Claude Code's sandbox; never bypass (domains not enforced)
             from maxxing import agent_guard
             if not agent_guard.available()["ok"]:
@@ -287,15 +290,17 @@ class Runner:
                 self._record(Attempt(rc=1, stderr=err), item)
                 return err
             mode = agent_guard.mode(mode)
-        if agent.get("approvals") and not plan:
+        if (agent.get("approvals") or ask) and not plan:
             if agent.get("approvals_forced") and meta.get("fresh", True):
                 self.note("Started by an outside event: asks before risky actions (agent setting: trust outside events)")
             mode = "default"
-            approval = approval_args(self.sid, str(meta.get("path") or ""), agent.get("approval_timeout_s"))
+            approval = approval_args(self.sid, str(meta.get("path") or "") if agent else "",
+                                     agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "") if x)
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"))
+        allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
+        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
         base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))
         if not agent:                                   # a topic's agents with `subagent` on: callable from its sessions
             from maxxing import agent_format
@@ -823,6 +828,15 @@ def approval_args(sid: str, path: str, timeout_s: object) -> list[str]:
     if config.read_json(f, None) != data:
         config.write_json(f, data, mode=0o600)
     return ["--mcp-config", str(f), "--permission-prompt-tool", approval_mcp.PROMPT_TOOL]
+
+
+def workspace_allowed(path: str) -> list[str]:
+    """The topic's "Always allow" rules (a session of the topic in mode ask or default)."""
+    from .. import workspace
+    try:
+        return workspace.topic_allowed_tools(path)
+    except Exception:  # noqa: BLE001 - a broken .maxxing.json: nothing pre-allowed, it asks
+        return []
 
 
 def effective_mode(meta: dict, cfg: dict) -> str:

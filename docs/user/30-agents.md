@@ -220,6 +220,14 @@ An agent can also ask for a human itself: in its role, tell it to run
 `maxxing feed post "Need your eyes on order 1042" --source orders --level warning` when something needs you.
 Agents never start on notifications of the source *Agents*.
 
+### Silent agents
+
+An agent that should just work in the background: **right-click** it in the list or on the Office (a long press on a
+phone) and tick **Silent**, or turn on **Silent** at the top of its settings. It runs as usual, but never calls you:
+no Telegram message for its results, its notifications land already read (no Telegram, no badge), and its results do
+not count as unread. A small 🔕 shows next to its name. What waits for your answer still shows (an approval, an e-mail
+to OK). The same menu switches it on / off, runs it now, and **Properties…** opens its settings.
+
 ## Telegram
 
 Turn on **Telegram** in the agent's settings: it gets its **own thread** in your Telegram chat, named after it
@@ -348,6 +356,7 @@ cleaning also keeps agents' memory short.
 maxxing agents list                                  # every agent, on/off, triggers, cost of the day
 maxxing agents run acme/blog/writer "Spring sale post"
 maxxing agents off writer                            # or: on
+maxxing agents silent writer                         # works without notifying you; loud = back to normal
 maxxing agents send acme/blog/editor "Draft ready: drafts/spring-sale.md"   # from an agent's session
 maxxing agents create acme/blog/writer --name Writer --role "Writes …"     # --role-file, --permission, --telegram…
 maxxing agents cron writer --schedule "0 8 * * 1" --prompt "Weekly post"   # add a schedule

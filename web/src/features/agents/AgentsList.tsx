@@ -18,6 +18,7 @@ import { Button, CountBadge, EmptyState, Input, Sensitive, Skeleton, StatusDot, 
 import { useCompact } from '@/stores/media'
 import { AgentAvatarIcon, OUTFIT } from './Avatar'
 import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi } from './layout'
+import { SilentMark, useAgentMenu } from './AgentMenu'
 
 export type AgentState = 'waiting' | 'unread' | 'running' | 'failed' | 'active' | 'off'
 /** One state per agent, the most pressing first. */
@@ -352,12 +353,14 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
   const state = agentState(a)
   const dot = DOT[state]
   const unread = a.thread_unread || 0
+  const ctx = useAgentMenu(a)
   return (
     <Link
       role="listitem"
       to={{ pathname: to, search: location.search }}
       aria-current={active ? 'page' : undefined}
       {...dnd.props}
+      {...ctx.props}
       className={cn(
         'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
         active && 'bg-accent hover:bg-accent',
@@ -375,8 +378,11 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
         </span>
       </span>
       <span className="grid min-w-0 flex-1">
-        <span className={cn('truncate text-sm', unread > 0 || state === 'waiting' ? 'font-semibold' : 'font-medium', state === 'off' && 'text-muted-foreground')}>
-          <Sensitive length={8}>{a.display_name}</Sensitive>
+        <span className="flex min-w-0 items-center gap-1">
+          <span className={cn('truncate text-sm', unread > 0 || state === 'waiting' ? 'font-semibold' : 'font-medium', state === 'off' && 'text-muted-foreground')}>
+            <Sensitive length={8}>{a.display_name}</Sensitive>
+          </span>
+          <SilentMark agent={a} />
         </span>
         <span className="truncate text-xs text-muted-foreground">
           <Sensitive length={10}>{a.topic}</Sensitive>
@@ -396,6 +402,7 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
         )}
         <CountBadge count={unread} title={t('agents.list.unread', { count: unread })} />
       </span>
+      {ctx.menu}
     </Link>
   )
 }

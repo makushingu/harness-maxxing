@@ -830,3 +830,33 @@ def test_events_waiting_in_the_window_follow_a_topic_rename(client, topic, monke
     for p in agents.debouncer.pending.values():
         p["due"] = 0
     assert agents.flush_due() == 1 and fired[0][0] == new and "order 5" in fired[0][1]["text"]
+
+
+def test_a_silent_agent_works_without_calling_the_user(client, topic, monkeypatch):
+    from maxxing import feed
+    from maxxing.telegram import gateway
+    sent, out = [], []
+    monkeypatch.setattr(gateway, "notify_agent", lambda path, text, **kw: sent.append(text))
+    monkeypatch.setattr(feed, "_to_telegram", lambda ev: out.append(ev["title"]))
+    _on(client)
+    _create(client)
+    client.patch("/api/agents/acme/blog/writer", json={"telegram": True, "silent": True})
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["silent"] is True and agents.load(A)["silent"] is True
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL plan the post"}).json()
+    assert run["started"]                                # it still works
+    wait_idle(client, run["session"]["id"])
+    wait_for(lambda: _results(client))
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["thread_unread"] == 0 and a["unread"] == 0 and sent == []
+    # its alerts stay in the feed, already read, and never reach Telegram
+    agents._limit_alert(A, "budget")
+    ev = feed.find(agents._ref(A, "budget"))
+    assert ev and ev["read"] and out == []
+    assert client.get("/api/agents/acme/blog/writer").json()["alerts"] == 0
+    # loud again: the next result is unread and goes to Telegram
+    client.patch("/api/agents/acme/blog/writer", json={"silent": False})
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL again"}).json()
+    wait_idle(client, run["session"]["id"])
+    wait_for(lambda: sent)
+    assert client.get("/api/agents/acme/blog/writer").json()["thread_unread"] >= 1

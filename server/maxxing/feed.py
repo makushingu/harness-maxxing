@@ -36,7 +36,7 @@ TITLE_MAX, BODY_MAX = 200, 4000
 SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,39}$")
 # Built-in sources: they already report in their own Telegram thread (Crons; Alerts: gateway.alert / system_alert).
 BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-ins", "health": "Server health",
-           "agents": "Agents"}
+           "agents": "Agents", "sessions": "Sessions"}
 # sources the product posts to by itself besides BUILTIN: mail (mail/outbox.py, the e-mails waiting for the owner's
 # OK) and infra (sites down, certificates): a webhook or an agent posting there could pass for them
 PRODUCT_SOURCES = {"mail", "infra"}
@@ -248,7 +248,7 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     bus.invalidate("feed", *((f"agents:{agent}",) if agent else ()))
     if notify and not grouped:
         _to_telegram(ev)
-    elif grouped and ev.get("ref"):
+    elif grouped and notify and ev.get("ref"):
         _alert_out(ev, new=False)
     return ev
 

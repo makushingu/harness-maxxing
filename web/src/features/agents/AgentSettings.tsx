@@ -171,6 +171,9 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
           <SettingRow label={t('agents.settings.enabled')} description={t('agents.settings.enabledDesc')} htmlFor="ag-enabled">
             <Switch id="ag-enabled" checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} />
           </SettingRow>
+          <SettingRow label={t('agents.settings.silent')} description={t('agents.settings.silentDesc')} htmlFor="ag-silent">
+            <Switch id="ag-silent" checked={a.silent} onCheckedChange={(v) => patch.mutate({ path: a.path, silent: v })} data-testid="agent-silent-switch" />
+          </SettingRow>
           <SettingRow label={t('agents.look.title')} description={t('agents.settings.look')}>
             <Button variant="outline" size="sm" onClick={() => setLook(true)} data-testid="agent-settings-look">
               <Pencil /> {t('agents.create.faceEdit')}

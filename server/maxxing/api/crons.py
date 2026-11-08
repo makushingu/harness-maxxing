@@ -35,7 +35,7 @@ class CronIn(BaseModel):
     enabled: Optional[bool] = None
     notify: Optional[Literal["never", "failure", "always"]] = None
     timeout_s: Optional[int] = None
-    permission_mode: Optional[Literal["", "bypass", "acceptEdits", "default"]] = None
+    permission_mode: Optional[Literal["", "bypass", "acceptEdits", "default", "ask"]] = None
     once_at: Optional[str] = None
     delete_after: Optional[bool] = None
     catch_up: Optional[bool] = None
