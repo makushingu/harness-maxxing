@@ -14,7 +14,7 @@ two blocks):
 | | **Appearance** | saved in this browser, in three cards. **Theme and colors**: dark/light, accent color (the logo takes it too), background (neutral or tinted with the accent) - the last theme, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window). **Layout**: density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*). **Fonts**: interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it) |
 | | **Profile** | your pseudo, a **photo** (kept on this server, shown instead of the color and emoji, also to your Team contacts), color and emoji (picked from a searchable list) for messages, notifications and Team, with a preview; **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
 | | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), **Privacy**: the presentation mode by default (new browsers start with your data masked), sign out everywhere |
-| | **Features** | the optional pages and the options of the sessions (below) |
+| | **Features** | every page of the sidebar: the ones always there, the optional ones with their switch, the options of the sessions under Sessions (below) |
 | **Claude** | **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
 | | **Memory** | second brain cleaner: line limit per `memory.md`, **Clean now**, size of every memory file - see [Memory](memory) |
 | | **Skills** | the skills Claude sees on this server: **yours** (in `~/.claude/skills`, the workspace, a project or a topic, with where each one lives) and the ones **shipped with Harness** (refreshed by every update, read-only); **Open**, **Edit with Claude**, **Share with the community**, **New skill** - see [Skills](skills) |
@@ -44,10 +44,9 @@ Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` o
 
 ## Features
 
-**Settings -> Features** has two cards.
-
-**Pages**: one row per optional page, in the order of your sidebar, with what it is for and what it needs. A page
-switched on gets its entry in the sidebar (and in the ⊞ menu, the palette and the `G` shortcuts); switched off, it
+**Settings -> Features** lists every page of the sidebar, in its order, with what it is for. **Dashboard**,
+**Sessions** and **Files** are always there (marked **Always on**); the optional pages have a switch and say what they
+need. A page switched on gets its entry in the sidebar (and in the ⊞ menu, the palette and the `G` shortcuts); switched off, it
 is hidden and nothing is deleted (each page's doc says what still runs meanwhile).
 
 | Page | On a new install | Needs |
@@ -62,7 +61,7 @@ is hidden and nothing is deleted (each page's doc says what still runs meanwhile
 The first-run wizard asks the same question (**What will you use?**), and Settings -> Keys offers the Git page as
 soon as a GitHub key is in the vault. An install made before 2.0.0a132 keeps the pages it had.
 
-**Sessions**: **Maxxing mode (beta)** and the **line under the answers** (cost, tokens, duration, model: tick what
+Under **Sessions**, indented: **Maxxing mode (beta)** and the **line under the answers** (cost, tokens, duration, model: tick what
 it shows) for everyone, and, saved in this browser only (marked **This browser**): the **Tabs view** (Alt+T) and
 the **HUD**. The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
 widget in **Settings -> Usage**, the presentation mode by default in **Settings -> Security**, the Telegram mode in
