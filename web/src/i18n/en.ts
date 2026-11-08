@@ -3782,7 +3782,7 @@ export const en = {
   'features.page.agents': "Lasting helpers that live in a topic, each with its role and memory, started by hand, on a schedule, a webhook or from Telegram, within a daily budget.",
   'features.page.tasks': "A board of things to do (kanban, week, calendar, list) that Claude reads and updates too, with its dashboard widget.",
   'features.page.team': "Chat with people who have their own Harness: messages, groups, polls and files, server to server.",
-  'features.page.mail': "Your mailboxes read, searched and sorted here, and by Claude with `maxxing mail`.",
+  'features.page.mail': "Your mailboxes read, searched and sorted here, and by Claude in your sessions.",
   'features.page.infra': "Every site, database, bucket, domain and server, with its status and where it lives.",
   'features.page.git': "The repositories of the server and of your GitHub account, their branches and commits as a graph.",
   'features.need.team': "Needs an https address on the internet (domain mode).",

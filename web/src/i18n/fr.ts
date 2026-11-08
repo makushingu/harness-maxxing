@@ -3764,7 +3764,7 @@ export const fr: Record<keyof typeof en, string> = {
   'features.page.agents': "Des aides durables qui vivent dans un topic, chacune avec son rôle et sa mémoire, lancées à la main, à heure fixe, par un webhook ou depuis Telegram, dans un budget par jour.",
   'features.page.tasks': "Un tableau des choses à faire (kanban, semaine, calendrier, liste) que Claude lit et met à jour aussi, avec son widget du tableau de bord.",
   'features.page.team': "Discuter avec des personnes qui ont leur propre Harness : messages, groupes, sondages et fichiers, de serveur à serveur.",
-  'features.page.mail': "Vos boîtes mail lues, cherchées et triées ici, et par Claude avec `maxxing mail`.",
+  'features.page.mail': "Vos boîtes mail lues, cherchées et triées ici, et par Claude dans vos sessions.",
   'features.page.infra': "Chaque site, base de données, bucket, domaine et serveur, avec son état et l’endroit où il vit.",
   'features.page.git': "Les dépôts du serveur et de votre compte GitHub, leurs branches et leurs commits en graphe.",
   'features.need.team': "Demande une adresse https sur internet (mode domaine).",

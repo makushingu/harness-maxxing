@@ -46,7 +46,7 @@ export function FeaturePages({ compact }: { compact?: boolean }) {
         const id = `ft-${n.setting}`
         return (
           <li key={n.setting} className={cn('flex items-center gap-4 py-3.5 first:pt-0 last:pb-0', compact && 'py-3')}>
-            <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors', on ? 'border-primary/30 bg-primary/10 text-primary' : 'text-muted-foreground')}>
+            <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors max-sm:hidden', on ? 'border-primary/30 bg-primary/10 text-primary' : 'text-muted-foreground')}>
               <n.icon className="size-[18px]" strokeWidth={1.8} />
             </span>
             <div className="grid min-w-0 flex-1 gap-0.5">
