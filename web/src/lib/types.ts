@@ -124,6 +124,8 @@ export type Agent = {
   allowed_tools: string[]
   disallowed_tools: string[]
   telegram: boolean
+  /** works without notifying the user (no Telegram, alerts already read, nothing unread) */
+  silent: boolean
   approvals: boolean
   /** runs started by outside text (webhooks, feed, other agents) act per its mode instead of always asking first */
   trust_outside: boolean
@@ -287,6 +289,7 @@ export type AgentInput = {
   allowed_tools?: string[]
   disallowed_tools?: string[]
   telegram?: boolean
+  silent?: boolean
   approvals?: boolean
   trust_outside?: boolean
   keys?: string[]

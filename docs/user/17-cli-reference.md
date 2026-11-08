@@ -204,6 +204,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents run AGENT [TASK] [--data] [--json]` | start it now (a new session); `--data`: the text is outside data, not a task; exit 1 when a limit refused it |
 | `maxxing agents send AGENT TEXT [--json]` | from an agent's session: hand work to another agent (the text is given as data; 3 hops at most) |
 | `maxxing agents on AGENT` / `off AGENT` | switch it on / off |
+| `maxxing agents silent AGENT` / `loud AGENT` | it works without notifying you (no Telegram, notifications already read, nothing unread) / back to normal |
 | `maxxing agents templates [--lang L] [--json]` | the ready-made agents (id, name, trigger) |
 | `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--mail ADDRESS] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it; `--mail`: the mailbox of an e-mail template) |
 | `maxxing agents show AGENT` | its settings, role, triggers, schedule jobs and webhook URLs (JSON, no secret) |

@@ -248,7 +248,7 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     bus.invalidate("feed", *((f"agents:{agent}",) if agent else ()))
     if notify and not grouped:
         _to_telegram(ev)
-    elif grouped and ev.get("ref"):
+    elif grouped and notify and ev.get("ref"):
         _alert_out(ev, new=False)
     return ev
 

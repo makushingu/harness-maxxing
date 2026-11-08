@@ -498,6 +498,9 @@ def clean(data: Any, strict: bool = False) -> dict:
             "enabled": d.get("enabled") is not False, "model": model, "permission_mode": mode,
             "allowed_tools": _clean_tools(d.get("allowed_tools")), "disallowed_tools": _clean_tools(d.get("disallowed_tools")),
             "telegram": bool(d.get("telegram")), "approvals": bool(d.get("approvals")),
+            # silent: it runs as usual, but nothing calls the user (no Telegram, quiet alerts, nothing unread);
+            # its requests (approvals, e-mails to OK) still do: they wait for the user
+            "silent": bool(d.get("silent")),
             "trust_outside": bool(d.get("trust_outside")), "keys": _clean_keys(d.get("keys"), strict),
             # sandbox: off for agents made before it existed (no field), on for new ones (create())
             "sandbox": bool(d.get("sandbox")), "domains": _clean_domains(d.get("domains"), strict),
@@ -654,10 +657,10 @@ def public(path: str, stats: dict | None = None) -> dict:
     return {"path": path, "project": p[0], "topic": p[1], "name": p[2], "display_name": a["name"] or p[2],
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
-                "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
+                "silent", "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
                 "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
-            "running": st.get("running", 0), "unread": st.get("unread", 0)}
+            "running": st.get("running", 0), "unread": 0 if a["silent"] else st.get("unread", 0)}
 
 
 def list_in_topic(project: str, topic: str, stats: dict | None = None) -> list[dict]:
@@ -1197,7 +1200,8 @@ def status(path: str, metas: list[dict] | None = None) -> dict:
             "last_run": last, "running_now": len(running),
             "running_sessions": [{"id": m.get("id"), "title": m.get("title") or "",
                                   "started": m.get("spawned_at") or m.get("updated")} for m in running],
-            "thread_unread": sum(1 for m in msgs if m.get("kind") == "result" and (m.get("at") or 0) > seen),
+            "thread_unread": 0 if silent(path) else sum(1 for m in msgs if m.get("kind") == "result"
+                                                        and (m.get("at") or 0) > seen),
             "waiting": waiting, "alerts": _alert_count(path)}
 
 
@@ -1533,7 +1537,19 @@ def _alert(path: str, what: str, title: str, body: str, level: str, url: str, gr
     ref = _ref(path, what)
     if not group and feed.find(ref):
         return
-    feed.post(title, body, level, ALERT_SOURCE, url, group=group, ref=ref, agent=path, actions=OPEN)
+    quiet = silent(path)
+    ev = feed.post(title, body, level, ALERT_SOURCE, url, group=group, ref=ref, agent=path, actions=OPEN,
+                   notify=not quiet)
+    if quiet and ev:                                    # kept in the feed, already read: no badge, no Telegram
+        feed.update(ev["id"], read=True, notify=False)
+
+
+def silent(path: str) -> bool:
+    """The agent works without calling the user (option `silent`)."""
+    try:
+        return bool(load(path)["silent"])
+    except Exception:  # noqa: BLE001 - an unreadable agent is not silenced
+        return False
 
 
 def _alerts_end(path: str, whats: tuple[str, ...], resolution: str) -> None:
@@ -1654,7 +1670,8 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                                "the agent page.", status="changed", session=session["id"], files=changed)
     except Exception:  # noqa: BLE001
         log.exception("agent %s: changed files check", path)
-    if load(path)["telegram"] and not group:          # a group's answers are read in the group
+    a = load(path)
+    if a["telegram"] and not a["silent"] and not group:   # a group's answers are read in the group
         try:
             from .telegram import gateway
             gateway.notify_agent(path, text, ok=ok, thread_msg=msg["id"])

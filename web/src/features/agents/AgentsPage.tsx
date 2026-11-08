@@ -46,6 +46,7 @@ import { OfficeFuture } from './OfficeFuture'
 import { OfficeCustom } from './OfficeCustom'
 import { draftUrl } from './EditWithClaude'
 import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi } from './layout'
+import { SilentMark, useAgentMenu } from './AgentMenu'
 
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
@@ -243,6 +244,7 @@ function AgentTile({ agent: a, index, layout }: { agent: Agent; index: number; l
   const s = statusOf(a, t, lang)
   const open = () => navigate(agentRoute(a))
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+  const ctx = useAgentMenu(a)
   return (
     <div
       role="link"
@@ -251,6 +253,7 @@ function AgentTile({ agent: a, index, layout }: { agent: Agent; index: number; l
       onClick={open}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && (e.preventDefault(), open())}
       {...dnd.props}
+      {...ctx.props}
       className={cn(
         'group/tile relative grid cursor-pointer justify-items-center gap-3 rounded-xl border bg-card px-3 pt-5 pb-4 text-center transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         dnd.dragging && 'opacity-50',
@@ -263,8 +266,11 @@ function AgentTile({ agent: a, index, layout }: { agent: Agent; index: number; l
       <DropBar side={dnd.side} vertical={false} />
       <AtDesk agent={a} status={s} />
       <div className="grid w-full min-w-0 gap-0.5">
-        <span className={cn('truncate text-sm font-medium', !a.enabled && 'text-muted-foreground')}>
-          <Sensitive length={8}>{a.display_name}</Sensitive>
+        <span className="flex min-w-0 items-center justify-center gap-1">
+          <span className={cn('truncate text-sm font-medium', !a.enabled && 'text-muted-foreground')}>
+            <Sensitive length={8}>{a.display_name}</Sensitive>
+          </span>
+          <SilentMark agent={a} />
         </span>
         <span className={cn('flex min-w-0 items-center justify-center gap-1.5 text-xs', s.id === 'failed' ? 'text-destructive' : s.id === 'waiting' ? 'text-warning' : 'text-muted-foreground')} data-testid="agent-card-status">
           <StatusDot tone={s.tone} pulse={s.pulse} className="size-1.5" />
@@ -286,6 +292,7 @@ function AgentTile({ agent: a, index, layout }: { agent: Agent; index: number; l
           </span>
         </Tooltip>
       </div>
+      {ctx.menu}
     </div>
   )
 }
