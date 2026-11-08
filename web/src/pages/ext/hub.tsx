@@ -17,7 +17,7 @@ export default function ExtensionsHub() {
       description={t('ext.hubDesc')}
       actions={
         <Button variant="outline" size="sm" asChild>
-          <Link to="/settings/extensions">
+          <Link to="/settings/pages">
             <Settings2 /> <span className="max-[429px]:sr-only">{t('ext.manage')}</span>
           </Link>
         </Button>
@@ -35,7 +35,7 @@ export default function ExtensionsHub() {
           description={t('ext.emptyDesc')}
           action={
             <Button asChild>
-              <Link to="/settings/extensions">{t('ext.manage')}</Link>
+              <Link to="/settings/pages">{t('ext.manage')}</Link>
             </Button>
           }
         />

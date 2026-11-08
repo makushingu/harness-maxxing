@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Copy, Eye, EyeOff, KeyRound, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
-import { revealSecret, useDeleteSecret, usePutSecret, useSecrets } from '@/lib/queries'
+import { revealSecret, useDeleteSecret, usePutSecret, useSaveSettings, useSecrets, useSettings } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
 import { fmtRelative } from '@/lib/format'
 import { copyText } from '@/lib/utils'
@@ -213,8 +213,19 @@ export function KeysSection() {
   const t = useT()
   const { data, isLoading } = useSecrets()
   const [dialog, setDialog] = React.useState<{ open: boolean; editing: Secret | null }>({ open: false, editing: null })
+  const { data: settings } = useSettings()
+  const save = useSaveSettings()
+  // a GitHub key arrived and the Git page is off (off by default): offer it once here, where the key was added
+  const gitHint = !!settings && !settings.git_page && !!data?.some((k) => /^(GITHUB_TOKEN|GH_TOKEN)$|GITHUB/i.test(k.name))
   return (
     <SectionStack>
+      {gitHint && (
+        <Callout tone="info" title={t('keys.gitSuggest')}>
+          <Button size="sm" variant="outline" className="mt-1" loading={save.isPending} onClick={() => save.mutate({ git_page: true })}>
+            {t('keys.gitSuggestOn')}
+          </Button>
+        </Callout>
+      )}
       <Callout tone="info" title={t('keys.exposeTitle')}>
         {t('keys.exposeExplain')}
       </Callout>

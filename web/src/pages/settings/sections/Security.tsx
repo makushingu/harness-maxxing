@@ -1,12 +1,12 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import { LogOut } from 'lucide-react'
-import { useChangePassword, useLogout, useTelegram } from '@/lib/queries'
+import { useChangePassword, useLogout, useSaveSettings, useSettings, useTelegram } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
 import { useT } from '@/i18n'
-import { Button, FormField, SecretInput, toast } from '@/components/ui'
+import { Button, FormField, SecretInput, Switch, toast } from '@/components/ui'
 import { NewPasswordFields, validatePasswords } from '@/pages/auth/PasswordFields'
-import { Callout } from '@/features/common'
+import { Callout, SettingRow } from '@/features/common'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -15,6 +15,8 @@ export function SecuritySection() {
   const change = useChangePassword()
   const logout = useLogout()
   const { data: tg } = useTelegram()
+  const { data: s } = useSettings()
+  const save = useSaveSettings()
   const [current, setCurrent] = React.useState('')
   const [pw, setPw] = React.useState('')
   const [confirmPw, setConfirmPw] = React.useState('')
@@ -68,6 +70,12 @@ export function SecuritySection() {
             </Link>
           </p>
         )}
+      </SettingsCard>
+      {/* the presentation mode masks your data while you share your screen; was in General before 2.0.0a132 */}
+      <SettingsCard title={t('security.privacy')} description={t('security.privacyDesc')}>
+        <SettingRow label={t('settings.presentationDefault')} description={t('settings.presentationDefaultDesc')} htmlFor="sec-pres">
+          <Switch id="sec-pres" checked={!!s?.presentation_default} disabled={!s} onCheckedChange={(v) => save.mutate({ presentation_default: v })} />
+        </SettingRow>
       </SettingsCard>
       <SettingsCard title={t('security.sessions')} description={t('security.sessionsDesc')}>
         <div className="grid gap-4">

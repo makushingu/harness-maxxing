@@ -18,10 +18,8 @@ Paths: code directory = `maxxing status` -> Code (here `{{CODE_DIR}}`), workspac
 |---|---|
 | a widget, a mini-game, a canvas, a page, an integration shown in the UI | an **extension** (skill `maxxing-extension`): survives updates with nothing to adapt |
 | a new scheduled job, task, memory rule, topic behaviour | crons / tasks / the topic's `CLAUDE.md` - not the code |
+| the interface to look or work differently, and no setting does it (Settings -> Appearance, Features) | a **customization of the web UI** (section 1b) |
 | the product to behave differently and nothing above can do it | a **customization** (this skill) |
-
-Never customize `web/` (the UI is shipped pre-built in `web/dist` and cannot be rebuilt on this
-server: `maxxing custom save` refuses it) - build a page or widget extension instead.
 
 ## 1. Make a customization
 1. Read the relevant code first (`<code>/server/maxxing/...`, `docs/dev/INTERNALS.md` explains the
@@ -36,19 +34,52 @@ server: `maxxing custom save` refuses it) - build a page or widget extension ins
      --check "a shell command that exits 0 while it works"
    ```
    The `--why` is what lets a future Claude adapt it to a new version: write the intent, not the diff.
+   Without `--files` every unsaved change goes in: with changes for different purposes pending, save each
+   with `--files`. A fix of an existing customization: save it with the same title plus "(fix)" and a `--why`
+   that says what it adapts.
    The `--check` is run after every update (`maxxing update --verify`, from the workspace, `$MAXXING_CODE` =
    code directory): e.g. `grep -q 'LIMIT = 50' $MAXXING_CODE/server/maxxing/rules.py`, or a `curl -fsS` of the
    endpoint it adds. Add or change it later with `maxxing custom check <id> "<command>"`.
 4. Tell the user it is recorded and will be kept by updates; note it in this topic's memory.md.
 
-`maxxing custom` (status) lists customizations, unsaved changes and any pending update.
+## 1b. Change the interface (web UI)
+The UI is React + TypeScript under `<code>/web/src` (`docs/dev/DESIGN.md` = its rules). This server builds
+its own copy into the state directory; the shipped build `<code>/web/dist` is **never** edited (`custom save`
+refuses it, an update sets such edits aside).
+1. Ask what the user wants to see, then read the page or component first (`web/src/pages/`, `web/src/features/`,
+   shared parts in `web/src/components/`). Make the **smallest** change; prefer a new file (a component, a hook)
+   plus a one-line hook into the existing code over rewriting a big file - the less of our code you touch, the
+   less an update has to adapt. Every visible text goes in **both** `web/src/i18n/en.ts` and `fr.ts`.
+   Never run prettier or reformat a file. Ask before adding an npm dependency.
+2. Build and look: `maxxing custom build` (typecheck + build, ~30 s, the first time also installs the build
+   tools - about 450 MB in `<code>/web/node_modules`). It is served at once (no restart): ask the user to reload
+   the page. A type error = fix it, never silence it. Phone layout too (`max-md:` classes = touch screens).
+3. Record it like any customization: `maxxing custom save "..." --why "..." --files <its files>` (the sources
+   only; `--files` whenever other unsaved changes exist, so each purpose stays its own customization), with a
+   `--check` such as `grep -q '<a unique string of the change>' $MAXXING_CODE/web/src/<file>`.
+4. Undo: `maxxing custom drop <id>` then `maxxing custom build` (or the standard interface is shown).
+After each update the server rebuilds it on the new version. If it no longer builds, the update still
+succeeds and the standard interface is shown: adapt the sources to the new code (same rule as a conflict,
+section 2: keep the new code, re-implement the intent), `maxxing custom build`, then `maxxing custom save`
+the fix.
+
+### Interface edits from before
+`maxxing custom` shows "Old UI edits" when an older update set web edits aside (git stashes named
+"edits of the web UI") or a local commit changed `web/dist`. With the user's OK: read them
+(`git -C <code> stash show -p <ref>`, `git -C <code> show <commit>`), redo each wanted change in `web/src`
+on the current code (the build files only tell what changed, never copy them), `maxxing custom build`, check
+with the user, `maxxing custom save`, then remove what is no longer needed (`git -C <code> stash drop <ref>`;
+a commit with `maxxing custom drop <id>`). Ask before dropping anything.
+
+`maxxing custom` (status) lists customizations, unsaved changes, the state of the web UI and any pending update.
 `maxxing custom drop <id>` removes one (ask first; restart afterwards).
 
 ## 2. During an update (topic system/harness, or system/update on older servers)
 First `maxxing update --preflight` (changes nothing): per customization `carries over`, `carries over, on
 code that changed` (verify it after), `now included` (check the new version really does it, then `maxxing
-custom drop <id>`), `conflicts` (adapt it, below). Edits of the web UI cannot be kept: the update sets them
-aside (`git -C <code> stash list`); rebuild what they did as an extension. Then `maxxing update`
+custom drop <id>`), `conflicts` (adapt it, below), and whether the customized web UI still builds. Edits of
+the shipped build `web/dist` are set aside (`git -C <code> stash list`): redo them in `web/src` (section 1b).
+Then `maxxing update`
 replays the customizations on top of the new version:
 - **exit 0** - carried over ("N customization(s) carried over"). Check each still works.
 - **exit 3 - conflict**: nothing changed, the old version keeps running. Adapt them:

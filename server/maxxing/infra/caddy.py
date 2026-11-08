@@ -62,7 +62,8 @@ def reserved() -> list[str]:
     """Names a path site cannot take: the UI's routes and the files at the root of the web build."""
     names = set(UI_ROUTES)
     try:
-        for e in config.WEB_DIST.iterdir():
+        from .. import webbuild
+        for e in webbuild.active_dist().iterdir():
             names.add(e.name.split(".")[0] if e.is_file() else e.name)
             names.add(e.name)
     except OSError:
@@ -230,7 +231,7 @@ def add_site(name: str, root: str | None = None, port: int | None = None, host: 
         if name in reserved():
             raise CaddyError(f"/{name} is used by Harness itself: pick another name", "reserved_name")
         if not harness_site().exists() or not hh:
-            raise CaddyError("path sites need Harness served by Caddy on a domain (Settings -> General -> address); "
+            raise CaddyError("path sites need Harness served by Caddy on a domain (Settings -> System -> Public URL); "
                              "give the site its own host with --host instead", "no_harness_site")
         if any(s.get("host") == hh and (s.get("path") or "").rstrip("/") == f"/{name}" for s in _served()):
             raise CaddyError(f"https://{hh}/{name} is already served by another part of the Caddy configuration", "taken")

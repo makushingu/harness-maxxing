@@ -1,4 +1,4 @@
-// Settings -> Updates: every version of the product, newest first (CHANGELOG.md of the installed code, via
+// Settings -> Updates: the installed version and the update itself (VersionCard), then every version of the product, newest first (CHANGELOG.md of the installed code, via
 // GET /api/system/changelog). The "What's new" dialog shows only the versions this browser has not seen.
 import * as React from 'react'
 import { Search } from 'lucide-react'
@@ -9,6 +9,7 @@ import { Markdown } from '@/components/ui/markdown'
 import { SHOW_LINK_CLASS, showcaseLink, showLinks } from '@/features/whatsnew/showcases'
 import { useTour } from '@/tour/store'
 import { SettingsCard, SectionStack } from './ui'
+import { VersionCard } from './VersionCard'
 
 export function UpdatesSection() {
   const t = useT()
@@ -20,6 +21,7 @@ export function UpdatesSection() {
   const entries = (data?.entries || []).filter((e) => !needle || `${e.version} ${e.label} ${e.body}`.toLowerCase().includes(needle))
   return (
     <SectionStack>
+      <VersionCard />
       <SettingsCard title={t('updates.title')} description={t('updates.desc', { count: data?.entries.length ?? 0 })}>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
           <div className="relative max-w-sm">

@@ -243,7 +243,7 @@ def move_to_git(code: Path | None = None) -> dict:
     """Harness Maxxing is fair source: a licensed install leaves the signed archives for the public repository.
     The code directory gets `origin` = GIT_URL, its branch becomes `stable` at the same version (the GitHub commit
     with the same files, else the same version number) with the customizations rebased on top, and the activation
-    token is forgotten (the key stays: Settings -> License). Then `maxxing update` works as on any git install.
+    token is forgotten (the key stays: Settings -> About). Then `maxxing update` works as on any git install.
     Never raises: {ok, moved?, skipped?, error?}. Nothing changes until the very end; a failure is retried later."""
     if not _move_lock.acquire(blocking=False):
         return {"ok": False, "error": "already moving"}

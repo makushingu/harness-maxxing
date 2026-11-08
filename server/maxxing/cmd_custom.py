@@ -6,6 +6,7 @@
   maxxing custom drop ID                        remove one customization
   maxxing custom export                         rewrite <workspace>/CUSTOMIZATIONS.md + customizations/*.patch
   maxxing custom restore [--from DIR] [--stat]  re-apply saved patches (new server, after a restore); --stat lists them
+  maxxing custom build [--force]                build this server's customized web UI (served as soon as it is done)
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from . import cli, config, customs
+from . import cli, config, customs, webbuild
 
 
 def _configure(p: argparse.ArgumentParser) -> None:
@@ -37,6 +38,10 @@ def _configure(p: argparse.ArgumentParser) -> None:
     s = sub.add_parser("restore", help="re-apply the saved patches (e.g. on a new server)")
     s.add_argument("--from", dest="src", help="folder with the .patch files (default: <workspace>/customizations)")
     s.add_argument("--stat", action="store_true", help="only list the patches that would be applied (changes nothing)")
+    s = sub.add_parser("build", help="typecheck and build the customized web UI into the state directory (the shipped "
+                                     "web/dist is never touched); served as soon as it is done")
+    s.add_argument("--force", action="store_true", help="build even when no web source is customized")
+    s.add_argument("--json", action="store_true")
 
 
 def _print_status(js: bool) -> int:
@@ -71,9 +76,36 @@ def _print_status(js: bool) -> int:
             print(f"  conflicting files: {', '.join(p['conflicts'])}")
         from .cmd_core import update_topic
         print(f"  -> topic {update_topic()} (skill maxxing-customize)")
+    ui = webbuild.status()
+    if ui["customized"]:
+        state = "your build, up to date" if ui["built"] else "NOT BUILT - the standard interface is shown"
+        print(f"Web UI         : customized ({len(ui['customized'])} file(s)) - {state}")
+        if not ui["built"]:
+            print("  -> maxxing custom build")
+    left = customs.web_leftovers()
+    if left:
+        print(f"Old UI edits   : {len(left)} set aside before the UI could be customized - "
+              + ", ".join(f"{x['kind']} {x['ref']}" for x in left[:4]))
+        print("  -> skill maxxing-customize, \"Interface edits from before\"")
     if items:
         print(f"Registry       : {Path(config.load_config()['workspace']) / customs.REGISTRY}")
     return 0
+
+
+def _build(force: bool, js: bool) -> int:
+    files = webbuild.customized_files()
+    if not files and not force:
+        msg = "no web source is customized: the shipped interface is used (--force builds anyway)"
+        print(json.dumps({"ok": True, "skipped": True, "message": msg}) if js else msg)
+        return 0
+    r = webbuild.build(progress=None if js else (lambda m: print(f"  {m}...", flush=True)))
+    if js:
+        print(json.dumps(r, indent=2))
+    elif r["ok"]:
+        print(f"Web UI built in {r['seconds']} s ({r['dir']}) - served now: reload the page in the browser")
+    else:
+        print(f"error: the web UI does not build - the previous interface stays\n{r['error']}")
+    return 0 if r["ok"] else 1
 
 
 def _handler(a) -> int:
@@ -81,6 +113,8 @@ def _handler(a) -> int:
     try:
         if cmd in ("status", "list"):
             return _print_status(getattr(a, "json", False))
+        if cmd == "build":
+            return _build(a.force, a.json)
         if cmd == "save":
             r = customs.save(a.title, a.why, a.files, check=a.check)
             print(f"Saved customization {r['id']}: {a.title}")
@@ -93,6 +127,8 @@ def _handler(a) -> int:
         if cmd == "drop":
             r = customs.drop(a.id)
             print(f"Dropped {r['dropped']['id']}: {r['dropped']['title']}")
+            if any(webbuild.is_web_source(f) for f in r["dropped"]["files"]):
+                print("It changed the web UI: rebuild it with `maxxing custom build` (or the standard one is shown)")
             print("Restart the service to run without it: systemctl restart claude-maxxing")
             return 0
         if cmd == "export":
@@ -113,6 +149,8 @@ def _handler(a) -> int:
             print(f"{r['applied']} customization(s) applied, {len(r['customs'])} in total")
             if r["applied"]:
                 print("Restart the service to use them: systemctl restart claude-maxxing")
+                if webbuild.customized_files():
+                    print("Some change the web UI: build it with `maxxing custom build`")
             return 0
     except customs.CustomError as e:
         print(f"error: {e}")

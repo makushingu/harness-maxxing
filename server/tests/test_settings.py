@@ -112,10 +112,10 @@ def test_a_system_zone_that_cannot_be_switched_keeps_the_server_clock(client, mo
 
 
 def test_profile_pseudo(client):
-    assert client.get("/api/settings/profile").json() == {"name": "", "color": "", "emoji": ""}
+    assert client.get("/api/settings/profile").json() == {"name": "", "color": "", "emoji": "", "photo": "", "photo_url": ""}
     r = client.put("/api/settings/profile", json={"name": "  Léa   <b>Martin</b> ", "color": "teal", "emoji": "🔥"})
     assert r.status_code == 200
-    assert r.json() == {"name": "Léa bMartin/b", "color": "teal", "emoji": "🔥"}
+    assert r.json() == {"name": "Léa bMartin/b", "color": "teal", "emoji": "🔥", "photo": "", "photo_url": ""}
     assert client.get("/api/settings/profile").json()["name"] == "Léa bMartin/b"
     assert client.put("/api/settings/profile", json={"name": "x", "color": "pink"}).status_code == 400
     assert client.put("/api/settings/profile", json={"name": "x", "emoji": "a b"}).status_code == 400

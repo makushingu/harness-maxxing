@@ -1,4 +1,4 @@
-"""Starter packs (Settings -> Projects, onboarding). See docs/dev/API.md#packs."""
+"""Starter packs (Settings -> Templates, onboarding). See docs/dev/API.md#packs."""
 from __future__ import annotations
 
 import asyncio

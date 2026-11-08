@@ -174,7 +174,7 @@ TEMPLATES: list[dict[str, Any]] = [
         "cron": {"schedule": "7 * * * *", "prompt": {"en": "Check the sites.", "fr": "Vérifie les sites."}},
         "permission_mode": "default", "approvals": False, "allowed_tools": READ + ["Bash(curl:*)", "WebFetch"],
         "keys": [], "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
-        "needs": {"en": "The list of sites at the end of its role, and their host names in Settings -> Sandbox -> Domains.", "fr": "La liste des sites à la fin de son rôle, et leurs noms d'hôte dans Réglages -> Bac à sable -> Domaines."},
+        "needs": {"en": "The list of sites at the end of its role, and their host names on its page: Settings -> Safety -> Domains it can reach.", "fr": "La liste des sites à la fin de son rôle, et leurs noms d'hôte sur sa page : Réglages -> Sécurité -> Domaines qu'il peut joindre."},
     },
     {
         "id": "feedback",

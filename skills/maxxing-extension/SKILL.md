@@ -241,7 +241,7 @@ Rules: render from `onData` every time (it is called again on each change, rebui
 `off`), make every agent clickable (also with the keyboard: a `<button>`), `maxxing.resize(document.body.scrollHeight)`
 after each render, light and dark (`maxxing.theme` + theme variables), a phone width (~360 px), and
 `@media (prefers-reduced-motion: reduce)` stops animations. Ask the user the style they want (a mission control, a
-farm, a train station, a plain table…) before building it. Then: **Settings -> Extensions -> Reload**, Agents ->
+farm, a train station, a plain table…) before building it. Then: **Settings -> Widgets** (or **Pages**) **-> Rescan**, Agents ->
 Office -> the view menu -> its name.
 
 ## Steps
@@ -256,14 +256,14 @@ Office -> the view menu -> its name.
    print(json.dumps(api.card(ctx), indent=2))"     # page: api.handle(ctx, 'GET', 'notes', {}, None)
    ```
    Check `page.js` syntax with `node --check page.js` if node is available.
-4. Tell the user: **Settings -> Extensions -> Reload**, then check the dashboard / the new page.
+4. Tell the user: **Settings -> Widgets** (or **Pages**) **-> Rescan**, then check the dashboard / the new page.
    Errors (bad manifest, import error, exception in card) are shown on the extension's row there.
 5. Record the extension's purpose and data source in the topic memory (`memory` skill).
 
 Community library (https://harness-maxxing.com/community): extensions, widgets and skills by other people.
 - **Install one**: only on the user's request; clone it at the commit the listing names, read every file and tell the
   user what it does (network, files, keys, `api.py` = code that runs in the server with its rights) before copying it
-  to `<workspace>/extensions/<id>/`; then Reload. Never run its code to "try it" before that.
+  to `<workspace>/extensions/<id>/`; then Rescan. Never run its code to "try it" before that.
 - **Publish one the user made**: follow https://harness-maxxing.com/community/publish.md (key `HM_COMMUNITY_KEY` in
   the vault; never print it). Ask before creating a public repository or pushing.
 

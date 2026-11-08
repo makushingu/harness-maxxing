@@ -44,6 +44,24 @@ function serviceWorker(): Plugin {
   }
 }
 
+/** Copies the emoji data of the emoji picker (`emojibase-data`, the app's languages only) to dist/emojibase/<lang>/:
+ *  served by this server, never fetched from a CDN (see features/profile/EmojiPicker.tsx). */
+function emojiData(): Plugin {
+  return {
+    name: 'maxxing-emoji-data',
+    apply: 'build',
+    generateBundle() {
+      for (const lang of ['en', 'fr'])
+        for (const file of ['data.json', 'messages.json'])
+          this.emitFile({
+            type: 'asset',
+            fileName: `emojibase/${lang}/${file}`,
+            source: fs.readFileSync(path.resolve(import.meta.dirname, 'node_modules/emojibase-data', lang, file)),
+          })
+    },
+  }
+}
+
 /** Writes a Brotli twin (`<file>.br`, quality 11) next to every JS/CSS asset; the server sends it to browsers that
  *  accept `br` (~18 % smaller than the proxy's on-the-fly gzip). Also preloads the Latin Inter font, which the CSS
  *  would otherwise only discover after it is downloaded and parsed. */
@@ -173,7 +191,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const target = env.MAXXING_API || 'http://127.0.0.1:8801'
   return {
-    plugins: [i18nSplit(), react(), tailwindcss(), serviceWorker(), precompress(), routePreload()],
+    plugins: [i18nSplit(), react(), tailwindcss(), serviceWorker(), precompress(), routePreload(), emojiData()],
     resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
     server: {
       port: 5173,

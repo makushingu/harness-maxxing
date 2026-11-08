@@ -8,6 +8,19 @@ Maxxing installs its skills in `~/.claude/skills/`, so they are available in **e
 The copies name the real folders of your install (code, workspace, state), so they stay right when the
 installer used other paths than the defaults; `maxxing init` (run by every update) writes them again.
 
+## Settings -> Skills
+
+**Settings -> Skills** lists every skill Claude sees on this server, with a search when there are many:
+- **Your skills**: the ones in `~/.claude/skills/` (badge **Server**: every session), in the workspace
+  (**Workspace**), in a project (its name: the sessions of its topics) or in a topic (`project/topic`: that topic
+  only). A skill marked **only with /name** has `disable-model-invocation: true`: Claude never picks it alone.
+  **Open** shows its `SKILL.md`; the **…** menu has **Edit with Claude** (a new session, of the skill's topic or
+  of `system/harness`, with the request started) and **Share with the community** (Claude prepares it for the
+  [community library](https://harness-maxxing.com/community)). **New skill** starts a session that writes one.
+- **Shipped with Harness**: the skills below. Every update writes them again, so they only open, read-only.
+
+The page only reads the skills: changes go through Claude (or your editor), never through a form.
+
 ## Shipped skills
 
 | Skill | Claude uses it when |

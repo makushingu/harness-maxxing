@@ -1,5 +1,5 @@
 // Donation links (docs/user/23-license.md): Harness Maxxing is free, donations fund its development. Only links to
-// the donation page of the website (new tab); the app never talks to a payment service. Settings -> Support shows
+// the donation page of the website (new tab); the app never talks to a payment service. Settings -> About shows
 // the card; the other mentions (sidebar / touch menu, What's new, Feedback sent, License) disappear with the setting
 // `donation_hidden`.
 import { ExternalLink, HandHeart } from 'lucide-react'

@@ -143,7 +143,7 @@ def test_typing_is_a_passing_signal(client, sent, monkeypatch):
 def test_profile_change_goes_to_contacts(client, sent):
     client.put("/api/settings/profile", json={"name": "Romy", "color": "teal", "emoji": ""})
     addrs, event = sent[-1]
-    assert set(addrs) == {LEA, TOM} and event == {"type": "profile", "profile": {"name": "Romy", "emoji": "", "color": "teal"}}
+    assert set(addrs) == {LEA, TOM} and event == {"type": "profile", "profile": {"name": "Romy", "emoji": "", "color": "teal", "photo": ""}}
     st = client.get("/api/team").json()
     assert st["people"][teampeer.pid(LEA)]["last_seen"] == 0
 

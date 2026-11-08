@@ -38,7 +38,7 @@ from urllib.parse import urlsplit
 import httpcore
 import httpx
 
-from . import bus, config
+from . import bus, config, profile_photo
 
 log = logging.getLogger("maxxing.teampeer")
 
@@ -272,7 +272,8 @@ def people() -> dict:
             continue                # a group member with a request not answered yet stays in its groups
         seen = now - float(p.get("last_seen") or 0)
         out[pid(addr)] = {"name": p.get("name") or urlsplit(addr).hostname, "emoji": p.get("emoji", ""),
-                          "color": p.get("color") or "zinc", "server": urlsplit(addr).hostname, "address": addr,
+                          "color": p.get("color") or "zinc", "photo": p.get("photo", ""), "photo_url": photo_url(addr, p),
+                          "server": urlsplit(addr).hostname, "address": addr,
                           "status": "online" if seen < ONLINE_S + SEEN_WRITE_S else "away" if seen < 3600 else "offline",
                           "contact": p.get("status") == "accepted", "peer": True,
                           "last_seen": float(p.get("last_seen") or 0)}
@@ -286,7 +287,7 @@ def connections() -> dict:
         doc = _load()
         now = time.time()
         rows = [{"address": a, "id": pid(a), "name": p.get("name", ""), "emoji": p.get("emoji", ""),
-                 "color": p.get("color", ""), "status": p["status"], "fingerprint": p.get("fingerprint", ""),
+                 "color": p.get("color", ""), "photo_url": photo_url(a, p), "status": p["status"], "fingerprint": p.get("fingerprint", ""),
                  "since": p.get("since", 0), "last_seen": p.get("last_seen", 0)}
                 for a, p in doc["peers"].items() if p.get("status") in ("accepted", "request", "waiting")]
         invites = sum(1 for i in doc["invites"] if i["expires"] > now)
@@ -296,13 +297,21 @@ def connections() -> dict:
 def _profile() -> dict:
     from .api.settings import profile
     p = profile()
-    return {"name": p["name"][:32], "emoji": p["emoji"][:8], "color": p["color"][:12]}
+    return {"name": p["name"][:32], "emoji": p["emoji"][:8], "color": p["color"][:12], "photo": p["photo"]}
 
 
 def _clean_profile(p: dict) -> dict:
     p = p if isinstance(p, dict) else {}
+    photo = str(p.get("photo") or "")          # the version of its photo (servers before 2.0.0a132 send none)
     return {"name": " ".join(str(p.get("name") or "").split())[:32], "emoji": str(p.get("emoji") or "")[:8],
-            "color": str(p.get("color") or "")[:12]}
+            "color": str(p.get("color") or "")[:12], "photo": photo if profile_photo.VERSION.fullmatch(photo) else ""}
+
+
+def photo_url(address: str, p: dict) -> str:
+    """Where the UI shows a contact's photo ("" = none): our server fetches it once per version, see
+    profile_photo.cached()."""
+    v = str(p.get("photo") or "")
+    return f"/api/team/people/{pid(address)}/photo?v={v}" if profile_photo.VERSION.fullmatch(v) else ""
 
 
 # ---- connecting -----------------------------------------------------------------------------------------------
@@ -876,6 +885,44 @@ def file_for(frm: str, fid: str, scope: str = "") -> dict:
     if not f or (scope and f["chat"] != scope) or not team.is_member(f["chat"], pid(frm)) or not Path(f["path"]).is_file():
         raise PeerError(404, "not_found", "No such file")
     return f
+
+
+def photo_for(frm: str, scope: str) -> tuple[Path, str]:
+    """Our photo, asked by a contact or a member of a group we share (never by a request not answered yet)."""
+    found = profile_photo.own()
+    if scope == PENDING or not found:
+        raise PeerError(404, "not_found", "No photo")
+    return found
+
+
+def fetch_photo(person: str, version: str) -> bytes | None:
+    """The photo of a person (id) from its server: signed GET with its contact key, else one of its group keys.
+    None on any failure."""
+    with _lock:
+        hit = next(((a, p) for a, p in _peek()["peers"].items() if pid(a) == person), None)
+    if not hit or str(hit[1].get("photo") or "") != version:
+        return None
+    address, p = hit
+    if p.get("status") == "accepted":
+        key = _key_ok(p.get("key"))
+    else:
+        key = next((k for k in (_key_ok(v) for v in (p.get("group_keys") or {}).values()) if k), None)
+    if not key:
+        return None
+    path = "/api/team-peer/photo"
+    try:
+        headers = _sign(key, "GET", path, own_address(), address, b"")
+        with _http().stream("GET", _check_target(address) + path, headers=headers, timeout=20, follow_redirects=False) as r:
+            if r.status_code != 200:
+                return None
+            data = bytearray()
+            for chunk in r.iter_bytes(1 << 16):
+                data += chunk
+                if len(data) > profile_photo.PHOTO_MAX:
+                    return None
+            return bytes(data)
+    except (httpx.HTTPError, PeerError, OSError):
+        return None
 
 
 FETCH_DEADLINE = 30 * 60                                   # a download that takes longer is dropped

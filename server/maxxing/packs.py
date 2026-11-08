@@ -1,5 +1,5 @@
 """Starter packs: ready-made projects for a kind of work (e-commerce, affiliate, creator, apps, second brain,
-freelance). Offered at onboarding and in Settings -> Projects, or with `maxxing packs add <id>`.
+freelance). Offered at onboarding and in Settings -> Templates, or with `maxxing packs add <id>`.
 
 A pack lives in templates/packs/<id>/:
   pack.json            {id, project, emoji, icon, title{en,fr}, description{en,fr}, topics[], crons[]}

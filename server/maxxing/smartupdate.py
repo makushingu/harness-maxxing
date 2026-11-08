@@ -3,7 +3,7 @@
 - preflight(): what the next update will do to THIS server, without touching it. The new version is checked
   out in a throw-away git worktree and every customization is replayed on it (cherry-pick): it applies,
   conflicts, or is already included in the new version (empty). Customizations that apply but touch files the
-  new version also changed are flagged "review". Uncommitted edits, edits of the pre-built web UI (they cannot
+  new version also changed are flagged "review". Uncommitted edits, edits of the shipped web build (they cannot
   be customizations) and extensions the new version no longer supports (manifest "api") are reported too.
   Verdict: "up_to_date" | "simple" (the button just updates) | "adapt" (a Harness session adapts first).
 - verify(): after an update (or on demand), every extension is loaded and every widget computed, and the check
@@ -151,8 +151,8 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
     _, target_init = _git("show", f"{target}:server/maxxing/__init__.py")
     latest = _version_in(target_init) or current
     dirty = customs.dirty_files()
-    web_dirty = [f for f in dirty if f.startswith("web/")]
-    other_dirty = [f for f in dirty if not f.startswith("web/")]
+    web_dirty = [f for f in dirty if f.startswith("web/dist/")]       # the shipped build: set aside, never kept
+    other_dirty = [f for f in dirty if not f.startswith("web/dist/")]
     mine = customs.list_customs(branch)
     behind = 0
     if target:                                         # as check_update: also with no common ancestor (rewritten)
@@ -173,7 +173,7 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
     _, changed = _git("diff", "--name-only", f"{base}..{target}")
     upstream_files = {f for f in changed.splitlines() if f.strip()}
     rep["upstream_files"] = len(upstream_files)
-    rep["customs"] = _replay(mine, target, upstream_files)
+    rep["customs"] = _replay(mine, target, upstream_files, rep)
     for f in other_dirty:                                      # unsaved: saved by the update, checked like the rest
         if f in upstream_files:
             rep.setdefault("unsaved_overlap", []).append(f)
@@ -184,7 +184,7 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
         log.warning("preflight: extensions check failed: %s", e)
     rep["notes"] = _target_notes(current, latest, target)
     adapt = (any(c["status"] == "conflict" for c in rep["customs"]) or web_dirty or rep["extensions"]
-             or rep.get("unsaved_overlap"))
+             or rep.get("unsaved_overlap") or (rep.get("ui_build") or {}).get("status") == "failed")
     rep["verdict"] = "adapt" if adapt else "simple"
     rep["sig"] = _signature()
     return _write(PREFLIGHT, rep)
@@ -209,14 +209,16 @@ def _target_notes(current: str, latest: str, target: str) -> list[dict]:
     return sorted(notes, key=lambda n: version_key(n["version"]) or ())
 
 
-def _replay(mine: list[dict], target: str, upstream_files: set[str]) -> list[dict]:
-    """Cherry-pick each customization onto the target in a temporary worktree."""
-    from . import customs
+def _replay(mine: list[dict], target: str, upstream_files: set[str], rep: dict | None = None) -> list[dict]:
+    """Cherry-pick each customization onto the target in a temporary worktree; when some change the web UI, build
+    it there too (rep["ui_build"] = {status: ok | failed, error, seconds})."""
+    from . import customs, webbuild
     out = [{"id": c["id"], "title": c["title"], "why": c.get("why", ""), "files": c["files"],
             "check": c.get("check", ""), "status": "ok", "conflicts": [],
             "overlap": sorted(set(c["files"]) & upstream_files)} for c in mine]
     if not mine:
         return out
+    webbuild._sweep(config.state_dir("update"), "mx-preflight-*")     # one killed midway (a restart)
     tmp = Path(tempfile.mkdtemp(prefix="mx-preflight-", dir=str(config.state_dir("update"))))
     wt = tmp / "code"
     try:
@@ -240,6 +242,12 @@ def _replay(mine: list[dict], target: str, upstream_files: set[str]) -> list[dic
             _wt_git(wt, "commit", "-q", "--no-verify", "-m", f"preflight {item['id']}")
             if item["overlap"]:
                 item["status"] = "review"                     # applies, but on code that changed upstream
+        web = [f for item in out if item["status"] in ("ok", "review") for f in item["files"]
+               if webbuild.is_web_source(f)]
+        if web and rep is not None:                     # never installs anything to check (no npm ci here)
+            r = webbuild.build(code=wt, out=tmp / "web-dist", share_from=config.CODE / "web", install=False)
+            rep["ui_build"] = {"status": "ok" if r["ok"] else "unchecked" if r.get("skipped") else "failed",
+                               "error": (r.get("error") or "")[-1500:], "seconds": r.get("seconds")}
     finally:
         customs.git("worktree", "remove", "--force", str(wt), timeout=120)
         customs.git("worktree", "prune")
@@ -335,7 +343,7 @@ def after_update() -> dict | None:
         names = [x.get("name") or x.get("title") for x in rep["extensions"] + rep["checks"] if not x["ok"]]
         title = f"After the update to {m['to']}: {rep['problems']} thing(s) to fix"
         body = "Not working any more: " + ", ".join(names[:5]) + ". Ask Harness to fix it (Settings -> System)."
-        feed.system(title, body, "warning", "system", "/settings/system")
+        feed.system(title, body, "warning", "system", "/settings/updates")
         from .telegram import gateway
         gateway.system_alert(f"{title}\n{body}")
     notes = upgrade_notes_to_apply(m.get("from") or "", m.get("to") or "") if m.get("smart") else []
@@ -381,16 +389,20 @@ def assist_prompt(rep: dict) -> str:
         lines.append(f"- Unsaved changes in {config.CODE}: {', '.join(rep['unsaved'][:8])}"
                      + (" (some on code the new version changed)" if rep.get("unsaved_overlap") else ""))
     if rep.get("web_changes"):
-        lines.append(f"- The pre-built web UI was edited ({', '.join(rep['web_changes'][:5])}): it cannot be kept "
-                     "as a customization; the update moves these edits aside (git stash).")
+        lines.append(f"- The shipped web build (web/dist) was edited ({', '.join(rep['web_changes'][:5])}): a build "
+                     "is never kept; the update moves these edits aside (git stash).")
+    if (rep.get("ui_build") or {}).get("status") == "failed":
+        lines.append("- The customized web UI does NOT BUILD on the new version (the standard interface would be "
+                     "shown): " + rep["ui_build"]["error"].strip()[-600:])
     for e in rep.get("extensions") or []:
         lines.append(f"- Extension `{e['id']}`: {e['reason']}")
     lines += ["", "How to do it (skill maxxing-customize):",
               "1. Read CUSTOMIZATIONS.md (what each change is FOR) and the changelog (`maxxing update --check`).",
               "2. Included in the new version: check it really does the same, then `maxxing custom drop <id>`.",
               "3. Unsaved changes: save them first with a real title and reason (`maxxing custom save ... --why ...`).",
-              "4. Edits of the web UI: rebuild what they did as an extension (skill maxxing-extension), ask me "
-              "before dropping anything.",
+              "4. Edits of the shipped build (web/dist): redo them in the sources under web/ (or as an extension "
+              "when one is enough), ask me before dropping anything. A web UI customization that does not build: "
+              "adapt it after the update, then `maxxing custom build`.",
               f"5. Run `maxxing update`. On a conflict (exit 3): `cd {config.CODE} && git rebase origin/"
               f"{rep.get('branch') or 'main'}`, then for each conflicting file re-implement the INTENT of the "
               "customization on the new code (do not just pick a side), `git add`, `GIT_EDITOR=true git rebase "

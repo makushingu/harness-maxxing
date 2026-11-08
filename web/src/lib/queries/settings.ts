@@ -58,6 +58,22 @@ export function useSaveProfile() {
   })
 }
 
+/** The profile photo (the UI sends a 256 px square, see Settings -> Profile); removing it brings back emoji / initials. */
+export function useSaveProfilePhoto() {
+  const qc = useQueryClient()
+  return useMut((photo: Blob) => api.put<Profile>('/api/settings/profile/photo', photo), {
+    invalidate: [['team']],
+    onSuccess: (p) => qc.setQueryData(qk.profile, p),
+  })
+}
+export function useRemoveProfilePhoto() {
+  const qc = useQueryClient()
+  return useMut(() => api.del<Profile>('/api/settings/profile/photo'), {
+    invalidate: [['team']],
+    onSuccess: (p) => qc.setQueryData(qk.profile, p),
+  })
+}
+
 /** Saying hello to the authors (Settings -> Profile, onboarding step Profile). */
 export type FeedbackType = 'bug' | 'idea' | 'other'
 /** Feedback button: the email it prefills and the version sent along (docs/user/23-license.md). */

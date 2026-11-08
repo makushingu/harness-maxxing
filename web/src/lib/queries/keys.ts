@@ -22,6 +22,7 @@ export const qk = {
   },
   tasks: ['tasks'] as const,
   packs: ['workspace', 'packs'] as const,
+  skills: ['workspace', 'skills'] as const,
   crons: {
     all: ['crons'] as const,
     list: ['crons', 'list'] as const,
@@ -90,7 +91,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   extensions: [qk.extensions, qk.dashboard.all],
   trash: [qk.trash, qk.files.all],
   feed: [qk.feed.all],
-  profile: [qk.profile],
+  // Team shows the user's own face too
+  profile: [qk.profile, ['team']],
   register: [qk.register, qk.onboarding],
   license: [qk.license, ['system']],
   infra: [['infra']],

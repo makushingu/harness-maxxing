@@ -125,7 +125,7 @@ def _me() -> dict:
     p = profile()
     lang = config.load_config().get("language") or "en"
     return {"name": p["name"] or ("Moi" if lang == "fr" else "Me"), "emoji": p["emoji"], "color": p["color"] or "blue",
-            "server": "", "status": "online"}
+            "photo": p["photo"], "photo_url": p["photo_url"], "server": "", "status": "online"}
 
 
 def _chat(doc: dict, cid: str) -> dict:
@@ -360,7 +360,8 @@ def _send_group(chat: dict, peers: dict, new: list[str] | None = None, removed: 
             if a in fresh or b in fresh:
                 pair[(a, b)] = pair[(b, a)] = teampeer.new_pair_key()
     roster = [{"address": me, **teampeer._profile()}] + [
-        {"address": peers[m]["address"], "name": peers[m]["name"], "emoji": peers[m]["emoji"], "color": peers[m]["color"]}
+        {"address": peers[m]["address"], "name": peers[m]["name"], "emoji": peers[m]["emoji"], "color": peers[m]["color"],
+         "photo": peers[m].get("photo", "")}
         for m in members]
     base = {"type": "chat", "chat": chat["id"], "kind": "group", "name": chat["name"], "emoji": chat["emoji"],
             "admin": me, "members": roster}

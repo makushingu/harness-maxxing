@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Literal, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .. import bus, config, memory
+from .. import bus, config, memory, profile_photo
 from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
@@ -109,12 +110,16 @@ class ProfileIn(BaseModel):
 
 
 def profile() -> dict:
-    """The user's pseudo (name, color, emoji): shown on their messages and used in notifications.
-    Empty name = no pseudo (the UI says "You")."""
+    """The user's pseudo (name, color, emoji, photo): shown on their messages and used in notifications.
+    Empty name = no pseudo (the UI says "You"). `photo` = the version of the photo (see maxxing/profile_photo.py),
+    `photo_url` = where the UI shows it ("" = none: emoji or initials)."""
     data = config.load_config().get("profile")
     data = data if isinstance(data, dict) else {}
+    photo = str(data.get("photo") or "")
+    photo = photo if profile_photo.VERSION.fullmatch(photo) else ""
     return {"name": str(data.get("name") or ""), "color": str(data.get("color") or ""),
-            "emoji": str(data.get("emoji") or "")}
+            "emoji": str(data.get("emoji") or ""), "photo": photo,
+            "photo_url": f"/api/settings/profile/photo?v={photo}" if photo else ""}
 
 
 def clean_profile(name: str, color: str, emoji: str) -> dict:
@@ -133,15 +138,55 @@ def get_profile():
     return profile()
 
 
+def _profile_changed() -> None:
+    bus.invalidate("profile")
+    if config.load_config().get("team_page"):
+        from .. import teampeer
+        teampeer.share_profile()               # Team contacts see the new name / face
+
+
 @router.put("/profile")
 def put_profile(body: ProfileIn):
     new = clean_profile(body.name, body.color, body.emoji)
-    if new != profile():
-        config.update_config(profile=new)
-        bus.invalidate("profile")
-        if config.load_config().get("team_page"):
-            from .. import teampeer
-            teampeer.share_profile()           # Team contacts see the new name / face
+    old = profile()
+    if new != {k: old[k] for k in new}:
+        config.update_config(profile=new)      # deep-merged: the photo stays
+        _profile_changed()
+    return profile()
+
+
+@router.get("/profile/photo")
+def get_profile_photo():
+    found = profile_photo.own()
+    if not found or not profile()["photo"]:
+        raise HTTPException(404, detail={"error": "not_found", "message": "No photo"})
+    return FileResponse(found[0], media_type=found[1], headers={
+        "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
+
+
+@router.put("/profile/photo")
+async def put_profile_photo(request: Request):
+    """The photo's bytes (JPEG, PNG or WebP, at most 512 KB; the UI sends a 256 px square)."""
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > profile_photo.PHOTO_MAX:
+            raise _err("too_large", "The photo must be 512 KB at most")
+    try:
+        version = await asyncio.to_thread(profile_photo.save, bytes(data))
+    except ValueError as e:
+        raise _err(str(e), "A JPEG, PNG or WebP image of 512 KB at most") from None
+    config.update_config(profile={"photo": version})
+    await asyncio.to_thread(_profile_changed)
+    return profile()
+
+
+@router.delete("/profile/photo")
+def delete_profile_photo():
+    if profile()["photo"]:
+        profile_photo.remove()
+        config.update_config(profile={"photo": ""})
+        _profile_changed()
     return profile()
 
 

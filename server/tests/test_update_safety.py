@@ -1,4 +1,4 @@
-"""`maxxing update` never loses what ran before: the branch, uncommitted edits, the web/ edits set aside."""
+"""`maxxing update` never loses what ran before: the branch, uncommitted edits, the web/dist edits set aside."""
 from __future__ import annotations
 
 import subprocess
@@ -16,8 +16,8 @@ def _rev(repo, ref):
 
 def _with_web_file(code):
     clone, work = code["clone"], code["work"]
-    (work / "web").mkdir()
-    (work / "web" / "app.js").write_text("v1\n")
+    (work / "web" / "dist").mkdir(parents=True)
+    (work / "web" / "dist" / "app.js").write_text("v1\n")
     _git("add", "-A", cwd=work)
     _git("commit", "-q", "-m", "web", cwd=work)
     _git("push", "-q", "origin", "main", cwd=work)
@@ -76,10 +76,10 @@ def test_conflict_puts_the_web_edits_back(code, capsys):
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     customs.save("Raise the limit")
     _upstream_release(work, "1.2.0", rules="LIMIT = 20\nNAME = 'product'\n")      # conflicts
-    (clone / "web" / "app.js").write_text("my hot fix\n")
+    (clone / "web" / "dist" / "app.js").write_text("my hot fix\n")
     assert run_cli("update") == 3
     assert "nothing changed" in capsys.readouterr().out
-    assert (clone / "web" / "app.js").read_text() == "my hot fix\n"
+    assert (clone / "web" / "dist" / "app.js").read_text() == "my hot fix\n"
     assert subprocess.run(["git", "-C", str(clone), "stash", "list"], capture_output=True, text=True).stdout == ""
 
 
@@ -88,7 +88,7 @@ def test_failed_auto_save_puts_the_web_edits_back(code, monkeypatch, capsys):
     clone, work = code["clone"], code["work"]
     _with_web_file(code)
     _upstream_release(work, "1.2.0")
-    (clone / "web" / "app.js").write_text("my hot fix\n")
+    (clone / "web" / "dist" / "app.js").write_text("my hot fix\n")
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
 
     def boom(*a, **k):
@@ -96,7 +96,7 @@ def test_failed_auto_save_puts_the_web_edits_back(code, monkeypatch, capsys):
     monkeypatch.setattr(customs, "save", boom)
     assert run_cli("update") == 1
     assert "cannot be kept" in capsys.readouterr().out
-    assert (clone / "web" / "app.js").read_text() == "my hot fix\n"
+    assert (clone / "web" / "dist" / "app.js").read_text() == "my hot fix\n"
     assert subprocess.run(["git", "-C", str(clone), "stash", "list"], capture_output=True, text=True).stdout == ""
 
 
@@ -105,11 +105,11 @@ def test_health_rollback_puts_the_web_edits_back(code, monkeypatch, capsys):
     _with_web_file(code)
     before = _head(clone)
     _upstream_release(work, "1.3.0", extra="feature.txt")
-    (clone / "web" / "app.js").write_text("my hot fix\n")
+    (clone / "web" / "dist" / "app.js").write_text("my hot fix\n")
     _broken_release(monkeypatch)
     assert run_cli("update") == 4
     assert "rolled back" in capsys.readouterr().out
-    assert _head(clone) == before and (clone / "web" / "app.js").read_text() == "my hot fix\n"
+    assert _head(clone) == before and (clone / "web" / "dist" / "app.js").read_text() == "my hot fix\n"
 
 
 def _branch(repo):
@@ -285,7 +285,7 @@ def test_conflict_with_web_edits_prints_instructions_that_work(code, capsys):
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     customs.save("Raise the limit")
     _upstream_release(work, "1.2.0", rules="LIMIT = 20\nNAME = 'product'\n")
-    (clone / "web" / "app.js").write_text("my hot fix\n")
+    (clone / "web" / "dist" / "app.js").write_text("my hot fix\n")
     assert run_cli("update") == 3
     out = capsys.readouterr().out
     cmd = next(ln.strip() for ln in out.splitlines() if ln.strip().startswith(f"cd {clone} && "))

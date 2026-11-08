@@ -1,20 +1,45 @@
 import * as React from 'react'
-import { Check } from 'lucide-react'
-import { useProfile, useRegister, useSaveProfile, useSaveRegister } from '@/lib/queries'
+import { Check, ImagePlus } from 'lucide-react'
+import { useProfile, useRegister, useRemoveProfilePhoto, useSaveProfile, useSaveProfilePhoto, useSaveRegister } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { Profile, ProfileColor } from '@/lib/types'
 import { Button, Input, Skeleton, Tooltip } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { Avatar, PROFILE_COLORS } from '@/features/profile/Avatar'
+import { EmojiPicker } from '@/features/profile/EmojiPicker'
 import { RegisterFields, validEmail, type RegisterValues } from '@/features/profile/Register'
 import { projectColor } from '@/features/tasks/model'
 import { SettingsCard, SectionStack } from './ui'
+
+const PHOTO_PX = 256
+
+/** The chosen image as a 256 px square (centered crop), WebP where the browser can write it, else JPEG. */
+async function squarePhoto(file: File): Promise<Blob> {
+  const img = await createImageBitmap(file)
+  const side = Math.min(img.width, img.height)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = PHOTO_PX
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('canvas')
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, PHOTO_PX, PHOTO_PX)
+  img.close()
+  const blob = (type: string) => new Promise<Blob | null>((ok) => canvas.toBlob(ok, type, 0.86))
+  const webp = await blob('image/webp')
+  const out = webp?.type === 'image/webp' ? webp : await blob('image/jpeg')
+  if (!out) throw new Error('encode')
+  return out
+}
 
 export function ProfileSection() {
   const t = useT()
   const { data: p } = useProfile()
   const save = useSaveProfile()
+  const savePhoto = useSaveProfilePhoto()
+  const removePhoto = useRemoveProfilePhoto()
+  const fileRef = React.useRef<HTMLInputElement>(null)
+  const [photoError, setPhotoError] = React.useState(false)
   const [name, setName] = React.useState('')
   const [emoji, setEmoji] = React.useState('')
   React.useEffect(() => {
@@ -26,7 +51,19 @@ export function ProfileSection() {
   if (!p) return <Skeleton className="h-72 rounded-xl" />
   const put = (patch: Partial<Profile>) => save.mutate({ ...p, ...patch })
   const commitName = () => name.trim() !== p.name && put({ name: name.trim() })
-  const commitEmoji = () => emoji.trim() !== p.emoji && put({ emoji: emoji.trim() })
+  const pickEmoji = (e: string) => {
+    setEmoji(e)
+    if (e !== p.emoji) put({ emoji: e })
+  }
+  const onFile = async (file: File | undefined) => {
+    if (!file) return
+    setPhotoError(false)
+    try {
+      savePhoto.mutate(await squarePhoto(file))
+    } catch {
+      setPhotoError(true)              // not an image the browser can read (HEIC on a desktop, a broken file...)
+    }
+  }
   const preview: Profile = { ...p, name: name.trim(), emoji: emoji.trim() }
   return (
     <SectionStack>
@@ -43,6 +80,29 @@ export function ProfileSection() {
               onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget.blur(), undefined)}
               className="w-56"
             />
+          </SettingRow>
+          <SettingRow label={t('profile.photo')} description={photoError ? t('profile.photoError') : t('profile.photoDesc')}>
+            <div className="flex items-center gap-2">
+              <Avatar profile={p} size="lg" />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic"
+                className="hidden"
+                onChange={(e) => {
+                  void onFile(e.target.files?.[0])
+                  e.target.value = ''
+                }}
+              />
+              <Button variant="outline" size="sm" loading={savePhoto.isPending} onClick={() => fileRef.current?.click()}>
+                <ImagePlus /> {p.photo ? t('profile.photoChange') : t('profile.photoAdd')}
+              </Button>
+              {p.photo && (
+                <Button variant="ghost" size="sm" loading={removePhoto.isPending} onClick={() => removePhoto.mutate()}>
+                  {t('profile.photoRemove')}
+                </Button>
+              )}
+            </div>
           </SettingRow>
           <SettingRow label={t('profile.color')} description={t('profile.colorDesc')}>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('profile.color')}>
@@ -68,38 +128,32 @@ export function ProfileSection() {
               })}
             </div>
           </SettingRow>
-          <SettingRow label={t('profile.emoji')} description={t('profile.emojiDesc')} htmlFor="profile-emoji">
-            <Input
-              id="profile-emoji"
-              value={emoji}
-              maxLength={8}
-              placeholder="🔥"
-              onChange={(e) => setEmoji(e.target.value.replace(/\s/g, ''))}
-              onBlur={commitEmoji}
-              onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget.blur(), undefined)}
-              className="w-24 text-center"
-            />
+          <SettingRow label={t('profile.emoji')} description={t('profile.emojiDesc')}>
+            <EmojiPicker value={emoji} onChange={pickEmoji} />
           </SettingRow>
-        </div>
-      </SettingsCard>
-      <SettingsCard title={t('profile.preview')}>
-        <div className="flex items-end justify-end gap-2">
-          <div className="grid justify-items-end gap-1">
-            <div className="rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] text-secondary-foreground">{t('profile.previewText')}</div>
-            <span className="text-[11px] text-muted-foreground">{preview.name || t('profile.you')}</span>
+          <div className="grid gap-2 pt-4">
+            <span className="text-[13px] text-muted-foreground">{t('profile.preview')}</span>
+            <div className="flex items-end justify-end gap-2 rounded-lg bg-muted/40 p-3">
+              <div className="grid justify-items-end gap-1">
+                <div className="rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] text-secondary-foreground">{t('profile.previewText')}</div>
+                <span className="text-[11px] text-muted-foreground">{preview.name || t('profile.you')}</span>
+              </div>
+              <Tooltip content={preview.name || t('profile.you')}>
+                <span>
+                  <Avatar profile={preview} />
+                </span>
+              </Tooltip>
+            </div>
           </div>
-          <Tooltip content={preview.name || t('profile.you')}>
-            <span>
-              <Avatar profile={preview} />
-            </span>
-          </Tooltip>
         </div>
       </SettingsCard>
+
       <RegisterCard />
     </SectionStack>
   )
 }
 
+/** Stay in touch (back here in 2.0.0a132): an optional e-mail for the news, and the anonymous counter. */
 function RegisterCard() {
   const t = useT()
   const { data: reg } = useRegister()
@@ -116,7 +170,7 @@ function RegisterCard() {
   }
   const on = (reg.count && !reg.count_blocked) || !!reg.email
   return (
-    <SettingsCard title={t('register.title')} description={t('register.desc')}>
+    <SettingsCard title={t('about.contact')} description={t('register.desc')}>
       <RegisterFields v={v} onChange={change} onEmailBlur={() => v.email.trim() !== reg.email && put(v)} counterBlocked={reg.count_blocked} />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-xs text-muted-foreground">
         <span>

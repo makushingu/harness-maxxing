@@ -677,7 +677,22 @@ URLs without query / fragment / userinfo. A channel with more than 64 MB waiting
   server start (api/system.startup, after `MAXXING_AFTER_UPDATE_DELAY` s): verify, feed alert if broken, and for
   `smart` the upgrade-notes session (config `update_auto_notes`, default true).
 - `assist_prompt / start_assist`, `fix_prompt`: the Harness sessions ("Answer me in French." when the UI is fr).
-- `maxxing update` sets edits under `web/` aside (`git stash push -u -- web/`) instead of failing.
+- `maxxing update` sets edits under `web/dist` aside (`git stash push -u -- web/dist`) instead of failing; edits of
+  the web sources are saved like any other change. When a customization changes the web sources, the preflight
+  builds them in its worktree (`webbuild.build(code=wt, share_from=<code>/web)`, borrows `node_modules` when the
+  lockfiles match, `tsc -b --force`) -> `ui_build`; a failure = verdict "adapt".
+
+## maxxing.webbuild  (owner: core)
+Customized web UI. `is_web_source(path)` = under `web/`, not `web/dist/` nor `web/node_modules/`. `source_key(code)` =
+sha256 of the web sources on disk (`git ls-files -co --exclude-standard`). `build(code, out, share_from, progress)`:
+`npm ci` when `node_modules/.maxxing-lock` != sha256(package-lock.json), `tsc -b`, `vite build --outDir <tmp>
+--emptyOutDir`, stamp `.maxxing-build.json` {key, commit, built_at}; default out = `<state>/web-dist` swapped in,
+the previous kept as `web-dist.prev` (flock `<state>/web-build.lock`). `active_dist()` (5 s cache, used by
+`app._mount_spa` per request and `caddy.reserved`) = `MAXXING_WEB_DIST` when set, else the local build whose stamp
+key equals `source_key()`, else the shipped `web/dist`. `customized_files()` = web sources of `list_customs()` +
+dirty ones. `maxxing update` (`_rebuild_web_ui`, after the customizations are replayed and before the restart)
+builds when there are any; a failure is a warning, never a rollback. `customs.web_leftovers()` = stashes "edits of
+the web UI" + customizations touching `web/dist` (the edits made before 2.0.0a132).
 - Customization checks: commit trailer `Check:` (save `--check`), overridden by `<workspace>/customizations/checks.json`
   (`maxxing custom check`).
 

@@ -130,7 +130,7 @@ def tick(spawn, now: float | None = None) -> str:
         config.write_json(state_file(), d, mode=0o600)
         feed.system(f"Harness {version} is available but needs you",
                     "The automatic update waits: a customization, an unsaved change or an upgrade note needs a "
-                    "look. Update with Harness from Settings -> Updates.", "info", "system", "/settings/system",
+                    "look. Update with Harness from Settings -> Updates.", "info", "system", "/settings/updates",
                     dedupe=f"auto-update-review:{target}")
         return "needs_review"
     tried = d.get("tried") or {}
@@ -141,7 +141,7 @@ def tick(spawn, now: float | None = None) -> str:
     d["tried"] = {"target": target, "version": version, "at": now}
     config.write_json(state_file(), d, mode=0o600)
     feed.system(f"Harness is updating to {version}", "Automatic update: nobody was on the interface and nothing "
-                "was running. The service restarts for a few seconds.", "info", "system", "/settings/system")
+                "was running. The service restarts for a few seconds.", "info", "system", "/settings/updates")
     spawn()
     return "started"
 

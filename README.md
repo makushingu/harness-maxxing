@@ -101,7 +101,7 @@ version checked against its checksum (`server/maxxing/deps.toml`, managed with `
 connection, import from another agent, first project, Telegram, backup).
 
 Unattended: `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
-Updates come from this repository (`maxxing update`, or the Update button in Settings).
+Updates come from this repository (`maxxing update`, or Settings -> Updates).
 
 Other ways to install:
 
@@ -110,7 +110,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | REPO=you
 bash /path/to/harness-maxxing/install.sh       # from a local copy (a clone with web/dist): no download, updates = a newer copy
 ```
 
-No key and no account. Companies that need an Enterprise license give their key afterwards in Settings → License
+No key and no account. Companies that need an Enterprise license give their key afterwards in Settings → About
 (optional): see [docs/user/23-license.md](docs/user/23-license.md). Servers installed with a key before 2.0.0a87
 switch to the public git repository by themselves.
 
@@ -122,7 +122,7 @@ Day-to-day: `maxxing status`, `maxxing doctor`, `maxxing update`. Remove: `maxxi
 
 ## Documentation
 
-User documentation is in [`docs/user/`](docs/user) and inside the app (Settings -> Docs):
+User documentation is in [`docs/user/`](docs/user) and inside the app (the book icon at the bottom of the sidebar, also linked from Settings -> About):
 [welcome](docs/user/01-welcome.md) · [installation](docs/user/02-installation.md) ·
 [onboarding](docs/user/03-onboarding.md) · [sessions](docs/user/04-sessions.md) ·
 [memory](docs/user/05-memory.md) · [crons](docs/user/08-crons.md) ·

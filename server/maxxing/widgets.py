@@ -125,7 +125,7 @@ def _first_steps() -> list[dict]:
         items.append({"icon": "graduation-cap", "title": t("Take the tutorial"), "subtitle": t("4 short lessons, at your pace"),
                       "href": f"/sessions?path={tutorial}&new=1"})
     items.append({"icon": "folder-plus", "title": t("Add a starter project"),
-                  "subtitle": t("Online store, creator, freelance... ready to use"), "href": "/settings/packs"})
+                  "subtitle": t("Online store, creator, freelance... ready to use"), "href": "/settings/templates"})
     return [{"type": "markdown", "text": t("Welcome! Everything starts with a session: Claude works in a topic, "
                                            "with its memory, on your server.")},
             {"type": "list", "grid": True, "items": items}]
@@ -385,7 +385,7 @@ def usage(force: bool = False) -> dict:
     from . import health
     u = health.usage(force)
     if not u.get("available"):
-        return {"title": t("Claude usage"), "link": "/settings/stats", "status": "warn", "blocks": [
+        return {"title": t("Claude usage"), "link": "/settings/usage", "status": "warn", "blocks": [
             {"type": "markdown", "text": _usage_reason(u)}]}
     blocks = []
     for key, label in (("five_hour", "5-hour window"), ("seven_day", "7-day window")):

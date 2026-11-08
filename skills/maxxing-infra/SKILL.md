@@ -5,8 +5,10 @@ description: Put a site online, create a database or an S3 bucket on this server
 
 # Infra: see everything, create on this server the standard way
 
-The **Infra page** (Settings -> Features -> Infra page, off by default) shows every site, database, bucket,
-domain and server with its status and links. The command `maxxing infra` is the same thing in the terminal **and
+The **Infra page** (Settings -> Features -> Infra, off by default) shows every site, database, bucket,
+domain and server with its status and links. After the first site, database or bucket you create, if the page is
+off (`"infra_page": false` in the state `config.json`), tell the user in one line that Settings -> Features ->
+Infra shows it live - never switch it on yourself. The command `maxxing infra` is the same thing in the terminal **and
 the only way to create things here**: never hand-write a Caddy block, a database or a bucket - use the recipes
 below, they validate, roll back on error, store credentials in the vault, register the resource and back it up.
 

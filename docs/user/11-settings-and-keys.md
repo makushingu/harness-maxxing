@@ -5,28 +5,68 @@ section: Settings
 
 Everything is configurable from **Settings**; no file editing is needed.
 
-| Section | What you find |
-|---|---|
-| **General** | theme (dark/light), accent color (the logo takes it too), density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*), background (neutral or tinted with the accent) - the last theme, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window), interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it), language (English/French), time zone, files root, public URL, **App** (install it on this computer or phone, below) |
-| **License** | optional **Enterprise key**, only for companies that need one (who does is explained there): record it, see it, remove it - see [License](license) |
-| **Support** | Harness Maxxing is free: **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes the Donate buttons from What's new, the Feedback window and Settings → License, in every browser - see [License](license#donations) |
-| **Features** | every optional feature in one place: HUD mode and "notify me when a session finishes" (this browser), web conversations in Telegram, Claude plan usage widget, the **Tasks**, **Git & GitHub** and **Infra** pages and **Maxxing mode (beta)** of the Sessions page (off by default) and presentation mode by default (for everyone) |
-| **Crons** | the scheduled jobs: list, run now, history, editor (see [Crons](crons)); old `/crons` links open it |
-| **Notifications** | a notification (and an optional sound) when a Claude session finishes, pulsing unread badges - saved per browser; then the [notifications feed](feed): its Telegram thread, **Server problems in the notifications**, sources and webhooks |
-| **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), sign out |
-| **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
-| **Stats** | Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens per project, topic and session, tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
-| **Memory** | second brain cleaner: line limit per `memory.md`, **Clean now**, size of every memory file - see [Memory](memory) |
-| **Telegram** | bot wizard, linking, threads, notification options – see [Telegram](telegram) |
-| **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |
-| **Keys** | your secrets vault (below) |
-| **MCP** | the MCP servers of Claude Code (a service's tools for Claude): every session or one topic, state, **Connect** (sign-in), **Remove** - see [MCP servers](28-mcp.md) |
-| **Extensions** | installed widgets and pages, enable/disable, reload – see [Dashboard widgets](dashboard-widgets) |
-| **System** | version and **Update** (with the smart update preflight), health, services (start/stop/restart), logs, **What's new** (also shown once after each update; the main new features have a **Show me** button that takes you to them and highlights them) |
-| **Updates** | every version of Harness Maxxing, newest first, with a search - the full history of what changed |
-| **Docs** | this documentation |
+The sections are grouped in six blocks, in this order (on a phone they are the tabs at the top, a thin bar between
+two blocks):
 
-Changing the **time zone** here does not change the server clock: run
+| Block | Section | What you find |
+|---|---|---|
+| **General** | **General** | language (English/French), time zone, **App** (install it on this computer or phone, below), the guided tour and the tutorial |
+| | **Appearance** | saved in this browser, in three cards. **Theme and colors**: dark/light, accent color (the logo takes it too), background (neutral or tinted with the accent) - the last theme, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window). **Layout**: density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*). **Fonts**: interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it) |
+| | **Profile** | your pseudo, a **photo** (kept on this server, shown instead of the color and emoji, also to your Team contacts), color and emoji (picked from a searchable list) for messages, notifications and Team, with a preview; **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
+| | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), **Privacy**: the presentation mode by default (new browsers start with your data masked), sign out everywhere |
+| | **Features** | every page of the sidebar: the ones always there, the optional ones with their switch, the options of the sessions under Sessions (below) |
+| **Claude** | **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
+| | **Memory** | second brain cleaner: line limit per `memory.md`, **Clean now**, size of every memory file - see [Memory](memory) |
+| | **Skills** | the skills Claude sees on this server: **yours** (in `~/.claude/skills`, the workspace, a project or a topic, with where each one lives) and the ones **shipped with Harness** (refreshed by every update, read-only); **Open**, **Edit with Claude**, **Share with the community**, **New skill** - see [Skills](skills) |
+| | **MCP** | the MCP servers of Claude Code (a service's tools for Claude): every session or one topic, state, **Connect** (sign-in), **Remove** - see [MCP servers](28-mcp.md) |
+| | **Keys** | your secrets vault (below) |
+| | **Usage** | Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** (on for new installs) shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens per project, topic and session, tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
+| **Automate** | **Crons** | the scheduled jobs: list, run now, history, editor (see [Crons](crons)); old `/crons` links open it |
+| | **Notifications** | a notification (and an optional sound) when a Claude session finishes, pulsing unread badges - saved per browser; then the [notifications feed](feed): its Telegram thread, **Server problems in the notifications**, sources and webhooks |
+| | **Telegram** | bot wizard, linking, mode (simple chat, threads, web mirror), notification options, two-step sign-in (also in Security) – see [Telegram](telegram) |
+| | **Voice** | how voice messages and dictation are transcribed (on the server, Groq, OpenAI, or off) |
+| **Extensions** | **Widgets** | the widget extensions of `<workspace>/extensions`: switch on/off, **Rescan**, **Customize the dashboard** (opens the dashboard in edit mode) – see [Dashboard widgets](dashboard-widgets) |
+| | **Pages** | the page extensions and the Office views of the Agents page: switch on/off, **Open page**, **In the sidebar** (pin), **Rescan** – see [Page extensions](page-extensions) |
+| **Workspace** | **Templates** | add a ready-made project (**starter pack**) for your kind of work; an existing project is never overwritten - see [Starter projects](starter-projects) |
+| | **Import** | the memory of another agent (Hermes, OpenClaw, Claude Code, a zip) - see [Import](import); and the way to the other imports: a memory backup (**Backup**), an agent file (Agents page) |
+| | **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |
+| | **Trash** | deleted sessions, topics and files, restore them or empty the trash |
+| **Server** | **System** | health, services (start/stop/restart), logs, and the **address of the server**: public URL and files root (the folder the file viewer can show) |
+| | **Updates** | the installed version, **Check** and **Update** (with the smart update preflight), **Automatic update**, **What's new** (also shown once after each update; the main new features have a **Show me** button that takes you to them and highlights them), then every version of Harness Maxxing, newest first, with a search |
+| | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)), **Support**: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
+
+The docs are not in Settings: open them with the book icon at the bottom of the sidebar (in the ⊞ menu on a phone).
+The community catalogue (widgets, pages, skills shared by other users) is on the website,
+[harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages and Skills link to it.
+Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support` open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
+**Widgets**, `/settings/docs` opens the docs.
+
+## Features
+
+**Settings -> Features** lists every page of the sidebar, in its order, with what it is for. **Dashboard**,
+**Sessions** and **Files** are always there (marked **Always on**); the optional pages have a switch and say what they
+need. A page switched on gets its entry in the sidebar (and in the ⊞ menu, the palette and the `G` shortcuts); switched off, it
+is hidden and nothing is deleted (each page's doc says what still runs meanwhile).
+
+| Page | On a new install | Needs |
+|---|---|---|
+| **Agents** - lasting helpers of a topic (see [Agents](agents)) | on | nothing |
+| **Tasks** - the task board (see [Tasks](tasks)) | off | nothing |
+| **Team** - chats with other Harness users (see [Team](team)) | off | an https address on the internet (domain mode) |
+| **E-mail** - your mailboxes (see [E-mail](mail)) | off | an IMAP/SMTP mailbox |
+| **Infra** - sites, databases, buckets, domains, servers (see [Infra](infra)) | off | nothing for this server; a key for Cloudflare or Hostinger |
+| **Git** - repositories and their graphs (see [Git](git)) | off | a `GITHUB_TOKEN` key for GitHub |
+
+The first-run wizard asks the same question (**What will you use?**), and Settings -> Keys offers the Git page as
+soon as a GitHub key is in the vault. An install made before 2.0.0a132 keeps the pages it had.
+
+Under **Sessions**, indented: **Maxxing mode (beta)** and the **line under the answers** (cost, tokens, duration, model: tick what
+it shows) for everyone, and, saved in this browser only (marked **This browser**): the **Tabs view** (Alt+T) and
+the **HUD**. The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
+widget in **Settings -> Usage**, the presentation mode by default in **Settings -> Security**, the Telegram mode in
+**Settings -> Telegram**.
+
+Changing the **time zone** (Settings -> General) does not change the server clock: run
 `timedatectl set-timezone <Zone> && systemctl restart cron` too, so scheduled jobs follow (see
 [Crons](crons)).
 
@@ -46,13 +86,13 @@ full screen on a phone). Two places: **Install app** in the ⊞ menu on a phone,
 
 ### On a phone or a tablet
 
-Phones and tablets get the **touch layout** (Settings -> General -> Layout changes it per device): no sidebar, no
+Phones and tablets get the **touch layout** (Settings -> Appearance -> Layout changes it per device): no sidebar, no
 bar at the bottom, the conversation fills the screen. Two buttons sit at the top of every screen:
 - **☰** (top left) opens your sessions - see [Sessions](04-sessions.md). Its counter shows the unread answers.
 - **⊞** (top right) opens everything else, laid out like the sidebar: a search field (the same as ⌘K), every page
   in your sidebar order (and Notifications), the extension pages apart, Feedback and Settings, then the status
   card - server health (tap it for the issues), CPU / RAM / disk (opens Settings -> System), your Claude plan
-  (opens Settings -> Stats), presentation mode, the theme, the docs and General settings. A dot on ⊞ means an
+  (opens Settings -> Usage), presentation mode, the theme, the docs and General settings. A dot on ⊞ means an
   update is waiting or the server needs attention.
 
 On a computer the bottom of the sidebar holds the same status block, with the keyboard shortcuts next to the docs.
