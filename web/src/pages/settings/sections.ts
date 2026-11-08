@@ -1,7 +1,7 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
 // Sections are grouped under headings in the left column (and in the phone tabs, in the same order).
 // Old ids keep working: SECTION_MOVED sends them to the section that took their content.
-import { UserRound, BarChart3, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
+import { UserRound, BarChart3, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, HandHeart, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
 export type SettingsSectionId =
@@ -10,7 +10,7 @@ export type SettingsSectionId =
   | 'crons' | 'notifications' | 'telegram' | 'voice'
   | 'widgets' | 'pages'
   | 'templates' | 'import' | 'backup' | 'trash'
-  | 'system' | 'updates' | 'about'
+  | 'system' | 'updates' | 'about' | 'support'
 
 export type SettingsGroupId = 'general' | 'claude' | 'automate' | 'extensions' | 'workspace' | 'server'
 
@@ -26,7 +26,7 @@ export const SETTINGS_GROUPS: { id: SettingsGroupId; label: TKey }[] = [
 export const SETTINGS_SECTIONS: { id: SettingsSectionId; group: SettingsGroupId; label: TKey; description: TKey; icon: LucideIcon; keywords?: string }[] = [
   { id: 'general', group: 'general', label: 'settings.general', description: 'settings.general.desc', icon: SlidersHorizontal, keywords: 'language timezone region install app phone home screen tour tutorial help' },
   { id: 'appearance', group: 'general', label: 'settings.appearance', description: 'settings.appearance.desc', icon: Palette, keywords: 'theme dark light accent color background tint density compact font mono layout touch phone first screen look' },
-  { id: 'profile', group: 'general', label: 'settings.profile', description: 'settings.profile.desc', icon: UserRound, keywords: 'pseudo name nickname avatar color emoji identity' },
+  { id: 'profile', group: 'general', label: 'settings.profile', description: 'settings.profile.desc', icon: UserRound, keywords: 'pseudo name nickname avatar color emoji identity stay in touch contact news email register counter' },
   { id: 'security', group: 'general', label: 'settings.security', description: 'settings.security.desc', icon: Shield, keywords: 'password sign out 2fa two factor presentation privacy blur hide' },
   { id: 'features', group: 'general', label: 'settings.features', description: 'settings.features.desc', icon: ToggleRight, keywords: 'features pages options agents tasks team mail email infra git hud tabs maxxing result line cost enable' },
   { id: 'claude', group: 'claude', label: 'settings.claude', description: 'settings.claude.desc', icon: Bot, keywords: 'model token api key permission sign in' },
@@ -47,14 +47,14 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId; group: SettingsGroupId;
   { id: 'trash', group: 'workspace', label: 'settings.trash', description: 'settings.trash.desc', icon: Trash2, keywords: 'deleted restore recycle bin undo corbeille' },
   { id: 'system', group: 'server', label: 'settings.system', description: 'settings.system.desc', icon: Server, keywords: 'health services logs cpu ram disk public address url files root' },
   { id: 'updates', group: 'server', label: 'settings.updates', description: 'settings.updates.desc', icon: History, keywords: 'update upgrade version check automatic changelog what is new release notes history' },
-  { id: 'about', group: 'server', label: 'settings.about', description: 'settings.about.desc', icon: Info, keywords: 'about license licence enterprise company key business fair source support donate donation sponsor contact news email register counter' },
+  { id: 'about', group: 'server', label: 'settings.about', description: 'settings.about.desc', icon: Info, keywords: 'about license licence enterprise company key business fair source docs github community' },
+  { id: 'support', group: 'server', label: 'settings.support', description: 'settings.support.desc', icon: HandHeart, keywords: 'support donate donation sponsor bitcoin lightning hide donate buttons' },
 ]
 
 /** Sections that moved (old links, bookmarks, notifications): old id -> where its content is now. */
 export const SECTION_MOVED: Record<string, string> = {
   stats: '/settings/usage',
   license: '/settings/about',
-  support: '/settings/about',
   docs: '/docs',
   packs: '/settings/templates',
   projects: '/settings/templates',

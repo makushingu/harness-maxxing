@@ -9,7 +9,7 @@ Telegram, together with the files, tasks, scheduled jobs and memory that make th
 
 Everything runs on your server, with your own Claude account or API key. Nothing else leaves it except
 an anonymous daily counter (version, system, health codes; no name, no IP, no content), which you can turn off
-in Settings → About - see [License](license#saying-hello-optional).
+in Settings → Profile - see [License](license#saying-hello-optional).
 
 ## Concepts
 

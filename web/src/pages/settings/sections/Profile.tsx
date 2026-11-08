@@ -1,12 +1,13 @@
 import * as React from 'react'
 import { Check } from 'lucide-react'
-import { useProfile, useSaveProfile } from '@/lib/queries'
+import { useProfile, useRegister, useSaveProfile, useSaveRegister } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { Profile, ProfileColor } from '@/lib/types'
-import { Input, Skeleton, Tooltip } from '@/components/ui'
+import { Button, Input, Skeleton, Tooltip } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { Avatar, PROFILE_COLORS } from '@/features/profile/Avatar'
+import { RegisterFields, validEmail, type RegisterValues } from '@/features/profile/Register'
 import { projectColor } from '@/features/tasks/model'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -95,6 +96,42 @@ export function ProfileSection() {
           </div>
         </div>
       </SettingsCard>
+
+      <RegisterCard />
     </SectionStack>
+  )
+}
+
+/** Stay in touch (back here in 2.0.0a132): an optional e-mail for the news, and the anonymous counter. */
+function RegisterCard() {
+  const t = useT()
+  const { data: reg } = useRegister()
+  const save = useSaveRegister()
+  const [v, setV] = React.useState<RegisterValues | null>(null)
+  React.useEffect(() => {
+    if (reg) setV({ email: reg.email, news: reg.news, count: reg.count })
+  }, [reg])
+  if (!reg || !v) return <Skeleton className="h-48 rounded-xl" />
+  const put = (n: RegisterValues) => validEmail(n.email) && save.mutate({ ...n, email: n.email.trim(), asked: true })
+  const change = (n: RegisterValues) => {
+    setV(n)
+    if (n.news !== v.news || n.count !== v.count) put(n)        // checkboxes save at once, the email on blur
+  }
+  const on = (reg.count && !reg.count_blocked) || !!reg.email
+  return (
+    <SettingsCard title={t('about.contact')} description={t('register.desc')}>
+      <RegisterFields v={v} onChange={change} onEmailBlur={() => v.email.trim() !== reg.email && put(v)} counterBlocked={reg.count_blocked} />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-xs text-muted-foreground">
+        <span>
+          {!on ? t('register.statusOff') : reg.registered ? t('register.statusOn') : reg.error ? t('register.statusError', { error: reg.error }) : t('register.statusPending')}
+        </span>
+        {on && (
+          <Button variant="outline" size="sm" disabled={save.isPending} onClick={() => save.mutate({ count: false, email: '', news: false, asked: true })}>
+            {t('register.stop')}
+          </Button>
+        )}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">{t('register.privacy')}</p>
+    </SettingsCard>
   )
 }

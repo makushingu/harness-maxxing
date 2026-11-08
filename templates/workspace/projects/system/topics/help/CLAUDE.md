@@ -34,7 +34,7 @@ is the only authority: `{{CODE_DIR}}/docs/user/` (the same pages as the Docs of 
 | `08-crons.md` | scheduled jobs: shell or Claude, schedule syntax, time zone, notifications |
 | `09-telegram.md` | Telegram bot, modes (Simple = one chat where a reply continues a session; one thread per open session; threads + web conversations; `maxxing telegram mode`), agents' threads, alerts with buttons, commands, voice, two-step sign-in (`maxxing 2fa off`) |
 | `10-backup.md` | memory backup to GitHub, restore, new server |
-| `11-settings-and-keys.md` | settings in six blocks (General with Appearance and Features, Claude with Skills, Automate, Extensions = Widgets + Pages, Workspace = Templates + Import + Backup + Trash, Server = System + Updates + About), secret keys vault, secret files (keystores, service-account JSON, certificates: `maxxing keys put-file`, path exposed as a variable, never in the backup), trash |
+| `11-settings-and-keys.md` | settings in six blocks (General with Appearance and Features, Claude with Skills, Automate, Extensions = Widgets + Pages, Workspace = Templates + Import + Backup + Trash, Server = System + Updates + About + Support), secret keys vault, secret files (keystores, service-account JSON, certificates: `maxxing keys put-file`, path exposed as a variable, never in the backup), trash |
 | `12-dashboard-widgets.md` / `13-page-extensions.md` | extensions |
 | `14-skills.md` | Claude Code skills: shipped ones, yours, where they live, Settings -> Skills |
 | `15-security.md` | password, permissions, exposure |
@@ -45,7 +45,7 @@ is the only authority: `{{CODE_DIR}}/docs/user/` (the same pages as the Docs of 
 | `20-customizing.md` | changing the product's own code, kept across updates |
 | `21-import.md` | Settings -> Import: the memory of another agent (Hermes, Claude Code, OpenClaw...) |
 | `22-tools.md` | videos (Remotion), PDFs, images, web scraping |
-| `23-license.md` | fair source license (what is allowed), optional hello to the authors (anonymous counter, email, news), Feedback button (bug / idea to the authors, email required), donations (Settings -> About, links only, can be hidden), optional Enterprise key (Settings -> License), updates |
+| `23-license.md` | fair source license (what is allowed), optional hello to the authors (anonymous counter, email, news), Feedback button (bug / idea to the authors, email required), donations (Settings -> Support, links only, can be hidden), optional Enterprise key (Settings -> License), updates |
 | `24-feed.md` | notifications feed: dashboard panel, webhooks (Stripe, Shopify, GitHub, JSON), `maxxing feed post`, Telegram rules, alerts with buttons (an agent's request Allow / Deny, Open, Seen) and the To handle filter, server problems in the feed (Settings -> Notifications) |
 | `25-starter-projects.md` | starter projects (packs): e-commerce, affiliate, creator, apps, second brain, freelance; Settings -> Templates, `maxxing packs` |
 | `26-git.md` | Git & GitHub: ```git graphs in the chat, the Git page (Settings -> Features: server clones + GitHub account, rights, branches, commits, pull requests), GITHUB_TOKEN |

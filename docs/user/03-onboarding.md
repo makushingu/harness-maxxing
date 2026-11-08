@@ -14,7 +14,7 @@ every step also exists in Settings.
 1. **Language & time zone** – English or French, and the time zone used by scheduled jobs.
 2. **About you** (all optional) – your pseudo, an email for security alerts (and the product news if you want),
    and, only for companies that have one, an **Enterprise license key**. The anonymous installation counter is on by
-   default and is turned off in Settings → About. See [License](license).
+   default and is turned off in Settings → Profile. See [License](license).
 3. **Claude connection** – the wizard detects whether Claude Code is signed in. Otherwise:
    - run `claude setup-token` on any machine with a browser and paste the long-lived token, or
    - paste an Anthropic API key (pay-as-you-go).

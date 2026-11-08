@@ -12,7 +12,7 @@ two blocks):
 |---|---|---|
 | **General** | **General** | language (English/French), time zone, **App** (install it on this computer or phone, below), the guided tour and the tutorial |
 | | **Appearance** | saved in this browser, in three cards. **Theme and colors**: dark/light, accent color (the logo takes it too), background (neutral or tinted with the accent) - the last theme, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window). **Layout**: density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*). **Fonts**: interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it) |
-| | **Profile** | your pseudo, color and emoji (messages, notifications), with a preview |
+| | **Profile** | your pseudo, color and emoji (messages, notifications), with a preview; **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
 | | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), **Privacy**: the presentation mode by default (new browsers start with your data masked), sign out everywhere |
 | | **Features** | the optional pages and the options of the sessions (below) |
 | **Claude** | **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
@@ -33,13 +33,13 @@ two blocks):
 | | **Trash** | deleted sessions, topics and files, restore them or empty the trash |
 | **Server** | **System** | health, services (start/stop/restart), logs, and the **address of the server**: public URL and files root (the folder the file viewer can show) |
 | | **Updates** | the installed version, **Check** and **Update** (with the smart update preflight), **Automatic update**, **What's new** (also shown once after each update; the main new features have a **Show me** button that takes you to them and highlights them), then every version of Harness Maxxing, newest first, with a search |
-| | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)), **Support**: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations); **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
+| | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)) |
+| | **Support** | the last section: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
 
 The docs are not in Settings: open them with the book icon at the bottom of the sidebar (in the ⊞ menu on a phone).
 The community catalogue (widgets, pages, skills shared by other users) is on the website,
 [harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages and Skills link to it.
-Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support`
-open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
+Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` opens **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
 **Widgets**, `/settings/docs` opens the docs.
 
 ## Features
