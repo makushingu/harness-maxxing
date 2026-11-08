@@ -72,7 +72,7 @@ export function UpdatePlan({ v, onUpdate, updating }: { v: VersionInfo; onUpdate
           {adapt ? <Wrench className="size-4 text-warning" /> : <ShieldCheck className="size-4 text-success" />}
           {adapt ? t('update.adaptTitle') : mine ? t('update.simpleTitleCustoms', { count: mine }) : t('update.simpleTitle')}
         </div>
-        {(p.customs.length > 0 || p.unsaved.length > 0 || p.web_changes.length > 0 || p.extensions.length > 0 || p.notes.length > 0) && (
+        {(p.customs.length > 0 || p.unsaved.length > 0 || p.web_changes.length > 0 || !!p.ui_build || p.extensions.length > 0 || p.notes.length > 0) && (
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
             {p.customs.map((c) => customLine(c, t))}
             {p.unsaved.length > 0 && (
@@ -83,6 +83,12 @@ export function UpdatePlan({ v, onUpdate, updating }: { v: VersionInfo; onUpdate
             {p.web_changes.length > 0 && (
               <Row tone="warn" detail={p.web_changes.slice(0, 3).join(', ')}>
                 {t('update.webChanges', { count: p.web_changes.length })}
+              </Row>
+            )}
+            {p.ui_build && (
+              <Row tone={p.ui_build.status === 'ok' ? 'ok' : p.ui_build.status === 'unchecked' ? 'info' : 'error'}
+                detail={p.ui_build.status === 'failed' ? p.ui_build.error.trim().split('\n').slice(-1)[0] : undefined}>
+                {t(p.ui_build.status === 'ok' ? 'update.uiBuildOk' : p.ui_build.status === 'unchecked' ? 'update.uiBuildUnchecked' : 'update.uiBuildFailed')}
               </Row>
             )}
             {p.extensions.map((e) => (

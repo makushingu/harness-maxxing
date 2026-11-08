@@ -1,0 +1,226 @@
+"""Customized web UI: its sources are customizations, this server builds them into <state>/web-dist (webbuild.py).
+A fake Node stands in for npm / tsc / vite: `vite build` copies web/src/main.txt to <outDir>/index.html."""
+from __future__ import annotations
+
+import subprocess
+
+import pytest
+
+from maxxing import cmd_core, config, customs, deps, smartupdate, webbuild
+from test_cmd_core import _git, env, repos, run_cli  # noqa: F401  (fixtures)
+from test_customs import _upstream_release, code  # noqa: F401  (fixtures)
+
+FAKE_NODE = """#!/bin/sh
+case "$1" in
+  *tsc) if [ -f "$PWD/src/TYPE_ERROR" ]; then echo "src/main.tsx(1,1): error TS2322: wrong type"; exit 2; fi; exit 0 ;;
+  *vite.js) out=""; while [ $# -gt 0 ]; do [ "$1" = "--outDir" ] && out="$2"; shift; done
+            mkdir -p "$out" && cp src/main.txt "$out/index.html" && exit 0 ;;
+esac
+exit 1
+"""
+FAKE_NPM = """#!/bin/sh
+mkdir -p node_modules
+echo "npm $*" >> node_modules/npm.log
+"""
+
+
+@pytest.fixture
+def ui(code, tmp_path, monkeypatch):
+    """The code directory ships web sources + their build; a fake Node.js."""
+    work, clone = code["work"], code["clone"]
+    (work / "web" / "src").mkdir(parents=True)
+    (work / "web" / "dist").mkdir()
+    (work / "web" / "package.json").write_text('{"name": "web"}\n')
+    (work / "web" / "package-lock.json").write_text('{"lockfileVersion": 3}\n')
+    (work / "web" / "src" / "main.txt").write_text("<p>standard</p>\n")
+    (work / "web" / "dist" / "index.html").write_text("<p>shipped</p>\n")
+    (work / ".gitignore").write_text("node_modules\n")
+    _git("add", "-A", cwd=work)
+    _git("commit", "-q", "-m", "web", cwd=work)
+    _git("push", "-q", "origin", "main", cwd=work)
+    _git("pull", "-q", "origin", "main", cwd=clone)
+    bin_dir = tmp_path / "nodebin"
+    bin_dir.mkdir()
+    for name, text in (("node", FAKE_NODE), ("npm", FAKE_NPM)):
+        (bin_dir / name).write_text(text)
+        (bin_dir / name).chmod(0o755)
+    monkeypatch.setattr(deps, "node_bin", lambda: bin_dir / "node")
+    monkeypatch.setattr(config, "WEB_DIST", clone / "web" / "dist")
+    monkeypatch.delenv("MAXXING_WEB_DIST", raising=False)
+    webbuild.forget()
+    yield {**code}
+    webbuild.forget()
+
+
+def _served(clone=None) -> str:
+    webbuild.forget()
+    return (webbuild.active_dist() / "index.html").read_text()
+
+
+def _edit(clone, text="<p>mine</p>\n"):
+    (clone / "web" / "src" / "main.txt").write_text(text)
+
+
+def test_the_shipped_build_is_served_until_a_customization_is_built(ui):
+    clone = ui["clone"]
+    assert webbuild.customized_files() == [] and _served() == "<p>shipped</p>\n"
+    assert run_cli("custom", "build") == 0                       # nothing customized: nothing to do
+    assert not webbuild.build_dir().exists()
+    _edit(clone)
+    assert webbuild.customized_files() == ["web/src/main.txt"]
+    assert _served() == "<p>shipped</p>\n"                       # not built yet
+    assert cmd_core.check_web()["level"] == cmd_core.WARN
+    assert run_cli("custom", "build") == 0
+    assert _served() == "<p>mine</p>\n"                          # served at once, no restart
+    assert cmd_core.check_web()["level"] == cmd_core.OK
+    assert (clone / "web" / "dist" / "index.html").read_text() == "<p>shipped</p>\n"   # never touched
+    assert customs.dirty_files() == ["web/src/main.txt"]         # node_modules ignored, dist clean
+    assert run_cli("custom", "save", "My header", "--why", "the user wanted it") == 0
+    assert _served() == "<p>mine</p>\n"                          # the same sources, now saved
+
+
+def test_a_build_that_no_longer_matches_the_sources_is_never_served(ui):
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>mine, edited again</p>\n")
+    assert _served() == "<p>shipped</p>\n"                       # stale: the standard UI, never an old one
+    assert webbuild.build()["ok"]
+    assert _served() == "<p>mine, edited again</p>\n"
+    _edit(clone)                                                  # back to the first sources (a rollback)
+    assert _served() == "<p>mine</p>\n"                          # the previous build is kept for that
+
+
+def test_a_failed_build_keeps_what_was_served(ui, capsys):
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>broken</p>\n")
+    (clone / "web" / "src" / "TYPE_ERROR").write_text("x")
+    assert run_cli("custom", "build") == 1
+    out = capsys.readouterr().out
+    assert "does not build" in out and "TS2322" in out
+    assert _served() == "<p>shipped</p>\n"                       # sources changed: standard UI, not a half build
+    assert (webbuild.build_dir() / "index.html").read_text() == "<p>mine</p>\n"
+
+
+def test_node_modules_are_installed_once_per_lockfile(ui):
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"] and webbuild.build()["ok"]
+    log = (clone / "web" / "node_modules" / "npm.log").read_text().splitlines()
+    assert len(log) == 1 and log[0].startswith("npm ci")
+    (clone / "web" / "package-lock.json").write_text('{"lockfileVersion": 3, "x": 1}\n')
+    assert webbuild.build()["ok"]
+    assert len((clone / "web" / "node_modules" / "npm.log").read_text().splitlines()) == 2
+
+
+def test_the_update_rebuilds_the_customized_ui(ui, capsys):
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "the user wanted it") == 0
+    assert webbuild.build()["ok"]
+    _upstream_release(work, "1.1.0", extra="feature.txt")
+    rep = smartupdate.preflight()
+    assert rep["ui_build"]["status"] == "ok" and rep["verdict"] == "simple"
+    assert run_cli("update", "--no-restart") == 0
+    assert "customized web UI rebuilt" in capsys.readouterr().out
+    assert (clone / "feature.txt").exists() and _served() == "<p>mine</p>\n"
+    assert webbuild._stamp(webbuild.build_dir())["commit"] == subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+
+
+def test_a_ui_customization_that_no_longer_builds_never_blocks_the_update(ui, capsys):
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "the user wanted it") == 0
+    assert webbuild.build()["ok"]
+    (work / "web" / "src" / "TYPE_ERROR").write_text("the new version changed a type\n")
+    _upstream_release(work, "1.1.0")
+    rep = smartupdate.preflight()
+    assert rep["ui_build"]["status"] == "failed" and rep["verdict"] == "adapt"
+    assert "does NOT BUILD" in smartupdate.assist_prompt(rep)
+    assert run_cli("update", "--no-restart") == 0
+    assert "do not build on the new version" in capsys.readouterr().out
+    assert _served() == "<p>shipped</p>\n"                       # the standard interface meanwhile
+
+
+def test_uncommitted_ui_sources_are_saved_by_the_update_and_the_build_set_aside(ui, capsys):
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    (clone / "web" / "dist" / "index.html").write_text("<p>built by hand in place</p>\n")
+    _upstream_release(work, "1.1.0")
+    rep = smartupdate.preflight()
+    assert rep["unsaved"] == ["web/src/main.txt"] and rep["web_changes"] == ["web/dist/index.html"]
+    assert run_cli("update", "--no-restart") == 0
+    assert [c["files"] for c in customs.list_customs()] == [["web/src/main.txt"]]
+    assert (clone / "web" / "dist" / "index.html").read_text() == "<p>shipped</p>\n"
+    assert _served() == "<p>mine</p>\n"                          # rebuilt from the saved sources
+    assert [x["kind"] for x in customs.web_leftovers()] == ["stash"]
+    run_cli("custom")
+    assert "Old UI edits" in capsys.readouterr().out
+
+
+def test_leftovers_also_list_commits_that_changed_the_shipped_build(ui):
+    clone = ui["clone"]
+    (clone / "web" / "dist" / "index.html").write_text("<p>hand made</p>\n")
+    _git("commit", "-qam", "my ui", cwd=clone)
+    assert [(x["kind"], x["title"]) for x in customs.web_leftovers()] == [("commit", "my ui")]
+
+
+def test_the_env_override_always_wins(ui, tmp_path, monkeypatch):
+    _edit(ui["clone"])
+    assert webbuild.build()["ok"]
+    monkeypatch.setenv("MAXXING_WEB_DIST", str(tmp_path / "dev"))
+    monkeypatch.setattr(config, "WEB_DIST", tmp_path / "dev")
+    webbuild.forget()
+    assert webbuild.active_dist() == tmp_path / "dev"
+
+
+def test_no_pathspec_slips_the_shipped_build_into_a_customization(ui):
+    clone = ui["clone"]
+    (clone / "web" / "dist" / "index.html").write_text("<p>edited build</p>\n")
+    _edit(clone)
+    for files in (["."], ["web"], None):
+        with pytest.raises(customs.CustomError, match="web/dist"):
+            customs.save("UI tweak", files=files)
+    assert customs.list_customs() == []
+    _git("add", "web/dist", cwd=clone)                            # staged earlier, other files saved
+    with pytest.raises(customs.CustomError, match="web/dist"):
+        customs.save("UI tweak", files=["web/src/main.txt"])
+    assert customs.save("UI tweak", files=["web/src/main.txt"])["id"]   # the refusal unstaged it
+
+
+def test_the_preflight_never_installs_build_tools(ui):
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "x") == 0
+    assert webbuild.build()["ok"]
+    (work / "web" / "package-lock.json").write_text('{"lockfileVersion": 3, "new": 1}\n')
+    _upstream_release(work, "1.1.0")
+    rep = smartupdate.preflight()
+    assert rep["ui_build"]["status"] == "unchecked" and rep["verdict"] == "simple"
+    assert len((clone / "web" / "node_modules" / "npm.log").read_text().splitlines()) == 1   # no npm ci for it
+
+
+def test_a_source_edited_during_the_build_is_not_taken_for_built(ui, monkeypatch):
+    clone = ui["clone"]
+    _edit(clone)
+    real = webbuild._run
+
+    def run(cmd, cwd, env, timeout):
+        if cmd[1].endswith("vite.js"):
+            _edit(clone, "<p>edited while building</p>\n")
+        return real(cmd, cwd, env, timeout)
+    monkeypatch.setattr(webbuild, "_run", run)
+    assert webbuild.build()["ok"]
+    assert _served() == "<p>shipped</p>\n"                       # the build has the older text: not served
+
+
+def test_leftovers_of_a_killed_build_are_swept(ui):
+    import os
+    old = config.STATE / "web-dist.new-abc"
+    old.mkdir(parents=True)
+    os.utime(old, (1, 1))
+    _edit(ui["clone"])
+    assert webbuild.build()["ok"] and not old.exists()

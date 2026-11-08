@@ -62,7 +62,8 @@ def reserved() -> list[str]:
     """Names a path site cannot take: the UI's routes and the files at the root of the web build."""
     names = set(UI_ROUTES)
     try:
-        for e in config.WEB_DIST.iterdir():
+        from .. import webbuild
+        for e in webbuild.active_dist().iterdir():
             names.add(e.name.split(".")[0] if e.is_file() else e.name)
             names.add(e.name)
     except OSError:

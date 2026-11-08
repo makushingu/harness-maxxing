@@ -122,6 +122,21 @@ def _local_range(branch: str | None = None, head: str = "HEAD") -> list[str]:
     return ["--right-only", "--cherry-pick", "--no-merges", f"{upstream(branch)}...{head}"]
 
 
+def web_leftovers() -> list[dict[str, str]]:
+    """Edits of the web UI kept from before it could be customized (2.0.0a132): the git stashes older updates set them
+    aside in, and local commits that changed the shipped build (web/dist). -> [{kind, ref, title}]."""
+    out: list[dict[str, str]] = []
+    code, lst = git("stash", "list", "--format=%gd%x1f%gs")
+    for ln in (lst.splitlines() if code == 0 else []):
+        ref, _, subject = ln.partition("\x1f")
+        if "edits of the web UI" in subject:
+            out.append({"kind": "stash", "ref": ref, "title": subject.strip()})
+    for c in list_customs():
+        if any(f.startswith("web/dist/") for f in c["files"]):
+            out.append({"kind": "commit", "ref": c["commit"][:12], "title": c["title"]})
+    return out
+
+
 def same_code_upstream(branch: str | None = None) -> bool:
     """The code that runs is exactly a version of upstream (its tree is the tree of an upstream commit): nothing
     local to keep, the code directory may follow upstream even when the histories differ."""
@@ -258,15 +273,20 @@ def save(title: str, why: str = "", files: list[str] | None = None, check: str =
     changed = dirty_files()
     if not changed:
         raise CustomError("nothing to save: no uncommitted change in " + str(config.CODE))
-    web = [f for f in changed if f.startswith("web/")]
-    if web:
-        raise CustomError("changes under web/ cannot be customizations (the web UI is shipped pre-built and "
-                          "cannot be rebuilt on this server): build an extension instead (" + ", ".join(web[:3]) + ")")
     ensure_identity()
     if files:
         git("add", "--", *files, check=True)
     else:
         git("add", "-A", check=True)
+    # what is staged now (a pathspec such as `.` or a change staged earlier included) - never the shipped UI build
+    _, staged = git("diff", "--cached", "--name-only", "-z")
+    built = [f for f in staged.split("\0") if f.startswith("web/dist/")]
+    if built:
+        git("reset", "-q", "--", "web/dist")
+        raise CustomError("web/dist is the shipped build of the UI, never a customization: save the sources under "
+                          "web/ and build them with `maxxing custom build`; put the shipped build back first: "
+                          f"git -C {config.CODE} checkout -- web/dist && git -C {config.CODE} clean -fdq web/dist"
+                          " (" + ", ".join(built[:3]) + ")")
     cid = f"c-{dt.datetime.now():%Y%m%d}-{_secrets.token_hex(2)}"
     msg = f"{PREFIX}{title}\n\nCustom-Id: {cid}\nWhy: {' '.join((why or '').split()) or '-'}\n" \
           f"Saved: {dt.datetime.now():%Y-%m-%d %H:%M}\n" + \

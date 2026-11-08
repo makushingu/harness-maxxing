@@ -16,12 +16,26 @@ Many changes need no code at all: **Settings -> Appearance** (colours, layout, f
 |---|---|---|---|
 | **Extensions** | widgets (Card or free HTML: games, canvas), pages, their API | `<workspace>/extensions/` | never touched |
 | **Workspace** | how Claude behaves in a topic, scheduled jobs, your own skills | `CLAUDE.md` files, Settings -> Crons, `.claude/skills/` | never touched |
-| **Customizations** | changing the product itself (a server rule, a limit, a CLI command…) | the code directory, recorded with `maxxing custom save` | replayed on top of the new version |
+| **Customizations** | changing the product itself (a server rule, a limit, a CLI command, the interface…) | the code directory, recorded with `maxxing custom save` | replayed on top of the new version |
 
-Claude always tries the first two before touching the product code. The web interface itself
-cannot be rebuilt on your server (it is shipped pre-built): for a change of the interface, Claude offers the closest
-way - a setting, a page or widget extension, a change on the server side. See
-[Dashboard widgets](dashboard-widgets) and [Page extensions](page-extensions).
+Claude always tries the first two before touching the product code. See [Dashboard widgets](dashboard-widgets) and
+[Page extensions](page-extensions).
+
+## Changing the interface
+
+The interface can be customized too: ask Claude ("make the sidebar wider", "add a button that opens my shop").
+It edits the interface's sources (`web/src` in the code directory), builds your own copy of the interface on the
+server (`maxxing custom build`, about 30 seconds) and records the change like any customization. The interface that
+comes with Harness Maxxing (`web/dist`) is never modified: your build lives in the state directory
+(`/var/lib/claude-maxxing/web-dist`) and is shown as long as it matches your sources.
+
+- The first build installs the build tools (about 450 MB, once per version).
+- Every update rebuilds your interface on the new version; Settings -> Updates says beforehand whether it still
+  builds. If it no longer does, the update still happens and the standard interface is shown until Claude adapts
+  your change (`maxxing doctor` says so too).
+- Small changes in their own files keep well across updates; Claude works that way.
+- Edits made before this was possible (set aside by an older update, or made in `web/dist`): `maxxing custom`
+  lists them as "Old UI edits"; Claude can redo them properly with your OK.
 
 ## Customizations
 
@@ -42,8 +56,8 @@ exported as a patch in `<workspace>/customizations/`. Both are part of the memor
 **Before**: Settings -> Updates shows what the next update does to *your* server - tested on a throw-away
 copy, nothing changed yet (`maxxing update --preflight` on the server). Each customization **carries
 over**, carries over on code that changed (checked after), is **now included** in the product (Harness
-offers to drop it), or **must be adapted**. Unsaved edits, edits of the interface files and extensions the
-new version no longer supports are listed too.
+offers to drop it), or **must be adapted**. Whether your customized interface still builds, unsaved edits, edits of
+the shipped interface build (`web/dist`) and extensions the new version no longer supports are listed too.
 
 - Everything compatible: **Update** does it all. After the restart, your extensions and customizations
   are checked automatically, and Harness applies the version's workspace novelties in a session of
@@ -65,8 +79,8 @@ update: `maxxing custom save "..." --why "..." --check "<command>"`, or later `m
 `maxxing update` (or the topic `system/harness` (`system/update` on older servers), or Settings -> Updates) keeps you safe:
 
 1. Unsaved edits of the code are saved as a customization first - nothing is ever lost. Edits of the
-   pre-built interface (`web/`) cannot be customizations: they are set aside (`git stash`) instead of
-   blocking the update, and Harness rebuilds what they did as an extension.
+   shipped interface build (`web/dist`) cannot be customizations: they are set aside (`git stash`) instead of
+   blocking the update, and Harness redoes them in the interface's sources.
 2. Your customizations are replayed on top of the new version.
 3. **No conflict**: the update finishes ("N customizations carried over").
 4. **Conflict** (the new version changed the same lines): **nothing changes**, the current version

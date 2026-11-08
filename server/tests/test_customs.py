@@ -62,21 +62,26 @@ def test_save_records_commit_registry_and_patch(code, capsys):
     patches = list((ws / "customizations").glob("*.patch"))
     assert len(patches) == 1 and "LIMIT = 50" in patches[0].read_text()
     assert customs.dirty_files() == []
-    # the web UI is pre-built: never a customization
-    (clone / "web").mkdir()
-    (clone / "web" / "x.ts").write_text("x")
+    # the shipped build of the web UI is never a customization (its sources are)
+    (clone / "web" / "dist").mkdir(parents=True)
+    (clone / "web" / "dist" / "x.js").write_text("x")
     assert run_cli("custom", "save", "UI tweak") == 1
-    assert "extension" in capsys.readouterr().out
+    assert "web/dist" in capsys.readouterr().out
+    (clone / "web" / "dist" / "x.js").unlink()
+    (clone / "web" / "src").mkdir()
+    (clone / "web" / "src" / "x.ts").write_text("x")
+    assert run_cli("custom", "save", "UI tweak", "--why", "bigger buttons") == 0
+    assert customs.list_customs()[-1]["files"] == ["web/src/x.ts"]
 
 
 def test_quoted_web_paths_are_still_refused(code, capsys):
     clone = code["clone"]
-    (clone / "web").mkdir()
-    (clone / "web" / "café x.ts").write_text("x")
-    assert customs.dirty_files() == ["web/café x.ts"]
-    with pytest.raises(customs.CustomError, match="web/"):
+    (clone / "web" / "dist").mkdir(parents=True)
+    (clone / "web" / "dist" / "café x.js").write_text("x")
+    assert customs.dirty_files() == ["web/dist/café x.js"]
+    with pytest.raises(customs.CustomError, match="web/dist"):
         customs.save("UI tweak")
-    (clone / "web" / "café x.ts").unlink()
+    (clone / "web" / "dist" / "café x.js").unlink()
     (clone / "server" / "maxxing" / "rules.py").rename(clone / "server" / "maxxing" / "règles.py")
     customs.git("add", "-A", check=True)
     assert set(customs.dirty_files()) == {"server/maxxing/règles.py", "server/maxxing/rules.py"}

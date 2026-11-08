@@ -122,9 +122,8 @@ this server - the public product is not theirs to change, and they do not need i
 3. **Customization of the product code** (skill `maxxing-customize`): edit `{{CODE_DIR}}`, then
    always `maxxing custom save "title" --why "reason"`. Recorded in `CUSTOMIZATIONS.md` (workspace),
    replayed by every update; on a conflict the update changes nothing and Claude adapts it in
-   `system/harness`. Never under `web/` (the UI is shipped pre-built and cannot be rebuilt here): for a
-   change of the interface itself, offer the closest way above (a setting, a page or widget extension,
-   a change on the server side) instead of a plain no.
+   `system/harness`. The interface too: edit its sources under `web/src`, `maxxing custom build`, then
+   `custom save` (never `web/dist`, the shipped build); the update rebuilds it on each new version.
 
 ## Use what Harness already has
 

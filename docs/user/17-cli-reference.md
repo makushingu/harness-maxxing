@@ -113,12 +113,13 @@ Changes made to the product code, recorded so updates carry them over (see [Cust
 
 | Command | Effect |
 |---|---|
-| `maxxing custom` / `status [--json]` | customizations, unsaved changes in the code directory, pending update |
-| `maxxing custom save "TITLE" --why "REASON" [--files F…] [--check "CMD"]` | commit the uncommitted changes as one customization (refused under `web/`); `--check` = a command that succeeds while it works, run after every update |
+| `maxxing custom` / `status [--json]` | customizations, unsaved changes in the code directory, the customized interface, pending update |
+| `maxxing custom save "TITLE" --why "REASON" [--files F…] [--check "CMD"]` | commit the uncommitted changes as one customization (refused under `web/dist`, the shipped interface build); `--check` = a command that succeeds while it works, run after every update |
 | `maxxing custom check ID "CMD"` | set (or clear with `""`) the check of a customization |
 | `maxxing custom drop ID` | remove one customization |
 | `maxxing custom export` | rewrite `<workspace>/CUSTOMIZATIONS.md` and `customizations/*.patch` |
 | `maxxing custom restore [--from DIR]` | re-apply the saved patches (new server) |
+| `maxxing custom build [--force] [--json]` | typecheck and build the customized interface into the state directory (shown at once; the first build installs the build tools) |
 
 ## maxxing deps
 
