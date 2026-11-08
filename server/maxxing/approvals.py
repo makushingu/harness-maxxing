@@ -83,6 +83,7 @@ def short(tool: str, inp: Any) -> str:
 
 
 _EDITS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+_READS = ("Read", "Glob", "Grep", "LS", "NotebookRead")
 
 
 def always_rule(d: dict) -> str:
@@ -105,7 +106,10 @@ def always_rule(d: dict) -> str:
         return f"Bash({cmd.strip()})"
     if tool in _EDITS:
         p = inp.get("file_path") or inp.get("notebook_path")
-        if not isinstance(p, str) or not p.startswith("/") or any(c in p for c in "\n\r()*"):
+        # Edit rules are gitignore patterns: "?", "[...]", "{...}", "!", "\\", "#", a final "/" (a whole folder)
+        # or a "." / ".." segment would allow more than this one file
+        if not isinstance(p, str) or not p.startswith("/") or any(c in p for c in "\n\r()*?[]{}!\\#") or \
+                p.endswith("/") or any(seg in (".", "..") for seg in p.split("/")):
             return ""
         return f"Edit(/{p})"                        # "//abs": an absolute path; Edit rules cover Write too
     if tool == "WebFetch":
@@ -113,6 +117,8 @@ def always_rule(d: dict) -> str:
         host = urlsplit(str(inp.get("url") or "")).hostname or ""
         return f"WebFetch(domain:{host})" if re.fullmatch(r"[a-z0-9.-]{1,253}", host) else ""
     if tool in ("Task", "Agent", "Skill"):           # the subagent / skill runs under the same rules: ask each time
+        return ""
+    if tool in _READS:                               # the bare tool would allow reading any file: ask each time
         return ""
     return tool
 

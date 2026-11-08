@@ -512,6 +512,14 @@ def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     ("Edit", {"file_path": "relative.md"}, ""),
     ("WebFetch", {"url": "https://Example.com/a?b=1"}, "WebFetch(domain:example.com)"),
     ("Task", {"prompt": "do it"}, ""),
+    ("Write", {"file_path": "/root/"}, ""),                              # a folder: the whole tree below it
+    ("Write", {"file_path": "/tmp/[ab].txt"}, ""),                       # gitignore patterns
+    ("Edit", {"file_path": "/tmp/a?.md"}, ""),
+    ("Edit", {"file_path": "/tmp/{a,b}.md"}, ""),
+    ("Edit", {"file_path": "/root/x/../../etc/passwd"}, ""),
+    ("Edit", {"file_path": "/root/./x.md"}, ""),
+    ("Read", {"file_path": "/etc/hostname"}, ""),                        # the bare tool would read anything
+    ("Grep", {"pattern": "x"}, ""),
     ("mcp__notion__search", {"query": "x"}, "mcp__notion__search"),
 ])
 def test_always_rule_is_narrow(tool, inp, rule):
