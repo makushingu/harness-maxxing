@@ -452,3 +452,76 @@ def test_a_line_nested_too_deep_is_a_parse_error_and_the_server_goes_on(tmp_path
     srv.send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     assert srv.recv()["result"]["tools"]
     assert srv.close() == 0
+
+
+# ---- permission mode `ask` (topics, global setting, jobs) ---------------------------------------------------------
+def test_a_topic_in_mode_ask_waits_for_the_user_and_always_allow_adds_a_rule(client, topic, mx):
+    from maxxing import approvals
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"permission_mode": "ask"}).status_code == 200
+    sid = client.post("/api/sessions", json={"path": topic, "message": "APPROVE push"}).json()["id"]
+    p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
+    argv = _calls()[-1]["argv"]
+    assert argv[argv.index("--permission-mode") + 1] == "default" and "--dangerously-skip-permissions" not in argv
+    spec = json.loads(Path(argv[argv.index("--mcp-config") + 1]).read_text())["mcpServers"]["maxxing-approval"]
+    assert spec["env"]["MAXXING_AGENT_PATH"] == ""          # a session, not an agent: no agent thread, a topic rule
+    assert p["agent_path"] == "" and p["always_rule"] == "Bash(git push)"
+    approvals.scan()
+    assert approvals.requester(p)[1].endswith(f"&session={sid}")
+    r = client.post(f"/api/approvals/{p['id']}", json={"decision": "allow", "always": True})
+    assert r.status_code == 200 and r.json()["status"] == "allow"
+    wait_idle(client, sid)
+    assert json.loads((mx["fake_dir"] / "approve.json").read_text())["behavior"] == "allow"
+    t = client.get("/api/workspace/tree").json()
+    blog = next(x for pr in t["projects"] for x in pr["topics"] if x["path"] == topic)
+    assert blog["permission_mode"] == "ask" and blog["allowed_tools"] == ["Bash(git push)"]
+    # the next turn: the rule goes with the deny rules, Claude asks for the rest
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL again"})
+    wait_idle(client, sid)
+    argv = _calls()[-1]["argv"]
+    st = json.loads(argv[argv.index("--settings") + 1])
+    assert st["permissions"]["allow"] == ["Bash(git push)"] and st["permissions"]["deny"]
+    assert "--permission-prompt-tool" in argv
+    # the whole list from the topic dialog (removing a rule)
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"allowed_tools": []}).status_code == 200
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL once more"})
+    wait_idle(client, sid)
+    argv = _calls()[-1]["argv"]
+    assert "allow" not in json.loads(argv[argv.index("--settings") + 1])["permissions"]
+    bad = client.patch("/api/workspace/projects/acme/topics/blog", json={"allowed_tools": ["Bash(a)\nBash(*)"]})
+    assert bad.status_code == 400
+
+
+def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
+    _agent(client, approvals=True)
+    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
+    p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
+    assert p["always_rule"] == ""                        # agents keep their own tool lists
+    assert client.post(f"/api/approvals/{p['id']}", json={"decision": "allow", "always": True}).status_code == 400
+    assert client.post(f"/api/approvals/{p['id']}", json={"decision": "deny", "always": True}).status_code == 400
+    assert client.post(f"/api/approvals/{p['id']}", json={"decision": "deny"}).status_code == 200
+    wait_idle(client, sid)
+
+
+@pytest.mark.parametrize("tool,inp,rule", [
+    ("Bash", {"command": "git status"}, "Bash(git status)"),
+    ("Bash", {"command": "rm -rf build/*"}, ""),                       # a wildcard would allow more
+    ("Bash", {"command": "echo a:*"}, ""),
+    ("Bash", {"command": "cd x\nmake"}, ""),
+    ("Bash", {"command": "curl -H 'Authorization: Bearer sk-ant-api03-" + "a" * 40 + "' x"}, ""),   # never a secret
+    ("Write", {"file_path": "/root/maxxing/x.md", "content": "hi"}, "Edit(//root/maxxing/x.md)"),
+    ("Edit", {"file_path": "relative.md"}, ""),
+    ("WebFetch", {"url": "https://Example.com/a?b=1"}, "WebFetch(domain:example.com)"),
+    ("Task", {"prompt": "do it"}, ""),
+    ("mcp__notion__search", {"query": "x"}, "mcp__notion__search"),
+])
+def test_always_rule_is_narrow(tool, inp, rule):
+    from maxxing import approvals
+    assert approvals.always_rule({"tool": tool, "input": inp, "agent_path": ""}) == rule
+
+
+def test_mode_ask_is_accepted_everywhere(client, topic):
+    assert client.put("/api/claude/settings", json={"permission_mode": "ask"}).status_code == 200
+    assert client.put("/api/claude/settings", json={"permission_mode": "nope"}).status_code == 400
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"permission_mode": "ask"}).status_code == 200
+    from maxxing.sessions import spawn
+    assert spawn.permission_args("ask") == (["--permission-mode", "default"], {})

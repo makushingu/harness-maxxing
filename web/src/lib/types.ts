@@ -33,7 +33,8 @@ export type OnboardingState = { completed: boolean; steps: Record<OnboardingStep
 
 /* ---------------------------------------------------------------- Claude */
 export type ClaudeAuthMethod = 'oauth_token' | 'credentials' | 'api_key' | null
-export type PermissionMode = 'bypass' | 'acceptEdits' | 'default'
+/** `ask`: what is not pre-allowed waits for the user's Allow / Deny (topics, global setting, jobs; not agents). */
+export type PermissionMode = 'bypass' | 'acceptEdits' | 'default' | 'ask'
 export type ClaudeModel = { id: string; label: string; /** Last context window Claude Code reported for this model here. */ context_window?: number | null }
 export type ClaudeStatus = {
   installed: boolean
@@ -82,6 +83,8 @@ export type Topic = {
   running: number
   unread: number
   telegram_thread: number | null
+  /** The topic's "Always allow" rules (Claude Code rules added from an approval card). */
+  allowed_tools?: string[]
   /** The topic's own permission mode for Claude turns; '' = the global setting. */
   permission_mode?: '' | PermissionMode
   /** Agents of the topic (Settings -> Features -> agents_page), without their status fields. */
@@ -306,7 +309,7 @@ export type AgentRunResult = { started: boolean; /** the new session (its id in 
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
 export type AgentWebhookResult = { agent: AgentDetail; hook: { id: string; name: string; kind: AgentWebhookKind; url: string; has_secret: boolean } }
 export type NameBody = { name: string; description?: string }
-export type PatchNameBody = { name?: string; description?: string; /** Projects only; "" removes it. */ emoji?: string; /** Topics only; "" = the global setting. */ permission_mode?: '' | PermissionMode }
+export type PatchNameBody = { name?: string; description?: string; /** Projects only; "" removes it. */ emoji?: string; /** Topics only; "" = the global setting. */ permission_mode?: '' | PermissionMode; /** Topics only: the whole list of "Always allow" rules. */ allowed_tools?: string[] }
 
 /* ---------------------------------------------------------------- Sessions */
 export type SessionState = 'idle' | 'running' | 'error'
@@ -365,6 +368,8 @@ export type Approval = {
   decided_at: number | null
   /** The input was too long to keep whole: only Deny (the server refuses Allow). */
   clipped?: boolean
+  /** The rule "Always allow" would add to the session's topic ("" = not offered: agents, multi-line commands...). */
+  always_rule?: string
 }
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string }
 export type PatchSessionBody = { title?: string; model?: string; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }

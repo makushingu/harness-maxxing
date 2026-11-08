@@ -107,12 +107,21 @@ lists Claude Code under `claude_version` when it is behind.
 |---|---|
 | `bypass` (default) | Claude runs every tool without asking (`--dangerously-skip-permissions`). Needed for unattended work; suitable for a server dedicated to Claude. |
 | `acceptEdits` | file edits are allowed, other actions (commands) are refused unless pre-approved in Claude Code settings |
-| `default` | Claude Code's standard permissions; in a web session nobody can approve, so many actions are refused |
+| `ask` (**Ask me**) | reading is free; every other tool that is not pre-allowed waits for your **Allow** / **Deny** (see below) |
+| `default` (**Strict**) | Claude Code's standard permissions, nobody is asked: what needs an approval is refused |
 
 A topic can have its own mode (session list -> topic menu -> **Permissions**), and so can a scheduled Claude job
 (**Permission mode** in the job editor): use a stricter mode where Claude reads content from outside - web pages,
 e-mails, forwarded messages - so instructions hidden in that content cannot make it do just anything. Order: the
 job's mode, else the topic's, else this global one.
+
+**Ask me** (`ask`): when Claude wants to run a command, edit a file, fetch a page or use an MCP tool that is not
+allowed yet, the session shows a card above its message box with the exact request and **Deny** / **Allow** (a
+message to Claude can go with Deny). The same request reaches the notifications and Telegram, so you can answer
+from your phone. Without an answer it is denied after 30 minutes; a stopped turn drops its requests. **Always
+allow** answers yes and adds a narrow rule to the topic - the exact command, the exact file, the site's domain, or
+the MCP tool - so its sessions stop asking for it. The topic's **Permissions** dialog lists these rules; remove one
+with ×. A job in an `ask` topic asks too (notifications, Telegram) and gets a denial if nobody answers in time.
 
 **Protect the secrets** (on by default): in every mode, Claude's tools refuse to read or edit the server's secrets
 (`secrets.json`) and the SSH keys (`~/.ssh`). It stops a hidden instruction from simply reading them; a script written

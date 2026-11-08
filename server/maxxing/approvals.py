@@ -1,4 +1,5 @@
-"""Approvals: a turn of an agent with `approvals: true` waits for the user's Allow / Deny before a tool call.
+"""Approvals: a turn of an agent with `approvals: true`, or of any session whose permission mode is `ask`, waits for
+the user's Allow / Deny before a tool call.
 
 The requests are files `<state>/approvals/<id>.json` written by the approval MCP server (approval_mcp.py, a child of
 Claude Code, another process); this module lists them for the UI, writes the user's decision into them, and - from
@@ -81,8 +82,53 @@ def short(tool: str, inp: Any) -> str:
     return summary(tool, inp)[0]
 
 
+_EDITS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+
+def always_rule(d: dict) -> str:
+    """The Claude Code rule an "Always allow" of this request adds to its topic ("" = not offered: an agent's
+    request - agents have their own tool lists -, a cut request, a command of several lines). Narrow on purpose:
+    the exact command, the exact file, the site's domain; another tool = the tool (an MCP tool, WebSearch...)."""
+    if d.get("agent_path") or d.get("clipped"):
+        return ""
+    tool = str(d.get("tool") or "")
+    inp = d.get("input") if isinstance(d.get("input"), dict) else {}
+    from . import logs
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,200}", tool) or any(
+            isinstance(v, str) and logs.redact(v) != v for v in inp.values()):   # a secret in it: never in a rule
+        return ""
+    if tool == "Bash":
+        cmd = inp.get("command")
+        # "*" and a final ":*" are wildcards in Bash rules: the rule would match more than what was allowed
+        if not isinstance(cmd, str) or not cmd.strip() or any(c in cmd.strip() for c in "\n\r*") or len(cmd) > 400:
+            return ""
+        return f"Bash({cmd.strip()})"
+    if tool in _EDITS:
+        p = inp.get("file_path") or inp.get("notebook_path")
+        if not isinstance(p, str) or not p.startswith("/") or any(c in p for c in "\n\r()*"):
+            return ""
+        return f"Edit(/{p})"                        # "//abs": an absolute path; Edit rules cover Write too
+    if tool == "WebFetch":
+        from urllib.parse import urlsplit
+        host = urlsplit(str(inp.get("url") or "")).hostname or ""
+        return f"WebFetch(domain:{host})" if re.fullmatch(r"[a-z0-9.-]{1,253}", host) else ""
+    if tool in ("Task", "Agent", "Skill"):           # the subagent / skill runs under the same rules: ask each time
+        return ""
+    return tool
+
+
+def topic_of_session(sid: str) -> str:
+    """The topic path of a session ("" for an agent's session or an unknown one)."""
+    from . import agents
+    from .sessions import store
+    m = store.read(sid) if sid else None
+    path = str((m or {}).get("path") or "")
+    return "" if not path or agents.is_agent_path(path) else path
+
+
 def public(d: dict) -> dict:
     return {"id": d.get("id"), "session": d.get("session") or "", "agent_path": d.get("agent_path") or "",
+            "always_rule": always_rule(d),
             "tool": d.get("tool") or "", "input": _redact(d.get("input") if isinstance(d.get("input"), dict) else {}),
             "summary": short(str(d.get("tool") or ""), d.get("input")), "at": d.get("at"),
             "expires": d.get("expires"), "status": d.get("status"), "message": d.get("message") or "",
@@ -141,10 +187,25 @@ def get(rid: str) -> dict:
 _lock = config.ProcessLock("approvals")     # read-check-write of a request (decide, the watcher's expiry)
 
 
-def decide(rid: str, decision: str, message: str = "", by: str = "web") -> dict:
-    """The user's answer. 409 when the request is no longer waiting (answered, timed out, session stopped)."""
+def decide(rid: str, decision: str, message: str = "", by: str = "web", always: bool = False) -> dict:
+    """The user's answer. 409 when the request is no longer waiting (answered, timed out, session stopped).
+    `always` (with allow): the request's rule (always_rule) is added to its topic first, so the next turns of the
+    topic's sessions run it without asking (the running turn still asks for other calls of it)."""
     if decision not in DECISIONS:
         raise ApprovalError(400, "bad_decision", "decision: allow or deny")
+    if always:
+        if decision != "allow":
+            raise ApprovalError(400, "bad_decision", "always: only with allow")
+        d = get(rid)
+        rule, topic = always_rule(d), topic_of_session(str(d.get("session") or ""))
+        if not rule or not topic:
+            raise ApprovalError(400, "no_rule", "This request cannot be allowed for good: allow it once")
+        if d.get("status") == "pending":
+            from . import workspace
+            try:
+                workspace.add_topic_allowed_tool(topic, rule)
+            except workspace.WorkspaceError as e:
+                raise ApprovalError(e.status, e.code, e.message) from None
     with _lock:                                 # web, Telegram and the feed at once: one answer, the others get 409
         d = get(rid)
         if d.get("status") != "pending":
@@ -203,6 +264,23 @@ def _agent_url(path: str) -> str:
     return f"/agents/{p[0]}/{p[1]}/{p[2]}" if p else "/agents"
 
 
+def requester(d: dict) -> tuple[str, str]:
+    """(who asks, where to answer): the agent and its page, else the session (its title) in the Sessions page."""
+    path = d.get("agent_path") or ""
+    if path:
+        return _agent_name(path), _agent_url(path)
+    sid = str(d.get("session") or "")
+    try:
+        from .sessions import store
+        m = store.read(sid) if sid else None
+    except Exception:  # noqa: BLE001
+        m = None
+    title = " ".join(str((m or {}).get("title") or "").split())[:80] or "Claude"
+    from urllib.parse import quote
+    url = f"/sessions?path={quote(str(m.get('path') or ''), safe='')}&session={sid}" if m else "/sessions"
+    return title, url
+
+
 def _agent_name(path: str) -> str:
     try:
         from . import agents
@@ -228,8 +306,9 @@ def _feed_new(d: dict) -> bool | None:
         acts = ([{"id": "allow", "label": "Allow", "style": "primary"}] if whole else
                 [{"id": "open", "label": "Open", "style": "link"}])
         note = CLIPPED_NOTE if d.get("clipped") else CUT_NOTE
-        return feed.post(f"{_agent_name(path)} is waiting for your OK", text if whole else f"{text}\n{note}",
-                  "warning", "agents", _agent_url(path), dedupe=f"approval:{d['id']}", ref=f"approval:{d['id']}",
+        name, url = requester(d)
+        return feed.post(f"{name} is waiting for your OK", text if whole else f"{text}\n{note}",
+                  "warning", "agents" if path else "sessions", url, dedupe=f"approval:{d['id']}", ref=f"approval:{d['id']}",
                   agent=path or None, actions=acts + [{"id": "deny", "label": "Deny", "style": "danger"}]) is not None
     except Exception:  # noqa: BLE001 - the feed is a nicety here
         log.exception("feed event for an approval failed")

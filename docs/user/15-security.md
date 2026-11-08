@@ -27,7 +27,8 @@ that read outside content: a hand-over then asks for your OK before risky action
 
 **What limits it:**
 - **Permission modes, per topic and per job** (the real limit): `bypass` (default, no questions), `acceptEdits`
-  (edits files, asks before commands), `default` (asks before edits and commands), `plan` (reads only, proposes a
+  (edits files, refuses commands), `ask` (asks you before anything but reading: **Allow** / **Deny** in the
+  session, the notifications or Telegram), `default` (refuses edits and commands), `plan` (reads only, proposes a
   plan). Set them for the whole server (Settings -> Claude), a topic (topic menu -> **Permissions**) or a
   scheduled job. Put every topic and job that reads untrusted content in a stricter mode.
 - Each session and job runs in its own systemd unit with a memory cap and a few protections that never get in

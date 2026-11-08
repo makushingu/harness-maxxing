@@ -3721,7 +3721,7 @@ def _approval_send_sync(d: dict) -> None:
             target = (chat, _agent_thread_sync(tok, chat, path))
     except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
         log.exception("agent thread for an approval")
-    name = fmt.escape(_agent_display(path)) if path else "Claude"
+    name = fmt.escape(_agent_display(path) if path else approvals.requester(d)[0])
     what, whole = approvals.summary(str(d.get("tool") or ""), d.get("input"))
     html = _w("approval_ask", name=name, what=fmt.escape(what))
     if not whole:                                  # part of it only: Allow from the request card, which shows it all

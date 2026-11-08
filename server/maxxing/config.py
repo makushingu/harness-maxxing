@@ -48,7 +48,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "claude_dir": "",
     "language": "en",
     "default_model": "",
-    "permission_mode": "bypass",          # bypass | acceptEdits | default
+    "permission_mode": "bypass",          # bypass | acceptEdits | default | ask
     # A turn that ends above this context (tokens) is followed by a summary turn and a fresh thread seeded with it
     # (the same as "Compact"): long sessions stop re-sending their whole history. 0 = off.
     "auto_compact_tokens": 300000,
