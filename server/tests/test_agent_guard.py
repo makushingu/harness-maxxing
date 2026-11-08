@@ -445,3 +445,14 @@ def test_the_apparmor_profile_waits_for_a_sandboxed_agent(client, topic, mx, mon
     assert calls == [1, 1]
     # the installer no longer loads it for everyone
     assert "apparmor_parser" not in (Path(__file__).resolve().parents[2] / "install.sh").read_text()
+
+
+def test_shell_settings_with_a_secret_stay_hidden():
+    from maxxing import agent_guard
+    for text in ("export PGPASSWORD=x\n", "export DATABASE_URL=postgres://u:pw@h/db\n", "github_token=ghp_1\n",
+                 "MYSECRET=1\n", "readonly NPM_TOKEN=abc\n", "set -x API_KEY abc\n", "export GITHUBTOKEN=1\n",
+                 "export OPENAI_API_KEY=sk-1\n", "declare -rx DB_PASS=1\n", "  export  http_proxy=http://me:pw@proxy:3128\n"):
+        assert agent_guard.sets_a_secret(text), text
+    for text in ('export PATH="$HOME/.local/bin:$PATH"\nalias ll="ls -l"\n', "export KEYBOARD=fr\n",
+                 "export EDITOR=vim\nPS1='\\u@\\h'\n", "export URL=https://example.com/a:b\n", "x" * 200_000 + "\n"):
+        assert not agent_guard.sets_a_secret(text), text
