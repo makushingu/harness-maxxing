@@ -475,3 +475,17 @@ def test_a_link_in_a_loop_in_the_home_folder_is_hidden(monkeypatch, tmp_path):
         return real(self, strict)
     monkeypatch.setattr(Path, "resolve", resolve)
     assert str(home / "loop") in agent_guard.home_wall()
+
+
+def test_a_huge_sandbox_goes_in_a_file(mx):
+    from maxxing.sessions import spawn
+    deny = [f"/home/me/entry-{i:05}" for i in range(4000)]          # thousands of entries in the home folder
+    extra = {"sandbox": {"enabled": True, "filesystem": {"denyRead": deny}}}
+    args = spawn.settings_args({}, extra)
+    assert args[0] == "--settings" and all(len(a.encode()) < 128 * 1024 for a in args)
+    s = json.loads(Path(args[1]).read_text())
+    assert s["sandbox"]["filesystem"]["denyRead"] == deny and s["permissions"]["deny"]
+    assert oct(Path(args[1]).stat().st_mode & 0o777) == "0o600"
+    assert spawn.settings_args({}, extra) == args                   # the same settings: the same file
+    small = spawn.settings_args({}, {"sandbox": {"enabled": True}})
+    assert json.loads(small[1])["sandbox"] == {"enabled": True}      # small ones stay inline

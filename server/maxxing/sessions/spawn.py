@@ -194,7 +194,37 @@ def settings_args(cfg: dict, extra: dict | None = None) -> list[str]:
     if extra:
         from maxxing import agent_guard
         s = agent_guard.merge(s, extra)
-    return ["--settings", json.dumps(s, separators=(",", ":"))]
+    text = json.dumps(s, separators=(",", ":"))
+    if len(text.encode()) <= SETTINGS_INLINE_MAX:
+        return ["--settings", text]
+    return ["--settings", str(_settings_file(text))]
+
+
+# one argument of a command line is at most 128 KiB (MAX_ARG_STRLEN): a larger `--settings` (an agent's sandbox in a
+# home folder of thousands of entries) goes in a file, named by its content (the same turn settings, the same file)
+SETTINGS_INLINE_MAX = 64 * 1024
+
+
+def _settings_file(text: str) -> Path:
+    import hashlib
+    d = config.state_dir("settings")
+    p = d / f"{hashlib.sha256(text.encode()).hexdigest()[:32]}.json"
+    if not p.exists():
+        now = time.time()
+        for old in d.glob("*.json"):                # a week unused: gone (a running turn read its file at start)
+            try:
+                if now - old.stat().st_mtime > 7 * 86400:
+                    old.unlink()
+            except OSError:
+                pass
+        tmp = d / f".{p.name}.{os.getpid()}.{threading.get_ident()}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, p)
+    else:
+        os.utime(p)
+    return p
 
 
 def claude_env(extra: dict | None = None, permission_mode: str = "bypass", keys: list[str] | None = None) -> dict[str, str]:
