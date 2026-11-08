@@ -370,6 +370,15 @@ def test_the_feed_filtered_by_source_is_read_in_index_order(client, mx):
             assert "TEMP B-TREE" not in plan and "events_src_id" in plan, plan
 
 
+def test_the_alert_of_the_same_group_is_found_through_its_index(client, mx):
+    feed.post("one", "", "error", "crons", group="job:a")
+    with feed._conn() as c:
+        plan = " ".join(r[-1] for r in c.execute(
+            "EXPLAIN QUERY PLAN SELECT * FROM events WHERE source=? AND grp=? AND read=0 AND level=? AND at>? "
+            "AND resolved IS NULL ORDER BY id DESC LIMIT 1", ("crons", "job:a", "error", 0)))
+        assert "events_grp" in plan and "TEMP B-TREE" not in plan, plan
+
+
 def test_the_pending_count_is_kept_indexed_and_left_out_of_later_pages(client, mx, monkeypatch):
     for n in range(3):
         feed.post(f"plain {n}")
