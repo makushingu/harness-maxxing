@@ -287,7 +287,7 @@ def copy_templates(ws: Path) -> list[str]:
         seeded |= {"projects/general", "projects/general/topics/inbox"}   # installed before 2.0.0a2
     variables = template_vars(ws)
     # Workspaces made before 2.0.0a33 keep their layout (system/update, server, tasks... and the tutorial project):
-    # the 2.0.0a33 system topics are not added next to them (Settings -> Projects adds the starter packs).
+    # the 2.0.0a33 system topics are not added next to them (Settings -> Templates adds the starter packs).
     if (ws / "projects/system/topics/update").is_dir() or (ws / "projects/tutorial").is_dir():
         seeded |= {"projects/system/topics/tutorial", "projects/system/topics/harness"}
         skip_new = {"projects/system/topics/tutorial", "projects/system/topics/harness"}
@@ -550,6 +550,9 @@ def do_init(a: argparse.Namespace) -> dict:
     if "agents_page" not in raw:                  # 2.0.0a132: Agents on for new installs; older ones keep
         old = _install_state()                    # what they had (off unless switched on)
         raw["agents_page"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
+    if "usage_widget" not in raw:                 # 2.0.0a132: plan usage shown on new installs; older ones keep
+        old = _install_state()                    # what they had (off unless switched on)
+        raw["usage_widget"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
     from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
     register.migrate(raw)
     config.write_json(config.config_path(), raw)
@@ -2233,7 +2236,7 @@ def cmd_update_preflight(a) -> int:
         line(OK, "verdict: simple - `maxxing update` (or the Update button) does it all")
     elif rep["verdict"] == "adapt":
         line(WARN, "verdict: some changes need adapting first",
-             f"Settings -> System -> Update with Harness, or the topic {update_topic()}: say \"update\"")
+             f"Settings -> Updates -> Update with Harness, or the topic {update_topic()}: say \"update\"")
     return 0
 
 
@@ -2328,6 +2331,11 @@ def _cfg_update(p: argparse.ArgumentParser) -> None:
 
 
 # ---- status --------------------------------------------------------------------------------
+# optional pages (Settings -> Features): a session reads them here to offer one that is off before building a substitute
+OPTIONAL_PAGES = (("agents_page", "Agents"), ("tasks_page", "Tasks"), ("team_page", "Team"), ("mail_page", "E-mail"),
+                  ("infra_page", "Infra"), ("git_page", "Git"))
+
+
 def collect_status() -> dict:
     cfg = config.load_config()
     code, out = systemctl("is-active", SERVICE, timeout=10)
@@ -2344,6 +2352,7 @@ def collect_status() -> dict:
         "workspace": cfg["workspace"],
         "state": str(config.STATE),
         "code": str(config.CODE),
+        "pages": {name: bool(cfg.get(key)) for key, name in OPTIONAL_PAGES},
     }
 
 
@@ -2364,6 +2373,9 @@ def cmd_status(a) -> int:
         ("Workspace", s["workspace"]),
         ("State", s["state"]),
         ("Code", s["code"]),
+        ("Pages", "on: " + (", ".join(n for n, on in s["pages"].items() if on) or "none")
+         + " · off: " + (", ".join(n for n, on in s["pages"].items() if not on) or "none")
+         + "   (Settings -> Features)"),
     ]
     for k, v in rows:
         print(f"{k:<10} {v}")

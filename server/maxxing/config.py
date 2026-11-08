@@ -74,7 +74,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "mcp_auto": False,                    # True: each turn loads only the MCP servers its session needs (mcp_auto.py)
     "onboarding_completed": False,
     "profile": {"name": "", "color": "", "emoji": ""},   # the user's pseudo: messages, notifications
-    "usage_widget": False,
+    "usage_widget": False,             # Settings -> Usage: show plan usage (`maxxing init`: on for new installs since 2.0.0a132)
     "maxxing_mode": False,             # Settings -> Features (beta): a finished session comes to the front (Sessions page)
     "health_feed": False,              # server health problems also in the Notifications feed (`maxxing init`: on when new)
     "agents_page": False,              # Settings -> Features: the Agents page (lasting roles of a topic, with triggers)

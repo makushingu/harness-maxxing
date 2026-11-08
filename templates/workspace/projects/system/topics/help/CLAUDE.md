@@ -45,7 +45,7 @@ is the only authority: `{{CODE_DIR}}/docs/user/` (the same pages as the Docs of 
 | `20-customizing.md` | changing the product's own code, kept across updates |
 | `21-import.md` | Settings -> Import: the memory of another agent (Hermes, Claude Code, OpenClaw...) |
 | `22-tools.md` | videos (Remotion), PDFs, images, web scraping |
-| `23-license.md` | fair source license (what is allowed), optional hello to the authors (anonymous counter, email, news), Feedback button (bug / idea to the authors, email required), donations (Settings -> About, links only, can be hidden), optional Enterprise key (Settings -> License), updates |
+| `23-license.md` | fair source license (what is allowed), optional hello to the authors (anonymous counter, email, news), Feedback button (bug / idea to the authors, email required), donations (Settings -> About, links only, can be hidden), optional Enterprise key (Settings -> About), updates |
 | `24-feed.md` | notifications feed: dashboard panel, webhooks (Stripe, Shopify, GitHub, JSON), `maxxing feed post`, Telegram rules, alerts with buttons (an agent's request Allow / Deny, Open, Seen) and the To handle filter, server problems in the feed (Settings -> Notifications) |
 | `25-starter-projects.md` | starter projects (packs): e-commerce, affiliate, creator, apps, second brain, freelance; Settings -> Templates, `maxxing packs` |
 | `26-git.md` | Git & GitHub: ```git graphs in the chat, the Git page (Settings -> Features: server clones + GitHub account, rights, branches, commits, pull requests), GITHUB_TOKEN |

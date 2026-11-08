@@ -111,7 +111,7 @@ export function mount(root, ctx) {
         el("p", {}, T.widgets, " ",
           el("button", { class: "ui-link", type: "button", on: { click: () => ctx.navigate("/") } }, T.toDashboard)),
         el("p", {}, ...withCode(T.self), " ",
-          el("button", { class: "ui-link", type: "button", on: { click: () => ctx.navigate("/settings/extensions") } }, T.settings)))));
+          el("button", { class: "ui-link", type: "button", on: { click: () => ctx.navigate("/settings/pages") } }, T.settings)))));
 
   root.replaceChildren(page);
   return () => root.replaceChildren();
