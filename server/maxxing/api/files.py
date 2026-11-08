@@ -789,6 +789,10 @@ def _stat(paths: list[str], within: list[str] | None = None) -> dict:
     out: dict[str, float | None] = {}
     for raw in paths:
         try:
+            os.fsencode(raw)
+        except UnicodeEncodeError:                  # a lone surrogate: no such file, and no JSON key for it
+            continue
+        try:
             out[raw] = confined(raw, within or []).stat().st_mtime
         except (HTTPException, OSError, ValueError, RuntimeError):     # RuntimeError: a symlink loop (< 3.13)
             out[raw] = None
