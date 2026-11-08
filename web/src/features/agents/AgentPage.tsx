@@ -33,7 +33,9 @@ import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ThreadApprovalBody, useThreadApprovals } from './approvals'
-import { AttachButton, AttachList, useAttachments } from './attach'
+import { AttachButton, AttachList, agentDraftKey, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { QuotePill } from '@/pages/sessions/Quote'
+import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip } from '@/pages/sessions/Items'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
@@ -243,6 +245,7 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
   const { data: ws } = useWorkspace()
   const seen = useAgentSeen()
   const box = React.useRef<HTMLDivElement>(null)
+  const composer = React.useRef<AgentComposerApi>(null)
   const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
   const msgs = React.useMemo(() => data?.messages || [], [data])
   const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
@@ -302,7 +305,8 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
           ))}
         </div>
       </div>
-      <Composer agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+      <QuotePill scope={box} selector="[data-kind]" onQuote={(q) => composer.current?.quote(q)} />
+      <Composer key={a.path} ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
 }
@@ -473,23 +477,51 @@ function ThreadMessage({
 
 const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
 
-function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void }) {
+/** What the conversation hands to the box: a quoted selection. */
+type AgentComposerApi = { quote: (text: string) => void }
+
+function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
   const run = useRunAgent()
-  const [text, setText] = React.useState('')
-  const files = useAttachments(a.path)
+  const key = agentDraftKey('agent', a.path)
+  const draft = useDraftText(key)
+  const { text, setText } = draft
   const input = React.useRef<HTMLTextAreaElement>(null)
+  const putText = (pasted: string, start: number, end: number) => {
+    setText((cur) => cur.slice(0, Math.min(start, cur.length)) + pasted + cur.slice(Math.min(end, cur.length)))
+    input.current?.focus()
+  }
+  const files = useAttachments(a.path, undefined, { draftKey: key, putText })
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
   }, [replyTo])
+  /** Caret after `next` once it is in the box. */
+  const caretTo = (pos: number) =>
+    requestAnimationFrame(() => {
+      input.current?.focus({ preventScroll: true })
+      input.current?.setSelectionRange(pos, pos)
+    })
+  // A selection quoted from the conversation: a Markdown quote at the end of the text, the reply goes after it.
+  React.useImperativeHandle(ref, () => ({
+    quote: (q: string) => {
+      const next = withQuote(text, q)
+      setText(next)
+      caretTo(next.length)
+    },
+  }))
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
-  const submit = () => {
-    const v = text.trim()
-    if (!canSend || !a.enabled || run.isPending) return
+  const submit = (heard?: string) => {
+    const typed = text.trim()
+    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
+    if ((!v && !files.paths.length) || files.uploading || !a.enabled || run.isPending) return
     const kept = files.atts
+    draft.hold()
+    files.hold()
     setText('')
     files.restore([])
     const back = () => {
+      draft.release(false)
+      files.release(false)
       setText(v)
       files.restore(kept)
     }
@@ -497,8 +529,11 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
       { path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths },
       {
         onSuccess: (r) => {
-          if (r.started) onCancelReply()
-          else {
+          if (r.started) {
+            draft.release(true)
+            files.release(true)
+            onCancelReply()
+          } else {
             back()
             toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
           }
@@ -508,9 +543,16 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
       },
     )
   }
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically").
+  const onVoice = (heard: string, autoSend: boolean) => {
+    if (autoSend && !files.uploading) return submit(heard)
+    const next = insertAtCaret(input.current, text, heard)
+    setText(next.text)
+    caretTo(next.caret)
+  }
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
+      <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
         {replyTo && (
           <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
             <Reply className="size-3.5 shrink-0 text-primary" />
@@ -536,12 +578,11 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               onPaste={files.onPaste}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  submit()
-                } else if (e.key === 'Escape' && replyTo) {
-                  e.preventDefault()
-                  onCancelReply()
+                const k = files.keyAction(e)
+                if (k === 'send') submit()
+                else if (k === 'escape') {
+                  if (replyTo) onCancelReply()
+                  else e.currentTarget.blur()
                 }
               }}
               minRows={1}
@@ -550,7 +591,8 @@ function Composer({ agent: a, replyTo, onCancelReply }: { agent: AgentDetail; re
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
+            <VoiceButton onTranscript={onVoice} />
+            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
           </div>

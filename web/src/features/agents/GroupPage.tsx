@@ -37,7 +37,9 @@ import { GroupForm, claudeTopic } from './GroupForm'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
 import { MentionChip, mentionComponents, mentionNodes, namedIn, useMentionMap, type MentionMap } from './mentions'
-import { AttachButton, AttachList, useAttachments } from './attach'
+import { AttachButton, AttachList, agentDraftKey, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { QuotePill } from '@/pages/sessions/Quote'
+import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip } from '@/pages/sessions/Items'
 import { groupUrl } from '@/lib/queries'
 
@@ -313,7 +315,7 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
 }
 
 /* ---------------------------------------------------------------- The conversation */
-function Conversation({ group: g, composer }: { group: AgentGroup; composer: React.Ref<ComposerApi> }) {
+function Conversation({ group: g, composer }: { group: AgentGroup; composer: React.RefObject<ComposerApi | null> }) {
   const t = useT()
   const { data, isLoading, error } = useGroupMessages(g.path)
   const { data: ws } = useWorkspace()
@@ -370,7 +372,8 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
           {g.speaking && <Speaking group={g} />}
         </div>
       </div>
-      <Composer group={g} ref={composer} first={!said} />
+      <QuotePill scope={box} selector="[data-kind]" onQuote={(q) => composer.current?.quote(q)} />
+      <Composer key={g.path} group={g} ref={composer} first={!said} />
     </div>
   )
 }
@@ -558,7 +561,7 @@ const GroupMessage = React.memo(function GroupMessage({
 })
 
 /* ---------------------------------------------------------------- The box */
-export type ComposerApi = { mention: (slug: string) => void }
+export type ComposerApi = { mention: (slug: string) => void; quote: (text: string) => void }
 
 /** The `@word` being typed just before the caret (start of the text or after a space / bracket), else null. */
 function mentionAt(text: string, caret: number): { start: number; q: string } | null {
@@ -577,12 +580,22 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const t = useT()
   const touch = useCompact()
   const say = useGroupSay()
-  const [text, setText] = React.useState('')
-  const files = useAttachments(g.path, groupUrl(g.path, '/uploads'))
+  const key = agentDraftKey('group', g.path)
+  const draft = useDraftText(key)
+  const { text, setText } = draft
   const [caret, setCaret] = React.useState(0)
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
   const input = React.useRef<HTMLTextAreaElement>(null)
+  // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
+  const placeAt = React.useRef<number | null>(null)
+  const putText = (pasted: string, start: number, end: number) =>
+    setText((cur) => {
+      const from = Math.min(start, cur.length)
+      placeAt.current = from + pasted.length
+      return cur.slice(0, from) + pasted + cur.slice(Math.min(end, cur.length))
+    })
+  const files = useAttachments(g.path, groupUrl(g.path, '/uploads'), { draftKey: key, putText })
   const location = useLocation()
   const focus = !!(location.state as { focus?: boolean } | null)?.focus
   React.useEffect(() => {
@@ -622,8 +635,6 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     setClosed(false)
     placeAt.current = pos
   }
-  // The caret goes after the inserted name as soon as the new text is in the box (before the next key is typed).
-  const placeAt = React.useRef<number | null>(null)
   React.useLayoutEffect(() => {
     const el = input.current
     if (placeAt.current == null || !el) return
@@ -631,21 +642,47 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     el.setSelectionRange(placeAt.current, placeAt.current)
     placeAt.current = null
   }, [text])
-  React.useImperativeHandle(ref, () => ({ mention: (slug: string) => insert(slug) }))
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically").
+  const onVoice = (heard: string, autoSend: boolean) => {
+    if (autoSend && !files.uploading) return submit(heard)
+    const next = insertAtCaret(input.current, text, heard)
+    setText(next.text)
+    setCaret(next.caret)
+    placeAt.current = next.caret
+  }
+  React.useImperativeHandle(ref, () => ({
+    mention: (slug: string) => insert(slug),
+    // a selection quoted from the conversation: a Markdown quote at the end of the text, the message goes after it
+    quote: (q: string) => {
+      const next = withQuote(text, q)
+      setText(next)
+      setCaret(next.length)
+      placeAt.current = next.length
+    },
+  }))
   const pick = (p: MentionPick) => at && insert(p.slug, at.start, caret)
 
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
-  const submit = () => {
-    const v = text.trim()
-    if (!canSend || !ready || say.isPending) return
+  const submit = (heard?: string) => {
+    const typed = text.trim()
+    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
+    if ((!v && !files.paths.length) || files.uploading || !ready || say.isPending) return
     const kept = files.atts
+    draft.hold()
+    files.hold()
     setText('')
     setCaret(0)
     files.restore([])
     say.mutate(
       { path: g.path, text: v, attachments: files.paths },
       {
+        onSuccess: () => {
+          draft.release(true)
+          files.release(true)
+        },
         onError: () => {
+          draft.release(false)
+          files.release(false)
           setText(v)
           files.restore(kept)
         },
@@ -671,10 +708,9 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
         return
       }
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      submit()
-    }
+    const k = files.keyAction(e)
+    if (k === 'send') submit()
+    else if (k === 'escape') e.currentTarget.blur()
   }
   const track = (e: React.SyntheticEvent<HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart ?? 0)
 
@@ -746,7 +782,8 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="group-text"
             />
-            <Button size="icon-sm" onClick={submit} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
+            <VoiceButton onTranscript={onVoice} />
+            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
               <Send />
             </Button>
           </div>

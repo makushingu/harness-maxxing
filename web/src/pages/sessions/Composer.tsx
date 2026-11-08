@@ -19,8 +19,8 @@ import { VoiceButton } from '@/features/voice/VoiceButton'
 const NO_ITEMS: QueueItem[] = []
 
 export type Att = { lid: string; name: string; size: number; path: string | null; progress: number; error: string | null; preview: string | null }
-const fromDraftAtt = (a: DraftAtt): Att => ({ lid: Math.random().toString(36).slice(2), name: a.name, size: a.size, path: a.path, progress: 1, error: null, preview: isImage(a.path) ? thumbUrl(a.path, 160) : null })
-const toDraftAtts = (atts: Att[]): DraftAtt[] => atts.filter((a) => a.path && !a.error).map((a) => ({ path: a.path!, name: a.name, size: a.size }))
+export const fromDraftAtt = (a: DraftAtt): Att => ({ lid: Math.random().toString(36).slice(2), name: a.name, size: a.size, path: a.path, progress: 1, error: null, preview: isImage(a.path) ? thumbUrl(a.path, 160) : null })
+export const toDraftAtts = (atts: Att[]): DraftAtt[] => atts.filter((a) => a.path && !a.error).map((a) => ({ path: a.path!, name: a.name, size: a.size }))
 
 export type ComposerHandle = { addFiles: (files: File[]) => void; focus: () => void; quote: (text: string) => void; bringBack: (s: Seed) => void }
 
