@@ -27,6 +27,7 @@ configured time zone.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import fcntl
 import json
@@ -667,9 +668,7 @@ def create_job(fields: dict) -> dict:
         j.update(id=new_id(), created=now, updated=now)
         while any(x["id"] == j["id"] for x in jobs):
             j["id"] = new_id()
-        jobs.append({k: j[k] for k in _STORED})
-        sync_crontab(jobs)
-        _save_raw(jobs)
+        _commit(jobs, jobs + [{k: j[k] for k in _STORED}])
     return get_job(j["id"])  # type: ignore[return-value]
 
 
@@ -710,15 +709,25 @@ def update_job(cid: str, fields: dict) -> dict | None:
                 if not j["once_at"]:
                     new.pop("done_at", None)
                     new.pop("missed", None)
-                jobs[i] = new
                 if j["enabled"] != bool(cur.get("enabled", True)):
                     _drop_retry(cid)                   # switched off or back on: a waiting retry is cancelled
-                sync_crontab(jobs)
-                _save_raw(jobs)
+                _commit(jobs, jobs[:i] + [new] + jobs[i + 1:])
                 break
         else:
             return None
     return get_job(cid)
+
+
+def _commit(old: list[dict], new: list[dict], reason: str = "removed") -> None:
+    """The crontab, then jobs.json (under _lock): when jobs.json cannot be written (disk full), the crontab goes back
+    to the jobs still saved, so both keep agreeing."""
+    sync_crontab(new)
+    try:
+        _save_raw(new, reason)
+    except BaseException:
+        with contextlib.suppress(Exception):
+            sync_crontab(old)
+        raise
 
 
 def delete_job(cid: str) -> bool:
@@ -727,8 +736,7 @@ def delete_job(cid: str) -> bool:
         rest = [j for j in jobs if j["id"] != cid]
         if len(rest) == len(jobs):
             return False
-        sync_crontab(rest)
-        _save_raw(rest, "deleted")
+        _commit(jobs, rest, "deleted")
         _forget_job(cid)
     return True
 
