@@ -309,6 +309,9 @@ html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 }
 .mx-side[data-unfold='open'] .mx-side-rail { animation: mx-rail-in 340ms var(--mx-side-ease) 60ms backwards; }
 .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 0; transition: opacity 130ms ease-out; }
+/* The bell, back at its folded spot once the bar has folded (it left the search field's row fading out). */
+@keyframes mx-bell-in { from { opacity: 0; } }
+.mx-side[data-unfold='closed'] .mx-bell-in { animation: mx-bell-in 160ms ease-out; }
 /* A critical status dot breathes slowly instead of the hard `animate-ping`. */
 @keyframes mx-soft-ping { 0% { transform: scale(1); opacity: 0.45; } 70%, 100% { transform: scale(2.2); opacity: 0; } }
 .mx-soft-ping { animation: mx-soft-ping 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
@@ -319,7 +322,7 @@ html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
 .dark .mx-claude-mark { opacity: 0.32; }
 @media (prefers-reduced-motion: reduce) {
   .mx-arc { transition: none; }
-  .mx-side, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal) { transition: none !important; animation: none !important; }
+  .mx-side, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-bell-in { transition: none !important; animation: none !important; }
   .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 1; }
   .mx-soft-ping { animation: none; opacity: 0; }
 }

@@ -71,29 +71,12 @@ export function RingArc({ r, width, pct, tone, size, track = 'stroke-muted' }: {
   )
 }
 
-/** A small donut gauge with its icon in the centre (the sidebar's CPU / RAM / disk): the arc glides (500 ms) and
- *  changes colour with the level (75 % warning, 90 % critical, the icon too), the donut pops gently once when the
- *  level changes; all instant under reduced motion. */
-export function DonutMeter({ icon: Icon, pct, tone, label, size = 30, className }: { icon: LucideIcon; pct: number; tone: MeterTone; label?: string; size?: number; className?: string }) {
-  const ref = useRef<HTMLSpanElement>(null)
-  usePulseOnChange(tone ?? 'ok', ref)
-  const v = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0
-  const w = size >= 34 ? 3.5 : 3
+/** The folded bar's tiny meter: icon (colour fading with the level) over / beside a short thin bar. */
+export function MiniMeter({ icon, pct, tone, label, className }: { icon: LucideIcon; pct: number; tone: MeterTone; label: string; className?: string }) {
   return (
-    <span
-      ref={ref}
-      role="meter"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(v)}
-      aria-label={label}
-      className={cn('relative inline-flex shrink-0 items-center justify-center', className)}
-      style={{ width: size, height: size }}
-    >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="absolute inset-0">
-        <RingArc r={size / 2 - w / 2} width={w} pct={v} tone={tone} size={size} track="stroke-muted-foreground/15" />
-      </svg>
-      <Icon aria-hidden className={cn('relative shrink-0', fade, tone ? toneText(tone) : 'text-foreground/70')} style={{ width: Math.round(size * 0.46), height: Math.round(size * 0.46) }} strokeWidth={2} />
+    <span className={cn('flex items-center gap-1', className)}>
+      <MeterIcon icon={icon} tone={tone} className="size-3" />
+      <MeterBar pct={pct} tone={tone} label={label} className="h-[3px] w-5 bg-muted-foreground/15" />
     </span>
   )
 }

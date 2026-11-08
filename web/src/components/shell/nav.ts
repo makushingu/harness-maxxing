@@ -8,12 +8,13 @@ import { cn } from '@/lib/utils'
 export const navRow = (collapsed: boolean, active?: boolean) =>
   cn(
     // `mx-nav-row`: 44 px tall while the bar is unfolded over the page too (globals.css), so no row moves when it
-    // unfolds; the icon eases between its folded (22 px) and unfolded (18 px) size instead of jumping.
+    // unfolds; the icon eases between its folded (20 px) and unfolded (18 px) size instead of jumping. A fine stroke
+    // (1.7, 2 on the current page) whatever the icon's own attribute, so every row of the bar has the same weight.
     'mx-nav-row group relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
     '[&>svg]:transition-[width,height] [&>svg]:duration-300 [&>svg]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:[&>svg]:transition-none',
-    active && 'bg-accent text-foreground',
-    // folded icon bar: 44 px square targets, bigger icons (whatever size the row's own icon asks for)
-    collapsed && 'h-11 justify-center px-0 [&>svg]:size-[22px]',
+    active ? '[&>svg]:[stroke-width:2] bg-accent text-foreground' : '[&>svg]:[stroke-width:1.7]',
+    // folded icon bar: 44 px square targets, slightly bigger icons (whatever size the row's own icon asks for)
+    collapsed && 'h-11 justify-center px-0 [&>svg]:size-5',
   )
 
 type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page'

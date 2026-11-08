@@ -9,7 +9,7 @@ import type { Health } from '@/lib/types'
 import { useUI, type Theme } from '@/stores/ui'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
-import { DonutMeter, MeterBar, MeterIcon, MeterValue, type MeterTone } from './Meter'
+import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
@@ -179,10 +179,9 @@ const alertHover = {
 } as const
 
 /** The bottom of the sidebar: CPU / RAM / disk, then the Claude quota under them.
- *  - Folded bar: three small donuts stacked (icon in the centre) and the health dot in the corner, then the Claude ring.
+ *  - Folded bar: three tiny meters (icon + short bar) and the health dot, then the Claude ring (the sparkle as a faint watermark inside).
  *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
- *    disk as three donuts side by side (figure and name under each), then the ring with "Claude quota · Max" and
- *    "5 h 47 % · Week 12 %".
+ *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
  *  status panel (issues, theme, presentation mode); the Claude entry leads to Settings -> Stats. Same two elements
  *  folded or not, so the keyboard focus survives folding. */
@@ -216,20 +215,19 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
             data-testid="status-line"
             aria-label={label}
             className={cn(
-              'group relative grid h-[104px] w-full min-w-0 content-center gap-2 rounded-md px-1.5 text-left outline-none transition-colors duration-300 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
-              collapsed && 'w-11 justify-items-center gap-1 px-0',
+              'group grid h-[66px] w-full min-w-0 content-center gap-1.5 rounded-md px-1.5 text-left outline-none transition-colors duration-300 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
+              collapsed && 'w-11 justify-items-center px-0',
               collapsed && alert && cn(alertBg[alert], alertHover[alert]),
             )}
           >
             {!rows ? (
-              <Skeleton className={collapsed ? 'h-24 w-8' : 'h-24'} />
+              <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
             ) : collapsed ? (
               <>
-                {/* three donuts stacked, the health dot in the corner (the whole block takes the alert tint) */}
                 {rows.map((r) => (
-                  <DonutMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} size={30} />
+                  <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
                 ))}
-                <span className="absolute top-0.5 right-0.5 flex size-2 items-center justify-center">
+                <span className="mt-0.5 flex size-3 items-center justify-center">
                   <LiveDot tone={s.tone} />
                 </span>
               </>
@@ -248,16 +246,16 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
                   <span className="min-w-0 flex-1 truncate">{s.health}</span>
                   <ChevronRight className="size-3.5 shrink-0 opacity-70" />
                 </span>
-                <span className="mx-side-reveal grid grid-cols-3 items-start gap-x-2" data-testid="sidebar-meters">
+                <span className="mx-side-reveal grid grid-cols-3 items-center gap-x-3" data-testid="sidebar-meters">
                   {rows.map((r) => (
-                    <span key={r.key} className="grid min-w-0 justify-items-center gap-1">
-                      <DonutMeter icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} size={36} />
-                      <span className="grid min-w-0 justify-items-center leading-none">
+                    <span key={r.key} className="grid min-w-0 gap-1">
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs">
+                        <MeterIcon icon={r.icon} tone={r.tone} />
                         <Sensitive length={3}>
-                          <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-[13px] font-semibold" />
+                          <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
                         </Sensitive>
-                        <span className="mt-0.5 max-w-full truncate text-[10.5px] font-medium tracking-wide text-muted-foreground uppercase">{r.label}</span>
                       </span>
+                      <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
                     </span>
                   ))}
                 </span>

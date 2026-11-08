@@ -79,7 +79,6 @@ export const en = {
   'touchHome.session': "Last session",
   'touchHome.dashboard': "Dashboard",
   'shell.openSessions': "Sessions",
-  'shell.railEmpty': "No sessions yet.",
   'shell.preview.you': "You",
   'shell.preview.claude': "Claude",
   'shell.preview.now': "Now",

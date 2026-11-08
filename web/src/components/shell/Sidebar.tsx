@@ -77,7 +77,7 @@ function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
 }
 
 /** The notifications bell, at the top of the bar: folded, an icon with a dot while something is unread; unfolded, the
- *  same icon (same place) with its count. Opens the dashboard's notifications panel beside the bar; the bar stays open
+ *  same icon right of the search field, with its count. Opens the dashboard's notifications panel beside the bar; the bar stays open
  *  while it is (its trigger has aria-expanded), and it closes when a link of it changes the page. */
 function NotificationsBell({ collapsed }: { collapsed: boolean }) {
   const t = useT()
@@ -98,14 +98,20 @@ function NotificationsBell({ collapsed }: { collapsed: boolean }) {
   const label = unread ? `${t('feed.title')} · ${t('feed.unreadCount', { count: unread })}` : t('feed.title')
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <Tooltip content={open ? null : label} side="right">
+      <Tooltip content={open ? null : label} side={collapsed ? 'right' : 'bottom'}>
         <PopoverTrigger
           ref={trigger}
           data-testid="sidebar-bell"
           aria-label={label}
-          className={cn(navRow(collapsed), 'data-[state=open]:bg-accent data-[state=open]:text-foreground', !collapsed && 'w-10 shrink-0 justify-center px-0')}
+          className={cn(
+            navRow(collapsed),
+            'data-[state=open]:bg-accent data-[state=open]:text-foreground',
+            // folded: first icon of the bar; unfolded: right of the search field, fading in there with the field
+            // (and out with it as the bar folds), then fading back in at its folded spot.
+            collapsed ? 'mx-bell-in' : 'mx-side-reveal order-last w-10 shrink-0 justify-center px-0',
+          )}
         >
-          <Bell className="size-[18px] shrink-0" strokeWidth={1.9} />
+          <Bell className="size-[18px] shrink-0" strokeWidth={1.7} />
           {unread > 0 &&
             (collapsed ? (
               <span className={FOLDED_DOT}>
@@ -187,7 +193,7 @@ const activeMark = (collapsed: boolean) => cn('absolute top-2 bottom-2 w-[3px] r
 /** Width of the folded icon bar (the page always keeps this room when the bar is not pinned). */
 const FOLDED_W = 64
 /** Width of the second column (the sessions) shown beside the unfolded bar. */
-const RAIL_W = 272
+const RAIL_W = 304
 /** Fold animation (keep in sync with the CSS of `.mx-side` in globals.css: 300 ms to unfold, 220 ms to fold). */
 const FOLD_MS = 220
 /** Delay before folding back once the pointer (or the keyboard focus) left the bar. */
@@ -226,7 +232,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     clear()
     const tick = () => {
       if (hover.current || focus.current) return
-      if (side.current?.querySelector('[aria-expanded="true"]')) {
+      if (side.current?.querySelector('[aria-haspopup][aria-expanded="true"]')) {
         timer.current = window.setTimeout(tick, FOLD_DELAY_MS) // a menu of the bar is open: wait for it
         return
       }
@@ -258,7 +264,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     // its button, which must not keep the bar open; fold unless the pointer is still over the bar.
     const onKey = (e: KeyboardEvent) => {
       const el = side.current
-      if (e.key !== 'Escape' || !el || el.contains(e.target as Node) || !el.querySelector('[aria-expanded="true"]')) return
+      if (e.key !== 'Escape' || !el || el.contains(e.target as Node) || !el.querySelector('[aria-haspopup][aria-expanded="true"]')) return
       const r = el.getBoundingClientRect()
       const p = pointer.current
       hover.current = !!p && p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom
@@ -373,7 +379,7 @@ export function Sidebar() {
           {({ isActive }) => (
             <>
               {isActive && <span aria-hidden className={activeMark(collapsed)} />}
-              <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
+              <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
               {!collapsed && <span className="flex-1 truncate">{label}</span>}
               {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
               {item.to === '/agents' && <AgentsNavExtra collapsed={collapsed} />}
@@ -417,7 +423,7 @@ export function Sidebar() {
         {({ isActive }) => (
           <>
             {isActive && <span aria-hidden className={activeMark(collapsed)} />}
-            <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2.2 : 1.9} />
+            <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
             {!collapsed && <span className="flex-1 truncate">{e.ext.name}</span>}
           </>
         )}
@@ -503,15 +509,16 @@ export function Sidebar() {
                   onClick={toggle}
                   aria-label={pinLabel}
                 >
-                  {pinned ? <PanelLeftClose /> : <Pin />}
+                  {pinned ? <PanelLeftClose strokeWidth={1.7} /> : <Pin strokeWidth={1.7} />}
                 </Button>
               </Tooltip>
             )}
           </div>
         </div>
       </div>
-      {/* Top row: the notifications bell (same place folded or not), then, unfolded, the search field (Ctrl K). Folded,
-          the bell alone: the rows below sit at the same height in both states. */}
+      {/* Top row: folded, the notifications bell alone; unfolded, the search field (Ctrl K) with the bell on its right
+          (the same element, moved by `order`, so its focus survives). The rows below sit at the same height in both
+          states. */}
       <div className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
         <NotificationsBell collapsed={collapsed} />
         {!collapsed && (
@@ -522,7 +529,7 @@ export function Sidebar() {
             className="mx-side-reveal flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-background/60 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
             aria-label={t('palette.open')}
           >
-            <Search className="size-4 shrink-0" />
+            <Search className="size-4 shrink-0" strokeWidth={1.7} />
             <span className="flex-1 truncate text-left">{t('palette.search')}</span>
             <Kbd>{MOD} K</Kbd>
           </button>
@@ -545,7 +552,7 @@ export function Sidebar() {
 
       <div className={block('border-t border-sidebar-border')}>
         {/* folded: a 44 px target and a bigger icon, like the rows (UpdateIndicator keeps its own small look) */}
-        <div className={cn('empty:hidden', collapsed && '[&>*]:h-11 [&_svg]:size-5 [&>*>span:first-child]:size-6')}>
+        <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
           <UpdateIndicator collapsed={collapsed} />
         </div>
         <HelpMenu collapsed={collapsed} />
