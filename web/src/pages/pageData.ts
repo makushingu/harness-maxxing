@@ -75,7 +75,7 @@ export function prefetchPageData(qc: QueryClient, pathname: string, search = '')
       void qc.prefetchInfiniteQuery(feedPagesQuery(null, false))
       break
     case 'settings':
-      queries.push(...(SETTINGS[sub]?.() ?? []))
+      if (Object.hasOwn(SETTINGS, sub)) queries.push(...SETTINGS[sub]())   // never constructor, __proto__…
       break
     case 'docs':
       queries.push(docsQuery())
