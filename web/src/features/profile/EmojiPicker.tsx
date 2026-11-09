@@ -19,7 +19,7 @@ export function EmojiPicker({ value, onChange, className, label }: { value: stri
             type="button"
             aria-label={label || t('emoji.pick')}
             title={label || t('emoji.pick')}
-            className="inline-flex h-9 min-w-12 items-center justify-center rounded-md border bg-background px-2.5 text-xl leading-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="inline-flex h-9 min-w-12 pointer-coarse:h-10 items-center justify-center rounded-md border bg-background px-2.5 text-xl leading-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             {value || <SmilePlus className="size-4 text-muted-foreground" />}
           </button>
@@ -41,7 +41,7 @@ export function EmojiPicker({ value, onChange, className, label }: { value: stri
           onClick={() => onChange('')}
           aria-label={t('emoji.clear')}
           title={t('emoji.clear')}
-          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex size-7 items-center pointer-coarse:size-10 justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <X className="size-3.5" />
         </button>

@@ -18,7 +18,7 @@ export default function EmojiPickerBody({ onPick }: { onPick: (emoji: string) =>
       <EmojiPicker.Search
         autoFocus
         placeholder={t('emoji.search')}
-        className="mx-2 mt-2 h-8 shrink-0 appearance-none rounded-md border bg-background px-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="mx-2 mt-2 h-8 pointer-coarse:h-10 shrink-0 appearance-none rounded-md border bg-background px-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
       />
       <EmojiPicker.Viewport className="relative mt-1 flex-1 outline-none">
         <EmojiPicker.Loading className="absolute inset-0 flex items-center justify-center text-muted-foreground">
