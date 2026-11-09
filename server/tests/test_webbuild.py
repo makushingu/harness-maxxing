@@ -298,3 +298,20 @@ def test_a_failed_swap_keeps_the_served_build(ui, monkeypatch):
     _edit(clone)
     assert _served() == "<p>mine</p>\n"                      # and the previous one still kept
     assert not list(config.STATE.glob("web-dist.new-*"))
+
+
+def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
+    import os
+    import time
+    pidfile = tmp_path / "pid"
+    ok, msg = webbuild._run(["sh", "-c", f"sleep 300 & echo $! > {pidfile}; sleep 300"], tmp_path, dict(os.environ), 2)
+    assert not ok and "timed out" in msg
+    pid = int(pidfile.read_text())
+    for _ in range(50):                                      # the grandchild (npm's scripts, esbuild) is gone too
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("grandchild still alive")

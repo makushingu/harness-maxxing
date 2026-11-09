@@ -7,12 +7,14 @@ sources never shows a stale or broken UI. The previous build is kept (web-dist.p
 """
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -170,14 +172,20 @@ def _node_env() -> tuple[Path | None, dict[str, str]]:
 
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str], timeout: float) -> tuple[bool, str]:
-    try:
-        r = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return False, f"{' '.join(cmd[:3])}: timed out after {int(timeout)} s"
+    try:                                        # its own process group: a timeout stops npm's children too
+        p = subprocess.Popen(cmd, cwd=str(cwd), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             start_new_session=True)
     except OSError as e:
         return False, f"{cmd[0]}: {e}"
+    try:
+        out, _ = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(OSError):
+            os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        return False, f"{' '.join(cmd[:3])}: timed out after {int(timeout)} s"
     # tools may print bytes that are not UTF-8 (a file name in an error): never a reason to fail the caller
-    return r.returncode == 0, (r.stdout + r.stderr).decode("utf-8", "replace").strip()
+    return p.returncode == 0, out.decode("utf-8", "replace").strip()
 
 
 def _install(web: Path, env: dict[str, str], node: Path, share_from: Path | None,
