@@ -44,14 +44,19 @@ function serviceWorker(): Plugin {
   }
 }
 
-/** Copies the emoji data of the emoji picker (`emojibase-data`, the app's languages only) to dist/emojibase/<lang>/:
- *  served by this server, never fetched from a CDN (see features/profile/EmojiPicker.tsx). */
+/** The interface languages: one dictionary per language in src/i18n/<lang>.ts. */
+const I18N_DIR = path.resolve(import.meta.dirname, 'src/i18n')
+const uiLanguages = () => fs.readdirSync(I18N_DIR).filter((f) => /^[a-z]{2}\.ts$/.test(f)).map((f) => f.slice(0, 2)).sort()
+
+/** Copies the emoji data of the emoji picker (`emojibase-data`, the interface languages only, English always: the
+ *  search falls back to it) to dist/emojibase/<lang>/: served by this server, never fetched from a CDN (see
+ *  features/profile/EmojiPicker.tsx and emojiData.ts). */
 function emojiData(): Plugin {
   return {
     name: 'maxxing-emoji-data',
     apply: 'build',
     generateBundle() {
-      for (const lang of ['en', 'fr'])
+      for (const lang of new Set(['en', ...uiLanguages()]))
         for (const file of ['data.json', 'messages.json'])
           this.emitFile({
             type: 'asset',
@@ -96,8 +101,8 @@ function precompress(): Plugin {
  *  namespace not in src/i18n/groups.ts) or one group; `virtual:i18n-loaders` maps language -> part -> import(). The
  *  dictionary files stay whole for TypeScript (fr.ts must have every key of en.ts) and for editing. */
 function i18nSplit(): Plugin {
-  const dir = path.resolve(import.meta.dirname, 'src/i18n')
-  const langs = () => fs.readdirSync(dir).filter((f) => /^[a-z]{2}\.ts$/.test(f)).map((f) => f.slice(0, 2)).sort()
+  const dir = I18N_DIR
+  const langs = uiLanguages
   const parts = ['core', ...Object.keys(GROUPS)]
   const groupOf = new Map<string, string>(Object.entries(GROUPS).flatMap(([g, names]) => names.map((n) => [n, g] as const)))
   const PREFIX = 'virtual:i18n/'

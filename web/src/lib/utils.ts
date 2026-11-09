@@ -108,3 +108,14 @@ export const store = {
     }
   },
 }
+
+/** Lower case with accents and ligatures folded, for searches: "Cœur" -> "coeur", "écureuil" -> "ecureuil". */
+export function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
+    .replace(/ß/g, 'ss')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+}
