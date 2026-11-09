@@ -3,6 +3,29 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.133 - 2026-11-09
+
+Added:
+- **Ask me** permission mode (Settings -> Claude, a topic, a job): a session waits for your Allow / Deny before a
+  tool that is not pre-allowed, in the session, the notifications and Telegram. **Always allow** adds a narrow rule
+  to the topic (one exact command, one file, one domain, one MCP tool), listed and removable in the topic's
+  Permissions. The old "Default" is now called **Strict (refuse)**.
+- **Feedback with a screenshot**: **Capture a zone** in the Feedback window takes a picture of the part of the
+  screen you select (or the whole screen). With **Hide my data** checked (the default), presentation mode is on
+  while it is taken, so names, numbers and messages come out as dots. You see it before sending; it goes only with
+  your message.
+
+Changed:
+- **Steer no longer stops background work**: sending a new message with Steer interrupts the current answer only;
+  background commands and sub-agents keep running.
+- **Agents and groups**: the message box works like a session's (paste as a file, drafts kept on reload,
+  dictation, keyboard shortcuts, quotes) and answers are drawn like session answers (file links open the viewer,
+  pictures and videos, Copy menu). Previews and links only open files of the agent's own folders.
+
+Fixed:
+- Linking another Telegram chat asks for the password while two-step sign-in is on.
+- Robustness fixes found by the Radar audit (Always allow rules, unusual file names, Settings links).
+
 ## 2.0.0-alpha.131 - 2026-11-08
 
 Changed:
