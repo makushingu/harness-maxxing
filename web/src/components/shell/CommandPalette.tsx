@@ -1,14 +1,14 @@
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { Command as Cmdk } from 'cmdk'
+import { Command as Cmdk, defaultFilter } from 'cmdk'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, useAgentGroups, useAgents, useDocs, useLogout, useSettings, useWorkspace } from '@/lib/queries'
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
 import { useUI, resolveTheme } from '@/stores/ui'
-import { cn } from '@/lib/utils'
-import { useT } from '@/i18n'
+import { cn, fold } from '@/lib/utils'
+import { tDyn, useT } from '@/i18n'
 import { useCommandStore, type Command } from '@/commands/registry'
 import { Kbd, Spinner, usePresentation } from '@/components/ui'
 import { useNav } from './nav'
@@ -187,7 +187,8 @@ export function CommandPalette() {
         title: `${t('nav.settings')} › ${t(s.label)}`,
         group: settings,
         icon: s.icon,
-        keywords: s.keywords?.split(' '),
+        // English words + the interface language's (skw.*, its own small chunk, loaded once the palette opens)
+        keywords: [...(s.keywords?.split(' ') ?? []), ...(open ? tDyn(t, `skw.${s.id}`, '').split(' ') : [])],
         perform: ({ navigate }) => navigate(`/settings/${s.id}`),
       })),
     ]
@@ -237,11 +238,13 @@ export function CommandPalette() {
     for (const d of docs || [])
       list.push({ id: `doc:${d.slug}`, title: d.title, hint: d.section, group: docsG, icon: BookOpen, perform: ({ navigate }) => navigate(`/docs/${d.slug}`) })
     return list
-  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList])
+  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList, open])
 
   const pageCmds = Object.values(sources).flat()
   const all = [...pageCmds, ...staticCmds]
-  const groups = groupBy(all)
+  // cmdk sorts the items of a group by score but not the groups themselves (its group sort looks them up by a value
+  // they do not carry): the group holding the best match goes first, the others keep their order
+  const groups = byBestMatch(groupBy(all), q)
   const asyncGroups = groupBy(asyncResults.q === dq ? asyncResults.cmds : [])
 
   return (
@@ -257,7 +260,7 @@ export function CommandPalette() {
           )}
         >
           <DialogPrimitive.Title className="sr-only">{t('palette.title')}</DialogPrimitive.Title>
-          <Cmdk label={t('palette.title')} className="flex min-h-0 flex-1 flex-col" loop>
+          <Cmdk label={t('palette.title')} className="flex min-h-0 flex-1 flex-col" loop filter={paletteFilter}>
             <div className="flex items-center gap-2 border-b px-4">
               <Search className="size-4 shrink-0 text-muted-foreground" />
               <Cmdk.Input
@@ -274,10 +277,11 @@ export function CommandPalette() {
             </div>
             <Cmdk.List className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 md:max-h-[440px]">
               <Cmdk.Empty className="py-10 text-center text-sm text-muted-foreground">{loading ? t('palette.searching') : t('palette.empty')}</Cmdk.Empty>
-              {Object.entries(groups).map(([g, cmds]) => (
+              {groups.map(([g, cmds]) => (
                 <Cmdk.Group key={g} heading={g} className={groupCls}>
                   {cmds.map((c) => (
-                    <Item key={c.id} c={c} onRun={run} masked={presentation && c.sensitive} />
+                    // cmdk keeps an item's keywords from its first render: a new key when they change (skw.* arrived)
+                    <Item key={`${c.id}:${c.keywords?.length ?? 0}`} c={c} onRun={run} masked={presentation && c.sensitive} />
                   ))}
                 </Cmdk.Group>
               ))}
@@ -306,6 +310,19 @@ export function CommandPalette() {
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )
+}
+
+/** cmdk's fuzzy score on accent-folded text ("securite" finds "Sécurité"), and a whole-word match (the search found
+ *  at the start of a word of the title or keywords: "mot de passe", "crons") above any fuzzy one, so the section the
+ *  words name comes before actions that only contain the letters in order. */
+function paletteFilter(value: string, search: string, keywords?: string[]): number {
+  const s = fold(search).trim()
+  if (!s) return 1
+  const hay = fold([value, ...(keywords ?? [])].join(' '))
+  let i = hay.indexOf(s)
+  while (i > 0 && /[\p{L}\p{N}]/u.test(hay[i - 1])) i = hay.indexOf(s, i + 1)
+  if (i >= 0) return 2
+  return defaultFilter(fold(value), s, keywords?.map(fold))
 }
 
 const groupCls =
@@ -361,6 +378,13 @@ function Highlighted({ text }: { text: string }) {
       )}
     </>
   )
+}
+
+function byBestMatch(groups: Record<string, Command[]>, q: string): [string, Command[]][] {
+  const entries = Object.entries(groups)
+  if (!q.trim()) return entries
+  const best = new Map(entries.map(([g, cmds]) => [g, Math.max(0, ...cmds.map((c) => paletteFilter(c.id + ' ' + c.title, q, c.keywords?.filter(Boolean) as string[] | undefined)))]))
+  return entries.sort((a, b) => best.get(b[0])! - best.get(a[0])!)
 }
 
 function groupBy(cmds: Command[]) {

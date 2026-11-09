@@ -29,6 +29,8 @@ export const GROUPS = {
   drag: ['drag'],
   // a pasted text that became a file: loaded on that paste
   paste: ['paste'],
+  // extra words of the Settings sections for the command palette: loaded on its first search
+  skw: ['skw'],
   // the guided tour: loaded with its chunk (tour/Tour.tsx); its entry points (menu, palette) use help.*
   tour: ['tour'],
 } as const satisfies Record<string, readonly string[]>
