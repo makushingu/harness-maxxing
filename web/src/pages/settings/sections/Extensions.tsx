@@ -11,6 +11,7 @@ import { useExtensions, usePinExtension, useReloadExtensions, useToggleExtension
 import { useT } from '@/i18n'
 import { Badge, Button, EmptyState, NamedIcon, Skeleton, Switch, toast } from '@/components/ui'
 import { SettingsCard, SectionStack } from './ui'
+import { useHarnessTopic } from './harnessTopic'
 
 type Kind = 'widgets' | 'pages'
 const inKind = (x: Extension, k: Kind) => (k === 'widgets' ? x.type === 'widget' : x.type !== 'widget' || !!x.agents_view)
@@ -48,8 +49,6 @@ export function CommunityLink({ text }: { text: string }) {
   )
 }
 
-const HARNESS_TOPIC = 'projects/system/topics/harness'
-
 function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode }) {
   const t = useT()
   const navigate = useNavigate()
@@ -58,6 +57,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
   const toggle = useToggleExtension()
   const pin = usePinExtension()
   const reload = useReloadExtensions()
+  const topic = useHarnessTopic()
   return (
     <SectionStack>
       <SettingsCard
@@ -66,7 +66,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
         actions={
           <>
             {extra}
-            <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(HARNESS_TOPIC, t(kind === 'widgets' ? 'ext.newWidgetPrompt' : 'ext.newPagePrompt')))}>
+            <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(topic, t(kind === 'widgets' ? 'ext.newWidgetPrompt' : 'ext.newPagePrompt')))}>
               <Plus /> {t(kind === 'widgets' ? 'ext.newWidget' : 'ext.newPage')}
             </Button>
             <Button variant="outline" size="sm" loading={reload.isPending} onClick={() => reload.mutate(undefined, { onSuccess: () => toast.success(t('ext.reloaded')) })}>

@@ -78,9 +78,11 @@ def _print_status(js: bool) -> int:
         print(f"  -> topic {update_topic()} (skill maxxing-customize)")
     ui = webbuild.status()
     if ui["customized"]:
-        state = "your build, up to date" if ui["built"] else "NOT BUILT - the standard interface is shown"
+        state = ("your build, up to date" if ui["current"] else
+                 "your previous build (the sources changed since)" if ui["built"] else
+                 "NOT BUILT - the standard interface is shown")
         print(f"Web UI         : customized ({len(ui['customized'])} file(s)) - {state}")
-        if not ui["built"]:
+        if not ui["current"]:
             print("  -> maxxing custom build")
     left = customs.web_leftovers()
     if left:
@@ -104,7 +106,9 @@ def _build(force: bool, js: bool) -> int:
     elif r["ok"]:
         print(f"Web UI built in {r['seconds']} s ({r['dir']}) - served now: reload the page in the browser")
     else:
-        print(f"error: the web UI does not build - the previous interface stays\n{r['error']}")
+        shown = ("your previous build stays served" if webbuild.status()["built"]
+                 else "the standard interface is shown until it builds")
+        print(f"error: the web UI does not build - {shown}\n{r['error']}")
     return 0 if r["ok"] else 1
 
 

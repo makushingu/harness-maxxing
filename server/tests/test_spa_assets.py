@@ -93,3 +93,23 @@ def test_index_html_is_the_app_page_never_cached(spa):
     assert r.status_code == 200
     assert r.headers["cache-control"] == "no-store"
     assert "content-security-policy" in r.headers
+
+
+def test_emoji_data_is_sent_compressed_without_a_proxy(spa):
+    import json
+    c, _ = spa
+    data = json.dumps([{"label": "grinning face", "tags": ["smile"] * 50}] * 200).encode()
+    (config.WEB_DIST / "emojibase" / "fr").mkdir(parents=True)
+    (config.WEB_DIST / "emojibase" / "fr" / "data.json").write_bytes(data)
+    r = c.get("/emojibase/fr/data.json", headers={"Accept-Encoding": "gzip"})
+    assert r.status_code == 200 and r.headers["content-encoding"] == "gzip" and r.content == data
+    assert int(r.headers["content-length"]) < len(data) // 10 and r.headers["etag"]
+    assert c.head("/emojibase/fr/data.json", headers={"Accept-Encoding": "gzip"}).headers["etag"] == r.headers["etag"]
+    # behind the proxy (it compresses), or a client without gzip: the file as is
+    for h in ({"Accept-Encoding": "gzip", "X-Forwarded-For": "1.2.3.4"}, {"Accept-Encoding": "identity"}):
+        r = c.get("/emojibase/fr/data.json", headers=h)
+        assert "content-encoding" not in r.headers and r.content == data
+    # a Brotli twin made by the build wins when accepted
+    (config.WEB_DIST / "emojibase" / "fr" / "data.json.br").write_bytes(b"BROTLI-TWIN")
+    r = c.get("/emojibase/fr/data.json", headers={"Accept-Encoding": "gzip, br", "X-Forwarded-For": "1.2.3.4"})
+    assert r.headers["content-encoding"] == "br" and r.headers["content-type"].startswith("application/json")

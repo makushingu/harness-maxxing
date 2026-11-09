@@ -1,9 +1,12 @@
 """Customizations of the web UI: the sources under web/ (never web/dist) are saved like any customization, and this
 server builds them into <state>/web-dist (`maxxing custom build`, and after every update that carries them over).
 
-The shipped web/dist stays untouched in the code directory: a local build is served only while it matches the web
-sources that are there now (`source_key`), else the shipped build is - an update or a rollback that changes the
-sources never shows a stale or broken UI. The previous build is kept (web-dist.prev) so a rollback finds it again.
+The shipped web/dist stays untouched in the code directory. A local build is served while it matches the web sources
+that are there now (`source_key`), or, when they were edited since (a customization being adapted, a build that
+failed), while it was built on the same upstream code with customizations that are all still there (`_context`):
+the customized UI stays until a new build replaces it. An update or a rollback (another upstream base) or a dropped
+customization shows the shipped build instead - never a stale UI on new code. The previous build is kept
+(web-dist.prev) so a rollback finds it again.
 """
 from __future__ import annotations
 
@@ -99,9 +102,31 @@ def _stamp(d: Path) -> dict[str, Any]:
 _active: dict[str, Any] = {}
 
 
+def _context() -> dict[str, Any] | None:
+    """What a build of the code directory was made on: {base: the upstream commit under the customizations, customs:
+    ids of the saved customizations changing web sources, customized: any web source changed (saved or not)}.
+    None when it cannot be told (not a git clone, no upstream)."""
+    from . import customs
+    base = customs._base()
+    if not base:
+        return None
+    items = customs.list_customs()
+    ids = sorted({c["id"] for c in items if any(is_web_source(f) for f in c["files"])})
+    customized = bool(ids) or any(is_web_source(f) for f in customs.dirty_files())
+    return {"base": base, "customs": ids, "customized": customized}
+
+
+def _still_valid(stamp: dict[str, Any], ctx: dict[str, Any] | None) -> bool:
+    """A build whose sources were edited since may stay served: same upstream base, none of its customizations
+    dropped, and the UI is still customized."""
+    return bool(ctx and ctx["customized"] and stamp.get("base") and stamp["base"] == ctx["base"]
+                and isinstance(stamp.get("customs"), list) and set(stamp["customs"]) <= set(ctx["customs"]))
+
+
 def active_dist(ttl: float = 5.0) -> Path:
     """The web build to serve: MAXXING_WEB_DIST when set (dev, tests), else this server's own build when it matches
-    the web sources on disk, else the shipped web/dist. Rechecked at most every `ttl` seconds."""
+    the web sources on disk, or still fits the code (see _still_valid: sources edited since, no new build yet), else
+    the shipped web/dist. Rechecked at most every `ttl` seconds."""
     if os.environ.get("MAXXING_WEB_DIST"):
         return config.WEB_DIST
     now = time.monotonic()
@@ -116,7 +141,14 @@ def active_dist(ttl: float = 5.0) -> Path:
         except Exception:                               # never a page down because of a local build: the shipped one
             log.exception("web sources unreadable, the shipped web UI is served")
             key = None
-        path = next((d for d in local if key and _stamp(d)["key"] == key), config.WEB_DIST)
+        path = next((d for d in local if key and _stamp(d)["key"] == key), None)
+        if path is None:
+            try:
+                ctx = _context()
+            except Exception:
+                log.exception("customizations unreadable, the shipped web UI is served")
+                ctx = None
+            path = next((d for d in local if _still_valid(_stamp(d), ctx)), config.WEB_DIST)
     _active.update(path=path, at=now, shipped=(config.WEB_DIST, config.STATE))
     return path
 
@@ -157,12 +189,15 @@ def customized_files() -> list[str]:
 
 
 def status() -> dict[str, Any]:
-    """{customized: [files], built: bool (a local build matches the sources), served: path, stamp}."""
+    """{customized: [files], built: bool (a local build is served), current: bool (it matches the sources on disk),
+    served: path, stamp}."""
     files = customized_files()
     forget()
     served = active_dist()
     local = served != config.WEB_DIST
-    return {"customized": files, "built": local, "served": str(served), "stamp": _stamp(served) if local else {},
+    stamp = _stamp(served) if local else {}
+    current = local and stamp.get("key") is not None and stamp.get("key") == source_key()
+    return {"customized": files, "built": local, "current": current, "served": str(served), "stamp": stamp,
             "dir": str(build_dir())}
 
 
@@ -284,8 +319,16 @@ def _build(code: Path | None, out: Path | None, share_from: Path | None, progres
             if not ok or not (tmp / "index.html").is_file():
                 return {"ok": False, "error": "build failed:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
             rc, head = _git(code, "rev-parse", "HEAD")
-            (tmp / STAMP).write_text(json.dumps({"key": key, "commit": head.strip() if rc == 0 else "",
-                                                 "built_at": time.time()}))
+            stamp = {"key": key, "commit": head.strip() if rc == 0 else "", "built_at": time.time()}
+            if out is None and code == config.CODE:    # this server's build: what it may outlive (see _still_valid)
+                try:
+                    ctx = _context()
+                except Exception:                       # then it is served only while its sources match
+                    log.exception("customizations unreadable")
+                    ctx = None
+                if ctx:
+                    stamp |= {"base": ctx["base"], "customs": ctx["customs"]}
+            (tmp / STAMP).write_text(json.dumps(stamp))
             if out is None:                             # this server's build: keep the previous one for a rollback
                 prev, old = _prev_dir(), final.with_name(final.name + ".old")
                 shutil.rmtree(old, ignore_errors=True)

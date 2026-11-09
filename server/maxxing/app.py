@@ -265,6 +265,27 @@ def _index_gz(index: Path) -> bytes | None:
     return _index_gz_cache["body"]
 
 
+_json_gz_cache: dict[tuple, bytes] = {}
+
+
+def _json_gz(f: Path) -> tuple[bytes, str] | None:
+    """A big static JSON file (the emoji data, ~765 kB a language) gzipped once per version -> (body, etag)."""
+    try:
+        st = f.stat()
+    except OSError:
+        return None
+    key = (str(f), st.st_mtime_ns, st.st_size)
+    body = _json_gz_cache.get(key)
+    if body is None:
+        body = gzip.compress(f.read_bytes(), 6)
+        for k in [k for k in _json_gz_cache if k[0] == key[0]]:   # the older version of that file
+            _json_gz_cache.pop(k, None)
+        if len(_json_gz_cache) >= 16:
+            _json_gz_cache.clear()
+        _json_gz_cache[key] = body
+    return body, '"%s-gz"' % hashlib.md5(f"{st.st_mtime_ns}-{st.st_size}".encode()).hexdigest()
+
+
 def _mount_spa(app: FastAPI) -> None:
     from . import webbuild
 
@@ -301,6 +322,20 @@ def _mount_spa(app: FastAPI) -> None:
                     return FileResponse(f, headers=vary)
             elif path.startswith("icons/"):
                 cache = "public, max-age=604800"
+            elif path.startswith("emojibase/") and f.suffix == ".json":
+                # the emoji picker's data: a Brotli twin when the build made one, else gzipped here when no proxy
+                # is in front (behind Caddy, its `encode` does it)
+                cache = "public, max-age=3600"
+                vary = {"Cache-Control": cache, "Vary": "Accept-Encoding"}
+                br = f.with_name(f.name + ".br")
+                if _accepts_br(request) and br.is_file():
+                    return FileResponse(br, media_type="application/json", headers={**vary, "Content-Encoding": "br"})
+                if "x-forwarded-for" not in request.headers and _accepts(dict(request.headers), "gzip"):
+                    got = await asyncio.to_thread(_json_gz, f)
+                    if got is not None:
+                        return Response(got[0], media_type="application/json",
+                                        headers={**vary, "Content-Encoding": "gzip", "ETag": got[1]})
+                return FileResponse(f, headers=vary)
             else:
                 cache = "public, max-age=3600"
             return FileResponse(f, headers={"Cache-Control": cache})

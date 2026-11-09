@@ -271,6 +271,7 @@ def test_check_notifies_once_per_advisory_set(mx, monkeypatch):
     assert deps.notify_vulnerable(r) and not deps.notify_vulnerable(r)       # once per set of advisories
     evs = [e for e in feed.list_events()["events"] if "vulnerab" in e["title"]]
     assert len(evs) == 1 and "GHSA-test" in evs[0]["body"]
+    assert evs[0]["url"] == "/settings/updates"                              # where updates are, not General
 
 
 def test_default_jobs_include_weekly_clean_and_check():

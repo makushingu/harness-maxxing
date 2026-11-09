@@ -3,14 +3,16 @@
 import { EmojiPicker } from 'frimousse'
 import { useLang, useT } from '@/i18n'
 import { Spinner } from '@/components/ui'
+import { resolveEmojiData } from './emojiData'
 
 export default function EmojiPickerBody({ onPick }: { onPick: (emoji: string) => void }) {
   const t = useT()
   const lang = useLang()
   return (
     <EmojiPicker.Root
-      locale={lang === 'fr' ? 'fr' : 'en'}
+      locale={lang}
       emojibaseUrl="/emojibase"
+      resolveEmojiData={resolveEmojiData}
       columns={8}
       onEmojiSelect={({ emoji }) => onPick(emoji)}
       className="isolate flex h-[340px] w-[304px] max-w-full flex-col"

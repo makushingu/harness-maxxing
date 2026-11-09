@@ -859,7 +859,7 @@ export type Preflight = {
   unsaved_overlap?: string[]
   web_changes: string[]
   /** the customized web UI built on the new version (only when a customization changes it) */
-  ui_build?: { status: 'ok' | 'failed' | 'unchecked'; error: string; seconds?: number }
+  ui_build?: { status: 'ok' | 'failed' | 'unchecked' | 'pending'; reason?: 'never_built' | 'tools_changed'; error: string; seconds?: number }
   extensions: { id: string; name: string; api: number; reason: string }[]
   notes: { version: string }[]
 }

@@ -92,6 +92,8 @@ export function usePreflight(enabled: boolean, target?: string | null) {
     queryFn: () => api.get<Preflight>('/api/system/update/preflight'),
     enabled,
     staleTime: 60_000,
+    // the build of a customized interface is checked in the background: asked again until it is done
+    refetchInterval: (q) => (q.state.data?.ui_build?.status === 'pending' ? 5_000 : false),
     retry: false,
   })
 }

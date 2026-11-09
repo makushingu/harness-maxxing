@@ -278,13 +278,15 @@ async def update_preflight(refresh: bool = False):
     """What the next update does to this server (simulated on a throw-away copy). Cached until the code, the
     target or the unsaved changes change; refresh=True fetches the latest version first."""
     from .. import smartupdate
-    if not refresh:
-        cached = await asyncio.to_thread(smartupdate.cached_preflight)
-        if cached:
-            return cached
-    rep = await asyncio.to_thread(smartupdate.preflight, None, refresh)
-    if not rep.get("ok"):
-        raise _err(502, "preflight_failed", rep.get("error") or "preflight failed")
+    rep = None if refresh else await asyncio.to_thread(smartupdate.cached_preflight)
+    if not rep:
+        # the build of a customized web UI is never run inside the request: in the background, the report is
+        # replaced when it is done (ui_build "pending" meanwhile, the page asks again)
+        rep = await asyncio.to_thread(smartupdate.preflight, None, refresh, False)
+        if not rep.get("ok"):
+            raise _err(502, "preflight_failed", rep.get("error") or "preflight failed")
+    if (rep.get("ui_build") or {}).get("status") == "pending":
+        smartupdate.check_ui_later()           # also after a restart left a pending report in the cache
     return rep
 
 

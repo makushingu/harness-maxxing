@@ -27,7 +27,9 @@ The interface can be customized too: ask Claude ("make the sidebar wider", "add 
 It edits the interface's sources (`web/src` in the code directory), builds your own copy of the interface on the
 server (`maxxing custom build`, about 30 seconds) and records the change like any customization. The interface that
 comes with Harness Maxxing (`web/dist`) is never modified: your build lives in the state directory
-(`/var/lib/claude-maxxing/web-dist`) and is shown as long as it matches your sources.
+(`/var/lib/claude-maxxing/web-dist`) and stays shown while Claude edits the sources again, until a new build
+replaces it (a build that fails changes nothing). After an update or once you drop the change, the standard
+interface is shown until your interface is built again.
 
 - The first build installs the build tools (about 450 MB, once per version).
 - Every update rebuilds your interface on the new version; Settings -> Updates says beforehand whether it still

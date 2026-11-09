@@ -6,7 +6,7 @@ import { Link } from 'react-router'
 import { RefreshCw, Sparkles, Wrench, KeyRound, GitBranch } from 'lucide-react'
 import { useWhatsNew } from '@/features/whatsnew/store'
 import { applyUpdate } from '@/pwa'
-import { useCheckVersion, useUpdate, useAutoUpdate, useVersion, useWorkspace } from '@/lib/queries'
+import { useCheckVersion, useUpdate, useAutoUpdate, useVersion } from '@/lib/queries'
 import { fmtRelative } from '@/lib/format'
 import { api } from '@/lib/api'
 import type { AuthState, VersionInfo } from '@/lib/types'
@@ -15,6 +15,7 @@ import { Badge, Button, ProgressBar, Skeleton, Spinner, Switch, confirm, toast }
 import { Callout, SettingRow } from '@/features/common'
 import { SettingsCard } from './ui'
 import { UpdatePlan, UpdateReportView } from './UpdatePlan'
+import { useHarnessTopic } from './harnessTopic'
 
 export function VersionCard() {
   const t = useT()
@@ -25,10 +26,7 @@ export function VersionCard() {
   const check = useCheckVersion()
   const lang = useLang()
   // the topic that handles updates: system/harness (system/update on workspaces installed before 2.0.0a33)
-  const { data: ws } = useWorkspace()
-  const hasOld = ws?.projects.some((p) => p.topics.some((tp) => tp.path === 'projects/system/topics/update'))
-  const hasNew = ws?.projects.some((p) => p.topics.some((tp) => tp.path === 'projects/system/topics/harness'))
-  const updateTopic = hasOld && !hasNew ? 'projects/system/topics/update' : 'projects/system/topics/harness'
+  const updateTopic = useHarnessTopic()
   const [phase, setPhase] = React.useState<'idle' | 'running' | 'restarting' | 'done' | 'blocked'>('idle')
   const start = React.useRef(0)
   const [elapsed, setElapsed] = React.useState(0)

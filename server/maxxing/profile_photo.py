@@ -78,6 +78,21 @@ def own() -> tuple[Path, str] | None:
     return (p, mime) if mime else None
 
 
+def prune(current: dict[str, str]) -> None:
+    """Drop the cached photos that are not the current version of a person still known here (`current`: person
+    id -> photo version): a forgotten contact, a member of no shared group any more, an old or removed photo."""
+    try:
+        files = list(_cache_dir().iterdir())
+    except OSError:
+        return
+    for f in files:
+        if f.name.startswith("."):              # a download being written
+            continue
+        pid, _, version = f.name.rpartition("-")
+        if current.get(pid) != version:
+            f.unlink(missing_ok=True)
+
+
 def _remember_failure(key: str) -> None:
     now = time.time()
     for k in [k for k, at in _failed.items() if now - at >= RETRY_S]:   # asked again anyway: forgotten
@@ -94,6 +109,9 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
     none, cannot be reached, or sent something that is not an image)."""
     if not VERSION.fullmatch(version or "") or not re.fullmatch(r"p_[0-9a-f]{6,32}", pid or ""):
         return None
+    from . import teampeer
+    if not teampeer.announces_photo(pid, version):
+        return None                             # not (or no longer) someone we know, or not their photo now
     d = _cache_dir()
     p = d / f"{pid}-{version}"
     if not p.is_file():
@@ -105,9 +123,6 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
                 return None
             _busy.add(key)
         try:
-            from . import teampeer
-            if not teampeer.announces_photo(pid, version):
-                return None                     # unknown person or version: nothing fetched, nothing remembered
             data = teampeer.fetch_photo(pid, version)
             if not data or not sniff(data) or hashlib.sha256(data).hexdigest()[:16] != version:
                 _remember_failure(key)

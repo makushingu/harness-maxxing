@@ -86,9 +86,11 @@ export function UpdatePlan({ v, onUpdate, updating }: { v: VersionInfo; onUpdate
               </Row>
             )}
             {p.ui_build && (
-              <Row tone={p.ui_build.status === 'ok' ? 'ok' : p.ui_build.status === 'unchecked' ? 'info' : 'error'}
+              <Row tone={p.ui_build.status === 'ok' ? 'ok' : p.ui_build.status === 'failed' ? 'error' : 'info'}
                 detail={p.ui_build.status === 'failed' ? p.ui_build.error.trim().split('\n').slice(-1)[0] : undefined}>
-                {t(p.ui_build.status === 'ok' ? 'update.uiBuildOk' : p.ui_build.status === 'unchecked' ? 'update.uiBuildUnchecked' : 'update.uiBuildFailed')}
+                {t(p.ui_build.status === 'ok' ? 'update.uiBuildOk' : p.ui_build.status === 'pending' ? 'update.uiBuildPending'
+                  : p.ui_build.status === 'unchecked' ? (p.ui_build.reason === 'never_built' ? 'update.uiBuildNeverBuilt' : 'update.uiBuildUnchecked')
+                  : 'update.uiBuildFailed')}
               </Row>
             )}
             {p.extensions.map((e) => (

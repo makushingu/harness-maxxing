@@ -1192,7 +1192,7 @@ def notify_vulnerable(result: dict) -> bool:
             + "\n\nA newer Harness Maxxing release may already fix it: maxxing update --check")
     try:
         ev = feed.post(f"{len(lines)} dependency(ies) with a known vulnerability", body, "warning", "system",
-                       "/settings", dedupe=f"deps-check:{key}")
+                       "/settings/updates", dedupe=f"deps-check:{key}")
     except Exception:  # noqa: BLE001 - never break the job for the feed
         ev = None
     if ev is None:
