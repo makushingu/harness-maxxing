@@ -218,3 +218,85 @@ def test_a_lone_surrogate_in_the_pseudo_is_a_400_not_a_500(client):
         r = client.put("/api/settings/profile", content=json.dumps(body), headers={"content-type": "application/json"})
         assert r.status_code == 400
     assert client.get("/api/settings/profile").json() == before
+
+
+def _cache_files():
+    d = config.STATE / "team" / "photos"
+    return sorted(p.name for p in d.iterdir()) if d.is_dir() else []
+
+
+def _fetched(client, monkeypatch, data, v):
+    monkeypatch.setattr(teampeer, "_http", lambda: _Http(data))
+    monkeypatch.setattr(profile_photo, "_failed", {})
+    return client.get(f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}")
+
+
+def test_a_forgotten_contacts_photo_is_deleted_and_never_served(client, monkeypatch):
+    v = hashlib.sha256(PNG).hexdigest()[:16]
+    _contact(monkeypatch, photo=v)
+    assert _fetched(client, monkeypatch, PNG, v).status_code == 200
+    assert _cache_files() == [f"{teampeer.pid(LEA)}-{v}"]
+    monkeypatch.setattr(teampeer, "_deliver_now", lambda *a, **k: True)
+    teampeer.forget(LEA)
+    assert _cache_files() == []
+    # a copy left on disk (a server before this fix) is not served for someone we do not know
+    d = config.STATE / "team" / "photos"
+    (d / f"{teampeer.pid(LEA)}-{v}").write_bytes(PNG)
+    assert client.get(f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}").status_code == 404
+
+
+def test_a_removed_or_replaced_photo_drops_the_old_copy(client, monkeypatch):
+    v = hashlib.sha256(PNG).hexdigest()[:16]
+    _contact(monkeypatch, photo=v)
+    assert _fetched(client, monkeypatch, PNG, v).status_code == 200
+    teampeer.receive(LEA, {"type": "profile", "profile": {"name": "Lea", "photo": ""}})
+    assert _cache_files() == []
+    assert client.get(f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}").status_code == 404
+    # another contact's photo is not touched
+    other = "https://other.example.com"
+    doc = teampeer._load()
+    doc["peers"][other] = {"key": teampeer._b64(b"o" * 32), "status": "accepted", "photo": v}
+    teampeer._save(doc)
+    d = config.STATE / "team" / "photos"
+    (d / f"{teampeer.pid(other)}-{v}").write_bytes(PNG)
+    teampeer.receive(LEA, {"type": "profile", "profile": {"name": "Lea", "photo": v}})
+    assert _cache_files() == [f"{teampeer.pid(other)}-{v}"]
+
+
+def test_a_group_members_photo_follows_its_changes_and_goes_with_the_group(client, monkeypatch):
+    _contact(monkeypatch, status="group")
+    doc = teampeer._load()
+    doc["peers"][LEA] = {"status": "group", "name": "Lea", "photo": "", "group_keys": {"g_one": teampeer._b64(b"g" * 32)}}
+    teampeer._save(doc)
+    v = hashlib.sha256(PNG).hexdigest()[:16]
+    # the creator's roster fills a photo we did not have (member seen before 2.0.0a132), never adds a stranger
+    teampeer.add_group_peers("g_one", [(LEA, None, {"name": "Renamed", "photo": v}),
+                                       ("https://stranger.example.com", None, {"photo": v})])
+    peers = teampeer.peers()
+    assert peers[LEA]["photo"] == v and peers[LEA]["name"] == "Lea" and "https://stranger.example.com" not in peers
+    assert _fetched(client, monkeypatch, PNG, v).status_code == 200
+    # the member changes its photo: it tells us through its group key, only the photo is taken
+    v2 = hashlib.sha256(JPEG).hexdigest()[:16]
+    teampeer.receive(LEA, {"type": "profile", "chat": "g_one", "profile": {"name": "Evil", "photo": v2}}, scope="g_one")
+    assert teampeer.peers()[LEA]["photo"] == v2 and teampeer.peers()[LEA]["name"] == "Lea"
+    assert _cache_files() == []
+    # an event for another group with this key is refused
+    import pytest
+    with pytest.raises(teampeer.PeerError):
+        teampeer.receive(LEA, {"type": "profile", "chat": "g_two", "profile": {"photo": v}}, scope="g_one")
+    assert _fetched(client, monkeypatch, JPEG, v2).status_code == 200
+    teampeer.drop_chat_keys("g_one")                 # we left the last group shared with her
+    assert LEA not in teampeer.peers() and _cache_files() == []
+
+
+def test_our_photo_reaches_group_members_who_are_not_contacts(client, monkeypatch):
+    _contact(monkeypatch)
+    doc = teampeer._load()
+    member = "https://member.example.com"
+    doc["peers"][member] = {"status": "group", "group_keys": {"g_one": teampeer._b64(b"g" * 32)}}
+    teampeer._save(doc)
+    monkeypatch.setattr(teampeer._wake, "set", lambda: None)
+    v = _put(client, PNG).json()["photo"]
+    out = {o["to"]: o["event"] for o in teampeer._load()["outbox"]}
+    assert out[LEA]["profile"]["photo"] == v and "chat" not in out[LEA]
+    assert out[member] == {"type": "profile", "chat": "g_one", "profile": {"photo": v}}

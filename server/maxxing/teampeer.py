@@ -234,11 +234,20 @@ def _peek() -> dict:
     return cached[1]
 
 
+def _known(p: dict) -> bool:
+    """A Team person: a contact, or a member of a group we share (a request alone is not)."""
+    return p.get("status") in ("accepted", "group") or bool(p.get("group_keys"))
+
+
 def _save(doc: dict) -> None:
     global _peeked
     config.write_json(_path(), doc, mode=0o600)
     _peeked = None
     bus.invalidate("team")
+    try:                            # people gone or photos changed: their old copies go too
+        profile_photo.prune({pid(a): str(p.get("photo") or "") for a, p in doc["peers"].items() if _known(p)})
+    except OSError:
+        log.warning("team: could not prune the cached photos", exc_info=True)
 
 
 def _b64(b: bytes) -> str:
@@ -268,7 +277,7 @@ def people() -> dict:
     out = {}
     now = time.time()
     for addr, p in _peek()["peers"].items():
-        if p.get("status") not in ("accepted", "group") and not p.get("group_keys"):
+        if not _known(p):
             continue                # a group member with a request not answered yet stays in its groups
         seen = now - float(p.get("last_seen") or 0)
         out[pid(addr)] = {"name": p.get("name") or urlsplit(addr).hostname, "emoji": p.get("emoji", ""),
@@ -587,7 +596,7 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
     if scope == PENDING:
         if kind not in ("accept", "refuse", "bye"):
             raise PeerError(403, "forbidden", "Not a contact yet")
-    elif scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave") or str(event.get("chat") or "") != scope):
+    elif scope and (kind not in ("message", "vote", "react", "typing", "read", "edit", "delete", "leave", "profile") or str(event.get("chat") or "") != scope):
         raise PeerError(403, "forbidden", "A group key only works in its own group")
     with _lock:
         doc = _load() if kind in ("accept", "refuse", "bye", "profile") else _peek()   # the others only read
@@ -602,6 +611,13 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
             if p.get("status") in ("waiting", "accepted", "request"):
                 _drop_link(doc, frm)
                 _save(doc)
+            return {"ok": True}
+        if kind == "profile" and scope:       # a group member: only its photo version (the group's creator holds
+            if scope in (p.get("group_keys") or {}):   # this pair key too; the bytes come from the member's server)
+                photo = _clean_profile(event.get("profile"))["photo"]
+                if p.get("photo", "") != photo:
+                    p["photo"] = photo
+                    _save(doc)
             return {"ok": True}
         if kind == "profile" and p.get("status") == "accepted":
             p.update(_clean_profile(event.get("profile")))
@@ -624,9 +640,9 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
 GROUP_PEERS_MAX = 500                                      # people known only through groups, at most
 
 
-def add_group_peers(chat: str, members: list[tuple[str, str, dict]]) -> None:
+def add_group_peers(chat: str, members: list[tuple[str, str | None, dict]]) -> None:
     """Members of a group we are in: we may talk with each about that chat only - (address, key, profile), one
-    write. A contact (or a pending request) keeps its own link key: a key handed by the group's creator would let
+    write (no key: a member we already know, only its photo may be filled). A contact (or a pending request) keeps its own link key: a key handed by the group's creator would let
     the creator speak as it. A key that is not 32 bytes is skipped; a known person's name is not changed (one
     group's creator cannot rename them for the others)."""
     with _lock:
@@ -646,6 +662,12 @@ def add_group_peers(chat: str, members: list[tuple[str, str, dict]]) -> None:
                 continue
             p.setdefault("group_keys", {})[chat] = key
             changed = True
+        for address, _key, profile in members:  # a member known before (another group, or before 2.0.0a132): the
+            p = doc["peers"].get(address)       # creator's copy of its photo, only when we have none (its own
+            photo = _clean_profile(profile)["photo"] if isinstance(profile, dict) else ""   # updates come first)
+            if p and p.get("status") == "group" and chat in (p.get("group_keys") or {}) and photo and not p.get("photo"):
+                p["photo"] = photo
+                changed = True
         if changed:
             _save(doc)
 
@@ -716,7 +738,8 @@ def _deliver_now(address: str, event: dict, raise_on_error: bool = False, key: b
         r = _post(_check_target(address), event, key or _key_to(address, event.get("chat")), timeout)
         if r.status_code == 200:
             return True
-        if r.status_code in (400, 413) and not raise_on_error:   # malformed: retrying changes nothing
+        if (r.status_code in (400, 413) or (r.status_code == 403 and event.get("type") == "profile")) and not raise_on_error:
+            # malformed, or a photo for a group member whose server predates it: retrying changes nothing
             log.info("team: %s refused an event for good (%s)", address, r.status_code)
             return None                        # never deliverable: dropped from the outbox
         err = f"{address} answered {r.status_code}"
@@ -766,14 +789,20 @@ def presence() -> None:
 
 
 def share_profile() -> None:
-    """The user changed their name, emoji or color: every contact gets it (queued like a message; a newer change
+    """The user changed their name, emoji, color or photo: every contact gets it, and the members of our groups who
+    are not contacts get the photo version, through one of their group keys (queued like a message; a newer change
     replaces one still waiting)."""
     with _lock:
         doc = _load()
         addrs = [a for a, p in doc["peers"].items() if p.get("status") == "accepted"]
+        members = [(a, next(iter(p["group_keys"]))) for a, p in doc["peers"].items()
+                   if p.get("status") != "accepted" and p.get("group_keys")]
         doc["outbox"] = [o for o in doc["outbox"] if (o.get("event") or {}).get("type") != "profile"]
         config.write_json(_path(), doc, mode=0o600)
-    send(addrs, {"type": "profile", "profile": _profile()})
+    profile = _profile()
+    send(addrs, {"type": "profile", "profile": profile})
+    for a, chat in members:
+        send([a], {"type": "profile", "chat": chat, "profile": {"photo": profile["photo"]}})
 
 
 def has_link(address: str, chat: str) -> bool:
@@ -901,7 +930,7 @@ PHOTO_DEADLINE = 20                                     # seconds for the whole 
 def _photo_peer(person: str, version: str) -> tuple[str, dict] | None:
     with _lock:
         hit = next(((a, p) for a, p in _peek()["peers"].items() if pid(a) == person), None)
-    return hit if hit and str(hit[1].get("photo") or "") == version else None
+    return hit if hit and _known(hit[1]) and str(hit[1].get("photo") or "") == version else None
 
 
 def announces_photo(person: str, version: str) -> bool:

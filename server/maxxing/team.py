@@ -764,7 +764,7 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
                 return
             if chat is None and sum(1 for c in doc["chats"] if c.get("remote") and c.get("admin") == who and not c.get("left")) >= GROUPS_PER_CREATOR:
                 raise TeamError(429, "too_many_groups", "Too many groups from this contact")
-            teampeer.add_group_peers(cid, [(a, keys[a], m) for a, m in addrs if a not in (me, frm) and isinstance(keys.get(a), str)])
+            teampeer.add_group_peers(cid, [(a, k if isinstance(k := keys.get(a), str) else None, m) for a, m in addrs if a not in (me, frm)])
             members = [teampeer.pid(a) for a, _ in addrs if a != me and (a == frm or teampeer.has_link(a, cid))]
             doc = _load()
             chat = next((c for c in doc["chats"] if c["id"] == cid), None)
