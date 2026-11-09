@@ -45,6 +45,8 @@ Fixed:
   stops without an answer (stopped, server restarted) shows its error in the flow, never the answer before it.
 - **New agent**: a name without a letter from a to z or a digit says why it cannot be used.
 - **Extension pages** no longer reload several times while they open.
+- **Tasks on a phone**: on a 393-412 px screen the view switch no longer pushes the menu button (⊞) off the screen: it
+  sits under the header below 480 px. **Show more** in the notifications is easier to tap.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 
