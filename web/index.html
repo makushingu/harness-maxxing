@@ -180,18 +180,22 @@
           cells.forEach(function (c) { end = Math.max(end, c.b <= last ? c.t : 0); });
           return end - t; // until the last of them starts landing
         }
-        // Never stuck: the first screen gets 8 s once the app code runs, the page 30 s in all.
-        var safety = setTimeout(function () { window.mxStep(3); }, 30000);
+        // Never stuck: the first screen gets 8 s once the app code runs, 8 s before it renders.
+        var safety = setTimeout(function () { window.mxStep(3); }, 8000);
+        // The app code failed before its first render: drop the cover at once instead of blocking clicks.
+        function fail() { if (!step2) window.mxStep(3); }
+        var step2 = 0;
+        addEventListener('error', fail); addEventListener('unhandledrejection', fail);
         window.mxStep = function (n) {
           if (ended) return;
           if (n < 3) {
             // Not at step 2: the app's first render follows at once, and a re-timed pixel leaves the compositor until
             // that render is painted (a pause in the build); the timeline keeps its pace instead.
             if (n === 1) hurry(0, 16);
-            if (n === 2) { clearTimeout(safety); safety = setTimeout(function () { window.mxStep(3); }, 8000); }
+            if (n === 2) { step2 = 1; removeEventListener('error', fail); removeEventListener('unhandledrejection', fail); clearTimeout(safety); safety = setTimeout(function () { window.mxStep(3); }, 8000); }
             return;
           }
-          ended = 1; clearTimeout(safety);
+          ended = 1; clearTimeout(safety); removeEventListener('error', fail); removeEventListener('unhandledrejection', fail);
           // The last pixels first, alone in their frame; the rest (costly: it restyles the page) in the next one.
           hurry(2, 6);
           if (rm) finish(); else requestAnimationFrame(finish);
@@ -213,10 +217,10 @@
             ox = z ? z.left + z.width / 2 : 0, oy = z ? z.top + z.height / 2 : 0, els = d.querySelectorAll('.mx-boot-item,.mx-card-in,[data-boot-rv]'), bd = [],
             M, F, i;
           cells.forEach(function (c) { left = Math.max(left, c.t - now()); });
-          M = rm ? 0 : left + LAND - 120; F = rm ? 0 : M + 230;
+          M = rm ? 0 : Math.max(left + LAND - 200, 0); F = rm ? 0 : M + 60;
           for (i = 0; i < els.length; i++) {
             var b = els[i].getBoundingClientRect();
-            bd.push(Math.round(60 + Math.hypot(Math.max(b.left - ox, 0, ox - b.right), Math.max(b.top - oy, 0, oy - b.bottom)) / 3.2));
+            bd.push(Math.min(150, Math.round(20 + Math.hypot(Math.max(b.left - ox, 0, ox - b.right), Math.max(b.top - oy, 0, oy - b.bottom)) / 6)));
           }
           // The glow and the sweep fade, the pixels merge, the face appears.
           anim(hw, [{ opacity: 1 }, { opacity: 0 }], { duration: Math.max(M + 100, 250) });
@@ -238,7 +242,7 @@
             R.dataset.boot = 'reveal';
           }
           if (rm) reveal(); else requestAnimationFrame(reveal);
-          anim(ov, [{ opacity: 1 }, { opacity: 0 }], { duration: rm ? 160 : 450, delay: F, easing: 'ease-out' }).onfinish = function () { ov.remove(); };
+          anim(ov, [{ opacity: 1 }, { opacity: 0 }], { duration: rm ? 160 : 250, delay: F, easing: 'ease-out' }).onfinish = function () { ov.remove(); };
           // Once everything has played, on an idle moment: dropping the attribute restyles the page again.
           setTimeout(function () {
             (window.requestIdleCallback || setTimeout)(function () {
@@ -246,7 +250,7 @@
               for (var i = 0; i < els.length; i++) els[i].style.removeProperty('--bd');
               for (i = 0; i < side.length; i++) side[i].style.removeProperty('--bdm');
             }, { timeout: 1500 });
-          }, F + 2200);
+          }, F + 1200);
           if (!z) {
             anim(box, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: rm ? 'none' : 'scale(.92)' }], { duration: rm ? 160 : 300, delay: F, easing: 'ease-out' }).onfinish = over;
             return;
@@ -255,9 +259,9 @@
           // now (under the cover) and shown in the paint where the flight ends.
           var dx = z.left + z.width / 2 - (a.left + a.width / 2), dy = z.top + z.height / 2 - (a.top + a.height / 2), s = z.width / a.width;
           el.style.visibility = 'hidden';
-          anim(box, [{ transform: 'none' }, { transform: 'translateX(' + dx + 'px)' }], { duration: 620, delay: F, easing: 'cubic-bezier(.55,0,.25,1)' });
-          var land = anim(y, [{ transform: 'none' }, { transform: 'translateY(' + dy + 'px) scale(' + s + ')' }], { duration: 620, delay: F, easing: 'cubic-bezier(.3,0,.2,1)' });
-          anim(sh, [{ opacity: 1 }, { opacity: 0 }], { duration: 620, delay: F });
+          anim(box, [{ transform: 'none' }, { transform: 'translateX(' + dx + 'px)' }], { duration: rm ? 1 : 480, delay: F, easing: 'cubic-bezier(.55,0,.25,1)' });
+          var land = anim(y, [{ transform: 'none' }, { transform: 'translateY(' + dy + 'px) scale(' + s + ')' }], { duration: rm ? 1 : 480, delay: F, easing: 'cubic-bezier(.3,0,.2,1)' });
+          anim(sh, [{ opacity: 1 }, { opacity: 0 }], { duration: rm ? 1 : 480, delay: F });
           land.onfinish = function () { el.style.visibility = ''; over(); };
         }
         window.mxStep(1);

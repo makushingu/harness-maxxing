@@ -241,7 +241,7 @@ export function takeEarlyTail(id: string): Promise<SessionEventsBackPage> | unde
  *  thread then opens with). */
 export function peekEarlyTail(id: string): Promise<SessionEventsBackPage> | undefined {
   const e = earlyTails.get(id)
-  return e && Date.now() - e.at < 15_000 ? e.p : undefined
+  return e && Date.now() - e.at < 60_000 ? e.p : undefined
 }
 
 /** Events strictly before byte `before` ("Show earlier messages"). `reset` = the log was rewritten. */

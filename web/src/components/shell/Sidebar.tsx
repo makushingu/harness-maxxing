@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@/components/ui'
-import { FeedPanel } from '@/features/feed/FeedItems'
 import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
 import { ActiveMark } from './ActiveMark'
@@ -140,7 +139,9 @@ function NotificationsBell({ collapsed }: { collapsed: boolean }) {
           ;(e.currentTarget as HTMLElement | null)?.focus()
         }}
       >
-        <FeedPanel className="max-h-[min(34rem,calc(100dvh-2rem))] rounded-none border-0 bg-transparent" />
+        <React.Suspense fallback={null}>
+          <FeedPanel className="max-h-[min(34rem,calc(100dvh-2rem))] rounded-none border-0 bg-transparent" />
+        </React.Suspense>
       </PopoverContent>
     </Popover>
     </>
@@ -228,6 +229,7 @@ function lazyRail<P>(load: () => Promise<{ default: React.ComponentType<P> }>) {
     }))
   return { preload, Comp: React.lazy(preload) }
 }
+const FeedPanel = React.lazy(() => import('@/features/feed/FeedItems').then((m) => ({ default: m.FeedPanel })))
 const AGENTS_RAIL = lazyRail(withGroups(['agents'], () => import('./AgentsRail')))
 const TEAM_RAIL = lazyRail(withGroups(['team'], () => import('./TeamRail')))
 const preloadRail = (k: RailKind) => void (k === 'agents' ? AGENTS_RAIL : k === 'team' ? TEAM_RAIL : { preload: preloadRailTree }).preload().catch(() => {})
@@ -257,6 +259,17 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   const pendingKind = React.useRef<RailKind | null>(null)
   const intent = React.useRef<{ timer?: number; since: number; fastAt: number; x: number; y: number; t: number } | null>(null)
   const railTimer = React.useRef<number | undefined>(undefined)
+  // right edge of the labels, measured once the bar is open (not on every pointer move); dropped on resize / leave
+  const bodyRight = React.useRef<number | null>(null)
+  const bodyStable = React.useRef(false)
+  React.useEffect(() => {
+    const drop = () => {
+      bodyRight.current = null
+      bodyStable.current = false
+    }
+    window.addEventListener('resize', drop)
+    return () => window.removeEventListener('resize', drop)
+  }, [])
   const railRest = React.useRef<number | undefined>(undefined)
   const phaseRef = React.useRef(phase) // the committed phase (a sliced render may still be thrown away)
   React.useLayoutEffect(() => {
@@ -458,8 +471,15 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       }
       if (railRef.current) return
       // heading for the column (the right edge of the labels)
-      const body = side.current?.querySelector<HTMLElement>('.mx-side-body')
-      if (body && e.clientX >= body.getBoundingClientRect().right - RAIL_EDGE) showRail()
+      // (kept once two reads agree: a read during the unfold's slide would be off)
+      let right = phaseRef.current === 'open' && bodyStable.current ? bodyRight.current : null
+      if (right === null) {
+        const body = side.current?.querySelector<HTMLElement>('.mx-side-body')
+        right = body ? body.getBoundingClientRect().right : null
+        bodyStable.current = phaseRef.current === 'open' && right !== null && right === bodyRight.current
+        bodyRight.current = right
+      }
+      if (right !== null && e.clientX >= right - RAIL_EDGE) showRail()
     },
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType === 'touch' || e.button !== 0) return
@@ -483,6 +503,8 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       if (e.pointerType === 'touch') return
       hover.current = false
       blocked.current = false
+      bodyRight.current = null
+      bodyStable.current = false
       cancelIntent()
       window.clearTimeout(railTimer.current)
       railTimer.current = undefined

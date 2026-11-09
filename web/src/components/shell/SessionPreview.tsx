@@ -29,7 +29,8 @@ const CARD_MAX_H_RUNNING = 384
 const PreviewWorking = React.lazy(withGroups(['files'], () => import('@/pages/sessions/PreviewWorking')))
 /** Events read on each poll of a running session (the full first page comes from the thread's own load). */
 const POLL_EVENTS = 40
-const POLL_MS = 4000
+/** The working rows' live stream opens after the card has been shown this long. */
+const STREAM_DELAY_MS = 400
 
 type Preview = { user: string | null; assistant: string | null; activity: string | null; model: string | null; at: number | null }
 
@@ -97,9 +98,10 @@ function useSessionPreview(id: string | null, live: boolean) {
   return useQuery({
     queryKey: previewKey(id || ''),
     enabled: !!id,
-    staleTime: 15_000,
+    staleTime: 60_000,
     gcTime: 10 * 60_000,
-    refetchInterval: live ? POLL_MS : false,
+    // a running session's card follows its live stream (PreviewWorking): no polling on top
+    refetchInterval: false,
     refetchOnWindowFocus: false,
     queryFn: async ({ signal }): Promise<Preview> => {
       const sid = id as string
@@ -238,6 +240,25 @@ export function SessionPreviewCard({
   const running = session.state === 'running'
   const { data, isPending, isError } = useSessionPreview(session.id, running)
 
+  // The live stream only once the card has stayed open a moment (a pointer passing over the rail opens nothing).
+  const [streamOn, setStreamOn] = React.useState(false)
+  React.useEffect(() => {
+    setStreamOn(false)
+    if (!running) return
+    const h = window.setTimeout(() => setStreamOn(true), STREAM_DELAY_MS)
+    return () => window.clearTimeout(h)
+  }, [running, session.id])
+  const nowLine =
+              data?.activity ? (
+                <p className="flex h-7 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <StatusDot tone="running" pulse className="shrink-0" />
+                  <span className="shrink-0">{t('shell.preview.now')}</span>
+                  <span className="min-w-0 truncate font-mono text-[11px]">
+                    <Sensitive length={16}>{data.activity}</Sensitive>
+                  </span>
+                </p>
+              ) : null
+
   const where = (() => {
     const m = /^projects\/([^/]+)(?:\/topics\/([^/]+))?$/.exec(session.path)
     return !session.path ? root : m ? (m[2] ? `${m[1]} / ${m[2]}` : m[1]) : session.path
@@ -317,20 +338,8 @@ export function SessionPreviewCard({
       {running && (
         // the thread's own bottom rows while Claude works; until its chunk is there, the current tool alone
         <div className="flex max-h-[176px] shrink-0 flex-col justify-end overflow-hidden border-t bg-muted/30 px-3 pt-2 pb-0.5">
-          <React.Suspense
-            fallback={
-              data?.activity ? (
-                <p className="flex h-7 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <StatusDot tone="running" pulse className="shrink-0" />
-                  <span className="shrink-0">{t('shell.preview.now')}</span>
-                  <span className="min-w-0 truncate font-mono text-[11px]">
-                    <Sensitive length={16}>{data.activity}</Sensitive>
-                  </span>
-                </p>
-              ) : null
-            }
-          >
-            <PreviewWorking session={session} />
+          <React.Suspense fallback={nowLine}>
+            {streamOn ? <PreviewWorking session={session} /> : nowLine}
           </React.Suspense>
         </div>
       )}

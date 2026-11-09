@@ -37,8 +37,11 @@ export function useBootReady() {
 
 /** The app shell: the loader ends once the first queries (auth, shell, page data) have answered - checked after
  *  each query change, a frame apart so a query started by the first render is seen, then on the next idle moment so
- *  the renders those answers cause are done before the logo's end is scheduled - or after 4 s at most (slow data: the
+ *  the renders those answers cause are done before the logo's end is scheduled - or after 1.5 s at most (slow data: the
  *  page shows its own placeholders). */
+/** Queries the first screen does not wait for (side panels, meters, background lists). */
+const BOOT_SKIP = new Set(['health', 'feed', 'team', 'agents', 'agent-groups', 'stats', 'mail', 'infra', 'mcp', 'approvals', 'docs', 'trash'])
+
 export function useBootReadyWhenIdle() {
   const qc = useQueryClient()
   React.useEffect(() => {
@@ -61,12 +64,12 @@ export function useBootReadyWhenIdle() {
       stopIdle()
       idle = 0
       frame = requestAnimationFrame(() => {
-        if (qc.isFetching() !== 0) return
+        if (qc.isFetching({ predicate: (q) => !BOOT_SKIP.has(String(q.queryKey[0])) && !(q.queryKey[0] === 'system' && q.queryKey[1] === 'usage') }) !== 0) return
         idle = w.requestIdleCallback ? w.requestIdleCallback(done, { timeout: 250 }) : window.setTimeout(done, 0)
       })
     }
     const unsubscribe = qc.getQueryCache().subscribe(check)
-    const cap = setTimeout(done, 4000)
+    const cap = setTimeout(done, 1500)
     check()
     return () => {
       unsubscribe()

@@ -34,7 +34,10 @@ export default function TeamRail({ onPick, shown = true }: { onPick?: () => void
   }
   React.useEffect(() => stop, [])
   React.useEffect(() => {
-    if (!shown) setAt(null)
+    if (!shown) {
+      stop()
+      setAt(null)
+    }
   }, [shown])
   const show = (el: HTMLElement, delay: number) => {
     stop()

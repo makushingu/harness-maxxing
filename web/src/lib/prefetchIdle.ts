@@ -19,17 +19,29 @@ export function canPrefetch(): boolean {
 /** `cb` once the boot loader has fully played (at once when there is none). Returns a cancel function. */
 export function whenBootDone(cb: () => void): () => void {
   const root = document.documentElement
-  if (!root.hasAttribute('data-boot')) {
+  const w = window as Window & { mxBooted?: number }
+  if (!root.hasAttribute('data-boot') || w.mxBooted) {
     cb()
     return () => {}
   }
-  const mo = new MutationObserver(() => {
-    if (root.hasAttribute('data-boot')) return
-    mo.disconnect()
+  let fired = false
+  const fire = () => {
+    if (fired) return
+    fired = true
+    stop()
     cb()
+  }
+  // The loader's end (`mxbooted`, right after the logo lands); the attribute's removal stays as a fallback.
+  const mo = new MutationObserver(() => {
+    if (!root.hasAttribute('data-boot')) fire()
   })
+  const stop = () => {
+    mo.disconnect()
+    window.removeEventListener('mxbooted', fire)
+  }
+  window.addEventListener('mxbooted', fire)
   mo.observe(root, { attributes: true, attributeFilter: ['data-boot'] })
-  return () => mo.disconnect()
+  return stop
 }
 
 /** `cb` when the browser is idle (at most `timeout` ms later). Returns a cancel function. */
