@@ -132,12 +132,12 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
 
 **Steer while Claude works.** A message sent during a turn waits in the queue above the composer.
 Click **Steer** (in the waiting-messages card) to use it immediately: the current turn is interrupted, Claude keeps everything
-it has done so far (same conversation) and continues the task taking your new message into account.
-Several queued messages are sent together. **Edit** puts the waiting messages back into the composer at once
+it has done so far (same conversation) and continues the task taking your new message into account. Commands and
+sub-agents it started in the background keep running. Several queued messages are sent together. **Edit** puts the waiting messages back into the composer at once
 (attachments included) so you can change them before sending again; if one of them started meanwhile, only the
 others stay in the composer. The **×** of the card empties the queue at once too (it comes back if the server
 refuses). **Stop** still cancels the turn
-and the queue.
+and the queue (background work included).
 
 **Ask without interrupting.** **Question** (in the same card) asks the waiting messages on the side:
 Claude answers about the session - where it is at, why it did something, what is left - without stopping

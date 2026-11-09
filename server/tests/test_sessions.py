@@ -504,7 +504,7 @@ def test_hud_message_gets_the_hud_preface_and_inline_images(client, topic, mx):
     last = [e["text"] for e in evs if e["type"] == "assistant"][-1]                       # fake claude echoes the prompt
     assert "Sent from the HUD" in last
     first, hud = calls(mx)[0], calls(mx)[-1]
-    assert "--input-format" not in first["argv"] and first["images"] == 0                 # plain messages: unchanged
+    assert first["images"] == 0                                                           # plain messages: text only
     assert hud["argv"][hud["argv"].index("--input-format") + 1] == "stream-json"
     assert hud["images"] == 1                                                             # the image inline, not the .txt
     assert all(p in hud["prompt"] for p in paths)                                         # paths still listed (annotations)
