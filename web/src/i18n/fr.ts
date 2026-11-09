@@ -103,6 +103,8 @@ export const fr: Record<keyof typeof en, string> = {
   'feedback.zone': "Capturer une zone",
   'feedback.zoneBlur': "Masquer mes données (mode présentation)",
   'feedback.zoneHint': "Glissez sur la partie de l’écran à envoyer · Entrée = tout l’écran · Échap = annuler",
+  'feedback.zoneHintTouch': "Glissez sur la partie de l’écran à envoyer",
+  'feedback.zoneWhole': "Tout l’écran",
   'feedback.zoneTaking': "Capture en cours…",
   'feedback.zoneAlt': "Capture envoyée avec le message",
   'feedback.zoneRedo': "Refaire la capture",

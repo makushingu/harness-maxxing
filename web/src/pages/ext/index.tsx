@@ -156,7 +156,7 @@ export default function ExtensionPage() {
             action={<Button onClick={() => setAttempt((a) => a + 1)}>{t('common.retry')}</Button>}
           />
         )}
-        <div ref={host} className="mx-ext" hidden={state.status === 'error'} />
+        <div ref={host} className="mx-ext" data-capture-private hidden={state.status === 'error'} />
       </div>
     </div>
   )

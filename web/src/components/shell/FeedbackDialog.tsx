@@ -31,6 +31,7 @@ export function FeedbackDialog() {
   const [shooting, setShooting] = React.useState(false)
   const [shot, setShot] = React.useState<Shot | null>(null)
   const [shotErr, setShotErr] = React.useState(false)
+  const sending = React.useRef(false)      // the image is read before mutate(): a 2nd click in between must not send twice
   const setShotUrl = (s: Shot | null) => setShot((old) => { if (old) URL.revokeObjectURL(old.url); return s })
 
   React.useEffect(() => {
@@ -53,7 +54,7 @@ export function FeedbackDialog() {
     if (hide) ui.setPresentation(true)
     try {
       await new Promise((ok) => setTimeout(ok, 120))   // the dialog's close animation, the masks rendered
-      setShotUrl(await shootZone(z))
+      setShotUrl(await shootZone(z, useUI.getState().presentation))
     } catch {
       setShotErr(true)
     } finally {
@@ -72,12 +73,13 @@ export function FeedbackDialog() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     setTried(true)
-    if (emailBad || msgBad || send.isPending) return
+    if (emailBad || msgBad || send.isPending || sending.current) return
+    sending.current = true
     const go = async () => {
       const image = shot ? { mime: shot.mime, data: await blobBase64(shot.blob), width: shot.width, height: shot.height } : undefined
-      send.mutate({ email: email.trim(), type, message: message.trim(), image }, { onSuccess: () => setSent(true) })
+      send.mutate({ email: email.trim(), type, message: message.trim(), image }, { onSuccess: () => setSent(true), onSettled: () => { sending.current = false } })
     }
-    void go()
+    go().catch(() => { sending.current = false })
   }
 
   return (
