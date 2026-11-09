@@ -5,14 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## 2.0.0-alpha.133 - 2026-11-09
+## 2.0.0-alpha.134 - 2026-11-09
 
-- Released from `main` ("Urgent fixes" path; a132 is Romain's on `beta`). Permission mode `ask` (approval MCP for
-  sessions, `allowed_tools` in `.maxxing.json`), runner in stream-json input (`on_steer` = control_request
-  interrupt + injected message, fallback = kill; `MAXXING_STREAM_INPUT=0`), agent chat parity (`within` param on
-  files raw/preview/thumb/stat, `/media-roots`), Feedback `image` ({mime, data base64 <= 1 MB, width, height},
-  `feedback.image()`, bodylimit 2 MB on POST /api/settings/feedback; cloud: `lead_images`, 100 a day, 6 months),
-  plus the Radar commits since a131.
+- First release of `beta` since a133 went out from `main`: carries a129, a130 and a132 (beta-only until now) to
+  `stable`. `upgrade_notes(old, new)` keeps `old < v <= new`, so a stable install at a133 would skip their notes:
+  `docs/upgrade/2.0.0a134.md` points to them. `changelog_since` is a git diff, so their CHANGELOG sections show.
+- FEU's work on `beta` after a132 (no entry until now): Team bubbles (`features/team/TeamBubbles.tsx`,
+  `stores/ui.ts` `teamBubbles` per browser, doc 29), sidebar boot loader + status footer meters, sessions tabs
+  animation, emoji picker search (English names, accents folded; emoji data sent Brotli/gzip), palette settings
+  keywords in French (`skw.*`), profile photo fixes (per-upload temp file, serialized removal, bounded failed
+  fetch memory, Team photos pruned and pushed to group members), customized UI build kept while sources change,
+  build never raises, ui-page centred in the extension kit.
 - Second-level sidebar: `components/shell/PageList.tsx` = `SecondBar` slot rendered by `Sidebar.tsx` + `PageList`
   portal from each page (container = shell, content = page); `useClosedList` / `entryPeek` = hover peek of the
   current page's entry while closed, native events (the portal breaks React's synthetic hover). Shared width handle
@@ -49,6 +52,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   source with icon + unread or total), day groups, `FeedItem roomy` (round level icon, 3-line clamp + Show more),
   header All / Unread + Mark all read (scoped to the source) + settings; state in `?source=`, `?pending=1`,
   `?unread=1`. `PageList entry` prop: the hover peek of a closed second bar binds to another sidebar entry (Home).
+
+## 2.0.0-alpha.133 - 2026-11-09
+
+- Released from `main` ("Urgent fixes" path; a132 is Romain's on `beta`). Permission mode `ask` (approval MCP for
+  sessions, `allowed_tools` in `.maxxing.json`), runner in stream-json input (`on_steer` = control_request
+  interrupt + injected message, fallback = kill; `MAXXING_STREAM_INPUT=0`), agent chat parity (`within` param on
+  files raw/preview/thumb/stat, `/media-roots`), Feedback `image` ({mime, data base64 <= 1 MB, width, height},
+  `feedback.image()`, bodylimit 2 MB on POST /api/settings/feedback; cloud: `lead_images`, 100 a day, 6 months),
+  plus the Radar commits since a131.
 
 ## 2.0.0-alpha.132 - 2026-11-08
 

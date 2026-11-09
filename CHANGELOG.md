@@ -3,6 +3,52 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.134 - 2026-11-09
+
+This version also brings 2.0.0-alpha.129 to 132 (below), released until now only to testers.
+
+Added:
+- **Second bar** (computer): Sessions, Agents, Team, Tasks, Infra, Files and E-mail show their list in a full-height
+  bar right next to the sidebar. One button opens or closes it for every page; closed, rest the mouse on the page's
+  entry in the sidebar to show it over the page. Drag its edge to change its width. A new browser starts with the sidebar
+  unfolded.
+- **Page lists on a phone or a tablet**: ☰ at the top left opens the list of the page you are on, the same as the
+  second bar (your sessions on Sessions; in the installed app, a swipe from the left edge too). It replaces the
+  chip rows of Tasks and Infra and the folders sheet and mailbox picker of E-mail; on a phone, Agents opens on the
+  Office and Team on the first chat. Pages without a list have no ☰.
+- **Search (Ctrl+K)**: chips above the results narrow them to one type (sessions, agents, tasks, files, memory,
+  settings, docs, commands) with the number found for each; Tab goes from one to the next. All shows a few lines of
+  each type and **See the N…** opens the rest.
+- **Team bubbles** (computer): Team no longer opens in a panel on the right but in chat bubbles at the bottom
+  right of every page, Messenger style: the Team bubble opens the list, a chat opens in a small window docked at
+  the bottom (up to three side by side), **Reduce** turns it into a round bubble with its unread count, and a new
+  message brings it up; **Open in Team** opens the chat on the Team page. The × of the Team bubble hides them all;
+  Settings -> Features, under Team, turns them off (Team then opens its page, as before).
+- The bottom of the sidebar shows your Claude plan usage in a ring next to the server's CPU, memory and disk; the
+  logo builds itself while the interface starts.
+- **E-mail**: drag the right edge of the message list to change its width (kept in this browser, double-click for
+  the default).
+
+Changed:
+- **Lighter page headers**: the unread notifications count shows on **Home** in the sidebar (and on the Home tile
+  of the ⊞ menu on a phone). Agents: **New group** and **New agent** at the top
+  right of the Office. Tasks: **Filters** (with chips for the active filters) and **New task** (quick add, key `N`)
+  at the top right. The search fields of the session tree, the agents list and Tasks are gone: Ctrl/⌘+K finds sessions,
+  agents, groups and tasks.
+- **Notifications page**: sources in its list (All, To handle, then each source with its unread count),
+  notifications grouped by day in roomier rows folded to three lines (Show more), All / Unread and Mark all as read
+  at the top right; the view is kept in the address. With the second bar closed, rest the mouse on Home for the list.
+- Sessions tabs: the session you switch to slides in from its tab's side.
+- The emoji picker finds emoji by their English name too, accents ignored; Ctrl/⌘+K finds settings by French words.
+- Dependency alerts point to Settings -> Updates; drafts about Harness open in a topic that exists.
+
+Fixed:
+- Profile photos: uploads and removals no longer step on each other, Team keeps photos only of people still
+  known, and photo changes reach group members.
+- The customized interface stays served while its sources are edited, until a new build replaces it; an update
+  never fails because of the interface build.
+- Extension pages built with the kit are centred like the app's own pages.
+
 ## 2.0.0-alpha.133 - 2026-11-09
 
 Added:
@@ -14,30 +60,8 @@ Added:
   screen you select (or the whole screen). With **Hide my data** checked (the default), presentation mode is on
   while it is taken, so names, numbers and messages come out as dots. You see it before sending; it goes only with
   your message.
-- **Second bar** (computer): Sessions, Agents, Team, Tasks, Infra, Files and E-mail show their list in a full-height
-  bar right next to the sidebar. One button opens or closes it for every page; closed, rest the mouse on the page's
-  entry in the sidebar to show it over the page. Drag its edge to change its width. The lists that unfolded inside
-  the sidebar on hover are gone; a new browser starts with the sidebar unfolded.
-- **Page lists on a phone or a tablet**: ☰ at the top left opens the list of the page you are on, the same as the
-  second bar (your sessions on Sessions; in the installed app, a swipe from the left edge too). It replaces the
-  chip rows of Tasks and Infra and the folders sheet and mailbox picker of E-mail; on a phone, Agents opens on the
-  Office and Team on the first chat. Pages without a list have no ☰.
-- **Search (Ctrl+K)**: chips above the results narrow them to one type (sessions, agents, tasks, files, memory,
-  settings, docs, commands) with the number found for each; Tab goes from one to the next. All shows a few lines of
-  each type and **See the N…** opens the rest.
-- **E-mail**: drag the right edge of the message list to change its width (kept in this browser, double-click for
-  the default).
 
 Changed:
-- **Lighter page headers**: the unread notifications count moves from the bell at the top of the sidebar to
-  **Home** (and to the Home tile of the ⊞ menu on a phone). Agents: **New group** and **New agent** at the top
-  right of the Office. Tasks: **Filters** (with chips for the active filters) and **New task** (quick add, key `N`)
-  at the top right. Team: **Open in Team** on a chat bubble; the Team bubbles switch moves to Settings -> Features,
-  under Team. The search fields of the session tree, the agents list and Tasks are gone: Ctrl/⌘+K finds sessions,
-  agents, groups and tasks.
-- **Notifications page**: sources in its list (All, To handle, then each source with its unread count),
-  notifications grouped by day in roomier rows folded to three lines (Show more), All / Unread and Mark all as read
-  at the top right; the view is kept in the address. With the second bar closed, rest the mouse on Home for the list.
 - **Steer no longer stops background work**: sending a new message with Steer interrupts the current answer only;
   background commands and sub-agents keep running.
 - **Agents and groups**: the message box works like a session's (paste as a file, drafts kept on reload,
