@@ -199,7 +199,9 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         isCol && rank < size - 1 && 'border-b',
         isCol && count > 1 && focused && 'shadow-[inset_0_2px_0_0_var(--primary)]',
         !isCol && 'h-full w-full',
-        place?.hidden && 'hidden',
+        // tabs view, a session not in front: kept laid out under the shown one but skipped (globals.css), so coming back
+        // to it only repaints - no style and layout of its whole thread, nothing re-measured, its scroll kept
+        place?.hidden && 'mx-tab-off',
       )}
     >
       {children}

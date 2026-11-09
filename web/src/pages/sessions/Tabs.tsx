@@ -9,6 +9,7 @@ import type { Session } from '@/lib/types'
 import { Button, Sensitive, StatusDot, Tooltip } from '@/components/ui'
 import { useSessionsUI, type Col } from './store'
 import { topicLabel } from './util'
+import { useTabIndicator } from './tabMotion'
 
 /** Shown first by "Next waiting": a session that finished and was not read, or stopped on an error. */
 const waits = (s: Session | undefined) => !!s && s.state !== 'running' && (s.unread || s.state === 'error')
@@ -51,6 +52,8 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
   const focused = useSessionsUI((s) => s.focused)
   const byId = React.useMemo(() => new Map((sessions || []).map((s) => [s.id, s])), [sessions])
   const bar = React.useRef<HTMLDivElement>(null)
+  const line = React.useRef<HTMLSpanElement>(null)
+  useTabIndicator(bar, line, [focused, cols.map((c) => c.key).join(' ')])
   // the chip on screen stays visible in the bar
   React.useEffect(() => {
     bar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
@@ -68,7 +71,12 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
   if (!cols.length) return null
   return (
     <div className={cn('flex min-w-0 shrink-0 items-center gap-1 border-b bg-sidebar/40 px-2 py-1.5', className)} data-testid="tabs-bar">
-      <div ref={bar} role="tablist" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+      <div ref={bar} role="tablist" className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+        <span
+          ref={line}
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-[100px] origin-left bg-primary opacity-0 transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        />
         {cols.map((c) => {
           const s = c.kind === 'session' ? byId.get(c.id) : undefined
           const on = c.key === focused

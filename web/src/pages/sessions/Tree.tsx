@@ -4,6 +4,7 @@
 // labelled project › topic); optional Favorites / Recent blocks on top. The header is the same on a computer and
 // on a phone: filter field, All / Running / Unread chips, one view menu holding every display choice.
 import * as React from 'react'
+import { warmProps } from './hoverWarm'
 import { useShallow } from 'zustand/react/shallow'
 import { Link, useNavigate } from 'react-router'
 import {
@@ -1061,7 +1062,7 @@ const SessionRow = React.memo(function SessionRow({
       }}
     >
       {open && <span aria-hidden className="absolute top-2 bottom-2 left-1 w-0.5 rounded-full bg-primary/70" />}
-      <button type="button" onClick={() => onOpen(s)} className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-session-row={s.id}>
+      <button type="button" onClick={() => onOpen(s)} {...(!open && warmProps(s.id))} className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-session-row={s.id}>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           {s.state === 'running' ? (
             <StatusDot tone="running" pulse label={t('sessions.state.running')} />

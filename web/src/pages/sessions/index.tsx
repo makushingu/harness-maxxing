@@ -11,6 +11,7 @@ import { Columns2, FolderOpen, Hash, Keyboard, LayoutGrid, MessageSquarePlus, Me
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
+import { useTabSwitchMotion } from './tabMotion'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
 import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
@@ -356,6 +357,7 @@ function Workspace() {
     return () => document.removeEventListener('wheel', onWheel)
   }, [mobile])
   const colEl = (k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null
+  const colElCb = React.useCallback((k: string) => strip.current?.querySelector<HTMLElement>(`:scope > [data-col="${CSS.escape(k)}"]`) ?? null, [])
   // A place equal to the previous one is the same object: the columns are memoized (ColumnFor), and a focus change
   // or a new row split would otherwise re-render all of them.
   const lastPlaces = React.useRef(new Map<string, Place>())
@@ -435,6 +437,9 @@ function Workspace() {
   templateNow.current = template
   const stacked = cols.some((c) => c.below)
 
+  // tabs view: the session that comes on screen slides in from the side of its tab
+  const tabShown = tabs ? [...places.places].find(([, pl]) => !pl.hidden)?.[0] : undefined
+  useTabSwitchMotion(tabs, tabShown, cols.map((c) => c.key), colElCb)
   React.useLayoutEffect(() => {
     for (const p of shownCols) {
       const el = colEl(p.key)
