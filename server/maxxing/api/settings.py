@@ -164,6 +164,12 @@ def get_profile_photo():
         "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
 
 
+def _save_photo(data: bytes) -> None:
+    with profile_photo.own_lock:               # two uploads at once: the file kept is the version announced
+        version = profile_photo.save(data)
+        config.update_config(profile={"photo": version})
+
+
 @router.put("/profile/photo")
 async def put_profile_photo(request: Request):
     """The photo's bytes (JPEG, PNG or WebP, at most 512 KB; the UI sends a 256 px square)."""
@@ -173,10 +179,9 @@ async def put_profile_photo(request: Request):
         if len(data) > profile_photo.PHOTO_MAX:
             raise _err("too_large", "The photo must be 512 KB at most")
     try:
-        version = await asyncio.to_thread(profile_photo.save, bytes(data))
+        await asyncio.to_thread(_save_photo, bytes(data))
     except ValueError as e:
         raise _err(str(e), "A JPEG, PNG or WebP image of 512 KB at most") from None
-    config.update_config(profile={"photo": version})
     await asyncio.to_thread(_profile_changed)
     return profile()
 

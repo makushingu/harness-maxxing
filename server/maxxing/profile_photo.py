@@ -25,6 +25,7 @@ _busy: set[str] = set()                     # fetches in flight: a second reques
 _busy_lock = threading.Lock()
 _failed: dict[str, float] = {}              # "<pid>-<version>" -> when a fetch failed (asked again after RETRY_S)
 RETRY_S = 600
+own_lock = threading.Lock()                 # the own photo and its version in config.json change together
 
 
 def sniff(data: bytes) -> str | None:
@@ -50,10 +51,15 @@ def save(data: bytes) -> str:
         raise ValueError("not_an_image")
     p = own_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name("photo.part")
-    tmp.write_bytes(data)
-    tmp.chmod(0o644)
-    tmp.replace(p)
+    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".photo-", suffix=".part")   # one per save: never shared
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, p)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     return hashlib.sha256(data).hexdigest()[:16]
 
 

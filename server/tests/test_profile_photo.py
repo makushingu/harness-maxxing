@@ -150,3 +150,26 @@ def test_a_slow_or_doubled_photo_fetch_never_holds_the_server(client, monkeypatc
     monkeypatch.setattr(teampeer, "PHOTO_DEADLINE", -1)     # past the deadline for the whole photo: dropped
     assert client.get(url).status_code == 404 and len(http.calls) == 1
     assert not (config.STATE / "team" / "photos").exists() or not any((config.STATE / "team" / "photos").iterdir())
+
+
+def test_two_photos_sent_at_once_keep_the_file_and_its_version_together(client):
+    import threading
+    pngs = [PNG + bytes([i]) * 8 for i in range(2)]
+    errors = []
+
+    def send(data):
+        for _ in range(30):
+            try:
+                if _put(client, data).status_code != 200:
+                    errors.append("status")
+            except Exception as e:                           # noqa: BLE001 - any failure is the bug
+                errors.append(repr(e))
+    threads = [threading.Thread(target=send, args=(d,)) for d in pngs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    v = client.get("/api/settings/profile").json()["photo"]
+    assert hashlib.sha256(profile_photo.own_path().read_bytes()).hexdigest()[:16] == v
+    assert not list(profile_photo.own_path().parent.glob("*.part"))
