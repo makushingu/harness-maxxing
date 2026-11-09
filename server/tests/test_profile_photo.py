@@ -173,3 +173,24 @@ def test_two_photos_sent_at_once_keep_the_file_and_its_version_together(client):
     v = client.get("/api/settings/profile").json()["photo"]
     assert hashlib.sha256(profile_photo.own_path().read_bytes()).hexdigest()[:16] == v
     assert not list(profile_photo.own_path().parent.glob("*.part"))
+
+
+def test_a_photo_removed_during_an_upload_never_leaves_a_version_without_its_file(client, monkeypatch):
+    import threading
+    import time
+    assert _put(client, PNG).status_code == 200
+    real, saving = profile_photo.save, threading.Event()
+
+    def slow(data):
+        v = real(data)
+        saving.set()
+        time.sleep(0.3)                                      # the file is there, the version not yet written
+        return v
+    monkeypatch.setattr(profile_photo, "save", slow)
+    t = threading.Thread(target=_put, args=(client, JPEG))
+    t.start()
+    assert saving.wait(5)
+    client.delete("/api/settings/profile/photo")
+    t.join()
+    p = client.get("/api/settings/profile").json()
+    assert not p["photo_url"] or client.get(p["photo_url"]).status_code == 200

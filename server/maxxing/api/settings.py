@@ -188,9 +188,12 @@ async def put_profile_photo(request: Request):
 
 @router.delete("/profile/photo")
 def delete_profile_photo():
-    if profile()["photo"]:
-        profile_photo.remove()
-        config.update_config(profile={"photo": ""})
+    with profile_photo.own_lock:               # never between the save and the version of an upload
+        had = bool(profile()["photo"])
+        if had:
+            profile_photo.remove()
+            config.update_config(profile={"photo": ""})
+    if had:
         _profile_changed()
     return profile()
 
