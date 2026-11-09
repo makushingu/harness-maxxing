@@ -194,3 +194,17 @@ def test_a_photo_removed_during_an_upload_never_leaves_a_version_without_its_fil
     t.join()
     p = client.get("/api/settings/profile").json()
     assert not p["photo_url"] or client.get(p["photo_url"]).status_code == 200
+
+
+def test_failed_photo_fetches_are_not_remembered_for_strangers_nor_forever(client, monkeypatch):
+    import time
+    v = hashlib.sha256(PNG).hexdigest()[:16]
+    _contact(monkeypatch, photo=v)
+    monkeypatch.setattr(teampeer, "_http", lambda: _Http(JPEG))      # bytes that do not match the version
+    monkeypatch.setattr(profile_photo, "_failed", {})
+    for i in range(50):                                              # ids and versions nobody announced
+        assert client.get(f"/api/team/people/p_{i:06x}/photo?v={i:016x}").status_code == 404
+    assert profile_photo._failed == {}
+    profile_photo._failed["p_000001-" + "1" * 16] = time.time() - profile_photo.RETRY_S - 1
+    assert client.get(f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}").status_code == 404
+    assert list(profile_photo._failed) == [f"{teampeer.pid(LEA)}-{v}"]   # the stale entry purged

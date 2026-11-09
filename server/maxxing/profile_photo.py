@@ -78,6 +78,13 @@ def own() -> tuple[Path, str] | None:
     return (p, mime) if mime else None
 
 
+def _remember_failure(key: str) -> None:
+    now = time.time()
+    for k in [k for k, at in _failed.items() if now - at >= RETRY_S]:   # asked again anyway: forgotten
+        _failed.pop(k, None)
+    _failed[key] = now
+
+
 def _cache_dir() -> Path:
     return config.STATE / "team" / "photos"
 
@@ -99,9 +106,11 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
             _busy.add(key)
         try:
             from . import teampeer
+            if not teampeer.announces_photo(pid, version):
+                return None                     # unknown person or version: nothing fetched, nothing remembered
             data = teampeer.fetch_photo(pid, version)
             if not data or not sniff(data) or hashlib.sha256(data).hexdigest()[:16] != version:
-                _failed[key] = time.time()
+                _remember_failure(key)
                 return None
             d.mkdir(parents=True, exist_ok=True)
             for old in d.glob(f"{pid}-*"):      # one version per person
