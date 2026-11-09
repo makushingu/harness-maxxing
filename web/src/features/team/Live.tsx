@@ -36,19 +36,21 @@ function useMessageNotifier() {
     if (!team) return
     const before = prev.current
     prev.current = new Map(team.chats.map((c) => [c.id, c.last?.at || 0]))
-    if (!before || !enabled) return
+    if (!before) return
     const fresh = team.chats.filter(
       (c) => c.last && c.unread > 0 && !c.muted && c.last.author !== team.me && c.last.kind !== 'info' && c.last.at > (before.get(c.id) ?? Infinity),
     )
     if (!fresh.length) return
     const ui = useTeamUI.getState()
+    // The chat's bubble comes up even with notifications off (it is the unread mark of the bubbles).
+    const bubbles = !isCompact() && !location.pathname.startsWith('/team')
+    if (bubbles) for (const c of fresh) ui.bump(c.id)
+    if (!enabled) return
     const away = document.hidden || !document.hasFocus()
     const onScreen = (id: string) =>
       (location.pathname.startsWith('/team') && new URLSearchParams(location.search).get('chat') === id) || (ui.docked.includes(id) && !location.pathname.startsWith('/team'))
-    const bubbles = !isCompact() && !location.pathname.startsWith('/team')
     let rang = false
     for (const c of fresh) {
-      if (bubbles) ui.bump(c.id)
       if (!away && onScreen(c.id)) continue
       const title = chatTitle(team, c)
       const who = c.kind === 'group' ? `${personOf(team, c.last!.author).name.split(' ')[0]} : ` : ''

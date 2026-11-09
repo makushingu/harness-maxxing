@@ -10,7 +10,7 @@ export function Toaster() {
     <Sonner
       theme={theme === 'system' ? resolveTheme('system') : theme}
       position={mobile ? 'top-center' : 'bottom-right'}
-      offset={mobile ? { top: 'calc(var(--safe-top) + 8px)' } : 16}
+      offset={mobile ? { top: 'calc(var(--safe-top) + 8px)' } : { bottom: 16, right: 'var(--mx-bubbles-w, 16px)' }}
       closeButton
       toastOptions={{
         classNames: {

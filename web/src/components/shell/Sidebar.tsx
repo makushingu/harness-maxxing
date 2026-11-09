@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { NavLink } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
 import { Bell, MessageCircle, PanelLeftClose, Pin, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
@@ -41,11 +41,12 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   const { data } = useTeam()
   const open = useTeamUI((s) => s.list)
   const setOpen = useTeamUI((s) => s.setList)
+  const onTeam = useLocation().pathname.startsWith('/team')
   const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return (
     <span className="flex items-center gap-1">
-      <span
+      {!onTeam && <span
         role="button"
         tabIndex={-1}
         title={open ? t('nav.teamPanelClose') : t('nav.teamPanel')}
@@ -60,7 +61,7 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
         )}
       >
         <MessageCircle className="size-3.5" />
-      </span>
+      </span>}
       <CountBadge count={unread} />
     </span>
   )

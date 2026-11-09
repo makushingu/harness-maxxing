@@ -29,6 +29,8 @@ type TeamUI = {
   close: (id: string) => void
   /** a new message: its chat shows up as a head (unless already on screen) */
   bump: (id: string) => void
+  /** drop the chats that are gone (deleted, group left) */
+  prune: (alive: Set<string>) => void
   setTab: (tab: TeamTab) => void
 }
 
@@ -67,6 +69,14 @@ export const useTeamUI = create<TeamUI>((set, get) => ({
     const heads = [id, ...s.heads.filter((x) => x !== id)].slice(0, MAX_HEADS)
     save(s.docked, heads)
     set({ heads })
+  },
+  prune: (alive) => {
+    const s = get()
+    const docked = s.docked.filter((x) => alive.has(x))
+    const heads = s.heads.filter((x) => alive.has(x))
+    if (docked.length === s.docked.length && heads.length === s.heads.length) return
+    save(docked, heads)
+    set({ docked, heads })
   },
   setTab: (tab) => {
     ls.set('mx-team-tab', tab)
