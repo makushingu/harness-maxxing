@@ -315,3 +315,17 @@ def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
         time.sleep(0.1)
     else:
         raise AssertionError("grandchild still alive")
+
+
+def test_rebuilding_the_same_sources_keeps_the_previous_build(ui):
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    first = webbuild._stamp(webbuild.build_dir())["key"]
+    _edit(clone, "<p>mine, edited again</p>\n")
+    assert webbuild.build()["ok"]
+    assert webbuild._stamp(webbuild._prev_dir())["key"] == first
+    assert webbuild.build()["ok"]                                 # nothing changed: a second build of the same sources
+    assert webbuild._stamp(webbuild._prev_dir())["key"] == first  # the rollback still finds the first one
+    _edit(clone)
+    assert _served() == "<p>mine</p>\n"

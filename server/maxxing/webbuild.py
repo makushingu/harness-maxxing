@@ -278,8 +278,11 @@ def _build(code: Path | None, out: Path | None, share_from: Path | None, progres
                         old.rename(final)               # the current build stays served, the previous one kept
                     raise
                 if old.exists():
-                    shutil.rmtree(prev, ignore_errors=True)
-                    old.rename(prev)
+                    if key is not None and _stamp(old).get("key") == key:
+                        shutil.rmtree(old, ignore_errors=True)   # the same sources rebuilt: the previous one stays
+                    else:
+                        shutil.rmtree(prev, ignore_errors=True)
+                        old.rename(prev)
                 forget()
             else:
                 shutil.rmtree(final, ignore_errors=True)
