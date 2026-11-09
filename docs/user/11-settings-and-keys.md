@@ -62,7 +62,8 @@ soon as a GitHub key is in the vault. An install made before 2.0.0a132 keeps the
 
 Under **Sessions**, indented: **Maxxing mode (beta)** and the **line under the answers** (cost, tokens, duration, model: tick what
 it shows) for everyone, and, saved in this browser only (marked **This browser**): the **Tabs view** (Alt+T) and
-the **HUD**. The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
+the **HUD**. Under **Team**, while Team is on: **Team bubbles** (the chat bubbles at the bottom right of every page,
+saved in this browser). The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
 widget in **Settings -> Usage**, the presentation mode by default in **Settings -> Security**, the Telegram mode in
 **Settings -> Telegram**.
 
@@ -88,19 +89,25 @@ full screen on a phone). Two places: **Install app** in the ⊞ menu on a phone,
 
 Phones and tablets get the **touch layout** (Settings -> Appearance -> Layout changes it per device): no sidebar, no
 bar at the bottom, the conversation fills the screen. Two buttons sit at the top of every screen:
-- **☰** (top left) opens your sessions - see [Sessions](04-sessions.md). Its counter shows the unread answers.
+- **☰** (top left) opens the list of the page you are on, the one the second bar shows on a computer: your sessions
+  on Sessions (its counter shows the unread answers - see [Sessions](04-sessions.md)), the agents, the chats, the
+  task projects, the Infra sections, the folder, the mailboxes and folders, the notification sources. Pages without
+  a list (Home, Git, Settings...) have no ☰.
 - **⊞** (top right) opens everything else, laid out like the sidebar: a search field (the same as ⌘K), every page
-  in your sidebar order (and Notifications), the extension pages apart, Feedback and Settings, then the status
+  in your sidebar order (the unread notifications count on the Home tile), the extension pages apart, Feedback and Settings, then the status
   card - server health (tap it for the issues), CPU / RAM / disk (opens Settings -> System), your Claude plan
   (opens Settings -> Usage), presentation mode, the theme, the docs and General settings. A dot on ⊞ means an
   update is waiting or the server needs attention.
 
 On a computer the bottom of the sidebar holds the same status block, with the keyboard shortcuts next to the docs.
+The pages with a list (Sessions, Agents, Team, Tasks, Infra, Files, E-mail, Notifications) show it in a second bar
+next to the sidebar (see [Sessions](04-sessions.md#layout)); the touch layout opens the same list from ☰.
 The guided tour and the interactive tutorial are in **Settings -> General**; **Sign out** is in **Settings ->
 Security**.
 
 Also:
-- In the installed app, **swipe from the left edge** to open the sessions, from the right edge to open the menu;
+- In the installed app, **swipe from the left edge** to open the page's list (the sessions on Sessions), from the
+  right edge to open the menu;
   swipe a drawer back towards its edge to close it.
 - Panels that slide up from the bottom close with a **swipe down** (from their handle, their title, or their
   content when it is scrolled to the top), or a tap on the dimmed area above them.

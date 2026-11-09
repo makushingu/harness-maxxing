@@ -15,15 +15,14 @@
 // button.
 // Agents and their runs never show in Sessions (sessions = where the user works, agents = automatic work).
 import * as React from 'react'
-import { Link, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router'
-import { Building2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Route, Routes, useParams, useSearchParams } from 'react-router'
 import { useT } from '@/i18n'
 import { useCompact } from '@/stores/media'
-import { PageHeader } from '@/components/shell/Page'
 import { PreviewProvider } from '@/pages/sessions/FilePreview'
-import { AgentsList } from './AgentsList'
-import { AgentsEmpty, AgentsOverview } from './AgentsPage'
+import { AgentsList, OfficeLink } from './AgentsList'
+import { AgentHover } from './AgentHover'
+import { PageList } from '@/components/shell/PageList'
+import { AgentsOverview } from './AgentsPage'
 import AgentPage from './AgentPage'
 import { RunView } from './RunView'
 import { CreateAgent, type CreateStart } from './CreateAgent'
@@ -36,7 +35,6 @@ export default function AgentsLayout() {
   const t = useT()
   const on = useAgentsOn()
   const touch = useCompact()
-  const location = useLocation()
   const [params, setParams] = useSearchParams()
   const creating = params.get('new') === '1'
   const setCreating = React.useCallback(
@@ -64,8 +62,6 @@ export default function AgentsLayout() {
   const topicPath = topic ? `projects/${topic.replace('/', '/topics/')}` : undefined
   // "New agent": the sheet asks where (the listed topic if the list is narrowed to one), then With Claude / By hand.
   const newAgent = React.useCallback(() => openWith({}), [openWith])
-  const home = /^\/agents\/?$/.test(location.pathname)
-  const office = home || /^\/agents\/office\/?$/.test(location.pathname)
 
   if (on === false) return <AgentsOff />
 
@@ -82,51 +78,21 @@ export default function AgentsLayout() {
       </Routes>
     </PreviewProvider>
   )
-  // The way back to the Office (every agent at its desk), whichever agent or run is open: a nav entry of its own,
-  // set apart from the search and New agent above it.
-  const officeLink = (
-    <div className="shrink-0 border-y px-2 py-1.5">
-      <Link
-        to={touch ? '/agents/office' : '/agents'}
-        aria-current={office && !touch ? 'page' : undefined}
-        className={cn(
-          'flex items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-          touch ? 'h-11' : 'h-9',
-          office && !touch && 'bg-accent text-foreground',
-        )}
-        data-testid="agents-office"
-      >
-        <Building2 className="size-4" />
-        {t('agents.side.office')}
-      </Link>
-    </div>
-  )
   const create = <CreateAgent open={creating} onOpenChange={setCreating} start={start} topicPath={topicPath} />
 
-  // Touch: one pane at a time (the list, or the agent / run full screen).
-  if (touch)
-    return (
-      <>
-        {home ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <PageHeader title={t('agents.title')} />
-            <AgentsList onNew={newAgent} nav={officeLink} empty={<AgentsEmpty onStart={openWith} />} className="flex-1" />
-          </div>
-        ) : (
-          detail
-        )}
-        {create}
-      </>
-    )
-
+  // The list in the second-level sidebar (components/shell/PageList.tsx; touch: the left drawer), the agent or the
+  // Office in the page.
   return (
     <div className="flex min-h-0 flex-1" data-testid="agents-layout">
-      <aside className="flex w-72 shrink-0 flex-col border-r bg-sidebar/40 xl:w-80" aria-label={t('agents.title')}>
-        <div className="flex min-h-[var(--header-h)] shrink-0 items-center border-b px-4">
-          <h1 className="text-base font-semibold tracking-tight">{t('agents.title')}</h1>
-        </div>
-        <AgentsList onNew={newAgent} nav={officeLink} className="flex-1" />
-      </aside>
+      <PageList id="agents" label={t('agents.title')}>
+        {touch ? (
+          <AgentsList nav={<OfficeLink />} className="min-h-0 flex-1" />
+        ) : (
+          <AgentHover className="min-h-0 flex-1">
+            <AgentsList nav={<OfficeLink />} className="flex-1" />
+          </AgentHover>
+        )}
+      </PageList>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{detail}</div>
       {create}
     </div>

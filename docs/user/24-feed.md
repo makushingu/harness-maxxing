@@ -8,9 +8,17 @@ important e-mails, any script's result - in one place instead of chat messages.
 
 ## Where you see it
 
-- **Dashboard**: a panel next to the widgets (wide screens). The bell in the header shows the unread
-  count and hides / shows the panel; on a phone it opens the list.
-- **See all** (page `/feed`): the last 30 days, filters per source, *Unread only*, *Mark all as read*.
+- **Sidebar**: the unread count sits on **Home** (a dot when the sidebar is folded); on a phone, on the Home
+  tile of the **⊞** menu. On a computer with the second bar closed, rest the mouse on **Home** to show the list of
+  sources.
+- **Dashboard**: a panel next to the widgets (wide screens). The bell in the dashboard's header shows the unread
+  count and hides / shows the panel; on a narrow screen it opens the list.
+- **See all** (page `/feed`): the last 30 days, grouped by day (*Today*, *Yesterday*, then the date). Its list (the
+  second bar on a computer, ☰ on a phone) holds **All** with the unread count, **To handle** when alerts are
+  waiting, then each source with its icon and its unread count (or its total when all is read). Each row shows a
+  round level icon and up to three lines of text (**Show more** / **Show less**). At the top right: **All /
+  Unread**, **Mark all as read** (for the source shown) and the settings. The choice is kept in the address
+  (`/feed?source=<source>`, `?pending=1`, `?unread=1`), so a link opens the same view.
 - **Telegram** (optional): the bot posts in the thread **Notifications** by itself - no Claude, instant.
   Under each message, **Ask Harness** opens a session about it, and **Open** follows its link.
 
@@ -31,7 +39,7 @@ Some events wait for you and carry buttons:
 Once handled, or when the cause goes away (the request was answered elsewhere, the problem is fixed, the agent
 runs again), the event says how it ended (*Allowed*, *Denied*, *No answer in time*, *Fixed*...) and its buttons go.
 Clicking twice, or on the web and then on Telegram, gives the same answer. Reading an alert on the web (Seen, Open,
-**Mark all read**) also removes its Seen button on Telegram. The **To handle** filter of the `/feed`
+**Mark all read**) also removes its Seen button on Telegram. The **To handle** entry of the `/feed`
 page (and the *to handle* count of the dashboard panel) shows only the alerts still waiting.
 
 ## What arrives by itself

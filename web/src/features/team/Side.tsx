@@ -30,12 +30,12 @@ export function TeamSide({ team, active, onOpen, compact }: { team: TeamState | 
   }
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className={cn('shrink-0', compact ? 'px-2 pt-2' : 'px-3 pt-3')}>
+      <div className={cn('flex shrink-0 items-center', compact ? 'px-2 pt-2' : 'px-3 pt-3')}>
         <Segmented
           size="sm"
           value={tab}
           onChange={setTab}
-          className="w-full [&>button]:flex-1"
+          className="min-w-0 flex-1 [&>button]:flex-1"
           options={[
             { value: 'chats', label: <>{t('team.tab.chats')} <Count n={unread} tone="primary" /></>, icon: <MessageCircle /> },
             { value: 'friends', label: <>{t('team.tab.friends')} <Count n={requests} tone="primary" /></>, icon: <Users /> },

@@ -16,10 +16,12 @@ feed and webhook events do not: schedule runs are skipped (the run says so), and
 skipped when you turn it back on (each agent says how many in its thread).
 
 **Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
-itself lives. Agents' runs never show in Sessions: the Agents page has its own column of every agent (its face, its
-topic, a dot for running / waiting for you / to read / failed / off), grouped by project. From top to bottom: a
-search with a small **+** (New agent) beside it, the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
-*Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). In the Sessions list, a topic's agents show **under its row**: their
+itself lives. Agents' runs never show in Sessions: the Agents page has its own list of every agent (its face, its
+topic, a dot for running / waiting for you / to read / failed / off), grouped by project, in the second bar next to
+the sidebar on a computer (see [Sessions](04-sessions.md#layout)). From top to bottom: the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
+*Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). **New group** and **New agent**
+sit at the top right of the Office; to find an agent or a group, use
+**Ctrl/⌘+K**. In the Sessions list, a topic's agents show **under its row**: their
 face, their name and a dot when one works, waits for you, has something to read or failed (the ones that need you
 first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
 **Agents of this topic** in the topic's menu.
@@ -49,7 +51,7 @@ The **...** next to a project's name (on its sign in Space) moves it up or down 
 outfit of its new agents; use it on a touch screen, where dragging is not available. The order and colors are saved
 on the server: every browser and phone shows the same.
 
-On a phone, the Agents page is the list; **Office** opens the office full screen.
+On a phone, the Agents page shows the Office; **☰** at the top left opens the list of agents.
 
 **Several agents in one conversation**: a [group](agent-groups) puts 2 to 6 agents of a project in one chat where you
 write and they answer in turn, handing work to each other with `@name` (a writer, a reviewer, a publisher...).

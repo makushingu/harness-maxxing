@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useCompact } from '@/stores/media'
-import { TouchAppButton, TouchSessionsButton } from './TouchNav'
+import { TouchAppButton, TouchListButton } from './TouchNav'
 
 export function useDocumentTitle(title?: string) {
   React.useEffect(() => {
@@ -40,7 +40,7 @@ export function PageHeader({
         className,
       )}
     >
-      {touch && <TouchSessionsButton />}
+      {touch && <TouchListButton />}
       {leading}
       <div className="flex min-w-0 flex-1 flex-col justify-center py-2">
         <h1 className="truncate text-[15px] leading-tight font-semibold tracking-tight md:text-base">{title}</h1>

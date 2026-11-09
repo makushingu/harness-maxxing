@@ -1,20 +1,21 @@
 // The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name, its
 // topic, a status dot and its unread count, always grouped by project (order and colour of layout.tsx: drag a project
-// header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: the search field,
-// a small "+" (New agent) and "New group" beside it, then `nav` (the Office entry of AgentsLayout), then the state filter (All /
-// waiting for you / to read / running / active / off, with counts; empty states hidden) and the ?topic= chip.
-// The groups of a project (agent_rooms: the owner talks to several of its agents) come first in its section: the search
-// finds them by name, the chips To read / Running keep the unread / busy ones, the other chips hide them.
-// On a phone it is the whole page at /agents; an agent then opens full screen.
+// header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: `nav` (OfficeLink),
+// then the state filter (All / waiting for you / to read / running / active / off, with counts; empty states hidden)
+// and the ?topic= chip. No search field (Ctrl K finds agents and groups); New agent / New group sit at the top right
+// of the Office (AgentsPage.tsx), and of the list's own header on a phone (AgentsLayout.tsx).
+// The groups of a project (agent_rooms: the owner talks to several of its agents) come first in its section: the
+// chips To read / Running keep the unread / busy ones, the other chips hide them.
+// On a phone it is the whole page at /agents (an agent then opens full screen); on a desktop, the page's left column.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
-import { Bot, Plus, Search, TriangleAlert, UsersRound, X } from 'lucide-react'
+import { Bot, Building2, TriangleAlert, UsersRound, X } from 'lucide-react'
 import { useT, type TFn } from '@/i18n'
-import { agentRoute, groupRoute, newGroupRoute, useAgentGroups, useAgents, useWorkspace } from '@/lib/queries'
+import { agentRoute, groupRoute, useAgentGroups, useAgents, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentGroup } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Button, CountBadge, EmptyState, Input, Sensitive, Skeleton, StatusDot, useMask, type DotTone } from '@/components/ui'
+import { Button, CountBadge, EmptyState, Sensitive, Skeleton, StatusDot, useMask, type DotTone } from '@/components/ui'
 import { useCompact } from '@/stores/media'
 import { AgentAvatarIcon, OUTFIT } from './Avatar'
 import { DropBar, ProjectMenu, useAgentsLayout, useReorder, type AgentsLayoutApi } from './layout'
@@ -46,7 +47,33 @@ const byActivity = (a: Agent, b: Agent) => (b.last_run?.at || b.created || 0) - 
 
 /** `empty`: shown instead of the short "No agent yet" when there is no agent at all (the touch layout, where the list
  *  is the whole page). `nav`: entries between "New agent" and the filter (the Office). */
-export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void; empty?: React.ReactNode; nav?: React.ReactNode; className?: string }) {
+/** The way back to the Office (every agent at its desk), whichever agent or run is open: a nav entry of its own, set
+ *  apart from the search and New agent above it. */
+export function OfficeLink() {
+  const t = useT()
+  const touch = useCompact()
+  const { pathname } = useLocation()
+  const office = !touch && /^\/agents(\/office)?\/?$/.test(pathname)
+  return (
+    <div className="shrink-0 border-y px-2 py-1.5">
+      <Link
+        to={touch ? '/agents/office' : '/agents'}
+        aria-current={office ? 'page' : undefined}
+        className={cn(
+          'flex items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+          touch ? 'h-11' : 'h-9',
+          office && 'bg-accent text-foreground',
+        )}
+        data-testid="agents-office"
+      >
+        <Building2 className="size-4" />
+        {t('agents.side.office')}
+      </Link>
+    </div>
+  )
+}
+
+export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode; nav?: React.ReactNode; className?: string }) {
   const t = useT()
   const mask = useMask()
   const touch = useCompact()
@@ -55,19 +82,17 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
   const { data: allGroups } = useAgentGroups()
   const [params, setParams] = useSearchParams()
   const [filter, setFilter] = React.useState<StateFilter | null>(null)
-  const [q, setQ] = React.useState('')
   // ?topic=<project>/<topic>: only the agents of that topic (the link from a topic's menu in Sessions).
-  const topic = params.get('topic') || ''
-  const ql = q.trim().toLowerCase()
+  const onAgents = useLocation().pathname.startsWith('/agents')
+  const topic = (onAgents && params.get('topic')) || ''
 
-  // The topic chip and the search narrow first; the state chips count what is left.
+  // The topic chip narrows first; the state chips count what is left.
   const matching = React.useMemo(() => {
     const all = data?.agents || []
     return all
       .filter((a) => !topic || `${a.project}/${a.topic}` === topic)
-      .filter((a) => !ql || [a.display_name, a.name, a.project, a.topic, a.description].some((x) => (x || '').toLowerCase().includes(ql)))
       .sort(byActivity)
-  }, [data, topic, ql])
+  }, [data, topic])
   const counts = React.useMemo(() => {
     const c = {} as Record<StateFilter, number>
     for (const g of STATE_GROUPS) c[g.id] = matching.filter((a) => g.has(agentState(a))).length
@@ -78,15 +103,14 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
     return g ? matching.filter((a) => g.has(agentState(a))) : matching
   }, [matching, filter])
 
-  // The groups follow the same narrowing: the topic (one of their members is in it), the search, then the chips.
+  // The groups follow the same narrowing: the topic (one of their members is in it), then the chips.
   const rooms = React.useMemo(() => {
     const g = filter === null || filter === 'unread' || filter === 'running' ? allGroups || [] : []
     return g
       .filter((x) => !topic || x.members.some((m) => m.path.startsWith(`projects/${topic.replace('/', '/topics/')}/`)))
-      .filter((x) => !ql || [x.display_name, x.name, x.project, x.goal].some((v) => (v || '').toLowerCase().includes(ql)))
       .filter((x) => (filter === 'unread' ? x.unread > 0 : filter === 'running' ? x.busy : true))
       .sort((a, b) => (b.last_at || b.created) - (a.last_at || a.created))
-  }, [allGroups, filter, topic, ql])
+  }, [allGroups, filter, topic])
 
   const layout = useAgentsLayout()
   const groups = React.useMemo(() => {
@@ -106,49 +130,9 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
   const shownProjects = groups.map((g) => g.id)
 
   return (
-    // Short screen (a phone sideways): the search, the Office entry and the chips scroll away with the list, which
+    // Short screen (a phone sideways): the Office entry and the chips scroll away with the list, which
     // would keep about two rows otherwise.
     <div className={cn('flex min-h-0 flex-col [@media(max-height:500px)]:overflow-y-auto', className)} data-testid="agents-list">
-      <div className={cn('grid shrink-0 gap-2 px-3 pt-3', touch ? 'pb-1' : 'pb-2')}>
-        <div className="flex items-center gap-1.5">
-        <div className="relative min-w-0 flex-1">
-          <Search className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground', touch ? 'left-3 size-[18px]' : 'left-2.5 size-3.5')} />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && (setQ(''), e.currentTarget.blur())}
-            placeholder={t('agents.side.search')}
-            aria-label={t('agents.side.search')}
-            className={cn('border-0 bg-muted dark:bg-muted', touch ? 'h-11 rounded-xl pl-10' : 'h-8 rounded-lg pl-8 text-[13px]')}
-            data-testid="agents-search"
-          />
-        </div>
-        {/* A small "+" next to the search: the Office has the big New agent button at the top right. */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onNew}
-          aria-label={t('agents.side.new')}
-          title={t('agents.side.new')}
-          className={cn('shrink-0 text-muted-foreground hover:text-foreground', touch ? 'size-11 rounded-xl' : 'size-8')}
-          data-testid="agent-new-side"
-        >
-          <Plus className={touch ? 'size-5' : undefined} />
-        </Button>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-sm"
-          className={cn('shrink-0 text-muted-foreground hover:text-foreground', touch ? 'size-11 rounded-xl' : 'size-8')}
-          data-testid="group-new-side"
-          data-tour="group-new"
-        >
-          <Link to={newGroupRoute(topic.split('/')[0] || undefined)} aria-label={t('groups.new')} title={t('groups.new')}>
-            <UsersRound className={touch ? 'size-5' : undefined} />
-          </Link>
-        </Button>
-        </div>
-      </div>
       {nav}
       <div className="grid shrink-0 gap-2 px-3 pt-2 pb-1.5">
         <div className={cn('flex min-w-0 gap-1.5', touch ? '-my-1 overflow-x-auto py-1' : 'flex-wrap')} role="group" aria-label={t('agents.side.filter')} data-hscroll-ok data-testid="agents-filter">
@@ -201,7 +185,7 @@ export function AgentsList({ onNew, empty, nav, className }: { onNew: () => void
         ) : !groups.length && empty && !data?.agents.length ? (
           empty
         ) : !groups.length ? (
-          <EmptyState compact icon={Bot} title={ql || topic || filter ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
+          <EmptyState compact icon={Bot} title={topic || filter ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
         ) : (
           groups.map((g, i) => (
             <Group
@@ -284,7 +268,7 @@ function GroupRow({ group: g }: { group: AgentGroup }) {
   return (
     <Link
       role="listitem"
-      to={{ pathname: to, search: location.search }}
+      to={{ pathname: to, search: location.pathname.startsWith('/agents') ? location.search : '' }}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
@@ -357,7 +341,7 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
   return (
     <Link
       role="listitem"
-      to={{ pathname: to, search: location.search }}
+      to={{ pathname: to, search: location.pathname.startsWith('/agents') ? location.search : '' }}
       aria-current={active ? 'page' : undefined}
       {...dnd.props}
       {...ctx.props}
@@ -367,6 +351,7 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
         dnd.dragging && 'opacity-50',
       )}
       data-testid="agents-row"
+      data-rail-agent
       data-state={state}
       data-path={a.path}
     >

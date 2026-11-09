@@ -31,33 +31,39 @@ function Badge({ n }: { n: number }) {
   return <CountBadge count={n} className="pointer-events-none absolute -top-1.5 -right-1.5 bg-popover" />
 }
 
-/** Header buttons: minimize (chat cards), the full Team page (list card), close. */
-function Tools({ onMin, onClose }: { onMin?: () => void; onClose: () => void }) {
+/** Header buttons: minimize + open in the Team page (chat cards), the full Team page (list card), close. */
+function Tools({ onMin, chatId, onClose }: { onMin?: () => void; chatId?: string; onClose: () => void }) {
   const t = useT()
   const navigate = useNavigate()
   return (
     <div className="flex shrink-0 items-center">
-      {onMin ? (
+      {onMin && (
         <Tooltip content={t('team.minimize')}>
           <Button size="icon-sm" variant="ghost" onClick={onMin} aria-label={t('team.minimize')}>
             <Minus />
           </Button>
         </Tooltip>
-      ) : (
-        <Tooltip content={t('team.fullPage')}>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            onClick={() => {
+      )}
+      <Tooltip content={chatId ? t('team.openInPage') : t('team.fullPage')}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          data-testid="bubble-expand"
+          onClick={() => {
+            // the chat leaves its bubble for the Team page (bubbles are not shown there)
+            if (chatId) {
+              useTeamUI.getState().close(chatId)
+              navigate(`/team?chat=${encodeURIComponent(chatId)}`)
+            } else {
               useTeamUI.getState().setList(false)
               navigate('/team')
-            }}
-            aria-label={t('team.fullPage')}
-          >
-            <Maximize2 className="size-3.5" />
-          </Button>
-        </Tooltip>
-      )}
+            }
+          }}
+          aria-label={chatId ? t('team.openInPage') : t('team.fullPage')}
+        >
+          <Maximize2 className="size-3.5" />
+        </Button>
+      </Tooltip>
       <Tooltip content={t('common.close')}>
         <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label={t('common.close')}>
           <X />
@@ -75,7 +81,7 @@ function ChatCard({ team, id }: { team: TeamState | undefined; id: string }) {
   return (
     <section className={CARD} style={{ width: CARD_W }} data-team-window={id}>
       <React.Suspense fallback={<Loading />}>
-        <ChatView team={team} chatId={id} compact headerExtra={<Tools onMin={() => minimize(id)} onClose={() => close(id)} />} />
+        <ChatView team={team} chatId={id} compact headerExtra={<Tools onMin={() => minimize(id)} chatId={id} onClose={() => close(id)} />} />
       </React.Suspense>
     </section>
   )

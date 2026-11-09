@@ -10,14 +10,13 @@
 // Run and the on/off switch show on hover or focus (always on touch screens).
 // The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
 import * as React from 'react'
-import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, ChevronDown, LayoutGrid, Play, Plus, Rocket, WandSparkles } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
+import { ChevronDown, LayoutGrid, Play, Plus, Rocket, UsersRound, WandSparkles } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { agentRoute, useAgents, useExtensions, usePatchAgent, useWorkspace } from '@/lib/queries'
+import { agentRoute, newGroupRoute, useAgents, useExtensions, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn, store } from '@/lib/utils'
-import { useCompact } from '@/stores/media'
 import {
   Button,
   DropdownMenu,
@@ -90,6 +89,26 @@ function useCustomViewTopic(): string {
   return (topics.find((x) => x.path === 'projects/general/topics/inbox') || topics.find((x) => x.project !== 'system') || topics[0])?.path || 'projects/general/topics/inbox'
 }
 
+/** New group (outline) + New agent (primary): the top right of the Office, and of the list on a phone. A list narrowed to
+ *  a topic (?topic=) starts the group in its project. */
+export function NewButtons({ onNew }: { onNew: () => void }) {
+  const t = useT()
+  const [params] = useSearchParams()
+  const project = (params.get('topic') || '').split('/')[0] || undefined
+  return (
+    <>
+      <Button asChild size="sm" variant="outline" data-testid="group-new" data-tour="group-new">
+        <Link to={newGroupRoute(project)}>
+          <UsersRound /> <span className="max-[429px]:sr-only">{t('groups.new')}</span>
+        </Link>
+      </Button>
+      <Button size="sm" onClick={onNew} data-testid="agent-new">
+        <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
+      </Button>
+    </>
+  )
+}
+
 export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart: (s: CreateStart) => void }) {
   const t = useT()
   const on = useAgentsOn()
@@ -100,7 +119,6 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
   // A view of an extension that is gone (deleted, off, in error) shows Classic; the choice is kept for when it is back.
   const ext = picked.startsWith('x:') ? custom.views.find((v) => `x:${v.id}` === picked) : undefined
   const view: OfficeView = picked.startsWith('x:') && !ext && !custom.loading ? 'classic' : picked
-  const touch = useCompact()
   // Projects and agents in the order of the layout (picked by hand, else workspace order / topic then name).
   const layout = useAgentsLayout()
   const groups = React.useMemo(() => layout.group(agents), [agents, layout])
@@ -110,21 +128,10 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
       title={t('agents.side.office')}
       description={t('agents.desc')}
       width={view === 'classic' ? 'default' : 'wide'}
-      leading={
-        touch ? (
-          <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
-            <Link to="/agents">
-              <ArrowLeft />
-            </Link>
-          </Button>
-        ) : undefined
-      }
       actions={
         <>
           {agents.length > 0 && <ViewMenu view={view} custom={custom.views} onChange={setView} />}
-          <Button size="sm" onClick={onNew} data-testid="agent-new">
-            <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
-          </Button>
+          <NewButtons onNew={onNew} />
         </>
       }
     >

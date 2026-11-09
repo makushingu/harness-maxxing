@@ -26,7 +26,8 @@ The page itself never changes your sites or databases; the only thing it does on
 
 ## The page
 
-A bar on the left (a row of tabs on a phone) lists **what you host** - Sites, Databases, Buckets, Domains, E-mail -
+A list in the second bar next to the sidebar (see [Sessions](04-sessions.md#layout); under **☰** at the top left on a phone)
+starts with **Overview** and **To look at**, then lists **what you host** - Sites, Databases, Buckets, Domains, E-mail -
 with how many of each and what is down, then **where it runs**: Servers & services. Search, filter by project and
 show hidden lines (eye button) on every tab except E-mail.
 

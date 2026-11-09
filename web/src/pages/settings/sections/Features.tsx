@@ -1,6 +1,6 @@
 // Settings > Features (2.0.0a132): every page of the sidebar in its order, the ones always there marked so and the
 // optional ones with their switch; the options of the sessions sit indented under Sessions ("Tell me when a session
-// finishes" lives in Notifications only). A "This browser" mark tells the few
+// finishes" lives in Notifications only), the Team bubbles under Team while Team is on. A "This browser" mark tells the few
 // switches kept in this browser only from those saved on the server.
 import { useUI } from '@/stores/ui'
 import { useT } from '@/i18n'
@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Callout, SettingRow } from '@/features/common'
 import { BrowserBadge, FeaturePages } from '@/features/settings/FeaturePages'
 import { useSessionsUI } from '@/pages/sessions/store'
+import { useTeamUI } from '@/features/team/store'
 import { RESULT_FIELDS, useResultLine } from '@/pages/sessions/resultLine'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -50,10 +51,24 @@ export function FeaturesSection() {
     </div>
   )
 
+  // the Team bubbles (features/team/TeamBubbles.tsx), indented under the Team row while Team is on
+  const teamOptions = s?.team_page ? (
+    <SettingRow label={<>{t('team.bubblesSetting')}<BrowserBadge /></>} description={t('team.bubblesSettingDesc')} htmlFor="ft-team-bubbles">
+      <Switch
+        id="ft-team-bubbles"
+        checked={ui.teamBubbles}
+        onCheckedChange={(v) => {
+          ui.setNotify({ teamBubbles: v })
+          if (v) useTeamUI.getState().setHidden(false)
+        }}
+      />
+    </SettingRow>
+  ) : null
+
   return (
     <SectionStack>
       <SettingsCard title={t('features.inSidebar')} description={t('features.pagesDesc')}>
-        <FeaturePages core sub={{ '/sessions': sessionOptions }} />
+        <FeaturePages core sub={{ '/sessions': sessionOptions, '/team': teamOptions }} />
       </SettingsCard>
     </SectionStack>
   )

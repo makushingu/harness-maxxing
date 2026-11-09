@@ -1,5 +1,5 @@
-// Preview card of an agent, shown beside the sidebar's sessions rail when the pointer rests on an agent of the tree
-// (pages/sessions/RailTree.tsx), or when it is focused from the keyboard: the agent in its Office, the room of its
+// Preview card of an agent, shown beside a page's list (the sessions tree, the Agents list) when the pointer rests on an agent of the tree
+// (pages/sessions/index.tsx), or when it is focused from the keyboard: the agent in its Office, the room of its
 // project as the Agents page draws it in the Space view (OfficeFuture.tsx: same art, its console under the selection
 // cursor, the other agents of the project around, the free desk), then in words what it does now: the working rows of
 // its running session (the session card's own block, pages/sessions/PreviewWorking.tsx), else its last run and its

@@ -1,30 +1,26 @@
-// Search + filters (popover) + active filter chips, and the quick-add bar.
+// The Tasks page's filters (a popover, at the top right of the page) and their active chips, and the quick-add field
+// (in the New task popover at the top right). No search field: Ctrl K finds tasks.
 import * as React from 'react'
-import { CalendarDays, Filter, Hash, Plus, Search, X } from 'lucide-react'
+import { CalendarDays, Filter, Hash, Plus, X } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { Badge, Button, Input, Kbd, Label, Popover, PopoverContent, PopoverTrigger, Select, Sensitive, Spinner, useMask } from '@/components/ui'
 import type { TaskProject } from '@/lib/types'
 import { EMPTY_FILTERS, PRIORITIES, PRIORITY_KEY, activeFilterCount, fmtDue, parseQuickAdd, type DueFilter, type QuickParse, type TaskFilters } from './model'
 import { PriorityIcon, ProjectDot } from './parts'
 
-export function FilterBar({
+function useFilters({
   filters,
   onChange,
   projects,
-  labels,
-  extra,
   withProject = true,
 }: {
   filters: TaskFilters
   onChange: (f: TaskFilters) => void
   projects: TaskProject[]
-  labels: string[]
-  extra?: React.ReactNode
   /** Project filter in the popover (off when the page has its projects bar). */
   withProject?: boolean
 }) {
   const t = useT()
-  const mask = useMask()
   const n = activeFilterCount(withProject ? filters : { ...filters, project: 'all' })
   const set = (p: Partial<TaskFilters>) => onChange({ ...filters, ...p })
   const dueOpts: { value: DueFilter; label: string }[] = [
@@ -35,131 +31,134 @@ export function FilterBar({
     { value: 'none', label: t('tasks.filter.noDate') },
   ]
   const proj = projects.find((p) => p.id === filters.project)
+  return { t, n, set, dueOpts, proj, withProject }
+}
+
+type FilterProps = { filters: TaskFilters; onChange: (f: TaskFilters) => void; projects: TaskProject[]; labels: string[]; withProject?: boolean }
+
+/** The Filters button and its popover (project when the page has no projects bar, label, priority, due). */
+export function FilterMenu(props: FilterProps) {
+  const { filters, onChange, projects, labels } = props
+  const { t, n, set, dueOpts, withProject } = useFilters(props)
+  const mask = useMask()
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 basis-48 md:max-w-xs">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={filters.q}
-            onChange={(e) => set({ q: e.target.value })}
-            placeholder={t('tasks.searchPlaceholder')}
-            aria-label={t('tasks.searchPlaceholder')}
-            className="pl-9"
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" aria-label={t('tasks.filters')} data-testid="task-filters">
+          <Filter />
+          <span className="max-sm:hidden">{t('tasks.filters')}</span>
+          {n > 0 && (
+            <Badge variant="default" className="h-5 min-w-5 justify-center rounded-full px-1 tabular-nums">
+              {n}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="grid w-72 gap-3 p-4">
+        {withProject && (
+        <div className="grid gap-1.5">
+          <Label htmlFor="f-project">{t('tasks.field.project')}</Label>
+          <Select
+            id="f-project"
+            value={filters.project}
+            onValueChange={(v) => set({ project: v })}
+            options={[
+              { value: 'all', label: t('tasks.filter.allProjects') },
+              { value: 'none', label: t('tasks.noProject') },
+              ...projects.map((p) => ({
+                value: p.id,
+                label: (
+                  <span className="inline-flex items-center gap-2">
+                    <ProjectDot color={p.color} />
+                    <Sensitive length={6}>{p.name}</Sensitive>
+                  </span>
+                ),
+              })),
+            ]}
           />
         </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" aria-label={t('tasks.filters')}>
-              <Filter />
-              <span className="max-sm:hidden">{t('tasks.filters')}</span>
-              {n > 0 && (
-                <Badge variant="default" className="h-5 min-w-5 justify-center rounded-full px-1 tabular-nums">
-                  {n}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="grid w-72 gap-3 p-4">
-            {withProject && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="f-project">{t('tasks.field.project')}</Label>
-              <Select
-                id="f-project"
-                value={filters.project}
-                onValueChange={(v) => set({ project: v })}
-                options={[
-                  { value: 'all', label: t('tasks.filter.allProjects') },
-                  { value: 'none', label: t('tasks.noProject') },
-                  ...projects.map((p) => ({
-                    value: p.id,
-                    label: (
-                      <span className="inline-flex items-center gap-2">
-                        <ProjectDot color={p.color} />
-                        <Sensitive length={6}>{p.name}</Sensitive>
-                      </span>
-                    ),
-                  })),
-                ]}
-              />
-            </div>
-            )}
-            <div className="grid gap-1.5">
-              <Label htmlFor="f-label">{t('tasks.field.labels')}</Label>
-              <Select
-                id="f-label"
-                value={filters.label}
-                onValueChange={(v) => set({ label: v })}
-                options={[{ value: 'all', label: t('tasks.filter.anyLabel') }, ...labels.map((l) => ({ value: l, label: mask(l, 5) }))]}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="f-prio">{t('tasks.field.priority')}</Label>
-              <Select
-                id="f-prio"
-                value={filters.priority}
-                onValueChange={(v) => set({ priority: v })}
-                options={[
-                  { value: 'all', label: t('tasks.filter.anyPriority') },
-                  ...PRIORITIES.map((p) => ({
-                    value: String(p),
-                    label: (
-                      <span className="inline-flex items-center gap-2">
-                        <PriorityIcon p={p} className="size-3.5" />
-                        {t(PRIORITY_KEY[p])}
-                      </span>
-                    ),
-                  })),
-                ]}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="f-due">{t('tasks.field.due')}</Label>
-              <Select id="f-due" value={filters.due} onValueChange={(v) => set({ due: v as DueFilter })} options={dueOpts} />
-            </div>
-            {n > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => onChange({ ...EMPTY_FILTERS, q: filters.q, project: withProject ? 'all' : filters.project })}>
-                {t('tasks.clearFilters')}
-              </Button>
-            )}
-          </PopoverContent>
-        </Popover>
-        {extra}
-      </div>
-      {n > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5" aria-label={t('tasks.activeFilters')}>
-          {withProject && filters.project !== 'all' && (
-            <FilterChip onClear={() => set({ project: 'all' })}>
-              {proj ? (
-                <>
-                  <ProjectDot color={proj.color} className="size-2" />
-                  <Sensitive length={5}>{proj.name}</Sensitive>
-                </>
-              ) : (
-                t('tasks.noProject')
-              )}
-            </FilterChip>
-          )}
-          {filters.label !== 'all' && (
-            <FilterChip onClear={() => set({ label: 'all' })}>
-              <Hash className="size-3" />
-              <Sensitive length={4}>{filters.label}</Sensitive>
-            </FilterChip>
-          )}
-          {filters.priority !== 'all' && (
-            <FilterChip onClear={() => set({ priority: 'all' })}>
-              <PriorityIcon p={Number(filters.priority) as 0} className="size-3" />
-              {t(PRIORITY_KEY[Number(filters.priority) as 0])}
-            </FilterChip>
-          )}
-          {filters.due !== 'all' && (
-            <FilterChip onClear={() => set({ due: 'all' })}>
-              <CalendarDays className="size-3" />
-              {dueOpts.find((o) => o.value === filters.due)?.label}
-            </FilterChip>
-          )}
+        )}
+        <div className="grid gap-1.5">
+          <Label htmlFor="f-label">{t('tasks.field.labels')}</Label>
+          <Select
+            id="f-label"
+            value={filters.label}
+            onValueChange={(v) => set({ label: v })}
+            options={[{ value: 'all', label: t('tasks.filter.anyLabel') }, ...labels.map((l) => ({ value: l, label: mask(l, 5) }))]}
+          />
         </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="f-prio">{t('tasks.field.priority')}</Label>
+          <Select
+            id="f-prio"
+            value={filters.priority}
+            onValueChange={(v) => set({ priority: v })}
+            options={[
+              { value: 'all', label: t('tasks.filter.anyPriority') },
+              ...PRIORITIES.map((p) => ({
+                value: String(p),
+                label: (
+                  <span className="inline-flex items-center gap-2">
+                    <PriorityIcon p={p} className="size-3.5" />
+                    {t(PRIORITY_KEY[p])}
+                  </span>
+                ),
+              })),
+            ]}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="f-due">{t('tasks.field.due')}</Label>
+          <Select id="f-due" value={filters.due} onValueChange={(v) => set({ due: v as DueFilter })} options={dueOpts} />
+        </div>
+        {n > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => onChange({ ...EMPTY_FILTERS, q: filters.q, project: withProject ? 'all' : filters.project })}>
+            {t('tasks.clearFilters')}
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** The active filters as chips, each with its ×; nothing when no filter is on. */
+export function FilterChips(props: FilterProps) {
+  const { filters } = props
+  const { t, n, set, dueOpts, proj, withProject } = useFilters(props)
+  if (!n && !filters.q) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" aria-label={t('tasks.activeFilters')}>
+      {/* a search kept in the address from before the field left the page */}
+      {filters.q && <FilterChip onClear={() => set({ q: '' })}>“<Sensitive length={5}>{filters.q}</Sensitive>”</FilterChip>}
+      {withProject && filters.project !== 'all' && (
+        <FilterChip onClear={() => set({ project: 'all' })}>
+          {proj ? (
+            <>
+              <ProjectDot color={proj.color} className="size-2" />
+              <Sensitive length={5}>{proj.name}</Sensitive>
+            </>
+          ) : (
+            t('tasks.noProject')
+          )}
+        </FilterChip>
+      )}
+      {filters.label !== 'all' && (
+        <FilterChip onClear={() => set({ label: 'all' })}>
+          <Hash className="size-3" />
+          <Sensitive length={4}>{filters.label}</Sensitive>
+        </FilterChip>
+      )}
+      {filters.priority !== 'all' && (
+        <FilterChip onClear={() => set({ priority: 'all' })}>
+          <PriorityIcon p={Number(filters.priority) as 0} className="size-3" />
+          {t(PRIORITY_KEY[Number(filters.priority) as 0])}
+        </FilterChip>
+      )}
+      {filters.due !== 'all' && (
+        <FilterChip onClear={() => set({ due: 'all' })}>
+          <CalendarDays className="size-3" />
+          {dueOpts.find((o) => o.value === filters.due)?.label}
+        </FilterChip>
       )}
     </div>
   )

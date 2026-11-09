@@ -318,63 +318,18 @@ html[data-boot] .mx-dot-in { animation-delay: calc(var(--bd, 0ms) + 200ms + var(
    but are neither painted nor hit, and their content is skipped (`content-visibility: hidden` keeps its layout, so a
    tab switch does not lay the whole thread out again; it also takes them out of the tab order and the a11y tree). */
 .mx-tab-off { visibility: hidden; pointer-events: none; content-visibility: hidden; }
-/* Folding sidebar (Sidebar.tsx). The bar unfolds over the page in 300 ms and folds back in 220 ms on one soft ease;
-   its shadow fades in a little slower than the edge so the edge never "pops". Its content is laid out at the final
-   width and revealed by the moving edge; the labels (and what only exists unfolded: `.mx-side-reveal`) fade in a
-   beat later, staggered down the list by the rows' --i (capped), with a tiny slide; they fade out first when it
-   folds. Rows keep their folded height (44 px) while unfolded over the page, so nothing moves vertically. */
-/* Not pinned, the bar is always as wide as unfolded (--mx-side-open, Sidebar.tsx) and slid left so only its last 64 px
-   show; `.mx-side-inner` slides back the same distance, so the content stays still under the moving edge. Transforms
-   only (composited), and `closing` is set on the element alone (no render). The shadow is a layer of its own that
-   slides with the bar and fades (no box-shadow animation, which repaints every frame). */
+/* Sidebar lists (Sidebar.tsx): Sessions, Agents or Team beside the bar. The bar never changes width by itself; the
+   floating list sits over the page (its box lets the pointer through while nothing shows), the one asked for fades
+   and slides in over the others; hidden ones keep their layout (visibility: out of the tab order and the
+   accessibility tree, no reflow on the way back). The list kept beside the page is the same layer, in the flow. */
 .mx-side { --mx-side-ease: cubic-bezier(0.22, 1, 0.36, 1); }
-.mx-side:is([data-unfold='open'], [data-unfold='closing'], [data-unfold='closed']),
-.mx-side-shadow {
-  width: var(--mx-side-open, 64px);
-  transform: translateX(calc(64px - var(--mx-side-open, 64px)));
-  transition: transform 220ms var(--mx-side-ease);
-}
-.mx-side:is([data-unfold='open'], [data-unfold='closing'], [data-unfold='closed']) > .mx-side-inner {
-  transform: translateX(calc(var(--mx-side-open, 64px) - 64px));
-  transition: transform 220ms var(--mx-side-ease);
-}
-.mx-side[data-unfold='open'], .mx-side[data-unfold='open'] > .mx-side-inner, .mx-side[data-unfold='open'] ~ .mx-side-shadow {
-  transform: none;
-  transition: transform 300ms var(--mx-side-ease);
-}
-/* Unfolded by the pointer, the labels come first: the sheet stops the sessions column's width short (still clipped
-   past the labels), then slides the rest of the way when the column is wanted (`data-rail`, Sidebar.tsx). */
-.mx-side[data-unfold='open']:not([data-rail]), .mx-side[data-unfold='open']:not([data-rail]) ~ .mx-side-shadow {
-  transform: translateX(calc(0px - var(--mx-side-rail, 0px)));
-}
-.mx-side[data-unfold='open']:not([data-rail]) > .mx-side-inner { transform: translateX(var(--mx-side-rail, 0px)); }
-.mx-side-shadow {
-  position: absolute; inset-block: 0; left: 0; z-index: -1; pointer-events: none; opacity: 0;
-  box-shadow: 12px 0 32px -14px rgb(0 0 0 / 0.18), 2px 0 8px -4px rgb(0 0 0 / 0.06);
-  transition: transform 220ms var(--mx-side-ease), opacity 200ms ease-out;
-}
-.dark .mx-side-shadow { box-shadow: 14px 0 36px -14px rgb(0 0 0 / 0.55), 2px 0 10px -4px rgb(0 0 0 / 0.3); }
-.mx-side[data-unfold='open'] ~ .mx-side-shadow { opacity: 1; transition: transform 300ms var(--mx-side-ease), opacity 420ms ease-out; }
-.mx-side:is([data-unfold='open'], [data-unfold='closing']) .mx-nav-row { height: 2.75rem; }
-@keyframes mx-label-in { from { opacity: 0; transform: translateX(-3px); } }
-@keyframes mx-rail-in { from { opacity: 0; transform: translateX(-8px); } }
-.mx-side[data-unfold='open'] .mx-side-body :is(.truncate, kbd, .mx-side-reveal) {
-  animation: mx-label-in 280ms var(--mx-side-ease) backwards;
-  animation-delay: calc(70ms + min(var(--i, 0), 8) * 14ms);
-}
-.mx-side[data-unfold='open'][data-rail] .mx-side-rail { animation: mx-rail-in 340ms var(--mx-side-ease) 60ms backwards; }
-/* Folded, the sessions column stays mounted but skipped: no rendering, no focus, no accessibility tree; its styles and
-   layout are kept for the next unfold (`data-warm`: its first moment, rendered once out of sight; Sidebar.tsx RailSlot). */
-.mx-side-rail:not([data-shown], [data-warm]) { content-visibility: hidden; }
-/* The second column's lists (sessions, agents, Team): the one the pointer asked for fades in over the others; hidden
-   ones keep their layout (visibility: out of the tab order and the accessibility tree, no reflow on the way back). */
-.mx-rail-layer { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; transform: translateX(-6px); visibility: hidden; pointer-events: none;
+/* A page's folded list (components/shell/PageList.tsx), shown over the page while the pointer rests on its rail or its
+   sidebar entry: fades and slides in (opacity / transform only). */
+.mx-list-peek { opacity: 0; transform: translateX(-6px); visibility: hidden; pointer-events: none;
   transition: opacity 140ms ease-out, transform 180ms var(--mx-side-ease, ease-out), visibility 0s linear 180ms; }
-.mx-rail-layer[data-on] { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition: opacity 160ms ease-out, transform 180ms var(--mx-side-ease, ease-out), visibility 0s; }
-.mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 0; transition: opacity 130ms ease-out; }
-/* The bell, back at its folded spot once the bar has folded (it left the search field's row fading out). */
-@keyframes mx-bell-in { from { opacity: 0; } }
-.mx-side[data-unfold='closed'] .mx-bell-in { animation: mx-bell-in 160ms ease-out; }
+.mx-list-peek[data-on] { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition: opacity 160ms ease-out, transform 180ms var(--mx-side-ease, ease-out), visibility 0s;
+  box-shadow: 12px 0 32px -14px rgb(0 0 0 / 0.18), 2px 0 8px -4px rgb(0 0 0 / 0.06); }
+.dark .mx-list-peek[data-on] { box-shadow: 14px 0 36px -14px rgb(0 0 0 / 0.55), 2px 0 10px -4px rgb(0 0 0 / 0.3); }
 /* A critical status dot breathes slowly instead of the hard `animate-ping`. */
 @keyframes mx-soft-ping { 0% { transform: scale(1); opacity: 0.45; } 70%, 100% { transform: scale(2.2); opacity: 0; } }
 .mx-soft-ping { animation: mx-soft-ping 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
@@ -530,8 +485,7 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
   html[data-boot='reveal'] #root { animation: mx-fade 160ms linear backwards !important; }
   /* the sidebar, its meters and status dot (above) */
   .mx-arc { transition: none; }
-  .mx-side, .mx-side-inner, .mx-side-shadow, .mx-side-rail, .mx-rail-layer, .mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-bell-in { transition: none !important; animation: none !important; }
-  .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 1; }
+  .mx-list-peek { transition: none !important; }
   .mx-soft-ping { animation: none; opacity: 0; }
 }
 

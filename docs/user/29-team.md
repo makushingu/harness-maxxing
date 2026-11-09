@@ -10,12 +10,15 @@ Turn it on in **Settings -> Features -> Team**. The **Team** entry appears in th
 **Team bubble** sits at the bottom right of every page, with the number of unread messages. Click it for the list of
 chats; a chat opens in a small window docked at the bottom of the page (up to three side by side), like Messenger.
 **–** minimizes it into a round head above the bubble (with its unread count; hover it for the name, **×** to close
-it), and a new message brings its chat's head up. The expand icon opens the full Team page.
+it), and a new message brings its chat's head up. **Open in Team** (⤢, next to **–**) opens that chat in the Team
+page and closes its window; the same icon in the list of chats opens the Team page.
 The **×** of the Team bubble (on hover) hides all the bubbles; the chat icon next to **Team** in the sidebar, or
-opening a chat, brings them back. To do without bubbles, turn off **Settings -> Notifications -> Team bubbles**
-(per browser): Team then opens its own page.
+opening a chat, brings them back. To do without bubbles, turn off **Settings -> Features -> Team bubbles**, under
+Team (per browser): Team then opens its own page.
 
-The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
+On the Team page, on a computer, the chats sit in the second bar next to the sidebar (see
+[Sessions](04-sessions.md#layout)); on a phone, **☰** at the top left opens them and the page shows the first chat
+(with nothing to show, **Open the list**). The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
 
 ## Connecting with someone
 

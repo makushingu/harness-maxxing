@@ -22,14 +22,21 @@ settings** when it only guessed. It signs in to check them before saving.
 - Many server hosts block ports 25 and 465 going out: when 465 does not answer, Harness uses 587 by itself.
 
 The password is kept in **Settings -> Keys** (`MAIL_<ID>_PASSWORD`), never given to sessions. Add as many mailboxes
-as you want and switch from one to the other at the top of the folder list. **Mailbox settings** (the **...** menu)
+as you want: on a computer they are listed in the second bar next to the sidebar (see
+[Sessions](04-sessions.md#layout)) - **All mailboxes**, then each mailbox with the folders of the open one under it,
+and **Add a mailbox** at the bottom; on a phone, the same list opens from **☰** (picking a mailbox keeps it open,
+picking a folder closes it). **Mailbox settings** (the
+**...** menu of the mailbox, with **New folder**)
 changes the name shown to the people you write to, the signature and the servers; **Remove** only removes it from
 Harness, the mailbox and its messages stay at your provider. The agents lose their rights on it: added again, it
 starts with none.
 
 ## Reading and sorting
 
-Folders on the left, messages in the middle, the open message on the right (one pane at a time on a phone).
+Folders on the left, messages in the middle, the open message on the right (one pane at a time on a phone, the
+folders under ☰). On a computer the folders sit in the second bar, so the page shows the messages and the open
+message side by side (from 760 px wide). Drag the right edge of the message list to widen or narrow it (at least
+280 px, leaving 360 px to the message; double-click for the default width); the width is kept in this browser.
 
 - **Search** looks in the current folder (sender, subject, text) on the mail server; **All / Unread / Flagged**
   filters the list.

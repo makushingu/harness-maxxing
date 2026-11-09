@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { BellRing } from 'lucide-react'
-import { useTeamUI } from '@/features/team/store'
 import { useUI } from '@/stores/ui'
 import { useSettings } from '@/lib/queries'
 import { useT } from '@/i18n'
@@ -26,7 +25,6 @@ export function NotificationsSection() {
   const notifyDone = useUI((s) => s.notifyDone)
   const notifySound = useUI((s) => s.notifySound)
   const notifyTeam = useUI((s) => s.notifyTeam)
-  const teamBubbles = useUI((s) => s.teamBubbles)
   const { data: settings } = useSettings()
   const badgePulse = useUI((s) => s.badgePulse)
   const setNotify = useUI((s) => s.setNotify)
@@ -68,18 +66,6 @@ export function NotificationsSection() {
                 onCheckedChange={async (v) => {
                   setNotify({ notifyTeam: v })
                   if (v && perm === 'default') await ask()
-                }}
-              />
-            </SettingRow>
-          )}
-          {settings?.team_page && (
-            <SettingRow label={t('team.bubblesSetting')} description={t('team.bubblesSettingDesc')} htmlFor="mx-team-bubbles">
-              <Switch
-                id="mx-team-bubbles"
-                checked={teamBubbles}
-                onCheckedChange={(v) => {
-                  setNotify({ teamBubbles: v })
-                  if (v) useTeamUI.getState().setHidden(false)
                 }}
               />
             </SettingRow>

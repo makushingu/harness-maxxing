@@ -1,5 +1,5 @@
 // Projects bar of the Tasks page: overview, all tasks, tasks without a project, then one entry per task project.
-// Desktop: a column on the left; mobile: a row of chips scrolled sideways.
+// A column in the second-level sidebar (pages/tasks PageList; touch: the left drawer).
 import * as React from 'react'
 import { Eye, EyeOff, FolderKanban, Inbox, LayoutGrid, ListChecks, MoreHorizontal, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,38 +31,7 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
   const shown = projects.filter((p) => !p.hidden || showHidden || p.id === scope)
 
   return (
-    <>
-      {/* mobile: chips */}
-      <nav aria-label={t('tasks.nav.label')} className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 md:hidden" data-testid="task-nav-chips">
-        <Chip active={scope === 'overview'} onClick={() => onScope('overview')} icon={<LayoutGrid className="size-3.5" />}>
-          {t('tasks.nav.overview')}
-        </Chip>
-        <Chip active={scope === 'all'} onClick={() => onScope('all')} count={all}>
-          {t('tasks.nav.all')}
-        </Chip>
-        {shown.map((p) => (
-          <Chip key={p.id} active={scope === p.id} onClick={() => onScope(p.id)} count={statsOf(stats, p.id).open} icon={<ProjectDot color={p.color} className="size-2" />} alert={statsOf(stats, p.id).overdue > 0}>
-            <Sensitive length={5}>{p.name}</Sensitive>
-          </Chip>
-        ))}
-        {(none.total > 0 || scope === 'none') && (
-          <Chip active={scope === 'none'} onClick={() => onScope('none')} count={none.open}>
-            {t('tasks.noProject')}
-          </Chip>
-        )}
-        <button
-          type="button"
-          onClick={onManage}
-          aria-label={t('tasks.manageProjects')}
-          title={t('tasks.manageProjects')}
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground"
-        >
-          <Settings2 className="size-4" />
-        </button>
-      </nav>
-
-      {/* desktop: column */}
-      <nav aria-label={t('tasks.nav.label')} className="sticky top-4 grid content-start gap-0.5 self-start max-md:hidden" data-testid="task-nav" data-tour="tasks-projects">
+      <nav aria-label={t('tasks.nav.label')} className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto p-2" data-testid="task-nav" data-tour="tasks-projects">
         <Entry active={scope === 'overview'} onClick={() => onScope('overview')} icon={<LayoutGrid className="size-4" />}>
           {t('tasks.nav.overview')}
         </Entry>
@@ -106,7 +75,6 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
           </button>
         )}
       </nav>
-    </>
   )
 }
 
@@ -169,23 +137,5 @@ function ProjectEntry({ project, emoji, stats, active, onClick }: { project: Tas
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  )
-}
-
-function Chip({ active, onClick, icon, count, alert, children }: { active: boolean; onClick: () => void; icon?: React.ReactNode; count?: number; alert?: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'inline-flex h-10 max-w-48 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] whitespace-nowrap transition-colors',
-        active ? 'border-primary/50 bg-primary/10 font-medium text-foreground' : 'bg-card text-muted-foreground',
-      )}
-    >
-      {icon}
-      <span className="min-w-0 truncate">{children}</span>
-      {count != null && count > 0 && <span className={cn('text-xs tabular-nums', alert ? 'text-destructive' : 'text-muted-foreground')}>{count}</span>}
-    </button>
   )
 }

@@ -1,10 +1,12 @@
 // Touch layout (phones, tablets - html[data-compact], stores/media.ts): no sidebar and no tab bar. Two buttons at the
-// top of every screen open two drawers: the sessions on the left, the rest of the app on the right (every entry of the
-// desktop sidebar: pages and pinned extension pages, notifications, help, settings, update and the status line).
+// top of every screen open two drawers: on the left the list of the page open - what the second-level sidebar holds on
+// a computer (PageList.tsx), the sessions on the Sessions page; no ☰ on a page without a list -, on the right the rest
+// of the app (every entry of the desktop sidebar: pages and pinned extension pages, help, settings, update and the
+// status line).
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation } from 'react-router'
-import { Bell, ChevronDown, ChevronRight, CircleHelp, LayoutGrid, Menu, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, CircleHelp, LayoutGrid, Menu, Search } from 'lucide-react'
 import { useAgentsAttention, useFeed, useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
@@ -14,12 +16,13 @@ import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
 import { useTour } from '@/tour/store'
 import { navTourId, useNavEntries } from './nav'
+import { ListSlot, pageListId, usePageListId } from './PageList'
 import { Logo } from './Logo'
 import { healthTone, StatusPanel, useStatusLine } from './HealthIndicator'
 import { useHelpActions } from './HelpMenu'
 import { UpdateIndicator, usePendingUpdate } from './UpdateIndicator'
 
-type Panel = 'sessions' | 'app' | null
+type Panel = 'sessions' | 'list' | 'app' | null
 export const useTouchNav = create<{ panel: Panel; setPanel: (p: Panel) => void }>((set) => ({ panel: null, setPanel: (panel) => set({ panel }) }))
 
 const topButton =
@@ -48,6 +51,27 @@ export function TouchSessionsButton({ className }: { className?: string }) {
   )
 }
 
+/** ☰ of a page with a list (PageList): opens it in the left drawer. Nothing on a page without one. */
+export function TouchListButton({ className }: { className?: string }) {
+  const t = useT()
+  const list = usePageListId()
+  if (!list) return null
+  return (
+    <button type="button" className={cn(topButton, '-ml-1', className)} aria-label={t('shell.openList')} onClick={() => useTouchNav.getState().setPanel('list')} data-testid="touch-list-button">
+      <Menu />
+    </button>
+  )
+}
+
+let keepOnce = false
+/** The next navigation leaves the page's list drawer open (a step inside the list, not a pick). */
+export const keepPageListOpen = () => {
+  keepOnce = true
+}
+
+/** Opens the page's list (touch: its drawer), from a button of the page (an empty state's "Open the list"). */
+export const openPageList = () => useTouchNav.getState().setPanel('list')
+
 /** ⊞ - opens the rest of the app. A dot: an update is waiting or the server needs attention. */
 export function TouchAppButton({ className }: { className?: string }) {
   const t = useT()
@@ -74,8 +98,13 @@ export function TouchDrawers() {
   // During the guided tour its cards sit above the drawers: no focus trap, a tap on a card does not close them.
   const tour = useTour((s) => s.active)
   const keep = (e: Event) => tour && e.preventDefault()
-  // Any navigation closes them (a page, a session picked in the list).
-  React.useEffect(() => setPanel(null), [location.pathname, location.search, setPanel])
+  // Any navigation closes them (a page, a session picked in the list), but a step inside the page's list (a folder of
+  // Files, a mailbox of E-mail: keepPageListOpen) keeps it.
+  React.useEffect(() => {
+    const keep = keepOnce && useTouchNav.getState().panel === 'list'
+    keepOnce = false
+    if (!keep) setPanel(null)
+  }, [location.pathname, location.search, setPanel])
   useEdgeOpen()
   return (
     <>
@@ -85,6 +114,13 @@ export function TouchDrawers() {
           <React.Suspense fallback={null}>
             <SessionsPanel />
           </React.Suspense>
+        </DrawerContent>
+      </Drawer>
+      <Drawer open={panel === 'list'} onOpenChange={(o) => setPanel(o ? 'list' : null)} modal={!tour}>
+        <DrawerContent side="left" aria-describedby={undefined} data-testid="touch-list" onInteractOutside={keep}>
+          <DrawerTitle className="sr-only">{t('shell.openList')}</DrawerTitle>
+          {/* the page's list comes in here (PageList) */}
+          <ListSlot className="flex min-h-0 flex-1 flex-col" />
         </DrawerContent>
       </Drawer>
       <Drawer open={panel === 'app'} onOpenChange={(o) => setPanel(o ? 'app' : null)} modal={!tour}>
@@ -97,7 +133,8 @@ export function TouchDrawers() {
   )
 }
 
-/** Installed app (no browser gesture to protect): a swipe from the left edge opens the sessions, from the right
+/** Installed app (no browser gesture to protect): a swipe from the left edge opens the page's list (the sessions on
+ *  the Sessions page), from the right
  *  edge the app menu. In a browser tab the edges keep the browser's back / forward gestures. */
 function useEdgeOpen() {
   React.useEffect(() => {
@@ -110,7 +147,7 @@ function useEdgeOpen() {
       from = null
       if (e.touches.length !== 1 || useTouchNav.getState().panel || document.querySelector('[role="dialog"]:not([data-touch-layer])')) return
       const x = e.touches[0].clientX
-      if (x <= EDGE) from = 'sessions'
+      if (x <= EDGE) from = pageListId() ? 'list' : location.pathname.startsWith('/sessions') ? 'sessions' : null
       else if (x >= window.innerWidth - EDGE) from = 'app'
       x0 = x
       y0 = e.touches[0].clientY
@@ -123,7 +160,7 @@ function useEdgeOpen() {
         from = null
         return
       }
-      if ((from === 'sessions' && dx > 40) || (from === 'app' && dx < -40)) {
+      if (((from === 'sessions' || from === 'list') && dx > 40) || (from === 'app' && dx < -40)) {
         useTouchNav.getState().setPanel(from)
         if (navigator.vibrate) navigator.vibrate(8)
         from = null
@@ -187,6 +224,7 @@ function AppPanel() {
               <e.page.icon strokeWidth={1.9} />
               <span className="max-w-full truncate">{t(e.page.short ?? e.page.label)}</span>
               {e.to === '/agents' && <AgentsTileBadge />}
+              {e.to === '/' && <CountBadge count={unreadFeed} className="absolute top-2 right-2" title={t('feed.unreadCount', { count: unreadFeed })} />}
             </NavLink>
           ) : (
             <NavLink key={e.to} to={e.to} className={linkCls} data-ext={e.ext.id} onClick={close}>
@@ -195,11 +233,6 @@ function AppPanel() {
             </NavLink>
           ),
         )}
-        <NavLink to="/feed" className={linkCls} onClick={close}>
-          <Bell strokeWidth={1.9} />
-          <span className="max-w-full truncate">{t('feed.title')}</span>
-          <CountBadge count={unreadFeed} className="absolute top-2 right-2" title={t('feed.unreadCount', { count: unreadFeed })} />
-        </NavLink>
       </nav>
 
       <div className="grid gap-0.5 px-2 pt-3">

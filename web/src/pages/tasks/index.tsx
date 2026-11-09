@@ -1,17 +1,19 @@
-// Tasks page (/tasks?project=<id|all|none|overview>&task=<id>): projects bar + overview, kanban, week, calendar
-// and list over <workspace>/tasks.json.
+// Tasks page (/tasks?project=<id|all|none|overview>&task=<id>): projects bar (the second-level sidebar; touch: the
+// left drawer) + overview, kanban, week, calendar and list over <workspace>/tasks.json. Top right: the view, By
+// project (kanban), Filters and New task (a popover with the quick-add field). No search field: Ctrl K finds tasks.
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CalendarDays, CalendarRange, ChevronDown, FolderKanban, Kanban, List as ListIcon, ListChecks, Plus, RotateCw, Rows3, SearchX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Page } from '@/components/shell/Page'
+import { PageList } from '@/components/shell/PageList'
 import { useLang, useT } from '@/i18n'
 import { isApiError } from '@/lib/api'
 import { useBulkTasks, useCreateTask, useDeleteTask, usePatchTask, useSettings, useTasks, useWorkspace } from '@/lib/queries'
 import type { Task, TaskProject, TaskStatus } from '@/lib/types'
 import { useHotkey } from '@/commands/shortcuts'
 import { useRegisterCommands } from '@/commands/registry'
-import { Button, EmptyState, Segmented, Select, Sensitive, Skeleton, confirm } from '@/components/ui'
+import { Button, EmptyState, Popover, PopoverContent, PopoverTrigger, Segmented, Select, Sensitive, Skeleton, confirm } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { TaskBoard, statusColumns, type BoardColumn } from '@/features/tasks/Board'
 import { TaskList, type GroupBy } from '@/features/tasks/List'
@@ -22,7 +24,7 @@ import { ProjectNav, type Scope } from '@/features/tasks/ProjectNav'
 import { ProjectHeader, TaskOverview } from '@/features/tasks/Overview'
 import { TaskCalendar } from '@/features/tasks/Calendar'
 import { weekColumns, weekDropDue } from '@/features/tasks/Week'
-import { FilterBar, QuickAdd } from '@/features/tasks/Toolbar'
+import { FilterChips, FilterMenu, QuickAdd } from '@/features/tasks/Toolbar'
 import { ProjectDot } from '@/features/tasks/parts'
 import {
   EMPTY_FILTERS,
@@ -88,7 +90,7 @@ export default function TasksPage() {
   const [prefs, setPrefs] = usePrefs()
   const [search, setSearch] = React.useState<Omit<TaskFilters, 'project'>>(EMPTY_FILTERS)
   const [projectsOpen, setProjectsOpen] = React.useState(false)
-  const quickRef = React.useRef<HTMLInputElement | null>(null)
+  const [adding, setAdding] = React.useState(false)
 
   const create = useCreateTask()
   const patch = usePatchTask()
@@ -195,11 +197,11 @@ export default function TasksPage() {
     if (ok) del.mutate(task.id)
   }
 
-  useHotkey('n', () => quickRef.current?.focus(), { enabled: !openId && !projectsOpen })
+  useHotkey('n', () => setAdding(true), { enabled: !openId && !projectsOpen })
   useRegisterCommands(
     'tasks',
     [
-      { id: 'tasks.new', title: t('tasks.cmd.new'), group: t('nav.tasks'), icon: Plus, perform: ({ close }) => (close(), setTimeout(() => quickRef.current?.focus(), 50)) },
+      { id: 'tasks.new', title: t('tasks.cmd.new'), group: t('nav.tasks'), icon: Plus, perform: ({ close }) => (close(), setTimeout(() => setAdding(true), 50)) },
       { id: 'tasks.projects', title: t('tasks.manageProjects'), group: t('nav.tasks'), icon: FolderKanban, perform: ({ close }) => (close(), setProjectsOpen(true)) },
       { id: 'tasks.overview', title: t('tasks.cmd.overview'), group: t('nav.tasks'), icon: FolderKanban, perform: ({ close }) => (close(), setScope('overview')) },
       ...VIEWS.filter((v) => v !== prefs.view).map((v) => ({
@@ -213,41 +215,33 @@ export default function TasksPage() {
     [t, prefs.view, setScope],
   )
 
-  const viewExtras = (
-    <div className="flex flex-wrap items-center gap-2">
-      {prefs.view === 'board' && scope === 'all' && (
-        <Button variant={prefs.lanes ? 'secondary' : 'ghost'} aria-pressed={prefs.lanes} onClick={() => setPrefs({ lanes: !prefs.lanes })} title={t('tasks.lanesHint')}>
-          <Rows3 />
-          {t('tasks.lanes')}
+  // the list view's own choices, in a row above the list (the kanban's By project is at the top right)
+  const viewExtras =
+    prefs.view === 'list' ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={groupBy}
+          onValueChange={(v) => setPrefs({ groupBy: v as GroupBy })}
+          aria-label={t('tasks.groupBy')}
+          className="w-auto min-w-36"
+          options={[
+            { value: 'due', label: t('tasks.groupBy.due') },
+            ...(oneProject ? [] : [{ value: 'project', label: t('tasks.groupBy.project') }]),
+            ...(project ? [{ value: 'topic', label: t('tasks.groupBy.topic') }] : []),
+          ]}
+        />
+        <Select
+          value={prefs.sort}
+          onValueChange={(v) => setPrefs({ sort: v as SortKey })}
+          aria-label={t('tasks.sortBy')}
+          className="w-auto min-w-36"
+          options={(['due', 'priority', 'created', 'updated', 'title'] as SortKey[]).map((k) => ({ value: k, label: t(`tasks.sort.${k}` as 'tasks.sort.due') }))}
+        />
+        <Button variant={prefs.showDone ? 'secondary' : 'ghost'} aria-pressed={prefs.showDone} onClick={() => setPrefs({ showDone: !prefs.showDone })}>
+          {t('tasks.showDone')}
         </Button>
-      )}
-      {prefs.view === 'list' && (
-        <>
-          <Select
-            value={groupBy}
-            onValueChange={(v) => setPrefs({ groupBy: v as GroupBy })}
-            aria-label={t('tasks.groupBy')}
-            className="w-auto min-w-36"
-            options={[
-              { value: 'due', label: t('tasks.groupBy.due') },
-              ...(oneProject ? [] : [{ value: 'project', label: t('tasks.groupBy.project') }]),
-              ...(project ? [{ value: 'topic', label: t('tasks.groupBy.topic') }] : []),
-            ]}
-          />
-          <Select
-            value={prefs.sort}
-            onValueChange={(v) => setPrefs({ sort: v as SortKey })}
-            aria-label={t('tasks.sortBy')}
-            className="w-auto min-w-36"
-            options={(['due', 'priority', 'created', 'updated', 'title'] as SortKey[]).map((k) => ({ value: k, label: t(`tasks.sort.${k}` as 'tasks.sort.due') }))}
-          />
-          <Button variant={prefs.showDone ? 'secondary' : 'ghost'} aria-pressed={prefs.showDone} onClick={() => setPrefs({ showDone: !prefs.showDone })}>
-            {t('tasks.showDone')}
-          </Button>
-        </>
-      )}
-    </div>
-  )
+      </div>
+    ) : null
 
   const boardCommon = {
     projects,
@@ -314,17 +308,48 @@ export default function TasksPage() {
       />
     ) : null
 
+  const filterProps = { filters, onChange: setFilters, projects, labels, withProject: false }
+  const nav = data ? <ProjectNav scope={scope} onScope={setScope} projects={projects} stats={stats} emojis={emojis} onManage={() => setProjectsOpen(true)} /> : null
+
   return (
     <Page
       title={t('nav.tasks')}
       description={t('tasks.description')}
       width="full"
-      // below 400 px the switch leaves the header, or the title shrinks to "Tâc…"
-      actions={viewSwitch && <div className="max-[399px]:hidden">{viewSwitch}</div>}
+      actions={
+        <>
+          {/* below 400 px the switch leaves the header, or the title shrinks to "Tâc…" */}
+          {viewSwitch && <div className="max-[399px]:hidden">{viewSwitch}</div>}
+          {prefs.view === 'board' && scope === 'all' && (
+            <Button variant={prefs.lanes ? 'secondary' : 'outline'} size="sm" aria-pressed={prefs.lanes} onClick={() => setPrefs({ lanes: !prefs.lanes })} title={t('tasks.lanesHint')} data-testid="task-lanes">
+              <Rows3 />
+              <span className="max-lg:sr-only">{t('tasks.lanes')}</span>
+            </Button>
+          )}
+          {scope !== 'overview' && data && <FilterMenu {...filterProps} />}
+          {data && (
+            <Popover open={adding} onOpenChange={setAdding}>
+              <PopoverTrigger asChild>
+                <Button size="sm" data-testid="task-new">
+                  <Plus />
+                  <span className="max-sm:sr-only">{t('tasks.cmd.new')}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(30rem,calc(100vw-2rem))] p-3">
+                <QuickAdd projects={projects} today={today} onAdd={(p) => addParsed(p)} />
+              </PopoverContent>
+            </Popover>
+          )}
+        </>
+      }
     >
-      <div className="mx-auto grid max-w-[1800px] gap-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6">
+      {nav && (
+        <PageList id="tasks" label={t('nav.tasks')}>
+          {nav}
+        </PageList>
+      )}
+      <div className="mx-auto grid max-w-[1800px] gap-4">
         {viewSwitch && <div className="min-[400px]:hidden">{viewSwitch}</div>}
-        {data ? <ProjectNav scope={scope} onScope={setScope} projects={projects} stats={stats} emojis={emojis} onManage={() => setProjectsOpen(true)} /> : <div className="max-md:hidden" />}
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4">
           {corrupt && (
             <Callout
@@ -363,16 +388,15 @@ export default function TasksPage() {
               <BoardSkeleton />
             ) : scope === 'overview' ? (
               <>
-                <QuickAdd projects={projects} today={today} inputRef={quickRef} onAdd={(p) => addParsed(p)} />
-                {tasks.length === 0 ? <NoTasks onNew={() => quickRef.current?.focus()} /> : <TaskOverview projects={projects} stats={stats} emojis={emojis} today={today} onPick={setScope} />}
+                {tasks.length === 0 ? <NoTasks onNew={() => setAdding(true)} /> : <TaskOverview projects={projects} stats={stats} emojis={emojis} today={today} onPick={setScope} />}
               </>
             ) : (
               <>
                 {oneProject && <ProjectHeader project={project} emoji={project?.workspace ? emojis.get(project.workspace) : undefined} stats={statsOf(stats, project ? project.id : '')} onManage={() => setProjectsOpen(true)} />}
-                <QuickAdd projects={projects} today={today} inputRef={quickRef} onAdd={(p) => addParsed(p)} />
-                <FilterBar filters={filters} onChange={setFilters} projects={projects} labels={labels} extra={viewExtras} withProject={false} />
+                <FilterChips {...filterProps} />
+                {viewExtras}
                 {tasks.length === 0 ? (
-                  <NoTasks onNew={() => quickRef.current?.focus()} />
+                  <NoTasks onNew={() => setAdding(true)} />
                 ) : visible.length === 0 && prefs.view !== 'calendar' && (prefs.view === 'list' || filtering) ? (
                   <EmptyState
                     compact

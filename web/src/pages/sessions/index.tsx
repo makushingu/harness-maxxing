@@ -21,12 +21,15 @@ import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogT
 import { focusComposer, MAX_STACK, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
 import { stripRows } from './layouts'
 import { SessionTree } from './Tree'
+import { AgentHover } from '@/features/agents/AgentHover'
 import { LayoutDropBar, LayoutPicker } from './LayoutPicker'
 import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, WhereBadge, StripContext, type ColumnVariant, type Place } from './Column'
 import { PreviewProvider } from './FilePreview'
 import { HudBar } from './Hud'
 import { parseAgentPath, topicLabel, useIsMobile } from './util'
 import { useTouchNav } from '@/components/shell/TouchNav'
+import { PageList } from '@/components/shell/PageList'
+import { useUI } from '@/stores/ui'
 import { enter, MaxxingDriver, promoteColumn, useMaxxing, useMaxxingEnabled } from './maxxing'
 import { MaxxingControls } from './MaxxingMeter'
 import { MobileTabsSlot, stepCol, TabsArrows, TabsBar, TabsToggle, useSwipe } from './Tabs'
@@ -63,10 +66,10 @@ function Workspace() {
   // sort, widths saved while resizing...).
   const cols = useSessionsUI((s) => s.cols)
   const focused = useSessionsUI((s) => s.focused)
-  const treeHidden = useSessionsUI((s) => s.treeHidden)
   const widths = useSessionsUI((s) => s.widths)
   const rowSplit = useSessionsUI((s) => s.rowSplit)
-  const setTreeHidden = useSessionsUI((s) => s.setTreeHidden)
+  const listOpen = useUI((s) => s.secondBarOpen)
+  const setListOpen = useUI((s) => s.setSecondBarOpen)
   const tabs = useSessionsUI((s) => s.tabs)
   const { data: ws } = useWorkspace()
   const { data: sessions, isError: sessionsFailed, refetch: refetchSessions } = useSessions(undefined, false)
@@ -111,7 +114,7 @@ function Workspace() {
     const show = params.get('show')
     if (show === 'running' || show === 'unread') {
       st.setShow(show)
-      if (st.treeHidden) st.setTreeHidden(false)
+      if (!mobile) useUI.getState().setSecondBarOpen(true)
       if (mobile) useTouchNav.getState().setPanel('sessions')
     }
     else if (params.get('new') === '1' && path !== null) {
@@ -622,16 +625,6 @@ function Workspace() {
       {/* Touch layout: the session layer has its own header (☰, ⋯, ⊞); nothing while the session to show is picked. */}
       {!mobileOpen && !touchPicking && header}
       <div className="flex min-h-0 flex-1">
-        {!mobile && treeHidden && (
-          // Folded tree: a slim rail keeps the unfold button where the fold button was (top left of the pane).
-          <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r bg-sidebar/40 py-2">
-            <Tooltip content={t('sessions.tree.show')} side="right">
-              <Button variant="ghost" size="icon-sm" aria-label={t('sessions.tree.show')} onClick={() => setTreeHidden(false)}>
-                <PanelLeftOpen />
-              </Button>
-            </Tooltip>
-          </div>
-        )}
         {mobile && !mobileOpen && !touchPicking && (
           <div className="flex flex-1 items-center justify-center p-6">
             {!sessions && sessionsFailed && (
@@ -665,16 +658,13 @@ function Workspace() {
             )}
           </div>
         )}
-        {!mobile && !treeHidden && (
-          <SessionTree
-            onHide={() => setTreeHidden(true)}
-            className="w-72 shrink-0 border-r bg-sidebar/40"
-            onOpenSession={openSession}
-            onNewSession={newSession}
-            activePath={currentTopic ?? null}
-            openIds={openIds}
-            focusedId={focusedId}
-          />
+        {!mobile && (
+          <PageList id="sessions" label={t('nav.sessions')}>
+            {/* the agents listed under their topic show their Office card on hover */}
+            <AgentHover className="min-h-0 flex-1">
+              <SessionTree className="min-h-0 flex-1" onOpenSession={openSession} onNewSession={newSession} activePath={currentTopic ?? null} openIds={openIds} focusedId={focusedId} />
+            </AgentHover>
+          </PageList>
         )}
         {!mobile && (
           <StripContext.Provider value={strip_}>
@@ -701,7 +691,12 @@ function Workspace() {
                       <Button onClick={newInCurrent} disabled={defaultTopic === null}>
                         <MessageSquarePlus /> {t('sessions.newSession')}
                       </Button>
-                      <Button variant="outline" onClick={() => setHelpOpen(true)}>
+                      {!listOpen && (
+                        <Button variant="outline" onClick={() => setListOpen(true)}>
+                          <PanelLeftOpen /> {t('sessions.tree.show')}
+                        </Button>
+                      )}
+                      <Button variant="ghost" onClick={() => setHelpOpen(true)}>
                         <Keyboard /> {t('sessions.shortcuts.title')}
                       </Button>
                     </>

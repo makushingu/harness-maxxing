@@ -14,6 +14,8 @@ import { useIsMobile } from '@/stores/media'
 import { useRegisterCommands, useRegisterProvider, type Command } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
 import { PageHeader } from '@/components/shell/Page'
+import { PageList } from '@/components/shell/PageList'
+import { keepPageListOpen, openPageList } from '@/components/shell/TouchNav'
 import {
   Button,
   confirm,
@@ -66,6 +68,8 @@ export default function FilesPage() {
   const go = React.useCallback(
     (p: string, kind?: 'file' | 'dir', replace = false) => {
       if (kind) seedFileKind(qc, p, kind)
+      // touch: a folder opened from the list drawer keeps it open (a file closes it)
+      if (kind === 'dir') keepPageListOpen()
       navigate(`/files?path=${encodeURIComponent(p)}`, { replace })
     },
     [navigate, qc],
@@ -307,8 +311,6 @@ export default function FilesPage() {
   }, { enabled: !mobile })
 
   /* ---------------- render */
-  const showListing = !mobile || !isFile
-  const showViewer = !mobile || isFile
   const segs = cwd && root ? crumbs(file || cwd, root) : []
   const upTarget = mobile ? (file ? dirname(file) : cwd && root && cwd !== root ? dirname(cwd) : null) : null
 
@@ -318,6 +320,24 @@ export default function FilesPage() {
   else title = <Breadcrumb segs={segs} onGo={(p) => go(p, 'dir')} onDropPath={(from, dir) => void moveTo(from, dir)} />
 
   const kindError = kindQ.isError ? kindQ.error : null
+  // the folder's list in the second-level sidebar (PageList; touch: the left drawer), the file in the page
+  const listing = (
+    <Listing
+      className="flex-1"
+      list={list}
+      loading={!kindQ.data || listQ.isPending}
+      error={listQ.error}
+      onRetry={() => listQ.refetch()}
+      selected={file}
+      actions={entryActions}
+      onUpload={upload}
+      onPickFiles={pickFiles}
+      uploads={uploads.items}
+      onClearUploads={uploads.clear}
+      onCancelUploads={uploads.cancelAll}
+      onUp={cwd && root && cwd !== root ? () => go(dirname(cwd), 'dir') : undefined}
+    />
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="files-page">
@@ -384,65 +404,55 @@ export default function FilesPage() {
         />
       ) : (
         <div className="flex min-h-0 flex-1">
-          {showListing && (
-            <Listing
-              className={cn('border-r bg-background', mobile ? 'w-full' : 'w-[300px] shrink-0 lg:w-[340px] xl:w-[380px]')}
-              list={list}
-              loading={!kindQ.data || listQ.isPending}
-              error={listQ.error}
-              onRetry={() => listQ.refetch()}
-              selected={file}
-              actions={entryActions}
-              onUpload={upload}
-              onPickFiles={pickFiles}
-              uploads={uploads.items}
-              onClearUploads={uploads.clear}
-              onCancelUploads={uploads.cancelAll}
-              onUp={cwd && root && cwd !== root ? () => go(dirname(cwd), 'dir') : undefined}
-            />
-          )}
-          {showViewer && (
-            <section className="flex min-w-0 flex-1 flex-col" aria-label={t('files.viewer')}>
-              {file ? (
-                kindQ.data === 'missing' ? (
-                  <EmptyState
-                    className="flex-1"
-                    icon={FileQuestion}
-                    title={t('files.notFound')}
-                    description={t('files.notFoundDesc')}
-                    action={
-                      <Button variant="secondary" onClick={() => go(dirname(file), 'dir')}>
-                        {t('files.openFolder')}
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <FileView key={file} path={file} siblings={visible} entry={entry} actions={viewActions} />
-                )
-              ) : kindQ.data ? (
+          <PageList id="files" label={t('nav.files')}>
+            {listing}
+          </PageList>
+          <section className="flex min-w-0 flex-1 flex-col" aria-label={t('files.viewer')}>
+            {file ? (
+              kindQ.data === 'missing' ? (
                 <EmptyState
                   className="flex-1"
-                  icon={MousePointerClick}
-                  title={t('files.selectFile')}
-                  description={t('files.selectFileDesc')}
+                  icon={FileQuestion}
+                  title={t('files.notFound')}
+                  description={t('files.notFoundDesc')}
                   action={
-                    <>
-                      <Button variant="secondary" onClick={pickFiles}>
-                        <Upload />
-                        {t('files.upload')}
-                      </Button>
-                      <Button variant="ghost" onClick={newFile}>
-                        <FilePlus />
-                        {t('files.newFile')}
-                      </Button>
-                    </>
+                    <Button variant="secondary" onClick={() => go(dirname(file), 'dir')}>
+                      {t('files.openFolder')}
+                    </Button>
                   }
                 />
               ) : (
-                <div className="flex-1" />
-              )}
-            </section>
-          )}
+                <FileView key={file} path={file} siblings={visible} entry={entry} actions={viewActions} />
+              )
+            ) : kindQ.data ? (
+              <EmptyState
+                className="flex-1"
+                icon={MousePointerClick}
+                title={t('files.selectFile')}
+                description={t('files.selectFileDesc')}
+                action={
+                  <>
+                    {mobile && (
+                      <Button onClick={openPageList}>
+                        <Folder />
+                        {t('files.openFolder')}
+                      </Button>
+                    )}
+                    <Button variant="secondary" onClick={pickFiles}>
+                      <Upload />
+                      {t('files.upload')}
+                    </Button>
+                    <Button variant="ghost" onClick={newFile}>
+                      <FilePlus />
+                      {t('files.newFile')}
+                    </Button>
+                  </>
+                }
+              />
+            ) : (
+              <div className="flex-1" />
+            )}
+          </section>
         </div>
       )}
       <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />

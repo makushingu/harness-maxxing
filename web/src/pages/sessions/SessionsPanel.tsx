@@ -7,8 +7,11 @@ import { useTouchNav } from '@/components/shell/TouchNav'
 import { SessionTree } from './Tree'
 import { useSessionsUI } from './store'
 import { useSessionSeeded } from '@/lib/queries'
+import { ListHead } from '@/components/shell/PageList'
+import { useT } from '@/i18n'
 
 export default function SessionsPanel() {
+  const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
   const cols = useSessionsUI((s) => s.cols)
@@ -25,5 +28,10 @@ export default function SessionsPanel() {
   }
   const onOpen = (s: Pick<Session, 'id' | 'path'>) => go(`path=${encodeURIComponent(s.path)}&session=${s.id}`)
   const onNew = (path: string) => go(`path=${encodeURIComponent(path)}&new=1`)
-  return <SessionTree touch className="min-h-0 flex-1" onOpenSession={onOpen} onNewSession={onNew} activePath={activePath} openIds={openIds} focusedId={focusedId} />
+  return (
+    <>
+      <ListHead label={t('nav.sessions')} />
+      <SessionTree touch className="min-h-0 flex-1" onOpenSession={onOpen} onNewSession={onNew} activePath={activePath} openIds={openIds} focusedId={focusedId} />
+    </>
+  )
 }

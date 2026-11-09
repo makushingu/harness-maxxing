@@ -13,6 +13,42 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   files raw/preview/thumb/stat, `/media-roots`), Feedback `image` ({mime, data base64 <= 1 MB, width, height},
   `feedback.image()`, bodylimit 2 MB on POST /api/settings/feedback; cloud: `lead_images`, 100 a day, 6 months),
   plus the Radar commits since a131.
+- Second-level sidebar: `components/shell/PageList.tsx` = `SecondBar` slot rendered by `Sidebar.tsx` + `PageList`
+  portal from each page (container = shell, content = page); `useClosedList` / `entryPeek` = hover peek of the
+  current page's entry while closed, native events (the portal breaks React's synthetic hover). Shared width handle
+  `components/shell/ResizeEdge.tsx`. `stores/ui.ts`: `secondBarOpen` (one for every page), `secondBarWidth`
+  (`SECOND_W` 220-520, default 288), `sidebarCollapsed` defaults to false. Removed: `SessionsRail.tsx`,
+  `AgentsRail.tsx`, `TeamRail.tsx`, `pages/sessions/RailTree.tsx`, `sidePanel.ts` (a133 rails; the hover previews of
+  sessions / chats go with them). Users: Sessions tree, Agents list, Team chats, Tasks `ProjectNav`,
+  Infra `InfraNav`, Files `Listing`, mail `FolderList` + `MailboxNav` (the old `FolderPane` is gone); mail shows two
+  panes (list | message) from 760 px.
+- Palette chips (`CommandPalette.tsx`): `CHIPS` / `chipOf` = type from the command id prefix (`session:`, `run:` =
+  a session of an agent, `agent:`, `group:`, `task:`, `file:` / `name:`, `memory:`, `settings:`, `doc:`,
+  `nav:`/`act:`/`help:`); page sources and providers have none (All only). A chip with `kinds` re-queries
+  `/api/search?kinds=…&limit=60` (All: limit 36, 6 lines per async group + a "See the N" item). Counts = cmdk's
+  own filter over the static commands + the All search's hits. Touch sessions drawer: `ListHead` (shared head of
+  `PageList`).
+- `NotificationsBell` removed: unread count on Home (`HomeNavExtra`, a dot when folded; Home tile of the ⊞ menu,
+  Notifications tile removed); folded sidebar: search icon (palette) instead. Dashboard header bell unchanged.
+- Agents: `features/agents/AgentsPage.tsx` `NewButtons` (New group outline + New agent primary, in the Office
+  header; `?topic=` starts the group in its project); list without search / + / New group.
+  Sessions: `Tree.tsx` `ListHeader` without filter (touch: New session right of the chips).
+- Team: `features/team/TeamBubbles.tsx` `Tools` `chatId` -> close the bubble + `/team?chat=<id>`; the bubbles
+  switch = `teamOptions` in `pages/settings/sections/Features.tsx` (sub-row of Team, per browser).
+- Tasks: `features/tasks/Toolbar.tsx` `FilterMenu` (popover) + `FilterChips`, `FilterBar` and the search field
+  removed (a `q` still in the URL shows as a clearable chip); New task = popover with the quick-add field, key `N`.
+- Touch layout: `components/shell/TouchNav.tsx` `TouchListButton` (☰ = the page's `PageList` in the left drawer via
+  `ListSlot`; Sessions keeps its own drawer; no button when the page registers no list), `openPageList()` (empty
+  states), `keepPageListOpen()` (a click in the list closes the drawer unless the handler calls it: Files folders,
+  mail mailboxes); edge swipe opens the same list in the installed app. Removed on touch: Tasks / Infra chip rows
+  (`ProjectNav` column only), mail folders sheet + mailbox picker, `/agents` list page (phone = Office), Team list
+  page (first chat; empty state button). `tour.nav.bodyMobile` updated.
+- Mail: list width handle (`ResizeEdge`) in `features/mail/MailPage.tsx`, localStorage `mx.mail.listWidth`, min 280 px,
+  360 px left for the message, double-click = default.
+- Notifications `/feed` (`pages/feed/index.tsx`): `PageList` of sources (All + unread, To handle when pending, each
+  source with icon + unread or total), day groups, `FeedItem roomy` (round level icon, 3-line clamp + Show more),
+  header All / Unread + Mark all read (scoped to the source) + settings; state in `?source=`, `?pending=1`,
+  `?unread=1`. `PageList entry` prop: the hover peek of a closed second bar binds to another sidebar entry (Home).
 
 ## 2.0.0-alpha.132 - 2026-11-08
 

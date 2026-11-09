@@ -1,18 +1,22 @@
-// Feature page "E-mail" (/mail, Settings -> Features -> mail_page): any IMAP/SMTP mailbox. Folders | messages |
-// message on wide screens, one pane at a time on a phone. The account, folder and message shown are in the URL
+// Feature page "E-mail" (/mail, Settings -> Features -> mail_page): any IMAP/SMTP mailbox. The mailboxes (and the folders
+// of the one open) are the second-level sidebar (MailboxNav in PageList; touch: the left drawer); the page shows
+// messages | message (the list's width dragged by its edge), one pane at a time when narrow. The account, folder and message shown are in the URL
 // (?a=<account>&f=<folder>&m=<uid>), so Claude can link to a message; ?a=* = "All mailboxes" (the cache of the last
 // checks). The Notifications link to a draft an agent wrote as ?account=<id>&folder=<f>&draft=<uid>: it opens in Compose.
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  Archive, Flag, FolderPlus, Mail, MailOpen, MoreHorizontal, Paperclip, Pencil, Plus, RefreshCw, Reply, Search, Settings2, SquarePen, Trash2, X,
+  Archive, Flag, FolderPlus, Inbox, Mail, MailOpen, MoreHorizontal, Paperclip, Pencil, Plus, RefreshCw, Reply, Search, Settings2, SquarePen, Trash2, X,
 } from 'lucide-react'
 import {
   Button, Checkbox, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Segmented,
-  Select, Sensitive, Sheet, SheetBody, SheetContent, SheetTitle, Skeleton, Tooltip, useMask,
+  Sensitive, Skeleton, Tooltip, useMask,
 } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
+import { PageList } from '@/components/shell/PageList'
+import { ResizeEdge } from '@/components/shell/ResizeEdge'
+import { keepPageListOpen } from '@/components/shell/TouchNav'
 import { errorMessage } from '@/lib/api'
 import { toast } from '@/components/ui/toast'
 import type { MailAccount, MailAction, MailComposeMode, MailFolder, MailMessage, MailSummary } from '@/lib/types'
@@ -21,7 +25,7 @@ import {
   useSettings,
 } from '@/lib/queries'
 import { fmtRelative } from '@/lib/format'
-import { cn } from '@/lib/utils'
+import { cn, store } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { AccountDialog } from './AccountDialog'
 import { Compose, signatureBlock, type ComposeInit } from './Compose'
@@ -31,12 +35,124 @@ import { OutboxBanner, SeenByAvatars, Verified } from './agents'
 import { clean, depth, folderIcon, folderLabel, leaf, shortDate, who } from './shared'
 import { composeHeldElsewhere, loadCompose, loadFiles, replyOf } from './localDraft'
 
+/** The message list's width (px) beside the reader: its bounds and where it is kept. */
+const LIST_MIN = 280
+const READER_MIN = 360
+const LIST_W_KEY = 'mx.mail.listWidth'
+
 /** `a` of "All mailboxes" in the URL (a mailbox id always has a dash, never a star). */
 export const ALL = '*'
 
 type Filter = 'all' | 'unread' | 'flagged'
 
-function FolderPane({ acc, all, accounts, folders, loading, error, current, onPick, onAccount, onAddAccount, onEditAccount }: {
+/** The folders of a mailbox (rename / delete a folder of your own from its ⋯; `newName` set = the New folder field). */
+function FolderList({ acc, folders, loading, error, current, onPick, newName, setNewName, className }: {
+  acc: MailAccount
+  folders: MailFolder[]
+  loading: boolean
+  error: unknown
+  current: string
+  onPick: (f: string) => void
+  newName: string | null
+  setNewName: (v: string | null) => void
+  className?: string
+}) {
+  const t = useT()
+  const mask = useMask()
+  const create = useMailCreateFolder(acc.id)
+  const rename = useMailRenameFolder(acc.id)
+  const del = useMailDeleteFolder(acc.id)
+  const [renaming, setRenaming] = React.useState<{ from: string; to: string } | null>(null)
+  return (
+    <nav className={className} aria-label={t('mail.folders')}>
+      {loading ? (
+        <div className="grid gap-1.5 p-1">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-7" />
+          ))}
+        </div>
+      ) : error ? (
+        <p className="p-2 text-xs text-destructive">{errorMessage(error)}</p>
+      ) : (
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-px">
+          {folders.map((f) => {
+            const Icon = folderIcon(f)
+            const active = f.name === current
+            if (renaming?.from === f.name) {
+              return (
+                <li key={f.name}>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      if (renaming.to.trim()) rename.mutate({ name: f.name, new_name: renaming.to.trim() }, { onSuccess: (r) => (active && onPick(r.name), setRenaming(null)) })
+                    }}
+                  >
+                    <Input autoFocus className="h-8 text-[13px]" value={renaming.to} onChange={(e) => setRenaming({ ...renaming, to: e.target.value })} onBlur={() => setRenaming(null)} />
+                  </form>
+                </li>
+              )
+            }
+            return (
+              <li key={f.name} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => onPick(f.name)}
+                  className={cn(
+                    'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
+                    active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                  )}
+                  style={{ paddingLeft: 8 + depth(f) * 12 }}
+                  title={f.role ? f.name : mask(f.name)}
+                >
+                  <Icon className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
+                  {!!f.unread && f.role !== 'sent' && f.role !== 'trash' && <span className="text-xs font-semibold text-primary tabular-nums">{f.unread}</span>}
+                </button>
+                {!f.role && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 hidden size-6 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-background data-[state=open]:flex"
+                        aria-label={t('mail.folder.menu')}
+                      >
+                        <MoreHorizontal className="size-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setRenaming({ from: f.name, to: leaf(f.name, f.delim) })}>
+                        <Pencil /> {t('mail.folder.rename')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem destructive onSelect={() => window.confirm(t('mail.folder.deleteConfirm', { name: leaf(f.name, f.delim) })) && del.mutate(f.name, { onSuccess: () => active && onPick('INBOX') })}>
+                        <Trash2 /> {t('mail.folder.delete')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </li>
+            )
+          })}
+          {newName !== null && (
+            <li>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (newName.trim()) create.mutate({ name: newName.trim() }, { onSuccess: (r) => (setNewName(null), onPick(r.name)) })
+                }}
+              >
+                <Input autoFocus className="h-8 text-[13px]" placeholder={t('mail.folder.newPh')} value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => !newName.trim() && setNewName(null)} />
+              </form>
+            </li>
+          )}
+        </ul>
+      )}
+    </nav>
+  )
+}
+
+/** The second-level sidebar of the page (touch: the left drawer). All mailboxes (with two or more), each mailbox, the folders of the one
+ *  open under it (its ⋯: edit it, new folder), Add a mailbox at the bottom. */
+function MailboxNav({ acc, all, accounts, folders, loading, error, current, onPick, onAccount, onAddAccount, onEditAccount }: {
   acc: MailAccount
   all: boolean
   accounts: MailAccount[]
@@ -51,141 +167,77 @@ function FolderPane({ acc, all, accounts, folders, loading, error, current, onPi
 }) {
   const t = useT()
   const mask = useMask()
-  const create = useMailCreateFolder(acc.id)
-  const rename = useMailRenameFolder(acc.id)
-  const del = useMailDeleteFolder(acc.id)
   const [newName, setNewName] = React.useState<string | null>(null)
-  const [renaming, setRenaming] = React.useState<{ from: string; to: string } | null>(null)
-
+  const row = (active: boolean) =>
+    cn(
+      'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] transition-colors pointer-coarse:h-10',
+      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+    )
   return (
-    <div className="flex min-h-0 flex-col">
-      <div className="flex items-center gap-1 p-2">
-        {accounts.length > 1 ? (
-          <Select
-            className="h-8 min-w-0 flex-1 text-[13px]"
-            aria-label={t('mail.account')}
-            value={all ? ALL : acc.id}
-            onValueChange={onAccount}
-            options={[{ value: ALL, label: t('mail.all.title') }, ...accounts.map((a) => ({ value: a.id, label: mask(a.label || a.address, 8) }))]}
-          />
-        ) : (
-          <span className="min-w-0 flex-1 truncate px-1.5 text-[13px] font-medium" title={mask(acc.address, 8)}>
-            <Sensitive length={8}>{acc.label || acc.address}</Sensitive>
-          </span>
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="mail-boxes">
+      <nav className="min-h-0 flex-1 overflow-y-auto p-2" aria-label={t('mail.account')}>
+        {accounts.length > 1 && (
+          <button type="button" className={row(all)} onClick={() => onAccount(ALL)} aria-current={all || undefined}>
+            <Inbox className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{t('mail.all.title')}</span>
+          </button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={t('mail.accountMenu')}>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {!all && (
-              <DropdownMenuItem onSelect={onEditAccount}>
-                <Settings2 /> {t('mail.acc.edit')}
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onSelect={onAddAccount}>
-              <Plus /> {t('mail.acc.addTitle')}
-            </DropdownMenuItem>
-            {!all && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setNewName('')}>
-                  <FolderPlus /> {t('mail.folder.new')}
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {all ? (
-        <p className="px-3.5 text-xs text-muted-foreground">{t('mail.all.desc')}</p>
-      ) : (
-        <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label={t('mail.folders')}>
-          {loading ? (
-            <div className="grid gap-1.5 p-1">
-              {Array.from({ length: 6 }, (_, i) => (
-                <Skeleton key={i} className="h-7" />
-              ))}
-            </div>
-          ) : error ? (
-            <p className="p-2 text-xs text-destructive">{errorMessage(error)}</p>
-          ) : (
-            <ul className="grid grid-cols-[minmax(0,1fr)] gap-px">
-              {folders.map((f) => {
-                const Icon = folderIcon(f)
-                const active = f.name === current
-                if (renaming?.from === f.name) {
-                  return (
-                    <li key={f.name}>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault()
-                          if (renaming.to.trim()) rename.mutate({ name: f.name, new_name: renaming.to.trim() }, { onSuccess: (r) => (active && onPick(r.name), setRenaming(null)) })
-                        }}
+        {accounts.map((a) => {
+          const open = !all && a.id === acc.id
+          return (
+            <div key={a.id} className="mt-0.5">
+              <div className="group relative">
+                <button type="button" className={cn(row(open), 'pr-9')} onClick={() => onAccount(a.id)} aria-current={open || undefined} title={mask(a.address, 8)} data-testid="mail-box">
+                  <Mail className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    <Sensitive length={8}>{a.label || a.address}</Sensitive>
+                  </span>
+                </button>
+                {open && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+                        aria-label={t('mail.accountMenu')}
                       >
-                        <Input autoFocus className="h-8 text-[13px]" value={renaming.to} onChange={(e) => setRenaming({ ...renaming, to: e.target.value })} onBlur={() => setRenaming(null)} />
-                      </form>
-                    </li>
-                  )
-                }
-                return (
-                  <li key={f.name} className="group relative">
-                    <button
-                      type="button"
-                      onClick={() => onPick(f.name)}
-                      className={cn(
-                        'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
-                        active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-                      )}
-                      style={{ paddingLeft: 8 + depth(f) * 12 }}
-                      title={f.role ? f.name : mask(f.name)}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
-                      {!!f.unread && f.role !== 'sent' && f.role !== 'trash' && <span className="text-xs font-semibold text-primary tabular-nums">{f.unread}</span>}
-                    </button>
-                    {!f.role && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="absolute top-1 right-1 hidden size-6 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-background data-[state=open]:flex"
-                            aria-label={t('mail.folder.menu')}
-                          >
-                            <MoreHorizontal className="size-3.5" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setRenaming({ from: f.name, to: leaf(f.name, f.delim) })}>
-                            <Pencil /> {t('mail.folder.rename')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem destructive onSelect={() => window.confirm(t('mail.folder.deleteConfirm', { name: leaf(f.name, f.delim) })) && del.mutate(f.name, { onSuccess: () => active && onPick('INBOX') })}>
-                            <Trash2 /> {t('mail.folder.delete')}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </li>
-                )
-              })}
-              {newName !== null && (
-                <li>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      if (newName.trim()) create.mutate({ name: newName.trim() }, { onSuccess: (r) => (setNewName(null), onPick(r.name)) })
-                    }}
-                  >
-                    <Input autoFocus className="h-8 text-[13px]" placeholder={t('mail.folder.newPh')} value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => !newName.trim() && setNewName(null)} />
-                  </form>
-                </li>
+                        <MoreHorizontal className="size-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={onEditAccount}>
+                        <Settings2 /> {t('mail.acc.edit')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setNewName('')}>
+                        <FolderPlus /> {t('mail.folder.new')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+              {open && (
+                <FolderList
+                  className="mt-0.5 mb-2 ml-3.5 border-l pl-1.5"
+                  acc={acc}
+                  folders={folders}
+                  loading={loading}
+                  error={error}
+                  current={current}
+                  onPick={onPick}
+                  newName={newName}
+                  setNewName={setNewName}
+                />
               )}
-            </ul>
-          )}
-        </nav>
-      )}
+            </div>
+          )
+        })}
+      </nav>
+      <div className="shrink-0 border-t p-2">
+        <button type="button" className={row(false)} onClick={onAddAccount} data-testid="mail-add-box">
+          <Plus className="size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{t('mail.acc.addTitle')}</span>
+        </button>
+      </div>
     </div>
   )
 }
@@ -286,15 +338,23 @@ export default function MailPage() {
   const [page, setPage] = React.useState(0)
   const [checked, setChecked] = React.useState<Set<number>>(new Set())
   const [dialog, setDialog] = React.useState<'add' | 'edit' | null>(null)
-  const [foldersOpen, setFoldersOpen] = React.useState(false)
   const [compose, setCompose] = React.useState<ComposeInit | null>(null)
   const mask = useMask()
   // the panes follow the width the page really has (the sidebar open or not), not the window: three panes leave
   // the reader at least ~26rem, else one pane beside the folders, else one pane at a time
   const [box, setBox] = React.useState<HTMLDivElement | null>(null)
   const width = useWidth(box)
-  const wide = width >= 1000
-  const mid = width >= 700
+  // the folders are in the second-level sidebar: messages | message from 760 px, one pane at a time below
+  const wide = width >= 760
+  // the list's width beside the reader: dragged by its right edge, kept in this browser (double-click: the default)
+  const listRef = React.useRef<HTMLElement>(null)
+  const [savedW, setSavedW] = React.useState(() => Number(store.get(LIST_W_KEY)) || 0)
+  const saveListW = (w: number | null) => {
+    if (w) store.set(LIST_W_KEY, String(Math.round(w)))
+    else store.remove(LIST_W_KEY)
+    setSavedW(w ? Math.round(w) : 0)
+  }
+  const listW = Math.max(LIST_MIN, Math.min(savedW || (width >= 1200 ? 416 : 352), width - READER_MIN))
 
   const folders = useMailFolders(all ? null : acc?.id || null)
   const msgs = useMailList(all ? null : acc?.id || null, folder, page, query, filter)
@@ -476,11 +536,6 @@ export default function MailPage() {
       actions={
         acc && (
           <>
-            {!mid && (
-              <Button variant="outline" size="sm" onClick={() => setFoldersOpen(true)}>
-                {all ? t('mail.all.title') : current ? folderLabel(current, t) : leaf(folder, '.')}
-              </Button>
-            )}
             <Tooltip content={checkedTip}>
               <Button variant="ghost" size="icon" onClick={refresh} aria-label={t('mail.check.now')} data-testid="mail-refresh">
                 <RefreshCw className={cn((check.isPending || msgs.isFetching) && 'animate-spin')} />
@@ -537,8 +592,8 @@ export default function MailPage() {
     )
   }
 
-  const folderPane = (
-    <FolderPane
+  const boxNav = (
+    <MailboxNav
       acc={acc}
       all={all}
       accounts={list}
@@ -546,8 +601,8 @@ export default function MailPage() {
       loading={folders.isLoading}
       error={folders.error}
       current={folder}
-      onPick={(f) => (go({ f, m: null }), setFoldersOpen(false))}
-      onAccount={(a) => (go({ a, f: 'INBOX', m: null }), a === ALL && setFoldersOpen(false))}
+      onPick={(f) => go({ f, m: null })}
+      onAccount={(a) => (keepPageListOpen(), go({ a, f: 'INBOX', m: null }))}
       onAddAccount={() => setDialog('add')}
       onEditAccount={() => setDialog('edit')}
     />
@@ -703,26 +758,23 @@ export default function MailPage() {
     <div className="flex min-h-0 flex-1 flex-col" ref={setBox}>
       {header}
       <div className="flex min-h-0 flex-1">
-        {mid && <aside className="flex w-56 shrink-0 flex-col border-r bg-muted/20">{folderPane}</aside>}
+        <PageList id="mail" label={t('nav.mail')}>
+          {boxNav}
+        </PageList>
         {all ? (
           <section className="flex min-w-0 flex-1 flex-col">{allPane}</section>
         ) : wide ? (
           <>
-            <section className={cn('flex shrink-0 flex-col border-r', width >= 1200 ? 'w-[26rem]' : 'w-[22rem]')}>{listPane}</section>
+            <section ref={listRef} className="relative flex shrink-0 flex-col border-r" style={{ width: listW }}>
+              {listPane}
+              <ResizeEdge side={listRef} min={LIST_MIN} max={Math.max(LIST_MIN, width - READER_MIN)} onWidth={saveListW} />
+            </section>
             <section className="flex min-w-0 flex-1 flex-col">{reader}</section>
           </>
         ) : (
           <section className="flex min-w-0 flex-1 flex-col">{uid ? reader : listPane}</section>
         )}
       </div>
-      {!mid && (
-        <Sheet open={foldersOpen} onOpenChange={setFoldersOpen}>
-          <SheetContent side="bottom" aria-describedby={undefined}>
-            <SheetTitle className="sr-only">{t('mail.folders')}</SheetTitle>
-            <SheetBody className="pt-2">{folderPane}</SheetBody>
-          </SheetContent>
-        </Sheet>
-      )}
       {compose && <Compose key={`${compose.mode}-${compose.reply?.uid || compose.draft?.uid || 'new'}-${compose.restored ? 'r' : ''}`} init={compose} accounts={list} onClose={() => setCompose(null)} />}
       <AccountDialog
         open={!!dialog}

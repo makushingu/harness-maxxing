@@ -19,8 +19,12 @@ export const ACCENTS = ['blue', 'clay', 'violet', 'green', 'amber', 'rose'] as c
 export type Accent = (typeof ACCENTS)[number]
 
 /** Expanded sidebar width (px): dragged by its right edge, double-click = default. */
+/** The sidebar entries that open a list beside the bar (Sidebar.tsx). */
 export const SIDEBAR_W = { min: 220, max: 440, default: 264 }
 const clampSidebar = (w: number) => Math.round(Math.max(SIDEBAR_W.min, Math.min(SIDEBAR_W.max, w)))
+/** The second-level sidebar's width (components/shell/PageList.tsx). */
+export const SECOND_W = { min: 220, max: 520, default: 288 }
+const clampSecond = (w: number) => Math.round(Math.max(SECOND_W.min, Math.min(SECOND_W.max, w)))
 
 type UIState = {
   theme: Theme
@@ -34,6 +38,11 @@ type UIState = {
   sidebarCollapsed: boolean
   /** Width of the expanded sidebar dragged by the user (desktop); null = the default (SIDEBAR_W). */
   sidebarWidth: number | null
+  /** The second-level sidebar (the list of Sessions, Agents, Team; desktop, components/shell/PageList.tsx) is open, for
+   *  every page; closed, the page's entry in the sidebar shows it on hover. */
+  secondBarOpen: boolean
+  /** Its width dragged by the user; null = the default (SECOND_W). */
+  secondBarWidth: number | null
   layout: Layout
   touchHome: TouchHome
   /** Presentation mode: every <Sensitive> renders a mask instead of its content. */
@@ -65,6 +74,8 @@ type UIState = {
   setLanguage: (l: Language) => void
   toggleSidebar: () => void
   setSidebarWidth: (w: number | null) => void
+  setSecondBarOpen: (v: boolean) => void
+  setSecondBarWidth: (w: number | null) => void
   setLayout: (l: Layout) => void
   setTouchHome: (h: TouchHome) => void
   setPresentation: (on: boolean) => void
@@ -90,9 +101,11 @@ export const useUI = create<UIState>()(
       font: 'inter',
       monoFont: 'system',
       language: initialLang(),
-      // New browsers start with the icon bar (it unfolds over the page on hover); the pin keeps it open.
-      sidebarCollapsed: true,
+      // New browsers start with the labelled sidebar (pinned); the pin folds it to the icon bar.
+      sidebarCollapsed: false,
       sidebarWidth: null,
+      secondBarOpen: true,
+      secondBarWidth: null,
       layout: 'auto',
       touchHome: 'session',
       presentation: false,
@@ -114,6 +127,8 @@ export const useUI = create<UIState>()(
       setLanguage: (language) => set({ language }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarWidth: (w) => set({ sidebarWidth: w == null ? null : clampSidebar(w) }),
+      setSecondBarOpen: (secondBarOpen) => set({ secondBarOpen }),
+      setSecondBarWidth: (w) => set({ secondBarWidth: w == null ? null : clampSecond(w) }),
       setLayout: (layout) => set({ layout }),
       setTouchHome: (touchHome) => set({ touchHome }),
       setPresentation: (presentation) => set({ presentation }),
@@ -143,6 +158,8 @@ export const useUI = create<UIState>()(
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
         out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
+        out.secondBarOpen = out.secondBarOpen !== false
+        out.secondBarWidth = typeof out.secondBarWidth === 'number' && Number.isFinite(out.secondBarWidth) ? clampSecond(out.secondBarWidth) : null
         if (out.touchHome !== 'dashboard') out.touchHome = 'session'
         return out
       },

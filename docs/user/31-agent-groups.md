@@ -19,8 +19,8 @@ Agents is switched off, no member's turn starts in any group: the hand-overs tha
 
 ## Create a group
 
-**The quick way**: on the **Agents** page, click the **group button** next to the **+** at the top of the list (or
-**New group with this agent** on an agent's page). Choose the **project**, tick **2 to 6 agents** (in the order they
+**The quick way**: on the **Agents** page, click **New group** at the top right of the Office, or
+**New group with this agent** on an agent's page. Choose the **project**, tick **2 to 6 agents** (in the order they
 speak when you write to everyone) and press **Create the group**. Its name is made from theirs; the rest uses the
 defaults. Then tell them in your first message what the group is for.
 

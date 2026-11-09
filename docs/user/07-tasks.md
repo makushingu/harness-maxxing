@@ -19,18 +19,21 @@ you create the project, follows it when you rename it, and when you delete the p
 a free project of the same name. You can add free projects too (Personal, Admin...), and a task does not
 need a project.
 
-The column on the left (a row of chips on a phone) picks what you see:
+The list of projects (in the second bar next to the sidebar on a computer, see
+[Sessions](04-sessions.md#layout); under **☰** at the top left on a phone) picks what you see:
 - **Overview**: one card per project with its open tasks, progress, overdue and urgent tasks and the next
   due date; projects that need attention come first. Click a card to open the project.
 - **All tasks**, **No project**, or one project: its header shows its progress and a **Sessions** button
-  that opens the project in Sessions. Quick add files new tasks in the project you are looking at.
+  that opens the project in Sessions. **New task** files new tasks in the project you are looking at.
 - Hide a project you do not use for tasks with its **⋯** menu (the `system` project is hidden at first);
-  **N hidden projects** at the bottom shows them again. **Projects** (the gear icon, at the end of the chips on a
-  phone) renames them and changes their color.
+  **N hidden projects** at the bottom shows them again. The gear icon next to **Projects** renames them and changes
+  their color.
 
 A link to one project: `/tasks?project=<workspace project name>`.
 
 ## Views
+
+At the top right of the page: the view switch, **By project** (board, All tasks), **Filters** and **New task**.
 
 - **Board**: drag cards between columns and to reorder them (a task whose status you change in its sheet goes
   on top of Done, at the bottom of the other columns). In **All tasks**, **By project** shows one
@@ -40,18 +43,22 @@ A link to one project: `/tasks?project=<workspace project name>`.
   that day.
 - **Calendar**: the month, with each task on its due date. Click a day to list its tasks below the
   grid and add one for that day; on a computer, drag a task to another day.
-- **List**: grouped by due date, by project or (inside a project) by topic, sortable.
+- **List**: grouped by due date, by project or (inside a project) by topic, sortable: **Group by**, **Sort** and
+  **Show done** sit above the list.
 
 ## Using the board
 
-- Create a task with a title; add notes (markdown), priority (none, low, medium, urgent), due
+- **New task** (or the `N` key) opens a small field: type the title and press Enter (Esc closes it). Shortcuts
+  in the title: `#label`, `!` / `!!` / `!!!` for the priority, `@project`, `^date` (`^tomorrow`, `^fri`,
+  `^2026-05-04`). Then add notes (markdown), priority (none, low, medium, urgent), due
   date, labels, a task project (with a color) and optionally a linked workspace topic.
 - **Several at once**: Ctrl/⌘ + click cards (or click the round box in their corner, or the one
   next to a column / group title) to select them. A bar appears at the bottom: change their
   status, priority, due date, project or labels in one go, or delete them. Dragging a selected
   card moves the whole selection to the other column. **Esc** clears the selection; **Select all** in the bar
   (or Ctrl/⌘ + A once a task is selected) selects every visible task.
-- Filter by label, priority or due date; "today" shows overdue and due-today tasks.
+- **Filters** filters by label, priority or due date ("today" shows overdue and due-today tasks); the active
+  filters show as chips above the tasks, × removes one. To find a task by its words, use **Ctrl/⌘+K**.
 - The dashboard widget **Tasks** summarizes what is in progress and due.
 
 ## Asking Claude

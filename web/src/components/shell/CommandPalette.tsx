@@ -8,7 +8,7 @@ import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, us
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
 import { useUI, resolveTheme } from '@/stores/ui'
 import { cn, fold } from '@/lib/utils'
-import { tDyn, useT } from '@/i18n'
+import { tDyn, useT, type TKey } from '@/i18n'
 import { useCommandStore, type Command } from '@/commands/registry'
 import { Kbd, Spinner, usePresentation } from '@/components/ui'
 import { useNav } from './nav'
@@ -36,6 +36,9 @@ export function CommandPalette() {
   const presentation = usePresentation()
   const [q, setQ] = React.useState('')
   const dq = useDebounced(q.trim(), 200)
+  // the chip picked above the results (a type: sessions, agents, tasks...); 'all' while nothing is typed
+  const [picked, setChip] = React.useState<Chip>('all')
+  const chip: Chip = q.trim() ? picked : 'all'
   const logout = useLogout()
   const theme = useUI((s) => s.theme)
   const setTheme = useUI((s) => s.setTheme)
@@ -52,19 +55,26 @@ export function CommandPalette() {
   const { data: groupList } = useAgentGroups(open && agentsOn)
 
   React.useEffect(() => {
-    if (!open) setQ('')
+    if (!open) {
+      setQ('')
+      setChip('all')
+    }
   }, [open])
 
   // Async: files, sessions, registered providers.
-  const [asyncResults, setAsync] = React.useState<{ q: string; cmds: Command[] }>({ q: '', cmds: [] })
+  const [asyncResults, setAsync] = React.useState<{ q: string; chip?: Chip; cmds: Command[] }>({ q: '', cmds: [] })
   const [loading, setLoading] = React.useState(false)
   React.useEffect(() => {
     if (!open || dq.length < 2) {
       setAsync({ q: '', cmds: [] })
+      setCounts({ q: '', n: {} })
       return
     }
     const ctrl = new AbortController()
     setLoading(true)
+    // a chip of a type the full-text index holds: that type only, and more of it
+    const kinds = CHIPS.find((c) => c.key === chip)?.kinds
+    const query = kinds ? { q: dq, limit: 60, kinds: kinds.join(',') } : { q: dq, limit: 36 }
     const fileGroup = t('palette.files')
     // One full-text search (sessions, memory, tasks, file contents: /api/search) + file and folder NAMES
     // (/api/files/search: also finds images, folders, binaries). Content hits come first; a name hit for a
@@ -76,14 +86,15 @@ export function CommandPalette() {
       return m ? groupRoute({ project: m[1], name: m[2] }) : '/agents'
     }
     const content = api
-      .get<SearchResult>('/api/search', { q: dq, limit: 24 }, { signal: ctrl.signal })
+      .get<SearchResult>('/api/search', query, { signal: ctrl.signal })
       .then((r) =>
         r.results.map<Command>((h) => ({
-          id: `${h.kind}:${h.id}`,
+          // a run of an agent goes with the agents (its chip), the other sessions with the sessions
+          id: `${h.kind === 'session' && AGENT_PATH_RE.test(h.path) ? 'run' : h.kind}:${h.id}`,
           title: h.title,
           hint: h.kind === 'task' || h.kind === 'group' ? undefined : h.path,
           detail: h.snippet,
-          group: GROUP[h.kind],
+          group: h.kind === 'session' && AGENT_PATH_RE.test(h.path) ? t('palette.agentRuns') : GROUP[h.kind],
           icon: ICON[h.kind],
           sensitive: true,
           perform: ({ navigate }) =>
@@ -104,7 +115,7 @@ export function CommandPalette() {
     const names = api
       .get<FileSearchHit[]>('/api/files/search', { q: dq }, { signal: ctrl.signal })
       .then((hits) =>
-        hits.slice(0, 8).map<Command>((h) => ({
+        hits.slice(0, chip === 'files' ? 40 : 8).map<Command>((h) => ({
           id: `name:${h.path}`,
           title: h.name,
           hint: h.path,
@@ -126,11 +137,11 @@ export function CommandPalette() {
     ]
     Promise.all(tasks).then((all) => {
       if (ctrl.signal.aborted) return
-      setAsync({ q: dq, cmds: all.flat() })
+      setAsync({ q: dq, chip, cmds: all.flat() })
       setLoading(false)
     })
     return () => ctrl.abort()
-  }, [dq, open, providers, t])
+  }, [dq, open, providers, t, chip])
 
   const close = () => setOpen(false)
   const run = (c: Command) => {
@@ -242,10 +253,33 @@ export function CommandPalette() {
 
   const pageCmds = Object.values(sources).flat()
   const all = [...pageCmds, ...staticCmds]
+  const found = asyncResults.q === dq ? asyncResults.cmds : []
+  // Results per chip: the commands the typed text matches (cmdk's own test) + what the search found. A chip's count
+  // stays the one of the search over every type while that chip shows its own longer list.
+  const matched = q.trim() ? all.filter((c) => paletteFilter(c.id + ' ' + c.title, q, c.keywords?.filter(Boolean) as string[] | undefined) > 0) : []
+  const [counts, setCounts] = React.useState<{ q: string; n: Partial<Record<Chip, number>> }>({ q: '', n: {} })
+  React.useEffect(() => {
+    if (asyncResults.q === dq && (asyncResults.chip ?? 'all') === 'all') setCounts({ q: dq, n: countChips(asyncResults.cmds) })
+  }, [asyncResults, dq])
+  const staticN = countChips(matched)
+  const asyncN = counts.q === dq ? counts.n : chip === 'all' ? {} : countChips(found)
+  // the chip shown: its own longer list once it came
+  const ownN = asyncResults.q === dq && asyncResults.chip === chip && chip !== 'all' ? countChips(found)[chip] : undefined
+  const chipN = (k: Chip) => (staticN[k] ?? 0) + ((k === chip ? ownN : undefined) ?? asyncN[k] ?? 0)
+  const chips = q.trim() ? CHIPS.filter((c) => c.key === 'all' || c.key === chip || chipN(c.key) > 0) : []
+  const keep = (c: Command) => chip === 'all' || chipOf(c) === chip
   // cmdk sorts the items of a group by score but not the groups themselves (its group sort looks them up by a value
   // they do not carry): the group holding the best match goes first, the others keep their order
-  const groups = byBestMatch(groupBy(all), q)
-  const asyncGroups = groupBy(asyncResults.q === dq ? asyncResults.cmds : [])
+  const groups = byBestMatch(groupBy(all.filter(keep)), q)
+  const asyncGroups = groupBy(found.filter(keep))
+  // Every type at once: a few lines of each, then "See the N…" opens its chip
+  const SHOWN = 6
+  const onInputKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || chips.length < 2) return
+    e.preventDefault()
+    const i = chips.findIndex((c) => c.key === chip)
+    setChip(chips[(i + (e.shiftKey ? -1 : 1) + chips.length) % chips.length].key)
+  }
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -266,6 +300,7 @@ export function CommandPalette() {
               <Cmdk.Input
                 value={q}
                 onValueChange={setQ}
+                onKeyDown={onInputKey}
                 placeholder={t('palette.placeholder')}
                 className="h-13 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground max-md:h-14 max-md:text-base"
               />
@@ -275,6 +310,33 @@ export function CommandPalette() {
               </button>
               <Kbd className="max-md:hidden">Esc</Kbd>
             </div>
+            {chips.length > 1 && (
+              <div role="tablist" aria-label={t('palette.filter')} className="flex shrink-0 gap-1.5 overflow-x-auto border-b px-3 py-2 [scrollbar-width:none]" data-testid="palette-chips">
+                {chips.map((c) => {
+                  const on = c.key === chip
+                  const n = c.key === 'all' ? 0 : chipN(c.key)
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      tabIndex={-1}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setChip(on && c.key !== 'all' ? 'all' : c.key)}
+                      data-chip={c.key}
+                      className={cn(
+                        'flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors pointer-coarse:h-9 pointer-coarse:px-3',
+                        on ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      )}
+                    >
+                      {t(c.label)}
+                      {n > 0 && <span className={cn('tabular-nums', on ? 'opacity-80' : 'opacity-70')}>{n}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
             <Cmdk.List className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 md:max-h-[440px]">
               <Cmdk.Empty className="py-10 text-center text-sm text-muted-foreground">{loading ? t('palette.searching') : t('palette.empty')}</Cmdk.Empty>
               {groups.map(([g, cmds]) => (
@@ -285,19 +347,33 @@ export function CommandPalette() {
                   ))}
                 </Cmdk.Group>
               ))}
-              {Object.entries(asyncGroups).map(([g, cmds]) => (
-                <Cmdk.Group key={`a:${g}`} heading={g} className={groupCls} forceMount>
-                  {cmds.map((c) => (
-                    <Item key={c.id} c={c} onRun={run} masked={presentation && c.sensitive} force />
-                  ))}
-                </Cmdk.Group>
-              ))}
+              {Object.entries(asyncGroups).map(([g, cmds]) => {
+                const more = chip === 'all' && cmds.length > SHOWN + 1 ? chipOf(cmds[0]) : null
+                return (
+                  <Cmdk.Group key={`a:${g}`} heading={g} className={groupCls} forceMount>
+                    {(more ? cmds.slice(0, SHOWN) : cmds).map((c) => (
+                      <Item key={c.id} c={c} onRun={run} masked={presentation && c.sensitive} force />
+                    ))}
+                    {more && (
+                      <Cmdk.Item value={`more:${g}`} forceMount onSelect={() => setChip(more)} className="flex h-9 cursor-default items-center gap-3 rounded-md px-2 text-xs text-muted-foreground outline-none select-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground max-md:h-11">
+                        <span className="size-4 shrink-0" />
+                        {t('palette.seeAll', { n: chipN(more), what: t(CHIPS.find((c) => c.key === more)!.label).toLowerCase() })}
+                      </Cmdk.Item>
+                    )}
+                  </Cmdk.Group>
+                )
+              })}
             </Cmdk.List>
             <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground max-md:hidden">
               <span className="flex items-center gap-1.5">
                 <Kbd>↑</Kbd>
                 <Kbd>↓</Kbd> {t('palette.move')}
               </span>
+              {chips.length > 1 && (
+                <span className="flex items-center gap-1.5">
+                  <Kbd>Tab</Kbd> {t('palette.nextChip')}
+                </span>
+              )}
               <span className="flex items-center gap-1.5">
                 <Kbd>
                   <CornerDownLeft className="size-3" />
@@ -315,6 +391,39 @@ export function CommandPalette() {
 /** cmdk's fuzzy score on accent-folded text ("securite" finds "Sécurité"), and a whole-word match (the search found
  *  at the start of a word of the title or keywords: "mot de passe", "crons") above any fuzzy one, so the section the
  *  words name comes before actions that only contain the letters in order. */
+/** The chips above the results: a type each (`kinds`: the types of the full-text index it narrows the search to).
+ *  Commands of no chip (pages, actions, the providers of a page) only show under "All". */
+type Chip = 'all' | 'sessions' | 'agents' | 'tasks' | 'files' | 'memory' | 'settings' | 'docs' | 'commands'
+const CHIPS: { key: Chip; label: TKey; kinds?: SearchHit['kind'][] }[] = [
+  { key: 'all', label: 'palette.all' },
+  { key: 'sessions', label: 'palette.sessions', kinds: ['session'] },
+  { key: 'agents', label: 'palette.agents', kinds: ['session', 'group'] },
+  { key: 'tasks', label: 'palette.tasks', kinds: ['task'] },
+  { key: 'files', label: 'palette.files', kinds: ['file'] },
+  { key: 'memory', label: 'palette.memory', kinds: ['memory'] },
+  { key: 'settings', label: 'nav.settings' },
+  { key: 'docs', label: 'nav.docs' },
+  { key: 'commands', label: 'palette.commands' },
+]
+const CHIP_OF: Record<string, Chip> = {
+  session: 'sessions', topic: 'sessions', 'topic-new': 'sessions',
+  run: 'agents', agent: 'agents', group: 'agents',
+  task: 'tasks', file: 'files', name: 'files', memory: 'memory',
+  settings: 'settings', doc: 'docs', nav: 'commands', act: 'commands', help: 'commands',
+}
+/** The chip of a command, from its id's prefix (`session:…`, `agent:…`); null: "All" only. */
+function chipOf(c: Command): Chip | null {
+  return CHIP_OF[c.id.slice(0, c.id.indexOf(':'))] ?? null
+}
+function countChips(cmds: Command[]) {
+  const n: Partial<Record<Chip, number>> = {}
+  for (const c of cmds) {
+    const k = chipOf(c)
+    if (k) n[k] = (n[k] ?? 0) + 1
+  }
+  return n
+}
+
 function paletteFilter(value: string, search: string, keywords?: string[]): number {
   const s = fold(search).trim()
   if (!s) return 1

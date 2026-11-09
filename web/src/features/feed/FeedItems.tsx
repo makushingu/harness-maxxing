@@ -76,13 +76,17 @@ function FeedActions({ ev, onOpen }: { ev: FeedEvent; onOpen: () => void }) {
   )
 }
 
-export function FeedItem({ ev, compact }: { ev: FeedEvent; compact?: boolean }) {
+/** `compact`: the dashboard panel; `roomy`: a row of the Notifications page (in a day's card), its text folded to three
+ *  lines with Show more when longer. */
+export function FeedItem({ ev, compact, roomy }: { ev: FeedEvent; compact?: boolean; roomy?: boolean }) {
   const t = useT()
   const lang = useLang()
   const navigate = useNavigate()
   const read = useMarkFeedRead()
   const del = useDeleteFeedEvent()
   const L = LEVEL[ev.level] || LEVEL.info
+  const [more, setMore] = React.useState(false)
+  const long = !!ev.body && (ev.body.length > 220 || ev.body.split('\n').length > 3)
   const open = () => {
     if (!ev.read) read.mutate({ ids: [ev.id] })
     if (!ev.url) return
@@ -90,18 +94,28 @@ export function FeedItem({ ev, compact }: { ev: FeedEvent; compact?: boolean }) 
     else window.open(ev.url, '_blank', 'noopener,noreferrer')
   }
   return (
-    <div className={cn('group/ev relative flex gap-2.5 rounded-lg px-2.5 py-2 hover:bg-accent/50', !ev.read && 'bg-primary/[0.04]')} data-testid="feed-item" data-level={ev.level}>
-      <L.icon className={cn('mt-0.5 size-4 shrink-0', L.cls)} />
+    <div
+      className={cn('group/ev relative flex hover:bg-accent/50', roomy ? 'gap-3 px-4 py-3' : 'gap-2.5 rounded-lg px-2.5 py-2', !ev.read && 'bg-primary/[0.04]')}
+      data-testid="feed-item"
+      data-level={ev.level}
+    >
+      {roomy ? (
+        <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-full bg-muted', L.cls)}>
+          <L.icon className="size-4" />
+        </span>
+      ) : (
+        <L.icon className={cn('mt-0.5 size-4 shrink-0', L.cls)} />
+      )}
       <div className="grid min-w-0 flex-1 gap-1.5">
         <button type="button" onClick={open} className="grid min-w-0 gap-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <span className={cn('flex min-w-0 items-center gap-1.5 text-[13px] leading-snug', !ev.read && 'font-medium')}>
+          <span className={cn('flex min-w-0 items-center gap-1.5 leading-snug', roomy ? 'text-sm' : 'text-[13px]', !ev.read && 'font-medium')}>
             <span className={cn('[overflow-wrap:anywhere]', compact ? 'line-clamp-1' : 'line-clamp-2')}>
               <Sensitive length={12}>{ev.title}</Sensitive>
             </span>
             {ev.count > 1 && <span className="shrink-0 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground tabular-nums">×{ev.count}</span>}
           </span>
           {ev.body && (
-            <span className={cn('text-xs [overflow-wrap:anywhere] whitespace-pre-line text-muted-foreground', compact ? 'line-clamp-2' : 'line-clamp-4')}>
+            <span className={cn('[overflow-wrap:anywhere] whitespace-pre-line text-muted-foreground', roomy ? 'text-[13px]' : 'text-xs', compact ? 'line-clamp-2' : roomy ? !more && 'line-clamp-3' : 'line-clamp-4')}>
               <Sensitive length={16}>{ev.body}</Sensitive>
             </span>
           )}
@@ -113,6 +127,11 @@ export function FeedItem({ ev, compact }: { ev: FeedEvent; compact?: boolean }) 
             </time>
           </span>
         </button>
+        {roomy && long && (
+          <button type="button" onClick={() => setMore(!more)} className="justify-self-start text-xs font-medium text-primary hover:underline">
+            {more ? t('feed.showLess') : t('feed.showMore')}
+          </button>
+        )}
         <FeedActions ev={ev} onOpen={open} />
       </div>
       {!ev.read && <span aria-label={t('feed.unread')} className="absolute top-3 right-2 size-1.5 rounded-full bg-primary group-hover/ev:hidden" />}

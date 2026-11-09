@@ -1,5 +1,5 @@
 // The agent preview card on hover (features/agents/AgentPreview.tsx: the agent in its Office), delegated on the agent
-// links of a sidebar column: the sessions tree (TopicAgents in Tree.tsx) and the Agents column (AgentsRail.tsx).
+// links of a page's list: the sessions tree (TopicAgents in Tree.tsx) and the Agents list (AgentsList.tsx).
 import * as React from 'react'
 import type { Agent } from '@/lib/types'
 import { agentRoute, useAgents, useSettings } from '@/lib/queries'
@@ -19,7 +19,7 @@ const preloadAgentPreview = () =>
   }))
 const AgentPreviewCard = React.lazy(preloadAgentPreview)
 
-/** Same rhythm as the session card (components/shell/SessionsRail.tsx): hover intent, switch, grace to cross. */
+/** Hover intent before the card shows, a short beat to switch, a grace to cross to it. */
 const PREVIEW_DELAY_MS = 250
 const PREVIEW_SWITCH_MS = 70
 const PREVIEW_CLOSE_MS = 140
@@ -64,7 +64,7 @@ export function AgentHover({ className, children }: { className?: string; childr
     else setAt(null)
   }
   const inBox = (t: EventTarget | null) => t instanceof Node && !!box.current?.contains(t)
-  const agent: Agent | undefined = at ? data?.agents.find((a) => agentRoute(a) === decodeURI(at.href)) : undefined
+  const agent: Agent | undefined = at ? data?.agents.find((a) => agentRoute(a) === decodeURI(at.href.split('?')[0])) : undefined
   return (
     <div
       ref={box}

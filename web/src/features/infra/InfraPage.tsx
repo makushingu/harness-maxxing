@@ -16,6 +16,7 @@ import {
   Sensitive, Skeleton, StatusDot, Switch, Textarea, useMask, usePresentation,
 } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
+import { PageList } from '@/components/shell/PageList'
 import { KIND_ICON, STATUS_TONE, locationLabel, providerName, rememberServers, statusText, subtitle } from './shared'
 import { MixBar, PlaceIcon, PlaceName, PlaceTag, ResourceRow, TypeView, placeCounts } from './TypeView'
 import { placeInfo, placeOf } from './places'
@@ -45,7 +46,8 @@ const TYPE_ICON: Record<'sites' | 'databases' | 'buckets' | 'domains', React.Com
 const TYPES = ['sites', 'databases', 'buckets', 'domains'] as const
 const isProblem = (r: InfraResource) => r.status === 'down' || r.status === 'warn'
 
-/** Inner sidebar of the page (a row of pills on a phone): the overview, what to look at, each type, then the places. */
+/** The page's list (the second-level sidebar; touch: the left drawer): the overview, what to look at,
+ *  each type, then the places. */
 function InfraNav({ tab, onTab, v, items, byId }: { tab: Tab; onTab: (t: Tab) => void; v: InfraView; items: InfraResource[]; byId: Map<string, InfraResource> }) {
   const t = useT()
   const problems = items.filter(isProblem)
@@ -65,25 +67,8 @@ function InfraNav({ tab, onTab, v, items, byId }: { tab: Tab; onTab: (t: Tab) =>
   ]
   const pill = (n: number, cls: string) => <span className={cn('rounded-full px-1.5 text-[11px] leading-4 font-semibold tabular-nums', cls)}>{n}</span>
   return (
-    <>
-      <nav aria-label={t('infra.title')} className="-mx-4 -mt-5 mb-1 border-b px-3 py-2 md:hidden">
-        <ul className="flex gap-1 overflow-x-auto [scrollbar-width:none]">
-          {entries.map((e) => (
-            <li key={e.id} className="shrink-0">
-              <button
-                type="button"
-                onClick={() => onTab(e.id)}
-                className={cn('flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap text-muted-foreground', tab === e.id && 'bg-secondary text-foreground')}
-              >
-                {e.label}
-                {!!e.bad && pill(e.bad, 'bg-destructive/15 text-destructive')}
-                {e.n != null && <span className="text-xs tabular-nums opacity-70">{e.n}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      <nav aria-label={t('infra.title')} className="sticky top-[calc(var(--header-h)+1.5rem)] hidden w-52 shrink-0 self-start md:block" data-testid="infra-nav">
+    <PageList id="infra" label={t('infra.title')}>
+      <nav aria-label={t('infra.title')} className="min-h-0 flex-1 overflow-y-auto p-2" data-testid="infra-nav">
         <ul className="grid gap-0.5">
           {entries.map((e) => (
             <React.Fragment key={e.id}>
@@ -116,7 +101,7 @@ function InfraNav({ tab, onTab, v, items, byId }: { tab: Tab; onTab: (t: Tab) =>
           ))}
         </ul>
       </nav>
-    </>
+    </PageList>
   )
 }
 
@@ -602,7 +587,7 @@ export default function InfraPage() {
       ) : v && !v.generated_at ? (
         <EmptyState icon={Network} title={t('infra.firstRun')} description={t('infra.firstRunDesc')} />
       ) : v ? (
-        <div className="flex min-w-0 gap-8 max-md:flex-col max-md:gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           <InfraNav tab={tab} onTab={(x) => set({ tab: x, id: null, at: null })} v={v} items={visible} byId={byId} />
           <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-4">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

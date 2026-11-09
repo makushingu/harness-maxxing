@@ -9,7 +9,8 @@ stopped.
 
 ## Layout
 
-- **Left pane**: the project / topic tree. Badges show running sessions and unread answers.
+- **Left pane**: the project / topic tree, in the second bar next to the sidebar (see below). Badges show
+  running sessions and unread answers.
 - **Main area**: one or more **columns**, one session each. Open several sessions side by side,
   resize and reorder the columns, or detach one into its own window.
 - **Grid**: with two sessions or more, the grid button at the top right stacks them two per column (four sessions
@@ -41,11 +42,18 @@ stopped.
   waits for your answer. Click the **Tabs** button again: your columns come back exactly as they were. On a phone, the same
   button sits in the session's header; the chips show under the top bar, and a sideways swipe on the session
   shows the previous or next one.
-- Fold the sidebar with the button at its top, next to the logo (`Ctrl+\`); fold the session tree with the button at its top left
-  (a slim rail stays to unfold it).
+- **Fold the sidebar** with the button at its top, next to the logo (`Ctrl+\`): only its icons stay. A new browser
+  starts with it unfolded.
+- **The second bar**: on a computer, the pages with a list (Sessions, Agents, Team, Tasks, Infra, Files, E-mail,
+  Notifications)
+  show that list in a full-height bar right next to the sidebar; here, the session tree. The button at the top
+  right of its head closes or opens it, and this choice is the same for every page and kept when you change page.
+  Closed, nothing is left of it: rest the mouse on the current page's entry in the sidebar to show the list over
+  the page. Drag its right edge to widen or narrow it (220 to 520 px). Pages without a list (Dashboard, Git,
+  Settings...) have no second bar. On a phone or a tablet, the same list opens from **☰** at the top left.
 - On a phone or a tablet (the *touch layout*), one session fills the screen and the app opens on the last one.
-  **☰** at the top left opens all your sessions: a search field, **New session** (in the topic of the session on
-  screen), the **All / Running / Unread** chips, then your projects and topics. **Press and hold** a session, a
+  **☰** at the top left opens all your sessions: the **All / Running / Unread** chips with **New session** on
+  their right (in the topic of the session on screen), then your projects and topics. **Press and hold** a session, a
   topic or a project for its menu (rename, favorite, archive, delete...). The **plan button** (checklist icon)
   sits right of the session's name; the session's **…** menu also holds *Telegram notifications*. **⊞** at the
   top right opens the rest of the app (see [Settings](11-settings-and-keys.md#on-a-phone-or-a-tablet)).
@@ -66,13 +74,12 @@ another topic.
 
 ## The sessions list
 
-On a computer, drag the right edge of the app's sidebar to widen or narrow it (double-click: normal width).
+On a computer, the list sits in the second bar: drag its right edge to widen or narrow it, and the button at the
+top right of its head closes it (see [Layout](#layout)). To find a session by its title or its content, use
+**Ctrl+K** (⌘K on a Mac): the list has no filter field.
 
 The top of the list is the same on a computer and on a phone:
 
-- **Filter** (always visible): type to narrow the list (projects, topics, titles, the last message, archived
-  sessions included); **Esc** or **×** clears it. On a phone a **New session** button sits next to it (in the
-  topic of the session on screen); on a computer the button on its left hides the list.
 - **All / Running / Unread**: the chips show every session, or only those working right now, or only the
   answers you have not read yet (unfolded, with their count). On a computer, **Open all** opens them next to
   the columns already open.
@@ -97,8 +104,7 @@ counters; on a touch screen **+** stays visible and a long press opens the menu.
   remove it. A star marks favorite sessions. Favorites are saved on the server: the same on your computer,
   your phone and the installed app, and a continued session (*cont.*) stays a favorite.
 - **Recent**: the most recently active sessions (a favorite is not repeated there while Favorites is shown).
-- The view, the layout, the sort and the blocks are remembered by this browser. Searching shows every match,
-  whatever the view.
+- The view, the layout, the sort and the blocks are remembered by this browser.
 
 ## Starting a session
 
@@ -351,14 +357,14 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -
   and the session tree shows only those sessions, unfolded (the **Running** or **Unread** chip lights up; a click on a
   project or topic still folds it, until the filter changes). **Open all** opens them next to the columns already
-  open; the **All** chip brings the whole tree back (typing a search does too). The **Sessions** link
+  open; the **All** chip brings the whole tree back. The **Sessions** link
   itself brings back your last layout.
 - **Archive** hides a session from the list without deleting it (see the Archived filter).
 - **Delete** stops a running turn and removes the session files.
 
 ## Search
 
-**Ctrl/⌘+K** (or the search bar at the top of the sidebar) is the one search of the app. It finds:
+**Ctrl/⌘+K** (or the search bar at the top of the sidebar, a search icon when it is folded) is the one search of the app. It finds:
 
 - **sessions**, by their title and by what you and Claude wrote;
 - with Agents on, every **agent** and **agent group** by its name (and its project, topic or members), and what
@@ -374,6 +380,12 @@ Type a few words in any order: a word of 3 letters or more may be the start of a
 matched words highlighted, one line per session. A session whose title matches no longer hides the other
 sessions that match. A very common word ranks its newest matches. A message is searchable a second after it is
 written; edited files within half a minute.
+
+Chips above the results narrow them to one type - **Sessions** (with the topics), **Agents** (agents, groups and
+the runs of the agents), **Tasks**, **Files**, **Memory**, **Settings**, **Docs**, **Commands** - with the number
+found for each; only the types that found something show. **Tab** / **Shift+Tab** goes from one chip to the next,
+a click on the chip picked goes back to **All**. **All** shows a few lines of each type, then **See the N…**
+opens that type's chip, which searches further in that type only.
 
 ## Sessions from Telegram and crons
 

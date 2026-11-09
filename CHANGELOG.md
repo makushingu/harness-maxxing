@@ -14,8 +14,30 @@ Added:
   screen you select (or the whole screen). With **Hide my data** checked (the default), presentation mode is on
   while it is taken, so names, numbers and messages come out as dots. You see it before sending; it goes only with
   your message.
+- **Second bar** (computer): Sessions, Agents, Team, Tasks, Infra, Files and E-mail show their list in a full-height
+  bar right next to the sidebar. One button opens or closes it for every page; closed, rest the mouse on the page's
+  entry in the sidebar to show it over the page. Drag its edge to change its width. The lists that unfolded inside
+  the sidebar on hover are gone; a new browser starts with the sidebar unfolded.
+- **Page lists on a phone or a tablet**: ☰ at the top left opens the list of the page you are on, the same as the
+  second bar (your sessions on Sessions; in the installed app, a swipe from the left edge too). It replaces the
+  chip rows of Tasks and Infra and the folders sheet and mailbox picker of E-mail; on a phone, Agents opens on the
+  Office and Team on the first chat. Pages without a list have no ☰.
+- **Search (Ctrl+K)**: chips above the results narrow them to one type (sessions, agents, tasks, files, memory,
+  settings, docs, commands) with the number found for each; Tab goes from one to the next. All shows a few lines of
+  each type and **See the N…** opens the rest.
+- **E-mail**: drag the right edge of the message list to change its width (kept in this browser, double-click for
+  the default).
 
 Changed:
+- **Lighter page headers**: the unread notifications count moves from the bell at the top of the sidebar to
+  **Home** (and to the Home tile of the ⊞ menu on a phone). Agents: **New group** and **New agent** at the top
+  right of the Office. Tasks: **Filters** (with chips for the active filters) and **New task** (quick add, key `N`)
+  at the top right. Team: **Open in Team** on a chat bubble; the Team bubbles switch moves to Settings -> Features,
+  under Team. The search fields of the session tree, the agents list and Tasks are gone: Ctrl/⌘+K finds sessions,
+  agents, groups and tasks.
+- **Notifications page**: sources in its list (All, To handle, then each source with its unread count),
+  notifications grouped by day in roomier rows folded to three lines (Show more), All / Unread and Mark all as read
+  at the top right; the view is kept in the address. With the second bar closed, rest the mouse on Home for the list.
 - **Steer no longer stops background work**: sending a new message with Steer interrupts the current answer only;
   background commands and sub-agents keep running.
 - **Agents and groups**: the message box works like a session's (paste as a file, drafts kept on reload,
