@@ -105,15 +105,18 @@ def always_rule(d: dict) -> str:
     if tool == "Bash":
         cmd = inp.get("command")
         # "*" and a final ":*" are wildcards in Bash rules: the rule would match more than what was allowed
-        if not isinstance(cmd, str) or not cmd.strip() or any(c in cmd.strip() for c in "\n\r*") or len(cmd) > 400:
+        if not isinstance(cmd, str) or not cmd.strip() or any(c in cmd.strip() for c in "\n\r\0*") or len(cmd) > 400:
             return ""
         return f"Bash({cmd.strip()})"
     if tool in _EDITS:
         p = inp.get("file_path") or inp.get("notebook_path")
         # Edit rules are gitignore patterns: "?", "[...]", "{...}", "!", "\\", "#", a final "/" (a whole folder)
-        # or a "." / ".." segment would allow more than this one file
-        if not isinstance(p, str) or not p.startswith("/") or any(c in p for c in "\n\r()*?[]{}!\\#") or \
-                p.endswith("/") or any(seg in (".", "..") for seg in p.split("/")):
+        # or a "." / ".." segment would allow more than this one file; trailing spaces are dropped from a pattern
+        # (the rule would cover "a" for "a "); a NUL or a rule over RULE_MAX could not be saved in the topic
+        from .workspace import RULE_MAX
+        if not isinstance(p, str) or not p.startswith("/") or any(c in p for c in "\n\r\t\0()*?[]{}!\\#") or \
+                p.endswith("/") or p != p.rstrip() or len(f"Edit(/{p})") > RULE_MAX or \
+                any(seg in (".", "..") for seg in p.split("/")):
             return ""
         return f"Edit(/{p})"                        # "//abs": an absolute path; Edit rules cover Write too
     if tool == "WebFetch":
@@ -121,6 +124,8 @@ def always_rule(d: dict) -> str:
         host = urlsplit(str(inp.get("url") or "")).hostname or ""
         return f"WebFetch(domain:{host})" if re.fullmatch(r"[a-z0-9.-]{1,253}", host) else ""
     if tool in ("Task", "Agent", "Skill"):           # the subagent / skill runs under the same rules: ask each time
+        return ""
+    if tool in ("ExitPlanMode", "AskUserQuestion"):  # each plan / question is read by the user: never allowed for good
         return ""
     if tool in _READS:                               # the bare tool would allow reading any file: ask each time
         return ""
