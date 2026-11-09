@@ -5,6 +5,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.133 - 2026-11-09
+
+- Released from `main` ("Urgent fixes" path; a132 is Romain's on `beta`). Permission mode `ask` (approval MCP for
+  sessions, `allowed_tools` in `.maxxing.json`), runner in stream-json input (`on_steer` = control_request
+  interrupt + injected message, fallback = kill; `MAXXING_STREAM_INPUT=0`), agent chat parity (`within` param on
+  files raw/preview/thumb/stat, `/media-roots`), Feedback `image` ({mime, data base64 <= 1 MB, width, height},
+  `feedback.image()`, bodylimit 2 MB on POST /api/settings/feedback; cloud: `lead_images`, 100 a day, 6 months),
+  plus the Radar commits since a131.
+
 ## 2.0.0-alpha.132 - 2026-11-08
 
 - Settings: `web/src/pages/settings/sections.ts` = 6 groups; new sections `appearance`, `skills`, `widgets`, `pages`,

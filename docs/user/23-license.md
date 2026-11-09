@@ -70,7 +70,7 @@ your email, your message, its type, the Harness Maxxing version, the interface l
 Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
 time: the one of Settings → Profile → Stay in touch, if any).
 
-**Capture a zone** adds a screenshot: drag over the part of the screen to show (Enter = the whole screen, Esc =
+**Capture a zone** adds a screenshot: drag over the part of the screen to show (**Whole screen** or Enter = all of it, **Cancel** or Esc =
 cancel). With **Hide my data (presentation mode)** checked (the default), presentation mode is on just while the
 picture is taken, so names, numbers and messages come out as dots. The picture is taken in your browser and shown in
 the window before you send it (**Remove** drops it); it is sent with the message only (WebP or JPEG, 1 MB at most).

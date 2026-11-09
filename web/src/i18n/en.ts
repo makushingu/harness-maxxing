@@ -111,6 +111,8 @@ export const en = {
   'feedback.zone': "Capture a zone",
   'feedback.zoneBlur': "Hide my data (presentation mode)",
   'feedback.zoneHint': "Drag over the part of the screen to send · Enter = whole screen · Esc = cancel",
+  'feedback.zoneHintTouch': "Drag over the part of the screen to send",
+  'feedback.zoneWhole': "Whole screen",
   'feedback.zoneTaking': "Taking the screenshot…",
   'feedback.zoneAlt': "Screenshot sent with the message",
   'feedback.zoneRedo': "Capture again",
