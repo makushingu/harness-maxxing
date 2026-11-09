@@ -57,8 +57,8 @@ stopped.
   topic or a project for its menu (rename, favorite, archive, delete...). The **plan button** (checklist icon)
   sits right of the session's name; the session's **…** menu also holds *Telegram notifications*. **⊞** at the
   top right opens the rest of the app (see [Settings](11-settings-and-keys.md#on-a-phone-or-a-tablet)).
-  While you type, the message box takes at most a third of the screen (its text scrolls inside) so the answer stays
-  in sight, and the project line steps aside until the keyboard closes; held sideways, the headers step aside too.
+  While you type in the message box, it takes at most a third of the screen (its text scrolls inside) so the answer
+  stays in sight, and the project line steps aside until the keyboard closes; held sideways, the headers step aside too.
 
 ## Move a session to another topic
 

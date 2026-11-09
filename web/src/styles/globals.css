@@ -65,18 +65,19 @@ html[data-kbd] {
   --safe-bottom-ui: 0px;
 }
 
-/* Keyboard up: the message box takes at most a third of what is left on screen, so the answer stays readable while
-   typing (it scrolls inside beyond that), and the session's place row steps aside. On a short screen (a phone held
-   sideways) the page and session headers step aside too, or the box and its send button fall below the keyboard. */
-html[data-kbd] [data-kbd-cap] {
-  max-height: max(3.5rem, calc(var(--vvh, 100dvh) * 0.3));
+/* Typing in a session's message box on a touch screen (keyboard up): the box takes at most a third of what is left on
+   screen, so the answer stays readable (it scrolls inside beyond that), and the session's place row steps aside. On a
+   short screen (a phone held sideways) the headers step aside too, or the box and its send button fall below the
+   keyboard. Only while that box has the focus: renaming the session or filling any other field changes nothing. */
+html[data-kbd]:has([data-kbd-cap]:focus) [data-kbd-cap] {
+  max-height: max(4.5rem, calc(var(--vvh, 100dvh) * 0.3));
   overflow-y: auto !important; /* the autosize sets overflow-y inline from its own maxRows, not from this cap */
 }
-html[data-kbd] [data-kbd-hide] {
+html[data-kbd]:has([data-kbd-cap]:focus) [data-kbd-hide] {
   display: none;
 }
 @media (max-height: 480px) {
-  html[data-kbd] [data-kbd-short-hide] {
+  html[data-kbd]:has([data-kbd-cap]:focus) [data-kbd-short-hide] {
     display: none;
   }
 }

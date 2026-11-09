@@ -7,13 +7,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.135 - 2026-11-09
 
-- Keyboard up on a touch screen (`html[data-kbd]`, `--vvh` from `lib/mobile-viewport.ts`), `styles/globals.css`:
-  `[data-kbd-cap]` (the session composer's textarea) gets `max-height: max(3.5rem, 30% of --vvh)` and `overflow-y:
-  auto !important` (the Textarea autosize sets `overflow-y` inline from its own `maxRows`, not from a CSS cap);
-  `[data-kbd-hide]` (the session's place row, column and mobile headers) is hidden; `[data-kbd-short-hide]`
-  (`PageHeader`, the session column header and the mobile session header) is hidden when `max-height: 480px` too (a
-  phone held sideways: the box and its send button went below the keyboard). Android resizes the page for the keyboard
-  (`interactive-widget=resizes-content`), so the 12-row composer left about 50 px of thread on a 412x915 phone.
+- Typing in the session composer on a touch screen, `styles/globals.css`, all scoped to
+  `html[data-kbd]:has([data-kbd-cap]:focus)` (`data-kbd` and `--vvh` come from `lib/mobile-viewport.ts`; the `:has`
+  keeps renaming a session, a dialog field or any other page's form out of it): `[data-kbd-cap]` (the composer's
+  textarea) gets `max-height: max(4.5rem, 30% of --vvh)` and `overflow-y: auto !important` (the Textarea autosize sets
+  `overflow-y` inline from its own `maxRows`, not from a CSS cap); `[data-kbd-hide]` (the session's place row, column
+  and mobile headers) is hidden; `[data-kbd-short-hide]` (`PageHeader`, the session column header, the mobile session
+  header) is hidden under `max-height: 480px` too (sideways the box and its send button went below the keyboard).
+  Android resizes the page for the keyboard (`interactive-widget=resizes-content`), so the 12-row composer left about
+  50 px of thread on a 412x915 phone.
 - Tasks: the view `Segmented` leaves the page header below 480 px (was 400): 393-412 px phones overflowed the header
   by about 30 px. Feed "Show more": `pointer-coarse:before` hit area like the switch and checkbox.
 - No frontend test runner in the repository: checked by hand in a phone-size browser (412x915 then 412x560 for the
