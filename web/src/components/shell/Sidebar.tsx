@@ -14,6 +14,7 @@ import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from '.
 import { Logo } from './Logo'
 import { StatusBlock } from './HealthIndicator'
 import { preloadRailTree, SessionsRail } from './SessionsRail'
+import { afterBoot } from '@/lib/bootLoader'
 import { HelpMenu } from './HelpMenu'
 import { UpdateIndicator } from './UpdateIndicator'
 import { useDragOrder } from './dragOrder'
@@ -382,11 +383,16 @@ function useKeptRail(enabled: boolean, unfolded: boolean) {
     const keep = () => live && React.startTransition(() => setKept(true))
     // its chunk first, so the column mounts with the tree (not a skeleton) and is laid out once before it is hidden
     const load = () => void preloadRailTree().then(keep, keep)
-    const t = window.setTimeout(() => {
-      idle = w.requestIdleCallback ? w.requestIdleCallback(load, { timeout: 1500 }) : window.setTimeout(load, 0)
-    }, 500)
+    let t: number | undefined
+    // never while the boot loader plays: its chunk and render would compete with the logo's end
+    const stop = afterBoot(() => {
+      t = window.setTimeout(() => {
+        idle = w.requestIdleCallback ? w.requestIdleCallback(load, { timeout: 1500 }) : window.setTimeout(load, 0)
+      }, 500)
+    })
     return () => {
       live = false
+      stop()
       window.clearTimeout(t)
       if (idle !== undefined) (w.cancelIdleCallback ?? window.clearTimeout)(idle)
     }

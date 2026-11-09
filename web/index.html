@@ -83,35 +83,39 @@
       })();
     </script>
     <style>
-      /* Boot loader, painted before any JS: the logo builds itself from its 58 pixels, one batch per boot step
-         (HTML parsed, app code running, first data in), then flies to its place in the interface. */
+      /* Boot loader, painted before any JS: the logo builds itself from its 58 pixels (one batch per boot step,
+         HTML parsed / app code running / first data in), then flies to its place in the interface. Everything that
+         moves animates transform or opacity of plain boxes (no SVG child, no filter, no JS timer per frame), so the
+         compositor keeps it moving while the page's code is parsed and rendered. */
       html { background: #fff; }
       html.dark { background: #09090b; }
-      #mxb { position: fixed; inset: 0; z-index: 60; background: #fff; transition: opacity .45s ease-out; }
+      #mxb { position: fixed; inset: 0; z-index: 60; background: #fff; }
       html.dark #mxb { background: #09090b; }
-      #mxb.o { opacity: 0; pointer-events: none; }
-      #mxl { position: fixed; z-index: 61; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; pointer-events: none; }
-      #mxl svg { width: 100%; height: 100%; display: block; overflow: visible; }
-      #mxl .tile { transform-box: fill-box; transform-origin: center; animation: mxb-t .45s cubic-bezier(.16,1,.3,1) .1s backwards; }
-      #mxl .c { transform-box: fill-box; transform-origin: center; transform: scale(.8); opacity: 0; transition: transform .32s cubic-bezier(.16,1,.3,1), opacity .2s ease-out; }
-      #mxl .c.on { opacity: 1; }
-      #mxl .g { fill: #1d1e24; opacity: .07; transform-box: fill-box; transform-origin: center; transform: scale(.8); animation: mxb-g 1.4s ease-in-out infinite; animation-delay: var(--d); }
-      #mxl.w .c { transform: scale(1.03); }
-      #mxl.w .g { display: none; }
-      #mxl .e, #mxl .m, #mxl .sol { opacity: 0; transition: opacity .25s ease-out; }
-      #mxl .sol { transition-duration: .18s; transition-delay: .12s; }
-      #mxl.w .e, #mxl.w .m, #mxl.w .sol { opacity: 1; }
-      #mxl .m path { stroke-dasharray: 600; stroke-dashoffset: 600; transition: stroke-dashoffset .5s cubic-bezier(.16,1,.3,1) .05s; }
-      #mxl.w .m path { stroke-dashoffset: 0; }
-      #mxl .sh { filter: drop-shadow(0 18px 30px rgba(0,0,0,.45)); }
-      html:not(.dark) #mxl .sh { filter: drop-shadow(0 14px 26px rgba(0,0,0,.16)); }
+      #mxl { position: fixed; z-index: 61; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; pointer-events: none; will-change: transform; }
+      #mxl div { position: absolute; }
+      #mxl .y, #mxl .k, #mxl .sh, #mxl .hw, #mxl .swr { inset: 0; will-change: transform; }
+      #mxl .tile, #mxl .k { border-radius: 24.5px; }
+      #mxl .tile { inset: 0; background: #faf9f4; animation: mxb-t .45s cubic-bezier(.16,1,.3,1) .1s backwards; }
+      #mxl .sh { border-radius: 24.5px; box-shadow: 0 18px 30px rgba(0,0,0,.45); animation: mxb-f .45s ease-out .1s backwards; }
+      html:not(.dark) #mxl .sh { box-shadow: 0 14px 26px rgba(0,0,0,.16); }
+      #mxl .k { overflow: hidden; }
+      #mxl .hl { inset: -26px; border-radius: 50%; background: radial-gradient(closest-side, var(--mh, #2d6efd), transparent); opacity: .12; animation: mxb-h 1.5s ease-in-out .3s infinite alternate backwards; }
+      #mxl .g { background: #1d1e24; opacity: .07; animation: mxb-g 1.4s ease-in-out infinite; }
+      #mxl .c { background-image: var(--mg); background-size: 112px 112px; opacity: 0; }
+      #mxl .sol { inset: 0; background-image: var(--ms); background-size: 112px 112px; opacity: 0; }
+      #mxl .fx, #mxl .mw, #mxl .mi { inset: 0; opacity: 0; }
+      #mxl .mw { overflow: hidden; opacity: 1; transform: translateX(-100%); }
+      #mxl .mi { opacity: 1; transform: translateX(100%); }
+      #mxl svg { width: 100%; height: 100%; display: block; }
+      #mxl .sw { left: -60px; top: -30px; width: 46px; height: 172px; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.3), rgba(255,255,255,0)); transform: rotate(18deg); opacity: 0; animation: mxb-s 1.4s cubic-bezier(.4,0,.6,1) .5s infinite; }
       @keyframes mxb-t { from { opacity: 0; transform: scale(.86); } }
-      @keyframes mxb-g { 50% { opacity: .16; } }
+      @keyframes mxb-f { from { opacity: 0; } }
+      @keyframes mxb-g { 50% { opacity: .17; } }
+      @keyframes mxb-h { from { opacity: .2; transform: scale(.9); } to { opacity: .6; transform: scale(1.1); } }
+      @keyframes mxb-s { from { opacity: 0; transform: translateX(14px) rotate(18deg); } 15%, 85% { opacity: 1; } to { opacity: 0; transform: translateX(176px) rotate(18deg); } }
       @media (prefers-reduced-motion: reduce) {
-        #mxl .c, #mxl .m path { transition: none; }
-        #mxl .g, #mxl .tile { animation: none; }
-        #mxb, #mxl { transition: opacity .16s linear; }
-        #mxl.o { opacity: 0; }
+        #mxl .g, #mxl .tile, #mxl .sh, #mxl .sw, #mxl .hl { animation: none; }
+        #mxl .sw, #mxl .hl { display: none; }
       }
     </style>
   </head>
@@ -121,54 +125,76 @@
     <div id="mxl" aria-hidden="true"></div>
     <script>
       // Boot loader (see the style above). window.mxStep(n): 1 = HTML parsed (below), 2 = app code running (main.tsx),
-      // 3 = first screen ready (src/lib/bootLoader.ts). Step 3 merges the pixels, flies the logo onto the first visible
-      // [data-boot-logo] (sidebar or sign-in page; a fade when there is none) and opens the interface around it
-      // (html[data-boot='reveal'], globals.css): each block waits in proportion to its distance from the logo.
+      // 3 = first screen ready (src/lib/bootLoader.ts). The pixels land on a timeline that runs by itself (a step only
+      // brings what is still waiting forward, it never stops anything); a glow breathes behind the logo, the empty cells pulse and a
+      // light sweeps across while it waits. Step 3 schedules the whole end at once, as compositor animations with
+      // delays: the last pixels, the merge, the flight onto the first visible [data-boot-logo] (sidebar or sign-in page;
+      // a fade when there is none) and the interface opening around it (html[data-boot='reveal'], globals.css: each
+      // block waits --bd, the flight's start plus its distance from the logo). Nothing then waits for a free main thread.
       (function () {
-        var d = document, R = d.documentElement, box = d.getElementById('mxl'), ov = d.getElementById('mxb'), cells = [], r = '', k,
+        var d = document, R = d.documentElement, box = d.getElementById('mxl'), ov = d.getElementById('mxb'), cells = [], h = '', u = 112 / 512,
           X = [110, 154, 190, 234, 270, 314, 350, 394], Y = [96, 136, 178, 209, 240, 288, 336],
-          rm = matchMedia('(prefers-reduced-motion: reduce)').matches, shown = -1, ended = 0;
+          rm = matchMedia('(prefers-reduced-motion: reduce)').matches, ended = 0, LAND = 320, ease = 'cubic-bezier(.16,1,.3,1)';
         function cell(x, y, w, h, b) { cells.push({ x: x, y: y, w: w, h: h, b: b }); }
         // The real logo path cut into its pixels: body (2 batches of rows), arms, legs.
         for (var j = 0; j < 6; j++) for (var i = 0; i < 7; i++) cell(X[i], Y[j], X[i + 1] - X[i], Y[j + 1] - Y[j], j < 3 ? 0 : 1);
         [[36, 73], [73, 110], [394, 431], [431, 468]].forEach(function (a) { cell(a[0], 178, a[1] - a[0], 31, 1); cell(a[0], 209, a[1] - a[0], 31, 1); });
         [110, 190, 270, 350].forEach(function (x) { cell(x, 336, 44, 39, 2); cell(x, 375, 44, 39, 2); });
+        function pos(c) { return 'left:' + c.x * u + 'px;top:' + c.y * u + 'px;width:' + c.w * u + 'px;height:' + c.h * u + 'px'; }
         cells.forEach(function (c, n) {
-          c.k = n; c.o = c.x + c.y * 1.6 + ((n * 37) % 11) * 14; // pop order: top-left to bottom-right, a little jitter
-          r += '<rect class="g" x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" style="--d:' + (c.x + c.y) * 2 + 'ms"/>' +
-            '<rect class="c" id="mc' + n + '" x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" fill="url(#mxg)"/>';
+          c.o = c.x + c.y * 1.6 + ((n * 37) % 11) * 14; // pop order: top-left to bottom-right, a little jitter
+          h += '<div class="g" style="' + pos(c) + ';animation-delay:' + (c.x + c.y) * 2 + 'ms"></div>';
         });
-        var g = (window.__mxGrads || {})[R.dataset.accent] || ['#2d6efd', '#0ec7f7'];
-        box.innerHTML = '<svg viewBox="0 0 512 512"><defs><linearGradient id="mxg" x1="40" y1="96" x2="470" y2="414" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="' + g[0] + '"/><stop offset="1" stop-color="' + g[1] + '"/></linearGradient><clipPath id="mxc"><rect width="512" height="512" rx="112"/></clipPath></defs>' +
-          '<g class="sh"><rect class="tile" width="512" height="512" rx="112" fill="#faf9f4"/></g><g clip-path="url(#mxc)">' + r +
-          '<path class="sol" fill="url(#mxg)" d="M110 96H394V178H468V240H394V414H350V336H314V414H270V336H234V414H190V336H154V414H110V240H36V178H110Z"/>' +
-          '<g class="e" fill="#1d1e24"><rect x="151" y="136" width="38" height="38"/><rect x="315" y="136" width="38" height="38"/></g>' +
-          '<g class="m" fill="none" stroke="#1d1e24"><path d="M110 243Q246 264 380 232" stroke-width="15"/><path d="M384 227Q452 168 540 86" stroke-width="9" stroke-linecap="round"/><rect x="-9" y="-12" width="18" height="24" rx="5" stroke="#d6d9df" stroke-width="4" transform="translate(381 231) rotate(-32)"/></g></g></svg>';
-        // The early auth check may switch a browser that never picked a look to the server's accent.
-        window.mxAccent = function (a) {
-          var s = d.querySelectorAll('#mxg stop'), c = (window.__mxGrads || {})[a];
-          if (c && s.length) { s[0].setAttribute('stop-color', c[0]); s[1].setAttribute('stop-color', c[1]); }
-        };
-        function batch(n, st) {
-          var list = cells.filter(function (c) { return c.b === n; }).sort(function (a, b) { return a.o - b.o; });
-          list.forEach(function (c, i) { setTimeout(function () { d.getElementById('mc' + c.k).classList.add('on'); }, i * st); });
-          return list.length * st + 120;
+        cells.forEach(function (c, n) { h += '<div class="c" id="mc' + n + '" style="' + pos(c) + ';background-position:' + -c.x * u + 'px ' + -c.y * u + 'px"></div>'; });
+        var face = '<svg viewBox="0 0 512 512"><g fill="#1d1e24"><rect x="151" y="136" width="38" height="38"/><rect x="315" y="136" width="38" height="38"/></g></svg>',
+          mouth = '<svg viewBox="0 0 512 512"><g fill="none" stroke="#1d1e24"><path d="M110 243Q246 264 380 232" stroke-width="15"/><path d="M384 227Q452 168 540 86" stroke-width="9" stroke-linecap="round"/><rect x="-9" y="-12" width="18" height="24" rx="5" stroke="#d6d9df" stroke-width="4" transform="translate(381 231) rotate(-32)"/></g></svg>';
+        box.innerHTML = '<div class="y"><div class="hw"><div class="hl"></div></div><div class="sh"></div><div class="tile"></div><div class="k">' + h +
+          '<div class="sol"></div><div class="fx">' + face + '</div><div class="mw"><div class="mi">' + mouth + '</div></div><div class="swr"><div class="sw"></div><div class="sw" style="animation-delay:1.2s"></div></div></div></div>';
+        var y = box.firstChild, hw = y.firstChild, sh = hw.nextSibling, k = y.lastChild, sol = k.querySelector('.sol'), fx = k.querySelector('.fx'), mw = k.querySelector('.mw'), sw = k.lastChild; // two light bands half a turn apart: one is always crossing
+        // The accent gradient as an image shared by every pixel (each shows its own part of it) and the merged body.
+        function paint(a) {
+          var g = (window.__mxGrads || {})[a] || ['#2d6efd', '#0ec7f7'], q = function (v) { return 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="40" y1="96" x2="470" y2="414" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="' + g[0] + '"/><stop offset="1" stop-color="' + g[1] + '"/></linearGradient></defs>' + v + '</svg>') + '")'; };
+          box.style.setProperty('--mh', g[0]);
+          box.style.setProperty('--mg', q('<rect width="512" height="512" fill="url(#g)"/>'));
+          box.style.setProperty('--ms', q('<path fill="url(#g)" d="M110 96H394V178H468V240H394V414H350V336H314V414H270V336H234V414H190V336H154V414H110V240H36V178H110Z"/>'));
         }
-        // While waiting the pixels pop one by one (16 ms); once the data is in, what is missing lands at once (6 ms).
-        function upto(n, st) { var t = 0; while (shown < n) { shown++; t = Math.max(t, batch(shown, st || 16)); } return t; }
+        paint(R.dataset.accent);
+        // The early auth check may switch a browser that never picked a look to the server's accent.
+        window.mxAccent = paint;
+        // The build timeline, from now: rows 1-3 at once, rows 4-6 and the arms next, the legs last. It runs by itself.
+        var T0 = performance.now(), plan = [[300, 24], [1000, 30], [2300, 70]];
+        function now() { return performance.now() - T0; }
+        [0, 1, 2].forEach(function (b) {
+          cells.filter(function (c) { return c.b === b; }).sort(function (p, q) { return p.o - q.o; }).forEach(function (c, i) {
+            c.t = plan[b][0] + i * plan[b][1];
+            c.a = d.getElementById('mc' + cells.indexOf(c)).animate([{ opacity: 0, transform: 'scale(.8)' }, { opacity: 1, transform: 'none' }],
+              { duration: rm ? 1 : LAND, delay: c.t, easing: ease, fill: 'both' });
+          });
+        });
+        // A step brings the pixels of batches <= last forward: what has not started yet pops now, `st` ms apart.
+        function hurry(last, st) {
+          var t = now(), n = 0, end = t;
+          cells.filter(function (c) { return c.b <= last && c.t > t; }).sort(function (p, q) { return p.t - q.t; }).forEach(function (c) {
+            c.t = t + 16 + n++ * st; c.a.effect.updateTiming({ delay: c.t });
+          });
+          cells.forEach(function (c) { end = Math.max(end, c.b <= last ? c.t : 0); });
+          return end - t; // until the last of them starts landing
+        }
         // Never stuck: the first screen gets 8 s once the app code runs, the page 30 s in all.
         var safety = setTimeout(function () { window.mxStep(3); }, 30000);
         window.mxStep = function (n) {
           if (ended) return;
           if (n < 3) {
-            upto(n - 1);
+            // Not at step 2: the app's first render follows at once, and a re-timed pixel leaves the compositor until
+            // that render is painted (a pause in the build); the timeline keeps its pace instead.
+            if (n === 1) hurry(0, 16);
             if (n === 2) { clearTimeout(safety); safety = setTimeout(function () { window.mxStep(3); }, 8000); }
             return;
           }
           ended = 1; clearTimeout(safety);
-          var t = upto(2, 6);
-          setTimeout(function () { box.classList.add('w'); }, t);
-          setTimeout(fly, t + 140);
+          // The last pixels first, alone in their frame; the rest (costly: it restyles the page) in the next one.
+          hurry(2, 6);
+          if (rm) finish(); else requestAnimationFrame(finish);
         };
         function target() {
           var l = d.querySelectorAll('[data-boot-logo]');
@@ -178,39 +204,61 @@
           }
           return null;
         }
-        function reveal(z) {
-          // Every block of the first screen waits in proportion to its distance from the logo (A -> Z cascade).
-          var ox = z ? z.left + z.width / 2 : 0, oy = z ? z.top + z.height / 2 : 0, els = d.querySelectorAll('.mx-boot-item,.mx-card-in,[data-boot-rv]');
-          for (var i = 0; i < els.length; i++) {
+        // The loader has played (logo landed or faded): deferred work (src/lib/bootLoader.ts afterBoot) may start.
+        function over() { box.remove(); window.mxBooted = 1; dispatchEvent(new Event('mxbooted')); }
+        function anim(el, kf, o) { o.fill = 'both'; return el.animate(kf, o); }
+        function finish() {
+          // Read everything first (one layout), then only write and schedule.
+          var left = 0, el = rm ? null : target(), z = el && el.getBoundingClientRect(), a = box.getBoundingClientRect(),
+            ox = z ? z.left + z.width / 2 : 0, oy = z ? z.top + z.height / 2 : 0, els = d.querySelectorAll('.mx-boot-item,.mx-card-in,[data-boot-rv]'), bd = [],
+            M, F, i;
+          cells.forEach(function (c) { left = Math.max(left, c.t - now()); });
+          M = rm ? 0 : left + LAND - 120; F = rm ? 0 : M + 230;
+          for (i = 0; i < els.length; i++) {
             var b = els[i].getBoundingClientRect();
-            els[i].style.setProperty('--bd', Math.round(60 + Math.hypot(Math.max(b.left - ox, 0, ox - b.right), Math.max(b.top - oy, 0, oy - b.bottom)) / 3.2) + 'ms');
+            bd.push(Math.round(60 + Math.hypot(Math.max(b.left - ox, 0, ox - b.right), Math.max(b.top - oy, 0, oy - b.bottom)) / 3.2));
           }
-          R.dataset.boot = 'reveal';
+          // The glow and the sweep fade, the pixels merge, the face appears.
+          anim(hw, [{ opacity: 1 }, { opacity: 0 }], { duration: Math.max(M + 100, 250) });
+          anim(sw, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, delay: Math.max(M - 200, 0) });
+          anim(sol, [{ opacity: 0 }, { opacity: 1 }], { duration: rm ? 1 : 180, delay: M + 40 });
+          anim(fx, [{ opacity: 0, transform: 'scale(.9)' }, { opacity: 1, transform: 'none' }], { duration: rm ? 1 : 260, delay: M + 60, easing: ease });
+          var wipe = { duration: rm ? 1 : 460, delay: M + 90, easing: 'cubic-bezier(.3,0,.2,1)' };
+          anim(mw, [{ transform: 'translateX(-100%)' }, { transform: 'none' }], wipe);
+          anim(mw.firstChild, [{ transform: 'translateX(100%)' }, { transform: 'none' }], wipe);
+          // The interface opens around the logo once the flight starts: every block waits for it plus its distance.
+          // The logo's animations above are committed alone in this frame (a light one): they run on the compositor
+          // from then on. The page's restyle (heavy: it starts every entrance animation) comes in the next frame, its
+          // delays counted from now, so a slow restyle never holds the merge or the flight back.
+          var side = d.querySelectorAll('#main,.mx-boot-side'), t0 = performance.now();
+          function reveal() {
+            var late = performance.now() - t0, ms = function (v) { return Math.max(0, Math.round(v - late)) + 'ms'; };
+            for (var i = 0; i < els.length; i++) els[i].style.setProperty('--bd', ms(F + bd[i]));
+            for (i = 0; i < side.length; i++) side[i].style.setProperty('--bdm', ms(F));
+            R.dataset.boot = 'reveal';
+          }
+          if (rm) reveal(); else requestAnimationFrame(reveal);
+          anim(ov, [{ opacity: 1 }, { opacity: 0 }], { duration: rm ? 160 : 450, delay: F, easing: 'ease-out' }).onfinish = function () { ov.remove(); };
+          // Once everything has played, on an idle moment: dropping the attribute restyles the page again.
           setTimeout(function () {
-            R.removeAttribute('data-boot');
-            for (var i = 0; i < els.length; i++) els[i].style.removeProperty('--bd');
-          }, 2200);
-        }
-        function fly() {
-          var el = target(), a = box.getBoundingClientRect(), z = el && el.getBoundingClientRect();
-          reveal(z);
-          ov.classList.add('o');
-          if (rm || !z) {
-            box.classList.add('o');
-            box.animate([{ opacity: 1 }, { opacity: 0, transform: rm ? 'none' : 'scale(.92)' }], { duration: rm ? 160 : 300, easing: 'ease-out', fill: 'forwards' });
-            setTimeout(function () { box.remove(); ov.remove(); }, rm ? 200 : 480);
+            (window.requestIdleCallback || setTimeout)(function () {
+              R.removeAttribute('data-boot');
+              for (var i = 0; i < els.length; i++) els[i].style.removeProperty('--bd');
+              for (i = 0; i < side.length; i++) side[i].style.removeProperty('--bdm');
+            }, { timeout: 1500 });
+          }, F + 2200);
+          if (!z) {
+            anim(box, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: rm ? 'none' : 'scale(.92)' }], { duration: rm ? 160 : 300, delay: F, easing: 'ease-out' }).onfinish = over;
             return;
           }
-          // X and Y on different curves: the logo travels on a soft arc, not a straight line.
-          var sv = box.firstChild, dx = z.left + z.width / 2 - (a.left + a.width / 2), dy = z.top + z.height / 2 - (a.top + a.height / 2), s = z.width / a.width;
+          // X and Y on different curves: the logo travels on a soft arc, not a straight line. The real logo is hidden
+          // now (under the cover) and shown in the paint where the flight ends.
+          var dx = z.left + z.width / 2 - (a.left + a.width / 2), dy = z.top + z.height / 2 - (a.top + a.height / 2), s = z.width / a.width;
           el.style.visibility = 'hidden';
-          box.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(' + dx + 'px)' }], { duration: 620, easing: 'cubic-bezier(.55,0,.25,1)', fill: 'forwards' });
-          var land = sv.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(' + dy + 'px) scale(' + s + ')' }], { duration: 620, easing: 'cubic-bezier(.3,0,.2,1)', fill: 'forwards' });
-          var sh = box.querySelector('.sh');
-          sh.animate([{ filter: getComputedStyle(sh).filter }, { filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }], { duration: 620, fill: 'forwards' });
-          // Handover once the last frame of the flight is in place: the real logo shows in the same paint.
-          land.onfinish = function () { el.style.visibility = ''; box.remove(); };
-          setTimeout(function () { ov.remove(); }, 700);
+          anim(box, [{ transform: 'none' }, { transform: 'translateX(' + dx + 'px)' }], { duration: 620, delay: F, easing: 'cubic-bezier(.55,0,.25,1)' });
+          var land = anim(y, [{ transform: 'none' }, { transform: 'translateY(' + dy + 'px) scale(' + s + ')' }], { duration: 620, delay: F, easing: 'cubic-bezier(.3,0,.2,1)' });
+          anim(sh, [{ opacity: 1 }, { opacity: 0 }], { duration: 620, delay: F });
+          land.onfinish = function () { el.style.visibility = ''; over(); };
         }
         window.mxStep(1);
       })();

@@ -9,10 +9,23 @@ declare global {
   interface Window {
     /** index.html boot loader (a no-op once it has played) */
     mxStep?: (n: number) => void
+    /** set once the loader has played (index.html), with the event `mxbooted` */
+    mxBooted?: number
   }
 }
 
 export const bootStep = (n: 1 | 2 | 3) => window.mxStep?.(n)
+
+/** Runs `cb` once the loader has played (at once when there is none), so non-critical work never competes with it.
+ *  Returns a cancel function. */
+export function afterBoot(cb: () => void): () => void {
+  if (!window.mxStep || window.mxBooted) {
+    cb()
+    return () => {}
+  }
+  window.addEventListener('mxbooted', cb, { once: true })
+  return () => window.removeEventListener('mxbooted', cb)
+}
 
 /** A screen with nothing to wait for (sign-in, setup, onboarding, an error): the loader can end once it is painted. */
 export function useBootReady() {
@@ -23,23 +36,33 @@ export function useBootReady() {
 }
 
 /** The app shell: the loader ends once the first queries (auth, shell, page data) have answered - checked after
- *  each query change, a frame apart so a query started by the first render is seen - or after 4 s at most (slow
- *  data: the page shows its own placeholders). */
+ *  each query change, a frame apart so a query started by the first render is seen, then on the next idle moment so
+ *  the renders those answers cause are done before the logo's end is scheduled - or after 4 s at most (slow data: the
+ *  page shows its own placeholders). */
 export function useBootReadyWhenIdle() {
   const qc = useQueryClient()
   React.useEffect(() => {
     if (!window.mxStep) return
     let frame = 0
+    let idle = 0
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    const stopIdle = () => {
+      if (idle) (w.cancelIdleCallback ?? clearTimeout)(idle)
+    }
     const done = () => {
       unsubscribe()
       clearTimeout(cap)
       cancelAnimationFrame(frame)
+      stopIdle()
       bootStep(3)
     }
     const check = () => {
       cancelAnimationFrame(frame)
+      stopIdle()
+      idle = 0
       frame = requestAnimationFrame(() => {
-        if (qc.isFetching() === 0) done()
+        if (qc.isFetching() !== 0) return
+        idle = w.requestIdleCallback ? w.requestIdleCallback(done, { timeout: 250 }) : window.setTimeout(done, 0)
       })
     }
     const unsubscribe = qc.getQueryCache().subscribe(check)
@@ -49,6 +72,7 @@ export function useBootReadyWhenIdle() {
       unsubscribe()
       clearTimeout(cap)
       cancelAnimationFrame(frame)
+      stopIdle()
     }
   }, [qc])
 }

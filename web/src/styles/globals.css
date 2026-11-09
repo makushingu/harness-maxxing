@@ -264,9 +264,10 @@ html[data-kbd] {
  *                         would turn the page into the containing block of its fixed overlays)
  *  .mx-card-in             dashboard cards; at most ~0.5 s for the whole grid (--i capped at 6)
  *  html[data-boot]        first load only, driven by the boot loader of index.html. 'load': the logo builds
- *                         itself over the app, whose entrance animations wait (paused); 'reveal': the logo
- *                         flies to the sidebar and the interface opens around it - every block (`.mx-boot-item`,
- *                         `.mx-card-in`, `[data-boot-rv]`) waits --bd, set from its distance to the logo, and its
+ *                         itself over the app, whose entrance animations wait (paused); 'reveal' (set when the end is scheduled):
+ *                         the logo flies to the sidebar and the interface opens around it - every block
+ *                         (`.mx-boot-item`, `.mx-card-in`, `[data-boot-rv]`) waits --bd = the flight's start
+ *                         plus its distance to the logo (set on each block), and its
  *                         content (chart lines, bars, gauges) inherits it; then the attribute goes
  *  .mx-pop                a check / badge that confirms an action (scale 0.6 -> 1, 220 ms)
  *  .mx-cv                 content-visibility: off-screen rows of long lists are not laid out/painted
@@ -288,13 +289,19 @@ html[data-kbd] {
 #main > * { animation: mx-fade 180ms ease-out backwards; }
 /* The sidebar (where the logo lands) animates only from 'reveal', so the loader measures it at its final place;
    the page's own entrance animations start under the loader and wait, paused, until 'reveal'. */
-html[data-boot='load'] :is(#main, #main *) { animation-play-state: paused !important; }
-html[data-boot='reveal'] .mx-boot-side { animation: mx-fade 320ms ease-out backwards; }
+/* Listed rather than `#main *`: a selector ending in `*` makes leaving 'load' restyle the whole page; this way only
+   these elements are (the restyle lands during the logo's merge). --bdm (not inherited, for the same reason) holds
+   the flight's start for #main and the sidebar. */
+@property --bdm { syntax: '<time>'; inherits: false; initial-value: 0ms; }
+html[data-boot='load'] #main, html[data-boot='load'] .mx-rise, html[data-boot='load'] .mx-unfold, html[data-boot='load'] .mx-card-in,
+html[data-boot='load'] .mx-fade, html[data-boot='load'] .mx-pop, html[data-boot='load'] .mx-grow-y, html[data-boot='load'] .mx-draw,
+html[data-boot='load'] .mx-sweep, html[data-boot='load'] .mx-dot-in { animation-play-state: paused !important; }
+html[data-boot='reveal'] .mx-boot-side { animation: mx-fade 320ms ease-out backwards; animation-delay: var(--bdm); }
 html[data-boot='reveal'] .mx-boot-item { animation: mx-slide-right 380ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: var(--bd, calc(60ms + var(--i, 0) * 30ms)); }
 html[data-boot='reveal'] [data-boot-rv] { animation: mx-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: var(--bd, 120ms); }
 html[data-boot='reveal'] [data-boot-rv] .mx-arc { animation: mx-boot-arc 900ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--bd, 0ms) + 180ms); }
 html[data-boot='reveal'] [data-boot-rv] [role='progressbar'] > span { transform-origin: left; animation: mx-sweep 640ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--bd, 0ms) + 160ms); }
-html[data-boot] #main { animation: mx-fade 300ms ease-out 40ms backwards; }
+html[data-boot] #main { animation: mx-fade 300ms ease-out backwards; animation-delay: calc(var(--bdm) + 40ms); }
 html[data-boot] .mx-card-in { animation-duration: 460ms; animation-delay: var(--bd, calc(20ms + var(--i, 0) * 32ms)); }
 html[data-boot] .mx-grow-y { animation-delay: calc(var(--bd, 0ms) + 140ms + var(--i, 0) * 24ms); }
 html[data-boot] .mx-draw { animation-duration: 900ms; animation-delay: calc(var(--bd, 0ms) + 200ms); }
