@@ -70,6 +70,11 @@ your email, your message, its type, the Harness Maxxing version, the interface l
 Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
 time: the one of Settings → Profile → Stay in touch, if any).
 
+**Capture a zone** adds a screenshot: drag over the part of the screen to show (Enter = the whole screen, Esc =
+cancel). With **Hide my data (presentation mode)** checked (the default), presentation mode is on just while the
+picture is taken, so names, numbers and messages come out as dots. The picture is taken in your browser and shown in
+the window before you send it (**Remove** drops it); it is sent with the message only (WebP or JPEG, 1 MB at most).
+
 ## Donations
 
 Harness Maxxing is free; donations fund its development. The **Donate** links carry a hand-and-heart icon in the app's
@@ -111,5 +116,5 @@ its hostname, operating system and Harness Maxxing version; the license server a
 else, and nothing on a schedule (the daily status of the old signed-archive servers is gone).
 
 Never sent: your files, sessions, prompts, memory, keys, project or topic names (a **Feedback** message carries only
-what you typed, see above).
+what you typed and the screenshot you chose to add, see above).
 Details: [harness-maxxing.com/privacy](https://harness-maxxing.com/privacy).

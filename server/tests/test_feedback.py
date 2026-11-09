@@ -154,3 +154,17 @@ def test_an_email_with_a_lone_surrogate_is_refused_before_anything_is_sent(clien
                    headers={"Content-Type": "application/json"})
     assert r.status_code == 400 and r.json()["error"] == "invalid_email"
     assert not (config.load_config().get("register") or {}).get("email")
+
+
+def test_a_screenshot_goes_along_only_when_it_is_a_real_image(client, cloud):
+    import base64
+    png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\0" * 40).decode()
+    r = client.post("/api/settings/feedback", json={"email": "me@x.io", "type": "bug", "message": "Look at this",
+                                                    "image": {"mime": "image/png", "data": png, "width": 120, "height": 80}})
+    assert r.status_code == 200, r.text
+    assert cloud.got[0]["image"] == {"mime": "image/png", "data": png, "width": 120, "height": 80}
+    for bad in ({"mime": "image/svg+xml", "data": png}, {"mime": "image/jpeg", "data": png}, {"mime": "image/png", "data": "@@"},
+                {"mime": "image/png", "data": base64.b64encode(b"\x89PNG" + b"\0" * (1024 * 1024)).decode()}):
+        r = client.post("/api/settings/feedback", json={"email": "me@x.io", "type": "bug", "message": "Look", "image": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_image", r.text
+    assert len(cloud.got) == 1
