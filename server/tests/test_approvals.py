@@ -518,6 +518,12 @@ def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     ("Edit", {"file_path": "/tmp/{a,b}.md"}, ""),
     ("Edit", {"file_path": "/root/x/../../etc/passwd"}, ""),
     ("Edit", {"file_path": "/root/./x.md"}, ""),
+    ("Edit", {"file_path": "/root/proj/config "}, ""),                  # trailing spaces leave the pattern
+    ("Edit", {"file_path": "/root/a\tb"}, ""),
+    ("Edit", {"file_path": "/root/a\x00b"}, ""),                        # could not be saved in the topic
+    ("Edit", {"file_path": "/root/" + "a" * 600}, ""),
+    ("Edit", {"file_path": "/root/" + "a" * 480}, "Edit(//root/" + "a" * 480 + ")"),
+    ("Bash", {"command": "echo a\x00b"}, ""),
     ("Read", {"file_path": "/etc/hostname"}, ""),                        # the bare tool would read anything
     ("Grep", {"pattern": "x"}, ""),
     ("ExitPlanMode", {"plan": "1. do it"}, ""),                          # every plan is read before it runs
