@@ -67,7 +67,7 @@ function emojiData(): Plugin {
   }
 }
 
-/** Writes a Brotli twin (`<file>.br`, quality 11) next to every JS/CSS asset; the server sends it to browsers that
+/** Writes a Brotli twin (`<file>.br`, quality 11) next to every JS/CSS asset and the emoji data; the server sends it to browsers that
  *  accept `br` (~18 % smaller than the proxy's on-the-fly gzip). Also preloads the Latin Inter font, which the CSS
  *  would otherwise only discover after it is downloaded and parsed. */
 function precompress(): Plugin {
@@ -87,7 +87,7 @@ function precompress(): Plugin {
     },
     writeBundle(_opts, bundle) {
       for (const name of Object.keys(bundle)) {
-        if (!/^assets\/.+\.(js|css)$/.test(name)) continue
+        if (!/^assets\/.+\.(js|css)$/.test(name) && !/^emojibase\/.+\.json$/.test(name)) continue
         const file = path.join(outDir, name)
         const src = fs.readFileSync(file)
         if (src.length < 1024) continue
