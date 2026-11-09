@@ -677,6 +677,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
             maxRows={maxRows}
             placeholder={placeholder || t('sessions.composer.placeholder')}
             aria-label={t('sessions.composer.label')}
+            data-kbd-cap=""
             className="border-0 bg-transparent px-3.5 pt-3 pb-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           <div className="@container flex min-w-0 items-center gap-1 px-1.5 pb-1.5">

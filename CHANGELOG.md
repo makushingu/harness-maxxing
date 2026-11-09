@@ -5,6 +5,14 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## 2.0.0-alpha.135 - 2026-11-09
 
+Fixes:
+- **Writing on a phone keeps the answer in sight.** With the keyboard up, the message box takes at most a third of the
+  screen (its text scrolls inside), and the project line of the session steps aside; held sideways, the headers step
+  aside too, so the box and its send button stay above the keyboard.
+- **Tasks on a phone**: the view switch moves below the title on screens narrower than 480 px, so the header no longer
+  pushes its last button off a 393-412 px phone.
+- **Notifications**: "Show more" is easier to tap on a touch screen.
+
 Changed:
 - **Agent preview on hover** is now off by default: switch it on in **Settings -> Features**, under Agents (kept in
   this browser). Its card draws the agent's room only when the Office is in the Space view; in Classic it shows just
