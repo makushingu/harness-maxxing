@@ -9,7 +9,7 @@
   --ui-row: var(--row-h, 40px);
   color: var(--foreground);
 }
-:where(.mx-ext, [data-mx-kit]) :where(.ui-page) { display: flex; flex-direction: column; gap: 24px; max-width: 1152px; }
+:where(.mx-ext, [data-mx-kit]) :where(.ui-page) { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 1152px; margin-inline: auto; }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-stack) { display: flex; flex-direction: column; gap: 12px; }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-row) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 :where(.mx-ext, [data-mx-kit]) :where(.ui-spacer) { flex: 1; }
