@@ -15,6 +15,7 @@ import logging
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -29,6 +30,7 @@ log = logging.getLogger(__name__)
 STAMP = ".maxxing-build.json"
 LOCK_STAMP = ".maxxing-lock"                     # in node_modules: the package-lock.json it was installed from
 SKIP = ("web/dist/", "web/node_modules/")
+SOURCE_MAX = 32 << 20                            # a bigger file is keyed by its size and date, never read
 
 
 def build_dir() -> Path:
@@ -62,11 +64,29 @@ def source_key(code: Path | None = None) -> str | None:
     h = hashlib.sha256()
     for rel in sorted({p for p in out.split("\0") if p and is_web_source(p)}):
         try:
-            data = (code / rel).read_bytes()
+            digest = _file_digest(code / rel)
         except OSError:                                # deleted but still in the index
             continue
-        h.update(os.fsencode(rel) + b"\0" + hashlib.sha256(data).digest())
+        if digest is not None:
+            h.update(os.fsencode(rel) + b"\0" + digest)
     return h.hexdigest()
+
+
+def _file_digest(path: Path) -> bytes | None:
+    """What a source file adds to source_key: a link by its target (like git), never followed - a link to a FIFO or
+    to /dev/zero would block every page -, a regular file by its content, anything else left out."""
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode):
+        return b"link:" + os.fsencode(os.readlink(path))
+    if not stat.S_ISREG(st.st_mode):
+        return None
+    if st.st_size > SOURCE_MAX:
+        return b"big:%d:%d" % (st.st_size, st.st_mtime_ns)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):   # swapped after the lstat
+            return None
+        return hashlib.sha256(f.read(SOURCE_MAX)).digest()
 
 
 def _stamp(d: Path) -> dict[str, Any]:

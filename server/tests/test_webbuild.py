@@ -317,6 +317,19 @@ def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
         raise AssertionError("grandchild still alive")
 
 
+def test_a_link_to_a_fifo_under_web_never_blocks_the_pages(ui):
+    import os
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+    os.mkfifo(clone / "fifo")
+    (clone / "web" / "src" / "link.ts").symlink_to(clone / "fifo")
+    assert webbuild.source_key() is not None                    # returns: the link is keyed by its target, not read
+    assert _served() == "<p>shipped</p>\n"                      # sources changed (a new file): the shipped build
+    (clone / "web" / "src" / "link.ts").unlink()
+    assert _served() == "<p>mine</p>\n"
+
+
 def test_rebuilding_the_same_sources_keeps_the_previous_build(ui):
     clone = ui["clone"]
     _edit(clone)
