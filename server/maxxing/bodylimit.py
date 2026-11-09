@@ -27,7 +27,8 @@ ROUTES: tuple[tuple[str, re.Pattern[str], int], ...] = (
     ("PUT", re.compile(r"^/api/files/write$"), 16 * MB),      # the editor's text (<= 2 MB read), JSON-escaped
     ("POST", re.compile(r"^/api/sessions$"), 8 * MB),         # a first message: prompts go through stdin, unbounded
     ("POST", re.compile(r"^/api/sessions/[^/]+/(messages|steer|ask)$"), 8 * MB),
-    ("*", re.compile(r"^/api/ext/"), 5 * MB),                 # extension routes (api/extensions.py MAX_BODY)
+    ("*", re.compile(r"^/api/ext/"), 5 * MB),
+    ("POST", re.compile(r"^/api/settings/feedback$"), 2 * MB),  # one screenshot <= 1 MB (feedback.MAX_IMAGE), base64                 # extension routes (api/extensions.py MAX_BODY)
 )
 _MUTATING = ("POST", "PUT", "PATCH", "DELETE")
 

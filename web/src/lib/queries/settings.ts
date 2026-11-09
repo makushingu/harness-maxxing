@@ -65,7 +65,7 @@ export function useFeedbackDefaults(enabled: boolean) {
   return useQuery({ queryKey: qk.feedback, queryFn: () => api.get<{ email: string; version: string }>('/api/settings/feedback'), enabled })
 }
 export function useSendFeedback() {
-  return useMut((b: { email: string; type: FeedbackType; message: string }) => api.post<{ ok: boolean }>('/api/settings/feedback', b), {
+  return useMut((b: { email: string; type: FeedbackType; message: string; image?: { mime: string; data: string; width: number; height: number } }) => api.post<{ ok: boolean }>('/api/settings/feedback', b), {
     invalidate: [qk.feedback],
     errorToast: false,
   })

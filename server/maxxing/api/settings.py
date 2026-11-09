@@ -160,10 +160,18 @@ async def put_register(body: RegisterIn):
     return st
 
 
+class FeedbackImageIn(BaseModel):
+    mime: str
+    data: str                       # base64, <= 1 MB once decoded (feedback.MAX_IMAGE)
+    width: int = 0
+    height: int = 0
+
+
 class FeedbackIn(BaseModel):
     email: str
     type: Literal["bug", "idea", "other"] = "other"
     message: str
+    image: Optional[FeedbackImageIn] = None   # the zone of the screen the user selected
 
 
 @router.get("/feedback")
@@ -178,7 +186,8 @@ async def post_feedback(body: FeedbackIn):
     """Send a bug report / idea to the authors (api.harness-maxxing.com/v1/feedback). Email required."""
     from .. import feedback
     try:
-        return await asyncio.to_thread(feedback.send, body.email, body.type, body.message)
+        shot = feedback.image(body.image.mime, body.image.data, body.image.width, body.image.height) if body.image else None
+        return await asyncio.to_thread(feedback.send, body.email, body.type, body.message, shot)
     except feedback.FeedbackError as e:
         raise HTTPException(e.status, detail={"error": e.code, "message": str(e)}) from None
 
