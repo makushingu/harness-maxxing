@@ -3843,6 +3843,7 @@ export const fr: Record<keyof typeof en, string> = {
   'skills.mineDesc': "Dans ~/.claude/skills (toutes les sessions), dans le workspace, ou dans un projet ou un topic (ses sessions seulement).",
   'skills.new': "Nouvelle skill",
   'skills.newPrompt': "Crée une skill (dans le bon dossier .claude/skills) qui ",
+  'skills.emptyShipped': "Les skills livrées avec Harness ne sont pas sur ce serveur. `maxxing update` les réinstalle.",
   'skills.noMatch': "Aucune skill ne correspond.",
   'skills.empty': "Aucune skill à vous pour l’instant",
   'skills.emptyDesc': "Demandez à Claude d’en écrire une quand vous refaites souvent le même type de tâche.",

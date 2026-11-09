@@ -3861,6 +3861,7 @@ export const en = {
   'skills.mineDesc': "In ~/.claude/skills (every session), in the workspace, or in a project or topic (its sessions only).",
   'skills.new': "New skill",
   'skills.newPrompt': "Create a skill (in the right .claude/skills folder) that ",
+  'skills.emptyShipped': "The skills shipped with Harness are not on this server. `maxxing update` installs them again.",
   'skills.noMatch': "No skill matches.",
   'skills.empty': "No skill of yours yet",
   'skills.emptyDesc': "Ask Claude to write one when you repeat the same kind of task.",

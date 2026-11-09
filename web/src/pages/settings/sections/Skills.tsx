@@ -11,12 +11,12 @@ import { openFileViewer } from '@/features/files/viewerStore'
 import { draftUrl } from '@/features/agents/EditWithClaude'
 import { CommunityLink } from './Extensions'
 import { SettingsCard, SectionStack } from './ui'
+import { useHarnessTopic } from './harnessTopic'
 
-const HARNESS_TOPIC = 'projects/system/topics/harness'
 const ORDER = { topic: 0, project: 1, workspace: 2, user: 3, product: 4 } as const
 
-/** The topic whose session edits this skill: its own topic, else system/harness. */
-const topicOf = (s: Skill) => (s.origin === 'topic' && s.project && s.topic ? `projects/${s.project}/topics/${s.topic}` : HARNESS_TOPIC)
+/** The topic whose session edits this skill: its own topic, else the Harness topic (`fallback`, see harnessTopic.ts). */
+const topicOf = (s: Skill, fallback: string) => (s.origin === 'topic' && s.project && s.topic ? `projects/${s.project}/topics/${s.topic}` : fallback)
 
 function Where({ s }: { s: Skill }) {
   const t = useT()
@@ -28,6 +28,7 @@ function Where({ s }: { s: Skill }) {
 function SkillRow({ s }: { s: Skill }) {
   const t = useT()
   const navigate = useNavigate()
+  const harness = useHarnessTopic()
   const mine = s.origin !== 'product'
   return (
     <li className="flex items-start gap-3 px-4 py-3" data-testid="skill-row">
@@ -51,10 +52,10 @@ function SkillRow({ s }: { s: Skill }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => navigate(draftUrl(topicOf(s), t('skills.editPrompt', { name: s.name, path: s.path })))}>
+              <DropdownMenuItem onSelect={() => navigate(draftUrl(topicOf(s, harness), t('skills.editPrompt', { name: s.name, path: s.path })))}>
                 <WandSparkles /> {t('skills.edit')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate(draftUrl(HARNESS_TOPIC, t('skills.publishPrompt', { name: s.name, path: s.path })))}>
+              <DropdownMenuItem onSelect={() => navigate(draftUrl(harness, t('skills.publishPrompt', { name: s.name, path: s.path })))}>
                 <Share2 /> {t('skills.publish')}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -78,6 +79,7 @@ function List({ items }: { items: Skill[] }) {
 export function SkillsSection() {
   const t = useT()
   const navigate = useNavigate()
+  const harness = useHarnessTopic()
   const { data, isLoading } = useSkills()
   const [q, setQ] = React.useState('')
   const needle = q.trim().toLowerCase()
@@ -98,7 +100,7 @@ export function SkillsSection() {
         description={t('skills.mineDesc')}
         className={flush}
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(HARNESS_TOPIC, t('skills.newPrompt')))}>
+          <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(harness, t('skills.newPrompt')))}>
             <Plus /> {t('skills.new')}
           </Button>
         }
@@ -115,7 +117,7 @@ export function SkillsSection() {
         )}
       </SettingsCard>
       <SettingsCard title={t('skills.shipped')} description={t('skills.shippedDesc')} className={flush}>
-        {isLoading ? <Skeleton className="m-4 h-12" /> : shipped.length ? <List items={shipped} /> : <p className="px-4 pb-4 text-sm text-muted-foreground">{t('skills.noMatch')}</p>}
+        {isLoading ? <Skeleton className="m-4 h-12" /> : shipped.length ? <List items={shipped} /> : <p className="px-4 pb-4 text-sm text-muted-foreground">{needle ? t('skills.noMatch') : t('skills.emptyShipped')}</p>}
       </SettingsCard>
       <CommunityLink text={t('skills.community')} />
     </SectionStack>
