@@ -898,12 +898,22 @@ def photo_for(frm: str, scope: str) -> tuple[Path, str]:
 PHOTO_DEADLINE = 20                                     # seconds for the whole photo, not per read
 
 
+def _photo_peer(person: str, version: str) -> tuple[str, dict] | None:
+    with _lock:
+        hit = next(((a, p) for a, p in _peek()["peers"].items() if pid(a) == person), None)
+    return hit if hit and str(hit[1].get("photo") or "") == version else None
+
+
+def announces_photo(person: str, version: str) -> bool:
+    """This person is known here and announced this version of its photo."""
+    return _photo_peer(person, version) is not None
+
+
 def fetch_photo(person: str, version: str) -> bytes | None:
     """The photo of a person (id) from its server: signed GET with its contact key, else one of its group keys.
     None on any failure."""
-    with _lock:
-        hit = next(((a, p) for a, p in _peek()["peers"].items() if pid(a) == person), None)
-    if not hit or str(hit[1].get("photo") or "") != version:
+    hit = _photo_peer(person, version)
+    if not hit:
         return None
     address, p = hit
     if p.get("status") == "accepted":

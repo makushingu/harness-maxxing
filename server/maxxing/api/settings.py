@@ -128,9 +128,19 @@ def clean_profile(name: str, color: str, emoji: str) -> dict:
     if color and color not in PROFILE_COLORS:
         raise _err("invalid_color", f"color: {', '.join(PROFILE_COLORS)} or empty")
     emoji = _CONTROL.sub("", (emoji or "").strip())
-    if len(emoji) > 8 or any(c.isspace() for c in emoji):
+    if len(emoji) > 8 or any(c.isspace() for c in emoji) or not _utf8(emoji):
         raise _err("invalid_emoji", "emoji: one emoji or initials (8 characters at most) or empty")
+    if not _utf8(name):                        # a lone surrogate: config.json could not be written
+        raise _err("invalid_name", "name: printable characters only")
     return {"name": name, "color": color, "emoji": emoji}
+
+
+def _utf8(s: str) -> bool:
+    try:
+        s.encode()
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 @router.get("/profile")
@@ -164,6 +174,12 @@ def get_profile_photo():
         "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
 
 
+def _save_photo(data: bytes) -> None:
+    with profile_photo.own_lock:               # two uploads at once: the file kept is the version announced
+        version = profile_photo.save(data)
+        config.update_config(profile={"photo": version})
+
+
 @router.put("/profile/photo")
 async def put_profile_photo(request: Request):
     """The photo's bytes (JPEG, PNG or WebP, at most 512 KB; the UI sends a 256 px square)."""
@@ -173,19 +189,21 @@ async def put_profile_photo(request: Request):
         if len(data) > profile_photo.PHOTO_MAX:
             raise _err("too_large", "The photo must be 512 KB at most")
     try:
-        version = await asyncio.to_thread(profile_photo.save, bytes(data))
+        await asyncio.to_thread(_save_photo, bytes(data))
     except ValueError as e:
         raise _err(str(e), "A JPEG, PNG or WebP image of 512 KB at most") from None
-    config.update_config(profile={"photo": version})
     await asyncio.to_thread(_profile_changed)
     return profile()
 
 
 @router.delete("/profile/photo")
 def delete_profile_photo():
-    if profile()["photo"]:
-        profile_photo.remove()
-        config.update_config(profile={"photo": ""})
+    with profile_photo.own_lock:               # never between the save and the version of an upload
+        had = bool(profile()["photo"])
+        if had:
+            profile_photo.remove()
+            config.update_config(profile={"photo": ""})
+    if had:
         _profile_changed()
     return profile()
 

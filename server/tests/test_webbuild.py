@@ -235,3 +235,110 @@ def test_the_build_stamp_is_never_served(ui):
     assert (webbuild.active_dist() / webbuild.STAMP).is_file()
     r = TestClient(create_app()).get("/" + webbuild.STAMP)
     assert "commit" not in r.text and "built_at" not in r.text
+
+
+def test_a_web_file_name_that_is_not_utf8_never_takes_the_pages_down(ui):
+    import os
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+    (clone / "web" / "src" / os.fsdecode(b"caf\xe9.ts")).write_text("x\n")
+    assert webbuild.source_key() is not None                    # no UnicodeDecodeError
+    assert _served() == "<p>shipped</p>\n"                      # sources changed: the shipped build, not a 500
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+
+
+def test_a_build_never_raises(ui, monkeypatch, capsys):
+    import errno
+    import tempfile
+    clone = ui["clone"]
+    _edit(clone)
+    real = webbuild._run
+
+    def latin1(cmd, cwd, env, timeout):                     # a tool that prints a Latin-1 file name and fails
+        if cmd[1].endswith("tsc"):
+            cmd = ["sh", "-c", "printf 'error caf\\351.ts\\n'; exit 2"]
+        return real(cmd, cwd, env, timeout)
+    with monkeypatch.context() as m:
+        m.setattr(webbuild, "_run", latin1)
+        r = webbuild.build()
+        assert not r["ok"] and "caf" in r["error"]
+
+    def full(*a, **k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    with monkeypatch.context() as m:
+        m.setattr(tempfile, "mkdtemp", full)
+        r = webbuild.build()
+        assert not r["ok"] and "No space left" in r["error"]
+        cmd_core._rebuild_web_ui()                           # the end of `maxxing update`: a warning, no trace
+        assert "do not build" in capsys.readouterr().out
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+    assert not list(config.STATE.glob("web-dist.new-*"))
+
+
+def test_a_failed_swap_keeps_the_served_build(ui, monkeypatch):
+    from pathlib import Path
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>second</p>\n")
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>third</p>\n")
+    real = Path.rename
+
+    def rename(self, target):
+        if self.name.startswith("web-dist.new-"):
+            raise OSError("rename failed")
+        return real(self, target)
+    with monkeypatch.context() as m:
+        m.setattr(Path, "rename", rename)
+        assert not webbuild.build()["ok"]
+    _edit(clone, "<p>second</p>\n")
+    assert _served() == "<p>second</p>\n"                    # still in place
+    _edit(clone)
+    assert _served() == "<p>mine</p>\n"                      # and the previous one still kept
+    assert not list(config.STATE.glob("web-dist.new-*"))
+
+
+def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
+    import os
+    import time
+    pidfile = tmp_path / "pid"
+    ok, msg = webbuild._run(["sh", "-c", f"sleep 300 & echo $! > {pidfile}; sleep 300"], tmp_path, dict(os.environ), 2)
+    assert not ok and "timed out" in msg
+    pid = int(pidfile.read_text())
+    for _ in range(50):                                      # the grandchild (npm's scripts, esbuild) is gone too
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("grandchild still alive")
+
+
+def test_a_link_to_a_fifo_under_web_never_blocks_the_pages(ui):
+    import os
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+    os.mkfifo(clone / "fifo")
+    (clone / "web" / "src" / "link.ts").symlink_to(clone / "fifo")
+    assert webbuild.source_key() is not None                    # returns: the link is keyed by its target, not read
+    assert _served() == "<p>shipped</p>\n"                      # sources changed (a new file): the shipped build
+    (clone / "web" / "src" / "link.ts").unlink()
+    assert _served() == "<p>mine</p>\n"
+
+
+def test_rebuilding_the_same_sources_keeps_the_previous_build(ui):
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    first = webbuild._stamp(webbuild.build_dir())["key"]
+    _edit(clone, "<p>mine, edited again</p>\n")
+    assert webbuild.build()["ok"]
+    assert webbuild._stamp(webbuild._prev_dir())["key"] == first
+    assert webbuild.build()["ok"]                                 # nothing changed: a second build of the same sources
+    assert webbuild._stamp(webbuild._prev_dir())["key"] == first  # the rollback still finds the first one
+    _edit(clone)
+    assert _served() == "<p>mine</p>\n"

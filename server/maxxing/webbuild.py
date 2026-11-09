@@ -7,11 +7,15 @@ sources never shows a stale or broken UI. The previous build is kept (web-dist.p
 """
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import shutil
+import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -21,9 +25,12 @@ from typing import Any, Callable
 
 from . import config
 
+log = logging.getLogger(__name__)
+
 STAMP = ".maxxing-build.json"
 LOCK_STAMP = ".maxxing-lock"                     # in node_modules: the package-lock.json it was installed from
 SKIP = ("web/dist/", "web/node_modules/")
+SOURCE_MAX = 32 << 20                            # a bigger file is keyed by its size and date, never read
 
 
 def build_dir() -> Path:
@@ -41,10 +48,10 @@ def is_web_source(path: str) -> bool:
 
 def _git(code: Path, *args: str) -> tuple[int, str]:
     try:
-        r = subprocess.run(["git", "-C", str(code), *args], capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["git", "-C", str(code), *args], capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as e:
         return 1, str(e)
-    return r.returncode, r.stdout
+    return r.returncode, os.fsdecode(r.stdout)        # a file name that is not UTF-8 stays a valid path
 
 
 def source_key(code: Path | None = None) -> str | None:
@@ -57,11 +64,29 @@ def source_key(code: Path | None = None) -> str | None:
     h = hashlib.sha256()
     for rel in sorted({p for p in out.split("\0") if p and is_web_source(p)}):
         try:
-            data = (code / rel).read_bytes()
+            digest = _file_digest(code / rel)
         except OSError:                                # deleted but still in the index
             continue
-        h.update(rel.encode() + b"\0" + hashlib.sha256(data).digest())
+        if digest is not None:
+            h.update(os.fsencode(rel) + b"\0" + digest)
     return h.hexdigest()
+
+
+def _file_digest(path: Path) -> bytes | None:
+    """What a source file adds to source_key: a link by its target (like git), never followed - a link to a FIFO or
+    to /dev/zero would block every page -, a regular file by its content, anything else left out."""
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode):
+        return b"link:" + os.fsencode(os.readlink(path))
+    if not stat.S_ISREG(st.st_mode):
+        return None
+    if st.st_size > SOURCE_MAX:
+        return b"big:%d:%d" % (st.st_size, st.st_mtime_ns)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):   # swapped after the lstat
+            return None
+        return hashlib.sha256(f.read(SOURCE_MAX)).digest()
 
 
 def _stamp(d: Path) -> dict[str, Any]:
@@ -86,8 +111,12 @@ def active_dist(ttl: float = 5.0) -> Path:
     path = config.WEB_DIST
     local = [d for d in (build_dir(), _prev_dir()) if (d / "index.html").is_file() and _stamp(d).get("key")]
     if local:
-        key = source_key()
-        path = next((d for d in local if _stamp(d)["key"] == key), config.WEB_DIST)
+        try:
+            key = source_key()
+        except Exception:                               # never a page down because of a local build: the shipped one
+            log.exception("web sources unreadable, the shipped web UI is served")
+            key = None
+        path = next((d for d in local if key and _stamp(d)["key"] == key), config.WEB_DIST)
     _active.update(path=path, at=now, shipped=(config.WEB_DIST, config.STATE))
     return path
 
@@ -163,13 +192,20 @@ def _node_env() -> tuple[Path | None, dict[str, str]]:
 
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str], timeout: float) -> tuple[bool, str]:
-    try:
-        r = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return False, f"{' '.join(cmd[:3])}: timed out after {int(timeout)} s"
+    try:                                        # its own process group: a timeout stops npm's children too
+        p = subprocess.Popen(cmd, cwd=str(cwd), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             start_new_session=True)
     except OSError as e:
         return False, f"{cmd[0]}: {e}"
-    return r.returncode == 0, ((r.stdout or "") + (r.stderr or "")).strip()
+    try:
+        out, _ = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(OSError):
+            os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        return False, f"{' '.join(cmd[:3])}: timed out after {int(timeout)} s"
+    # tools may print bytes that are not UTF-8 (a file name in an error): never a reason to fail the caller
+    return p.returncode == 0, out.decode("utf-8", "replace").strip()
 
 
 def _install(web: Path, env: dict[str, str], node: Path, share_from: Path | None,
@@ -206,6 +242,16 @@ def build(code: Path | None = None, out: Path | None = None, share_from: Path | 
     """Typecheck and build the web UI of `code` (default: the code directory) into `out` (default: this server's
     build, swapped in atomically, the previous one kept). -> {ok, error, seconds, dir}; `install=False` (the
     preflight) never runs npm: {ok: False, skipped: True} when the tools are missing. Never raises."""
+    t0 = time.monotonic()
+    try:
+        return _build(code, out, share_from, progress, install)
+    except Exception as e:                              # a full disk, an unreadable tree: a failed build, not a trace
+        log.exception("web UI build failed")
+        return {"ok": False, "error": f"build failed: {e}", "seconds": round(time.monotonic() - t0)}
+
+
+def _build(code: Path | None, out: Path | None, share_from: Path | None, progress: Step | None,
+           install: bool) -> dict[str, Any]:
     code = code or config.CODE
     say = progress or (lambda _m: None)
     t0 = time.monotonic()
@@ -231,23 +277,36 @@ def build(code: Path | None = None, out: Path | None = None, share_from: Path | 
             return {"ok": False, "error": "type errors:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
         final.parent.mkdir(parents=True, exist_ok=True)
         tmp = Path(tempfile.mkdtemp(prefix=final.name + ".new-", dir=str(final.parent)))
-        say("building (vite)")
-        ok, msg = _run([str(node), "node_modules/vite/bin/vite.js", "build", "--outDir", str(tmp), "--emptyOutDir",
-                        "--logLevel", "warn"], web, env, 900)
-        if not ok or not (tmp / "index.html").is_file():
-            shutil.rmtree(tmp, ignore_errors=True)
-            return {"ok": False, "error": "build failed:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
-        rc, head = _git(code, "rev-parse", "HEAD")
-        (tmp / STAMP).write_text(json.dumps({"key": key, "commit": head.strip() if rc == 0 else "",
-                                             "built_at": time.time()}))
-        if out is None:                                 # this server's build: keep the previous one for a rollback
-            prev = _prev_dir()
-            shutil.rmtree(prev, ignore_errors=True)
-            if final.exists():
-                final.rename(prev)
-            tmp.rename(final)
-            forget()
-        else:
-            shutil.rmtree(final, ignore_errors=True)
-            tmp.rename(final)
+        try:
+            say("building (vite)")
+            ok, msg = _run([str(node), "node_modules/vite/bin/vite.js", "build", "--outDir", str(tmp), "--emptyOutDir",
+                            "--logLevel", "warn"], web, env, 900)
+            if not ok or not (tmp / "index.html").is_file():
+                return {"ok": False, "error": "build failed:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
+            rc, head = _git(code, "rev-parse", "HEAD")
+            (tmp / STAMP).write_text(json.dumps({"key": key, "commit": head.strip() if rc == 0 else "",
+                                                 "built_at": time.time()}))
+            if out is None:                             # this server's build: keep the previous one for a rollback
+                prev, old = _prev_dir(), final.with_name(final.name + ".old")
+                shutil.rmtree(old, ignore_errors=True)
+                if final.exists():
+                    final.rename(old)
+                try:
+                    tmp.rename(final)
+                except OSError:
+                    if old.exists():
+                        old.rename(final)               # the current build stays served, the previous one kept
+                    raise
+                if old.exists():
+                    if key is not None and _stamp(old).get("key") == key:
+                        shutil.rmtree(old, ignore_errors=True)   # the same sources rebuilt: the previous one stays
+                    else:
+                        shutil.rmtree(prev, ignore_errors=True)
+                        old.rename(prev)
+                forget()
+            else:
+                shutil.rmtree(final, ignore_errors=True)
+                tmp.rename(final)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)      # moved into place on success: nothing is left
     return {"ok": True, "error": "", "seconds": round(time.monotonic() - t0), "dir": str(final)}

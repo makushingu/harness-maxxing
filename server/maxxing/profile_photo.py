@@ -25,6 +25,7 @@ _busy: set[str] = set()                     # fetches in flight: a second reques
 _busy_lock = threading.Lock()
 _failed: dict[str, float] = {}              # "<pid>-<version>" -> when a fetch failed (asked again after RETRY_S)
 RETRY_S = 600
+own_lock = threading.Lock()                 # the own photo and its version in config.json change together
 
 
 def sniff(data: bytes) -> str | None:
@@ -50,10 +51,15 @@ def save(data: bytes) -> str:
         raise ValueError("not_an_image")
     p = own_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name("photo.part")
-    tmp.write_bytes(data)
-    tmp.chmod(0o644)
-    tmp.replace(p)
+    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".photo-", suffix=".part")   # one per save: never shared
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, p)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     return hashlib.sha256(data).hexdigest()[:16]
 
 
@@ -70,6 +76,13 @@ def own() -> tuple[Path, str] | None:
     except OSError:
         return None
     return (p, mime) if mime else None
+
+
+def _remember_failure(key: str) -> None:
+    now = time.time()
+    for k in [k for k, at in _failed.items() if now - at >= RETRY_S]:   # asked again anyway: forgotten
+        _failed.pop(k, None)
+    _failed[key] = now
 
 
 def _cache_dir() -> Path:
@@ -93,9 +106,11 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
             _busy.add(key)
         try:
             from . import teampeer
+            if not teampeer.announces_photo(pid, version):
+                return None                     # unknown person or version: nothing fetched, nothing remembered
             data = teampeer.fetch_photo(pid, version)
             if not data or not sniff(data) or hashlib.sha256(data).hexdigest()[:16] != version:
-                _failed[key] = time.time()
+                _remember_failure(key)
                 return None
             d.mkdir(parents=True, exist_ok=True)
             for old in d.glob(f"{pid}-*"):      # one version per person

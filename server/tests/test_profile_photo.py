@@ -150,3 +150,71 @@ def test_a_slow_or_doubled_photo_fetch_never_holds_the_server(client, monkeypatc
     monkeypatch.setattr(teampeer, "PHOTO_DEADLINE", -1)     # past the deadline for the whole photo: dropped
     assert client.get(url).status_code == 404 and len(http.calls) == 1
     assert not (config.STATE / "team" / "photos").exists() or not any((config.STATE / "team" / "photos").iterdir())
+
+
+def test_two_photos_sent_at_once_keep_the_file_and_its_version_together(client):
+    import threading
+    pngs = [PNG + bytes([i]) * 8 for i in range(2)]
+    errors = []
+
+    def send(data):
+        for _ in range(30):
+            try:
+                if _put(client, data).status_code != 200:
+                    errors.append("status")
+            except Exception as e:                           # noqa: BLE001 - any failure is the bug
+                errors.append(repr(e))
+    threads = [threading.Thread(target=send, args=(d,)) for d in pngs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    v = client.get("/api/settings/profile").json()["photo"]
+    assert hashlib.sha256(profile_photo.own_path().read_bytes()).hexdigest()[:16] == v
+    assert not list(profile_photo.own_path().parent.glob("*.part"))
+
+
+def test_a_photo_removed_during_an_upload_never_leaves_a_version_without_its_file(client, monkeypatch):
+    import threading
+    import time
+    assert _put(client, PNG).status_code == 200
+    real, saving = profile_photo.save, threading.Event()
+
+    def slow(data):
+        v = real(data)
+        saving.set()
+        time.sleep(0.3)                                      # the file is there, the version not yet written
+        return v
+    monkeypatch.setattr(profile_photo, "save", slow)
+    t = threading.Thread(target=_put, args=(client, JPEG))
+    t.start()
+    assert saving.wait(5)
+    client.delete("/api/settings/profile/photo")
+    t.join()
+    p = client.get("/api/settings/profile").json()
+    assert not p["photo_url"] or client.get(p["photo_url"]).status_code == 200
+
+
+def test_failed_photo_fetches_are_not_remembered_for_strangers_nor_forever(client, monkeypatch):
+    import time
+    v = hashlib.sha256(PNG).hexdigest()[:16]
+    _contact(monkeypatch, photo=v)
+    monkeypatch.setattr(teampeer, "_http", lambda: _Http(JPEG))      # bytes that do not match the version
+    monkeypatch.setattr(profile_photo, "_failed", {})
+    for i in range(50):                                              # ids and versions nobody announced
+        assert client.get(f"/api/team/people/p_{i:06x}/photo?v={i:016x}").status_code == 404
+    assert profile_photo._failed == {}
+    profile_photo._failed["p_000001-" + "1" * 16] = time.time() - profile_photo.RETRY_S - 1
+    assert client.get(f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}").status_code == 404
+    assert list(profile_photo._failed) == [f"{teampeer.pid(LEA)}-{v}"]   # the stale entry purged
+
+
+def test_a_lone_surrogate_in_the_pseudo_is_a_400_not_a_500(client):
+    import json
+    before = client.get("/api/settings/profile").json()
+    for field in ("name", "emoji"):
+        body = {"name": "Léa", "color": "", "emoji": "", field: "\ud800"}
+        r = client.put("/api/settings/profile", content=json.dumps(body), headers={"content-type": "application/json"})
+        assert r.status_code == 400
+    assert client.get("/api/settings/profile").json() == before

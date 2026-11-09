@@ -62,7 +62,7 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
 export default function SettingsPage() {
   const t = useT()
   const { section = 'general' } = useParams()
-  const { search } = useLocation()
+  const { search, hash: anchor } = useLocation()
   const meta = SETTINGS_SECTIONS.find((s) => s.id === section)
   useDocumentTitle(meta ? `${t(meta.label)} · ${t('nav.settings')}` : t('nav.settings'))
   const tabs = React.useRef<HTMLUListElement>(null)
@@ -106,10 +106,10 @@ export default function SettingsPage() {
     }
   }, [section])
   if (!meta) {
-    const moved = SECTION_MOVED[section]
+    const moved = Object.hasOwn(SECTION_MOVED, section) ? SECTION_MOVED[section] : undefined   // never constructor, __proto__…
     if (moved) {
       const [path, hash = ''] = moved.split('#')
-      return <Navigate to={{ pathname: path, search, hash }} replace />
+      return <Navigate to={{ pathname: path, search, hash: hash || anchor }} replace />   // an old link's anchor kept
     }
     return <Navigate to="/settings/general" replace />
   }
