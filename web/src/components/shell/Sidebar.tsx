@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { NavLink } from 'react-router'
-import { Bell, PanelLeftClose, PanelRight, Pin, Search } from 'lucide-react'
+import { Bell, MessageCircle, PanelLeftClose, Pin, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -35,12 +35,12 @@ function useSessionBadge() {
   return { unread, running }
 }
 
-/** Team entry: its unread count, and (on hover) the button that opens the chats on the right of the page. */
+/** Team entry: its unread count, and (on hover) the button that opens the chat list in the Team bubble. */
 function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const { data } = useTeam()
-  const open = useTeamUI((s) => s.open)
-  const setOpen = useTeamUI((s) => s.setOpen)
+  const open = useTeamUI((s) => s.list)
+  const setOpen = useTeamUI((s) => s.setList)
   const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return (
@@ -59,7 +59,7 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
           open ? 'text-primary' : 'opacity-0 group-hover:opacity-100',
         )}
       >
-        <PanelRight className="size-3.5" />
+        <MessageCircle className="size-3.5" />
       </span>
       <CountBadge count={unread} />
     </span>

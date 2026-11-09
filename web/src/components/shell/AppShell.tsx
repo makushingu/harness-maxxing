@@ -24,7 +24,6 @@ import { useFeedbackDialog } from './feedback-store'
 import { useNav } from './nav'
 import { RouteProgress } from './RouteProgress'
 import { useBootReadyWhenIdle } from '@/lib/bootLoader'
-import { useTeamUI } from '@/features/team/store'
 
 // Rarely-used overlays are separate chunks: they are fetched when the browser is idle (or at first use),
 // not before the first paint.
@@ -58,7 +57,7 @@ function usePrefetch() {
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
 const FileViewerHost = React.lazy(withGroups(['files'], () => import('@/features/files/Viewer')))
 const TeamLive = React.lazy(() => import('@/features/team/Live').then((m) => ({ default: m.TeamLive })))
-const TeamPanel = React.lazy(withGroups(['team'], () => import('@/features/team/TeamPanel').then((m) => ({ default: m.TeamPanel }))))
+const TeamBubbles = React.lazy(withGroups(['team'], () => import('@/features/team/TeamBubbles').then((m) => ({ default: m.TeamBubbles }))))
 const FeedbackDialog = React.lazy(withGroups(['feedback'], () => import('./FeedbackDialog').then((m) => ({ default: m.FeedbackDialog }))))
 
 /** The Feedback dialog: its code (and words) load the first time it is opened, then it stays mounted for its animations. */
@@ -187,12 +186,11 @@ function useScrollReset(ref: React.RefObject<HTMLElement | null>) {
   }, [pathname, ref])
 }
 
-/** Team (Settings -> Features -> team_page), desktop only: the chats in a column on the right of every page but /team. */
-function useTeamPanel(touch: boolean) {
+/** Team (Settings -> Features -> team_page), desktop only: the Messenger-style bubbles on every page but /team. */
+function useTeamBubbles(touch: boolean) {
   const { data: s } = useSettings()
-  const open = useTeamUI((u) => u.open)
   const { pathname } = useLocation()
-  return !touch && !!s?.team_page && open && !pathname.startsWith('/team')
+  return !touch && !!s?.team_page && !pathname.startsWith('/team')
 }
 
 /** Team on: presence for the contacts and notifications of new messages, on every page and device. */
@@ -213,7 +211,7 @@ export function AppShell() {
   useMobileViewport()
   const touch = useCompact()
   const goSessions = useTouchHome(touch)
-  const teamPanel = useTeamPanel(touch)
+  const teamBubbles = useTeamBubbles(touch)
   const teamOn = useTeamOn()
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
@@ -231,9 +229,9 @@ export function AppShell() {
       >
         {goSessions ? <Navigate to="/sessions" replace /> : <Outlet />}
       </main>
-      {teamPanel && (
+      {teamBubbles && (
         <React.Suspense fallback={null}>
-          <TeamPanel />
+          <TeamBubbles />
         </React.Suspense>
       )}
       {teamOn && (

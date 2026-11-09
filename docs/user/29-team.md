@@ -6,9 +6,11 @@ section: Using Harness Maxxing
 Chat with the people you work with - a colleague, a partner, a client who also uses Harness Maxxing - right next
 to your sessions: direct messages and groups, files, polls, and a summary by Claude when you want one.
 
-Turn it on in **Settings -> Features -> Team**. The **Team** entry appears in the sidebar; the small icon next to it
-(on hover) opens the chats in a panel on the right of any page, with the number of unread messages. Drag the panel's
-left edge to make it wider (double-click: normal width).
+Turn it on in **Settings -> Features -> Team**. The **Team** entry appears in the sidebar, and on a computer a round
+**Team bubble** sits at the bottom right of every page, with the number of unread messages. Click it for the list of
+chats; a chat opens in a small window docked at the bottom of the page (up to three side by side), like Messenger.
+**–** minimizes it into a round head above the bubble (with its unread count; hover it for the name, **×** to close
+it), and a new message brings its chat's head up. The expand icon opens the full Team page.
 
 The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
 

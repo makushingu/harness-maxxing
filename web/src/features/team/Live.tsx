@@ -6,6 +6,7 @@ import { teamPresence, useTeam } from '@/lib/queries'
 import { useUI } from '@/stores/ui'
 import { useT } from '@/i18n'
 import { toast } from '@/components/ui'
+import { isCompact } from '@/stores/media'
 import { playChime, showSystemNotification } from '@/features/notify/useDoneNotifier'
 import { chatTitle, personOf } from './people'
 import { useTeamUI } from './store'
@@ -43,14 +44,16 @@ function useMessageNotifier() {
     const ui = useTeamUI.getState()
     const away = document.hidden || !document.hasFocus()
     const onScreen = (id: string) =>
-      (location.pathname.startsWith('/team') && new URLSearchParams(location.search).get('chat') === id) || (ui.open && ui.chat === id && !location.pathname.startsWith('/team'))
+      (location.pathname.startsWith('/team') && new URLSearchParams(location.search).get('chat') === id) || (ui.docked.includes(id) && !location.pathname.startsWith('/team'))
+    const bubbles = !isCompact() && !location.pathname.startsWith('/team')
     let rang = false
     for (const c of fresh) {
+      if (bubbles) ui.bump(c.id)
       if (!away && onScreen(c.id)) continue
       const title = chatTitle(team, c)
       const who = c.kind === 'group' ? `${personOf(team, c.last!.author).name.split(' ')[0]} : ` : ''
       const body = who + (c.last!.kind === 'poll' ? `📊 ${c.last!.text}` : `${c.last!.files ? '📎 ' : ''}${c.last!.text}`).slice(0, 160)
-      const open = () => navigate(`/team?chat=${encodeURIComponent(c.id)}`)
+      const open = () => (bubbles && !location.pathname.startsWith('/team') ? useTeamUI.getState().openChat(c.id) : navigate(`/team?chat=${encodeURIComponent(c.id)}`))
       if (!away || !showSystemNotification(title, body, open, `mx-team-${c.id}`)) toast.action(title, body, { label: t('notify.open'), onClick: open })
       rang = true
     }

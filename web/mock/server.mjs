@@ -1942,7 +1942,46 @@ function mockAgents() {
 }
 R('GET', '/api/agents', () => ({ agents: mockAgents(), avatar: {} }))
 R('GET', '/api/agents/layout', () => ({ projects: [], colors: {}, agents: {} }))
-R('GET', '/api/team', () => ({ me: 'alex', people: {}, chats: [], reactions: [], typing: {} }))
+// MOCK_FEATURES=all: three chats (a DM with unread messages, a quiet DM, a group) for the Team bubbles.
+const TEAM = (() => {
+  const now = Math.floor(Date.now() / 1000)
+  const person = (name, status) => ({ name, server: 'peer.example.com', status, contact: true, peer: true })
+  const people = { romain: person('Romain Maxxing', 'online'), lea: person('Léa Martin', 'away'), sam: person('Sam Petit', 'offline') }
+  const msgs = {
+    'd-romain': [['romain', 3600, 'Salut ! Tu as vu la nouvelle barre latérale ?'], ['alex', 3500, 'Oui, je la teste sur mon serveur'], ['romain', 120, 'Top. Tu peux regarder la PR #50 ?'], ['romain', 60, 'Les crons sont dans Réglages maintenant']],
+    'd-lea': [['lea', 86400, 'Merci pour le devis'], ['alex', 86000, 'Avec plaisir 🙂']],
+    'g-launch': [['sam', 7200, 'On cale la vidéo de lancement jeudi ?'], ['lea', 7000, 'Ok pour moi'], ['alex', 6900, 'Parfait, je prépare le texte']],
+  }
+  const chats = [
+    { id: 'd-romain', kind: 'dm', name: '', emoji: '', members: ['romain'], unread: 2 },
+    { id: 'd-lea', kind: 'dm', name: '', emoji: '', members: ['lea'], unread: 0 },
+    { id: 'g-launch', kind: 'group', name: 'Lancement', emoji: '🚀', members: ['romain', 'lea', 'sam'], unread: 0, admin: 'alex' },
+  ].map((c) => {
+    const ms = msgs[c.id].map(([author, ago, text], i) => ({ id: `${c.id}-${i}`, author, at: now - ago, text, kind: 'text' }))
+    const l = ms[ms.length - 1]
+    return { chat: { ...c, created: now - 90 * 86400, seen: {}, last: { author: l.author, at: l.at, kind: 'text', text: l.text, files: 0 }, updated: l.at }, messages: ms }
+  })
+  return { people, chats }
+})()
+R('GET', '/api/team', () => (MOCK_ALL ? { me: 'alex', people: TEAM.people, chats: TEAM.chats.map((c) => c.chat), reactions: ['👍', '❤️', '😂'], typing: {} } : { me: 'alex', people: {}, chats: [], reactions: [], typing: {} }))
+R('GET', '/api/team/chats/:id', ({ params }) => {
+  const c = TEAM.chats.find((x) => x.chat.id === params.id)
+  if (!c) fail(404, 'not_found', 'No such chat')
+  return c
+})
+R('POST', '/api/team/chats/:id/read', ({ params }) => {
+  const c = TEAM.chats.find((x) => x.chat.id === params.id)
+  if (c) c.chat.unread = 0
+  return { ok: true }
+})
+R('POST', '/api/team/chats/:id/messages', ({ params, body }) => {
+  const c = TEAM.chats.find((x) => x.chat.id === params.id)
+  if (!c) fail(404, 'not_found', 'No such chat')
+  const m = { id: `${c.chat.id}-${c.messages.length}`, author: 'alex', at: Math.floor(Date.now() / 1000), text: String(body.text || ''), kind: 'text' }
+  c.messages.push(m)
+  c.chat.last = { author: 'alex', at: m.at, kind: 'text', text: m.text, files: 0 }
+  return m
+})
 R('POST', '/api/team/presence', () => ({ ok: true }))
 R('GET', '/api/feed', () => ({ events: [], more: false, unread: 0, pending: 0, sources: [] }))
 

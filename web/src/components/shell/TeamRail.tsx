@@ -1,9 +1,9 @@
 // Second column of the unfolded desktop sidebar while the pointer rests on "Team": the Team page's own chat list
-// (features/team/Chat.tsx ChatList: unread badges, last message line). A click opens the chat (/team?chat=<id>) and
-// folds the bar; resting on a chat shows a card with its last messages beside the column (PreviewShell, the frame of
+// (features/team/Chat.tsx ChatList: unread badges, last message line). A click opens the chat in a bubble window
+// (TeamBubbles.tsx, or /team?chat=<id> when Team bubbles are not shown) and folds the bar; resting on a chat shows a card with its last messages beside the column (PreviewShell, the frame of
 // the session card). Lazy-loaded with the "team" texts (Sidebar.tsx). Reading the messages never marks them read.
 import * as React from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useTeam, useTeamChat, type TeamChat, type TeamState } from '@/lib/queries'
 import { useLang, useT } from '@/i18n'
 import { fmtRelative } from '@/lib/format'
@@ -24,6 +24,8 @@ export default function TeamRail({ onPick, shown = true }: { onPick?: () => void
   const navigate = useNavigate()
   const { data: team } = useTeam()
   const setTab = useTeamUI((s) => s.setTab)
+  const openChat = useTeamUI((s) => s.openChat)
+  const { pathname } = useLocation()
   const box = React.useRef<HTMLDivElement>(null)
   const [at, setAt] = React.useState<{ id: string; el: HTMLElement } | null>(null)
   const openTimer = React.useRef<number | undefined>(undefined)
@@ -81,7 +83,8 @@ export default function TeamRail({ onPick, shown = true }: { onPick?: () => void
         onOpen={(id) => {
           onPick?.()
           setTab('chats')
-          navigate(`/team?chat=${encodeURIComponent(id)}`)
+          if (pathname.startsWith('/team')) navigate(`/team?chat=${encodeURIComponent(id)}`)
+          else openChat(id)
         }}
         onFriends={() => {
           onPick?.()
