@@ -44,6 +44,11 @@ Click a card to open the agent; point at it for its on/off switch and **Run** (a
   asks about the style and builds it as an extension. Once it is done, pick it in the same menu; if it is turned off
   or deleted, the Office shows Classic. How it works: [Page extensions](page-extensions), "Office views".
 
+**Preview on hover** (computer, off by default): switch it on in **Settings -> Features**, under Agents (kept in this
+browser). Resting the mouse on an agent in a list (the Agents list, the agents of a topic in the sessions list) then
+shows a card with what it is doing now, else its last run, and its next start. With the Office in **Space**, the card
+also draws the agent's room.
+
 **Your order, your colors.** Drag a project (its name in the list or in Classic, the wall of its bay in
 Space)
 to move it, and drag an agent onto another of the same project to take its place; an agent never leaves its project.

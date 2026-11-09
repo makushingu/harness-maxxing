@@ -2554,6 +2554,8 @@ export const fr: Record<keyof typeof en, string> = {
   'notify.doneDesc': 'Notification système quand l\'onglet est en arrière-plan, un petit bandeau sinon. Les crons ne notifient pas.',
   'team.notifySetting': "Messages Team",
   'team.notifySettingDesc': "Une notification pour un nouveau message dans une discussion Team qui n’est pas à l’écran (jamais pour une discussion en sourdine).",
+  'features.agentPreview': "Aperçu au survol",
+  'features.agentPreviewDesc': "Laisser la souris sur un agent d’une liste montre ce qu’il fait. Avec le Bureau en vue Space, la carte montre aussi sa salle.",
   'team.bubblesSetting': "Bulles Team",
   'team.bubblesSettingDesc': "Les discussions s’ouvrent en bulles en bas à droite de chaque page, comme Messenger. Désactivé : Team ouvre sa page.",
   'notify.sound': 'Jouer un son',

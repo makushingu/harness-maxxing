@@ -5,6 +5,14 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.135 - 2026-11-09
+
+- Agent preview card (`features/agents/AgentHover.tsx` + `AgentPreview.tsx`, FEU's `ff43b2c76`): gated by
+  `stores/ui.ts` `agentPreview` (per browser, default `false`, no persist migration: a missing key takes the default),
+  switch indented under `/agents` in Settings -> Features (`features.agentPreview*`, settings i18n group). The room
+  (`OfficeRoom`) is drawn only when `mx-agents-office-view` is `future` (or the old `game`), read once per card;
+  otherwise a narrower card (300 px) without it. Doc 30.
+
 ## 2.0.0-alpha.134 - 2026-11-09
 
 - First release of `beta` since a133 went out from `main`: carries a129, a130 and a132 (beta-only until now) to

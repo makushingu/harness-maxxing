@@ -1,6 +1,6 @@
-// Preview card of an agent, shown beside a page's list (the sessions tree, the Agents list) when the pointer rests on an agent of the tree
+// Preview card of an agent (Settings -> Features -> Agents -> Preview on hover, off by default), shown beside a page's list (the sessions tree, the Agents list) when the pointer rests on an agent of the tree
 // (pages/sessions/index.tsx), or when it is focused from the keyboard: the agent in its Office, the room of its
-// project as the Agents page draws it in the Space view (OfficeFuture.tsx: same art, its console under the selection
+// project as the Agents page draws it in the Space view, only while the Office is in Space (any other view: no room) (OfficeFuture.tsx: same art, its console under the selection
 // cursor, the other agents of the project around, the free desk), then in words what it does now: the working rows of
 // its running session (the session card's own block, pages/sessions/PreviewWorking.tsx), else its last run and its
 // next scheduled start. Same frame as the session card (components/shell/SessionPreview.tsx: PreviewShell).
@@ -12,6 +12,7 @@ import { useAgents, useCrons, useSessionSeeded } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
+import { store } from '@/lib/utils'
 import { Sensitive, StatusDot } from '@/components/ui'
 import { PreviewShell } from '@/components/shell/SessionPreview'
 import PreviewWorking from '@/pages/sessions/PreviewWorking'
@@ -25,6 +26,12 @@ const CARD_W = 360
 const CARD_MAX_H = 520
 /** Consoles drawn at most (two rows with the free desk): the hovered agent is always one of them. */
 const MAX_DESKS = 5
+/** Without the room (Classic or an extension's view): just the words. */
+const CARD_W_PLAIN = 300
+
+/** The Office drawn in Space (the view the Agents page keeps in this browser, VIEW_KEY of AgentsPage.tsx; `game` = the
+ *  former Gamified view). Read when the card opens: a change on the Agents page shows on the next hover. */
+const inSpace = () => ['future', 'game'].includes(store.get('mx-agents-office-view') || '')
 
 export default function AgentPreviewCard({
   agent: a,
@@ -45,6 +52,7 @@ export default function AgentPreviewCard({
   const { data: list } = useAgents()
   const { data: crons } = useCrons()
   const st = statusOf(a, t, lang)
+  const [space] = React.useState(inSpace)
   // The room: the agents of its project in the Office's order, cut around the hovered one.
   const room = React.useMemo(() => {
     const peers = (list?.agents || []).filter((x) => x.project === a.project && x.path !== a.path)
@@ -65,7 +73,7 @@ export default function AgentPreviewCard({
   const last = a.last_run
 
   return (
-    <PreviewShell anchor={anchor} rail={rail} width={CARD_W} maxHeight={CARD_MAX_H} swapKey={a.path} testId="agent-preview" onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
+    <PreviewShell anchor={anchor} rail={rail} width={space ? CARD_W : CARD_W_PLAIN} maxHeight={CARD_MAX_H} swapKey={a.path} testId="agent-preview" onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       <div className="flex shrink-0 items-start gap-2.5 border-b px-3.5 pt-3 pb-2.5">
         <AgentAvatarIcon avatar={a.avatar} size={32} mood={st.id === 'off' ? 'sleep' : 'idle'} className="mt-0.5" />
         <div className="min-w-0 flex-1">
@@ -86,9 +94,11 @@ export default function AgentPreviewCard({
           </div>
         </div>
       </div>
-      <div className="shrink-0 border-b">
-        <OfficeRoom project={a.project} agents={room} focus={a.path} layout={layout} />
-      </div>
+      {space && (
+        <div className="shrink-0 border-b">
+          <OfficeRoom project={a.project} agents={room} focus={a.path} layout={layout} />
+        </div>
+      )}
       {running ? (
         // its run's own bottom rows while Claude works (the session card's block), its title until they load
         <div className="flex max-h-[176px] min-h-0 shrink-0 flex-col justify-end overflow-hidden bg-muted/30 px-3 pt-2 pb-0.5">

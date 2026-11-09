@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.135 - 2026-11-09
+
+Changed:
+- **Agent preview on hover** is now off by default: switch it on in **Settings -> Features**, under Agents (kept in
+  this browser). Its card draws the agent's room only when the Office is in the Space view; in Classic it shows just
+  what the agent does now, its last run and its next start.
+
 ## 2.0.0-alpha.134 - 2026-11-09
 
 This version also brings 2.0.0-alpha.129 to 132 (below), released until now only to testers.

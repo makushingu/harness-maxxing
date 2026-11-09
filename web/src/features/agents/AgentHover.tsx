@@ -5,6 +5,7 @@ import type { Agent } from '@/lib/types'
 import { agentRoute, useAgents, useSettings } from '@/lib/queries'
 import { withGroups } from '@/i18n'
 import { cn } from '@/lib/utils'
+import { useUI } from '@/stores/ui'
 
 // ---- the agent preview card ---------------------------------------------------------------------------------------
 
@@ -32,7 +33,9 @@ const agentOf = (t: EventTarget | null) => (t instanceof Element ? t.closest<HTM
 export function AgentHover({ className, children }: { className?: string; children: React.ReactNode }) {
   const box = React.useRef<HTMLDivElement>(null)
   const { data: settings } = useSettings()
-  const on = !!settings?.agents_page
+  // Settings -> Features -> Agents -> Preview on hover (this browser, off by default)
+  const preview = useUI((u) => u.agentPreview)
+  const on = !!settings?.agents_page && preview
   const { data } = useAgents(on)
   const [at, setAt] = React.useState<{ href: string; el: HTMLAnchorElement } | null>(null)
   const openTimer = React.useRef<number | undefined>(undefined)

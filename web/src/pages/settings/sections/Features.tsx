@@ -1,6 +1,6 @@
 // Settings > Features (2.0.0a132): every page of the sidebar in its order, the ones always there marked so and the
 // optional ones with their switch; the options of the sessions sit indented under Sessions ("Tell me when a session
-// finishes" lives in Notifications only), the Team bubbles under Team while Team is on. A "This browser" mark tells the few
+// finishes" lives in Notifications only), the Team bubbles under Team while Team is on, the agent preview on hover under Agents while Agents is on. A "This browser" mark tells the few
 // switches kept in this browser only from those saved on the server.
 import { useUI } from '@/stores/ui'
 import { useT } from '@/i18n'
@@ -65,10 +65,17 @@ export function FeaturesSection() {
     </SettingRow>
   ) : null
 
+  // the agent card on hover (features/agents/AgentHover.tsx), indented under the Agents row while Agents is on
+  const agentsOptions = s?.agents_page ? (
+    <SettingRow label={<>{t('features.agentPreview')}<BrowserBadge /></>} description={t('features.agentPreviewDesc')} htmlFor="ft-agent-preview">
+      <Switch id="ft-agent-preview" checked={ui.agentPreview} onCheckedChange={(v) => ui.setNotify({ agentPreview: v })} />
+    </SettingRow>
+  ) : null
+
   return (
     <SectionStack>
       <SettingsCard title={t('features.inSidebar')} description={t('features.pagesDesc')}>
-        <FeaturePages core sub={{ '/sessions': sessionOptions, '/team': teamOptions }} />
+        <FeaturePages core sub={{ '/sessions': sessionOptions, '/agents': agentsOptions, '/team': teamOptions }} />
       </SettingsCard>
     </SectionStack>
   )

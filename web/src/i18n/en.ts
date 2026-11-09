@@ -2572,6 +2572,8 @@ export const en = {
   'notify.doneDesc': 'System notification when the tab is in the background, a small banner otherwise. Cron runs are not notified.',
   'team.notifySetting': "Team messages",
   'team.notifySettingDesc': "A notification for a new message in a Team chat that is not on screen (muted chats never notify).",
+  'features.agentPreview': "Preview on hover",
+  'features.agentPreviewDesc': "Resting the pointer on an agent in a list shows what it is doing. With the Office in Space, the card shows its room too.",
   'team.bubblesSetting': "Team bubbles",
   'team.bubblesSettingDesc': "Chats open as bubbles at the bottom right of every page, like Messenger. Off: Team opens its own page.",
   'notify.sound': 'Play a sound',

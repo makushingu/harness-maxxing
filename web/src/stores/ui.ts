@@ -57,6 +57,8 @@ type UIState = {
   notifyTeam: boolean
   /** Team chats as Messenger-style bubbles at the bottom right of every page (off: Team opens its page). */
   teamBubbles: boolean
+  /** Resting the pointer on an agent of a page's list shows its card (features/agents/AgentHover.tsx); off by default. */
+  agentPreview: boolean
   /** Short sound with that notification. */
   notifySound: boolean
   /** The unread badges (sidebar, tab bar, tree) pulse. */
@@ -80,7 +82,7 @@ type UIState = {
   setTouchHome: (h: TouchHome) => void
   setPresentation: (on: boolean) => void
   setTourDone: (done: boolean) => void
-  setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'teamBubbles' | 'notifySound' | 'badgePulse'>>) => void
+  setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'teamBubbles' | 'agentPreview' | 'notifySound' | 'badgePulse'>>) => void
   setFeedPanel: (v: boolean) => void
   setHud: (on: boolean) => void
   adoptLook: (look: Look) => void
@@ -113,6 +115,7 @@ export const useUI = create<UIState>()(
       notifyDone: false,
       notifyTeam: true,
       teamBubbles: true,
+      agentPreview: false,
       feedPanel: true,
       notifySound: true,
       badgePulse: false,
