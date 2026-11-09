@@ -21,6 +21,14 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   APPROVE       asks the --permission-prompt-tool MCP server about a Bash call (approval tests)
   REPLY_AS x: t answers t when the turn runs in a folder named x (agent groups; the last such line wins)
   MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
+  NORESULT      exits right after the init line (no result), stdin still open
+  BGTASK:<name> starts a background command (task_started / background_tasks_changed) that ends after
+                $FAKE_CLAUDE_BG_S s (default 3): writes $FAKE_CLAUDE_DIR/bg-<name>.done, task_notification, then a
+                turn by itself ("Background task <name> finished.") - like Claude Code
+With `--input-format stream-json`, stdin is read line by line like the real CLI: each user message is a turn,
+`{"type":"control_request","request":{"subtype":"interrupt"}}` cuts the running turn short (SLOW / PAUSE stop,
+result `error_during_execution`; background tasks keep running), and the process exits once stdin is closed and
+no background task is left.
 A `--system-prompt` that names chat sessions (short titles) gets $FAKE_CLAUDE_TITLE (default "Fake short
 title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail.
 Threads are remembered in $FAKE_CLAUDE_DIR (default /tmp/fake-claude-<uid>): --resume of an
@@ -33,7 +41,9 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -99,10 +109,84 @@ def _agents(sid: str, model: str, seconds: float) -> None:
               "status": "completed", "summary": summary, "session_id": sid})
 
 
+EMIT_LOCK = threading.Lock()
+INTERRUPT = threading.Event()
+EVENTS: queue.Queue = queue.Queue()                    # ("user", text, images) / ("bgdone", name) / ("eof",)
+BG: dict[str, str] = {}                                # background tasks running: task id -> description
+BG_LOCK = threading.Lock()
+
+
 def emit(ev: dict) -> None:
-    sys.stdout.write(json.dumps(ev) + "\n")
-    sys.stdout.flush()
+    with EMIT_LOCK:
+        sys.stdout.write(json.dumps(ev) + "\n")
+        sys.stdout.flush()
     time.sleep(DELAY)
+
+
+def _user_text(line: str) -> tuple[str, int] | None:
+    try:
+        ev = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(ev, dict) or ev.get("type") != "user":
+        return None
+    content = ev["message"]["content"]
+    if isinstance(content, str):
+        return content, 0
+    return ("".join(b.get("text", "") for b in content if b.get("type") == "text"),
+            sum(1 for b in content if b.get("type") == "image"))
+
+
+def _stdin_reader() -> None:
+    for line in sys.stdin:
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(ev, dict) and ev.get("type") == "control_request":
+            if (ev.get("request") or {}).get("subtype") == "interrupt":
+                INTERRUPT.set()
+            emit({"type": "control_response", "response": {"subtype": "success", "request_id": ev.get("request_id")}})
+            continue
+        got = _user_text(line)
+        if got:
+            EVENTS.put(("user", *got))
+    EVENTS.put(("eof",))
+
+
+def _tasks_changed(sid: str) -> None:
+    emit({"type": "system", "subtype": "background_tasks_changed", "session_id": sid,
+          "tasks": [{"task_id": t, "task_type": "local_bash", "description": d} for t, d in list(BG.items())]})
+
+
+def _bg_task(sid: str, model: str, name: str) -> None:
+    tid, use = f"bg_{name}", f"toolu_bg_{name}"
+    cmd = f"sleep; touch bg-{name}.done"
+    emit(msg(sid, model, [{"type": "tool_use", "id": use, "name": "Bash",
+                           "input": {"command": cmd, "description": cmd, "run_in_background": True}}]))
+    BG[tid] = cmd
+    _tasks_changed(sid)
+    emit({"type": "system", "subtype": "task_started", "task_id": tid, "tool_use_id": use, "task_type": "local_bash",
+          "description": cmd, "is_backgrounded": True, "session_id": sid})
+    emit({"type": "user", "message": {"role": "user", "content": [
+        {"tool_use_id": use, "type": "tool_result", "content": f"Command running in background with ID: {tid}."}]},
+        "parent_tool_use_id": None, "session_id": sid})
+
+    def run() -> None:
+        time.sleep(float(os.environ.get("FAKE_CLAUDE_BG_S", "3")))
+        (STORE / f"bg-{name}.done").write_text("ok")
+        with BG_LOCK:                                    # the turn it starts waits for these lines
+            EVENTS.put(("bgdone", name))
+            BG.pop(tid, None)
+            emit({"type": "system", "subtype": "task_notification", "task_id": tid, "tool_use_id": use,
+                  "status": "completed", "summary": cmd, "session_id": sid})
+            _tasks_changed(sid)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _interrupted(sid: str, model: str, t0: float) -> None:
+    r = result(sid, model, "", ok=False, t0=t0)
+    emit(r)
 
 
 def usage(inp: int = 3, out: int = 12, cr: int = 1200, cw: int = 300) -> dict:
@@ -143,7 +227,7 @@ def result(sid: str, model: str, text: str, ok: bool = True, errors: list | None
     return r
 
 
-def record(o: dict, prompt: str, images: int = 0) -> None:
+def record(o: dict, prompt: str, images: int = 0, continued: bool = False) -> None:
     STORE.mkdir(parents=True, exist_ok=True)
     with open(STORE / "calls.jsonl", "a") as f:
         f.write(json.dumps({"argv": sys.argv[1:], "prompt": prompt, "images": images, "cwd": os.getcwd(),
@@ -152,7 +236,7 @@ def record(o: dict, prompt: str, images: int = 0) -> None:
                                                                    "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
                                                                    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
                                                                    "MAXXING_SESSION")},
-                            "at": time.time()}) + "\n")
+                            "at": time.time(), **({"continued": True} if continued else {})}) + "\n")
 
 
 def reply_for(prompt: str) -> str:
@@ -273,12 +357,19 @@ def main() -> int:
     if o["version"]:
         print(VERSION)
         return 0
-    prompt = o["prompt"] if o["prompt"] is not None else (sys.stdin.read() if not sys.stdin.isatty() else "")
     images = 0
-    if o["input"] == "stream-json":                    # one user message: text + image blocks
-        content = json.loads(prompt.splitlines()[0])["message"]["content"]
-        prompt = "".join(b.get("text", "") for b in content if b.get("type") == "text")
-        images = sum(1 for b in content if b.get("type") == "image")
+    if o["input"] == "stream-json" and o["prompt"] is None:   # user messages, one per line; stdin stays open
+        got = None
+        while got is None:
+            line = sys.stdin.readline()
+            if not line:
+                return 1
+            got = _user_text(line)
+        prompt, images = got
+        threading.Thread(target=_stdin_reader, daemon=True).start()
+    else:
+        prompt = o["prompt"] if o["prompt"] is not None else (sys.stdin.read() if not sys.stdin.isatty() else "")
+        EVENTS.put(("eof",))
     record(o, prompt, images)
     model = o["model"] or DEFAULT_MODEL
     STORE.mkdir(parents=True, exist_ok=True)
@@ -299,6 +390,30 @@ def main() -> int:
             return 1
         (STORE / sid).write_text(prompt)
 
+    rc = turn(o, sid, model, prompt, t0)
+    if rc is not None or o["format"] != "stream-json":
+        return rc or 0
+    eof = False
+    while True:                                          # more messages (stream-json input), tasks ending
+        if eof and not BG and EVENTS.empty():
+            return 0
+        ev = EVENTS.get()
+        if ev[0] == "eof":
+            eof = True
+        elif ev[0] == "user":
+            record(o, ev[1], ev[2], continued=True)
+            rc = turn(o, sid, model, ev[1], time.time())
+        else:
+            with BG_LOCK:
+                pass
+            rc = turn(o, sid, model, f"Background task {ev[1]} finished. NOTOOL", time.time())
+        if rc is not None:
+            return rc
+
+
+def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
+    """One turn; an exit code when the process ends with it, None when it can take more."""
+    INTERRUPT.clear()
     text = reply_for(prompt)
     if "AUTH_EXPIRED" in prompt or os.environ.get("FAKE_CLAUDE_AUTH_EXPIRED") == "1":
         err = "OAuth session expired and could not be refreshed. Please run /login."
@@ -333,6 +448,8 @@ def main() -> int:
           if "MCPINIT" in prompt else [],
           "model": model, "permissionMode": "bypassPermissions" if o["skip"] else (o["permission_mode"] or "default"),
           "apiKeySource": "none", "claude_code_version": VERSION.split()[0], "uuid": str(uuid.uuid4())})
+    if "NORESULT" in prompt:                           # crashes mid-turn: no result line
+        return 0
     emit({"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": sid})
     emit(msg(sid, model, [{"type": "thinking", "thinking": "", "signature": "c2lnbmF0dXJl"}]))
     if "FAIL" in prompt and "RESUME_FAIL" not in prompt:
@@ -344,17 +461,22 @@ def main() -> int:
         r["subtype"] = "error_max_budget_usd"
         emit(r)
         return 1
+    for name in __import__("re").findall(r"BGTASK:([A-Za-z0-9_-]+)", prompt):
+        _bg_task(sid, model, name)
     if "SLOW" in prompt:
         emit(msg(sid, model, [{"type": "text", "text": "Starting a long task."}]))
         for i in range(300):
-            time.sleep(0.1)
+            if INTERRUPT.wait(0.1):
+                _interrupted(sid, model, t0)
+                return None
             if i % 50 == 0:
                 emit({"type": "tool_progress", "tool_use_id": "toolu_slow", "tool_name": "Bash",
                       "elapsed_time_seconds": i // 10, "session_id": sid})
     if "AGENTS" in prompt:                               # two background sub-agents and a background command
         _agents(sid, model, float(os.environ.get("FAKE_CLAUDE_AGENTS_S", "1.5")))
-    if "PAUSE" in prompt:
-        time.sleep(1.5)
+    if "PAUSE" in prompt and INTERRUPT.wait(1.5):
+        _interrupted(sid, model, t0)
+        return None
     if "ORPHAN" in prompt:                               # a background program that keeps our stdout open
         import subprocess as _sp
         _sp.Popen(["sleep", "30"], stdout=sys.stdout, start_new_session=True)
@@ -412,7 +534,7 @@ def main() -> int:
     emit({"type": "rate_limit_event", "rate_limit_info": {"status": "allowed", "rateLimitType": "five_hour"},
           "session_id": sid})
     emit(result(sid, model, text, t0=t0))
-    return 0
+    return None
 
 
 if __name__ == "__main__":

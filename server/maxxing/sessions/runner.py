@@ -7,9 +7,11 @@ session's queue turn after turn, then exits:
 
   1. takes the run lock (`<id>.run`; another live runner -> exit at once), records its pid;
   2. pops the next queue item, writes an `mx_user` line into the raw log;
-  3. runs `claude -p --output-format stream-json --verbose [--model M] <permission flags>`
+  3. runs `claude -p --input-format stream-json --output-format stream-json --verbose [--model M] <flags>`
      with `--session-id <csid>` on a fresh thread, `--resume <csid>` afterwards. The prompt goes
-     through stdin (no argv size limit, no option parsing of a leading "-");
+     through stdin as a user message (no argv size limit, no option parsing of a leading "-"); stdin stays
+     open until the turn is really over (a `result` and no background task left), so a steer can reach
+     the same process;
   4. copies every stream-json line into the log (with an `mx_at` timestamp added, tool outputs
      clipped by clip.py) and keeps
      cost / real model / context size / last assistant text in the meta;
@@ -21,7 +23,11 @@ session's queue turn after turn, then exits:
 SIGTERM aborts the CURRENT turn only (the server clears the queue before signalling), so a
 message sent right after "stop" is still processed. SIGUSR1 (steer) also ends the current turn but
 keeps the queue: its head - the steered message, `steer: true` - runs next in the same Claude thread
-with a preface telling Claude to go on with it. `timeout_s` (meta) caps a turn.
+with a preface telling Claude to go on with it. While Claude's stdin is still open, the steer does not
+kill anything: an `interrupt` control request stops the current step, and the steered message is
+written to the SAME process, so background commands and sub-agents keep running. Otherwise (stdin
+already closed, no answer to the interrupt) the process group is killed as before. `timeout_s` (meta)
+caps a turn.
 """
 from __future__ import annotations
 
@@ -95,6 +101,81 @@ class Attempt:
     oom: bool = False                                  # SIGKILLed while the unit's oom_kill counter went up
     mcp_used: set[str] = field(default_factory=set)    # MCP servers (tool form) whose tools were called
     connectors: list[str] | None = None                # claude.ai connectors listed by the init event
+    handover: bool = False                             # ended by a steer: the process lives on for the next item
+
+
+class _Stdin:
+    """Claude's stdin, written by one thread in order (a big message never blocks the runner). A write error
+    (Claude gone) closes it."""
+
+    def __init__(self, stream) -> None:
+        self.stream = stream
+        self.closed = False
+        self.q: queue.Queue[str | None] = queue.Queue()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def send(self, data: str) -> bool:
+        if self.closed:
+            return False
+        self.q.put(data)
+        return True
+
+    def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self.q.put(None)
+
+    def _run(self) -> None:
+        while True:
+            data = self.q.get()
+            try:
+                if data is None:
+                    self.stream.close()
+                    return
+                self.stream.write(data)
+                self.stream.flush()
+            except (OSError, ValueError):
+                self.closed = True
+                try:
+                    self.stream.close()
+                except (OSError, ValueError):
+                    pass
+                return
+
+
+@dataclass
+class _Proc:
+    """A running claude process; with stream-json input it may serve several queue items (a steer)."""
+    p: subprocess.Popen
+    stdin: _Stdin
+    lines: Iterator[str]
+    err_chunks: list[str]
+    t_err: threading.Thread
+    lock_fd: int | None = None
+    oom_before: int | None = None
+    stream: bool = True                                # stream-json input: messages can be added while it runs
+    turn_done: bool = False                            # a `result` came since Claude last started working
+    tasks: set[str] = field(default_factory=set)       # background tasks still running (Bash, agents, Monitor...)
+    interrupt_at: float | None = None                  # monotonic time the interrupt request was sent
+
+    def track(self, ev: dict) -> None:
+        t, st = ev.get("type"), ev.get("subtype")
+        if t == "result":
+            self.turn_done = True
+        elif t != "system":
+            return
+        elif st == "init":                             # Claude starts a turn (also by itself, when a task ends)
+            self.turn_done = False
+        elif st == "background_tasks_changed" and isinstance(ev.get("tasks"), list):
+            self.tasks = {str(x.get("task_id")) for x in ev["tasks"] if isinstance(x, dict)}
+        elif st == "task_started" and ev.get("is_backgrounded") and ev.get("task_id"):
+            self.tasks.add(str(ev["task_id"]))
+        elif st == "task_notification" or (st == "task_updated"
+                                           and str((ev.get("patch") or {}).get("status")) in TASK_ENDED):
+            self.tasks.discard(str(ev.get("task_id")))
+
+    def alive(self) -> bool:
+        return self.p.poll() is None
 
 
 class Runner:
@@ -107,6 +188,9 @@ class Runner:
         self.current: dict | None = None               # queue item of the turn in progress
         self.voice_wait = False                        # waiting for the transcript of a voice message (_voice)
         self.interrupted = False                       # the current turn was cut short by a steer
+        self.proc: _Proc | None = None                 # the claude process (kept across a steer)
+        self.steer_pending = False                     # a steer the reading loop has to carry out
+        self.keep_proc = False                         # the last turn handed its process over to the next item
 
     # ---- signals -------------------------------------------------------------------------
     def on_sigterm(self, *_: object) -> None:
@@ -126,6 +210,10 @@ class Runner:
         if self.voice_wait:                            # a voice message waiting for its transcript: never lost, the
             return                                     # steered message runs right after it
         self.interrupted = True
+        pr = self.proc
+        if pr is not None and pr.stream and not pr.stdin.closed and pr.alive():
+            self.steer_pending = True                  # the reading loop interrupts the step and hands over: the
+            return                                     # process (its background tasks) keeps running
         self.stop_flag.set()
         self._kill_child()
 
@@ -170,11 +258,41 @@ class Runner:
                     break
                 failed = self.turn(item)
                 self.current = None
+                if not self.keep_proc:
+                    self._end_proc()
         except Exception as e:                         # never leave a session "running"
             self._crash(e)
         finally:
+            self.keep_proc = False
+            self._end_proc()
             os.close(fd)
         return 0
+
+    def _end_proc(self) -> None:
+        """A claude process nobody reads any more (a steered item that did not run, a crash): ends it."""
+        pr, self.proc = self.proc, None
+        self.steer_pending = False
+        if pr is None:
+            return
+        pr.stdin.close()
+        if pr.alive():
+            self._kill_child()
+            try:
+                pr.p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+        self._release(pr)
+
+    def _release(self, pr: _Proc) -> None:
+        with self.lock:
+            if self.child is pr.p:
+                self.child = None
+        if pr.lock_fd is not None:
+            try:
+                os.close(pr.lock_fd)
+            except OSError:
+                pass
+            pr.lock_fd = None
 
     def _pop(self, failed: str | None) -> dict | None:
         """Next queue item, or None after setting the final state - atomically, so a message
@@ -244,6 +362,7 @@ class Runner:
     # ---- one turn ------------------------------------------------------------------------
     def turn(self, item: dict) -> str | None:
         """Run one queue item; returns an error string when the turn failed (None when ok)."""
+        self.keep_proc = False                         # set again only when this turn hands its process over
         meta = store.read(self.sid) or {}
         cfg = config.load_config()
         kind = item.get("kind") or "user"
@@ -312,17 +431,28 @@ class Runner:
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
-        prompt, json_in = stdin_payload(text, item, Path(cfg.get("workspace") or "/").resolve())
+        root = Path(cfg.get("workspace") or "/").resolve()
+        prompt, json_in = stdin_payload(text, item, root)
+        if STREAM_INPUT:                                # always a user message: stdin stays open (steer)
+            prompt, json_in = user_message(text, item, root), True
         if json_in:
             base += ["--input-format", "stream-json"]
         timeout_s = meta.get("timeout_s")
 
         csid, fresh = meta.get("csid") or self.sid, bool(meta.get("fresh", True))
-        a = self.attempt(base + (["--session-id", csid] if fresh else ["--resume", csid]),
-                         prompt, cwd, env, timeout_s, hold=not fresh, csid=csid,
-                         prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid))
+        live = self.proc
+        if live is not None and item.get("steer") and live.stream and not live.stdin.closed and live.alive() \
+                and not fresh:                         # the steered message joins the running process
+            a = self._attempt_in(live, prompt, timeout_s, csid, store.thread_prev_cost(meta, csid))
+        else:
+            self._end_proc()
+            a = self.attempt(base + (["--session-id", csid] if fresh else ["--resume", csid]),
+                             prompt, cwd, env, timeout_s, hold=not fresh, csid=csid,
+                             prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid))
         a.fresh = fresh
-        if not fresh and a.rc != 0 and not a.saw_init and not a.stopped and _resume_lost(a):
+        if a.handover:
+            self.keep_proc = True
+        if not fresh and a.rc != 0 and not a.saw_init and not a.stopped and not a.handover and _resume_lost(a):
             csid = str(uuid.uuid4())
             store.update(self.sid, csid=csid, fresh=True)
             self.note("The previous conversation thread was no longer available. A new thread was started in "
@@ -337,7 +467,8 @@ class Runner:
         if a.saw_init:
             store.update(self.sid, fresh=False)
         if a.stopped and self.interrupted and not a.timed_out:
-            self.note("Interrupted to take your new message into account - Harness continues the task with it.")
+            self.note("Interrupted to take your new message into account - Harness continues the task with it."
+                      + (" Background tasks keep running." if a.handover else ""))
         elif a.stopped:
             self.note("Stopped." if not a.timed_out else f"Turn stopped after {timeout_s} s (timeout).",
                       "warn")
@@ -348,6 +479,8 @@ class Runner:
         if plan and err is None and not a.stopped:
             store.update(self.sid, plan_ready=True)
         self._post(item, a, err)
+        if a.handover:                                 # the steered message runs next, in the same process
+            return err
         self._mcp_after(item, a, err, cfg, meta, mcp_plan, plan)
         if not plan:
             self._auto_compact(item, a, err, cfg)
@@ -465,16 +598,12 @@ class Runner:
                 hold: bool, csid: str = "", prev_total: float = 0.0) -> Attempt:
         """Run one claude process, streaming its stdout into the raw log. `prev_total`: the running cost Claude
         last reported for thread `csid` (to tell this turn's own cost). Holds the Claude Code update lock (shared)
-        meanwhile: an automatic update never replaces the files of a running Claude, and waits for it."""
-        fd = _claude_in_use(self.note)
-        try:
-            return self._attempt(args, prompt, cwd, env, timeout_s, hold, csid, prev_total)
-        finally:
-            if fd is not None:
-                os.close(fd)
+        while the process runs: an automatic update never replaces the files of a running Claude, and waits for it."""
+        fd = _claude_in_use(self.note)                 # released with the process (_release), even after a steer
+        return self._attempt(args, prompt, cwd, env, timeout_s, hold, csid, prev_total, fd)
 
     def _attempt(self, args: list[str], prompt: str, cwd: str, env: dict, timeout_s: object,
-                 hold: bool, csid: str = "", prev_total: float = 0.0) -> Attempt:
+                 hold: bool, csid: str = "", prev_total: float = 0.0, lock_fd: int | None = None) -> Attempt:
         a = Attempt(csid=csid, prev_total=prev_total, t0=time.time())
         oom_before = _oom_kills()
         try:
@@ -482,14 +611,36 @@ class Runner:
                                  stderr=subprocess.PIPE, text=True, bufsize=1, start_new_session=True)
         except (OSError, ValueError) as e:                # ValueError: a NUL in an argument (an old session's model)
             a.stderr = f"Cannot start Claude ({args[0]}): {e}"
+            if lock_fd is not None:
+                os.close(lock_fd)
             return a
-        with self.lock:
-            self.child = p
-        if self.stop_flag.is_set():                    # stop arrived while starting
-            self._kill_child()
         err_chunks: list[str] = []
         t_err = threading.Thread(target=_stderr_tail, args=(p.stderr, err_chunks), daemon=True)
         t_err.start()
+        stream = "--input-format" in args and args[args.index("--input-format") + 1:][:1] == ["stream-json"]
+        pr = _Proc(p=p, stdin=_Stdin(p.stdin), lines=_lines_until_exit(p), err_chunks=err_chunks, t_err=t_err,
+                   lock_fd=lock_fd, oom_before=oom_before, stream=stream and STREAM_INPUT)
+        with self.lock:
+            self.child = p
+            self.proc = pr
+        if self.stop_flag.is_set():                    # stop arrived while starting
+            self._kill_child()
+        pr.stdin.send(prompt)
+        if not pr.stream:                              # plain text prompt: Claude reads to EOF
+            pr.stdin.close()
+        return self._read(pr, a, timeout_s, hold)
+
+    def _attempt_in(self, pr: _Proc, prompt: str, timeout_s: object, csid: str, prev_total: float) -> Attempt:
+        """The steered message, written to the claude process the interrupted turn ran in."""
+        a = Attempt(csid=csid, prev_total=prev_total, t0=time.time(), saw_init=True)
+        pr.turn_done, pr.interrupt_at = False, None
+        if not pr.stdin.send(prompt):                  # closed meanwhile: the reading ends with the process
+            a.stderr = "Claude's input was closed before the message could be sent."
+        return self._read(pr, a, timeout_s, hold=False)
+
+    def _read(self, pr: _Proc, a: Attempt, timeout_s: object, hold: bool) -> Attempt:
+        """Claude's output into the log until the process ends - or until a steer hands it over (a.handover)."""
+        p = pr.p
         timer = None
         if timeout_s:
             def on_timeout() -> None:
@@ -499,40 +650,77 @@ class Runner:
             timer = threading.Timer(float(timeout_s), on_timeout)
             timer.daemon = True
             timer.start()
-        threading.Thread(target=_feed, args=(p, prompt), daemon=True).start()
-        for raw in _lines_until_exit(p):
-            line = raw.strip()
-            if not line:
-                continue
-            ev = _parse(line)
-            if ev is not None:
-                self._observe(ev, a)
-                if ev.get("type") == "result" and a.thread_total is not None:
-                    ev["mx_turn_cost"] = a.turn_cost   # shown per turn in the thread (normalize.py)
-                if not clip.keep_event(ev):            # progress-only lines (thinking_tokens)
-                    continue
-                clip.clip_event(ev)                    # huge tool outputs / the init lists never reach the log
-                ev.setdefault("mx_at", time.time())
-                line = json.dumps(ev, ensure_ascii=False)
-            if hold and not a.saw_init:
-                a.held.append(line)
-                continue
-            if a.held:
-                for h in a.held:
-                    self._write_line(h)
-                a.held = []
-            self._write_line(line)
+        try:
+            for raw in pr.lines:
+                line = raw.strip()
+                if line:
+                    ev = _parse(line)
+                    if ev is not None:
+                        self._observe(ev, a)
+                        pr.track(ev)
+                        if ev.get("type") == "result" and a.thread_total is not None:
+                            ev["mx_turn_cost"] = a.turn_cost   # shown per turn in the thread (normalize.py)
+                        if clip.keep_event(ev):            # not progress-only lines (thinking_tokens)
+                            clip.clip_event(ev)            # huge tool outputs / the init lists never reach the log
+                            ev.setdefault("mx_at", time.time())
+                            line = json.dumps(ev, ensure_ascii=False)
+                        else:
+                            line = ""
+                    if line:
+                        if hold and not a.saw_init:
+                            a.held.append(line)
+                        else:
+                            if a.held:
+                                for h in a.held:
+                                    self._write_line(h)
+                                a.held = []
+                            self._write_line(line)
+                if self.steer_pending and self._steer_step(pr):
+                    for h in a.held:
+                        self._write_line(h)
+                    a.held = []
+                    a.handover, a.rc = True, 0
+                    a.stopped = pr.interrupt_at is not None    # a step was cut short (else: only background tasks ran)
+                    return a                       # (stderr: reported once, when the process ends)
+                if pr.stream and pr.turn_done and not pr.tasks and not pr.stdin.closed:
+                    pr.stdin.close()                   # the turn is over: Claude exits (as with a text prompt)
+        finally:
+            if timer:
+                timer.cancel()
         a.rc = p.wait()
-        if a.rc in (-9, 137) and oom_before is not None:
-            a.oom = (_oom_kills() or 0) > oom_before
-        if timer:
-            timer.cancel()
-        t_err.join(timeout=5)
-        a.stderr = "".join(err_chunks).strip()[-STDERR_TAIL:]
+        if a.rc in (-9, 137) and pr.oom_before is not None:
+            a.oom = (_oom_kills() or 0) > pr.oom_before
+        pr.stdin.close()
+        pr.t_err.join(timeout=5)
+        a.stderr = "".join(pr.err_chunks).strip()[-STDERR_TAIL:]
         a.stopped = self.stop_flag.is_set()
         with self.lock:
-            self.child = None
+            if self.proc is pr:
+                self.proc = None
+        self._release(pr)
         return a
+
+    def _steer_step(self, pr: _Proc) -> bool:
+        """One pass of a pending steer: True when the process can take the steered message now (the step it was
+        on has ended). Interrupts the running step first; falls back to killing the turn when Claude's input is
+        closed or the interrupt gets no answer."""
+        if pr.stdin.closed or not pr.alive():
+            self.steer_pending = False
+            self.stop_flag.set()
+            self._kill_child()
+            return False
+        if pr.turn_done:                               # nothing (left) to interrupt: only background tasks run
+            self.steer_pending = False
+            return True
+        if pr.interrupt_at is None:
+            pr.interrupt_at = time.monotonic()
+            pr.stdin.send(json.dumps({"type": "control_request", "request_id": "mx-" + uuid.uuid4().hex[:12],
+                                      "request": {"subtype": "interrupt"}}) + "\n")
+        elif time.monotonic() - pr.interrupt_at > INTERRUPT_WAIT_S:
+            self.steer_pending = False                 # Claude did not stop: the old way
+            self.stop_flag.set()
+            self._kill_child()
+        return False
 
     def _write_line(self, line: str) -> None:
         with open(store.log_path(self.sid), "a") as f:
@@ -867,6 +1055,14 @@ def stdin_payload(prompt: str, item: dict, root: Path | None = None) -> tuple[st
     return json.dumps(msg) + "\n", True
 
 
+def user_message(prompt: str, item: dict, root: Path | None = None) -> str:
+    """The prompt as one stream-json user message line (HUD images inline, as stdin_payload)."""
+    payload, json_in = stdin_payload(prompt, item, root)
+    if json_in:
+        return payload
+    return json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": prompt}]}}) + "\n"
+
+
 PLAN_PREFACE = ("[Plan mode is on: you must not create, edit or delete files nor run commands that change "
                 "anything - the tools refuse it. Explore what you need (read files, search, read-only commands), "
                 "then answer with the complete plan in Markdown, in the user's language: goal, steps, files "
@@ -920,6 +1116,11 @@ def _seed(text: str) -> dict:
 
 
 STDOUT_GRACE_S = float(os.environ.get("MAXXING_STDOUT_GRACE_S") or 10)
+# Prompts go to Claude as stream-json user messages with stdin kept open (a steer reaches the same process);
+# MAXXING_STREAM_INPUT=0 = the old way (text prompt, stdin closed at once; a steer kills the turn).
+STREAM_INPUT = os.environ.get("MAXXING_STREAM_INPUT", "1") != "0"
+INTERRUPT_WAIT_S = float(os.environ.get("MAXXING_INTERRUPT_WAIT_S") or 15)
+TASK_ENDED = ("completed", "failed", "killed", "stopped", "cancelled", "error")
 
 
 UPDATE_LOCK = ".claude-update.lock"     # maxxing.claude_update holds it (exclusive) while it updates Claude Code
@@ -978,22 +1179,13 @@ def _lines_until_exit(p: subprocess.Popen) -> Iterator[str]:
             raw = ""
         if raw is None:
             return
-        if raw:
-            yield raw
+        yield raw                                      # "" = nothing new: the reader checks a pending steer
         # checked on every pass: a background program that keeps writing must not hold the turn open either
         if p.poll() is not None:
             gone = gone or time.monotonic()
             if time.monotonic() - gone >= STDOUT_GRACE_S:
                 print("claude exited but its output stayed open (a background program): turn ended", file=sys.stderr)
                 return
-
-
-def _feed(p: subprocess.Popen, prompt: str) -> None:
-    try:
-        p.stdin.write(prompt)
-        p.stdin.close()
-    except (OSError, ValueError):
-        pass
 
 
 def _parse(line: str) -> dict | None:
