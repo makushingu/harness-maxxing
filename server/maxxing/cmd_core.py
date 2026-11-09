@@ -2180,10 +2180,12 @@ def _rebuild_web_ui() -> None:
     interface is served during the build). A failure never undoes the update: the standard interface stays until
     Claude adapts the customization (`maxxing custom build`)."""
     from . import webbuild
-    files = webbuild.customized_files()
-    if not files:
-        return
-    r = webbuild.build()
+    try:
+        if not webbuild.customized_files():
+            return
+        r = webbuild.build()
+    except Exception as e:                              # the update itself is done: never a trace at its end
+        r = {"ok": False, "error": str(e)}
     if r["ok"]:
         line(OK, f"your customized web UI rebuilt on the new version ({r['seconds']} s)")
     else:

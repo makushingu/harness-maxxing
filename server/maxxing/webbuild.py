@@ -171,12 +171,13 @@ def _node_env() -> tuple[Path | None, dict[str, str]]:
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str], timeout: float) -> tuple[bool, str]:
     try:
-        r = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"{' '.join(cmd[:3])}: timed out after {int(timeout)} s"
     except OSError as e:
         return False, f"{cmd[0]}: {e}"
-    return r.returncode == 0, ((r.stdout or "") + (r.stderr or "")).strip()
+    # tools may print bytes that are not UTF-8 (a file name in an error): never a reason to fail the caller
+    return r.returncode == 0, (r.stdout + r.stderr).decode("utf-8", "replace").strip()
 
 
 def _install(web: Path, env: dict[str, str], node: Path, share_from: Path | None,
@@ -213,6 +214,16 @@ def build(code: Path | None = None, out: Path | None = None, share_from: Path | 
     """Typecheck and build the web UI of `code` (default: the code directory) into `out` (default: this server's
     build, swapped in atomically, the previous one kept). -> {ok, error, seconds, dir}; `install=False` (the
     preflight) never runs npm: {ok: False, skipped: True} when the tools are missing. Never raises."""
+    t0 = time.monotonic()
+    try:
+        return _build(code, out, share_from, progress, install)
+    except Exception as e:                              # a full disk, an unreadable tree: a failed build, not a trace
+        log.exception("web UI build failed")
+        return {"ok": False, "error": f"build failed: {e}", "seconds": round(time.monotonic() - t0)}
+
+
+def _build(code: Path | None, out: Path | None, share_from: Path | None, progress: Step | None,
+           install: bool) -> dict[str, Any]:
     code = code or config.CODE
     say = progress or (lambda _m: None)
     t0 = time.monotonic()
@@ -238,23 +249,33 @@ def build(code: Path | None = None, out: Path | None = None, share_from: Path | 
             return {"ok": False, "error": "type errors:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
         final.parent.mkdir(parents=True, exist_ok=True)
         tmp = Path(tempfile.mkdtemp(prefix=final.name + ".new-", dir=str(final.parent)))
-        say("building (vite)")
-        ok, msg = _run([str(node), "node_modules/vite/bin/vite.js", "build", "--outDir", str(tmp), "--emptyOutDir",
-                        "--logLevel", "warn"], web, env, 900)
-        if not ok or not (tmp / "index.html").is_file():
-            shutil.rmtree(tmp, ignore_errors=True)
-            return {"ok": False, "error": "build failed:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
-        rc, head = _git(code, "rev-parse", "HEAD")
-        (tmp / STAMP).write_text(json.dumps({"key": key, "commit": head.strip() if rc == 0 else "",
-                                             "built_at": time.time()}))
-        if out is None:                                 # this server's build: keep the previous one for a rollback
-            prev = _prev_dir()
-            shutil.rmtree(prev, ignore_errors=True)
-            if final.exists():
-                final.rename(prev)
-            tmp.rename(final)
-            forget()
-        else:
-            shutil.rmtree(final, ignore_errors=True)
-            tmp.rename(final)
+        try:
+            say("building (vite)")
+            ok, msg = _run([str(node), "node_modules/vite/bin/vite.js", "build", "--outDir", str(tmp), "--emptyOutDir",
+                            "--logLevel", "warn"], web, env, 900)
+            if not ok or not (tmp / "index.html").is_file():
+                return {"ok": False, "error": "build failed:\n" + msg[-3000:], "seconds": round(time.monotonic() - t0)}
+            rc, head = _git(code, "rev-parse", "HEAD")
+            (tmp / STAMP).write_text(json.dumps({"key": key, "commit": head.strip() if rc == 0 else "",
+                                                 "built_at": time.time()}))
+            if out is None:                             # this server's build: keep the previous one for a rollback
+                prev, old = _prev_dir(), final.with_name(final.name + ".old")
+                shutil.rmtree(old, ignore_errors=True)
+                if final.exists():
+                    final.rename(old)
+                try:
+                    tmp.rename(final)
+                except OSError:
+                    if old.exists():
+                        old.rename(final)               # the current build stays served, the previous one kept
+                    raise
+                if old.exists():
+                    shutil.rmtree(prev, ignore_errors=True)
+                    old.rename(prev)
+                forget()
+            else:
+                shutil.rmtree(final, ignore_errors=True)
+                tmp.rename(final)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)      # moved into place on success: nothing is left
     return {"ok": True, "error": "", "seconds": round(time.monotonic() - t0), "dir": str(final)}

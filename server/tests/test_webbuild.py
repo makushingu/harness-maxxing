@@ -246,3 +246,55 @@ def test_a_web_file_name_that_is_not_utf8_never_takes_the_pages_down(ui):
     assert webbuild.source_key() is not None                    # no UnicodeDecodeError
     assert _served() == "<p>shipped</p>\n"                      # sources changed: the shipped build, not a 500
     assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+
+
+def test_a_build_never_raises(ui, monkeypatch, capsys):
+    import errno
+    import tempfile
+    clone = ui["clone"]
+    _edit(clone)
+    real = webbuild._run
+
+    def latin1(cmd, cwd, env, timeout):                     # a tool that prints a Latin-1 file name and fails
+        if cmd[1].endswith("tsc"):
+            cmd = ["sh", "-c", "printf 'error caf\\351.ts\\n'; exit 2"]
+        return real(cmd, cwd, env, timeout)
+    with monkeypatch.context() as m:
+        m.setattr(webbuild, "_run", latin1)
+        r = webbuild.build()
+        assert not r["ok"] and "caf" in r["error"]
+
+    def full(*a, **k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    with monkeypatch.context() as m:
+        m.setattr(tempfile, "mkdtemp", full)
+        r = webbuild.build()
+        assert not r["ok"] and "No space left" in r["error"]
+        cmd_core._rebuild_web_ui()                           # the end of `maxxing update`: a warning, no trace
+        assert "do not build" in capsys.readouterr().out
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+    assert not list(config.STATE.glob("web-dist.new-*"))
+
+
+def test_a_failed_swap_keeps_the_served_build(ui, monkeypatch):
+    from pathlib import Path
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>second</p>\n")
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>third</p>\n")
+    real = Path.rename
+
+    def rename(self, target):
+        if self.name.startswith("web-dist.new-"):
+            raise OSError("rename failed")
+        return real(self, target)
+    with monkeypatch.context() as m:
+        m.setattr(Path, "rename", rename)
+        assert not webbuild.build()["ok"]
+    _edit(clone, "<p>second</p>\n")
+    assert _served() == "<p>second</p>\n"                    # still in place
+    _edit(clone)
+    assert _served() == "<p>mine</p>\n"                      # and the previous one still kept
+    assert not list(config.STATE.glob("web-dist.new-*"))
