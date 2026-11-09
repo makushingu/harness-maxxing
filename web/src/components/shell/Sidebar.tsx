@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { NavLink, useLocation } from 'react-router'
+import { NavLink } from 'react-router'
 import { Bell, PanelLeftClose, PanelRight, Pin, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
@@ -12,6 +12,8 @@ import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Po
 import { FeedPanel } from '@/features/feed/FeedItems'
 import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
 import { Logo } from './Logo'
+import { ActiveMark } from './ActiveMark'
+import { CloseOnNav } from './CloseOnNav'
 import { StatusBlock } from './HealthIndicator'
 import { preloadRailTree, SessionsRail } from './SessionsRail'
 import { afterBoot } from '@/lib/bootLoader'
@@ -85,8 +87,7 @@ function NotificationsBell({ collapsed }: { collapsed: boolean }) {
   const { data } = useFeed()
   const unread = data?.unread ?? 0
   const [open, setOpen] = React.useState(false)
-  const { pathname } = useLocation()
-  React.useEffect(() => setOpen(false), [pathname])
+  const close = React.useCallback(() => setOpen(false), [])
   // the panel opens beside the whole bar (its right edge, past the sessions column when unfolded), not over it
   const trigger = React.useRef<HTMLButtonElement>(null)
   const [offset, setOffset] = React.useState(10)
@@ -98,6 +99,8 @@ function NotificationsBell({ collapsed }: { collapsed: boolean }) {
   }
   const label = unread ? `${t('feed.title')} · ${t('feed.unreadCount', { count: unread })}` : t('feed.title')
   return (
+    <>
+    {open && <CloseOnNav onNav={close} />}
     <Popover open={open} onOpenChange={onOpenChange}>
       <Tooltip content={open ? null : label} side={collapsed ? 'right' : 'bottom'}>
         <PopoverTrigger
@@ -140,6 +143,7 @@ function NotificationsBell({ collapsed }: { collapsed: boolean }) {
         <FeedPanel className="max-h-[min(34rem,calc(100dvh-2rem))] rounded-none border-0 bg-transparent" />
       </PopoverContent>
     </Popover>
+    </>
   )
 }
 
@@ -199,19 +203,39 @@ const RAIL_W = 304
 const FOLD_MS = 220
 /** Delay before folding back once the pointer (or the keyboard focus) left the bar. */
 const FOLD_DELAY_MS = 250
+/** Hover intent: the pointer must rest on the folded bar this long (and be slow: under INTENT_SPEED px/ms for the
+ *  last INTENT_CALM_MS) before it unfolds, so a pass on the way to an icon, or an icon clicked, never unfolds it. */
+const INTENT_MS = 280
+const INTENT_SPEED = 0.25
+const INTENT_CALM_MS = 120
+/** Unfolded, the labels come first; the sessions column follows when the pointer heads for it (the last RAIL_EDGE px of
+ *  the labels), rests on the Sessions row (RAIL_SESSIONS_MS), or stays on the bar (RAIL_REST_MS after it unfolded). */
+const RAIL_EDGE = 48
+const RAIL_SESSIONS_MS = 200
+const RAIL_REST_MS = 900
 
 /** closed = icon bar; open = unfolded over the page; closing = folding back (labels still there, clipped). */
 export type UnfoldPhase = 'closed' | 'open' | 'closing'
 
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
-/** The folded bar unfolds over the page on hover or keyboard focus, and folds back 250 ms after the pointer / focus
- *  left (Esc folds at once). A menu opened from the bar (Help, status) keeps it open until it closes. */
+/** The folded bar unfolds over the page when the pointer rests on it (hover intent, see INTENT_MS) or on keyboard
+ *  focus, and folds back 250 ms after the pointer / focus left (Esc folds at once). A click on the folded bar (an icon)
+ *  only navigates: the bar stays folded until the pointer leaves and comes back. Unfolded by the pointer, the labels
+ *  come first and the sessions column only when wanted (`rail`, see RAIL_*); by the keyboard, both at once. A menu
+ *  opened from the bar (Help, status) keeps it open until it closes. */
 function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) {
   // React only knows open / closed: `closing` (labels still there, the edge moving back) is written on the bar's own
   // element, so folding costs one render (at the end) instead of two. React never writes `data-unfold` back while it
   // stays 'open' (it only patches what changed since its last render).
   const [phase, setPhase] = React.useState<'open' | 'closed'>('closed')
+  // the sessions column shown beside the labels (only while open)
+  const [rail, setRail] = React.useState(false)
+  const railRef = React.useRef(rail)
+  railRef.current = rail
+  const intent = React.useRef<{ timer?: number; since: number; fastAt: number; x: number; y: number; t: number } | null>(null)
+  const railTimer = React.useRef<number | undefined>(undefined)
+  const railRest = React.useRef<number | undefined>(undefined)
   const phaseRef = React.useRef(phase) // the committed phase (a sliced render may still be thrown away)
   React.useLayoutEffect(() => {
     phaseRef.current = phase
@@ -238,11 +262,47 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     window.clearTimeout(timer.current)
     timer.current = undefined
   }
-  const open = () => {
+  const cancelIntent = () => {
+    window.clearTimeout(intent.current?.timer)
+    intent.current = null
+  }
+  const cancelRail = () => {
+    window.clearTimeout(railTimer.current)
+    window.clearTimeout(railRest.current)
+    railTimer.current = railRest.current = undefined
+  }
+  const showRail = () => {
+    cancelRail()
+    // not while a menu of the bar is open (the notifications panel sits where the column would come)
+    if (railRef.current || side.current?.querySelector('[aria-haspopup][aria-expanded="true"]')) return
+    setRail(true)
+  }
+  const open = (withRail = false) => {
     clear()
+    cancelIntent()
     if (!enabled || blocked.current) return
     setClosing(false) // back over the bar while it folds: it unfolds again from where it is
     setPhase('open')
+    if (withRail) showRail()
+    else if (!railRef.current) {
+      window.clearTimeout(railRest.current)
+      railRest.current = window.setTimeout(() => hover.current && showRail(), RAIL_REST_MS)
+    }
+  }
+  /** The pointer came onto the folded bar: unfold once it rests there (not on a pass, not on a click). */
+  const startIntent = (x: number, y: number) => {
+    cancelIntent()
+    if (!enabled || blocked.current) return
+    const now = performance.now()
+    const it: NonNullable<typeof intent.current> = { since: now, fastAt: now, x, y, t: now }
+    intent.current = it
+    const check = () => {
+      if (intent.current !== it) return
+      const wait = Math.max(it.since + INTENT_MS, it.fastAt + INTENT_CALM_MS) - performance.now()
+      if (wait > 4) it.timer = window.setTimeout(check, wait)
+      else open()
+    }
+    it.timer = window.setTimeout(check, INTENT_MS)
   }
   const fold = (delay: number) => {
     clear()
@@ -253,10 +313,14 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
         return
       }
       if (phaseRef.current !== 'open') return
+      cancelRail()
       const done = () => {
         // The folded bar looks the same before this render (labels faded out, edge at 64 px): React may slice it
         // (no long task); the pointer coming back meanwhile wins (an urgent update).
-        React.startTransition(() => setPhase('closed'))
+        React.startTransition(() => {
+          setPhase('closed')
+          setRail(false)
+        })
       }
       if (reducedMotion()) return done()
       setClosing(true)
@@ -271,11 +335,22 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     if (was.current === enabled) return
     was.current = enabled
     clear()
+    cancelIntent()
+    cancelRail()
     setPhase('closed')
+    setRail(false)
     // Just un-pinned with the pointer on it: fold now (the user sees the click did something), unfold on next visit.
     if (enabled) blocked.current = true
   }, [enabled])
-  React.useEffect(() => clear, [])
+  React.useEffect(
+    () => () => {
+      clear()
+      cancelIntent()
+      cancelRail()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
 
   React.useEffect(() => {
     if (!enabled) return
@@ -318,12 +393,56 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     onPointerEnter: (e: React.PointerEvent) => {
       if (e.pointerType === 'touch') return
       hover.current = true
-      open()
+      // back over the bar while it folds: it unfolds again at once (it is still on screen)
+      if (side.current?.dataset.unfold === 'closing') open(railRef.current)
+      else if (phaseRef.current === 'open') clear()
+      else startIntent(e.clientX, e.clientY)
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch') return
+      const it = intent.current
+      if (it) {
+        const t = performance.now()
+        if (Math.hypot(e.clientX - it.x, e.clientY - it.y) / Math.max(1, t - it.t) > INTENT_SPEED) it.fastAt = t
+        it.x = e.clientX
+        it.y = e.clientY
+        it.t = t
+        return
+      }
+      if (phaseRef.current !== 'open' || railRef.current) return
+      // heading for the sessions column (the right edge of the labels), or resting on the Sessions row
+      const body = side.current?.querySelector<HTMLElement>('.mx-side-body')
+      if (body && e.clientX >= body.getBoundingClientRect().right - RAIL_EDGE) return showRail()
+      const onSessions = !!(e.target as Element).closest?.('a[href="/sessions"]')
+      if (onSessions && railTimer.current === undefined) railTimer.current = window.setTimeout(showRail, RAIL_SESSIONS_MS)
+      else if (!onSessions && railTimer.current !== undefined) {
+        window.clearTimeout(railTimer.current)
+        railTimer.current = undefined
+      }
+    },
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch' || e.button !== 0) return
+      // a click on the folded bar is a shortcut, not a wish to see the labels: stay folded until the pointer comes back
+      if (phaseRef.current !== 'open') {
+        cancelIntent()
+        blocked.current = true
+      }
+    },
+    onClick: (e: React.MouseEvent) => {
+      // unfolded, a page picked in the labels: fold now (the page is what was asked for)
+      const target = e.target as Element
+      const a = target.closest?.('a[href]')
+      if (!a || e.defaultPrevented || target.closest('button') || !a.closest('.mx-side-body')) return
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+      if (phaseRef.current === 'open' && !focus.current) dismissRef.current()
     },
     onPointerLeave: (e: React.PointerEvent) => {
       if (e.pointerType === 'touch') return
       hover.current = false
       blocked.current = false
+      cancelIntent()
+      window.clearTimeout(railTimer.current)
+      railTimer.current = undefined
       if (enabled) fold(FOLD_DELAY_MS)
     },
     onFocus: (e: React.FocusEvent) => {
@@ -332,7 +451,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       if (!side.current?.contains(el) || !el.matches(':focus-visible') || performance.now() < ignoreFocusUntil.current) return
       focus.current = true
       blocked.current = false
-      open()
+      open(true) // the keyboard reaches the sessions column after the labels: show it at once
     },
     onBlur: (e: React.FocusEvent) => {
       const next = e.relatedTarget as Node | null
@@ -352,7 +471,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       fold(0)
     },
   }
-  /** A session was picked in the second column: fold now, stay folded until the pointer comes back. */
+  /** A session was picked in the second column (or a page in the first): fold now, stay folded until the pointer comes back. */
   const dismiss = () => {
     if (!enabled) return
     blocked.current = hover.current // a pick from the keyboard, pointer elsewhere: the next visit unfolds it
@@ -365,7 +484,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   const dismissRef = React.useRef(dismiss)
   dismissRef.current = dismiss
   const stableDismiss = React.useCallback(() => dismissRef.current(), [])
-  return { phase: enabled ? phase : 'closed', props, dismiss: stableDismiss } as const
+  return { phase: enabled ? phase : 'closed', rail: enabled && phase === 'open' && rail, props, dismiss: stableDismiss } as const
 }
 
 /** The sessions column is mounted ahead of the first unfold (on idle, a desktop with a mouse) and then kept, so no
@@ -426,7 +545,9 @@ function RailSlot({ shown, children }: { shown: boolean; children: React.ReactNo
   )
 }
 
-export function Sidebar() {
+/** Memoized: the shell re-renders on every URL change (a session switched in the Sessions page's tabs too), and the
+ *  bar has nothing to redo then (its links follow the URL by themselves). */
+export const Sidebar = React.memo(function Sidebar() {
   const prefetchLink = usePrefetchLink()
   const t = useT()
   const { entries, end } = useNavEntries()
@@ -463,7 +584,7 @@ export function Sidebar() {
         >
           {({ isActive }) => (
             <>
-              {isActive && <span aria-hidden className={activeMark(collapsed)} />}
+              {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
               <item.icon className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
               {!collapsed && <span className="flex-1 truncate">{label}</span>}
               {item.to === '/team' && <TeamNavExtra collapsed={collapsed} />}
@@ -500,6 +621,7 @@ export function Sidebar() {
     <Tooltip key={e.to} content={collapsed ? e.ext.name : null} side="right">
       <NavLink
         to={e.to}
+        {...prefetchLink(e.to)}
         {...drag}
         data-ext={e.ext.id}
         style={{ '--i': idx } as React.CSSProperties}
@@ -507,7 +629,7 @@ export function Sidebar() {
       >
         {({ isActive }) => (
           <>
-            {isActive && <span aria-hidden className={activeMark(collapsed)} />}
+            {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
             <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
             {!collapsed && <span className="flex-1 truncate">{e.ext.name}</span>}
           </>
@@ -539,13 +661,15 @@ export function Sidebar() {
       ref={side}
       className={cn('mx-boot-side relative hidden shrink-0 md:block', unfolded ? 'z-40' : 'z-30')}
       // `--mx-side-open`: the unfolded width (bar + sessions column), read by globals.css (`.mx-side`)
-      style={pinned ? { width } : ({ width: FOLDED_W, '--mx-side-open': `${width + RAIL_W}px` } as React.CSSProperties)}
+      style={pinned ? { width } : ({ width: FOLDED_W, '--mx-side-open': `${width + RAIL_W}px`, '--mx-side-rail': `${RAIL_W}px` } as React.CSSProperties)}
     >
       <aside
         ref={bar}
         {...unfold.props}
         data-testid="sidebar"
         data-unfold={pinned ? 'pinned' : unfold.phase}
+        // unfolded by the pointer: the labels first, the sessions column once wanted (globals.css slides it in)
+        data-rail={unfold.rail || undefined}
         // not `data-expanded`: sonner's toast CSS has a `[data-expanded=false]…>*` rule, so flipping that attribute
         // restyled the whole bar on every unfold / fold
         data-side-expanded={collapsed ? 'false' : 'true'}
@@ -649,8 +773,8 @@ export function Sidebar() {
             (globals.css) skips it, keeps its layout and takes it out of the tab order and the accessibility tree
             (cheaper than `inert`, which restyles the whole tree each time), so every unfold only reveals it. */}
         {!pinned && (unfolded || railKept) && (
-          <RailSlot shown={unfolded}>
-            <SessionsRail onPick={unfold.dismiss} shown={unfolded} />
+          <RailSlot shown={unfold.rail}>
+            <SessionsRail onPick={unfold.dismiss} shown={unfold.rail} />
           </RailSlot>
         )}
         </div>
@@ -660,4 +784,4 @@ export function Sidebar() {
       {!pinned && <div aria-hidden className="mx-side-shadow" />}
     </div>
   )
-}
+})

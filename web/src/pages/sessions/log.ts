@@ -8,7 +8,7 @@
 // The cache survives column moves / remounts (no reload, no flash).
 import * as React from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { fetchBefore, fetchTail, liveStreams, qk, takeEarlyTail, TAIL_EVENTS, useSetSessionCache } from '@/lib/queries'
+import { fetchBefore, fetchTail, liveStreams, qk, setLogProbe, takeEarlyTail, TAIL_EVENTS, useSetSessionCache } from '@/lib/queries'
 import { refreshFileStamps } from '@/lib/queries/files'
 import { errorMessage } from '@/lib/api'
 import { useEventSource } from '@/lib/sse'
@@ -81,6 +81,8 @@ const INITIAL: LogState = {
 const cache = new Map<string, LogState>()
 const listeners = new Map<string, Set<() => void>>()
 const loading = new Map<string, Promise<void>>()
+
+setLogProbe((id) => cache.get(id)?.status === 'ready' || loading.has(id))
 
 export function getLog(id: string): LogState {
   return get(id)

@@ -30,6 +30,7 @@ import {
   versionQuery,
   workspaceQuery,
 } from '@/lib/queries'
+import { openSessionIds } from '@/lib/prefetchIdle'
 import { prefetchPageChunk } from './prefetch'
 
 type Q = { queryKey: readonly unknown[]; queryFn: (...a: never[]) => Promise<unknown>; staleTime?: number | ((q: never) => number) }
@@ -58,7 +59,9 @@ export function prefetchPageData(qc: QueryClient, pathname: string, search = '')
       // The tree (its archived folds load their list when opened), the columns' header data, and the open sessions
       // with their thread.
       queries.push(sessionsQuery(undefined, false), claudeStatusQuery(), telegramQuery())
+      // (no session in the URL - the sidebar link -: the ones this browser left open on the page)
       const ids = [params.get('session'), ...(params.get('open') || '').split(',')].filter((x): x is string => !!x)
+      if (!ids.length) ids.push(...openSessionIds())
       for (const id of new Set(ids).values()) {
         queries.push(sessionQuery(id))
         prefetchTail(id)

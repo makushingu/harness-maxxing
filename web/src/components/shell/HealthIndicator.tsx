@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import * as React from 'react'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Download, HardDrive, Info, MemoryStick, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
@@ -9,6 +10,7 @@ import type { Health } from '@/lib/types'
 import { useUI, type Theme } from '@/stores/ui'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
+import { CloseOnNav } from './CloseOnNav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
 
@@ -191,8 +193,7 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
   const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
   // the panel's links (System, Stats) lead away: close it when the page changes
   const [open, setOpen] = useState(false)
-  const { pathname } = useLocation()
-  useEffect(() => setOpen(false), [pathname])
+  const close = React.useCallback(() => setOpen(false), [])
   const lang = useLang()
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const label = [s.health, ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
@@ -208,6 +209,7 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
   )
   return (
     <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
+      {open && <CloseOnNav onNav={close} />}
       <Popover open={open} onOpenChange={setOpen}>
         <Tooltip content={collapsed ? tip : null} side="right">
           <PopoverTrigger

@@ -13,10 +13,14 @@ import { cn } from '@/lib/utils'
 import { SessionTree } from './Tree'
 import { focusComposer, useSessionsUI } from './store'
 
-export default function RailTree({ onPick, className }: { onPick?: () => void; className?: string }) {
+export default function RailTree({ onPick, className, frozen }: { onPick?: () => void; className?: string; frozen?: boolean }) {
   const navigate = useNavigate()
-  const cols = useSessionsUI((s) => s.cols)
-  const focused = useSessionsUI((s) => s.focused)
+  // Folded (`frozen`), the column is kept but out of sight: the open / focused sessions it marks stay as they were
+  // (a tab switch on the Sessions page must not render this whole tree again), and catch up when it is shown.
+  const seen = React.useRef<{ cols: unknown; focused: unknown } | null>(null)
+  const cols = useSessionsUI((s) => (frozen && seen.current ? (seen.current.cols as typeof s.cols) : s.cols))
+  const focused = useSessionsUI((s) => (frozen && seen.current ? (seen.current.focused as typeof s.focused) : s.focused))
+  seen.current = { cols, focused }
   const focusedCol = cols.find((c) => c.key === focused) || null
   const focusedId = focusedCol?.kind === 'session' ? focusedCol.id : null
   const { data: session } = useSessionSeeded(focusedId)

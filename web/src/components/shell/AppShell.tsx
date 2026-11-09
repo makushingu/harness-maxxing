@@ -6,8 +6,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useGlobalBus } from '@/lib/sse'
 import { api } from '@/lib/api'
-import { prefetchSessions } from '@/lib/queries'
-import { prefetchPages } from '@/pages/prefetch'
+import { startIdlePrefetch } from '@/lib/prefetchIdle'
 import { ConnectionBanner } from './ConnectionBanner'
 import { useAuthState, useSettings } from '@/lib/queries'
 import { useDoneNotifier } from '@/features/notify/useDoneNotifier'
@@ -49,24 +48,11 @@ function WhenIdle({ children }: { children: React.ReactNode }) {
   return ready ? <React.Suspense fallback={null}>{children}</React.Suspense> : null
 }
 
-/** Once idle: warm the page chunks (navigation becomes instant) and the sessions list. Needs a fast connection. */
+/** Once the boot loader is gone and the browser idle: warm the sidebar pages and the Sessions page's first screen
+ *  (lib/prefetchIdle.ts). Needs a fast connection. */
 function usePrefetch() {
   const qc = useQueryClient()
-  React.useEffect(() => {
-    const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
-    if (conn?.saveData || /(^|-)2g$/.test(conn?.effectiveType || '')) return
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void }
-    const run = () => {
-      prefetchSessions(qc)
-      prefetchPages()
-    }
-    if (w.requestIdleCallback) {
-      const h = w.requestIdleCallback(run, { timeout: 4000 })
-      return () => w.cancelIdleCallback?.(h)
-    }
-    const h = setTimeout(run, 2000)
-    return () => clearTimeout(h)
-  }, [qc])
+  React.useEffect(() => startIdlePrefetch(qc), [qc])
 }
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))

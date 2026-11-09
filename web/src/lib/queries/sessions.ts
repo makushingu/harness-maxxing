@@ -206,12 +206,20 @@ export function fetchTail(id: string, n = 200, signal?: AbortSignal): Promise<Se
   return api.get<SessionEventsBackPage>(`/api/sessions/${seg(id)}/events`, { tail: n }, { signal })
 }
 
+/** Whether the Sessions page's log cache (pages/sessions/log.ts, in the page's chunk) already holds a session: set by
+ *  that module once it is loaded, so the shell can skip a tail it would not use. */
+let logLoaded: (id: string) => boolean = () => false
+export function setLogProbe(fn: (id: string) => boolean) {
+  logLoaded = fn
+}
+
 /** Events of a session's first page (the thread's initial load). */
 export const TAIL_EVENTS = 100
 const earlyTails = new Map<string, { p: Promise<SessionEventsBackPage>; at: number }>()
 /** Starts loading a session's tail before the Sessions page is there (app boot, see lib/boot.ts), or before it
  *  comes in front (Maxxing mode). A tail still fresh is kept; an old one is loaded again. */
 export function prefetchTail(id: string) {
+  if (logLoaded(id)) return // the thread already holds it (and follows it live): nothing to load
   const e = earlyTails.get(id)
   if (e && Date.now() - e.at < 10_000) return
   const p = fetchTail(id, TAIL_EVENTS)

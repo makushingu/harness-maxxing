@@ -87,7 +87,7 @@ export function SessionsRail({ onPick, shown = true }: { onPick?: () => void; sh
   const tree = React.useMemo(
     () => (
       <React.Suspense fallback={<RailSkeleton />}>
-        <RailTree onPick={pick} className="h-full min-h-0 flex-1" />
+        <RailTree onPick={pick} frozen={!shown} className="h-full min-h-0 flex-1" />
       </React.Suspense>
     ),
     [pick],

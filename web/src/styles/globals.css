@@ -260,8 +260,8 @@ html[data-kbd] {
  * Motion. Light, short, transform/opacity only (compositor-friendly on every GPU), and switched
  * off by prefers-reduced-motion (rule above). Documented in docs/dev/DESIGN.md.
  *  .mx-rise / .mx-unfold  entrance of a list item; --i (0..10) staggers siblings by 28 ms
- *  #main > *              page content fades in when a route mounts (opacity only: a transform
- *                         would turn the page into the containing block of its fixed overlays)
+ *  #main > *              page content fades in when a route mounts; on a computer it also rises 6 px (a transform
+ *                         makes the page the containing block of its fixed layers for 200 ms: none on a computer)
  *  .mx-card-in             dashboard cards; at most ~0.5 s for the whole grid (--i capped at 6)
  *  html[data-boot]        first load only, driven by the boot loader of index.html. 'load': the logo builds
  *                         itself over the app, whose entrance animations wait (paused); 'reveal' (set when the end is scheduled):
@@ -287,6 +287,12 @@ html[data-kbd] {
 .mx-fade { animation: mx-fade 220ms ease-out backwards; }
 .mx-pop { animation: mx-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 #main > * { animation: mx-fade 180ms ease-out backwards; }
+/* Computer: the page also rises 6 px (200 ms). Only there: on a phone the Sessions page is a `fixed` layer, which a
+   transform on its page would hold inside the page box for the length of the entrance. */
+@media (min-width: 768px) {
+  #main > * { animation: mx-page-in 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+}
+@keyframes mx-page-in { from { opacity: 0; transform: translateY(6px); } }
 /* The sidebar (where the logo lands) animates only from 'reveal', so the loader measures it at its final place;
    the page's own entrance animations start under the loader and wait, paused, until 'reveal'. */
 /* Listed rather than `#main *`: a selector ending in `*` makes leaving 'load' restyle the whole page; this way only
@@ -308,6 +314,10 @@ html[data-boot] .mx-draw { animation-duration: 900ms; animation-delay: calc(var(
 html[data-boot] .mx-sweep { animation-delay: calc(var(--bd, 0ms) + 120ms + var(--i, 0) * 40ms); }
 html[data-boot] .mx-dot-in { animation-delay: calc(var(--bd, 0ms) + 200ms + var(--i, 0) * 40ms + var(--x, 0) * 3ms); }
 @keyframes mx-boot-arc { from { stroke-dasharray: 0 100; } }
+/* Tabs view of the Sessions page (Column.tsx): the sessions not in front stay in the grid cell, under the shown one,
+   but are neither painted nor hit, and their content is skipped (`content-visibility: hidden` keeps its layout, so a
+   tab switch does not lay the whole thread out again; it also takes them out of the tab order and the a11y tree). */
+.mx-tab-off { visibility: hidden; pointer-events: none; content-visibility: hidden; }
 /* Folding sidebar (Sidebar.tsx). The bar unfolds over the page in 300 ms and folds back in 220 ms on one soft ease;
    its shadow fades in a little slower than the edge so the edge never "pops". Its content is laid out at the final
    width and revealed by the moving edge; the labels (and what only exists unfolded: `.mx-side-reveal`) fade in a
@@ -332,6 +342,12 @@ html[data-boot] .mx-dot-in { animation-delay: calc(var(--bd, 0ms) + 200ms + var(
   transform: none;
   transition: transform 300ms var(--mx-side-ease);
 }
+/* Unfolded by the pointer, the labels come first: the sheet stops the sessions column's width short (still clipped
+   past the labels), then slides the rest of the way when the column is wanted (`data-rail`, Sidebar.tsx). */
+.mx-side[data-unfold='open']:not([data-rail]), .mx-side[data-unfold='open']:not([data-rail]) ~ .mx-side-shadow {
+  transform: translateX(calc(0px - var(--mx-side-rail, 0px)));
+}
+.mx-side[data-unfold='open']:not([data-rail]) > .mx-side-inner { transform: translateX(var(--mx-side-rail, 0px)); }
 .mx-side-shadow {
   position: absolute; inset-block: 0; left: 0; z-index: -1; pointer-events: none; opacity: 0;
   box-shadow: 12px 0 32px -14px rgb(0 0 0 / 0.18), 2px 0 8px -4px rgb(0 0 0 / 0.06);
@@ -346,7 +362,7 @@ html[data-boot] .mx-dot-in { animation-delay: calc(var(--bd, 0ms) + 200ms + var(
   animation: mx-label-in 280ms var(--mx-side-ease) backwards;
   animation-delay: calc(70ms + min(var(--i, 0), 8) * 14ms);
 }
-.mx-side[data-unfold='open'] .mx-side-rail { animation: mx-rail-in 340ms var(--mx-side-ease) 60ms backwards; }
+.mx-side[data-unfold='open'][data-rail] .mx-side-rail { animation: mx-rail-in 340ms var(--mx-side-ease) 60ms backwards; }
 /* Folded, the sessions column stays mounted but skipped: no rendering, no focus, no accessibility tree; its styles and
    layout are kept for the next unfold (`data-warm`: its first moment, rendered once out of sight; Sidebar.tsx RailSlot). */
 .mx-side-rail:not([data-shown], [data-warm]) { content-visibility: hidden; }
