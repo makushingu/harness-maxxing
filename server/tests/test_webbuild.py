@@ -235,3 +235,14 @@ def test_the_build_stamp_is_never_served(ui):
     assert (webbuild.active_dist() / webbuild.STAMP).is_file()
     r = TestClient(create_app()).get("/" + webbuild.STAMP)
     assert "commit" not in r.text and "built_at" not in r.text
+
+
+def test_a_web_file_name_that_is_not_utf8_never_takes_the_pages_down(ui):
+    import os
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
+    (clone / "web" / "src" / os.fsdecode(b"caf\xe9.ts")).write_text("x\n")
+    assert webbuild.source_key() is not None                    # no UnicodeDecodeError
+    assert _served() == "<p>shipped</p>\n"                      # sources changed: the shipped build, not a 500
+    assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"

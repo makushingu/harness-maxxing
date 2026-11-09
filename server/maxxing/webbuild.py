@@ -10,6 +10,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -20,6 +21,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import config
+
+log = logging.getLogger(__name__)
 
 STAMP = ".maxxing-build.json"
 LOCK_STAMP = ".maxxing-lock"                     # in node_modules: the package-lock.json it was installed from
@@ -41,10 +44,10 @@ def is_web_source(path: str) -> bool:
 
 def _git(code: Path, *args: str) -> tuple[int, str]:
     try:
-        r = subprocess.run(["git", "-C", str(code), *args], capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["git", "-C", str(code), *args], capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as e:
         return 1, str(e)
-    return r.returncode, r.stdout
+    return r.returncode, os.fsdecode(r.stdout)        # a file name that is not UTF-8 stays a valid path
 
 
 def source_key(code: Path | None = None) -> str | None:
@@ -60,7 +63,7 @@ def source_key(code: Path | None = None) -> str | None:
             data = (code / rel).read_bytes()
         except OSError:                                # deleted but still in the index
             continue
-        h.update(rel.encode() + b"\0" + hashlib.sha256(data).digest())
+        h.update(os.fsencode(rel) + b"\0" + hashlib.sha256(data).digest())
     return h.hexdigest()
 
 
@@ -86,8 +89,12 @@ def active_dist(ttl: float = 5.0) -> Path:
     path = config.WEB_DIST
     local = [d for d in (build_dir(), _prev_dir()) if (d / "index.html").is_file() and _stamp(d).get("key")]
     if local:
-        key = source_key()
-        path = next((d for d in local if _stamp(d)["key"] == key), config.WEB_DIST)
+        try:
+            key = source_key()
+        except Exception:                               # never a page down because of a local build: the shipped one
+            log.exception("web sources unreadable, the shipped web UI is served")
+            key = None
+        path = next((d for d in local if key and _stamp(d)["key"] == key), config.WEB_DIST)
     _active.update(path=path, at=now, shipped=(config.WEB_DIST, config.STATE))
     return path
 
