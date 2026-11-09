@@ -366,6 +366,11 @@ html[data-boot] .mx-dot-in { animation-delay: calc(var(--bd, 0ms) + 200ms + var(
 /* Folded, the sessions column stays mounted but skipped: no rendering, no focus, no accessibility tree; its styles and
    layout are kept for the next unfold (`data-warm`: its first moment, rendered once out of sight; Sidebar.tsx RailSlot). */
 .mx-side-rail:not([data-shown], [data-warm]) { content-visibility: hidden; }
+/* The second column's lists (sessions, agents, Team): the one the pointer asked for fades in over the others; hidden
+   ones keep their layout (visibility: out of the tab order and the accessibility tree, no reflow on the way back). */
+.mx-rail-layer { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; transform: translateX(-6px); visibility: hidden; pointer-events: none;
+  transition: opacity 140ms ease-out, transform 180ms var(--mx-side-ease, ease-out), visibility 0s linear 180ms; }
+.mx-rail-layer[data-on] { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition: opacity 160ms ease-out, transform 180ms var(--mx-side-ease, ease-out), visibility 0s; }
 .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 0; transition: opacity 130ms ease-out; }
 /* The bell, back at its folded spot once the bar has folded (it left the search field's row fading out). */
 @keyframes mx-bell-in { from { opacity: 0; } }
@@ -525,7 +530,7 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
   html[data-boot='reveal'] #root { animation: mx-fade 160ms linear backwards !important; }
   /* the sidebar, its meters and status dot (above) */
   .mx-arc { transition: none; }
-  .mx-side, .mx-side-inner, .mx-side-shadow, .mx-side-rail, .mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-bell-in { transition: none !important; animation: none !important; }
+  .mx-side, .mx-side-inner, .mx-side-shadow, .mx-side-rail, .mx-rail-layer, .mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-bell-in { transition: none !important; animation: none !important; }
   .mx-side[data-unfold='closing'] :is(.mx-side-body :is(.truncate, kbd, .mx-side-reveal), .mx-side-rail) { opacity: 1; }
   .mx-soft-ping { animation: none; opacity: 0; }
 }

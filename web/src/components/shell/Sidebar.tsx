@@ -6,7 +6,7 @@ import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
 import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
-import { useT } from '@/i18n'
+import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@/components/ui'
 import { FeedPanel } from '@/features/feed/FeedItems'
@@ -214,6 +214,24 @@ const RAIL_EDGE = 48
 const RAIL_SESSIONS_MS = 200
 const RAIL_REST_MS = 900
 
+/** What the second column shows: it follows the nav entry the pointer rests on (Sessions, Agents, Team); the other
+ *  entries keep the last one. Back to the sessions when the bar folds. */
+type RailKind = 'sessions' | 'agents' | 'team'
+const RAIL_OF: Record<string, RailKind> = { '/sessions': 'sessions', '/agents': 'agents', '/team': 'team' }
+/** The Agents and Team columns: their own chunks (and texts), fetched the first time the pointer rests on the entry. */
+function lazyRail<P>(load: () => Promise<{ default: React.ComponentType<P> }>) {
+  let p: Promise<{ default: React.ComponentType<P> }> | undefined
+  const preload = () =>
+    (p ??= load().catch((e: unknown) => {
+      p = undefined
+      throw e
+    }))
+  return { preload, Comp: React.lazy(preload) }
+}
+const AGENTS_RAIL = lazyRail(withGroups(['agents'], () => import('./AgentsRail')))
+const TEAM_RAIL = lazyRail(withGroups(['team'], () => import('./TeamRail')))
+const preloadRail = (k: RailKind) => void (k === 'agents' ? AGENTS_RAIL : k === 'team' ? TEAM_RAIL : { preload: preloadRailTree }).preload().catch(() => {})
+
 /** closed = icon bar; open = unfolded over the page; closing = folding back (labels still there, clipped). */
 export type UnfoldPhase = 'closed' | 'open' | 'closing'
 
@@ -233,6 +251,10 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   const [rail, setRail] = React.useState(false)
   const railRef = React.useRef(rail)
   railRef.current = rail
+  const [kind, setKind] = React.useState<RailKind>('sessions')
+  const kindRef = React.useRef(kind)
+  kindRef.current = kind
+  const pendingKind = React.useRef<RailKind | null>(null)
   const intent = React.useRef<{ timer?: number; since: number; fastAt: number; x: number; y: number; t: number } | null>(null)
   const railTimer = React.useRef<number | undefined>(undefined)
   const railRest = React.useRef<number | undefined>(undefined)
@@ -270,6 +292,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
     window.clearTimeout(railTimer.current)
     window.clearTimeout(railRest.current)
     railTimer.current = railRest.current = undefined
+    pendingKind.current = null
   }
   const showRail = () => {
     cancelRail()
@@ -320,6 +343,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
         React.startTransition(() => {
           setPhase('closed')
           setRail(false)
+          setKind('sessions')
         })
       }
       if (reducedMotion()) return done()
@@ -409,16 +433,33 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
         it.t = t
         return
       }
-      if (phaseRef.current !== 'open' || railRef.current) return
-      // heading for the sessions column (the right edge of the labels), or resting on the Sessions row
-      const body = side.current?.querySelector<HTMLElement>('.mx-side-body')
-      if (body && e.clientX >= body.getBoundingClientRect().right - RAIL_EDGE) return showRail()
-      const onSessions = !!(e.target as Element).closest?.('a[href="/sessions"]')
-      if (onSessions && railTimer.current === undefined) railTimer.current = window.setTimeout(showRail, RAIL_SESSIONS_MS)
-      else if (!onSessions && railTimer.current !== undefined) {
+      if (phaseRef.current !== 'open') return
+      // resting on Sessions / Agents / Team: the column shows that list (its chunk fetched as soon as the pointer is on it)
+      const link = (e.target as Element).closest?.('.mx-side-body nav a[href]')
+      const k = link ? RAIL_OF[link.getAttribute('href') || ''] : undefined
+      if (k && (k !== kindRef.current || !railRef.current)) {
+        if (pendingKind.current !== k) {
+          preloadRail(k)
+          window.clearTimeout(railTimer.current)
+          pendingKind.current = k
+          railTimer.current = window.setTimeout(() => {
+            railTimer.current = undefined
+            pendingKind.current = null
+            setKind(k)
+            showRail()
+          }, RAIL_SESSIONS_MS)
+        }
+        return
+      }
+      if (railTimer.current !== undefined) {
         window.clearTimeout(railTimer.current)
         railTimer.current = undefined
+        pendingKind.current = null
       }
+      if (railRef.current) return
+      // heading for the column (the right edge of the labels)
+      const body = side.current?.querySelector<HTMLElement>('.mx-side-body')
+      if (body && e.clientX >= body.getBoundingClientRect().right - RAIL_EDGE) showRail()
     },
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType === 'touch' || e.button !== 0) return
@@ -429,12 +470,14 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       }
     },
     onClick: (e: React.MouseEvent) => {
-      // unfolded, a page picked in the labels: fold now (the page is what was asked for)
+      // unfolded, a page picked in the labels or an item of the second column: fold now (it is what was asked for)
       const target = e.target as Element
       const a = target.closest?.('a[href]')
-      if (!a || e.defaultPrevented || target.closest('button') || !a.closest('.mx-side-body')) return
+      // (not `defaultPrevented`: a router link always prevents the browser's own navigation)
+      if (!a || target.closest('button') || !side.current?.contains(a)) return
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-      if (phaseRef.current === 'open' && !focus.current) dismissRef.current()
+      // a mouse click (detail > 0) always folds; Enter from the keyboard keeps the keyboard's unfold
+      if (phaseRef.current === 'open' && (e.detail > 0 || !focus.current)) dismissRef.current()
     },
     onPointerLeave: (e: React.PointerEvent) => {
       if (e.pointerType === 'touch') return
@@ -443,6 +486,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
       cancelIntent()
       window.clearTimeout(railTimer.current)
       railTimer.current = undefined
+      pendingKind.current = null
       if (enabled) fold(FOLD_DELAY_MS)
     },
     onFocus: (e: React.FocusEvent) => {
@@ -484,7 +528,7 @@ function useUnfold(enabled: boolean, side: React.RefObject<HTMLElement | null>) 
   const dismissRef = React.useRef(dismiss)
   dismissRef.current = dismiss
   const stableDismiss = React.useCallback(() => dismissRef.current(), [])
-  return { phase: enabled ? phase : 'closed', rail: enabled && phase === 'open' && rail, props, dismiss: stableDismiss } as const
+  return { phase: enabled ? phase : 'closed', rail: enabled && phase === 'open' && rail, kind, props, dismiss: stableDismiss } as const
 }
 
 /** The sessions column is mounted ahead of the first unfold (on idle, a desktop with a mouse) and then kept, so no
@@ -537,9 +581,18 @@ function RailSlot({ shown, children }: { shown: boolean; children: React.ReactNo
       data-testid="sessions-rail"
       data-shown={shown || undefined}
       data-warm={(warm && !shown) || undefined}
-      className="mx-side-rail h-full min-h-0 shrink-0 border-l border-sidebar-border"
+      className="mx-side-rail relative h-full min-h-0 shrink-0 border-l border-sidebar-border"
       style={{ width: RAIL_W }}
     >
+      {children}
+    </div>
+  )
+}
+
+/** One list of the second column; the one shown fades in over the others (opacity / transform only, globals.css). */
+function RailLayer({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return (
+    <div className="mx-rail-layer bg-sidebar" data-on={on || undefined}>
       {children}
     </div>
   )
@@ -653,6 +706,10 @@ export const Sidebar = React.memo(function Sidebar() {
 
   const unfolded = !pinned && unfold.phase !== 'closed'
   const railKept = useKeptRail(!pinned, unfolded)
+  const kind = unfold.kind
+  // the Agents / Team columns, once shown, stay mounted (switching back is a crossfade, not a reload)
+  const [seen, setSeen] = React.useState<{ agents?: boolean; team?: boolean }>({})
+  if (kind !== 'sessions' && !seen[kind]) setSeen({ ...seen, [kind]: true })
   const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
 
   return (
@@ -774,7 +831,23 @@ export const Sidebar = React.memo(function Sidebar() {
             (cheaper than `inert`, which restyles the whole tree each time), so every unfold only reveals it. */}
         {!pinned && (unfolded || railKept) && (
           <RailSlot shown={unfold.rail}>
-            <SessionsRail onPick={unfold.dismiss} shown={unfold.rail} />
+            <RailLayer on={kind === 'sessions'}>
+              <SessionsRail onPick={unfold.dismiss} shown={unfold.rail && kind === 'sessions'} />
+            </RailLayer>
+            {seen.agents && (
+              <RailLayer on={kind === 'agents'}>
+                <React.Suspense fallback={null}>
+                  <AGENTS_RAIL.Comp onPick={unfold.dismiss} />
+                </React.Suspense>
+              </RailLayer>
+            )}
+            {seen.team && (
+              <RailLayer on={kind === 'team'}>
+                <React.Suspense fallback={null}>
+                  <TEAM_RAIL.Comp onPick={unfold.dismiss} shown={unfold.rail && kind === 'team'} />
+                </React.Suspense>
+              </RailLayer>
+            )}
           </RailSlot>
         )}
         </div>

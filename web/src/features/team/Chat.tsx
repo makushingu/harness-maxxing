@@ -123,6 +123,7 @@ export function ChatList({
             <button
               key={c.id}
               type="button"
+              data-chat-row={c.id}
               onClick={() => onOpen(c.id)}
               className={cn(
                 'flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60',
