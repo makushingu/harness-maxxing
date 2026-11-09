@@ -208,3 +208,13 @@ def test_failed_photo_fetches_are_not_remembered_for_strangers_nor_forever(clien
     profile_photo._failed["p_000001-" + "1" * 16] = time.time() - profile_photo.RETRY_S - 1
     assert client.get(f"/api/team/people/{teampeer.pid(LEA)}/photo?v={v}").status_code == 404
     assert list(profile_photo._failed) == [f"{teampeer.pid(LEA)}-{v}"]   # the stale entry purged
+
+
+def test_a_lone_surrogate_in_the_pseudo_is_a_400_not_a_500(client):
+    import json
+    before = client.get("/api/settings/profile").json()
+    for field in ("name", "emoji"):
+        body = {"name": "Léa", "color": "", "emoji": "", field: "\ud800"}
+        r = client.put("/api/settings/profile", content=json.dumps(body), headers={"content-type": "application/json"})
+        assert r.status_code == 400
+    assert client.get("/api/settings/profile").json() == before

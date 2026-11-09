@@ -128,9 +128,19 @@ def clean_profile(name: str, color: str, emoji: str) -> dict:
     if color and color not in PROFILE_COLORS:
         raise _err("invalid_color", f"color: {', '.join(PROFILE_COLORS)} or empty")
     emoji = _CONTROL.sub("", (emoji or "").strip())
-    if len(emoji) > 8 or any(c.isspace() for c in emoji):
+    if len(emoji) > 8 or any(c.isspace() for c in emoji) or not _utf8(emoji):
         raise _err("invalid_emoji", "emoji: one emoji or initials (8 characters at most) or empty")
+    if not _utf8(name):                        # a lone surrogate: config.json could not be written
+        raise _err("invalid_name", "name: printable characters only")
     return {"name": name, "color": color, "emoji": emoji}
+
+
+def _utf8(s: str) -> bool:
+    try:
+        s.encode()
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 @router.get("/profile")
