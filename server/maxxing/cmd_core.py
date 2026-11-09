@@ -2268,6 +2268,9 @@ def cmd_update_preflight(a) -> int:
     ui = rep.get("ui_build") or {}
     if ui.get("status") == "ok":
         line(OK, f"your customized web UI builds on the new version ({ui.get('seconds')} s)")
+    elif ui.get("status") == "unchecked" and ui.get("reason") == "never_built":
+        line(INFO, "your customized web UI: not checked, it was never built on this server (maxxing custom build); "
+             "built during the update")
     elif ui.get("status") == "unchecked":
         line(INFO, "your customized web UI: checked during the update (the new version changes its build tools)")
     elif ui.get("status") == "failed":

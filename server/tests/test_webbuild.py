@@ -222,6 +222,7 @@ def test_the_preflight_never_installs_build_tools(ui):
     _upstream_release(work, "1.1.0")
     rep = smartupdate.preflight()
     assert rep["ui_build"]["status"] == "unchecked" and rep["verdict"] == "simple"
+    assert rep["ui_build"]["reason"] == "tools_changed"
     assert len((clone / "web" / "node_modules" / "npm.log").read_text().splitlines()) == 1   # no npm ci for it
 
 
@@ -365,3 +366,39 @@ def test_rebuilding_the_same_sources_keeps_the_previous_build(ui):
     assert webbuild._stamp(webbuild._prev_dir())["key"] == first  # the rollback still finds the first one
     _edit(clone)
     assert _served() == "<p>mine</p>\n"
+
+
+def test_the_settings_page_never_builds_the_ui_inside_its_request(ui, monkeypatch):
+    import asyncio
+    import threading
+    from maxxing.api import system
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "x") == 0
+    assert webbuild.build()["ok"]
+    _upstream_release(work, "1.1.0")
+    real, later = webbuild.build, smartupdate.check_ui_later
+    started = []
+    monkeypatch.setattr(smartupdate, "check_ui_later", lambda: started.append(1) or True)
+    monkeypatch.setattr(webbuild, "build", lambda *a, **k: pytest.fail("built in the request"))
+    rep = asyncio.run(system.update_preflight(refresh=True))
+    assert rep["ui_build"]["status"] == "pending" and started == [1]
+    assert asyncio.run(system.update_preflight())["ui_build"]["status"] == "pending" and started == [1, 1]
+    monkeypatch.setattr(webbuild, "build", real)
+    assert later()                                                 # the real background check
+    for t in threading.enumerate():
+        if t.name == "preflight-ui":
+            t.join(60)
+    assert smartupdate.cached_preflight()["ui_build"]["status"] == "ok"
+
+
+def test_a_ui_never_built_here_is_not_blamed_on_new_build_tools(ui, capsys):
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "x") == 0      # saved, never built
+    _upstream_release(work, "1.1.0")
+    rep = smartupdate.preflight()
+    assert rep["ui_build"]["status"] == "unchecked" and rep["ui_build"]["reason"] == "never_built"
+    assert run_cli("update", "--preflight") == 0
+    out = capsys.readouterr().out
+    assert "never built on this server" in out and "changes its build tools" not in out

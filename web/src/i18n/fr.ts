@@ -1793,6 +1793,8 @@ export const fr: Record<keyof typeof en, string> = {
   'update.webChanges': "{count} retouches de l’interface compilée (web/dist) : Harness les refait dans ses sources",
   'update.uiBuildOk': "Votre interface personnalisée se construit sur la nouvelle version",
   'update.uiBuildUnchecked': "Votre interface personnalisée est reconstruite pendant la mise à jour (la nouvelle version change ses outils de build)",
+  'update.uiBuildNeverBuilt': "Votre interface personnalisée n’a jamais été construite sur ce serveur : elle l’est pendant la mise à jour",
+  'update.uiBuildPending': "Vérification que votre interface personnalisée se construit sur la nouvelle version…",
   'update.uiBuildFailed': "Votre interface personnalisée ne se construit pas sur la nouvelle version : Harness l’adapte",
   'update.webChanges#one': "1 retouche des fichiers de l’interface : Harness la refait en extension",
   'update.extension': "L’extension « {name} » doit être mise à jour pour la nouvelle version",

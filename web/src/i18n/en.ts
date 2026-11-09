@@ -1809,6 +1809,8 @@ export const en = {
   'update.webChanges': "{count} edits of the built interface (web/dist): Harness redoes them in its sources",
   'update.uiBuildOk': "Your customized interface builds on the new version",
   'update.uiBuildUnchecked': "Your customized interface is rebuilt during the update (the new version changes its build tools)",
+  'update.uiBuildNeverBuilt': "Your customized interface was never built on this server: it is built during the update",
+  'update.uiBuildPending': "Checking that your customized interface builds on the new version…",
   'update.uiBuildFailed': "Your customized interface does not build on the new version: Harness adapts it",
   'update.webChanges#one': "1 edit of the interface files: Harness rebuilds it as an extension",
   'update.extension': "Extension \"{name}\" needs an update for the new version",

@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -129,8 +130,10 @@ def cached_preflight() -> dict | None:
     return d
 
 
-def preflight(branch: str | None = None, fetch: bool = True) -> dict:
-    """Simulate the update on a throw-away copy. Never changes the install."""
+def preflight(branch: str | None = None, fetch: bool = True, ui_check: bool = True) -> dict:
+    """Simulate the update on a throw-away copy. Never changes the install. `ui_check=False` (a web request) leaves
+    out the build of a customized web UI (tsc + vite, 20 s to minutes): ui_build = {status: pending}, done by
+    check_ui_later()."""
     from . import customs
     from .cmd_core import _current_branch, _git, _rev, _version_in, changelog_since, check_update
     if not customs.is_git():
@@ -173,7 +176,7 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
     _, changed = _git("diff", "--name-only", f"{base}..{target}")
     upstream_files = {f for f in changed.splitlines() if f.strip()}
     rep["upstream_files"] = len(upstream_files)
-    rep["customs"] = _replay(mine, target, upstream_files, rep)
+    rep["customs"] = _replay(mine, target, upstream_files, rep, ui_check)
     for f in other_dirty:                                      # unsaved: saved by the update, checked like the rest
         if f in upstream_files:
             rep.setdefault("unsaved_overlap", []).append(f)
@@ -188,6 +191,26 @@ def preflight(branch: str | None = None, fetch: bool = True) -> dict:
     rep["verdict"] = "adapt" if adapt else "simple"
     rep["sig"] = _signature()
     return _write(PREFLIGHT, rep)
+
+
+_ui_check = threading.Lock()
+
+
+def check_ui_later() -> bool:
+    """Finish a preflight left with ui_build pending (see preflight), in a background thread, once at a time: the
+    cached report is replaced when it is done. -> False when one already runs."""
+    if not _ui_check.acquire(blocking=False):
+        return False
+
+    def run() -> None:
+        try:
+            preflight(None, False, ui_check=True)
+        except Exception:  # noqa: BLE001 - a background check never takes anything down
+            log.exception("preflight: web UI check failed")
+        finally:
+            _ui_check.release()
+    threading.Thread(target=run, name="preflight-ui", daemon=True).start()
+    return True
 
 
 def _target_notes(current: str, latest: str, target: str) -> list[dict]:
@@ -209,9 +232,10 @@ def _target_notes(current: str, latest: str, target: str) -> list[dict]:
     return sorted(notes, key=lambda n: version_key(n["version"]) or ())
 
 
-def _replay(mine: list[dict], target: str, upstream_files: set[str], rep: dict | None = None) -> list[dict]:
+def _replay(mine: list[dict], target: str, upstream_files: set[str], rep: dict | None = None,
+            ui_check: bool = True) -> list[dict]:
     """Cherry-pick each customization onto the target in a temporary worktree; when some change the web UI, build
-    it there too (rep["ui_build"] = {status: ok | failed, error, seconds})."""
+    it there too (rep["ui_build"] = {status: ok | failed | unchecked | pending, reason, error, seconds})."""
     from . import customs, webbuild
     out = [{"id": c["id"], "title": c["title"], "why": c.get("why", ""), "files": c["files"],
             "check": c.get("check", ""), "status": "ok", "conflicts": [],
@@ -244,10 +268,15 @@ def _replay(mine: list[dict], target: str, upstream_files: set[str], rep: dict |
                 item["status"] = "review"                     # applies, but on code that changed upstream
         web = [f for item in out if item["status"] in ("ok", "review") for f in item["files"]
                if webbuild.is_web_source(f)]
-        if web and rep is not None:                     # never installs anything to check (no npm ci here)
+        if web and rep is not None and not ui_check:
+            rep["ui_build"] = {"status": "pending", "error": ""}
+        elif web and rep is not None:                   # never installs anything to check (no npm ci here)
             r = webbuild.build(code=wt, out=tmp / "web-dist", share_from=config.CODE / "web", install=False)
             rep["ui_build"] = {"status": "ok" if r["ok"] else "unchecked" if r.get("skipped") else "failed",
                                "error": (r.get("error") or "")[-1500:], "seconds": r.get("seconds")}
+            if r.get("skipped"):                        # why: never built here, or new build tools
+                built = (config.CODE / "web" / "node_modules" / webbuild.LOCK_STAMP).is_file()
+                rep["ui_build"]["reason"] = "tools_changed" if built else "never_built"
     finally:
         customs.git("worktree", "remove", "--force", str(wt), timeout=120)
         customs.git("worktree", "prune")
