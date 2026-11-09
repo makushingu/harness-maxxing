@@ -46,6 +46,8 @@ type UIState = {
   feedPanel: boolean
   /** Notification for a new Team message (a chat that is not on screen, not muted). */
   notifyTeam: boolean
+  /** Team chats as Messenger-style bubbles at the bottom right of every page (off: Team opens its page). */
+  teamBubbles: boolean
   /** Short sound with that notification. */
   notifySound: boolean
   /** The unread badges (sidebar, tab bar, tree) pulse. */
@@ -67,7 +69,7 @@ type UIState = {
   setTouchHome: (h: TouchHome) => void
   setPresentation: (on: boolean) => void
   setTourDone: (done: boolean) => void
-  setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'notifySound' | 'badgePulse'>>) => void
+  setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'teamBubbles' | 'notifySound' | 'badgePulse'>>) => void
   setFeedPanel: (v: boolean) => void
   setHud: (on: boolean) => void
   adoptLook: (look: Look) => void
@@ -97,6 +99,7 @@ export const useUI = create<UIState>()(
       tourDone: false,
       notifyDone: false,
       notifyTeam: true,
+      teamBubbles: true,
       feedPanel: true,
       notifySound: true,
       badgePulse: false,

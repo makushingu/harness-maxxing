@@ -42,11 +42,12 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   const open = useTeamUI((s) => s.list)
   const setOpen = useTeamUI((s) => s.setList)
   const onTeam = useLocation().pathname.startsWith('/team')
+  const bubbles = useUI((s) => s.teamBubbles)
   const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return (
     <span className="flex items-center gap-1">
-      {!onTeam && <span
+      {!onTeam && bubbles && <span
         role="button"
         tabIndex={-1}
         title={open ? t('nav.teamPanelClose') : t('nav.teamPanel')}

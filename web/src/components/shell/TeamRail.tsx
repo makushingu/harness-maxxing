@@ -13,6 +13,7 @@ import { PreviewShell } from './SessionPreview'
 import { ChatList } from '@/features/team/Chat'
 import { ChatAvatar, chatTitle, personOf } from '@/features/team/people'
 import { useTeamUI } from '@/features/team/store'
+import { useUI } from '@/stores/ui'
 
 const PREVIEW_DELAY_MS = 250
 const PREVIEW_SWITCH_MS = 70
@@ -26,6 +27,7 @@ export default function TeamRail({ onPick, shown = true }: { onPick?: () => void
   const setTab = useTeamUI((s) => s.setTab)
   const openChat = useTeamUI((s) => s.openChat)
   const { pathname } = useLocation()
+  const bubbles = useUI((s) => s.teamBubbles)
   const box = React.useRef<HTMLDivElement>(null)
   const [at, setAt] = React.useState<{ id: string; el: HTMLElement } | null>(null)
   const openTimer = React.useRef<number | undefined>(undefined)
@@ -83,7 +85,7 @@ export default function TeamRail({ onPick, shown = true }: { onPick?: () => void
         onOpen={(id) => {
           onPick?.()
           setTab('chats')
-          if (pathname.startsWith('/team')) navigate(`/team?chat=${encodeURIComponent(id)}`)
+          if (!bubbles || pathname.startsWith('/team')) navigate(`/team?chat=${encodeURIComponent(id)}`)
           else openChat(id)
         }}
         onFriends={() => {

@@ -8,7 +8,7 @@ import { Maximize2, MessageCircle, Minus, X } from 'lucide-react'
 import { useTeam, type TeamChat, type TeamState } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { Button, CountBadge, Spinner, Tooltip } from '@/components/ui'
+import { Button, CountBadge, Spinner, Tooltip, toast } from '@/components/ui'
 import { ChatAvatar, chatTitle } from './people'
 import { useTeamUI } from './store'
 
@@ -98,6 +98,10 @@ function ListCard({ team }: { team: TeamState | undefined }) {
   )
 }
 
+/** the small × at the top left of a bubble, shown on hover */
+const CLOSE_DOT =
+  'absolute -top-1.5 -left-1.5 inline-flex size-5 items-center justify-center rounded-full border bg-popover text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100'
+
 function Head({ team, chat }: { team: TeamState | undefined; chat: TeamChat }) {
   const t = useT()
   const openChat = useTeamUI((s) => s.openChat)
@@ -116,7 +120,7 @@ function Head({ team, chat }: { team: TeamState | undefined; chat: TeamChat }) {
         onClick={() => close(chat.id)}
         aria-label={t('team.closeChat')}
         title={t('team.closeChat')}
-        className="absolute -top-1.5 -left-1.5 inline-flex size-5 items-center justify-center rounded-full border bg-popover text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100"
+        className={CLOSE_DOT}
       >
         <X className="size-3" />
       </button>
@@ -136,6 +140,7 @@ export function TeamBubbles() {
   const { data: team } = useTeam()
   const list = useTeamUI((s) => s.list)
   const setList = useTeamUI((s) => s.setList)
+  const setHidden = useTeamUI((s) => s.setHidden)
   const docked = useTeamUI((s) => s.docked)
   const heads = useTeamUI((s) => s.heads)
   const vw = useViewportWidth()
@@ -171,18 +176,27 @@ export function TeamBubbles() {
         className={cn('pointer-events-none fixed right-4 z-40 flex flex-col-reverse items-center gap-2.5 transition-[bottom] [&>*]:pointer-events-auto', lifted ? 'bottom-28' : 'bottom-4')}
         data-testid="team-heads"
       >
-        <Tooltip content={list ? t('nav.teamPanelClose') : t('nav.teamPanel')} side="left">
-          <button
-            type="button"
-            onClick={() => setList(!list)}
-            aria-label={t('team.title')}
-            aria-expanded={list}
-            className={cn(BUBBLE, list ? 'border-primary/50 bg-primary/[0.08] text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
-          >
-            <MessageCircle className="size-5" />
-            <Badge n={unread} />
+        <div className="group/head relative">
+          <Tooltip content={list ? t('nav.teamPanelClose') : t('nav.teamPanel')} side="left">
+            <button
+              type="button"
+              onClick={() => setList(!list)}
+              aria-label={t('team.title')}
+              aria-expanded={list}
+              className={cn(BUBBLE, list ? 'border-primary/50 bg-primary/[0.08] text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
+            >
+              <MessageCircle className="size-5" />
+              <Badge n={unread} />
+            </button>
+          </Tooltip>
+          <button type="button" onClick={() => {
+              setHidden(true)
+              toast.action(t('team.bubblesHidden'), t('team.bubblesHiddenDesc'), { label: t('team.bubblesUndo'), onClick: () => setHidden(false) })
+            }}
+            aria-label={t('team.hideBubbles')} title={t('team.hideBubbles')} className={CLOSE_DOT}>
+            <X className="size-3" />
           </button>
-        </Tooltip>
+        </div>
         {waiting.map((id) => (
           <Head key={id} team={team} chat={byId.get(id)!} />
         ))}

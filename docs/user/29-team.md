@@ -11,6 +11,9 @@ Turn it on in **Settings -> Features -> Team**. The **Team** entry appears in th
 chats; a chat opens in a small window docked at the bottom of the page (up to three side by side), like Messenger.
 **–** minimizes it into a round head above the bubble (with its unread count; hover it for the name, **×** to close
 it), and a new message brings its chat's head up. The expand icon opens the full Team page.
+The **×** of the Team bubble (on hover) hides all the bubbles; the chat icon next to **Team** in the sidebar, or
+opening a chat, brings them back. To do without bubbles, turn off **Settings -> Notifications -> Team bubbles**
+(per browser): Team then opens its own page.
 
 The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
 

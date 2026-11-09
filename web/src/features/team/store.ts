@@ -16,6 +16,8 @@ const save = (docked: string[], heads: string[]) => {
 }
 
 type TeamUI = {
+  /** the whole bubble stack closed by its × (back from the sidebar, a chat opened, a notification) */
+  hidden: boolean
   /** the chat list above the Team bubble */
   list: boolean
   /** open chat windows, oldest first */
@@ -24,6 +26,7 @@ type TeamUI = {
   heads: string[]
   tab: TeamTab
   setList: (open: boolean) => void
+  setHidden: (hidden: boolean) => void
   openChat: (id: string) => void
   minimize: (id: string) => void
   close: (id: string) => void
@@ -36,10 +39,19 @@ type TeamUI = {
 
 export const useTeamUI = create<TeamUI>((set, get) => ({
   list: false,
+  hidden: ls.get('mx-team-hidden') === '1',
   docked: readList('mx-team-docked').slice(-MAX_WINDOWS),
   heads: readList('mx-team-heads').slice(0, MAX_HEADS),
   tab: ls.get('mx-team-tab') === 'friends' ? 'friends' : 'chats',
-  setList: (list) => set({ list }),
+  setList: (list) => {
+    if (list) ls.remove('mx-team-hidden')
+    set(list ? { list, hidden: false } : { list })
+  },
+  setHidden: (hidden) => {
+    if (hidden) ls.set('mx-team-hidden', '1')
+    else ls.remove('mx-team-hidden')
+    set(hidden ? { hidden, list: false } : { hidden })
+  },
   openChat: (id) => {
     const s = get()
     let docked = [...s.docked.filter((x) => x !== id), id]
@@ -47,7 +59,8 @@ export const useTeamUI = create<TeamUI>((set, get) => ({
     while (docked.length > MAX_WINDOWS) heads = [docked.shift()!, ...heads]
     heads = heads.slice(0, MAX_HEADS)
     save(docked, heads)
-    set({ docked, heads, list: false })
+    ls.remove('mx-team-hidden')
+    set({ docked, heads, list: false, hidden: false })
   },
   minimize: (id) => {
     const s = get()

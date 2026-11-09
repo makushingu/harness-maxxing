@@ -12,6 +12,7 @@ import { useAuthState, useSettings } from '@/lib/queries'
 import { useDoneNotifier } from '@/features/notify/useDoneNotifier'
 import { checkVersion, useWhatsNew } from '@/features/whatsnew/store'
 import { useUI } from '@/stores/ui'
+import { useTeamUI } from '@/features/team/store'
 import { withGroups } from '@/i18n'
 import { useHotkey } from '@/commands/shortcuts'
 import { useCommandStore } from '@/commands/registry'
@@ -190,7 +191,9 @@ function useScrollReset(ref: React.RefObject<HTMLElement | null>) {
 function useTeamBubbles(touch: boolean) {
   const { data: s } = useSettings()
   const { pathname } = useLocation()
-  return !touch && !!s?.team_page && !pathname.startsWith('/team')
+  const on = useUI((u) => u.teamBubbles)
+  const hidden = useTeamUI((u) => u.hidden)
+  return on && !hidden && !touch && !!s?.team_page && !pathname.startsWith('/team')
 }
 
 /** Team on: presence for the contacts and notifications of new messages, on every page and device. */

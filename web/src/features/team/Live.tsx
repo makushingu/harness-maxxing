@@ -43,7 +43,7 @@ function useMessageNotifier() {
     if (!fresh.length) return
     const ui = useTeamUI.getState()
     // The chat's bubble comes up even with notifications off (it is the unread mark of the bubbles).
-    const bubbles = !isCompact() && !location.pathname.startsWith('/team')
+    const bubbles = useUI.getState().teamBubbles && !isCompact() && !location.pathname.startsWith('/team')
     if (bubbles) for (const c of fresh) ui.bump(c.id)
     if (!enabled) return
     const away = document.hidden || !document.hasFocus()
