@@ -631,7 +631,8 @@ function topicObj(p, tp) {
   const ss = S.sessions.filter((s) => s.path === pth && !s.archived)
   const th = S.telegram.threads.find((x) => x.path === pth)
   return { name: tp.name, project: p.name, path: pth, description: tp.description || '', session_count: ss.length, archived_count: S.sessions.filter((s) => s.path === pth && s.archived).length,
-    running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, telegram_thread: th ? th.thread_id : null }
+    running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, telegram_thread: th ? th.thread_id : null,
+    ...(MOCK_ALL ? { agents: mockAgents().filter((a) => a.project === p.name && a.topic === tp.name) } : {}) }
 }
 function projectObj(p) {
   const pp = projPath(p.name)
@@ -1919,7 +1920,28 @@ R('GET', '/api/stats/tokens', () => {
 })
 R('GET', '/api/usage', () => ({ available: true, plan: 'Max', source: 'api', seen_at: now(),
   five_hour: { pct: +meters().five.toFixed(1), resets_at: now() + 2 * HOUR }, seven_day: { pct: +meters().week.toFixed(1), resets_at: now() + 3 * DAY } }))
-R('GET', '/api/agents', () => ({ agents: [], avatar: {} }))
+// MOCK_FEATURES=all: three agents in acme (two in blog, one in seo) for the Office and the rail's agent preview card;
+// the writer "works" in the running blog session.
+function mockAgents() {
+  if (!MOCK_ALL) return []
+  const t = now()
+  const run = S.sessions.find((s) => s.state === 'running' && s.path === topicPath('acme', 'blog'))
+  const base = (topic, name, display_name, description, avatar, extra = {}) => ({
+    path: `${topicPath('acme', topic)}/agents/${name}`, project: 'acme', topic, name, display_name, description, avatar, enabled: true, model: '', permission_mode: '',
+    allowed_tools: [], disallowed_tools: [], telegram: false, silent: false, approvals: false, trust_outside: false, keys: [], sandbox: true, domains: [], writable: [],
+    rules: [], subagent: false, limits: { usd_per_day: 2, runs_per_hour: 6, timeout_s: 1800, debounce_s: 60 }, triggers: [], created: t - 9 * DAY, session_count: 12,
+    archived_count: 0, running: 0, unread: 0, cost_today: 0.42, runs_last_hour: 0, last_run: null, running_now: 0, running_sessions: [], thread_unread: 0, waiting: 0, alerts: 0, ...extra })
+  return [
+    base('blog', 'writer', 'Blog Writer', 'Drafts the weekly article from the editorial calendar.', { color: 'clay', skin: 'light', hair: 'short', hair_color: 'black', face: 'focused', accessory: 'none' },
+      run ? { running: 1, running_now: 1, running_sessions: [{ id: run.id, title: run.title, started: t - 2 * MIN }], last_run: { id: 'm1', at: t - 2 * DAY, kind: 'result', text: 'Published "Cart abandonment in 2026".', ok: true } } : {}),
+    base('blog', 'proofreader', 'Proofreader', 'Reads every draft for typos and tone.', { color: 'green', skin: 'tan', hair: 'long', hair_color: 'brown', face: 'happy', accessory: 'glasses' },
+      { last_run: { id: 'm2', at: t - 3 * HOUR, kind: 'result', text: 'Fixed 7 typos in drafts/2026-10-payment-methods.md and flagged one claim without a source.', ok: true }, thread_unread: 1 }),
+    base('seo', 'rank-watch', 'Rank Watch', 'Checks the rankings of the 40 tracked keywords every morning.', { color: 'blue', skin: 'brown', hair: 'bun', hair_color: 'black', face: 'smile', accessory: 'headphones' },
+      { last_run: { id: 'm3', at: t - 20 * HOUR, kind: 'result', text: 'Two keywords moved into the top 3: "speed up checkout" and "cart abandonment".', ok: true } }),
+  ]
+}
+R('GET', '/api/agents', () => ({ agents: mockAgents(), avatar: {} }))
+R('GET', '/api/agents/layout', () => ({ projects: [], colors: {}, agents: {} }))
 R('GET', '/api/team', () => ({ me: 'alex', people: {}, chats: [], reactions: [], typing: {} }))
 R('POST', '/api/team/presence', () => ({ ok: true }))
 R('GET', '/api/feed', () => ({ events: [], more: false, unread: 0, pending: 0, sources: [] }))

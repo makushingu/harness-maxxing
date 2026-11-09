@@ -19,7 +19,7 @@ import { DropBar, ProjectMenu, type AgentsLayoutApi, type ProjectGroup } from '.
 import type { Status } from './parts'
 import { WaitingBubble } from './approvals'
 import type { CreateStart } from './CreateAgent'
-import { Cursor, hash, useDesk, useRoom } from './office'
+import { colsFor, Cursor, hash, useDesk, useRoom } from './office'
 
 /** A console cell is W x H pixels of art . */
 const W = 30
@@ -89,10 +89,42 @@ export function OfficeFuture({ groups, layout, onStart }: { groups: ProjectGroup
   )
 }
 
-function Bay({ project, agents, index, layout, s, phone, onStart }: { project: string; agents: Agent[]; index: number; layout: AgentsLayoutApi; s: number; phone: boolean; onStart: (s: CreateStart) => void }) {
+/**
+ * One bay alone, read-only, for the sidebar's agent preview card (AgentPreview.tsx): the room of `project` with
+ * `agents` at their consoles, `focus` (an agent path) under the selection cursor. At most 3 consoles a row (the
+ * phone grid), smaller pixels for 3; `inert`: nothing in it takes a pointer, the focus or a screen reader (the card says
+ * it in words).
+ */
+export function OfficeRoom({ project, agents, focus, layout }: { project: string; agents: Agent[]; focus?: string; layout: AgentsLayoutApi }) {
+  // the Office's own pixel size while two consoles a row fit the card, smaller for three
+  const s = colsFor(agents.length, true) <= 2 ? 4 : 3
+  return (
+    <div
+      inert
+      className="flex justify-center p-2.5"
+      style={{
+        backgroundColor: HULL.void,
+        backgroundImage: `${SKY}, linear-gradient(rgba(94,231,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(94,231,255,0.035) 1px, transparent 1px)`,
+        backgroundSize: `${96 * s}px ${40 * s}px, ${16 * s}px ${16 * s}px, ${16 * s}px ${16 * s}px`,
+        imageRendering: 'pixelated',
+      }}
+      data-testid="office-room-preview"
+    >
+      <Bay project={project} agents={agents} index={0} layout={layout} s={s} phone onStart={() => {}} focus={focus} />
+    </div>
+  )
+}
+
+function Bay({ project, agents, index, layout, s, phone, onStart, focus }: { project: string; agents: Agent[]; index: number; layout: AgentsLayoutApi; s: number; phone: boolean; onStart: (s: CreateStart) => void; focus?: string }) {
   const t = useT()
   const mask = useMask()
-  const { dnd, emoji, color: c, cols, fillers, create } = useRoom(project, agents, index, layout, phone, onStart)
+  const room = useRoom(project, agents, index, layout, phone, onStart)
+  const { dnd, emoji, color: c, create } = room
+  // The preview (a `focus` given) keeps its rows short: the free desk only where the last row has room for it.
+  const previewCols = colsFor(agents.length, true)
+  const free = focus === undefined || agents.length % previewCols !== 0
+  const cols = focus === undefined ? room.cols : previewCols
+  const fillers = focus === undefined ? room.fillers : free ? (cols - ((agents.length + 1) % cols)) % cols : 0
   const wallH = 15 * s
   const style = {
     '--bay': c,
@@ -159,9 +191,9 @@ function Bay({ project, agents, index, layout, s, phone, onStart }: { project: s
         }}
       >
         {agents.map((a, i) => (
-          <Console key={a.path} agent={a} index={i} layout={layout} s={s} color={c} />
+          <Console key={a.path} agent={a} index={i} layout={layout} s={s} color={c} active={a.path === focus} />
         ))}
-        <FreeConsole s={s} color={c} label={t('agents.office.freeDesk')} onClick={create} />
+        {free && <FreeConsole s={s} color={c} label={t('agents.office.freeDesk')} onClick={create} />}
         {Array.from({ length: fillers }, (_, i) => (
           <Filler key={i} kind={(hash(project) + i) % 3} s={s} color={c} />
         ))}
@@ -223,7 +255,7 @@ function Leds({ s, color, seed }: { s: number; color: string; seed: number }) {
 }
 
 /** One agent at its console; the whole cell opens it. */
-function Console({ agent: a, index, layout, s, color }: { agent: Agent; index: number; layout: AgentsLayoutApi; s: number; color: string }) {
+function Console({ agent: a, index, layout, s, color, active }: { agent: Agent; index: number; layout: AgentsLayoutApi; s: number; color: string; active?: boolean }) {
   const { st, dnd, props } = useDesk(a, index, layout)
   const working = st.id === 'running'
   const off = st.id === 'off'
@@ -231,7 +263,7 @@ function Console({ agent: a, index, layout, s, color }: { agent: Agent; index: n
     <Tooltip content={`${a.display_name} · ${st.text}`}>
       <div {...props} className={cn('group/desk relative grid cursor-pointer justify-items-center outline-none', dnd.dragging && 'opacity-50')} data-testid="office-desk">
         <DropBar side={dnd.side} vertical={false} />
-        <Cursor className="border-[#5ee7ff] drop-shadow-[0_0_4px_#5ee7ff]" />
+        <Cursor className={cn('border-[#5ee7ff] drop-shadow-[0_0_4px_#5ee7ff]', active && 'opacity-100')} />
         <div className="relative" style={{ width: W * s, height: H * s }}>
           <PodChair s={s} color={color} off={off} />
           <span className={cn('absolute', working && 'mx-game-bob', off && 'opacity-70')} style={{ left: 3 * s, top: s }}>
