@@ -1401,6 +1401,9 @@ def check_web() -> Check:
     if st["customized"] and not st["built"]:
         return _c("web", WARN, "your web UI customizations are not built - the standard interface is shown",
                   ", ".join(st["customized"][:4]), "maxxing custom build")
+    if st["customized"] and not st["current"]:
+        return _c("web", WARN, "your web UI sources changed since the last build - your previous build is shown",
+                  ", ".join(st["customized"][:4]), "maxxing custom build")
     if st["customized"]:
         return _c("web", OK, f"customized web UI built ({len(st['customized'])} file(s) changed)", st["served"])
     return _c("web", OK, "web UI build present")

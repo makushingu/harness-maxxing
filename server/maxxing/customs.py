@@ -46,7 +46,7 @@ def git(*args: str, timeout: float = 120, check: bool = False) -> tuple[int, str
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat"}
     try:
         r = subprocess.run(["git", *IDENT, "-C", str(config.CODE), *args], capture_output=True, text=True,
-                           timeout=timeout, env=env)
+                           errors="surrogateescape", timeout=timeout, env=env)   # a file name that is not UTF-8
     except (OSError, subprocess.TimeoutExpired) as e:
         if check:
             raise CustomError(f"git {args[0]}: {e}") from None

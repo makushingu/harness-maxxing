@@ -79,16 +79,38 @@ def test_the_shipped_build_is_served_until_a_customization_is_built(ui):
     assert _served() == "<p>mine</p>\n"                          # the same sources, now saved
 
 
-def test_a_build_that_no_longer_matches_the_sources_is_never_served(ui):
+def test_the_customized_ui_stays_until_a_new_build_replaces_it(ui, capsys):
     clone = ui["clone"]
     _edit(clone)
     assert webbuild.build()["ok"]
     _edit(clone, "<p>mine, edited again</p>\n")
-    assert _served() == "<p>shipped</p>\n"                       # stale: the standard UI, never an old one
+    (clone / "web" / "src" / "scratch.orig").write_text("x")     # a stray file under web/ changes nothing either
+    assert _served() == "<p>mine</p>\n"                          # being adapted: the customized UI stays
+    st = webbuild.status()
+    assert st["built"] and not st["current"]
+    assert cmd_core.check_web()["level"] == cmd_core.WARN
+    run_cli("custom")
+    assert "your previous build" in capsys.readouterr().out
+    (clone / "web" / "src" / "scratch.orig").unlink()
     assert webbuild.build()["ok"]
     assert _served() == "<p>mine, edited again</p>\n"
     _edit(clone)                                                  # back to the first sources (a rollback)
     assert _served() == "<p>mine</p>\n"                          # the previous build is kept for that
+    _git("checkout", "--", "web", cwd=clone)                     # the unsaved customization thrown away
+    assert _served() == "<p>shipped</p>\n"
+
+
+def test_a_dropped_customization_shows_the_shipped_ui(ui):
+    clone = ui["clone"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "the user wanted it") == 0
+    assert webbuild.build()["ok"]
+    (clone / "web" / "src" / "other.txt").write_text("more\n")
+    assert run_cli("custom", "save", "Another", "--why", "more") == 0   # saving more keeps the build served
+    assert _served() == "<p>mine</p>\n"
+    first = customs.list_customs()[0]["id"]
+    assert run_cli("custom", "drop", first) == 0
+    assert _served() == "<p>shipped</p>\n"                       # the build holds what was dropped
 
 
 def test_a_failed_build_keeps_what_was_served(ui, capsys):
@@ -99,8 +121,8 @@ def test_a_failed_build_keeps_what_was_served(ui, capsys):
     (clone / "web" / "src" / "TYPE_ERROR").write_text("x")
     assert run_cli("custom", "build") == 1
     out = capsys.readouterr().out
-    assert "does not build" in out and "TS2322" in out
-    assert _served() == "<p>shipped</p>\n"                       # sources changed: standard UI, not a half build
+    assert "does not build" in out and "TS2322" in out and "previous build stays" in out
+    assert _served() == "<p>mine</p>\n"                          # the last good build, never a half one
     assert (webbuild.build_dir() / "index.html").read_text() == "<p>mine</p>\n"
 
 
@@ -214,7 +236,7 @@ def test_a_source_edited_during_the_build_is_not_taken_for_built(ui, monkeypatch
         return real(cmd, cwd, env, timeout)
     monkeypatch.setattr(webbuild, "_run", run)
     assert webbuild.build()["ok"]
-    assert _served() == "<p>shipped</p>\n"                       # the build has the older text: not served
+    assert not webbuild.status()["current"]                      # the build has the older text: not up to date
 
 
 def test_leftovers_of_a_killed_build_are_swept(ui):
@@ -244,7 +266,7 @@ def test_a_web_file_name_that_is_not_utf8_never_takes_the_pages_down(ui):
     assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
     (clone / "web" / "src" / os.fsdecode(b"caf\xe9.ts")).write_text("x\n")
     assert webbuild.source_key() is not None                    # no UnicodeDecodeError
-    assert _served() == "<p>shipped</p>\n"                      # sources changed: the shipped build, not a 500
+    assert _served() == "<p>mine</p>\n"                         # sources changed: the last build, not a 500
     assert webbuild.build()["ok"] and _served() == "<p>mine</p>\n"
 
 
@@ -325,7 +347,8 @@ def test_a_link_to_a_fifo_under_web_never_blocks_the_pages(ui):
     os.mkfifo(clone / "fifo")
     (clone / "web" / "src" / "link.ts").symlink_to(clone / "fifo")
     assert webbuild.source_key() is not None                    # returns: the link is keyed by its target, not read
-    assert _served() == "<p>shipped</p>\n"                      # sources changed (a new file): the shipped build
+    assert _served() == "<p>mine</p>\n"                         # sources changed (a new file): the last build stays
+    assert not webbuild.status()["current"]
     (clone / "web" / "src" / "link.ts").unlink()
     assert _served() == "<p>mine</p>\n"
 
