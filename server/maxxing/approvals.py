@@ -122,6 +122,8 @@ def always_rule(d: dict) -> str:
         return f"WebFetch(domain:{host})" if re.fullmatch(r"[a-z0-9.-]{1,253}", host) else ""
     if tool in ("Task", "Agent", "Skill"):           # the subagent / skill runs under the same rules: ask each time
         return ""
+    if tool in ("ExitPlanMode", "AskUserQuestion"):  # each plan / question is read by the user: never allowed for good
+        return ""
     if tool in _READS:                               # the bare tool would allow reading any file: ask each time
         return ""
     return tool

@@ -520,6 +520,8 @@ def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     ("Edit", {"file_path": "/root/./x.md"}, ""),
     ("Read", {"file_path": "/etc/hostname"}, ""),                        # the bare tool would read anything
     ("Grep", {"pattern": "x"}, ""),
+    ("ExitPlanMode", {"plan": "1. do it"}, ""),                          # every plan is read before it runs
+    ("AskUserQuestion", {"questions": []}, ""),
     ("mcp__notion__search", {"query": "x"}, "mcp__notion__search"),
 ])
 def test_always_rule_is_narrow(tool, inp, rule):
