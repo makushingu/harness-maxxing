@@ -8,11 +8,8 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 Fixes:
 - **Writing on a phone keeps the answer in sight.** While you type in a session's message box on a phone or a tablet,
   the box takes at most a third of the screen (its text scrolls inside) and the project line of the session steps
-  aside; held sideways, the headers step aside too, so the box and its send button stay above the keyboard. Everything
-  comes back when the keyboard closes.
-- **Tasks on a phone**: the view switch moves below the title on screens narrower than 480 px, so the header no longer
-  pushes its last button off a 393-412 px phone.
-- **Notifications**: "Show more" is easier to tap on a touch screen.
+  aside; held sideways, the session header steps aside too, so the box and its send button stay above the keyboard.
+  Everything comes back when the keyboard closes.
 
 Changed:
 - **Agent preview on hover** is now off by default: switch it on in **Settings -> Features**, under Agents (kept in
