@@ -106,7 +106,7 @@ export default function SettingsPage() {
     }
   }, [section])
   if (!meta) {
-    const moved = SECTION_MOVED[section]
+    const moved = Object.hasOwn(SECTION_MOVED, section) ? SECTION_MOVED[section] : undefined   // never constructor, __proto__…
     if (moved) {
       const [path, hash = ''] = moved.split('#')
       return <Navigate to={{ pathname: path, search, hash }} replace />
