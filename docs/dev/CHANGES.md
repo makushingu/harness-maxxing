@@ -5,6 +5,13 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.137 - 2026-11-10
+
+- Released from `main` ("Urgent fixes" path): the 45 Radar audit fixes validated by FEU and pushed straight to
+  `main` on 2026-11-10 (Team peer endpoints and bubbles, trash/search with non-UTF-8 names, steering while only
+  background tasks run, customized UI build swap, update-plan UI check, MCP login cap, DNS/mail checks, deps lock,
+  log redaction, touch targets, responsive Tasks/Team/sidebar previews). One commit per finding, each with its test.
+
 ## 2.0.0-alpha.136 - 2026-11-10
 
 - Released from `main` ("Urgent fixes" path). Phone keyboard and the session composer (issue #54, idea of PR #55):

@@ -3,6 +3,31 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.137 - 2026-11-10
+
+Fixed:
+- **Team**: a chat docked in a bubble notifies you again when the bubbles are hidden; no chat card goes off screen
+  with the list open on a narrow window; the member list of a big group scrolls; on a phone, Team no longer opens a
+  chat by itself (and marks it read), and Summarize is an icon in the chat header. Odd messages from another server
+  (bad dates, polls without two real options, deeply nested data) are refused or shown safely instead of breaking the
+  page; sharing your profile writes Team's data once instead of once per member.
+- **Sessions**: a message sent while only background tasks run (a dev server…) goes to Claude at once instead of
+  leaving the session "running"; the buttons of the queue and quote cards are easier to tap; the sidebar previews
+  stay inside a narrow window.
+- **Trash and search**: a file whose name is not valid UTF-8 no longer breaks a deletion, the Trash page or the
+  search index; restoring an agent whose topic is in the trash asks to restore the topic first; a restore cut
+  half-way leaves nothing behind.
+- **Tasks** beside both sidebars: the header turns to icons and the board scrolls instead of being cut.
+- **Ctrl/⌘+K** keeps the other chips while you refine the text on one; **New agent** is back on every Agents page.
+- **Feedback**: presentation mode turns back off if the page reloads during a capture.
+- **MCP**: clicking Connect again no longer cancels a login being finished; logins for unknown servers are refused.
+- **E-mail and domains**: SPF lookups counted right, MX priorities and DNS providers read correctly, mail checks
+  bounded in time; closing the compose box during a send no longer holds back the next update.
+- **Customized interface**: a build cut half-way is put back; edited sources are checked without busy loops.
+- Logged error traces hide secrets; voice transcription keeps its old model until the new one is downloaded;
+  dependency checks are bounded in size and time; small fixes for the import plan, onboarding on touch, Shopify
+  cards, Telegram headings, emoji data caching, two-factor waits and long file names.
+
 ## 2.0.0-alpha.136 - 2026-11-10
 
 Fixed:
