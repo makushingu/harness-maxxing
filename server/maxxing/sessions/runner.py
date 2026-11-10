@@ -185,6 +185,7 @@ class Runner:
         self.stop_flag = threading.Event()
         self.lock = threading.RLock()                  # re-entrant: signal handlers run on the main thread
         self.turn_id = ""                              # id of the turn in progress (meta turn_id)
+        self.turn_at = 0.0
         self.current: dict | None = None               # queue item of the turn in progress
         self.voice_wait = False                        # waiting for the transcript of a voice message (_voice)
         self.interrupted = False                       # the current turn was cut short by a steer
@@ -369,12 +370,13 @@ class Runner:
         cfg = config.load_config()
         kind = item.get("kind") or "user"
         voices = [v for v in item.get("voice") or [] if isinstance(v, dict) and v.get("path")]
+        self.turn_at = time.time()                     # its message's time: on_turn_end finds this turn by it
         store.append_log(self.sid, {"type": "mx_user", "text": item.get("text") or "",
                                     "attachments": item.get("attachments") or [],
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
                                     **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
-                                    "at": time.time()})
+                                    "at": self.turn_at})
         if voices:
             heard, err = self._voice(item, voices)
             if heard is None:                          # stopped, or nothing to send: no Claude call
@@ -871,7 +873,7 @@ class Runner:
             m["error"] = err
             m["updated"] = m["finished_at"] = time.time()
             # which item this turn ran: on_turn_end callbacks answer only their own turns (never a summary)
-            m["last_turn"] = {"id": self.turn_id, "kind": item.get("kind") or "user",
+            m["last_turn"] = {"id": self.turn_id, "kind": item.get("kind") or "user", "at": self.turn_at,
                               "source": item.get("source") or "web", "refs": list(item.get("refs") or [])}
             if not m.get("title"):
                 m["title"] = " ".join((item.get("text") or "").split())[:60] or "Untitled"

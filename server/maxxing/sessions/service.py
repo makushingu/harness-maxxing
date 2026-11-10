@@ -1010,33 +1010,42 @@ def last_user_message(sid: str) -> dict | None:
     return None
 
 
-def _ended_turn(sid: str, evs: list[dict]) -> tuple[int, int]:
-    """(start, end) of the last turn that ended in `evs`: end = its `result` (len(evs) when it died without one).
-    A user message after the last result is the next turn when the session still runs (a message queued meanwhile),
-    else the turn that died."""
-    end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), None)
-    last_user = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "user"), -1)
-    if end is None or (last_user > end and (store.read(sid) or {}).get("state") != "running"):
-        return last_user + 1, len(evs)
-    return next((i + 1 for i in range(end - 1, -1, -1) if evs[i]["type"] == "user"), 0), end
+def _ended_turn(evs: list[dict], at: float | None, died: bool) -> tuple[int, int]:
+    """[start, end) of the turn that ended in `evs`. `at`: the time of its message (meta last_turn.at), so a message
+    queued meanwhile that already runs is never taken for it; `died`: it ended without being recorded (killed,
+    server restarted) - the last message's turn."""
+    users = [i for i, ev in enumerate(evs) if ev["type"] == "user"]
+    def ran(i: int) -> bool:                  # the message of the turn at `at`
+        return bool(at) and abs((evs[i].get("at") or 0) - at) < 1e-3
+    if died:                                  # its message (none if it never started: the last one is recorded)
+        if users and ran(users[-1]):
+            return len(evs), len(evs)
+        start = users[-1] + 1 if users else 0
+    elif at:
+        start = next((i + 1 for i in reversed(users) if ran(i)), None)
+        if start is None:                     # out of the tail read: nothing of another turn
+            return len(evs), len(evs)
+    else:                                     # an older runner (no last_turn.at): the turn of the last result
+        end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), len(evs))
+        return next((i + 1 for i in reversed(users) if i < end), 0), end
+    return start, next((i for i in users if i >= start), len(evs))
 
 
-def ended_turn_text(sid: str) -> str:
-    """What the last turn that ended wrote ("" if nothing): when the next turn (a message queued meanwhile) has
-    started already, still the answer of the one that ended, never a reply of the turn before it."""
+def ended_turn_text(sid: str, at: float | None = None, died: bool = False) -> str:
+    """What the turn that ended wrote ("" if nothing), never a reply of another turn (see _ended_turn)."""
     evs = _tail_events(sid)
-    start, end = _ended_turn(sid, evs)
+    start, end = _ended_turn(evs, at, died)
     return next((ev["text"] for ev in reversed(evs[start:end]) if ev["type"] == "assistant"), "")
 
 
 STEPS_MAX = 40                                # tools kept per turn in the agent's thread (the run shows them all)
 
 
-def ended_turn_steps(sid: str) -> dict:
+def ended_turn_steps(sid: str, at: float | None = None, died: bool = False) -> dict:
     """The tools the last turn that ended used ({name, summary, error?}, the last STEPS_MAX), with its model and
     duration: what the agent page shows under the turn's answer without reading its whole log."""
     evs = _tail_events(sid)
-    start, end = _ended_turn(sid, evs)
+    start, end = _ended_turn(evs, at, died)
     uses: list[dict] = []
     failed: set[str] = set()
     for ev in evs[start:end]:
@@ -1046,7 +1055,7 @@ def ended_turn_steps(sid: str) -> dict:
             failed.add(ev.get("tool_use_id") or "")
     tools = [{"name": u.get("name") or "", "summary": (u.get("summary") or "")[:160],
               **({"error": True} if u.get("id") in failed else {})} for u in uses]
-    res = evs[end] if end < len(evs) else {}
+    res = next((ev for ev in reversed(evs[start:end]) if ev["type"] == "result"), {})
     return {"tools": tools[-STEPS_MAX:], "tools_total": len(tools), "model": res.get("model") or "",
             "duration_ms": int(res.get("duration_ms") or 0)}
 
@@ -1253,10 +1262,11 @@ def release_handoff(sid: str) -> None:
         _spawn(sid)
 
 
-def _ended(s: dict, m: dict) -> dict:
+def _ended(s: dict, m: dict, died: bool = False) -> dict:
     """The Session given to on_turn_end callbacks, plus `last_turn`: which item the ended turn ran (id, kind,
-    source, refs) - not part of the API Session."""
-    return {**s, "last_turn": m.get("last_turn") if isinstance(m.get("last_turn"), dict) else {}}
+    source, refs, at) and `turn_died`: it failed without being recorded (last_turn is then the turn before) - not
+    part of the API Session."""
+    return {**s, "last_turn": m.get("last_turn") if isinstance(m.get("last_turn"), dict) else {}, "turn_died": died}
 
 
 def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
@@ -1314,7 +1324,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
         # a turn ended, or failed to start (error without a new turn - also when it failed before this watcher
         # ever saw it running: systemd-run refusing within one pass)
         if cur[1] > prev[1] or (prev[2] != "error" and cur[2] == "error" and cur[1] == prev[1]):
-            ends.append((_ended(s, m), last_result(sid)))
+            ends.append((_ended(s, m, died=cur[1] == prev[1]), last_result(sid)))
     for sid in [k for k, until in _held.items() if k not in alive or until <= time.time()]:
         _held.pop(sid, None)
         if sid in alive:

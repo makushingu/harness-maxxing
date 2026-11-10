@@ -225,6 +225,9 @@ def test_help_is_never_refused_in_an_agent_turn(monkeypatch):
     assert agent_guard.check_cli(["agents", "cron", "--help"]) is None
     assert agent_guard.check_cli(["agents", "create", "-h"]) is None
     assert agent_guard.check_cli(["agents", "create", "a/b/c"])
+    # after `--`, "-h" is a value: the command really runs, so it is checked
+    assert agent_guard.check_cli(["agents", "set", "other", "--", "-h"])
+    assert agent_guard.check_cli(["agents", "group", "say", "acme/g", "--", "-h"])
 
 
 def test_maxxing_inside_the_sandbox_is_refused(monkeypatch, tmp_path):
@@ -280,14 +283,25 @@ def test_a_turn_that_died_without_a_result_never_shows_the_answer_before(client,
     _create(client)
     sid = _say(client, "hi")["session"]["id"]
     wait_idle(client, sid)
-    first = service.ended_turn_text(sid)
-    assert first and service.ended_turn_steps(sid)["model"]
-    store.append_log(sid, {"type": "mx_user", "text": "second", "at": 1.0})
-    with store.edit(sid) as m:                         # the next queued message runs: the ended turn is still the first
-        m["state"] = "running"
-    assert service.ended_turn_text(sid) == first
-    with store.edit(sid) as m:                         # the second message died (crash, kill): nothing of the first
-        m["state"] = "error"
-    assert service.ended_turn_text(sid) == ""
-    steps = service.ended_turn_steps(sid)
-    assert steps["tools"] == [] and not steps["model"] and not steps["duration_ms"]
+    at = store.read(sid)["last_turn"]["at"]
+    first = service.ended_turn_text(sid, at)
+    assert first and service.ended_turn_steps(sid, at)["model"]
+    store.append_log(sid, {"type": "mx_user", "text": "second", "at": at + 5})
+    assert service.ended_turn_text(sid, at) == first   # the next queued message runs already: still the first turn
+    for died in ((at, True), (None, True)):            # the second one died (killed, restart): nothing of the first
+        assert service.ended_turn_text(sid, *died) == ""
+        steps = service.ended_turn_steps(sid, *died)
+        assert steps["tools"] == [] and not steps["model"] and not steps["duration_ms"]
+    store.append_log(sid, {"type": "mx_user", "text": "third", "at": at + 9})
+    assert service.ended_turn_text(sid, at + 5) == ""  # the second ended without a result, the third runs
+    # it failed to start at all (no message of its own): the last message is the recorded first turn
+    sid2 = _say(client, "again")["session"]["id"]
+    wait_idle(client, sid2)
+    assert service.ended_turn_text(sid2, store.read(sid2)["last_turn"]["at"], True) == ""
+    # and in the thread: the error, not the answer before
+    with store.edit(sid2) as m:
+        m["state"], m["error"] = "error", "runner killed"
+    store.append_log(sid2, {"type": "mx_user", "text": "x", "at": 1.0})
+    meta = store.read(sid2)
+    agents.on_turn_end({**meta, "id": sid2, "last_turn": meta["last_turn"], "turn_died": True}, None)
+    assert _results(client)[-1]["text"] == "runner killed"

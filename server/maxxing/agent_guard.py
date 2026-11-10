@@ -650,7 +650,8 @@ def in_the_sandbox() -> bool:
 def check_cli(argv: list[str]) -> str | None:
     """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
-    if not words or "-h" in argv or "--help" in argv:   # help changes nothing (argparse prints it and exits)
+    head = argv[:argv.index("--")] if "--" in argv else argv    # after `--`, a "-h" is a value, not help
+    if not words or "-h" in head or "--help" in head:   # help changes nothing (argparse prints it and exits)
         return None
     if in_the_sandbox():
         return ("Run `maxxing` alone on its command line (no pipe, `;`, `&&`, `$(...)` nor redirection): only then "

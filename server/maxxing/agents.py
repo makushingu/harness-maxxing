@@ -1988,6 +1988,12 @@ def check_alerts() -> int:
 
 
 # ---- turn end (server): the result goes to the agent's thread (+ Telegram) ----------------------------
+def _which_turn(session: dict) -> tuple[float | None, bool]:
+    """(time of the ended turn's message, it died unrecorded) for service.ended_turn_text / _steps."""
+    at = (session.get("last_turn") or {}).get("at")
+    return (float(at) if isinstance(at, (int, float)) else None), bool(session.get("turn_died"))
+
+
 def on_turn_end(session: dict, result: dict | None) -> None:
     path = session.get("path") or ""
     if not is_agent_path(path) or session.get("source") != "agent" or not exists(path):
@@ -1995,7 +2001,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     from .sessions import service
     ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
     try:                                # this turn's own text, never the answer of the turn before (a conversation goes on)
-        text = service.ended_turn_text(session["id"]) or ""
+        text = service.ended_turn_text(session["id"], *_which_turn(session)) or ""
     except Exception:
         text = ""
     if not ok and not text:
@@ -2014,7 +2020,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     _release(path, session["id"], float(ended))
     group = str((meta.get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
     try:                                # its steps, shown under the answer on the agent page
-        steps = service.ended_turn_steps(session["id"])
+        steps = service.ended_turn_steps(session["id"], *_which_turn(session))
     except Exception:  # noqa: BLE001
         steps = {}
     steps = {k: v for k, v in steps.items() if v}
