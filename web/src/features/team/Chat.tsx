@@ -331,9 +331,9 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
         <ChatHeader team={team} chat={chat} title={title} compact={compact} writing={writing} />
         <ChatMenu team={team} chat={chat} />
         <Tooltip content={t('team.summarizeHint')}>
-          <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" disabled={summarize.isPending || pickable.length < 2} onClick={() => (sel ? setSel(null) : startSummary())}>
+          <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" aria-label={t('team.summarize')} disabled={summarize.isPending || pickable.length < 2} onClick={() => (sel ? setSel(null) : startSummary())}>
             {summarize.isPending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5 text-primary" />}
-            {!compact && t('team.summarize')}
+            {!compact && <span className="max-md:hidden">{t('team.summarize')}</span>}
           </Button>
         </Tooltip>
         {headerExtra}
