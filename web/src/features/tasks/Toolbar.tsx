@@ -36,8 +36,9 @@ function useFilters({
 
 type FilterProps = { filters: TaskFilters; onChange: (f: TaskFilters) => void; projects: TaskProject[]; labels: string[]; withProject?: boolean }
 
-/** The Filters button and its popover (project when the page has no projects bar, label, priority, due). */
-export function FilterMenu(props: FilterProps) {
+/** The Filters button and its popover (project when the page has no projects bar, label, priority, due). `iconOnly`:
+ *  no label (a narrow page). */
+export function FilterMenu({ iconOnly, ...props }: FilterProps & { iconOnly?: boolean }) {
   const { filters, onChange, projects, labels } = props
   const { t, n, set, dueOpts, withProject } = useFilters(props)
   const mask = useMask()
@@ -46,7 +47,7 @@ export function FilterMenu(props: FilterProps) {
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" aria-label={t('tasks.filters')} data-testid="task-filters">
           <Filter />
-          <span className="max-sm:hidden">{t('tasks.filters')}</span>
+          <span className={iconOnly ? 'hidden' : 'max-sm:hidden'}>{t('tasks.filters')}</span>
           {n > 0 && (
             <Badge variant="default" className="h-5 min-w-5 justify-center rounded-full px-1 tabular-nums">
               {n}
