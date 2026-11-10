@@ -43,7 +43,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   sandbox's `SandboxNetworkAccess {host}` for a host outside the domains) were never answered, so the command waited
   until its timeout. `_can_use_tool` answers them in a thread: through `approval_mcp.ask(ctx=...)` when the turn has
   approvals (an approval card), else a deny at once. `approvals.summary` reads `host`. `agent_guard.check_cli` never
-  refuses `-h` / `--help`. fake_claude: `ASKNET`.
+  refuses `-h` / `--help`, and refuses any command run inside the sandbox (`in_the_sandbox()`: an agent turn's unit
+  whose state is hidden; a command line with a pipe, `;`, `&&` is sandboxed as a whole and its writes would vanish).
+  fake_claude: `ASKNET`. `public()` gives `chat_model`.
 - Released from `main` ("Urgent fixes" path). `server/maxxing/claude_models.py`: daily `GET /v1/models`
   (secrets token/API key, else the `claude login` access token while valid, `anthropic-beta: oauth-2025-04-20`),
   newest id per family -> `<state>/claude-models.json`; `service.KNOWN_MODELS` removed, `service.models()` uses

@@ -19,7 +19,8 @@ def _say(client, text: str) -> dict:
 def test_the_conversation_is_the_manager_and_the_runs_keep_their_rules(client, topic, mx):
     from maxxing.sessions import store
     _on(client)
-    _create(client, model="claude-sonnet-4-5", chat_model="claude-opus-4-1", domains=["api.github.com"])
+    assert _create(client, model="claude-sonnet-4-5", chat_model="claude-opus-4-1",
+                   domains=["api.github.com"])["chat_model"] == "claude-opus-4-1"
     root = client.get("/api/workspace/tree").json()["root"]
     sid = _say(client, "hi")["session"]["id"]
     wait_idle(client, sid)
@@ -175,3 +176,18 @@ def test_help_is_never_refused_in_an_agent_turn(monkeypatch):
     assert agent_guard.check_cli(["agents", "cron", "--help"]) is None
     assert agent_guard.check_cli(["agents", "create", "-h"]) is None
     assert agent_guard.check_cli(["agents", "create", "a/b/c"])
+
+
+def test_maxxing_inside_the_sandbox_is_refused(monkeypatch, tmp_path):
+    """A command line with a pipe runs `maxxing` inside the sandbox, where the server state is hidden: refused, so
+    that nothing seems done that vanished."""
+    from maxxing import agent_guard, config
+    monkeypatch.setenv("MAXXING_AGENT", A)
+    real = agent_guard.Path.read_text
+    monkeypatch.setattr(agent_guard.Path, "read_text", lambda self, *a, **k: "0::/system.slice/maxxing-0123abcd.service"
+                        if str(self) == "/proc/self/cgroup" else real(self, *a, **k))
+    monkeypatch.setattr(config, "STATE", tmp_path / "hidden")
+    assert "alone on its command line" in agent_guard.check_cli(["agents", "set", "writer", "model=x"])
+    (tmp_path / "hidden").mkdir()
+    (tmp_path / "hidden" / "config.json").write_text("{}")
+    assert "alone on its command line" not in (agent_guard.check_cli(["agents", "set", "writer", "model=x"]) or "")

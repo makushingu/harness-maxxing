@@ -620,11 +620,27 @@ def _manages(turn: dict, words: list[str]) -> bool:
         return False
 
 
+def in_the_sandbox() -> bool:
+    """This `maxxing` runs inside an agent turn's sandbox: a command line with a pipe, `;`, `&&`... is sandboxed as a
+    whole (only a plain `maxxing …` is excluded), and there the server state is hidden: what it writes would vanish."""
+    if not os.environ.get("MAXXING_AGENT"):
+        return False
+    try:
+        if not UNIT_RE.search(Path("/proc/self/cgroup").read_text()):
+            return False
+    except OSError:
+        return False
+    return not (config.STATE / "config.json").exists()
+
+
 def check_cli(argv: list[str]) -> str | None:
     """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
     if not words or "-h" in argv or "--help" in argv:   # help changes nothing (argparse prints it and exits)
         return None
+    if in_the_sandbox():
+        return ("Run `maxxing` alone on its command line (no pipe, `;`, `&&`, `$(...)` nor redirection): only then "
+                "it runs outside the sandbox and reaches the server. Nothing was done.")
     turn = agent_turn()
     if turn["tampered"]:
         return ("Refused: the MAXXING_AGENT* variables of this agent turn were changed. Run `maxxing` with the "

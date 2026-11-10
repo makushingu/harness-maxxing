@@ -580,7 +580,8 @@ SECURITY_LIMITS = ("usd_per_day", "runs_per_hour", "timeout_s")
 MANAGER_NOTE = ("You run as a Harness Maxxing agent, in a conversation with your owner: you are the manager of this "
                 "agent. Your memory.md is yours. You may change your own role (CLAUDE.md, in your folder), your memory, "
                 "and your schedules and triggers with `maxxing agents` on yourself (`show`, `set`, `cron`, `webhook`, "
-                "`watch`, `on`, `off`; never edit agent.json by hand). Changing a safety setting (sandbox, domains, "
+                "`watch`, `on`, `off`; never edit agent.json by hand; run each `maxxing` command alone on its line, "
+                "without pipe, `;` or `&&`). Changing a safety setting (sandbox, domains, "
                 "keys, permission mode, approvals, trusting outside events, writable folders, rules, tool lists, "
                 "mailboxes, budget, runs per hour, timeout) sends the owner a request to allow: say so, it is applied "
                 "once allowed. {box}Your memory and your runs' results may hold text that came from outside (mails, "
@@ -826,7 +827,7 @@ def public(path: str, stats: dict | None = None) -> dict:
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
                 "silent", "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent", "chat",
-                "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
+                "chat_model", "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": 0 if a["silent"] else st.get("unread", 0)}
 
