@@ -20,6 +20,7 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
   const trustRef = React.useRef(trust)
   trustRef.current = trust
   const done = React.useRef(false)
+  const deadline = React.useRef(Date.now() + challenge.expires_in * 1000)
   const finish = React.useCallback(
     (err: string | null) => {
       if (done.current) return
@@ -45,9 +46,15 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
       try {
         const r = await pollTwoFactor(challenge.challenge, undefined, trustRef.current)
         if (r.status === 'approved') return finish(null)
-        if (typeof r.expires_in === 'number') setLeft(r.expires_in)
+        if (typeof r.expires_in === 'number') {
+          setLeft(r.expires_in)
+          deadline.current = Date.now() + r.expires_in * 1000
+        }
       } catch (e) {
         if (outcome(e)) return
+        // signed out meanwhile, or the server keeps failing past the end of the request: the wait ends
+        if (isApiError(e, 'auth_required')) return finish(errorMessage(e))
+        if (Date.now() > deadline.current + 2 * POLL_MS) return finish(t('twofa.expired'))
       }
       if (!stop && !done.current) timer = setTimeout(tick, POLL_MS)
     }
@@ -58,7 +65,7 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
       clearTimeout(timer)
       clearInterval(clock)
     }
-  }, [challenge.challenge, finish, outcome])
+  }, [challenge.challenge, finish, outcome, t])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
