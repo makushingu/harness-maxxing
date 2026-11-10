@@ -34,6 +34,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   "conversation")`, a run of its own ("Started at your request, from the conversation"); `MANAGER_NOTE` tells it to
   do so when asked to do its routine now; the conversation hands its hold of the day's budget over to that run
   (`agents.hand_over`), else the run would find it all held (busy).
+- **Conversation from the Office**: `AgentsOverview` keeps `?chat=<agent path>` and gives `office.tsx` `OfficeChat`
+  ({open, current}) to the desks (`useDesk`, `AgentTile`): a desk toggles the panel instead of navigating (outside the
+  Office the desk still opens the page). Panel = `AgentPage.tsx` `AgentChatPanel` (header + `AgentCenter`), docked
+  440 px from 1024 px, else a `Sheet`. Extension views get `chat_route` per agent (`OfficeCustom`, the current
+  pathname + `?chat=`).
 - **Text as it is written**: the runner passes `--include-partial-messages` (`MAXXING_PARTIAL_TEXT=0` = off); the
   `stream_event` lines never reach the log: the top-level text block being written goes to `<sid>.live`
   (`{text, off}`, `off` = log size when the block started, rewritten at most every 0.15 s, removed at the end of the

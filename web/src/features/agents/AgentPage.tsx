@@ -12,12 +12,12 @@
 import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
+  AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, Maximize2, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
+  agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
@@ -186,6 +186,52 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
             </SheetBody>
           </SheetContent>
         </Sheet>
+      )}
+    </div>
+  )
+}
+
+/** An agent's conversation in a panel next to the Office (AgentsOverview, ?chat=): the same flow and box as its page,
+ *  with a way to its page (profile, settings) and Close. */
+export function AgentChatPanel({ path, onClose }: { path: string; onClose: () => void }) {
+  const t = useT()
+  const { data: a, isLoading, error } = useAgent(path)
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="office-chat" data-path={path}>
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+        {a && <AgentAvatarIcon avatar={a.avatar} size={28} />}
+        <div className="grid min-w-0 flex-1">
+          <span className="truncate text-sm font-medium">
+            <Sensitive length={8}>{a?.display_name || ''}</Sensitive>
+          </span>
+          {a && (
+            <span className="truncate text-xs text-muted-foreground">
+              <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
+            </span>
+          )}
+        </div>
+        {a && (
+          <Tooltip content={t('agents.office.openPage')}>
+            <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.office.openPage')}>
+              <Link to={agentRoute(a)} data-testid="office-chat-page">
+                <Maximize2 />
+              </Link>
+            </Button>
+          </Tooltip>
+        )}
+        <Button variant="ghost" size="icon-sm" aria-label={t('common.close')} onClick={onClose} data-testid="office-chat-close">
+          <X />
+        </Button>
+      </div>
+      {isLoading ? (
+        <div className="grid gap-3 p-4">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="ml-10 h-16 rounded-xl" />
+        </div>
+      ) : error || !a ? (
+        <EmptyState compact tone="error" title={t('agents.notFound')} description={errorMessage(error)} />
+      ) : (
+        <AgentCenter agent={a} />
       )}
     </div>
   )

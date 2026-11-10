@@ -46,6 +46,11 @@ Click a card to open the agent; point at it for its on/off switch and **Run** (a
   asks about the style and builds it as an extension. Once it is done, pick it in the same menu; if it is turned off
   or deleted, the Office shows Classic. How it works: [Page extensions](page-extensions), "Office views".
 
+**Talk from the Office**: click an agent at its desk and its conversation opens on the right, the Office still in view
+(on a phone or a narrow window, in a sheet): the same flow and box as its page, its answers as they are written. Click
+another desk to talk to that agent, the same one again (or **×**) to close; the **⤢** button opens its page (profile,
+settings). Office views made by an extension can open it too.
+
 **Preview on hover** (computer, off by default): switch it on in **Settings -> Features**, under Agents (kept in this
 browser). Resting the mouse on an agent in a list (the Agents list, the agents of a topic in the sessions list) then
 shows a card with what it is doing now, else its last run, and its next start. With the Office in **Space**, the card

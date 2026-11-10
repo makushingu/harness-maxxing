@@ -17,6 +17,8 @@ New:
   started each run, then its answer with its steps folded in one line (**Reply** goes on with that run). Your own
   messages no longer count in its runs per hour. Ask it to do its routine now and it starts a run of its own instead
   of doing the work in the conversation.
+- **Talk to an agent from the Office**: a click on its desk opens its conversation next to the Office (a sheet on a
+  phone) instead of leaving it; its page is one click away. Office views made by an extension can open it too.
 - **Answers appear as they are written**: in a session and on an agent's page, Claude's text now shows word by word
   while it writes, instead of a whole paragraph at once.
 - **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
