@@ -52,8 +52,8 @@ const clickToLoad = () => null
 
 /** A result longer than this is folded (the first lines and "Read all"). */
 const FOLD_CHARS = 700
-/** Who wrote a run: the user (a message) or something else (an event, a schedule, another agent). */
-const isMine = (m: AgentMessage) => m.trigger === 'manual' || m.trigger === 'telegram' || m.source === 'manual' || m.source === 'telegram'
+/** Who wrote a run: typed by the owner (the agent page, Telegram): not a script's `maxxing agents run` (trigger manual too). */
+const byOwner = (m: AgentMessage) => !!m.owner || m.source === 'manual' || m.source === 'telegram'
 
 /** `at`: the agent when the route's names say something else (an agent of a project called "groups", whose address
  *  looks like a group's: AgentsLayout hands it over). */
@@ -255,7 +255,7 @@ function ownSessions(a: AgentDetail, msgs: AgentMessage[]): Set<string> {
   const own = new Set<string>()
   if (a.chat_session) own.add(a.chat_session)
   if (a.last_chat_session) own.add(a.last_chat_session)
-  for (const m of msgs) if (m.kind === 'run' && m.session && (m.owner || isMine(m))) own.add(m.session)
+  for (const m of msgs) if (m.kind === 'run' && m.session && byOwner(m)) own.add(m.session)
   return own
 }
 
@@ -393,7 +393,7 @@ function Runs({ agent: a, msgs: all, own }: { agent: AgentDetail; msgs: AgentMes
   const { isLoading, error } = useAgentThread(a.path)
   const { data: crons } = useCrons()
   const box = React.useRef<HTMLDivElement>(null)
-  const msgs = React.useMemo(() => all.filter((m) => !(m.session && own.has(m.session)) && !(m.kind === 'run' && isMine(m)) && m.status !== 'new_chat'), [all, own])
+  const msgs = React.useMemo(() => all.filter((m) => !(m.session && own.has(m.session)) && !(m.kind === 'run' && byOwner(m)) && m.status !== 'new_chat'), [all, own])
   const byId = React.useMemo(() => new Map(all.map((m) => [m.id, m])), [all])
   const asks = useThreadApprovals(a.path, msgs)
   const running = (a.running_sessions || []).filter((s) => !own.has(s.id))
@@ -555,7 +555,7 @@ function ThreadMessage({
       </div>
     )
   if (m.kind === 'run') {
-    if (isMine(m))
+    if (byOwner(m))
       return (
         <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
           {quote}
