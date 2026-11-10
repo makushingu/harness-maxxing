@@ -236,6 +236,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
           {!advOpen && <p className="-mt-2 text-[13px] text-muted-foreground">{t('agents.settings.sec.advancedDesc')}</p>}
           {advOpen && (
             <div className="grid gap-6">
+              <h4 className="-mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('agents.settings.grp.permissions')}</h4>
               <FormField label={t('agents.field.permission')} hint={a.sandbox ? t('agents.sandbox.permissionHint') : t('agents.field.permissionHint')}>
                 <PermissionSelect value={d.permission} onChange={(v) => set('permission', v)} />
               </FormField>
@@ -248,6 +249,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
                   <Switch id="ag-subagent" checked={a.subagent} onCheckedChange={(v) => patch.mutate({ path: a.path, subagent: v })} data-testid="agent-subagent" />
                 </SettingRow>
               </div>
+              <h4 className="-mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('agents.settings.grp.tools')}</h4>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">{t('agents.settings.tools')}</span>
                 <span className="text-[13px] text-muted-foreground">{t('agents.settings.toolsDesc')}</span>
@@ -267,6 +269,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
                 </div>
                 <RulesEditor value={d.rules} onChange={(r) => set('rules', r)} error={ruleError} />
               </div>
+              <h4 className="-mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('agents.settings.grp.limits')}</h4>
               <div className="grid gap-3">
                 <div className="grid gap-0.5">
                   <span className="text-sm font-medium">{t('agents.settings.sec.limits')}</span>

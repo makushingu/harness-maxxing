@@ -7,12 +7,13 @@
 //   (a dashed card), then its answer with its steps folded in one line; Reply goes on with that run, "Open the run"
 //   opens it in place (RunView), never in Sessions;
 // - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
-//   webhook address, what came in, test), guards, memory, advanced settings (a sheet), "Edit with Claude".
+//   webhook address, what came in, test; one menu adds one), protection and budget, memory, settings (a sheet).
 // Opening the page marks its results as read (POST /seen).
 import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
   AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, Maximize2, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
+  PencilLine,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -470,22 +471,31 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
   )
 }
 
-/** A new agent (no role yet): ready-made jobs of the gallery as ideas; a click puts the request in the box. */
+/** A new agent (no role yet): a blank brief and ready-made jobs of the gallery as ideas; a click puts the brief
+ * in the box, to change before sending (its first […] selected). */
 function Suggestions({ onPick }: { onPick: (text: string) => void }) {
   const t = useT()
   const lang = useLang()
   const { data: templates } = useAgentTemplates(lang)
-  if (!templates?.length) return null
+  const [all, setAll] = React.useState(false)
+  const chip =
+    'flex items-center gap-2 rounded-full border bg-card py-1 pr-3 pl-1 text-xs transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+  const shown = (templates || []).filter((tp) => all || tp.first)
+  const more = (templates || []).length - shown.length
   return (
     <div className="mt-2 grid w-full max-w-xl gap-2 text-left" data-testid="agent-suggestions">
       <span className="text-center text-xs text-muted-foreground">{t('agents.new.ideas')}</span>
       <div className="flex flex-wrap justify-center gap-2">
-        {templates.map((tp) => (
+        <button type="button" onClick={() => onPick(t('agents.new.blank'))} className={cn(chip, 'pl-2.5')} data-testid="agent-suggest-blank">
+          <PencilLine className="size-3.5 text-muted-foreground" aria-hidden />
+          {t('agents.new.blankChip')}
+        </button>
+        {shown.map((tp) => (
           <button
             key={tp.id}
             type="button"
-            onClick={() => onPick(t('agents.new.suggest', { name: tp.name, summary: tp.summary.charAt(0).toLowerCase() + tp.summary.slice(1) }))}
-            className="flex items-center gap-2 rounded-full border bg-card py-1 pr-3 pl-1 text-xs transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            onClick={() => onPick(tp.brief || t('agents.new.blank'))}
+            className={chip}
             title={tp.summary}
             data-testid={`agent-suggest-${tp.id}`}
           >
@@ -493,6 +503,11 @@ function Suggestions({ onPick }: { onPick: (text: string) => void }) {
             {tp.name}
           </button>
         ))}
+        {more > 0 && (
+          <button type="button" onClick={() => setAll(true)} className={cn(chip, 'pl-3 text-muted-foreground')} data-testid="agent-suggest-more">
+            {t('agents.new.moreIdeas', { n: more })}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -912,9 +927,15 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
       caretTo(next.length)
     },
     // a suggestion of the empty conversation: the box gets it, to change or send
+    // its first […] (what is left to fill in) is selected, so typing replaces it
     fill: (v: string) => {
       setText(v)
-      caretTo(v.length)
+      const at = v.indexOf('[…]')
+      requestAnimationFrame(() => {
+        input.current?.focus()
+        if (at >= 0) input.current?.setSelectionRange(at, at + 3)
+        else input.current?.setSelectionRange(v.length, v.length)
+      })
     },
   }))
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
@@ -1057,7 +1078,6 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
   const [memory, setMemory] = React.useState(false)
   const lim = a.limits
   const spent = a.cost_today || 0
-  const mode = a.approvals ? 'approvals' : a.permission_mode || 'topic'
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4">
       <ProfileHead agent={a} />
@@ -1070,13 +1090,10 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
       </PanelSection>
 
       <PanelSection title={t('agents.panel.when')}>
-        <p className="text-xs text-muted-foreground">{t('agents.when.manual')}</p>
         <AgentTriggers agent={a} onMailSettings={() => setAdvanced('mail')} />
-        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground" data-testid="agent-self-locked">
-          <Lock className="mt-px size-3 shrink-0" /> {t('agents.edit.selfLockedChat')}
-        </p>
       </PanelSection>
 
+      {/* protection and budget: what keeps it safe, in plain words; a click opens the setting */}
       <PanelSection title={t('agents.panel.guards')}>
         <div className="grid gap-1.5 text-xs">
           <div className="flex items-center gap-2">
@@ -1090,27 +1107,40 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
               <div className={cn('h-full rounded-full', spent >= lim.usd_per_day ? 'bg-destructive' : 'bg-primary')} style={{ width: `${Math.min(100, (spent / lim.usd_per_day) * 100)}%` }} />
             </div>
           )}
-          {lim.runs_per_hour > 0 && <span className="text-muted-foreground tabular-nums">{t('agents.runsHour', { count: a.runs_last_hour || 0, max: lim.runs_per_hour })}</span>}
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <ShieldCheck className="size-3.5 shrink-0" /> {t(`agents.panel.mode.${mode}` as 'agents.panel.mode.topic')}
-          </span>
-          {a.triggers.some((x) => x.kind === 'feed') &&
-            (a.trust_outside && !a.approvals ? (
-              <span className="flex items-center gap-1.5 text-warning" data-testid="agent-outside-risk">
-                <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.panel.outsideTrusted')}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                <ShieldCheck className="size-3.5 shrink-0" /> {t('agents.panel.outsideAsks')}
-              </span>
-            ))}
-          <span className={cn('flex items-center gap-1.5', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')} data-testid="agent-sandbox-line">
-            <Lock className="size-3.5 shrink-0" /> {a.sandbox ? t('agents.panel.sandboxOn') : t('agents.panel.sandboxOff')}
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-            <KeyRound className="size-3.5 shrink-0" />
-            <span className="truncate">{a.keys.length ? t('agents.panel.keys', { keys: a.keys.join(', ') }) : t('agents.panel.noKeys')}</span>
-          </span>
+          {lim.runs_per_hour > 0 && (a.runs_last_hour || 0) >= lim.runs_per_hour && (
+            <span className="text-warning tabular-nums">{t('agents.runsHour', { count: a.runs_last_hour || 0, max: lim.runs_per_hour })}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => setAdvanced('protection')}
+            className={cn('-mx-1 mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-accent', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')}
+            data-testid="agent-sandbox-line"
+          >
+            {a.sandbox ? <ShieldCheck className="size-3.5 shrink-0" /> : <Lock className="size-3.5 shrink-0 opacity-60" />}
+            <span className="min-w-0 flex-1 truncate">
+              {a.sandbox
+                ? a.domains?.length
+                  ? t('agents.panel.sandboxSites', { sites: a.domains.join(', ') })
+                  : t('agents.panel.sandboxOn')
+                : t(readsOutside(a) ? 'agents.panel.sandboxAdvise' : 'agents.panel.sandboxOff')}
+            </span>
+          </button>
+          {a.approvals && (
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <ShieldCheck className="size-3.5 shrink-0" /> {t('agents.panel.mode.approvals')}
+            </span>
+          )}
+          {a.triggers.some((x) => x.kind === 'feed') && a.trust_outside && !a.approvals && (
+            <span className="flex items-center gap-1.5 text-warning" data-testid="agent-outside-risk">
+              <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.panel.outsideTrusted')}
+            </span>
+          )}
+          {a.keys.length > 0 && (
+            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+              <KeyRound className="size-3.5 shrink-0" />
+              <span className="truncate">{t('agents.panel.keys', { keys: a.keys.join(', ') })}</span>
+            </span>
+          )}
         </div>
       </PanelSection>
 
@@ -1126,17 +1156,6 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
       </PanelSection>
 
       <div className="grid gap-2">
-        <Link
-          to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
-          className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent"
-          data-testid="agent-new-group"
-        >
-          <UsersRound className="size-4 shrink-0 text-muted-foreground" />
-          <span className="grid min-w-0 flex-1">
-            <span className="text-sm">{t('groups.withAgent')}</span>
-            <span className="truncate text-xs text-muted-foreground">{t('groups.withAgentDesc')}</span>
-          </span>
-        </Link>
         <button type="button" onClick={() => setAdvanced(true)} className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent" data-testid="agent-advanced">
           <Settings2 className="size-4 shrink-0 text-muted-foreground" />
           <span className="grid min-w-0 flex-1">
@@ -1144,6 +1163,13 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
             <span className="truncate text-xs text-muted-foreground">{t('agents.panel.advancedDesc')}</span>
           </span>
         </button>
+        <Link
+          to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
+          className="flex items-center gap-1.5 justify-self-start px-1 text-xs text-muted-foreground hover:text-foreground"
+          data-testid="agent-new-group"
+        >
+          <UsersRound className="size-3.5 shrink-0" /> {t('groups.withAgent')}
+        </Link>
       </div>
       <Sheet open={!!advanced} onOpenChange={setAdvanced}>
         <SheetContent side="right" className="md:w-[520px]">

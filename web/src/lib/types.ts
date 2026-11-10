@@ -186,6 +186,10 @@ export type AgentTemplate = {
   role: string
   /** what the user still has to connect */
   needs: string
+  /** the message an idea of a new agent's conversation puts in the box (My job / When / Results / Never without me) */
+  brief: string
+  /** shown first among the ideas (the others behind "More ideas") */
+  first: boolean
   avatar: AgentAvatar
   permission_mode: PermissionMode
   approvals: boolean

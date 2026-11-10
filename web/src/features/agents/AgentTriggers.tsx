@@ -4,7 +4,7 @@
 // thread.
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Clock, Mail, MoreHorizontal, Pencil, Play, Rss, Send, Trash2, Webhook } from 'lucide-react'
+import { ChevronRight, Clock, Mail, MoreHorizontal, Pencil, Play, Plus, Rss, Send, Trash2, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentKeys, useMailAccounts, useSettings, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron, useTestAgentTrigger } from '@/lib/queries'
 import type { AgentDetail, AgentTrigger, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, Cron } from '@/lib/types'
@@ -20,21 +20,8 @@ import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { FeedTriggerFields, WebhookKindSelect, WebhookMade, agoText, triggerSummary } from './parts'
 
 /** A dashed "add" row of the panel. */
-function AddRow({ icon: Icon, label, onClick, testId }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void; testId?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testId}
-      className="flex w-full items-center gap-2 rounded-xl border border-dashed px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:min-h-11"
-    >
-      <Icon className="size-4 shrink-0" /> {label}
-    </button>
-  )
-}
-
 /** "When it works": the agent's triggers as sentences (schedules, webhooks with their address and what came in,
- * feed filters, Telegram), each switchable, then the rows that add one. */
+ * feed filters, Telegram), each switchable, then one row that adds one (a menu). */
 export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail; onMailSettings?: () => void }) {
   const t = useT()
   const { data: settings } = useSettings()
@@ -166,15 +153,47 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
             <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
           </button>
         ))}
-      <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5">
-        <Send className="size-4 shrink-0 text-primary" />
-        <span className="min-w-0 flex-1 text-sm">{t('agents.when.telegram')}</span>
-        <Switch checked={a.telegram} onCheckedChange={(v) => patch.mutate({ path: a.path, telegram: v })} aria-label={t('agents.trigger.telegramSwitch')} data-testid="agent-telegram-switch" />
-      </div>
+      {a.telegram && (
+        <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5">
+          <Send className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 text-sm">{t('agents.when.telegram')}</span>
+          <Switch checked={a.telegram} onCheckedChange={(v) => patch.mutate({ path: a.path, telegram: v })} aria-label={t('agents.trigger.telegramSwitch')} data-testid="agent-telegram-switch" />
+        </div>
+      )}
       {a.telegram && <p className="px-1 text-xs text-muted-foreground">{t('agents.trigger.telegramNote')}</p>}
-      <AddRow icon={Clock} label={t('agents.when.addCron')} onClick={() => setAddCron(true)} testId="agent-add-cron" />
-      <AddRow icon={Webhook} label={t('agents.when.addHook')} onClick={() => setHook(true)} testId="agent-add-hook" />
-      <AddRow icon={Rss} label={t('agents.when.addFeed')} onClick={() => setFeedEdit({ enabled: true, source: '', levels: [], match: '', prompt: '' })} testId="agent-add-feed" />
+      {/* one row adds any trigger: a schedule, a webhook, a notification, Telegram */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            data-testid="agent-add-trigger"
+            className="flex w-full items-center gap-2 rounded-xl border border-dashed px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:min-h-11"
+          >
+            <Plus className="size-4 shrink-0" /> {t('agents.when.add')}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+          <DropdownMenuItem onSelect={() => setAddCron(true)} data-testid="agent-add-cron">
+            <Clock /> {t('agents.when.addCron')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setHook(true)} data-testid="agent-add-hook">
+            <Webhook /> {t('agents.when.addHook')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setFeedEdit({ enabled: true, source: '', levels: [], match: '', prompt: '' })} data-testid="agent-add-feed">
+            <Rss /> {t('agents.when.addFeed')}
+          </DropdownMenuItem>
+          {!a.telegram && (
+            <DropdownMenuItem onSelect={() => patch.mutate({ path: a.path, telegram: true })} data-testid="agent-telegram-switch">
+              <Send /> {t('agents.when.addTelegram')}
+            </DropdownMenuItem>
+          )}
+          {mailOn && onMailSettings && !watching.length && (
+            <DropdownMenuItem onSelect={onMailSettings} data-testid="agent-add-mail">
+              <Mail /> {t('agents.when.addMail')}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <CronEditor seed={cronSeed} onOpenChange={(o) => !o && setCronSeed(null)} onSaved={() => (setCronSeed(null), refresh())} />
       <AddCronDialog open={addCron} onOpenChange={setAddCron} agent={a} />
@@ -198,11 +217,18 @@ function CronRow({ job: j, onEdit, onChanged }: { job: Cron; onEdit: () => void;
   const patch = usePatchCron()
   const run = useRunCron()
   const del = useDeleteCron()
+  // the schedule runs in the time zone of Settings -> General: said when it is not this browser's
+  const { data: settings } = useSettings()
+  const tz = settings?.timezone
+  const zone = tz && tz !== Intl.DateTimeFormat().resolvedOptions().timeZone ? tz.split('/').pop()!.replace(/_/g, ' ') : ''
   return (
     <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-cron">
       <Clock className="size-4 shrink-0 text-primary" />
       <div className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-sm">{t('agents.when.cron', { when: j.human || j.schedule })}</span>
+        <span className="text-sm">
+          {t('agents.when.cron', { when: j.human || j.schedule })}
+          {zone && <span className="text-muted-foreground"> {t('agents.when.zone', { zone })}</span>}
+        </span>
         <span className="truncate text-xs text-muted-foreground">
           <Sensitive length={8}>{j.name}</Sensitive>
           {j.next_run && j.enabled ? ` · ${t('agents.trigger.next', { when: fmtRelative(j.next_run, lang) })}` : ''}
