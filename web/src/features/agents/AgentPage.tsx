@@ -326,7 +326,7 @@ function AgentCenter({ agent: a }: { agent: AgentDetail }) {
     if (unread > 0) seenMutate({ path: a.path })
   }, [unread, a.path, seenMutate])
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Flow agent={a} onReply={setReplyTo} />
       <Composer agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
