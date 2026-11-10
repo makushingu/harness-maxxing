@@ -5,8 +5,19 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## 2.0.0-alpha.138 - 2026-11-10
+## 2.0.0-alpha.139 - 2026-11-10
 
+- Fixes before release: `agent_guard._manages` reads the target with `cmd_agents._configure`'s parser
+  (`parse_known_args`; `--name writer other` targets `other`) and `cmd_agents._handler` refuses a manager command of
+  `AGENT_OWNER_ONLY` on another agent; `silent` / `loud` joined `AGENT_OWNER_ONLY` (and `AGENT_MANAGER`);
+  `check_cli` takes `-h` / `--help` as help only before `--`. `on_turn_end` finds the ended turn by
+  `last_turn.at` (the runner writes the `mx_user` time there) and `turn_died` (watcher: error without a recorded
+  turn): `service._ended_turn(evs, at, died)` -> `ended_turn_text` / `ended_turn_steps` never take another turn's
+  answer, tools or model (no `at`: the old last-result rule). UI: `fetchAgentThreadBefore` (`?before=`, pages of
+  200 when the flow is scrolled to its top, view kept in place); the composer's model is the agent's
+  (`chat_model` or `model`) unless picked, and is sent only when picked; `NewAgentForm` explains an empty slug.
+- `pages/ext/index.tsx`: `t` / `navigate` read through a ref, not effect deps (`useT()` changes with each
+  dictionary group: ~10 remounts of an extension page while it opened).
 - **Agent chat** (every agent, no switch: a `chat` key left in an agent.json is dropped by `clean()`):
   `limits.chat_idle_h` (6, 0-720). `agents._fire`: the owner's own words
   (`_owner_chat`: trigger manual/telegram, source manual/telegram, no outside `text`) go on in the session kept in
@@ -95,6 +106,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   refuses `-h` / `--help`, and refuses any command run inside the sandbox (`in_the_sandbox()`: an agent turn's unit
   whose state is hidden; a command line with a pipe, `;`, `&&` is sandboxed as a whole and its writes would vanish).
   fake_claude: `ASKNET`. `public()` gives `chat_model`.
+
+## 2.0.0-alpha.138 - 2026-11-10
+
 - Released from `main` ("Urgent fixes" path). `server/maxxing/claude_models.py`: daily `GET /v1/models`
   (secrets token/API key, else the `claude login` access token while valid, `anthropic-beta: oauth-2025-04-20`),
   newest id per family -> `<state>/claude-models.json`; `service.KNOWN_MODELS` removed, `service.models()` uses

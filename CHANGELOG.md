@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## 2.0.0-alpha.138 - 2026-11-10
+## 2.0.0-alpha.139 - 2026-11-10
 
 New:
 - **Talk to an agent like in a chat**: your messages to an agent (its page, Telegram) now go on in one conversation
@@ -11,12 +11,12 @@ New:
   and costs less; a message typed while it works waits for its turn. **New conversation** (under the box, or `/new`
   on Telegram) starts a fresh one, and so do 6 hours without a message (adjustable). Its schedules, webhooks,
   e-mails and other agents still start sessions of their own. Every agent works this way, existing ones too.
-  Its page is now **one flow**, like a chat: your messages on the right, its answers on the left with its avatar, as
-  they are written, with every command and file it used and what it changed of itself (its memory, its role, its
+  Its page is now **one flow**, like a chat: your messages on the right, its answers on the left with its avatar,
+  live while it works, with every command and file it used and what it changed of itself (its memory, its role, its
   settings) in green. What its schedules, webhooks, e-mails and other agents started shows in the same flow: what
   started each run, then its answer with its steps folded in one line (**Reply** goes on with that run). Your own
   messages no longer count in its runs per hour. Ask it to do its routine now and it starts a run of its own instead
-  of doing the work in the conversation.
+  of doing the work in the conversation. Scroll up to load older messages.
 - **Talk to an agent from the Office**: a click on its desk opens its conversation next to the Office (a sheet on a
   phone) instead of leaving it; its page is one click away. Office views made by an extension can open it too.
 - **A new agent sets itself up**: **New agent** asks only for a name and a place, then opens its conversation. Tell
@@ -39,6 +39,16 @@ New:
   **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
   (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
   (the model picker in its box).
+
+Fixed:
+- **Agents**: an agent's conversation changes that agent only, whatever the order of its options; a run that
+  stops without an answer (stopped, server restarted) shows its error in the flow, never the answer before it.
+- **New agent**: a name without a letter from a to z or a digit says why it cannot be used.
+- **Extension pages** no longer reload several times while they open.
+
+## 2.0.0-alpha.138 - 2026-11-10
+
+New:
 - **New Claude models show up by themselves**: once a day Harness Maxxing asks Anthropic which models exist and
   lists the newest Opus, Sonnet, Haiku and Fable everywhere you pick a model (Settings, topics, jobs, agents,
   Telegram `/model`), without waiting for an update. If your default model is the newest of its family, it follows
