@@ -51,6 +51,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   agent without role shows the templates as `Suggestions` (`AgentComposerApi.fill`). `AgentSettings.tsx`: sections
   `essential | protection | mail | advanced` (`SectionId`; `?settings=mail` unchanged), `LimitsFields part`,
   `readsOutside()`; 46 unused texts dropped.
+  Then: `MANAGER_NEW` sets the agent up in one turn from a brief (My job / When / Results / Never without me),
+  freedoms decided by rule, questions only for what it cannot guess; `schedule_zone_note()` (config `timezone`) joins
+  every manager note and `agents cron` prints the zone (the server clock may differ: `system_clock: keep`).
+  `agent_templates.BRIEFS` / `brief()` / `FIRST_IDEAS` -> `brief`, `first` in `GET /api/agents/templates`;
+  `Suggestions`: Blank brief + 6 ideas + "more", `fill()` selects the first `[…]`. Profile: one add-trigger menu
+  (`agent-add-trigger`; Telegram row only when on), guards = budget + Free/Protected line (opens the Protection
+  section) + approvals / keys when set; group link under Settings; `CronRow` shows `settings.timezone` when it is
+  not the browser's. Skill `maxxing-agents`: same brief and rules.
 - Removed the text as it is written (`--include-partial-messages`, `<sid>.live`, the SSE `partial` frame,
   `partialText`): not needed. The runner still drops `stream_event` lines. The manager's sandboxed turns pre-allow
   `agent_guard.MANAGER_SAFE` (Read, Glob, Grep, WebSearch; the deny rules still win).

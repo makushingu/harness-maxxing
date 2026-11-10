@@ -89,14 +89,25 @@ its commits (the clone's local `.git/info/exclude`).
 
 **Agents -> New agent** asks for a **name** and **where it lives** (the project, then the topic; already filled in
 when the list is narrowed to one topic), draws its pixel character (the dice draws another), then **Create and talk**:
-the agent is made empty and **its conversation opens**. Tell it what you want ("every Monday morning, sum up the
-players' feedback and suggest 3 improvements"): it writes its role, adds its schedule or its triggers, then asks
-you the few questions its work needs about its **freedoms** - will it read mails, webhooks or web pages (then it
-proposes its sandbox, with the sites it needs), which keys of the vault it needs, whether it should ask you before
-acting - and changes those settings when it makes sense. It ends with a short summary of how it is set up.
+the agent is made empty and **its conversation opens**. It asks you for its job in one go, as a short brief:
 
-With no agent yet, the Agents page shows the same form. The empty conversation of a new agent offers **ideas**, the
-ready-made jobs below: a click puts the request in the box, to change or send.
+```
+My job: tell me only what is new on these sites: example.com, example.org
+When: every morning at 8
+Results: here
+Never without me: -
+```
+
+Free text works too. In the same answer it sets itself up: it writes its role, gives itself a name, adds its
+schedule or triggers (times are those of your time zone, Settings -> General) and decides its **freedoms** by itself
+with simple rules - it reads mails, webhooks or web pages: it turns its sandbox on, with the sites it needs; it
+sends, pays, publishes or deletes: it asks you first. It asks only what it cannot find or guess (which shop, which
+sites); when you do not know or do not mind, it picks a sensible default and says so. It ends with a short summary;
+tell it any change.
+
+With no agent yet, the Agents page shows the same form. The empty conversation of a new agent offers a **Blank brief**
+and **ideas**, the ready-made jobs below (six first, the others behind **more ideas**): a click puts their brief in
+the box, with the part to fill in (`[…]`) selected, to change and send.
 
 | Agent | When | What it does |
 |---|---|---|
@@ -112,7 +123,8 @@ ready-made jobs below: a click puts the request in the box, to change or send.
 From the command line, the same jobs come ready-made with their safe settings (read-only tools, the sites they reach,
 the keys they suggest if your vault holds them): `maxxing agents templates`, then
 `maxxing agents create acme/shop/sales --template sales`. You can also ask for an agent in any session ("I want an
-agent that..."): Claude creates it and gives you the link to its conversation.
+agent that..."): Claude fills in the same brief from your request, asks only what is missing, creates the agent with
+the same rules and gives you the link to its conversation.
 
 **New agent -> Import a Claude Code agent file** turns a `.claude/agents/<name>.md` file into an agent (see below).
 
@@ -163,15 +175,18 @@ it starts folded on screens narrower than 1600 px so the conversation keeps its 
 - **Its character and name** at the top: click them to change its **name and look** (a pencil shows on hover).
 - **Its role**: click it to edit (its `CLAUDE.md`).
 - **When it works**: its triggers as sentences. A webhook shows its address (copy it), what came in ("3 received · the
-  last 10 min ago") and **Send a test**, which posts a test event so you see it start. Add a schedule, a webhook or a
-  notification filter from here; switch Telegram on or off.
-- **Guards**: today's cost against its budget, its runs this hour, what it may do without asking.
+  last 10 min ago") and **Send a test**, which posts a test event so you see it start. A schedule shows its time zone
+  when it is not your browser's. **Add a trigger** adds a schedule, a webhook, a notification filter, Telegram or a
+  mailbox.
+- **Protection and budget**: today's cost against its budget, Free or Protected (with its sites; click to change it),
+  and only when they apply: whether it asks you first, the keys it gets.
 - **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
 - **Settings**, in four sections (the chips on top jump to them): **Essentials** (on, silent, its look, the model, the
   daily budget); **Protection** (**Free** or **Protected**, below; **Ask me before risky actions**; the keys it gets);
   **E-mail** (shown once it has a mailbox, or with **Give it a mailbox**); **Advanced**, folded (permission mode,
   outside events, callable from the topic's sessions, allowed and forbidden tools, rules, the other limits, export as
-  a Claude Code file). Delete is at the bottom.
+  a Claude Code file, grouped under Permissions, Tools and rules, Limits and export). Delete is at the bottom.
+- **New group with this agent**, a link under Settings.
 
 Opening the page marks its results as read. In the list on the left, the *Waiting for you* and *To read* chips show
 only the agents waiting for your OK or with something to read.

@@ -20,14 +20,16 @@ New:
 - **Talk to an agent from the Office**: a click on its desk opens its conversation next to the Office (a sheet on a
   phone) instead of leaving it; its page is one click away. Office views made by an extension can open it too.
 - **A new agent sets itself up**: **New agent** asks only for a name and a place, then opens its conversation. Tell
-  it what you want: it writes its role and its schedule, asks about its freedoms (mails, sites, keys, asking you
-  first) and adjusts its settings. The ready-made agents show as ideas in that empty conversation. "Edit with Claude"
-  is gone: ask the agent itself.
+  it its job in one go (a four-line brief: my job, when, results, never without me): it sets itself up in the same
+  answer - role, name, schedule in your time zone, its freedoms decided with simple rules - and asks only what it
+  cannot guess. The ready-made agents show as ideas that put their brief in the box, to fill in and send. Asking for
+  an agent in any session follows the same brief and rules. "Edit with Claude" is gone: ask the agent itself.
 - **New agents are free, like a session**: no sandbox by default, so they just work. One that reads text from
   outside (a mailbox, a webhook, the feed) is better **Protected**: its settings say so, and it proposes it itself.
   Existing agents keep their setting. A change that only makes an agent safer no longer waits for your OK.
 - **Simpler agent settings**: four sections - Essentials, Protection (Free or Protected), E-mail (once it has a
-  mailbox) and Advanced, folded.
+  mailbox) and Advanced, folded and grouped; shorter texts. Its profile is lighter: one **Add a trigger** menu,
+  **Protection and budget** in plain words, a schedule shows its time zone when it is not your browser's.
 - **Fewer requests in an agent's conversation**: in its sandbox, the agent no longer asks before reading files,
   searching the web or opening a page of its sites. It still asks to leave its sandbox, to open another site and to
   change a safety setting.
