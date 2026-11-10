@@ -1025,6 +1025,29 @@ def ended_turn_text(sid: str) -> str:
     return ""
 
 
+STEPS_MAX = 40                                # tools kept per turn in the agent's thread (the run shows them all)
+
+
+def ended_turn_steps(sid: str) -> dict:
+    """The tools the last turn that ended used ({name, summary, error?}, the last STEPS_MAX), with its model and
+    duration: what the agent page shows under the turn's answer without reading its whole log."""
+    evs = _tail_events(sid)
+    end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), len(evs))
+    start = next((i + 1 for i in range(end - 1, -1, -1) if evs[i]["type"] == "user"), 0)
+    uses: list[dict] = []
+    failed: set[str] = set()
+    for ev in evs[start:end]:
+        if ev["type"] == "tool_use":
+            uses.append(ev)
+        elif ev["type"] == "tool_result" and ev.get("is_error"):
+            failed.add(ev.get("tool_use_id") or "")
+    tools = [{"name": u.get("name") or "", "summary": (u.get("summary") or "")[:160],
+              **({"error": True} if u.get("id") in failed else {})} for u in uses]
+    res = evs[end] if end < len(evs) else {}
+    return {"tools": tools[-STEPS_MAX:], "tools_total": len(tools), "model": res.get("model") or "",
+            "duration_ms": int(res.get("duration_ms") or 0)}
+
+
 def last_result(sid: str) -> dict | None:
     for ev in reversed(_tail_events(sid)):
         if ev["type"] == "result":

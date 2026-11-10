@@ -1927,7 +1927,13 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         ended = 0.0 if meta.get("state") == "running" or meta.get("queue") else time.time()
     _release(path, session["id"], float(ended))
     group = str((meta.get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
-    msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost, **({"group": group} if group else {}))
+    try:                                # its steps, shown under the answer on the agent page
+        steps = service.ended_turn_steps(session["id"])
+    except Exception:  # noqa: BLE001
+        steps = {}
+    steps = {k: v for k, v in steps.items() if v}
+    msg = post(path, "result", text, ok=ok, session=session["id"], cost=cost, **steps,
+               **({"group": group} if group else {}))
     if group:
         try:
             from . import agent_rooms

@@ -120,6 +120,24 @@ def test_run_posts_to_the_thread_with_the_result(client, topic):
     assert kinds[:3] == ["note", "run", "result"]
 
 
+def test_a_result_keeps_the_steps_of_its_turn(client, topic):
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "say hi"}).json()
+    wait_idle(client, run["session"]["id"])
+
+    def result():
+        msgs = client.get("/api/agents/acme/blog/writer/thread").json()["messages"]
+        return [m for m in msgs if m["kind"] == "result"]
+    res = wait_for(result)[-1]
+    assert res["tools"] and all(t["name"] for t in res["tools"]) and res["tools_total"] == len(res["tools"])
+    assert res["model"] and res["duration_ms"] >= 0
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL again"}).json()
+    wait_idle(client, run["session"]["id"])
+    res = wait_for(lambda: [m for m in result() if "again" in m["text"]])[-1]
+    assert "tools" not in res                       # a turn without tools: nothing kept
+
+
 def test_guards_disabled_budget_rate(client, topic, monkeypatch):
     from maxxing import agents
     _on(client)

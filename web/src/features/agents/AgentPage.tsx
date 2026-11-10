@@ -1,37 +1,34 @@
-// One agent (/agents/<project>/<topic>/<name>), two tabs:
-// - Conversation: the owner's conversation with it IS a session (the same column as the Sessions page: messages as
-//   they come, tools, model, Stop, approvals); in it the agent is its own manager (role, memory, schedules; a safety
-//   setting waits for the owner's OK). No conversation open (a new one, 6 h idle): a box starts one (model picked
-//   there), with a link to read the last one again. An automation running now shows as a bar above it;
-// - Runs (?tab=runs): what its automations did (schedules, webhooks, e-mails, other agents), each in a session of its
-//   own with its own rules: what started it, a "working…" bubble with what it writes as it comes, its result, a
-//   callout when it waits for your OK; a run opens in place (RunView);
+// One agent (/agents/<project>/<topic>/<name>): one flow, newest at the bottom, with the box to write to it under it.
+// - the owner's messages (the page, Telegram) on the right, the agent's answers on the left with its avatar: as they
+//   come (its steps, what it writes, Stop), then with their steps as lines of a session; in this conversation the
+//   agent is its own manager (role, memory, schedules; what it changed is said in green; a safety setting waits for
+//   the owner's OK, a card in the flow). Its turns go on in one session (6 h idle or "New conversation": a new one);
+// - what its automations did, in the same flow (schedules, webhooks, e-mails, other agents): what started each run
+//   (a dashed card), then its answer with its steps folded in one line; Reply goes on with that run, "Open the run"
+//   opens it in place (RunView), never in Sessions;
 // - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
-//   webhook address, what came in, test), guards, memory, advanced settings (a sheet), "Edit with Claude" (a session
-//   of its topic configures it: an agent cannot change its own role or settings).
-// Opening the page marks its results as read (POST /seen). Its runs open in place (RunView), never in Sessions.
+//   webhook address, what came in, test), guards, memory, advanced settings (a sheet), "Edit with Claude".
+// Opening the page marks its results as read (POST /seen).
 import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, History, Info, KeyRound, Lock, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle, Zap,
+  AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
+  agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
-import { fmtDate, fmtRelative } from '@/lib/format'
+import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCompact, useMediaQuery } from '@/stores/media'
 import {
-  Badge, Button, EmptyState, Segmented, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
+  Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
-import { SessionColumn } from '@/pages/sessions/Column'
-import type { Col } from '@/pages/sessions/store'
 import { ModelPicker } from '@/pages/sessions/Widgets'
 import { Page, PageHeader } from '@/components/shell/Page'
-import { absTopicDir, filesUrl, fmtCost } from '@/pages/sessions/util'
+import { absTopicDir, filesUrl, fmtCost, modelLabel, toolIcon } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings, type SectionId } from './AgentSettings'
@@ -163,10 +160,6 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
                 <EnabledSwitch agent={a} />
               </span>
             </Tooltip>
-            {/* Phone: in the profile only (its "Edit with Claude" row), the header leaves the room to the name. */}
-            <span className="contents max-sm:hidden">
-              <EditWithClaude agent={a} />
-            </span>
             <Button variant={wide ? 'secondary' : 'outline'} size="sm" onClick={openProfile} aria-pressed={dockable ? wide : undefined} data-testid="agent-profile-open">
               <Info /> <span className="max-sm:sr-only">{t('agents.panel.open')}</span>
             </Button>
@@ -250,37 +243,33 @@ export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>
   return m.source || tr || t('agents.from.manual')
 }
 
-/** The sessions of the owner's conversations (now, the last one, and every session an own message started or went
- *  on in): the Conversation tab; every other session of the agent is a run of an automation. */
+/** What started a run, as an icon: a schedule, an e-mail, another agent, a notification / webhook, a command. */
+function triggerIcon(m: Pick<AgentMessage, 'trigger' | 'source'>) {
+  const tr = m.trigger || ''
+  if (tr.startsWith('cron:')) return Clock
+  if (tr.startsWith('agent:')) return Bot
+  if (tr === 'telegram') return Send
+  if (/mail/i.test(m.source || '')) return Mail
+  if (tr.startsWith('feed:')) return Zap
+  if (m.source === 'command line') return SquareTerminal
+  return PlayCircle
+}
+
+/** The sessions of the owner's conversations (now, the last one, every session an own message started): their
+ *  answers show their steps as a session does; every other session of the agent is a run of an automation (its
+ *  steps folded). A reply to a run goes on in that run: it does not make it a conversation. */
 function ownSessions(a: AgentDetail, msgs: AgentMessage[]): Set<string> {
   const own = new Set<string>()
   if (a.chat_session) own.add(a.chat_session)
   if (a.last_chat_session) own.add(a.last_chat_session)
-  for (const m of msgs) if (m.kind === 'run' && m.session && byOwner(m)) own.add(m.session)
+  for (const m of msgs) if (m.kind === 'run' && m.session && byOwner(m) && !m.reply_to) own.add(m.session)
   return own
 }
 
-type Tab = 'chat' | 'runs'
-
+/** One flow, newest at the bottom: the owner's messages and the agent's answers (as they come, with their steps),
+ *  and what its automations did (what started each, its steps folded, its result), a day line between days. */
 function AgentCenter({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
-  const [search, setSearch] = useSearchParams()
-  const tab: Tab = search.get('tab') === 'runs' ? 'runs' : 'chat'
-  const setTab = (v: Tab) =>
-    setSearch(
-      (p) => {
-        const n = new URLSearchParams(p)
-        if (v === 'runs') n.set('tab', 'runs')
-        else n.delete('tab')
-        return n
-      },
-      { replace: true },
-    )
-  const { data } = useAgentThread(a.path)
-  const msgs = React.useMemo(() => data?.messages || [], [data])
-  const own = React.useMemo(() => ownSessions(a, msgs), [a, msgs])
-  const autos = (a.running_sessions || []).filter((s) => !own.has(s.id))
-  const fresh = useNewAgentChat()
+  const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
   // Reading the page = its results are read (again when a new one comes in while it is open).
   const seen = useAgentSeen()
   const unread = a.thread_unread || 0
@@ -290,341 +279,345 @@ function AgentCenter({ agent: a }: { agent: AgentDetail }) {
   }, [unread, a.path, seenMutate])
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 md:px-4" data-testid="agent-tabs">
-        <Segmented<Tab>
-          size="sm"
-          value={tab}
-          onChange={setTab}
-          aria-label={a.display_name}
-          options={[
-            { value: 'chat', label: t('agents.tab.chat'), icon: <MessageSquare /> },
-            {
-              value: 'runs',
-              icon: <Zap />,
-              label: (
-                <span className="inline-flex items-center gap-1.5" data-testid="agent-tab-runs">
-                  {t('agents.tab.runs')}
-                  {autos.length > 0 && <StatusDot tone="running" pulse label={t('agents.runningNow')} className="size-1.5" />}
-                </span>
-              ),
-            },
-          ]}
-        />
-        <span className="flex-1" />
-        {tab === 'chat' && a.chat_session && (
-          <Tooltip content={t('agents.chat.newHint')}>
-            <Button variant="ghost" size="sm" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">
-              <MessageSquarePlus /> <span className="max-sm:sr-only">{t('agents.chat.new')}</span>
-            </Button>
-          </Tooltip>
-        )}
-      </div>
-      {tab === 'chat' && autos.map((s) => <AutoRunBar key={s.id} agent={a} sid={s.id} msgs={msgs} waiting={(a.waiting || 0) > 0} />)}
-      {tab === 'chat' ? <ChatPane agent={a} /> : <Runs agent={a} msgs={msgs} own={own} />}
+      <Flow agent={a} onReply={setReplyTo} />
+      <Composer agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
 }
 
-/** An automation running now, above the conversation: what started it, what it does, a link to watch it. */
-function AutoRunBar({ agent: a, sid, msgs, waiting }: { agent: AgentDetail; sid: string; msgs: AgentMessage[]; waiting: boolean }) {
-  const t = useT()
-  const { data: crons } = useCrons()
-  const live = useLiveTurn(sid)
-  const start = msgs.find((m) => m.kind === 'run' && m.session === sid)
-  const now = live.tool || firstLine(live.text)
-  return (
-    <Link
-      to={agentRunRoute(a.path, sid)}
-      className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted md:px-4 pointer-coarse:min-h-10"
-      data-testid="agent-auto-running"
-    >
-      {waiting ? <ShieldCheck className="size-3.5 shrink-0 text-warning" /> : <StatusDot tone="running" pulse className="size-2 shrink-0" />}
-      <span className="shrink-0 font-medium">{start ? t('agents.thread.started', { from: triggerLabel(t, start, crons?.jobs || []) }) : t('agents.auto.running')}</span>
-      {now && (
-        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-          <Sensitive>{now}</Sensitive>
-        </span>
-      )}
-      <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-primary">
-        <PlayCircle className="size-3" /> {t('agents.conv.follow')}
-      </span>
-    </Link>
-  )
-}
+const dayOf = (at: number) => new Date(at * 1000).toDateString()
 
-/** The owner's conversation: the session itself (same column as Sessions), or a box that starts one. */
-function ChatPane({ agent: a }: { agent: AgentDetail }) {
-  const sid = a.chat_session || ''
-  const col = React.useMemo<Col>(() => ({ key: `chat:${sid}`, kind: 'session', id: sid }), [sid])
-  if (!sid) return <StartChat agent={a} />
-  return (
-    // the page header above already leaves room for the notch
-    <div className="flex min-h-0 flex-1 flex-col" style={{ '--safe-top': '0px' } as React.CSSProperties} data-testid="agent-chat-session">
-      <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" agentRun />
-    </div>
-  )
-}
-
-function StartChat({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
-  return (
-    <div className="flex min-w-0 flex-1 flex-col" data-testid="agent-start-chat">
-      <div className="grid min-h-0 flex-1 content-center overflow-y-auto px-4 py-6">
-        <div className="mx-auto grid max-w-md justify-items-center gap-3 text-center">
-          <AgentAvatarIcon avatar={a.avatar} size={56} />
-          <p className="text-base font-medium">
-            <Sensitive length={8}>{t('agents.chat.startTitle', { name: a.display_name })}</Sensitive>
-          </p>
-          <p className="text-sm text-muted-foreground">{t('agents.chat.startDesc')}</p>
-          {a.last_chat_session && (
-            <Link to={agentRunRoute(a.path, a.last_chat_session)} className="inline-flex items-center gap-1 text-sm text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-last-chat">
-              <History className="size-3.5" /> {t('agents.chat.last')}
-            </Link>
-          )}
-        </div>
-      </div>
-      <Composer agent={a} replyTo={null} onCancelReply={() => {}} />
-    </div>
-  )
-}
-
-/** The runs of its automations (the owner's own conversations left out: they are the Conversation tab). */
-function Runs({ agent: a, msgs: all, own }: { agent: AgentDetail; msgs: AgentMessage[]; own: Set<string> }) {
-  const t = useT()
-  const { isLoading, error } = useAgentThread(a.path)
-  const { data: crons } = useCrons()
-  const box = React.useRef<HTMLDivElement>(null)
-  const msgs = React.useMemo(() => all.filter((m) => !(m.session && own.has(m.session)) && !(m.kind === 'run' && byOwner(m)) && m.status !== 'new_chat'), [all, own])
-  const byId = React.useMemo(() => new Map(all.map((m) => [m.id, m])), [all])
-  const asks = useThreadApprovals(a.path, msgs)
-  const running = (a.running_sessions || []).filter((s) => !own.has(s.id))
-  const last = msgs[msgs.length - 1]?.id
-  // Newest at the bottom: follow it when a message arrives (unless the user scrolled up to read).
-  const stick = React.useRef(true)
-  React.useLayoutEffect(() => {
-    const el = box.current
-    if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [last, running.length])
-
-  return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <div
-        ref={box}
-        onScroll={(e) => {
-          const el = e.currentTarget
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-        }}
-        className="min-h-0 flex-1 overflow-y-auto"
-        aria-live="polite"
-        data-testid="agent-thread"
-        data-thread
-      >
-        <AnswerContext owner={{ agent: a.path }}>
-          <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
-            {isLoading ? (
-              [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
-            ) : error ? (
-              <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
-            ) : !msgs.length && !running.length ? (
-              <EmptyState icon={StickyNote} compact title={t('agents.runs.empty')} description={t('agents.runs.emptyDesc')} />
-            ) : (
-              msgs
-                .filter((m) => !asks.merged(m))
-                .map((m) => (
-                  <ThreadMessage
-                    key={m.id}
-                    m={m}
-                    agent={a}
-                    crons={crons?.jobs || []}
-                    answers={m.reply_to ? byId.get(m.reply_to) : undefined}
-                    live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
-                    decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
-                  />
-                ))
-            )}
-            {running.map((s) => (
-              <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
-            ))}
-          </div>
-        </AnswerContext>
-      </div>
-    </div>
-  )
-}
-
-/** What the agent is writing in this turn (after the last message it got), and the tool it is using now. */
-function useLiveTurn(sid: string): { text: string; tool: string } {
-  const log = useSessionLog(sid)
-  return React.useMemo(() => {
-    let text = ''
-    let tool = ''
-    for (let i = log.items.length - 1; i >= 0; i--) {
-      const it = log.items[i]
-      if (it.kind === 'user') break
-      if (it.kind === 'assistant' && !text) text = it.ev.text || ''
-      if (it.kind === 'tool' && !text && !tool && !it.result) tool = it.use.summary || it.use.name
-    }
-    return { text, tool }
-  }, [log.items])
-}
-
-/** A running session of the agent: "working…" with what it writes as it comes, or "waiting for your OK" with the
- *  way to answer. */
-function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; waiting: boolean }) {
-  const t = useT()
-  const live = useLiveTurn(sid)
-  return (
-    <div className="flex items-start gap-2" data-kind="working">
-      <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div className={cn('grid min-w-0 gap-1 rounded-xl rounded-tl-sm border bg-card px-3 py-2 text-sm', waiting && 'border-warning/40 bg-warning/5')}>
-        <span className="flex items-center gap-2 text-muted-foreground wrap-anywhere">
-          {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
-          {waiting ? t('agents.conv.waiting', { name: a.display_name }) : t('agents.conv.working', { name: a.display_name })}
-        </span>
-        {!waiting && live.text && (
-          <div className="min-w-0 text-sm" data-testid="agent-live-text">
-            <Sensitive block>
-              <AnswerText text={live.text} />
-            </Sensitive>
-          </div>
-        )}
-        {!waiting && live.tool && (
-          <span className="truncate font-mono text-[11px] text-muted-foreground" data-testid="agent-live-tool">
-            <Sensitive>{live.tool}</Sensitive>
-          </span>
-        )}
-        <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
-          <PlayCircle className="size-3" /> {waiting ? t('agents.conv.waitingOpen') : t('agents.conv.follow')}
-        </Link>
-      </div>
-    </div>
-  )
-}
-
-function ThreadMessage({
-  m, agent: a, crons, answers, onReply, live, decided,
-}: {
-  m: AgentMessage
-  agent: AgentDetail
-  crons: Cron[]
-  answers?: AgentMessage
-  /** Reply on a result (its session goes on): none in the runs list, a run opens in place to go on with it */
-  onReply?: (m: AgentMessage) => void
-  /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
-  live?: Approval
-  decided?: AgentMessage
-}) {
+function DayLine({ at }: { at: number }) {
   const t = useT()
   const lang = useLang()
-  const [open, setOpen] = React.useState(false)
-  // Right click (long press): copy what was said, mine or the agent's (not the approvals: their buttons are the point).
-  const { onContextMenu, touch, menu } = useMessageMenu({ text: m.kind === 'approval' ? '' : m.text, copy: true })
-  const when = (
-    <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
-      {fmtRelative(m.at, lang)}
+  const d = new Date(at * 1000)
+  const today = new Date()
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  const label =
+    d.toDateString() === today.toDateString()
+      ? t('agents.flow.today')
+      : d.toDateString() === yesterday.toDateString()
+        ? t('agents.flow.yesterday')
+        : d.toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) })
+  return <Divider>{label}</Divider>
+}
+
+function Divider({ children, testid }: { children: React.ReactNode; testid?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground" data-testid={testid}>
+      <span className="h-px w-6 bg-border" aria-hidden />
+      {children}
+      <span className="h-px w-6 bg-border" aria-hidden />
+    </div>
+  )
+}
+
+function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMessage) => void }) {
+  const t = useT()
+  const { data, isLoading, error } = useAgentThread(a.path)
+  const msgs = React.useMemo(() => data?.messages || [], [data])
+  const { data: crons } = useCrons()
+  const jobs = crons?.jobs || []
+  const own = React.useMemo(() => ownSessions(a, msgs), [a, msgs])
+  const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
+  const asks = useThreadApprovals(a.path, msgs)
+  const running = a.running_sessions || []
+  const box = React.useRef<HTMLDivElement>(null)
+  const last = msgs[msgs.length - 1]?.id
+  // Newest at the bottom: follow it when a message arrives or a turn writes (unless the user scrolled up to read).
+  const stick = React.useRef(true)
+  const follow = React.useCallback(() => {
+    const el = box.current
+    if (el && stick.current) el.scrollTop = el.scrollHeight
+  }, [])
+  React.useLayoutEffect(follow, [last, running.length, follow])
+
+  const rows: { key: string; session?: string; node: React.ReactNode }[] = []
+  let day = ''
+  for (const m of msgs) {
+    if (asks.merged(m)) continue
+    if (dayOf(m.at) !== day) {
+      day = dayOf(m.at)
+      rows.push({ key: `day:${day}`, node: <DayLine at={m.at} /> })
+    }
+    let node: React.ReactNode
+    if (m.kind === 'note' && m.status === 'new_chat') node = <Divider testid="agent-new-chat-line">{t('agents.chat.new')}</Divider>
+    else if (m.kind === 'note' && m.status === 'changed_chat') node = <ChangeLine icon={Settings2} text={changedText(t, m.files)} />
+    else if (m.kind === 'run' && byOwner(m)) {
+      // a conversation that started afresh (6 h without a word): said once, above the message that opened it
+      if (m.chat === 'new' && rows.length && !String(rows[rows.length - 1].key).startsWith('new:'))
+        rows.push({ key: `new:${m.id}`, node: <Divider>{t('agents.chat.new')}</Divider> })
+      node = <OwnerMessage m={m} answers={m.reply_to ? byId.get(m.reply_to) : undefined} />
+    } else if (m.kind === 'run') node = <TriggerCard m={m} crons={jobs} />
+    else if (m.kind === 'result')
+      node = <AgentTurn m={m} agent={a} chat={!!m.session && own.has(m.session)} onReply={onReply} />
+    else
+      node = (
+        <ThreadMessage
+          m={m}
+          agent={a}
+          crons={jobs}
+          live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
+          decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
+        />
+      )
+    rows.push({ key: m.id, session: m.session, node })
+  }
+  // A turn going on now: right under the last message of its session (the owner's message, what started the run).
+  for (const s of running) {
+    let at = -1
+    for (let i = rows.length - 1; i >= 0; i--)
+      if (rows[i].session === s.id) {
+        at = i
+        break
+      }
+    const node = <LiveTurn agent={a} sid={s.id} chat={own.has(s.id)} onWrite={follow} />
+    rows.splice(at < 0 ? rows.length : at + 1, 0, { key: `live:${s.id}`, node })
+  }
+
+  return (
+    <div
+      ref={box}
+      onScroll={(e) => {
+        const el = e.currentTarget
+        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+      }}
+      className="min-h-0 flex-1 overflow-y-auto"
+      aria-live="polite"
+      data-testid="agent-thread"
+      data-thread
+    >
+      <AnswerContext owner={{ agent: a.path }}>
+        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
+          {isLoading ? (
+            [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
+          ) : error ? (
+            <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
+          ) : !rows.length ? (
+            <div className="grid justify-items-center gap-3 py-10 text-center" data-testid="agent-start-chat">
+              <AgentAvatarIcon avatar={a.avatar} size={56} />
+              <p className="text-base font-medium">
+                <Sensitive length={8}>{t('agents.chat.startTitle', { name: a.display_name })}</Sensitive>
+              </p>
+              <p className="max-w-md text-sm text-muted-foreground">{t('agents.chat.startDesc')}</p>
+            </div>
+          ) : (
+            rows.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)
+          )}
+        </div>
+      </AnswerContext>
+    </div>
+  )
+}
+
+const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
+
+function When({ at }: { at: number }) {
+  const lang = useLang()
+  return (
+    <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(at * 1000).toISOString()} title={fmtDate(at, lang)}>
+      {fmtRelative(at, lang)}
     </time>
   )
-  const sessionLink = m.session && (
-    <Link to={agentRunRoute(a.path, m.session)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
-      <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
-    </Link>
-  )
-  const quote = answers && (
-    <p className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-      <Reply className="size-3 shrink-0" />
-      <span className="truncate">{t('agents.conv.inReply', { text: firstLine(answers.text) })}</span>
-    </p>
-  )
-  if (m.kind === 'note')
-    return (
-      <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground" data-kind="note">
-        <span className="h-px w-6 bg-border" aria-hidden />
-        <Sensitive>{m.text}</Sensitive> · {when}
-        <span className="h-px w-6 bg-border" aria-hidden />
-      </div>
-    )
-  if (m.kind === 'skip')
-    return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm" data-kind="skip">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-        <div className="grid min-w-0 flex-1 gap-0.5">
-          <span>
-            {t('agents.thread.skipped', { from: triggerLabel(t, m, crons) })} <span className="text-muted-foreground">{reasonText(t, m.reason) || m.text}</span>
-          </span>
-          {when}
-        </div>
-      </div>
-    )
-  if (m.kind === 'run') {
-    if (byOwner(m))
-      return (
-        <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="run">
-          {quote}
-          {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
-          <div className="relative rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" onContextMenu={onContextMenu} {...touch}>
-            {menu}
-            <p className="whitespace-pre-wrap break-words" data-quote>
-              <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
-            </p>
-          </div>
-          <span className="flex justify-end gap-2 text-[11px] text-muted-foreground">
-            {m.trigger === 'telegram' && t('agents.from.telegram')} {when}
-          </span>
-        </div>
-      )
-    return (
-      <div className="grid gap-1 rounded-xl border border-dashed px-3 py-2 text-sm sm:ml-9" data-kind="run">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <span className="min-w-0 font-medium text-foreground wrap-anywhere">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
-          {when}
-        </div>
-        {m.text && (
-          <p className="line-clamp-4 whitespace-pre-wrap break-words text-muted-foreground">
-            <Sensitive block>{m.text}</Sensitive>
-          </p>
-        )}
-        {!!m.attachments?.length && (
-          <div className="flex">
-            <AttachmentStrip paths={m.attachments} />
-          </div>
-        )}
-      </div>
-    )
-  }
-  // result / approval: the agent speaks
-  const failed = m.kind === 'result' && m.ok === false
-  const long = (m.text || '').length > FOLD_CHARS
+}
+
+/** What the owner wrote (the page, Telegram): on the right, as in a session. */
+function OwnerMessage({ m, answers }: { m: AgentMessage; answers?: AgentMessage }) {
+  const t = useT()
+  const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
   return (
-    <div className="flex items-start gap-2" data-kind={m.kind}>
-      <AgentAvatarIcon avatar={a.avatar} size={32} />
-      <div
-        onContextMenu={onContextMenu}
-        {...touch}
-        className={cn('relative grid min-w-0 max-w-[85%] gap-1.5 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', failed && 'border-destructive/40', m.kind === 'approval' && live && 'border-warning/40 bg-warning/5', m.kind === 'approval' && live && 'max-w-full flex-1')}
-      >
+    <div className="group/msg relative flex flex-col items-end gap-1.5 pl-8" data-kind="run" data-owner>
+      {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
+      <div className="relative max-w-full rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]" onContextMenu={onContextMenu} {...touch} data-quote>
         {menu}
+        <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
+      </div>
+      <div className="flex min-w-0 max-w-full items-center gap-1.5 text-[11px] text-muted-foreground">
+        {answers && (
+          <span className="inline-flex min-w-0 items-center gap-1 rounded bg-muted px-1" title={t('agents.conv.replyingTo')}>
+            <Reply className="size-3 shrink-0" />
+            <span className="truncate">
+              <Sensitive>{firstLine(answers.text)}</Sensitive>
+            </span>
+          </span>
+        )}
+        {m.trigger === 'telegram' && <span className="shrink-0">{t('agents.from.telegram')}</span>}
+        <When at={m.at} />
+      </div>
+    </div>
+  )
+}
+
+/** What started a run of an automation (a schedule, an e-mail, a webhook, another agent) and what it was told. */
+function TriggerCard({ m, crons }: { m: AgentMessage; crons: Cron[] }) {
+  const t = useT()
+  const Icon = triggerIcon(m)
+  return (
+    <div className="grid gap-1 rounded-xl border border-dashed px-3 py-2 text-sm sm:ml-10" data-kind="run">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+        <Icon className="size-3.5 shrink-0" />
+        <span className="min-w-0 font-medium text-foreground wrap-anywhere">{t('agents.thread.started', { from: triggerLabel(t, m, crons) })}</span>
+        <When at={m.at} />
+      </div>
+      {m.text && (
+        <p className="line-clamp-4 whitespace-pre-wrap break-words text-muted-foreground">
+          <Sensitive block>{m.text}</Sensitive>
+        </p>
+      )}
+      {!!m.attachments?.length && (
+        <div className="flex">
+          <AttachmentStrip paths={m.attachments} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+type Step = { name: string; summary: string; state: 'ok' | 'error' | 'running' }
+
+/** One step of a turn, as a tool line of a session (its details are in the run). */
+function StepRow({ s }: { s: Step }) {
+  const Icon = toolIcon(s.name)
+  return (
+    <div className={cn('flex h-8 min-w-0 items-center gap-2 rounded-lg border bg-card/60 px-2.5 text-[13px]', s.state === 'error' && 'border-destructive/40')} data-testid="agent-step">
+      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="shrink-0 font-medium">{s.name.replace(/^mcp__/, '')}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
+        <Sensitive>{s.summary}</Sensitive>
+      </span>
+      {s.state === 'running' ? (
+        <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
+      ) : s.state === 'error' ? (
+        <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+      ) : (
+        <Check className="size-3.5 shrink-0 text-success" />
+      )}
+    </div>
+  )
+}
+
+/** The steps of a run of an automation, folded in one line ("7 steps · Read · Bash · Write") that opens them. */
+function StepsFold({ steps, total }: { steps: Step[]; total: number }) {
+  const t = useT()
+  const [open, setOpen] = React.useState(false)
+  const names = [...new Set(steps.map((s) => s.name.replace(/^mcp__/, '')))].join(' · ')
+  return (
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card/60 text-[13px]" data-testid="agent-steps">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-accent/60 max-md:h-10">
+        <Layers className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 font-medium">{t('agents.flow.steps', { n: total })}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">{names}</span>
+        {steps.some((s) => s.state === 'error') && <AlertCircle className="size-3.5 shrink-0 text-destructive" />}
+        <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && <StepList steps={steps} total={total} className="border-t p-1.5" />}
+    </div>
+  )
+}
+
+function StepList({ steps, total, className }: { steps: Step[]; total: number; className?: string }) {
+  const t = useT()
+  return (
+    <div className={cn('grid min-w-0 gap-1', className)}>
+      {total > steps.length && <p className="px-1 text-[11px] text-muted-foreground">{t('agents.flow.earlier', { n: total - steps.length })}</p>}
+      {steps.map((s, i) => (
+        <StepRow key={i} s={s} />
+      ))}
+    </div>
+  )
+}
+
+/** A line of what the agent changed of itself (its memory, its role, its settings). */
+function ChangeLine({ icon: Icon, text }: { icon: React.ComponentType<{ className?: string }>; text: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-success/30 bg-success/8 px-2.5 py-1.5 text-[13px] sm:ml-10" data-testid="agent-change">
+      <Icon className="size-3.5 shrink-0 text-success" />
+      <span className="min-w-0 flex-1">{text}</span>
+    </div>
+  )
+}
+
+function changedText(t: TFn, files?: string[]): string {
+  const what = (files || []).map((f) => (f === 'CLAUDE.md' ? t('agents.flow.role') : t('agents.flow.settings')))
+  return t('agents.flow.changed', { what: [...new Set(what)].join(' + ') || t('agents.flow.settings') })
+}
+
+/** It wrote to its memory during the turn (memory.md, edited or written, without an error). */
+const wroteMemory = (steps: Step[]) => steps.some((s) => /^(Edit|MultiEdit|Write)$/.test(s.name) && s.state === 'ok' && /(^|[\s/])memory\.md\b/.test(s.summary))
+
+/** "Sonnet 5.5 · 20 s · $0.15" under an answer, as in a session. */
+function ResultLine({ model, ms, cost }: { model?: string; ms?: number; cost?: number }) {
+  const parts = [modelLabel(model), ms ? fmtDuration(ms / 1000) : '', cost ? fmtCost(cost) : ''].filter(Boolean)
+  if (!parts.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums" data-testid="result-line">
+      <Check className="size-3 text-success" />
+      {parts.map((p, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <span aria-hidden>·</span>}
+          <span>{p}</span>
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
+
+/** The agent's frame: its avatar, its name and a header line, then what it did and said. */
+function AgentBubble({ agent: a, head, children, className, testid }: { agent: AgentDetail; head: React.ReactNode; children: React.ReactNode; className?: string; testid?: string }) {
+  return (
+    <div className="flex items-start gap-2" data-kind="result" data-testid={testid}>
+      <AgentAvatarIcon avatar={a.avatar} size={32} />
+      <div className={cn('relative grid min-w-0 max-w-[85%] flex-1 gap-2 rounded-xl rounded-tl-sm border bg-card px-3 py-2 max-sm:max-w-full', className)}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="min-w-0 font-medium wrap-anywhere">
             <Sensitive length={8}>{a.display_name}</Sensitive>
           </span>
-          {m.kind === 'approval' ? (
-            !live && <Badge variant="secondary">{t('agents.approval.asked')}</Badge>
-          ) : failed ? (
+          {head}
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** An answer of the agent: a turn of the conversation (its steps shown as in a session) or the result of a run of
+ *  an automation (its steps folded, Reply goes on with it). */
+function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: AgentDetail; chat: boolean; onReply: (m: AgentMessage) => void }) {
+  const t = useT()
+  const [open, setOpen] = React.useState(false)
+  const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
+  const failed = m.ok === false
+  const long = (m.text || '').length > FOLD_CHARS
+  const steps: Step[] = (m.tools || []).map((s) => ({ name: s.name, summary: s.summary, state: s.error ? 'error' : 'ok' }))
+  const total = Math.max(m.tools_total || 0, steps.length)
+  return (
+    <AgentBubble
+      agent={a}
+      className={cn(failed && 'border-destructive/40')}
+      head={
+        <>
+          {failed ? (
             <span className="inline-flex items-center gap-1 text-destructive">
               <XCircle className="size-3" /> {t('agents.thread.failed')}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-success">
-              <CheckCircle2 className="size-3" /> {t('agents.thread.done')}
-            </span>
+            !chat && (
+              <span className="inline-flex items-center gap-1 text-success">
+                <CheckCircle2 className="size-3" /> {t('agents.thread.done')}
+              </span>
+            )
           )}
-          {when}
-          {m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
-        </div>
-        {m.kind === 'approval' ? (
-          <ThreadApprovalBody m={m} live={live} decided={decided} />
-        ) : m.text ? (
-          <div className="grid min-w-0">
+          <When at={m.at} />
+          {!chat && m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
+        </>
+      }
+    >
+      {steps.length > 0 && (chat ? <StepList steps={steps} total={total} /> : <StepsFold steps={steps} total={total} />)}
+      {wroteMemory(steps) && <ChangeLine icon={Brain} text={t('agents.flow.memory')} />}
+      <div className="grid min-w-0" onContextMenu={onContextMenu} {...touch}>
+        {menu}
+        {m.text ? (
+          <>
             <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
               <Sensitive block>
                 <AnswerText text={m.text} />
@@ -634,30 +627,146 @@ function ThreadMessage({
             <Sensitive block>
               <MessageMedia text={m.text} />
             </Sensitive>
-          </div>
+          </>
         ) : (
           <span className="text-sm text-muted-foreground italic">{t('agents.thread.noText')}</span>
         )}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {long && (
-            <button type="button" className="text-xs text-primary hover:underline pointer-coarse:min-h-10" onClick={() => setOpen((o) => !o)}>
-              {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
-            </button>
-          )}
-          {onReply && m.kind === 'result' && m.session && m.session !== a.chat_session && (
-            <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary pointer-coarse:min-h-10" onClick={() => onReply(m)} data-testid="agent-reply">
-              <Reply className="size-3" /> {t('agents.conv.reply')}
-            </button>
-          )}
-          {sessionLink}
-          {m.kind === 'result' && m.session && <ContinueButton agent={a} sid={m.session} variant="link" />}
-        </div>
       </div>
-    </div>
+      {chat && <ResultLine model={m.model} ms={m.duration_ms} cost={m.cost} />}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {long && (
+          <button type="button" className="text-xs text-primary hover:underline pointer-coarse:min-h-10" onClick={() => setOpen((o) => !o)}>
+            {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
+          </button>
+        )}
+        {!chat && m.session && (
+          <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary pointer-coarse:min-h-10" onClick={() => onReply(m)} data-testid="agent-reply">
+            <Reply className="size-3" /> {t('agents.conv.reply')}
+          </button>
+        )}
+        {m.session && (
+          <Link to={agentRunRoute(a.path, m.session)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
+            <PlayCircle className="size-3" /> {chat ? t('agents.flow.details') : t('agents.thread.openRun')}
+          </Link>
+        )}
+        {!chat && m.session && <ContinueButton agent={a} sid={m.session} variant="link" />}
+      </div>
+    </AgentBubble>
   )
 }
 
-const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
+/** A turn going on now: its steps as they come, what it writes, Stop - for a run as for the conversation. */
+function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: string; chat: boolean; onWrite: () => void }) {
+  const t = useT()
+  const log = useSessionLog(sid)
+  const stop = useStopSession()
+  const waiting = (a.waiting || 0) > 0
+  const { steps, text } = React.useMemo(() => {
+    let from = 0
+    for (let i = log.items.length - 1; i >= 0; i--)
+      if (log.items[i].kind === 'user') {
+        from = i + 1
+        break
+      }
+    const steps: Step[] = []
+    let text = ''
+    for (const it of log.items.slice(from)) {
+      if (it.kind === 'tool') steps.push({ name: it.use.name, summary: it.use.summary || '', state: !it.result ? 'running' : it.result.is_error ? 'error' : 'ok' })
+      else if (it.kind === 'assistant') text = it.ev.text || ''
+    }
+    return { steps, text }
+  }, [log.items])
+  React.useLayoutEffect(onWrite, [steps.length, text, onWrite])
+  const shown = steps.slice(-12)
+  return (
+    <AgentBubble
+      agent={a}
+      testid="agent-live"
+      className={cn(waiting && 'border-warning/40')}
+      head={
+        waiting ? (
+          <span className="inline-flex items-center gap-1 text-warning">
+            <ShieldCheck className="size-3" /> {t('agents.thread.approval')}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-primary">
+            <StatusDot tone="running" pulse className="size-1.5" /> {t('agents.flow.working')}
+          </span>
+        )
+      }
+    >
+      {shown.length > 0 && <StepList steps={shown} total={steps.length} />}
+      {text && (
+        <div className="min-w-0 text-sm" data-testid="agent-live-text">
+          <Sensitive block>
+            <AnswerText text={text} />
+          </Sensitive>
+        </div>
+      )}
+      {!shown.length && !text && <span className="text-sm text-muted-foreground">{t('agents.conv.working', { name: a.display_name })}</span>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50 pointer-coarse:min-h-10" onClick={() => stop.mutate(sid)} disabled={stop.isPending} data-testid="agent-stop">
+          <Square className="size-3" /> {t('agents.flow.stop')}
+        </button>
+        <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
+          <PlayCircle className="size-3" /> {chat ? t('agents.flow.details') : t('agents.thread.openRun')}
+        </Link>
+      </div>
+    </AgentBubble>
+  )
+}
+
+/** The other messages of the thread: a note, a run not started (and why), a request for the owner's OK. */
+function ThreadMessage({
+  m, agent: a, crons, live, decided,
+}: {
+  m: AgentMessage
+  agent: AgentDetail
+  crons: Cron[]
+  /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
+  live?: Approval
+  decided?: AgentMessage
+}) {
+  const t = useT()
+  if (m.kind === 'note')
+    return (
+      <Divider>
+        <Sensitive>{m.text}</Sensitive> · <When at={m.at} />
+      </Divider>
+    )
+  if (m.kind === 'skip')
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm sm:ml-10" data-kind="skip">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <span>
+            {t('agents.thread.skipped', { from: triggerLabel(t, m, crons) })} <span className="text-muted-foreground">{reasonText(t, m.reason) || m.text}</span>
+          </span>
+          <When at={m.at} />
+        </div>
+      </div>
+    )
+  // approval: the agent asks
+  return (
+    <AgentBubble
+      agent={a}
+      className={cn(live && 'max-w-full border-warning/40 bg-warning/5')}
+      head={
+        <>
+          {!live && <Badge variant="secondary">{t('agents.approval.asked')}</Badge>}
+          <When at={m.at} />
+        </>
+      }
+    >
+      <ThreadApprovalBody m={m} live={live} decided={decided} />
+      {m.session && (
+        <Link to={agentRunRoute(a.path, m.session)} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
+          <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
+        </Link>
+      )}
+    </AgentBubble>
+  )
+}
 
 /** What the conversation hands to the box: a quoted selection (`from`: the agent that wrote it, null = the owner). */
 type AgentComposerApi = { quote: (text: string, from: string | null) => void }
@@ -665,6 +774,7 @@ type AgentComposerApi = { quote: (text: string, from: string | null) => void }
 function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
   const run = useRunAgent()
+  const fresh = useNewAgentChat()
   const [model, setModel] = React.useState(a.chat_model || a.model || '')
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
@@ -799,6 +909,13 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
       {a.enabled && !replyTo && (
         <div className="mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
           <ModelPicker chosen={model} onChange={setModel} />
+          {a.chat_session && (
+            <Tooltip content={t('agents.chat.newHint')}>
+              <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-muted-foreground" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">
+                <MessageSquarePlus /> {t('agents.chat.new')}
+              </Button>
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

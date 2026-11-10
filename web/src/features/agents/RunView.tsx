@@ -32,9 +32,9 @@ export function RunView() {
   // Not a run of this agent (an old link, a session moved away): open it where it lives.
   if (session && session.path !== path) return <Navigate to={sessionsUrl(session)} replace />
 
-  // the owner's conversation (an older one, read again) goes back to the Conversation tab, a run to the Runs tab
+  // back to the agent's flow (the conversation and its runs are in it)
   const chat = !!a && (sid === a.chat_session || sid === a.last_chat_session)
-  const back = agentRoute({ project, topic, name }) + (chat ? '' : '?tab=runs')
+  const back = agentRoute({ project, topic, name })
   const running = session?.state === 'running'
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="agent-run-view">
