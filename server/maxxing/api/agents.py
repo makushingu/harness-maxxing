@@ -99,7 +99,6 @@ class AgentIn(BaseModel):
     writable: Optional[list[str]] = Field(default=None, max_length=20)
     rules: Optional[list[Rule]] = Field(default=None, max_length=20)
     subagent: Optional[bool] = None
-    chat: Optional[bool] = None          # the owner's messages go on in one conversation
     chat_model: Optional[str] = Field(default=None, max_length=80)   # its model ("" = model)
     mail: Optional[list[dict]] = Field(default=None, max_length=10)    # mailboxes of the E-mail page (mail/access.py)
 

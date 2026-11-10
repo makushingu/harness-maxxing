@@ -13,6 +13,12 @@ from maxxing import agents
 A = "projects/acme/topics/blog/agents/writer"
 
 
+def _run(text: str, **kw) -> dict:
+    """A run that is not the owner's conversation (a script's `maxxing agents run`): a session of its own."""
+    from maxxing import agents
+    return agents.fire(A, trigger="manual", prompt=text, source="command line", **kw)
+
+
 def _on(client) -> None:
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
 
@@ -60,7 +66,7 @@ def test_create_folder_tree_and_paths(client, topic, mx):
 
 def test_update_role_settings_and_runner_flags(client, topic):
     _on(client)
-    before = _create(client, chat=False)["avatar"]
+    before = _create(client)["avatar"]
     r = client.patch(f"/api/agents/acme/blog/writer", json={
         "description": "New role.", "model": "sonnet", "permission_mode": "acceptEdits",
         "allowed_tools": ["Read", "Bash(git:*)"], "limits": {"usd_per_day": 1.5}, "avatar": {"face": "wink"}})
@@ -69,7 +75,7 @@ def test_update_role_settings_and_runner_flags(client, topic):
     assert a["description"] == "New role." and a["limits"]["usd_per_day"] == 1.5 and a["limits"]["runs_per_hour"] == 6
     assert a["avatar"]["face"] == "wink" and a["avatar"]["color"] == before["color"]
     assert client.patch("/api/agents/acme/blog/writer", json={"permission_mode": "nope"}).status_code == 422
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL write"}).json()
+    run = _run("NOTOOL write")
     assert run["started"]
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
@@ -194,8 +200,8 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
 def test_an_agent_turn_has_one_system_note_with_the_owner_note_and_the_subagents_rule(client, topic):
     from maxxing.sessions import spawn
     _on(client)
-    _create(client, chat=False)
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    _create(client)
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert argv.count("--append-system-prompt") == 1        # Claude Code keeps only the last of several
@@ -505,15 +511,15 @@ def _results(client) -> list[dict]:
 
 def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client, topic):
     _on(client)
-    _create(client, chat=False)                          # one session per message (agents made before `chat`)
-    first = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL plan the post"}).json()
+    _create(client)
+    first = _run("NOTOOL plan the post")
     sid = first["session"]["id"]
     wait_idle(client, sid)
     res = wait_for(lambda: _results(client))
     a = client.get("/api/agents/acme/blog/writer").json()
     assert a["thread_unread"] == 1 and a["running_sessions"] == [] and a["waiting"] == 0
     # reply to the result: the same session goes on (no new session, the task is not framed)
-    r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL now point 2", "reply_to": res[-1]["id"]}).json()
+    r = _run("NOTOOL now point 2", reply_to=res[-1]["id"])
     assert r["started"] and r["continued"] and r["session"]["id"] == sid
     wait_idle(client, sid)
     assert _calls()[-1]["prompt"] == "NOTOOL now point 2"
@@ -521,13 +527,13 @@ def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client,
     assert runs[-1]["reply_to"] == res[-1]["id"] and runs[-1]["session"] == sid
     wait_for(lambda: len(_results(client)) == 2)
     # a new message (no reply): a new session, with the last results as framed context
-    n = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL something else"}).json()
+    n = _run("NOTOOL something else")
     assert n["session"]["id"] != sid and not n.get("continued")
     wait_idle(client, n["session"]["id"])
     p = _calls()[-1]["prompt"]
     assert p.startswith("NOTOOL something else") and "your last results in your thread" in p and "THREAD-" in p
     # an unknown reply_to: a new session as usual
-    x = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL x", "reply_to": "nope"}).json()
+    x = _run("NOTOOL x", reply_to="nope")
     assert x["started"]
     wait_idle(client, x["session"]["id"])
     wait_for(lambda: len(_results(client)) == 4)        # its result is in before seen (a later one is unread again)
@@ -603,8 +609,8 @@ def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeyp
 def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
     from maxxing import agents
     _on(client)
-    _create(client, chat=False)
-    run = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()["session"]["id"]
+    _create(client)
+    run = lambda t: _run(f"NOTOOL {t}")["session"]["id"]
     archived = lambda sid: client.get(f"/api/sessions/{sid}").json()["archived"]
     a = run("one")
     wait_idle(client, a)
@@ -870,7 +876,7 @@ def test_a_silent_agent_works_without_calling_the_user(client, topic, monkeypatc
 def test_the_owner_chats_in_one_conversation(client, topic, monkeypatch):
     from maxxing.sessions import store
     _on(client)
-    assert _create(client)["chat"] is True                  # on for new agents
+    _create(client)
     say = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()
     first = say("one")
     sid = first["session"]["id"]
@@ -923,16 +929,16 @@ def test_the_owner_chats_in_one_conversation(client, topic, monkeypatch):
     assert say("seven")["session"]["id"] != n["session"]["id"]
 
 
-def test_agents_made_before_chat_keep_one_session_per_message(client, topic):
+def test_agents_made_before_the_conversation_have_it_too(client, topic):
     _on(client)
     _create(client)
     f = agents.folder(A) / "agent.json"
     data = json.loads(f.read_text())
-    data.pop("chat")                                      # an agent.json written before the field existed
+    data["chat"] = False                                  # an agent.json of a beta that had the switch
     f.write_text(json.dumps(data))
-    assert agents.load(A)["chat"] is False
+    assert "chat" not in agents.load(A)
     one = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL one"}).json()
     wait_idle(client, one["session"]["id"])
     two = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL two"}).json()
-    assert two["session"]["id"] != one["session"]["id"]
+    assert two["session"]["id"] == one["session"]["id"]
     wait_idle(client, two["session"]["id"])

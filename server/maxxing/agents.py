@@ -76,7 +76,7 @@ LIMITS = {  # name: (default, min, max)
     "timeout_s": (1800, 60, 86400),
     "debounce_s": (60, 0, 3600),               # feed / Telegram events closer than this go in one turn
     "approval_timeout_s": (1800, 30, 86400),   # `approvals`: a tool call nobody answered is denied after this
-    "chat_idle_h": (6, 0, 720),                # `chat`: after this long without a message, a new conversation (0 = never)
+    "chat_idle_h": (6, 0, 720),                # the owner's conversation: after this long without a message, a new conversation (0 = never)
 }
 TRIGGER_KINDS = ("feed",)                      # stored in agent.json; cron triggers are cron jobs (crons.py)
 MAX_TRIGGERS = 10
@@ -516,8 +516,6 @@ def clean(data: Any, strict: bool = False) -> dict:
             "sandbox": bool(d.get("sandbox")), "domains": _clean_domains(d.get("domains"), strict),
             "writable": _clean_writable(d.get("writable"), strict), "rules": _clean_rules(d.get("rules"), strict),
             "subagent": bool(d.get("subagent")), "mail": _clean_mail(d.get("mail"), strict),
-            # chat: the owner's messages go on in one conversation (off for agents made before it existed)
-            "chat": bool(d.get("chat")),
             # chat_model: the model of the owner's conversation ("" = `model`)
             "chat_model": chat_model,
             "limits": limits, "triggers": triggers,
@@ -570,7 +568,7 @@ OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep
               "(what and why); the owner applies it.")
 
 
-# The owner's conversation (`chat`) is the agent's manager: it changes its own role, memory, triggers and
+# The owner's conversation is the agent's manager: it changes its own role, memory, triggers and
 # schedules directly (`maxxing agents set|cron|webhook|watch|on|off` on itself); a change of what keeps it safe
 # (SECURITY_FIELDS, SECURITY_LIMITS) waits for the owner's OK (request_change). Its runs keep their own rules.
 SECURITY_FIELDS = ("sandbox", "domains", "keys", "permission_mode", "approvals", "trust_outside", "writable", "rules",
@@ -826,7 +824,7 @@ def public(path: str, stats: dict | None = None) -> dict:
     return {"path": path, "project": p[0], "topic": p[1], "name": p[2], "display_name": a["name"] or p[2],
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
-                "silent", "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent", "chat",
+                "silent", "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
                 "chat_model", "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": 0 if a["silent"] else st.get("unread", 0)}
@@ -891,7 +889,7 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
         raise AgentError(409, "too_many", f"At most {MAX_PER_TOPIC} agents per topic")
     f = dict(fields or {})
     description = _utf8(str(f.pop("description", "") or ""))
-    data = clean({"sandbox": True, "chat": True, **f, "created": time.time()}, strict=True)
+    data = clean({"sandbox": True, **f, "created": time.time()}, strict=True)
     try:
         folder(path).mkdir(parents=True)
     except FileExistsError:                             # created by a request at the same moment
@@ -1379,7 +1377,7 @@ def _open_chat(path: str) -> str | None:
     """The conversation the owner's next message goes on in (None: the next one starts a new session)."""
     try:
         a = load(path)
-        return _chat_session(path, a) if a["chat"] else None
+        return _chat_session(path, a)
     except Exception:  # noqa: BLE001 - a status never fails on it
         return None
 
@@ -1602,7 +1600,7 @@ def _owner_chat(trigger: str, source: str, text: str) -> bool:
 
 
 def _chat_session(path: str, a: dict) -> str | None:
-    """The conversation the owner's next message goes on in (`chat` on), None = a new one: none yet, gone, failed,
+    """The conversation the owner's next message goes on in, None = a new one: none yet, gone, failed,
     or silent for longer than limits.chat_idle_h."""
     from .sessions import service, store
     c = _read_state(path).get("chat")
@@ -1639,7 +1637,7 @@ def _joins_running(path: str, reply_to: str | None) -> bool:
         a = load(path)
     except Exception:  # noqa: BLE001
         return False
-    sid = _reply_session(path, reply_to) if reply_to else (_chat_session(path, a) if a["chat"] else None)
+    sid = _reply_session(path, reply_to) if reply_to else _chat_session(path, a)
     m = store.read_cached(sid) if sid else None
     return bool(m and (m.get("state") == "running" or m.get("queue")))
 
@@ -1721,7 +1719,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     sid = _reply_session(path, reply_to) if reply_to else None
     if sid and not owner and _is_manager(sid):
         sid = None                                      # outside text never enters the owner's conversation
-    chat = owner and a["chat"]
+    chat = owner
     if not sid and chat:
         sid = _chat_session(path, a)
     own = {"owner": True} if owner else {}

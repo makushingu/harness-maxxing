@@ -7,8 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 
-- **Agent chat**: `agent.json` `chat` (bool; `create()` sets it,
-  missing = off for older agents) + `limits.chat_idle_h` (6, 0-720). `agents._fire`: the owner's own words
+- **Agent chat** (every agent, no switch: a `chat` key left in an agent.json is dropped by `clean()`):
+  `limits.chat_idle_h` (6, 0-720). `agents._fire`: the owner's own words
   (`_owner_chat`: trigger manual/telegram, source manual/telegram, no outside `text`) go on in the session kept in
   `<state>/agents/<key>.json` `chat: {session, at}` (`_chat_session`: gone, failed, other path or idle > chat_idle_h
   -> new session, which gets `context()` as before). `new_chat()` + `POST /api/agents/{p}/{t}/{n}/chat/new` +

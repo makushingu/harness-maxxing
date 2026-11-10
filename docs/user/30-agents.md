@@ -134,14 +134,13 @@ The page is a **conversation** with the agent, like a contact in a chat app:
 - **Its results**: one card per answer, long ones folded (**Read all**), with the cost and a link to the session. While
   it works, the "working…" bubble shows what it is writing and the command it runs, as it comes, and links to the live
   session; when it waits for your OK, the bubble says so.
-- **Writing to it is a chat** (**One conversation**, on for new agents): your messages, here or on Telegram, go on in
+- **Writing to it is a chat**: your messages, here or on Telegram, go on in
   **the same session**. The agent remembers everything you said and what it already read or did, so it answers faster
   and costs less (Claude reuses the conversation instead of starting over). A message typed while it works waits for
   its turn in the same conversation. Under the box, **New conversation** starts a fresh one with your next message; a
   new one also starts by itself after 6 hours without a message (**New conversation after**, in Settings -> Limits;
   0 = never) or when the last one failed. A new conversation gets the agent's last results as context, so "and the
-  second point?" still makes sense. Agents made before this option keep a new session per message until you switch
-  **One conversation** on in their Settings -> Limits.
+  second point?" still makes sense.
 - **In the conversation, the agent manages itself** (see [Who changes an agent](#who-changes-an-agent)): ask it to
   rewrite its role, add a schedule or stop a webhook, and it does it. A change of its safety settings shows up as a
   card to allow, and a command that needs more than its sandbox asks you first. Its conversation can use another
@@ -219,7 +218,7 @@ which starts A) stop after 3 hops, like `maxxing agents send`.
 | **On / off** | on | an agent switched off starts for nothing (its schedule runs are skipped) |
 | **Daily budget** | 2 USD | once today's sessions of the agent cost that much, it waits until tomorrow (the day of your time zone in Settings); a turn that reaches it is stopped in the middle (Claude Code `--max-budget-usd`); a run holds what is left of the day until it ends, so a trigger meanwhile is skipped (feed events wait for it) (0 = no budget; 0.01 USD at least otherwise, 1000 at most) |
 | **Runs per hour** | 6 | more starts by its triggers and scripts in the same hour are refused (0 = no limit, 120 at most); your own messages (agent page, Telegram) never count. A negative value or one above the maximum is refused when you save |
-| **New conversation after** | 6 h | with **One conversation** on: after this long without a message, your next one starts a new conversation (0 = never, 720 at most) |
+| **New conversation after** | 6 h | after this long without a message, your next one starts a new conversation (0 = never, 720 at most) |
 | **Time limit** | 30 min | a run is stopped after this |
 | **Grouping delay** | 60 s | events closer than this go into one run |
 
@@ -258,7 +257,7 @@ Turn on **Telegram** in the agent's settings: it gets its **own thread** in your
 (`🤖 Writer · acme/blog`). Each result is posted there, and anything you write there - text, a photo, a file, a voice
 note - starts the agent with it as the task (the bot answers "⏳ Writer is on it.", or why it did not start). An
 album, a long text Telegram splits, or a forward with your comment start **one** run.
-With **One conversation** on, your messages there go on in the same conversation as on the agent page, and `/new`
+Your messages there go on in the same conversation as on the agent page, and `/new`
 starts a new one. **Reply** to one of its results to go on with that result's session. The other commands
 (`/stop`...) work in session threads, not here. Without threads (topics off for the bot), results come into
 the main chat with the agent's name in front. See [Telegram](telegram).
@@ -332,7 +331,7 @@ You, and the agent when **you** ask it in its conversation.
   is refused; when something should change, the run says so in its answer. Without the sandbox nothing can stop a run
   from editing its files, so a run that changes its `agent.json` or `CLAUDE.md` is reported in its conversation
   ("This run changed ...").
-- **Its conversation with you** (with **One conversation** on) is its manager. It may rewrite its role (`CLAUDE.md`)
+- **Its conversation with you** is its manager. It may rewrite its role (`CLAUDE.md`)
   and its memory, add, change or remove its schedules (`maxxing agents cron <agent> --job <id> --schedule … | --off |
   --remove`), add webhooks and feed triggers, switch itself off and change its other settings (`maxxing agents set
   <agent> FIELD=VALUE`: name, model, Telegram, limits such as **New conversation after**). Only on itself: never

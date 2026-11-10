@@ -10,8 +10,8 @@ New:
   instead of starting a new session each time. It remembers what you said and what it already did, answers faster
   and costs less; a message typed while it works waits for its turn. **New conversation** (under the box, or `/new`
   on Telegram) starts a fresh one, and so do 6 hours without a message (adjustable). Its schedules, webhooks,
-  e-mails and other agents still start sessions of their own. On for new agents; for an existing one, switch on
-  **One conversation** in its Settings -> Limits. While it works, the conversation shows what it writes as it comes.
+  e-mails and other agents still start sessions of their own. Every agent works this way, existing ones too.
+  While it works, the conversation shows what it writes as it comes.
   Your own messages no longer count in its runs per hour.
 - **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
   add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what

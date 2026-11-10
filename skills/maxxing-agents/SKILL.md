@@ -115,12 +115,11 @@ another `source` than the ones its own feed triggers watch: from its own turn, `
 source (exit 2).
 
 ## Sessions of an agent (how a conversation works)
-- **The owner's messages are a chat** (`chat: true` in agent.json, the default for new agents; "One conversation"
-  in its Settings -> Limits): what the user types on the agent page or in its Telegram thread goes on in **one
+- **The owner's messages are a chat** (every agent): what the user types on the agent page or in its Telegram thread goes on in **one
   session** (kept in the agent's state, `chat`), so it keeps its whole context. A new conversation starts after
   `limits.chat_idle_h` hours without a message (6; 0 = never), when the last one failed, or on **New conversation**
   (`POST /api/agents/<p>/<t>/<a>/chat/new`, Telegram `/new` in its thread). The owner's messages never count in
-  `runs_per_hour`. With `chat` off (agents made before it), each message is a new session.
+  `runs_per_hour`.
 - **That conversation is the agent's manager** (its session has `MAXXING_AGENT_CHAT=1`, set by the server): it may
   edit its own `CLAUDE.md` and memory, and run on **itself only** `maxxing agents show|set|cron|webhook|watch|on|off`
   (`set <agent> FIELD=VALUE …` or `--json '{…}'`, dotted `limits.chat_idle_h=2`; `cron <agent> --job <id>

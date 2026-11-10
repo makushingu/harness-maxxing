@@ -191,11 +191,9 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
             </label>
             <ModelSelect id="ag-model" value={d.model} onChange={(v) => set('model', v)} />
           </div>
-          {a.chat && (
-            <FormField label={t('agents.chat.model')} hint={t('agents.chat.modelHint')}>
-              <ModelSelect id="ag-chat-model" value={d.chatModel} onChange={(v) => set('chatModel', v)} defaultLabel={t('agents.chat.modelSame')} />
-            </FormField>
-          )}
+          <FormField label={t('agents.chat.model')} hint={t('agents.chat.modelHint')}>
+            <ModelSelect id="ag-chat-model" value={d.chatModel} onChange={(v) => set('chatModel', v)} defaultLabel={t('agents.chat.modelSame')} />
+          </FormField>
         </Section>
 
         <Section id="may" title={titles.may} description={t('agents.settings.sec.mayDesc')}>
@@ -242,10 +240,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
         </Section>
 
         <Section id="limits" title={titles.limits} description={t('agents.limits.desc')}>
-          <SettingRow label={t('agents.chat.setting')} description={t('agents.chat.settingDesc')} htmlFor="ag-chat">
-            <Switch id="ag-chat" checked={!!a.chat} onCheckedChange={(v) => patch.mutate({ path: a.path, chat: v })} data-testid="agent-chat" />
-          </SettingRow>
-          <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} chat={!!a.chat} />
+          <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} />
         </Section>
 
         <Section id="claude" title={titles.claude} description={t('agents.settings.sec.claudeDesc')}>

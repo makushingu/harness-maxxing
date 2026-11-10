@@ -167,7 +167,7 @@ function NumberInput({ value, onValue, ...rest }: { value: number; onValue: (n: 
 }
 
 /** Daily budget, runs per hour, time limit, grouping window. */
-export function LimitsFields({ value, onChange, chat }: { value: AgentLimits; onChange: (l: AgentLimits) => void; chat?: boolean }) {
+export function LimitsFields({ value, onChange }: { value: AgentLimits; onChange: (l: AgentLimits) => void }) {
   const t = useT()
   const num = (k: Exclude<keyof AgentLimits, 'chat_idle_h'>, scale = 1) => ({
     value: Math.round((value[k] / scale) * 100) / 100,
@@ -187,7 +187,7 @@ export function LimitsFields({ value, onChange, chat }: { value: AgentLimits; on
       <FormField label={t('agents.limits.debounce')} hint={t('agents.limits.debounceHint')}>
         <NumberInput {...num('debounce_s')} />
       </FormField>
-      {chat && value.chat_idle_h !== undefined && (
+      {value.chat_idle_h !== undefined && (
         <FormField label={t('agents.limits.chatIdle')} hint={t('agents.limits.chatIdleHint')}>
           <NumberInput value={value.chat_idle_h} onValue={(n) => onChange({ ...value, chat_idle_h: Math.round(n) })} data-testid="limit-chat-idle" />
         </FormField>

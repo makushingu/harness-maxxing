@@ -180,15 +180,15 @@ def test_failed_runs_fold_into_one_alert_ended_by_a_good_run(client, topic, mx):
 def test_budget_and_rate_alerts_once_until_the_agent_runs_again(client, topic, mx, monkeypatch):
     from maxxing import agents
     _agent(client)
-    monkeypatch.setattr(agents, "gate", lambda path: "budget")
+    monkeypatch.setattr(agents, "gate", lambda path, owner=False: "budget")
     assert agents.fire(A, trigger="manual")["reason"] == "budget"
     assert agents.fire(A, trigger="manual")["reason"] == "budget"
-    monkeypatch.setattr(agents, "gate", lambda path: "rate")
+    monkeypatch.setattr(agents, "gate", lambda path, owner=False: "rate")
     agents.fire(A, trigger="manual")
     evs = [e for e in feed.list_events(source="agents")["events"]]
     assert sorted(e["ref"] for e in evs) == [f"agent:{A}#budget", f"agent:{A}#rate"]
     assert "daily budget" in feed.find(f"agent:{A}#budget")["title"]
-    monkeypatch.setattr(agents, "gate", lambda path: None)
+    monkeypatch.setattr(agents, "gate", lambda path, owner=False: None)
     r = agents.fire(A, trigger="manual", prompt="NOTOOL go")
     assert r["started"]
     assert feed.find(f"agent:{A}#budget") is None and feed.find(f"agent:{A}#rate") is None

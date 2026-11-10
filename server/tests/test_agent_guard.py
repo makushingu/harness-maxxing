@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from conftest import wait_idle
-from test_agents import A, _calls, _create, _on
+from test_agents import A, _calls, _create, _on, _run
 
 
 def _settings(argv: list[str]) -> dict:
@@ -18,13 +18,13 @@ def _settings(argv: list[str]) -> dict:
 
 def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     _on(client)
-    a = _create(client, chat=False, permission_mode="bypass", domains=["API.github.com", "https://*.example.com/"],
+    a = _create(client, permission_mode="bypass", domains=["API.github.com", "https://*.example.com/"],
                 writable=["drafts", "."])
     assert a["sandbox"] is True and a["domains"] == ["api.github.com", "*.example.com"]
     assert a["writable"] == ["drafts", "."]
     assert client.patch(f"/api/agents/acme/blog/writer", json={"domains": ["bad host!"]}).status_code == 400
     assert client.patch(f"/api/agents/acme/blog/writer", json={"writable": ["../x"]}).status_code == 400
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert "--dangerously-skip-permissions" not in argv
@@ -45,7 +45,7 @@ def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     assert argv[argv.index("--add-dir") + 1] == f"{root}/projects/acme/topics/blog"     # "." holds drafts
     # switched off: the agent's own mode, no sandbox
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert "--dangerously-skip-permissions" in argv and "sandbox" not in _settings(argv)
@@ -260,10 +260,10 @@ def test_templates_bring_their_domains():
 def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch):
     from maxxing import agent_guard, agents
     _on(client)
-    _create(client, chat=False)
+    _create(client)
     root = client.get("/api/workspace/tree").json()["root"]
     (Path(root) / "projects/acme/topics/blog/.mcp.json").write_text("{}")
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     s = _settings(_calls()[-1]["argv"])
     locked = s["sandbox"]["filesystem"]["denyWrite"]
@@ -309,7 +309,7 @@ def test_domain_wildcards_name_a_site_not_an_extension(client, topic, mx):
 
 def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic, mx):
     _on(client)
-    _create(client, writable=["."], chat=False)
+    _create(client, writable=["."])
     assert client.patch("/api/agents/acme/blog/writer", json={"writable": ["agents/other"]}).status_code == 400
     _create(client, name="other")
     root = Path(client.get("/api/workspace/tree").json()["root"])
@@ -317,7 +317,7 @@ def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic,
     (t / "site").mkdir()
     (t / "README.md").write_text("hi")
     (t / "memory.md").write_text("")
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     s = _settings(argv)

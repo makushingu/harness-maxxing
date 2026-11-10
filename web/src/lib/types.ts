@@ -147,8 +147,6 @@ export type Agent = {
   rules: AgentRule[]
   /** callable by Claude as a subagent from the normal sessions of its topic */
   subagent: boolean
-  /** the owner's messages (agent page, Telegram) go on in one conversation instead of a new session each */
-  chat?: boolean
   /** the model of the owner's conversation ('' = `model`) */
   chat_model?: string
   limits: AgentLimits
@@ -307,7 +305,6 @@ export type AgentInput = {
   writable?: string[]
   rules?: AgentRule[]
   subagent?: boolean
-  chat?: boolean
   chat_model?: string
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
