@@ -447,17 +447,21 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
             [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
           ) : error ? (
             <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
-          ) : !rows.length ? (
-            <div className="grid justify-items-center gap-3 py-10 text-center" data-testid="agent-start-chat">
-              <AgentAvatarIcon avatar={a.avatar} size={56} />
-              <p className="text-base font-medium">
-                <Sensitive length={8}>{t(a.description ? 'agents.chat.startTitle' : 'agents.new.startTitle', { name: a.display_name })}</Sensitive>
-              </p>
-              <p className="max-w-md text-sm text-muted-foreground">{t(a.description ? 'agents.chat.startDesc' : 'agents.new.startDesc')}</p>
-              {!a.description && onSuggest && <Suggestions onPick={onSuggest} />}
-            </div>
           ) : (
-            rows.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)
+            <>
+              {rows.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)}
+              {/* nothing said yet (notes such as "Agent created" aside): its greeting, and ideas when it has no role */}
+              {!running.length && !msgs.some((m) => m.kind !== 'note') && (
+                <div className="grid justify-items-center gap-3 py-10 text-center" data-testid="agent-start-chat">
+                  <AgentAvatarIcon avatar={a.avatar} size={56} />
+                  <p className="text-base font-medium">
+                    <Sensitive length={8}>{t(a.description ? 'agents.chat.startTitle' : 'agents.new.startTitle', { name: a.display_name })}</Sensitive>
+                  </p>
+                  <p className="max-w-md text-sm text-muted-foreground">{t(a.description ? 'agents.chat.startDesc' : 'agents.new.startDesc')}</p>
+                  {!a.description && onSuggest && <Suggestions onPick={onSuggest} />}
+                </div>
+              )}
+            </>
           )}
         </div>
         </StepBases.Provider>
