@@ -332,6 +332,29 @@ def test_a_swap_cut_between_its_renames_puts_the_build_back(ui):
     assert webbuild.build_dir().is_dir() and not old.exists()
 
 
+def test_edited_sources_do_not_rerun_the_git_context_on_every_recheck(ui, monkeypatch):
+    import threading
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>being edited</p>\n")
+    calls = []
+    real = webbuild._context
+    monkeypatch.setattr(webbuild, "_context", lambda: calls.append(1) or real())
+    webbuild.forget()
+    threads = [threading.Thread(target=webbuild.active_dist, kwargs={"ttl": 0}) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    for _ in range(10):                                      # rechecks past the 5 s cache
+        assert (webbuild.active_dist(ttl=0) / "index.html").read_text() == "<p>mine</p>\n"
+    assert len(calls) == 1
+    assert run_cli("custom", "save", "My header", "--why", "the user wanted it") == 0   # git moved: looked again
+    webbuild.active_dist(ttl=0)
+    assert len(calls) == 2
+
+
 def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
     import os
     import time
