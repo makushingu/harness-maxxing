@@ -64,17 +64,11 @@ export function CommandPalette() {
   // Async: files, sessions, registered providers.
   const [asyncResults, setAsync] = React.useState<{ q: string; chip?: Chip; cmds: Command[] }>({ q: '', cmds: [] })
   const [loading, setLoading] = React.useState(false)
-  React.useEffect(() => {
-    if (!open || dq.length < 2) {
-      setAsync({ q: '', cmds: [] })
-      setCounts({ q: '', n: {} })
-      return
-    }
-    const ctrl = new AbortController()
-    setLoading(true)
-    // a chip of a type the full-text index holds: that type only, and more of it
-    const kinds = CHIPS.find((c) => c.key === chip)?.kinds
-    const query = kinds ? { q: dq, limit: 60, kinds: kinds.join(',') } : { q: dq, limit: 36 }
+  /** The files, sessions, tasks... and the providers' commands `text` finds; `kind`, a chip of a type the full-text
+   *  index holds, asks for that type only, and more of it. */
+  const search = React.useCallback((text: string, kind: Chip, signal: AbortSignal) => {
+    const kinds = CHIPS.find((c) => c.key === kind)?.kinds
+    const query = kinds ? { q: text, limit: 60, kinds: kinds.join(',') } : { q: text, limit: 36 }
     const fileGroup = t('palette.files')
     // One full-text search (sessions, memory, tasks, file contents: /api/search) + file and folder NAMES
     // (/api/files/search: also finds images, folders, binaries). Content hits come first; a name hit for a
@@ -86,7 +80,7 @@ export function CommandPalette() {
       return m ? groupRoute({ project: m[1], name: m[2] }) : '/agents'
     }
     const content = api
-      .get<SearchResult>('/api/search', query, { signal: ctrl.signal })
+      .get<SearchResult>('/api/search', query, { signal })
       .then((r) =>
         r.results.map<Command>((h) => ({
           // a run of an agent goes with the agents (its chip), the other sessions with the sessions
@@ -113,9 +107,9 @@ export function CommandPalette() {
       )
       .catch(() => [] as Command[])
     const names = api
-      .get<FileSearchHit[]>('/api/files/search', { q: dq }, { signal: ctrl.signal })
+      .get<FileSearchHit[]>('/api/files/search', { q: text }, { signal })
       .then((hits) =>
-        hits.slice(0, chip === 'files' ? 40 : 8).map<Command>((h) => ({
+        hits.slice(0, kind === 'files' ? 40 : 8).map<Command>((h) => ({
           id: `name:${h.path}`,
           title: h.name,
           hint: h.path,
@@ -132,16 +126,26 @@ export function CommandPalette() {
         return [...c, ...n.filter((x) => !paths.has(x.hint))]
       }),
       ...Object.values(providers)
-        .filter((p) => dq.length >= (p.minQuery ?? 2))
-        .map((p) => Promise.resolve(p.search(dq, ctrl.signal)).catch(() => [] as Command[])),
+        .filter((p) => text.length >= (p.minQuery ?? 2))
+        .map((p) => Promise.resolve(p.search(text, signal)).catch(() => [] as Command[])),
     ]
-    Promise.all(tasks).then((all) => {
+    return Promise.all(tasks).then((all) => all.flat())
+  }, [providers, t])
+  React.useEffect(() => {
+    if (!open || dq.length < 2) {
+      setAsync({ q: '', cmds: [] })
+      setCounts({ q: '', n: {} })
+      return
+    }
+    const ctrl = new AbortController()
+    setLoading(true)
+    search(dq, chip, ctrl.signal).then((cmds) => {
       if (ctrl.signal.aborted) return
-      setAsync({ q: dq, chip, cmds: all.flat() })
+      setAsync({ q: dq, chip, cmds })
       setLoading(false)
     })
     return () => ctrl.abort()
-  }, [dq, open, providers, t, chip])
+  }, [dq, open, search, chip])
 
   const close = () => setOpen(false)
   const run = (c: Command) => {
@@ -261,6 +265,16 @@ export function CommandPalette() {
   React.useEffect(() => {
     if (asyncResults.q === dq && (asyncResults.chip ?? 'all') === 'all') setCounts({ q: dq, n: countChips(asyncResults.cmds) })
   }, [asyncResults, dq])
+  // Text refined with a chip picked: the counts of the other chips come from a search over every type too.
+  const countsQ = counts.q
+  React.useEffect(() => {
+    if (!open || dq.length < 2 || chip === 'all' || countsQ === dq) return
+    const ctrl = new AbortController()
+    search(dq, 'all', ctrl.signal).then((cmds) => {
+      if (!ctrl.signal.aborted) setCounts({ q: dq, n: countChips(cmds) })
+    })
+    return () => ctrl.abort()
+  }, [dq, open, chip, countsQ, search])
   const staticN = countChips(matched)
   const asyncN = counts.q === dq ? counts.n : chip === 'all' ? {} : countChips(found)
   // the chip shown: its own longer list once it came
