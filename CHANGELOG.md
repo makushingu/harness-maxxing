@@ -11,14 +11,15 @@ New:
   and costs less; a message typed while it works waits for its turn. **New conversation** (under the box, or `/new`
   on Telegram) starts a fresh one, and so do 6 hours without a message (adjustable). Its schedules, webhooks,
   e-mails and other agents still start sessions of their own. Every agent works this way, existing ones too.
-  While it works, the conversation shows what it writes as it comes.
-  Your own messages no longer count in its runs per hour.
+  On its page the conversation is a session like the ones of the Sessions page (answer as it is written, commands,
+  model picker, Stop); its automations have their own **Runs** tab, and one running now shows as a bar above the
+  conversation. Your own messages no longer count in its runs per hour.
 - **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
   add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what
   keeps it safe (sandbox, sites, keys, approvals, budget...) shows up as a card with the change written out:
   **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
   (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
-  (Settings -> Model).
+  (the model picker in its box).
 - **New Claude models show up by themselves**: once a day Harness Maxxing asks Anthropic which models exist and
   lists the newest Opus, Sonnet, Haiku and Fable everywhere you pick a model (Settings, topics, jobs, agents,
   Telegram `/model`), without waiting for an update. If your default model is the newest of its family, it follows

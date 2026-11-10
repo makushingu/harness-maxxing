@@ -129,7 +129,7 @@ source (exit 2).
   feed and Telegram, 7 days) and prints "waiting for the owner's OK"; once answered, the next owner message starts
   with "Since your last message: …". Sandboxed agents: the conversation keeps the sandbox for Bash (auto-allowed) but
   may run a command outside it (`dangerouslyDisableSandbox`) after an approval; `agent.json` and `.claude/` stay
-  read-only. `chat_model` (empty = `model`) is its model. Outside text never continues it (a reply with outside text
+  read-only. `chat_model` (empty = `model`) is the model a new conversation starts with; the owner changes it in its box. Outside text never continues it (a reply with outside text
   starts a run).
 - Every other start is a **new session** in the agent folder (schedules, webhooks, feed, e-mail, another agent,
   `maxxing agents run` from a script, a Telegram forward = outside text), except a **reply**: `POST

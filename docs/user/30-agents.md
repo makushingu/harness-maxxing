@@ -128,43 +128,37 @@ which files or keys it uses, and what it must never do. Keep it short; it learns
 
 ## The agent page
 
-The page is a **conversation** with the agent, like a contact in a chat app:
+The page has two tabs.
 
-- **What started each run**: your message (on the right), or an event, a schedule, another agent (dashed).
-- **Its results**: one card per answer, long ones folded (**Read all**), with the cost and a link to the session. While
-  it works, the "working…" bubble shows what it is writing and the command it runs, as it comes, and links to the live
-  session; when it waits for your OK, the bubble says so.
-- **Writing to it is a chat**: your messages, here or on Telegram, go on in
-  **the same session**. The agent remembers everything you said and what it already read or did, so it answers faster
-  and costs less (Claude reuses the conversation instead of starting over). A message typed while it works waits for
-  its turn in the same conversation. Under the box, **New conversation** starts a fresh one with your next message; a
-  new one also starts by itself after 6 hours without a message (**New conversation after**, in Settings -> Limits;
-  0 = never) or when the last one failed. A new conversation gets the agent's last results as context, so "and the
-  second point?" still makes sense.
+**Conversation** is your conversation with the agent, and it is a **session** like the ones of the Sessions page: its
+answer shows as it is written, with every command and file, the model picker in the box, **Stop**, plan mode, the
+approvals, files (paperclip, paste, drop), dictation, quotes.
+
+- **It is one conversation**: your messages, here or on Telegram, go on in **the same session**. The agent remembers
+  everything you said and what it already read or did, so it answers faster and costs less. **New conversation** (at
+  the top) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New conversation
+  after**, in Settings -> Limits; 0 = never) or when the last one failed. Before the first message of a new one you
+  pick its model in the box, and **Read the last conversation again** opens the one before. A new conversation gets
+  the agent's last results as context, so "and the second point?" still makes sense.
 - **In the conversation, the agent manages itself** (see [Who changes an agent](#who-changes-an-agent)): ask it to
   rewrite its role, add a schedule or stop a webhook, and it does it. A change of its safety settings shows up as a
-  card to allow, and a command that needs more than its sandbox asks you first. Its conversation can use another
-  model than its runs (**Model of the conversation**, Settings -> Model).
-- **Files**: the paperclip, a paste or a drop attaches up to 10 files to your message (a photo, a PDF, a brief), as in
-  a session. They are saved in the agent's folder, under `attachments/`, and the agent reads them; with the sandbox
-  that folder is read only for the agent. A message can be only files.
-- **The box works like a session's**: a long or structured paste (JSON, CSV, logs, a very long text) becomes an
-  attached file (**Paste as text** in the notice, or Ctrl/⌘+Shift+V, keeps it as text); what you type and the files
-  already uploaded are kept if you reload or leave the page (a file still uploading is not), and a message that could
-  not be sent comes back into the box; the microphone dictates at the cursor; Enter sends,
-  Shift+Enter goes to a new line (on a phone Enter is a new line and the button sends), Ctrl/⌘+Enter sends, Esc leaves
-  the box (or cancels a reply). Select text in the conversation and click **Quote**: it goes into your message as a
-  quote.
+  card to allow, and a command that needs more than its sandbox asks you first.
+- **An automation running now** shows as a bar above the conversation (what started it and what it does); click it to
+  watch the run.
+
+**Runs** shows what its **schedules, webhooks, notifications, e-mails, other agents and commands** started. Each one is
+a session of its own, with its own rules, never mixed with your conversation (a forward on Telegram too: outside text,
+see [Safety](#safety)):
+
+- **What started each run** (dashed), then **its result**: one card per answer, long ones folded (**Read all**), with
+  the cost. While a run works, its "working…" bubble shows what it is writing and the command it runs, as it comes;
+  when it waits for your OK, the bubble says so. A dot on the tab says a run is going on.
+- **Open the run** shows the whole session (every command, every file) right in the Agents page, live, with its box to
+  go on with it and a way back to the Runs tab. A link to an agent's session (Telegram, a notification, the search)
+  opens it there too. A reply in its Telegram thread to one of its results goes on with that run's session.
 - **Its answers** open file links in the preview, show images and videos as thumbnails and audio with a player, and
   have a copy menu. Only the files of the agent's own folders (its folder and its writable folders) get a link or a
   preview: any other path stays plain text, since an answer can repeat text from a mail or a webhook.
-- **Reply** on a result of another session (a schedule run, an older conversation) goes on with **that result's
-  session**: same context, nothing to explain again. A reply in its Telegram thread to one of its results does the
-  same.
-- The **schedule, webhook, notification, e-mail and agent runs stay separate**: each one is a new session of its own,
-  never mixed with your conversation. So does a forward on Telegram (outside text, see [Safety](#safety)).
-- **Open the run** shows the whole session (every command, every file) right in the Agents page, with a way back to
-  the conversation. A link to an agent's session (Telegram, a notification, the search) opens it there too.
 - **Continue in Sessions** turns a run into a normal session of the topic: same history, same Claude thread (the run
   itself does not change), your own permissions instead of the agent's guards. Use it to take over by hand. A run
   continued already opens the same copy again.

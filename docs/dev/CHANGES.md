@@ -20,6 +20,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   ok)`, which posted the previous turn's answer again in a continued session. UI: `AgentPage.tsx` live text/tool in
   `Working` (`useSessionLog`), `ChatLine` divider, New conversation bar, Reply hidden on the open conversation;
   Settings -> Limits switch + `chat_idle_h` field (`LimitsFields chat`).
+- **Agent page = the conversation as a session**: `AgentPage.tsx` `AgentCenter` with tabs (`?tab=runs`): Conversation
+  = `SessionColumn` (solo, `agentRun`) on `chat_session`, or `StartChat` (agent composer + `ModelPicker`, `POST .../run`
+  `model` -> `fire(model=)` = the new chat session's model, default `chat_model` then `model`; link to
+  `last_chat_session`); `AutoRunBar` per running session that is not the owner's (`ownSessions`: chat, last chat,
+  sessions of runs with `owner`/source manual|telegram; a `maxxing agents run` is trigger manual + source
+  `command line` = an automation). Runs = the thread without the owner's sessions, no reply box. `status()` adds
+  `last_chat_session` (`<state>/agents/<key>.json` `last_chat`, set by `new_chat()` and when `_chat_mark` replaces
+  the conversation). The chat notes (change requests answered) go into the manager turn's system note
+  (`run_settings`) instead of the owner's message, so a message typed in the session's own box gets them too.
+  `BUS_TURN_KEYS` += agent one/thread (a run started by another process reaches the page by the session watcher).
+  Settings: the `chat_model` picker is gone from the UI (field kept).
 - **Agent manager (the owner's conversation)**: a new chat session gets `MAXXING_AGENT_CHAT=1` in its meta env and no
   model of its own; `agents.manager_turn(meta)` (chat, no outside, no group) -> `run_settings(manager=True)`: model
   `chat_model` (new agent.json field, "" = `model`) or `model`, `MANAGER_NOTE` instead of `OWNER_NOTE`, approvals on
