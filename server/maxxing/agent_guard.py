@@ -623,7 +623,7 @@ def _manages(turn: dict, words: list[str]) -> bool:
 def check_cli(argv: list[str]) -> str | None:
     """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
-    if not words:
+    if not words or "-h" in argv or "--help" in argv:   # help changes nothing (argparse prints it and exits)
         return None
     turn = agent_turn()
     if turn["tampered"]:

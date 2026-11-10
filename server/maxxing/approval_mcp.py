@@ -153,15 +153,22 @@ def _timeout() -> float:
         return DEFAULT_TIMEOUT_S
 
 
-def ask(args: dict, poll_s: float = POLL_S) -> dict:
-    """One permission prompt: write the request, wait for the answer, return Claude Code's expected object."""
+def ask(args: dict, poll_s: float = POLL_S, ctx: dict | None = None) -> dict:
+    """One permission prompt: write the request, wait for the answer, return Claude Code's expected object.
+    ctx: {folder, session, agent_path, timeout} when the caller is not this MCP server (the runner answering Claude
+    Code's own `can_use_tool` requests), else the environment."""
     tool = str(args.get("tool_name") or "")[:200] or "?"
     tool_input = args.get("input") if isinstance(args.get("input"), dict) else {}
-    folder, timeout = _folder(), _timeout()
+    if ctx:
+        folder, timeout = Path(ctx["folder"]), float(ctx["timeout"])
+        folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    else:
+        folder, timeout = _folder(), _timeout()
     rid = secrets.token_hex(8)
     now = time.time()
-    req = {"id": rid, "session": os.environ.get("MAXXING_SESSION") or "",
-           "agent_path": os.environ.get("MAXXING_AGENT_PATH") or "", "tool": tool, "input": clip(tool_input),
+    req = {"id": rid, "session": (ctx or {}).get("session") or os.environ.get("MAXXING_SESSION") or "",
+           "agent_path": (ctx or {}).get("agent_path") if ctx else os.environ.get("MAXXING_AGENT_PATH") or "",
+           "tool": tool, "input": clip(tool_input),
            "tool_use_id": str(args.get("tool_use_id") or "")[:200], "at": now, "expires": now + timeout,
            "status": "pending"}
     if req["input"] != tool_input:          # what Allow would run is not all shown: it can only be denied

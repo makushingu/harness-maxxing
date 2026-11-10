@@ -62,7 +62,7 @@ def summary(tool: str, inp: Any) -> tuple[str, bool]:
     """`short()` and whether it shows the whole request (False: cut, or other keys left out such as the content of
     a Write). Only a complete summary may be allowed from a one-tap button (feed, Telegram)."""
     inp = inp if isinstance(inp, dict) else {}
-    for k in ("command", "file_path", "notebook_path", "path", "url", "pattern", "query", "prompt", "description"):
+    for k in ("command", "file_path", "notebook_path", "path", "url", "host", "pattern", "query", "prompt", "description"):
         if isinstance(inp.get(k), str) and inp[k].strip():
             text = " ".join(inp[k].split())
             rest = {o for o, v in inp.items() if o != k and v not in (None, "", [], {})} - _MINOR.get(tool, set())

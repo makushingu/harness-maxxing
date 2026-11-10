@@ -147,3 +147,31 @@ def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monke
     capsys.readouterr()
     assert cli.main(["agents", "set", "writer", "approvals=true", "limits.usd_per_day=4"]) == 0
     assert agents.load(A)["approvals"] is True and agents.load(A)["limits"]["usd_per_day"] == 4
+
+
+def test_claude_codes_own_questions_are_asked_in_the_conversation_and_denied_in_runs(client, topic, mx):
+    """The sandbox asks for a host outside the domains on the control channel (can_use_tool): an approval in the
+    conversation, denied at once in a run (unanswered, the turn would wait until its timeout)."""
+    import os
+    from pathlib import Path
+    from maxxing import approvals
+    _on(client)
+    _create(client)
+    out = Path(os.environ["FAKE_CLAUDE_DIR"]) / "asknet.txt"
+    run = agents.fire(A, trigger="cron:c_1", prompt="NOTOOL ASKNET", source="cron")
+    wait_idle(client, run["session"]["id"])
+    assert out.read_text().splitlines() == ["deny"]
+    sid = _say(client, "ASKNET")["session"]["id"]
+    req = wait_for(lambda: [x for x in approvals.pending(sid) if x["tool"] == "SandboxNetworkAccess"])[0]
+    assert req["agent_path"] == A and req["summary"] == "SandboxNetworkAccess: example.org"
+    approvals.decide(req["id"], "allow")
+    wait_idle(client, sid)
+    assert out.read_text().splitlines() == ["deny", "allow"]
+
+
+def test_help_is_never_refused_in_an_agent_turn(monkeypatch):
+    from maxxing import agent_guard
+    monkeypatch.setenv("MAXXING_AGENT", A)
+    assert agent_guard.check_cli(["agents", "cron", "--help"]) is None
+    assert agent_guard.check_cli(["agents", "create", "-h"]) is None
+    assert agent_guard.check_cli(["agents", "create", "a/b/c"])
