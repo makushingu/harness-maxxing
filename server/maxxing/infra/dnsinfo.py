@@ -74,10 +74,21 @@ def resolve(name: str, apex: bool) -> dict:
     return out
 
 
+def _matches(name: str, pattern: str) -> bool:
+    """`x.com` / `.x.com`: that domain or a name under it; `x.`: a label x (any TLD after it); `x`: a label starting
+    with x (awsdns-12). Never a substring: ns1.surname.com is not name.com, evilgithub.io is not github.io."""
+    if pattern.endswith("."):
+        return ("." + pattern) in ("." + name)
+    if "." not in pattern:
+        return any(label.startswith(pattern) for label in name.split("."))
+    p = pattern.lstrip(".")
+    return name == p or name.endswith("." + p)
+
+
 def dns_provider(ns: list[str]) -> str | None:
     for n in ns or []:
         for suffix, p in NS_PROVIDERS:
-            if suffix in n:
+            if _matches(n, suffix):
                 return p
     return "other" if ns else None
 
@@ -86,7 +97,7 @@ def hosted_by(info: dict) -> str | None:
     """The platform behind an address, from its CNAME chain then its IPs (our own servers are matched in build.py)."""
     for cn in info.get("cname") or []:
         for suffix, h in CNAME_HOSTS:
-            if cn.endswith(suffix.lstrip(".")) or suffix in cn:
+            if _matches(cn, suffix):
                 return h
     from .build import behind_cloudflare
     for ip in info.get("a") or []:

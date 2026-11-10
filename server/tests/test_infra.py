@@ -1264,3 +1264,14 @@ def test_a_malformed_probe_answer_costs_only_its_server(monkeypatch):
     servers = [{"name": n, "host": "h.example.com", "user": n} for n in answers]
     res = {r["id"]: r for r in build.build({build.LOCAL: {}, **probes}, servers, {}, {}, {}, {}, "/w", None)}
     assert res["server:a"]["status"] == "down" and "server:b" in res
+
+
+def test_dns_providers_and_hosts_match_whole_labels():
+    from maxxing.infra import dnsinfo
+    assert dnsinfo.dns_provider(["ns1.surname.com"]) == "other"
+    assert dnsinfo.dns_provider(["ns1.name.com"]) == "name.com"
+    assert dnsinfo.dns_provider(["ns-12.awsdns-34.org"]) == "aws" and dnsinfo.dns_provider(["ns1.dns-parking.com"]) == "hostinger"
+    assert dnsinfo.dns_provider(["ns1045.ui-dns.de"]) == "ionos" and dnsinfo.dns_provider(["ns1.notui-dns.de"]) == "other"
+    assert dnsinfo.hosted_by({"cname": ["evilgithub.io"]}) is None
+    assert dnsinfo.hosted_by({"cname": ["me.github.io"]}) == "github"
+    assert dnsinfo.hosted_by({"cname": ["cname.vercel-dns.com"]}) == "vercel"
