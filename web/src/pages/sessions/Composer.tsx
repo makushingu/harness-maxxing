@@ -550,7 +550,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
                     }}
                     disabled={clearingQueue}
                     aria-label={t('sessions.queue.clear')}
-                    className="ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="relative ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     <X className="size-3.5" />
                   </button>
@@ -616,7 +616,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
                       type="button"
                       onClick={() => setQuotes([])}
                       aria-label={t('sessions.quote.clear')}
-                      className="ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      className="relative ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       <X className="size-3.5" />
                     </button>
