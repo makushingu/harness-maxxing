@@ -19,6 +19,15 @@ New:
   of doing the work in the conversation.
 - **Talk to an agent from the Office**: a click on its desk opens its conversation next to the Office (a sheet on a
   phone) instead of leaving it; its page is one click away. Office views made by an extension can open it too.
+- **A new agent sets itself up**: **New agent** asks only for a name and a place, then opens its conversation. Tell
+  it what you want: it writes its role and its schedule, asks about its freedoms (mails, sites, keys, asking you
+  first) and adjusts its settings. The ready-made agents show as ideas in that empty conversation. "Edit with Claude"
+  is gone: ask the agent itself.
+- **New agents are free, like a session**: no sandbox by default, so they just work. One that reads text from
+  outside (a mailbox, a webhook, the feed) is better **Protected**: its settings say so, and it proposes it itself.
+  Existing agents keep their setting. A change that only makes an agent safer no longer waits for your OK.
+- **Simpler agent settings**: four sections - Essentials, Protection (Free or Protected), E-mail (once it has a
+  mailbox) and Advanced, folded.
 - **Fewer requests in an agent's conversation**: in its sandbox, the agent no longer asks before reading files,
   searching the web or opening a page of its sites. It still asks to leave its sandbox, to open another site and to
   change a safety setting.

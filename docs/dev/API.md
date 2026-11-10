@@ -433,7 +433,7 @@ AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?
                keys: the only vault entries its runs get as env vars (none by default, exposed or not).
 Agent  = {path, project, topic, name (folder slug), display_name, description, avatar: Avatar, enabled, model,
           permission_mode, allowed_tools, disallowed_tools, telegram, approvals, trust_outside, keys, limits: Limits,
-          triggers: [Trigger], sandbox: bool (false when missing: agents made before the sandbox; true for new ones),
+          triggers: [Trigger], sandbox: bool (false when missing: agents made before the sandbox; new ones: false, true with a mailbox or a feed trigger),
           domains: [host] (sandbox network allow list, "*.x" ok), writable: [folder of the topic, "." = all],
           rules: [{tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match, reason}], subagent: bool,
           created, session_count, archived_count, running, unread}

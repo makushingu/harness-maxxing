@@ -87,19 +87,16 @@ its commits (the clone's local `.git/info/exclude`).
 
 ## Create an agent
 
-**Agents -> New agent** first asks where it lives: the project, then the topic (already filled in when the list is
-narrowed to one topic). Then pick how to set it up:
+**Agents -> New agent** asks for a **name** and **where it lives** (the project, then the topic; already filled in
+when the list is narrowed to one topic), draws its pixel character (the dice draws another), then **Create and talk**:
+the agent is made empty and **its conversation opens**. Tell it what you want ("every Monday morning, sum up the
+players' feedback and suggest 3 improvements"): it writes its role, adds its schedule or its triggers, then asks
+you the few questions its work needs about its **freedoms** - will it read mails, webhooks or web pages (then it
+proposes its sandbox, with the sites it needs), which keys of the vault it needs, whether it should ask you before
+acting - and changes those settings when it makes sense. It ends with a short summary of how it is set up.
 
-- **With Claude**: a new session of that topic opens in **Sessions** with the request already started in its box (not
-  sent). Finish the sentence with what it should do and when ("every Monday morning, sum up the players' feedback and
-  suggest 3 improvements") and send. Claude writes the role, picks the trigger, asks only what is missing (a few
-  questions at most), shows you a summary, creates the agent, gives you its webhook address if it has one and offers a
-  test run. You can ask the same thing in any session.
-- **By hand**: the form, on that topic (see below).
-
-With no agent yet, the Agents page shows the same choice.
-
-Or start from a **ready-made agent** (in the creation sheet, or on the empty Agents page):
+With no agent yet, the Agents page shows the same form. The empty conversation of a new agent offers **ideas**, the
+ready-made jobs below: a click puts the request in the box, to change or send.
 
 | Agent | When | What it does |
 |---|---|---|
@@ -112,21 +109,12 @@ Or start from a **ready-made agent** (in the creation sheet, or on the empty Age
 | **Site monitor** | every hour | checks the sites listed in its role, speaks only when one is down |
 | **Feedback analyst** | webhook | groups user feedback and proposes improvements |
 
-It fills the steps below: check them, change what you want, create. Each one is set up safely: it may only read,
-learn in its memory and do the few things its role needs (for example `curl` for the sales one), its webhook runs ask
-before anything else, and the keys it suggests are checked only if your Keys vault holds them (the read-only ones
-never suggest a full Stripe key `STRIPE_SECRET_KEY`: store a restricted key as `STRIPE_RESTRICTED_KEY`). The blue note at the
-top says what is left to connect (a webhook address in Shopify, a key, the list of sites). From the command line:
-`maxxing agents templates`, then `maxxing agents create acme/shop/sales --template sales`. Both ways give the same
-settings, the sites it may reach (`api.stripe.com`...) included.
+From the command line, the same jobs come ready-made with their safe settings (read-only tools, the sites they reach,
+the keys they suggest if your vault holds them): `maxxing agents templates`, then
+`maxxing agents create acme/shop/sales --template sales`. You can also ask for an agent in any session ("I want an
+agent that..."): Claude creates it and gives you the link to its conversation.
 
-**By hand** gives the three steps (the first one already filled in):
-
-1. **Where**: the project and the topic it works in.
-2. **Who**: its name, its pixel character (it wears the project's color, so its agents are easy to spot; **Change**
-   picks the outfit, skin, hair, hair color, face and an accessory, or Random), its role in a few lines, and optionally
-   the model, the permission mode and the tools it may use.
-3. **When**: its triggers, whether it asks before risky actions, the keys it can use, and its limits (below).
+**New agent -> Import a Claude Code agent file** turns a `.claude/agents/<name>.md` file into an agent (see below).
 
 Writing a good role: say what the agent produces and where it puts it ("a draft in `drafts/`, never published"),
 which files or keys it uses, and what it must never do. Keep it short; it learns the rest in its memory.
@@ -179,10 +167,11 @@ it starts folded on screens narrower than 1600 px so the conversation keeps its 
   notification filter from here; switch Telegram on or off.
 - **Guards**: today's cost against its budget, its runs this hour, what it may do without asking.
 - **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
-- **Advanced settings**, in sections (the chips on top jump to them): **Model**; **What it may do** (permission mode,
-  ask before risky actions, outside events, keys, allowed and forbidden tools); **Safety** (sandbox, the sites it may
-  reach, the folders it may write in, rules); **Limits**; **Claude Code** (callable from the topic's sessions, export
-  as a Claude Code file). Delete is at the bottom.
+- **Settings**, in four sections (the chips on top jump to them): **Essentials** (on, silent, its look, the model, the
+  daily budget); **Protection** (**Free** or **Protected**, below; **Ask me before risky actions**; the keys it gets);
+  **E-mail** (shown once it has a mailbox, or with **Give it a mailbox**); **Advanced**, folded (permission mode,
+  outside events, callable from the topic's sessions, allowed and forbidden tools, rules, the other limits, export as
+  a Claude Code file). Delete is at the bottom.
 
 Opening the page marks its results as read. In the list on the left, the *Waiting for you* and *To read* chips show
 only the agents waiting for your OK or with something to read.
@@ -278,10 +267,15 @@ Your own messages (its page, its Telegram thread, the Run button) are tasks, not
 **forward** to it on Telegram, or the quote of someone else's message you reply to, is outside text: its run asks
 first, and starts anew instead of going on with an earlier one.
 
-### Sandbox
+### Free or Protected (sandbox)
 
-New agents run in **Claude Code's sandbox** (settings -> **Sandbox**; agents made before it existed stay without it
-until you switch it on):
+A new agent is **Free**, like a session: its commands reach the whole server, it works without asking. That suits an
+agent that only reads what you give it. An agent that reads **text from outside** - a mailbox, a webhook, the feed,
+web pages - can be told what to do by that text: **Protected** is advised (settings -> **Protection**), and the
+agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a webhook template on the
+command line, starts Protected. Agents made before keep their setting.
+
+**Protected** runs it in **Claude Code's sandbox**:
 
 - its commands can **write only in its own folder**, plus the **folders of the topic** you list (`.` = the topic's
   existing files and folders; never the other agents, the topic's `CLAUDE.md` / `memory.md` / `.claude/`, nor a new
@@ -335,22 +329,23 @@ You, and the agent when **you** ask it in its conversation.
   --remove`), add webhooks and feed triggers, switch itself off and change its other settings (`maxxing agents set
   <agent> FIELD=VALUE`: name, model, Telegram, limits such as **New conversation after**). Only on itself: never
   another agent, never a new one.
-- **A safety setting waits for your OK**: the sandbox, its domains, keys, permission mode, approvals, trusting outside
-  events, writable folders, rules, tool lists, mailboxes, being a subagent, and the budget, runs per hour and timeout.
-  The agent's request shows up as a card in the conversation (and in the Notifications, and on Telegram) with the
-  change written out (`sandbox: on → off`, `domains: + example.com`); **Allow** applies it, **Deny** leaves everything
-  as it was, and the agent hears of your answer with your next message. A request waits up to 7 days.
-- **Its commands stay in its sandbox** in the conversation too (its domains, no secrets), without asking. When one
-  needs more (another site, a file outside its folders), it can run outside the sandbox **once you allow that
-  command** (an approval card). Its runs never can.
+- **A safety setting waits for your OK** when it opens the agent: leaving its sandbox, more domains, keys, a freer
+  permission mode, approvals off, trusting outside events, more writable folders, fewer rules, tool lists, mailboxes,
+  being a subagent, a higher budget, runs per hour or timeout. The agent's request shows up as a card in the
+  conversation (and in the Notifications, and on Telegram) with the change written out (`sandbox: on → off`,
+  `domains: + example.com`); **Allow** applies it, **Deny** leaves everything as it was, and the agent hears of your
+  answer with your next message. A request waits up to 7 days. What only makes it **safer** (its sandbox, approvals
+  on, fewer keys or sites, a lower budget) is applied at once.
+- **In its sandbox, the conversation does not ask** before reading files, searching the web, opening a page of its
+  sites or writing in its folders; its commands stay in the sandbox (its domains, no secrets). When one needs more
+  (another site, a file outside its folders), it can run outside the sandbox **once you allow that command** (an
+  approval card). Its runs never can.
 - Text that came from outside (a mail, a page, a webhook) can end up in its memory or its results: the conversation is
   told it is information, never orders, and only what you write there counts. Outside text never enters the
   conversation itself: a forward or an event always starts a run of its own.
 
-To change an agent, use its page, or **Edit with Claude** (agent page, top right or in its profile): a new session of
-the agent's topic - with your rights, not the agent's - opens in **Sessions** with the request already started; finish
-the sentence with what should change ("run it every morning at 8", "let it write in drafts/") and send. Claude applies
-it with the `maxxing-agents` skill and sums up what changed. **New agent** opens the same kind of session.
+To change an agent, tell it in its conversation ("run every morning at 8", "you may write in drafts/"), or use its
+page and its settings.
 
 ### Rules
 
@@ -377,7 +372,7 @@ Harness agents speak Claude Code's own format (`.claude/agents/<name>.md`: a `--
 `tools`, `model`, `permissionMode`, then the role):
 
 - **Export (Claude Code file)** on the agent's page downloads it (`maxxing agents export AGENT`);
-- **New agent -> Import a Claude Code agent file** creates an agent from one, sandboxed and without trigger
+- **New agent -> Import a Claude Code agent file** creates an agent from one, Free and without trigger
   (`maxxing agents import FILE --topic P/T`); its `tools` become the agent's **tools allowed without asking**: read
   them before you import a file someone else wrote; fields Harness has no equivalent for (`mcpServers`, `hooks`, `memory`…)
   are listed as not imported;

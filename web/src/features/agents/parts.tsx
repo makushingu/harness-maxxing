@@ -167,17 +167,22 @@ function NumberInput({ value, onValue, ...rest }: { value: number; onValue: (n: 
 }
 
 /** Daily budget, runs per hour, time limit, grouping window. */
-export function LimitsFields({ value, onChange }: { value: AgentLimits; onChange: (l: AgentLimits) => void }) {
+/** The limits of an agent; part: only its daily budget (`budget`), or all but it (`rest`). */
+export function LimitsFields({ value, onChange, part }: { value: AgentLimits; onChange: (l: AgentLimits) => void; part?: 'budget' | 'rest' }) {
   const t = useT()
   const num = (k: Exclude<keyof AgentLimits, 'chat_idle_h'>, scale = 1) => ({
     value: Math.round((value[k] / scale) * 100) / 100,
     onValue: (n: number) => onChange({ ...value, [k]: k === 'usd_per_day' ? n : Math.round(n * scale) }),
   })
+  const budget = (
+    <FormField label={t('agents.limits.usd')} hint={t('agents.limits.usdHint')}>
+      <NumberInput {...num('usd_per_day')} data-testid="limit-usd" />
+    </FormField>
+  )
+  if (part === 'budget') return budget
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <FormField label={t('agents.limits.usd')} hint={t('agents.limits.usdHint')}>
-        <NumberInput {...num('usd_per_day')} data-testid="limit-usd" />
-      </FormField>
+      {part !== 'rest' && budget}
       <FormField label={t('agents.limits.runs')} hint={t('agents.limits.runsHint')}>
         <NumberInput {...num('runs_per_hour')} />
       </FormField>

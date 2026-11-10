@@ -17,7 +17,7 @@ import {
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
+  agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentTemplates, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
@@ -31,8 +31,7 @@ import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, modelLabel, relPaths, toolIcon, type PathBases } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
-import { AgentSettings, type SectionId } from './AgentSettings'
-import { EditWithClaude } from './EditWithClaude'
+import { AgentSettings, readsOutside, type SectionId } from './AgentSettings'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ApprovalLine, ThreadApprovalBody, useThreadApprovals } from './approvals'
@@ -325,10 +324,11 @@ function AgentCenter({ agent: a }: { agent: AgentDetail }) {
   React.useEffect(() => {
     if (unread > 0) seenMutate({ path: a.path })
   }, [unread, a.path, seenMutate])
+  const composer = React.useRef<AgentComposerApi>(null)
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <Flow agent={a} onReply={setReplyTo} />
-      <Composer agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+      <Flow agent={a} onReply={setReplyTo} onSuggest={(v) => composer.current?.fill(v)} />
+      <Composer ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
     </div>
   )
 }
@@ -360,7 +360,7 @@ function Divider({ children, testid }: { children: React.ReactNode; testid?: str
   )
 }
 
-function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMessage) => void }) {
+function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (m: AgentMessage) => void; onSuggest?: (text: string) => void }) {
   const t = useT()
   const { data, isLoading, error } = useAgentThread(a.path)
   const msgs = React.useMemo(() => data?.messages || [], [data])
@@ -451,9 +451,10 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
             <div className="grid justify-items-center gap-3 py-10 text-center" data-testid="agent-start-chat">
               <AgentAvatarIcon avatar={a.avatar} size={56} />
               <p className="text-base font-medium">
-                <Sensitive length={8}>{t('agents.chat.startTitle', { name: a.display_name })}</Sensitive>
+                <Sensitive length={8}>{t(a.description ? 'agents.chat.startTitle' : 'agents.new.startTitle', { name: a.display_name })}</Sensitive>
               </p>
-              <p className="max-w-md text-sm text-muted-foreground">{t('agents.chat.startDesc')}</p>
+              <p className="max-w-md text-sm text-muted-foreground">{t(a.description ? 'agents.chat.startDesc' : 'agents.new.startDesc')}</p>
+              {!a.description && onSuggest && <Suggestions onPick={onSuggest} />}
             </div>
           ) : (
             rows.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)
@@ -461,6 +462,34 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
         </div>
         </StepBases.Provider>
       </AnswerContext>
+    </div>
+  )
+}
+
+/** A new agent (no role yet): ready-made jobs of the gallery as ideas; a click puts the request in the box. */
+function Suggestions({ onPick }: { onPick: (text: string) => void }) {
+  const t = useT()
+  const lang = useLang()
+  const { data: templates } = useAgentTemplates(lang)
+  if (!templates?.length) return null
+  return (
+    <div className="mt-2 grid w-full max-w-xl gap-2 text-left" data-testid="agent-suggestions">
+      <span className="text-center text-xs text-muted-foreground">{t('agents.new.ideas')}</span>
+      <div className="flex flex-wrap justify-center gap-2">
+        {templates.map((tp) => (
+          <button
+            key={tp.id}
+            type="button"
+            onClick={() => onPick(t('agents.new.suggest', { name: tp.name, summary: tp.summary.charAt(0).toLowerCase() + tp.summary.slice(1) }))}
+            className="flex items-center gap-2 rounded-full border bg-card py-1 pr-3 pl-1 text-xs transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            title={tp.summary}
+            data-testid={`agent-suggest-${tp.id}`}
+          >
+            <AgentAvatarIcon avatar={tp.avatar} size={22} />
+            {tp.name}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -836,7 +865,7 @@ function ThreadMessage({
 }
 
 /** What the conversation hands to the box: a quoted selection (`from`: the agent that wrote it, null = the owner). */
-type AgentComposerApi = { quote: (text: string, from: string | null) => void }
+type AgentComposerApi = { quote: (text: string, from: string | null) => void; fill: (text: string) => void }
 
 function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
@@ -877,6 +906,11 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
       const next = withQuote(text, q, from)
       setText(next)
       caretTo(next.length)
+    },
+    // a suggestion of the empty conversation: the box gets it, to change or send
+    fill: (v: string) => {
+      setText(v)
+      caretTo(v.length)
     },
   }))
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
@@ -1066,7 +1100,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
                 <ShieldCheck className="size-3.5 shrink-0" /> {t('agents.panel.outsideAsks')}
               </span>
             ))}
-          <span className={cn('flex items-center gap-1.5', a.sandbox ? 'text-muted-foreground' : 'text-warning')} data-testid="agent-sandbox-line">
+          <span className={cn('flex items-center gap-1.5', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')} data-testid="agent-sandbox-line">
             <Lock className="size-3.5 shrink-0" /> {a.sandbox ? t('agents.panel.sandboxOn') : t('agents.panel.sandboxOff')}
           </span>
           <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
@@ -1088,7 +1122,6 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
       </PanelSection>
 
       <div className="grid gap-2">
-        <EditWithClaude agent={a} variant="row" />
         <Link
           to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
           className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left hover:bg-accent"

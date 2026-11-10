@@ -39,6 +39,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Office the desk still opens the page). Panel = `AgentPage.tsx` `AgentChatPanel` (header + `AgentCenter`), docked
   440 px from 1024 px, else a `Sheet`. Extension views get `chat_route` per agent (`OfficeCustom`, the current
   pathname + `?chat=`).
+- **Agents, simpler**: `agents.create()` defaults `sandbox` to whether the fields
+  read outside text (`mail`, a `feed` trigger); `cmd_agents create` sets it for a webhook / mail template, `--sandbox`
+  added; imports are free. `request_change` applies at once what only makes the agent safer (`_safer`,
+  `_safer_limit`: sandbox on, approvals on, trust off, a stricter mode, subsets of domains / writable (any when the
+  sandbox comes on) / keys / allowed tools, supersets of disallowed tools and rules, lower limits; mail and subagent
+  always asked). `MANAGER_NEW` joins the manager's system note while its role (CLAUDE.md description) is empty.
+  UI: `CreateAgent.tsx` = `NewAgentForm` (where + name + random character -> `POST /api/agents` with an empty
+  description -> the agent page); the old 3-step form, `QuickCreate`, the gallery cards, `EditWithClaude` /
+  `useCreateWithClaude` are gone (`draftUrl` stays for groups and custom Office views); the empty conversation of an
+  agent without role shows the templates as `Suggestions` (`AgentComposerApi.fill`). `AgentSettings.tsx`: sections
+  `essential | protection | mail | advanced` (`SectionId`; `?settings=mail` unchanged), `LimitsFields part`,
+  `readsOutside()`; 46 unused texts dropped.
 - Removed the text as it is written (`--include-partial-messages`, `<sid>.live`, the SSE `partial` frame,
   `partialText`): not needed. The runner still drops `stream_event` lines. The manager's sandboxed turns pre-allow
   `agent_guard.MANAGER_SAFE` (Read, Glob, Grep, WebSearch; the deny rules still win).

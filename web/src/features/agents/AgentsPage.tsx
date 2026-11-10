@@ -43,7 +43,7 @@ import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
 import { statusOf, useAgentsOn, useRunNow, type Status } from './parts'
 import { WaitingBubble } from './approvals'
-import { QuickCreate, type CreateStart } from './CreateAgent'
+import { NewAgentForm, type CreateStart } from './CreateAgent'
 import { OfficeFuture } from './OfficeFuture'
 import { OfficeCustom } from './OfficeCustom'
 import { OfficeChat } from './office'
@@ -394,10 +394,11 @@ function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
   return null
 }
 
-/** No agent yet: one character waiting at its desk, what an agent is in a sentence, then the same ways in as the
- *  creation sheet - where, then With Claude (a session in Sessions prepares it), by hand, a ready-made agent or a file. */
+/** No agent yet: one character waiting at its desk, what an agent is in a sentence, then the form of the creation
+ *  sheet - where and a name, then its conversation (or a Claude Code agent file). */
 export function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) {
   const t = useT()
+  const navigate = useNavigate()
   return (
     <div className="mx-auto grid w-full max-w-2xl gap-6 px-3 py-10 max-md:py-6" data-testid="agents-empty">
       <div className="grid justify-items-center gap-4 text-center">
@@ -407,12 +408,7 @@ export function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) 
           <p className="text-sm text-muted-foreground">{t('agents.emptyDesc')}</p>
         </div>
       </div>
-      <QuickCreate
-        onManual={(topic) => onStart({ manual: true, topic })}
-        onImport={(topic) => onStart({ importing: true, topic })}
-        onTemplate={(template, topic) => onStart({ template, topic })}
-        onDone={() => {}}
-      />
+      <NewAgentForm onImport={(topic) => onStart({ importing: true, topic })} onDone={(a) => navigate(agentRoute(a))} />
     </div>
   )
 }
