@@ -300,3 +300,23 @@ def test_our_photo_reaches_group_members_who_are_not_contacts(client, monkeypatc
     out = {o["to"]: o["event"] for o in teampeer._load()["outbox"]}
     assert out[LEA]["profile"]["photo"] == v and "chat" not in out[LEA]
     assert out[member] == {"type": "profile", "chat": "g_one", "profile": {"photo": v}}
+
+
+def test_sharing_the_profile_with_many_group_members_writes_team_json_once(client, monkeypatch):
+    _contact(monkeypatch)
+    doc = teampeer._load()
+    for i in range(300):
+        doc["peers"][f"https://m{i}.example.com"] = {"status": "group", "group_keys": {"g_one": teampeer._b64(b"g" * 32)}}
+    teampeer._save(doc)
+    monkeypatch.setattr(teampeer._wake, "set", lambda: None)
+    writes, real = [], config.write_json
+
+    def write_json(path, *a, **k):
+        if path == teampeer._path():
+            writes.append(1)
+        return real(path, *a, **k)
+    monkeypatch.setattr(config, "write_json", write_json)
+    teampeer.share_profile()
+    assert len(writes) == 1
+    out = teampeer._load()["outbox"]
+    assert len(out) == 301 and len({o["id"] for o in out}) == 301
