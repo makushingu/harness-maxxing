@@ -9,6 +9,7 @@ MAXXING_SHOPIFY_API overrides the base URL (tests, demo).
 from __future__ import annotations
 
 import datetime as dt
+import math
 import os
 import threading
 import time
@@ -21,6 +22,7 @@ from . import config
 
 API_VERSION = "2025-01"
 CACHE_S = 120
+ERROR_CACHE_S = 30                                       # a failing store is not asked again at every refresh
 DAYS = 14
 MAX_PAGES = 20                                           # 250 orders a page: up to 5000 over the window
 STORE_KEY, TOKEN_KEY = "SHOPIFY_STORE", "SHOPIFY_ADMIN_TOKEN"
@@ -41,7 +43,7 @@ _T = {"fr": {"Shopify": "Shopify", "Revenue today": "CA du jour", "Orders today"
              "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
                  "Seules les {n} dernières commandes sont comptées : les jours plus anciens et la comparaison "
                  "sur 7 jours sont incomplets."}}
-_cache: dict[str, Any] = {"at": 0.0, "key": None, "card": None}
+_cache: dict[str, Any] = {"at": 0.0, "key": None, "card": None, "ttl": CACHE_S}
 _lock = threading.Lock()
 
 
@@ -63,6 +65,18 @@ def configured() -> bool:
 def _url(store: str) -> str:
     base = os.environ.get("MAXXING_SHOPIFY_API") or f"https://{store}"
     return f"{base.rstrip('/')}/admin/api/{API_VERSION}/graphql.json"
+
+
+def _obj(v: Any) -> dict:
+    return v if isinstance(v, dict) else {}
+
+
+def _amount(v: Any) -> float:
+    try:
+        f = float(v or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return f if math.isfinite(f) else 0.0
 
 
 def fetch(store: str, token: str, since: dt.date) -> dict[str, Any]:
@@ -88,19 +102,21 @@ def fetch(store: str, token: str, since: dt.date) -> dict[str, Any]:
                 raise RuntimeError("Shopify sent an unreadable answer")
             if body.get("errors"):
                 raise RuntimeError(str(body["errors"])[:200])
-            data = body.get("data") or {}
-            shop = (data.get("shop") or {}).get("name") or shop
-            cur = (data.get("shop") or {}).get("currencyCode") or cur
-            page = data.get("orders") or {}
-            for e in page.get("edges") or []:
-                n = e.get("node") or {}
-                if n.get("cancelledAt"):
+            data = _obj(body.get("data"))
+            shop_info = _obj(data.get("shop"))
+            shop = str(shop_info.get("name") or shop)
+            cur = str(shop_info.get("currencyCode") or cur)
+            page = _obj(data.get("orders"))
+            edges = page.get("edges")
+            for e in edges if isinstance(edges, list) else []:
+                n = _obj(_obj(e).get("node"))
+                if not n or n.get("cancelledAt"):
                     continue
-                money = ((n.get("totalPriceSet") or {}).get("shopMoney") or {})
+                money = _obj(_obj(n.get("totalPriceSet")).get("shopMoney"))
                 orders.append({"name": str(n.get("name") or ""), "at": str(n.get("createdAt") or ""),
-                               "total": float(money.get("amount") or 0),
+                               "total": _amount(money.get("amount")),
                                "fulfilled": n.get("displayFulfillmentStatus") == "FULFILLED"})
-            info = page.get("pageInfo") or {}
+            info = _obj(page.get("pageInfo"))
             if not info.get("hasNextPage"):
                 break
             truncated = page_no == MAX_PAGES - 1
@@ -171,16 +187,19 @@ def card(force: bool = False) -> dict:
         return connect_card()
     key = (store, token[-6:])
     with _lock:
-        if not force and _cache["key"] == key and time.time() - _cache["at"] < CACHE_S and _cache["card"]:
+        if not force and _cache["key"] == key and time.time() - _cache["at"] < _cache["ttl"] and _cache["card"]:
             return _cache["card"]
     tz = ZoneInfo(config.load_config().get("timezone") or "UTC")
     today = dt.datetime.now(tz).date()
     try:
         data = fetch(store, token, today - dt.timedelta(days=DAYS - 1))
     except RuntimeError as e:
-        return {"title": t("Shopify"), "link": "/settings/keys", "status": "error",
-                "blocks": [{"type": "markdown", "text": f"{store}: {e}"}]}
+        c = {"title": t("Shopify"), "link": "/settings/keys", "status": "error",
+             "blocks": [{"type": "markdown", "text": f"{store}: {e}"}]}
+        with _lock:
+            _cache.update(at=time.time(), key=key, card=c, ttl=ERROR_CACHE_S)
+        return c
     c = build_card(data, today, tz)
     with _lock:
-        _cache.update(at=time.time(), key=key, card=c)
+        _cache.update(at=time.time(), key=key, card=c, ttl=CACHE_S)
     return c

@@ -86,10 +86,10 @@ export default function AgentsLayout() {
     <div className="flex min-h-0 flex-1" data-testid="agents-layout">
       <PageList id="agents" label={t('agents.title')}>
         {touch ? (
-          <AgentsList nav={<OfficeLink />} className="min-h-0 flex-1" />
+          <AgentsList nav={<OfficeLink onNew={newAgent} />} className="min-h-0 flex-1" />
         ) : (
           <AgentHover className="min-h-0 flex-1">
-            <AgentsList nav={<OfficeLink />} className="flex-1" />
+            <AgentsList nav={<OfficeLink onNew={newAgent} />} className="flex-1" />
           </AgentHover>
         )}
       </PageList>

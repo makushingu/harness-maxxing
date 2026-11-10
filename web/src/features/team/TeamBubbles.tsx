@@ -164,11 +164,14 @@ export function TeamBubbles() {
       document.documentElement.style.removeProperty('--mx-bubbles-w')
     }
   }, [])
-  // As many cards as the window holds (the newest); the others wait as bubbles.
-  const room = Math.max(1, Math.floor((vw - COLUMN_W - LEFT_ROOM - (list ? LIST_W + GAP : 0) + GAP) / (CARD_W + GAP)))
+  // As many cards as the window holds (the newest); the others wait as bubbles. With the list open in a narrow window
+  // no card may fit: they all wait rather than going off screen on the left.
+  const fit = Math.floor((vw - COLUMN_W - LEFT_ROOM - (list ? LIST_W + GAP : 0) + GAP) / (CARD_W + GAP))
+  const room = list ? Math.max(0, fit) : Math.max(1, fit)
   const open = docked.filter((id) => !team || byId.has(id))
-  const shown = open.slice(-room)
-  const waiting = [...new Set([...open.slice(0, -room).reverse(), ...heads])].filter((id) => byId.has(id) && !shown.includes(id))
+  const cut = Math.max(0, open.length - room)
+  const shown = open.slice(cut)
+  const waiting = [...new Set([...open.slice(0, cut).reverse(), ...heads])].filter((id) => byId.has(id) && !shown.includes(id))
   const unread = team?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   return (
     <>

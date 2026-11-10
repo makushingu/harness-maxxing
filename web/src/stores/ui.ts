@@ -47,6 +47,9 @@ type UIState = {
   touchHome: TouchHome
   /** Presentation mode: every <Sensitive> renders a mask instead of its content. */
   presentation: boolean
+  /** Presentation mode turned on only for a Feedback screenshot: a page reloaded or closed during the shot turns it
+   *  back off on the next load. */
+  presentationShot: boolean
   /** The guided tour was completed or skipped (it starts automatically once, after onboarding). */
   tourDone: boolean
   /** Desktop notification when a Claude session finishes its turn (this browser). */
@@ -111,6 +114,7 @@ export const useUI = create<UIState>()(
       layout: 'auto',
       touchHome: 'session',
       presentation: false,
+      presentationShot: false,
       tourDone: false,
       notifyDone: false,
       notifyTeam: true,
@@ -164,6 +168,10 @@ export const useUI = create<UIState>()(
         out.secondBarOpen = out.secondBarOpen !== false
         out.secondBarWidth = typeof out.secondBarWidth === 'number' && Number.isFinite(out.secondBarWidth) ? clampSecond(out.secondBarWidth) : null
         if (out.touchHome !== 'dashboard') out.touchHome = 'session'
+        if (out.presentationShot) {
+          out.presentation = false
+          out.presentationShot = false
+        }
         return out
       },
     },

@@ -3,13 +3,13 @@
 // header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: `nav` (OfficeLink),
 // then the state filter (All / waiting for you / to read / running / active / off, with counts; empty states hidden)
 // and the ?topic= chip. No search field (Ctrl K finds agents and groups); New agent / New group sit at the top right
-// of the Office (AgentsPage.tsx), and of the list's own header on a phone (AgentsLayout.tsx).
+// of the Office (AgentsPage.tsx), and a "+" for New agent beside the Office link, on every page of Agents.
 // The groups of a project (agent_rooms: the owner talks to several of its agents) come first in its section: the
 // chips To read / Running keep the unread / busy ones, the other chips hide them.
 // On a phone it is the whole page at /agents (an agent then opens full screen); on a desktop, the page's left column.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
-import { Bot, Building2, TriangleAlert, UsersRound, X } from 'lucide-react'
+import { Bot, Building2, Plus, TriangleAlert, UsersRound, X } from 'lucide-react'
 import { useT, type TFn } from '@/i18n'
 import { agentRoute, groupRoute, useAgentGroups, useAgents, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentGroup } from '@/lib/types'
@@ -47,20 +47,20 @@ const byActivity = (a: Agent, b: Agent) => (b.last_run?.at || b.created || 0) - 
 
 /** `empty`: shown instead of the short "No agent yet" when there is no agent at all (the touch layout, where the list
  *  is the whole page). `nav`: entries between "New agent" and the filter (the Office). */
-/** The way back to the Office (every agent at its desk), whichever agent or run is open: a nav entry of its own, set
- *  apart from the search and New agent above it. */
-export function OfficeLink() {
+/** The way back to the Office (every agent at its desk), whichever agent or run is open: a nav entry of its own, with
+ *  New agent (`onNew`) beside it. */
+export function OfficeLink({ onNew }: { onNew?: () => void }) {
   const t = useT()
   const touch = useCompact()
   const { pathname } = useLocation()
   const office = !touch && /^\/agents(\/office)?\/?$/.test(pathname)
   return (
-    <div className="shrink-0 border-y px-2 py-1.5">
+    <div className="flex shrink-0 items-center gap-1 border-y px-2 py-1.5">
       <Link
         to={touch ? '/agents/office' : '/agents'}
         aria-current={office ? 'page' : undefined}
         className={cn(
-          'flex items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+          'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
           touch ? 'h-11' : 'h-9',
           office && 'bg-accent text-foreground',
         )}
@@ -69,6 +69,11 @@ export function OfficeLink() {
         <Building2 className="size-4" />
         {t('agents.side.office')}
       </Link>
+      {onNew && (
+        <Button variant="ghost" size="icon" onClick={onNew} aria-label={t('agents.new')} title={t('agents.new')} data-testid="agent-new-list">
+          <Plus />
+        </Button>
+      )}
     </div>
   )
 }

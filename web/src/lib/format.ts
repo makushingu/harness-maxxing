@@ -43,7 +43,9 @@ export function fmtNumber(n: number, lang: string, opts?: Intl.NumberFormatOptio
 
 export function fmtDate(at: number, lang: string, tz?: string, opts?: Intl.DateTimeFormatOptions) {
   const o: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short', timeZone: tz || undefined, ...opts }
-  return cached('d', lang, o, () => new Intl.DateTimeFormat(lang, o)).format(new Date(at * 1000))
+  const d = new Date(at * 1000)
+  if (Number.isNaN(d.getTime())) return ''          // out of the Date range: format() would throw
+  return cached('d', lang, o, () => new Intl.DateTimeFormat(lang, o)).format(d)
 }
 
 /** "3 min ago" / "in 2 h" — `at` in Unix seconds. */

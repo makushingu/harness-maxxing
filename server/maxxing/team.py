@@ -41,7 +41,7 @@ SUMMARY_MESSAGES = 200         # at most this many messages are summarized
 FILES_MAX = 10                  # files per message
 GROUPS_PER_CREATOR = 50         # groups another server's user may open here (they all live in team.json)
 COLORS = ("clay", "blue", "violet", "green", "amber", "rose", "teal", "zinc")
-_ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}$")         # message and poll option ids (the same on every server)
+_ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}\Z")         # message and poll option ids (the same on every server)
 REACTIONS = ("👍", "❤️", "😂", "🎉", "🤔", "👀")
 
 _lock = threading.RLock()
@@ -683,7 +683,7 @@ def _remote_message(frm_pid: str, raw: dict) -> dict:
     raw = raw if isinstance(raw, dict) else {}
     kind = raw.get("kind") if raw.get("kind") in ("text", "summary", "poll") else "text"
     now = time.time()
-    at = min(_finite(raw.get("at") or now, now), now)
+    at = max(min(_finite(raw.get("at") or now, now), now), 0.0)
     mid = str(raw.get("id") or "")
     if not _ID.match(mid):
         raise TeamError(400, "bad_id", "Bad message id")
@@ -693,12 +693,14 @@ def _remote_message(frm_pid: str, raw: dict) -> dict:
         msg["reply_to"] = raw["reply_to"]
     if kind == "poll":
         p = raw.get("poll") if isinstance(raw.get("poll"), dict) else {}
-        opts = [o for o in (p.get("options") or []) if isinstance(o, dict)][:12]
+        opts: dict[str, dict] = {}                       # valid ids only, each once (a vote is counted by id)
+        for o in p.get("options") if isinstance(p.get("options"), list) else []:
+            if isinstance(o, dict) and _ID.match(str(o.get("id"))) and str(o["id"]) not in opts:
+                opts[str(o["id"])] = {"id": str(o["id"]), "label": str(o.get("label") or "")[:120], "votes": []}
         if len(opts) < 2:
             raise TeamError(400, "invalid_poll", "Bad poll")
         msg["poll"] = {"question": str(p.get("question") or msg["text"])[:200], "multi": bool(p.get("multi")),
-                       "options": [{"id": str(o.get("id"))[:40], "label": str(o.get("label") or "")[:120], "votes": []}
-                                   for o in opts if _ID.match(str(o.get("id")))]}
+                       "options": list(opts.values())[:12]}
     if kind == "summary":
         summ = raw.get("summary") if isinstance(raw.get("summary"), dict) else {}
         msg["summary"] = {"count": int(_finite(summ.get("count"), 0)) % 100000, "from": at, "to": at}

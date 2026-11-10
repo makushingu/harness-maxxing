@@ -253,6 +253,12 @@ export default function TasksPage() {
   }
   const filtering = activeFilterCount({ ...filters, project: 'all' }) > 0 || !!filters.q
 
+  // Beside two sidebars the page is narrower than the window says: the header keeps its icons only (else the title is
+  // squeezed out) and the board scrolls sideways rather than squeezing its columns.
+  const bodyRef = React.useRef<HTMLDivElement>(null)
+  const width = useWidth(bodyRef)
+  const narrow = width !== null && width < 800
+  const label = narrow ? 'sr-only' : 'max-lg:sr-only'
   const body = () => {
     if (prefs.view === 'board' && scope === 'all' && prefs.lanes)
       return <Lanes tasks={visible} projects={projects} onAdd={(pid, status, text) => addParsed(parseQuickAdd(text, projects, today), { status, project_id: pid })} common={boardCommon} onDropStatus={dropStatus} onBulk={(ids, status) => bulk.mutate({ ids, patch: { status } })} />
@@ -260,6 +266,7 @@ export default function TasksPage() {
       return (
         <TaskBoard
           {...boardCommon}
+          layout={width !== null && width < 640 ? 'scroll' : 'grid'}
           columns={statusColumns(visible, t, (status, text) => addParsed(parseQuickAdd(text, projects, today), { status }))}
           onDrop={(task, col, prev, next) => dropStatus(task, col, prev, next)}
           onBulkDrop={(ids, status) => bulk.mutate({ ids, patch: { status: status as TaskStatus } })}
@@ -303,7 +310,7 @@ export default function TasksPage() {
         aria-label={t('tasks.view')}
         options={VIEWS.map((v) => {
           const Icon = VIEW_ICON[v]
-          return { value: v, label: <span className="max-lg:sr-only">{t(`tasks.view.${v}` as 'tasks.view.board')}</span>, icon: <Icon /> }
+          return { value: v, label: <span className={label}>{t(`tasks.view.${v}` as 'tasks.view.board')}</span>, icon: <Icon /> }
         })}
       />
     ) : null
@@ -323,16 +330,16 @@ export default function TasksPage() {
           {prefs.view === 'board' && scope === 'all' && (
             <Button variant={prefs.lanes ? 'secondary' : 'outline'} size="sm" aria-pressed={prefs.lanes} onClick={() => setPrefs({ lanes: !prefs.lanes })} title={t('tasks.lanesHint')} data-testid="task-lanes">
               <Rows3 />
-              <span className="max-lg:sr-only">{t('tasks.lanes')}</span>
+              <span className={label}>{t('tasks.lanes')}</span>
             </Button>
           )}
-          {scope !== 'overview' && data && <FilterMenu {...filterProps} />}
+          {scope !== 'overview' && data && <FilterMenu {...filterProps} iconOnly={narrow} />}
           {data && (
             <Popover open={adding} onOpenChange={setAdding}>
               <PopoverTrigger asChild>
                 <Button size="sm" data-testid="task-new">
                   <Plus />
-                  <span className="max-sm:sr-only">{t('tasks.cmd.new')}</span>
+                  <span className={narrow ? 'sr-only' : 'max-sm:sr-only'}>{t('tasks.cmd.new')}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[min(30rem,calc(100vw-2rem))] p-3">
@@ -348,7 +355,7 @@ export default function TasksPage() {
           {nav}
         </PageList>
       )}
-      <div className="mx-auto grid max-w-[1800px] gap-4">
+      <div ref={bodyRef} className="mx-auto grid max-w-[1800px] gap-4">
         {viewSwitch && <div className="min-[400px]:hidden">{viewSwitch}</div>}
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4">
           {corrupt && (
@@ -546,4 +553,17 @@ function BoardSkeleton() {
       ))}
     </div>
   )
+}
+
+/** The element's width (live; null before it is measured). */
+function useWidth(ref: React.RefObject<HTMLElement | null>) {
+  const [width, setWidth] = React.useState<number | null>(null)
+  React.useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+  return width
 }

@@ -387,3 +387,49 @@ def test_vote_or_react_on_an_unknown_message_is_ignored_not_retried(client, monk
                                        "on": True}).status_code == 200
         assert _post(client, lea_key, {"type": "vote", "chat": chat, "msg": "m_99999999",
                                        "options": ["o_1"]}).status_code == 200
+
+
+def test_deeply_nested_json_is_a_400(client, monkeypatch):
+    key = _setup(monkeypatch)
+    deep = b"[" * 100000 + b"]" * 100000
+    assert client.post("/api/team-peer/hello", content=deep, headers={"Content-Type": "application/json"}).status_code == 400
+    assert client.post("/api/team-peer/inbox", content=deep, headers=_signed(key, deep)).status_code == 400
+
+
+def test_ids_with_a_final_newline_are_refused(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    assert _post(client, key, _msg(dm, "one")).status_code == 200
+    assert _post(client, key, _msg(dm, "two", mid="m_0123abcd\n")).status_code == 400
+    reply = _msg(dm, "three", mid="m_0123abce")
+    reply["message"]["reply_to"] = "m_0123abcd\n"
+    assert _post(client, key, reply).status_code == 200
+    msgs = team.messages(dm)["messages"]
+    assert [m["id"] for m in msgs] == ["m_0123abcd", "m_0123abce"] and "reply_to" not in msgs[1]
+
+
+def _poll(dm, options, mid="m_0000aaaa"):
+    ev = _msg(dm, "q", mid=mid)
+    ev["message"] |= {"kind": "poll", "poll": {"question": "Q?", "options": options}}
+    return ev
+
+
+def test_remote_polls_need_two_distinct_valid_options(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    assert _post(client, key, _poll(dm, [{"id": "x", "label": "a"}, {"id": "y", "label": "b"}])).status_code == 400
+    same = [{"id": "o_00000001", "label": "a"}, {"id": "o_00000001", "label": "b"}]
+    assert _post(client, key, _poll(dm, same)).status_code == 400
+    ok = same + [{"id": "o_00000002", "label": "c"}]
+    assert _post(client, key, _poll(dm, ok, mid="m_0000bbbb")).status_code == 200
+    poll = team.messages(dm)["messages"][-1]["poll"]
+    assert [o["id"] for o in poll["options"]] == ["o_00000001", "o_00000002"]
+
+
+def test_a_remote_date_before_1970_is_clamped(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    ev = _msg(dm)
+    ev["message"]["at"] = -1e20
+    assert _post(client, key, ev).status_code == 200
+    assert team.messages(dm)["messages"][0]["at"] == 0

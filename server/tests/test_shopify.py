@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import time
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -105,3 +106,44 @@ def test_a_window_with_too_many_orders_says_it_is_incomplete(mx, monkeypatch):
     monkeypatch.setattr(shopify, "MAX_PAGES", 3)
     data = shopify.fetch("myshop.myshopify.com", "shpat_test", dt.date(2026, 10, 1))
     assert data["truncated"] is True and len(data["orders"]) == 750
+
+
+def test_odd_shapes_in_the_answer_are_skipped_not_a_500(mx, monkeypatch):
+    vault.put("SHOPIFY_STORE", "myshop.myshopify.com")
+    vault.put("SHOPIFY_ADMIN_TOKEN", "shpat_test")
+    real = httpx.Client
+    good = {"node": {"name": "#1", "createdAt": "2026-10-12T10:00:00Z", "totalPriceSet": {"shopMoney": {"amount": "5"}}}}
+    shapes = [
+        {"data": {"shop": "S", "orders": {"edges": ["text", good]}}},
+        {"data": {"shop": {"name": "S"}, "orders": [1, 2]}},
+        {"data": [], "extensions": {}},
+        {"data": {"orders": {"edges": [{"node": {"totalPriceSet": {"shopMoney": {"amount": "abc"}}}}, good]}}},
+        {"data": {"orders": {"edges": [{"node": {"totalPriceSet": {"shopMoney": {"amount": "nan"}}}}]}}},
+        {"data": {"orders": {"edges": [{"node": "x"}, {"node": {"totalPriceSet": "x"}}], "pageInfo": "x"}}},
+    ]
+    for body in shapes:
+        shopify._cache.update(at=0, key=None, card=None)
+        monkeypatch.setattr(shopify.httpx, "Client",
+                            lambda body=body, **kw: real(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)), **kw))
+        c = shopify.card(force=True)
+        assert c["title"].startswith("Shopify"), body
+        assert "nan" not in str(c).lower(), body
+
+
+def test_an_error_is_cached_for_a_short_while(mx, monkeypatch):
+    shopify._cache.update(at=0, key=None, card=None)
+    vault.put("SHOPIFY_STORE", "myshop.myshopify.com")
+    vault.put("SHOPIFY_ADMIN_TOKEN", "bad")
+    real = httpx.Client
+    calls = []
+
+    def handler(r):
+        calls.append(1)
+        return httpx.Response(401)
+    monkeypatch.setattr(shopify.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    assert shopify.card()["status"] == "error"
+    assert shopify.card()["status"] == "error"
+    assert len(calls) == 1
+    shopify._cache.update(at=time.time() - shopify.ERROR_CACHE_S - 1)
+    shopify.card()
+    assert len(calls) == 2
