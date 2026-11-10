@@ -6,8 +6,13 @@ import json
 
 from conftest import wait_for, wait_idle
 from test_agent_guard import _settings
-from test_agents import A, _calls, _create, _on, _results
+from test_agents import A, _calls, _create as _create_any, _on, _results
 from maxxing import agents
+
+
+def _create(client, **extra) -> dict:
+    """An agent in its sandbox (new agents are free unless they read outside text: test_new_agents_are_free...)."""
+    return _create_any(client, **{"sandbox": True, **extra})
 
 
 def _say(client, text: str) -> dict:
@@ -111,10 +116,18 @@ def test_a_safety_change_waits_for_the_owner(client, topic, mx):
     argv = _calls()[-1]["argv"]
     assert "Since your last message" not in argv[argv.index("--append-system-prompt") + 1]
     # denied: nothing changes
-    r2 = agents.request_change(A, {"approvals": True}, session=sid)
+    r2 = agents.request_change(A, {"trust_outside": True}, session=sid)
     approvals.decide(r2["request"], "deny", message="not now")
-    assert agents.load(A)["approvals"] is False
+    assert agents.load(A)["trust_outside"] is False
     assert "not now" in agents._read_state(A)["chat_notes"][-1]
+    # what only makes it safer is applied at once: back in its sandbox (its sites narrow it), approvals on, a
+    # lower budget; giving it a key still asks
+    r = agents.request_change(A, {"sandbox": True, "domains": ["example.com"], "approvals": True,
+                                  "limits": {"usd_per_day": 1}, "keys": ["SHOP_TOKEN"]}, session=sid)
+    assert r["applied"] == ["approvals", "domains", "limits", "sandbox"] and r["asked"] == ["keys"]
+    a = agents.load(A)
+    assert a["sandbox"] and a["approvals"] and a["domains"] == ["example.com"] and a["limits"]["usd_per_day"] == 1
+    assert agents.request_change(A, {"domains": ["example.com", "x.example.org"]}, session=sid)["asked"] == ["domains"]
 
 
 def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monkeypatch, capsys):
@@ -138,10 +151,10 @@ def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monke
     assert agent_guard.check_cli(["agents", "set", "writer", "model=x"])
     # `set` in its conversation: the safety part waits
     monkeypatch.setenv("MAXXING_AGENT_CHAT", "1")
-    assert cli.main(["agents", "set", "writer", "chat_model=claude-opus-4-1", "approvals=true"]) == 0
+    assert cli.main(["agents", "set", "writer", "chat_model=claude-opus-4-1", "trust_outside=true"]) == 0
     out = capsys.readouterr().out
-    assert "changed: chat_model" in out and "waiting for the owner's OK" in out and "approvals" in out
-    assert agents.load(A)["chat_model"] == "claude-opus-4-1" and agents.load(A)["approvals"] is False
+    assert "changed: chat_model" in out and "waiting for the owner's OK" in out and "trust_outside" in out
+    assert agents.load(A)["chat_model"] == "claude-opus-4-1" and agents.load(A)["trust_outside"] is False
     # its schedules: add, change, switch off, remove (its own only)
     assert cli.main(["agents", "cron", "writer", "--schedule", "0 8 * * *", "--json"]) == 0
     cid = json.loads(capsys.readouterr().out)["cron"]
@@ -231,3 +244,19 @@ def test_the_owner_picks_the_model_of_a_new_conversation_and_finds_the_last_one(
     n = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL again"}).json()["session"]
     assert n["model"] == "sonnet"                         # no pick: the agent's model
     wait_idle(client, n["id"])
+
+
+def test_a_new_agent_without_a_role_sets_itself_up_in_its_conversation(client, topic, mx):
+    _on(client)
+    a = _create_any(client, description="")
+    assert a["sandbox"] is False and a["description"] == ""
+    sid = _say(client, "hi")["session"]["id"]
+    wait_idle(client, sid)
+    argv = _calls()[-1]["argv"]
+    note = argv[argv.index("--append-system-prompt") + 1]
+    assert "You are a new agent" in note and "your freedoms" in note
+    client.patch("/api/agents/acme/blog/writer", json={"description": "You write the blog posts."})
+    _say(client, "again")
+    wait_idle(client, sid)
+    argv = _calls()[-1]["argv"]
+    assert "You are a new agent" not in argv[argv.index("--append-system-prompt") + 1]

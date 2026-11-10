@@ -9,14 +9,27 @@ import sys
 from pathlib import Path
 
 from conftest import wait_idle
-from test_agents import A, _calls, _create, _on, _run
+from test_agents import A, _calls, _create as _create_any, _on, _run
+
+
+def _create(client, **extra) -> dict:
+    """An agent in its sandbox (new agents are free unless they read outside text: test_new_agents_are_free...)."""
+    return _create_any(client, **{"sandbox": True, **extra})
 
 
 def _settings(argv: list[str]) -> dict:
     return json.loads(argv[argv.index("--settings") + 1])
 
 
-def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
+def test_new_agents_are_free_unless_they_read_outside_text(client, topic, mx):
+    _on(client)
+    assert _create_any(client, name="free")["sandbox"] is False                 # free like a session
+    feed = [{"kind": "feed", "source": "shop", "prompt": "NOTOOL handle it"}]
+    assert _create_any(client, name="watcher", triggers=feed)["sandbox"] is True   # outside text: protected
+    assert _create_any(client, name="mine", triggers=feed, sandbox=False)["sandbox"] is False
+
+
+def test_sandboxed_agents_never_bypass(client, topic, mx):
     _on(client)
     a = _create(client, permission_mode="bypass", domains=["API.github.com", "https://*.example.com/"],
                 writable=["drafts", "."])
@@ -189,7 +202,7 @@ def test_claude_code_agent_file_export_and_import(client, topic, mx):
     a = r.json()
     assert a["path"] == "projects/acme/topics/blog/agents/code-reviewer" and a["display_name"] == "Code Reviewer"
     assert a["allowed_tools"] == ["Read", "Grep"] and a["model"] == "" and a["permission_mode"] == "bypass"
-    assert a["sandbox"] is True and a["ignored"] == ["mcpServers", "memory"]
+    assert a["sandbox"] is False and a["ignored"] == ["mcpServers", "memory"]           # free like any new one
     assert a["description"] == "Reviews code: quality, security\n\nYou are a senior reviewer."
     assert client.post("/api/agents/import", json={"topic_path": "projects/acme/topics/blog",
                                                    "markdown": "no front matter"}).status_code == 400

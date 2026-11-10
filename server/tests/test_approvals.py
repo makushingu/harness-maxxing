@@ -187,7 +187,7 @@ def test_mcp_stdin_closed_expires_what_waits(tmp_path):
 def _agent(client, **extra) -> None:
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
     r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "writer",
-                                         "description": "Writes.", **extra})
+                                         "description": "Writes.", "sandbox": True, **extra})
     assert r.status_code == 200, r.text
 
 

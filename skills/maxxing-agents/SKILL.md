@@ -36,7 +36,7 @@ one message**, only those you cannot infer:
 | **When it runs** | "every morning / each Monday" -> schedule; "when an order / a payment / a PR / a form arrives" -> webhook of that service; "when the feed shows…" -> feed trigger on an existing source; "I'll write to it" -> Telegram or manual | nothing in the request says when |
 | **Results** | its Activity thread (always); Telegram if the user wants it on the phone | - |
 | **Safety** | runs started by outside text (webhook, feed, another agent) always ask before risky actions (never `--trust-outside` unless the user insists); `--approvals` if even its own runs may send, pay, delete or publish; `--keys A,B` = only the vault keys it needs (none by default); budget $2/day, 6 runs/hour | it acts on money, customers or public posts |
-| **Sandbox** | on by default: its commands write only in its folder (`--writable drafts,site` = folders of the topic too; give the folders it needs, `.` only if it must edit files at the topic's root: never `agents/`, the topic's CLAUDE.md / memory.md / .claude, nor new files at the root) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default). `--no-sandbox` only if the user insists (it then reaches the whole server) | its role calls an API whose host you cannot deduce |
+| **Sandbox** | off by default (free, like a session); `--sandbox` when it reads outside text (mails, webhooks, web pages, the feed: on by itself for a mailbox, a feed trigger or a webhook template): its commands write only in its folder (`--writable drafts,site` = folders of the topic too; give the folders it needs, `.` only if it must edit files at the topic's root: never `agents/`, the topic's CLAUDE.md / memory.md / .claude, nor new files at the root) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default) | it reads outside text and its role calls an API whose host you cannot deduce |
 | **Name** | short and human ("Game Dev", "Support"); folder = lowercase-dashes of it | - |
 
 Then, before creating, show a short summary (name, topic, role in 2-3 lines, trigger in plain words,
@@ -54,7 +54,10 @@ maxxing agents webhook game-dev [--kind generic|stripe|shopify|github] [--prompt
 maxxing agents watch   game-dev --source shop --levels warning,error --match refund     # existing feed events
 maxxing agents show    game-dev                                                         # check it
 ```
-Other `create` options: `--model`, `--lang` (template texts), `--approvals`, `--keys A,B`, `--domains H,H`, `--writable D,D`, `--no-sandbox`, `--trust-outside`, `--telegram`, `--usd-per-day N`, `--runs-per-hour N`, `--off`.
+Once created, give the user the link to talk to it: `[Talk to <name>](/agents/<project>/<topic>/<agent>)` (its
+conversation, where it can change its own role, schedules and settings). When the user does not know yet what
+it should do, point to **New agent** on the Agents page: an empty agent opens and sets itself up in its conversation.
+Other `create` options: `--model`, `--lang` (template texts), `--approvals`, `--keys A,B`, `--domains H,H`, `--writable D,D`, `--sandbox`, `--no-sandbox`, `--trust-outside`, `--telegram`, `--usd-per-day N`, `--runs-per-hour N`, `--off`.
 Rules: `name` (the folder) = 1-48 lowercase letters, digits or dashes; at most 20 agents per topic; the role
 is written like a topic CLAUDE.md, in the user's language. Never a secret in the role (keys -> Settings -> Keys).
 
@@ -89,13 +92,13 @@ field), or add a trigger with the commands above.
   run ask. `keys`: the only Keys vault entries its turns get as `$NAME` (none by default, even exposed ones);
   inside its turns `maxxing keys get` only answers for these.
 - `allowed_tools` / `disallowed_tools`: Claude Code tool rules (`Read`, `Bash(git:*)`...).
-- `sandbox` (Claude Code's sandbox, on for new agents; never bypass; in its runs `maxxing` only accepts `feed post|list`,
+- `sandbox` (Claude Code's sandbox, off for new agents unless they read outside text; never bypass; in its runs `maxxing` only accepts `feed post|list`,
   `agents send|show|list|templates`, `keys get|list`, `status`), `domains` (hosts its commands may reach), `writable` (topic folders it may write in, `.` = the topic's existing files and folders except `agents/`, CLAUDE.md, memory.md, .claude), `rules`
   (`[{"tool": "Bash", "match": "sendmail", "reason": "write a draft instead"}]`: refused before running, reason shown
   to Claude), `subagent` (callable as a Claude Code subagent from the topic's sessions). A run that fails with
   "sandbox cannot run on this server" -> `maxxing agents sandbox-setup` as root (or `maxxing doctor`).
 - Claude Code agent files: `maxxing agents export <agent> [-o FILE]` / `maxxing agents import FILE --topic P/T
-  [--name N]` (sandboxed, no trigger; fields Harness has no equivalent for are listed as ignored).
+  [--name N]` (free, no trigger; fields Harness has no equivalent for are listed as ignored).
 - A finished run can be taken over by hand: agent page -> the run -> **Continue in Sessions** (a normal session of
   the topic, same Claude thread, the user's own permissions).
 - Unknown or invalid values fall back to their default; keep every field when editing by hand.
@@ -125,7 +128,8 @@ source (exit 2).
   (`set <agent> FIELD=VALUE …` or `--json '{…}'`, dotted `limits.chat_idle_h=2`; `cron <agent> --job <id>
   [--schedule …] [--prompt …] [--on|--off] [--remove]`). Safety fields (`sandbox domains keys permission_mode approvals
   trust_outside writable rules allowed_tools disallowed_tools mail subagent`, `limits.usd_per_day runs_per_hour
-  timeout_s`) are not applied: `set` writes an approval request (kind `agent_change`, Allow / Deny in the thread, the
+  timeout_s`) that only make it safer (sandbox on, approvals on, trust off, fewer keys / sites / tools, a lower budget)
+  are applied at once; the others are not: `set` writes an approval request (kind `agent_change`, Allow / Deny in the thread, the
   feed and Telegram, 7 days) and prints "waiting for the owner's OK"; once answered, the next owner message starts
   with "Since your last message: …". Sandboxed agents: the conversation keeps the sandbox for Bash (auto-allowed) but
   may run a command outside it (`dangerouslyDisableSandbox`) after an approval; `agent.json` and `.claude/` stay

@@ -74,7 +74,9 @@ def _configure(p) -> None:
                                                   "separated (. = the whole topic)")
     s.add_argument("--mail", default="", metavar="MAILBOX", help="a mailbox of the E-mail page it may use (id or "
                    "address): read + drafts, or what a mail template says (`maxxing mail accounts`)")
-    s.add_argument("--no-sandbox", action="store_true", help="no sandbox: its commands reach the whole server")
+    s.add_argument("--sandbox", action="store_true", help="protected: its commands run in a sandbox (its --domains, "
+                   "no secrets); the default for an agent with a mailbox, a feed trigger or a webhook template")
+    s.add_argument("--no-sandbox", action="store_true", help="free (the default): its commands reach the whole server")
     s.add_argument("--trust-outside", action="store_true",
                    help="runs started by outside events (webhooks, feed, other agents) do not ask first: risky")
     s.add_argument("--usd-per-day", type=float, help="daily budget in $ (default 2, 0 = none)")
@@ -315,8 +317,10 @@ def _create(a) -> int:
         v = [x.strip() for x in getattr(a, k).split(",") if x.strip()]
         if v:
             fields[k] = v
-    if a.no_sandbox:
-        fields["sandbox"] = False
+    if tpl and (tpl.get("webhook") or tpl.get("mail")):
+        fields["sandbox"] = True                    # it will read outside text: protected (create() sees no webhook)
+    if a.sandbox or a.no_sandbox:
+        fields["sandbox"] = bool(a.sandbox)
     try:
         r = agents.create(f"projects/{project}/topics/{topic}", name, fields)
     except agents.AgentError as e:
