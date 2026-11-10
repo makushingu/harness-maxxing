@@ -215,6 +215,10 @@ def _build(t: Path, root: Path) -> list[dict[str, Any]]:
         for name in set(_sizes) - {p.name for p in entries}:
             del _sizes[name]
     for p in entries:
+        try:
+            p.name.encode("utf-8")
+        except UnicodeEncodeError:                 # left by an older version: not listable, still emptied/purged
+            continue
         side = _side(p)
         try:
             at = float(side.get("at") or p.stat().st_mtime)

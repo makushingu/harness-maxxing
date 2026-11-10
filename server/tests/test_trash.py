@@ -187,6 +187,26 @@ def test_long_name_cut_inside_a_character_still_lists(client, mx):
     assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200 and f.read_text() == "x"
 
 
+def test_a_file_name_that_is_not_utf8_goes_to_the_trash_and_the_trash_still_lists(client, mx):
+    f = mx["files"] / os.fsdecode(b"bad\xff.txt")
+    f.write_text("x")
+    r = client.post("/api/files/delete", content=json.dumps({"path": str(f)}),
+                    headers={"Content-Type": "application/json"})
+    assert r.status_code == 200 and not f.exists()
+    r = client.get("/api/trash")
+    assert r.status_code == 200
+    it = _items(client)[0]
+    assert it["name"] == "bad\ufffd.txt" and it["restorable"]
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200
+    assert (mx["files"] / "bad\ufffd.txt").read_text() == "x"
+
+
+def test_an_old_entry_named_outside_utf8_does_not_break_the_listing(client, mx):
+    (trash.trash_dir() / os.fsdecode(b"20260101-000000-bad\xff.txt")).write_text("x")
+    assert client.get("/api/trash").status_code == 200 and _items(client) == []
+    assert client.delete("/api/trash").status_code == 200 and not any(trash.trash_dir().iterdir())
+
+
 def test_deleted_json_file_is_listed_restored_and_emptied(client, mx):
     f = mx["files"] / "export.json"
     f.write_text('{"a": 1}')
