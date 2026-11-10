@@ -141,8 +141,20 @@ def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monke
                  ["agents", "off", "writer"], ["agents", "show", "writer"], ["agents", "webhook", A]):
         assert agent_guard.check_cli(argv) is None, argv
     for argv in (["agents", "set", "other", "model=x"], ["agents", "create", "acme/blog/new"],
-                 ["agents", "group", "list"], ["agents", "off", "other"]):
+                 ["agents", "group", "list"], ["agents", "off", "other"], ["agents", "silent", "other"],
+                 # an option's value is not the target: argparse takes `other`
+                 ["agents", "cron", "--name", "writer", "other", "--schedule", "0 8 * * *"],
+                 ["agents", "webhook", "--prompt", "writer", "other"], ["agents", "watch", "--source", "writer", "other"],
+                 ["agents", "set", "--json", "writer", "other"]):
         assert agent_guard.check_cli(argv), argv
+    # and the command itself checks the target again
+    with monkeypatch.context() as m:
+        m.setattr(agent_guard, "check_cli", lambda argv: None)
+        assert cli.main(["agents", "cron", "other", "--schedule", "0 8 * * *"]) == 2
+        assert cli.main(["agents", "off", "other"]) == 2
+        assert not agents.cron_jobs("projects/acme/topics/blog/agents/other") and agents.load(
+            "projects/acme/topics/blog/agents/other")["enabled"] is not False
+        capsys.readouterr()
     # a run (no MAXXING_AGENT_CHAT), or outside text: never
     monkeypatch.setenv("MAXXING_AGENT_OUTSIDE", "1")
     assert agent_guard.check_cli(["agents", "set", "writer", "model=x"])
@@ -260,3 +272,22 @@ def test_a_new_agent_without_a_role_sets_itself_up_in_its_conversation(client, t
     wait_idle(client, sid)
     argv = _calls()[-1]["argv"]
     assert "You are a new agent" not in argv[argv.index("--append-system-prompt") + 1]
+
+
+def test_a_turn_that_died_without_a_result_never_shows_the_answer_before(client, topic, mx):
+    from maxxing.sessions import service, store
+    _on(client)
+    _create(client)
+    sid = _say(client, "hi")["session"]["id"]
+    wait_idle(client, sid)
+    first = service.ended_turn_text(sid)
+    assert first and service.ended_turn_steps(sid)["model"]
+    store.append_log(sid, {"type": "mx_user", "text": "second", "at": 1.0})
+    with store.edit(sid) as m:                         # the next queued message runs: the ended turn is still the first
+        m["state"] = "running"
+    assert service.ended_turn_text(sid) == first
+    with store.edit(sid) as m:                         # the second message died (crash, kill): nothing of the first
+        m["state"] = "error"
+    assert service.ended_turn_text(sid) == ""
+    steps = service.ended_turn_steps(sid)
+    assert steps["tools"] == [] and not steps["model"] and not steps["duration_ms"]

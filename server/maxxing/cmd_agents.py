@@ -572,6 +572,11 @@ def _handler(a) -> int:
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 2
+    from . import agent_guard
+    turn = _turn()
+    if turn.get("manager") and turn["path"] and turn["path"] != path and a.agents_cmd in agent_guard.AGENT_OWNER_ONLY:
+        print("Refused: the conversation with an agent changes that agent only.", file=sys.stderr)
+        return 2
     if a.agents_cmd in ("on", "off"):
         agents.update(path, {"enabled": a.agents_cmd == "on"})
         print(f"{path}: {a.agents_cmd}")

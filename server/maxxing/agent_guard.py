@@ -610,19 +610,27 @@ def sandboxed_session(sid8: str) -> str | None:
 
 
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
-AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "set", "import", "sandbox-setup", "group"}
+AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "import", "sandbox-setup", "group"}
 # ...but the owner's conversation with an agent (its manager) runs these on that agent itself
-AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "set", "show", "run"}
+AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "show", "run"}
 
 
-def _manages(turn: dict, words: list[str]) -> bool:
-    """`maxxing agents <sub> <agent>` run by the manager of that very agent."""
+def _manages(turn: dict, words: list[str], argv: list[str]) -> bool:
+    """`maxxing agents <sub> <agent>` run by the manager of that very agent. The target is read by the command's own
+    parser (an option value such as `--name writer` is not the agent)."""
     if not (turn.get("manager") and len(words) > 2 and words[0] == "agents" and words[1] in AGENT_MANAGER):
         return False
+    import argparse
+    import contextlib
+    import io
     from . import cmd_agents
+    p = argparse.ArgumentParser(prog="maxxing agents", add_help=False)
+    cmd_agents._configure(p)
     try:
-        return cmd_agents.resolve(words[2]) == turn["path"]
-    except (ValueError, SystemExit):
+        with contextlib.redirect_stderr(io.StringIO()):
+            ns, _ = p.parse_known_args(argv[argv.index("agents") + 1:])
+        return ns.agents_cmd in AGENT_MANAGER and cmd_agents.resolve(ns.agent) == turn["path"]
+    except (ValueError, SystemExit, AttributeError):
         return False
 
 
@@ -651,7 +659,7 @@ def check_cli(argv: list[str]) -> str | None:
     if turn["tampered"]:
         return ("Refused: the MAXXING_AGENT* variables of this agent turn were changed. Run `maxxing` with the "
                 "environment the run was started with.")
-    if _manages(turn, words):
+    if _manages(turn, words, argv):
         return None
     if turn["path"] and words[0] == "agents" and len(words) > 1 and words[1] in AGENT_OWNER_ONLY:
         return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
