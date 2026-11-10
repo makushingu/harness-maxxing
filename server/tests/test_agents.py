@@ -13,6 +13,12 @@ from maxxing import agents
 A = "projects/acme/topics/blog/agents/writer"
 
 
+def _run(text: str, **kw) -> dict:
+    """A run that is not the owner's conversation (a script's `maxxing agents run`): a session of its own."""
+    from maxxing import agents
+    return agents.fire(A, trigger="manual", prompt=text, source="command line", **kw)
+
+
 def _on(client) -> None:
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
 
@@ -69,7 +75,7 @@ def test_update_role_settings_and_runner_flags(client, topic):
     assert a["description"] == "New role." and a["limits"]["usd_per_day"] == 1.5 and a["limits"]["runs_per_hour"] == 6
     assert a["avatar"]["face"] == "wink" and a["avatar"]["color"] == before["color"]
     assert client.patch("/api/agents/acme/blog/writer", json={"permission_mode": "nope"}).status_code == 422
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL write"}).json()
+    run = _run("NOTOOL write")
     assert run["started"]
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
@@ -114,6 +120,24 @@ def test_run_posts_to_the_thread_with_the_result(client, topic):
     assert kinds[:3] == ["note", "run", "result"]
 
 
+def test_a_result_keeps_the_steps_of_its_turn(client, topic):
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "say hi"}).json()
+    wait_idle(client, run["session"]["id"])
+
+    def result():
+        msgs = client.get("/api/agents/acme/blog/writer/thread").json()["messages"]
+        return [m for m in msgs if m["kind"] == "result"]
+    res = wait_for(result)[-1]
+    assert res["tools"] and all(t["name"] for t in res["tools"]) and res["tools_total"] == len(res["tools"])
+    assert res["model"] and res["duration_ms"] >= 0
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL again"}).json()
+    wait_idle(client, run["session"]["id"])
+    res = wait_for(lambda: [m for m in result() if "again" in m["text"]])[-1]
+    assert "tools" not in res                       # a turn without tools: nothing kept
+
+
 def test_guards_disabled_budget_rate(client, topic, monkeypatch):
     from maxxing import agents
     _on(client)
@@ -124,10 +148,14 @@ def test_guards_disabled_budget_rate(client, topic, monkeypatch):
     monkeypatch.setattr(agents, "day_cost", lambda path, when=None: 5.0)
     assert client.post("/api/agents/acme/blog/writer/run", json={}).json()["reason"] == "budget"
     monkeypatch.setattr(agents, "day_cost", lambda path, when=None: 0.0)
-    first = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL a"}).json()
+    first = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")
     assert first["started"]
     wait_idle(client, first["session"]["id"])
-    assert client.post("/api/agents/acme/blog/writer/run", json={}).json()["reason"] == "rate"
+    # the hourly limit stops a script or a trigger in a loop, never the owner typing on the agent page
+    assert agents.fire(A, trigger="manual", source="command line")["reason"] == "rate"
+    again = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL b"}).json()
+    assert again["started"]
+    wait_idle(client, first["session"]["id"])
     skips = [m for m in agents.thread(A) if m["kind"] == "skip"]
     assert [m["reason"] for m in skips] == ["disabled", "budget", "rate"]
 
@@ -138,9 +166,9 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     _create(client)
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
-    first = agents.fire(A, trigger="manual", prompt="NOTOOL a")
+    first = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")
     assert first["started"]
-    assert agents.fire(A, trigger="manual", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
     assert agents.fire(A, trigger="feed:t_1", prompt="NOTOOL c", wait=True) == {"started": False, "reason": "busy"}
     assert [m["reason"] for m in agents.thread(A) if m["kind"] == "skip"] == ["busy"]   # wait: nothing posted
     from maxxing import feed
@@ -150,7 +178,7 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     assert argv[argv.index("--max-budget-usd") + 1] == "2.00"
     wait_for(lambda: not agents._read_state(A).get("held"))                            # released at the turn end
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.02")
-    again = agents.fire(A, trigger="manual", prompt="NOTOOL d")
+    again = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL d")
     assert again["started"]
     wait_idle(client, again["session"]["id"])
     argv = _calls()[-1]["argv"]
@@ -158,7 +186,7 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     # runs per hour: two triggers at the same moment, one slot left -> one run
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0, "runs_per_hour": 3}})
     out: list = []
-    ts = [threading.Thread(target=lambda: out.append(agents.fire(A, trigger="manual", prompt="NOTOOL e")))
+    ts = [threading.Thread(target=lambda: out.append(agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL e")))
           for _ in range(2)]
     [t.start() for t in ts]
     [t.join() for t in ts]
@@ -174,7 +202,7 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
     _create(client)
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "1.5")
-    sid = agents.fire(A, trigger="manual", prompt="NOTOOL a")["session"]["id"]
+    sid = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")["session"]["id"]
     wait_for(lambda: (store.read(sid) or {}).get("state") == "running")
     with store.edit(sid) as m:                     # a 2nd turn queued while the 1st runs (mcp_auto, a compaction...)
         m["queue"] = (m.get("queue") or []) + [{"text": "NOTOOL second", "attachments": [], "source": "system"}]
@@ -182,7 +210,7 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
     wait_for(lambda: any(m["kind"] == "result" for m in agents.thread(A)), timeout=5)   # turn 1's end was handled
     assert (store.read(sid) or {}).get("state") == "running"                            # turn 2 runs
     assert sid in (agents._read_state(A).get("held") or {})
-    assert agents.fire(A, trigger="manual", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
     wait_idle(client, sid, timeout=20)
     wait_for(lambda: not agents._read_state(A).get("held"))                            # released at its own end
 
@@ -191,7 +219,7 @@ def test_an_agent_turn_has_one_system_note_with_the_owner_note_and_the_subagents
     from maxxing.sessions import spawn
     _on(client)
     _create(client)
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert argv.count("--append-system-prompt") == 1        # Claude Code keeps only the last of several
@@ -264,7 +292,8 @@ def test_the_agents_list_reads_the_sessions_once(client, topic, monkeypatch):
     _create(client)
     assert client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "editor"}).status_code == 200
     for name in ("writer", "editor"):
-        run = client.post(f"/api/agents/acme/blog/{name}/run", json={"text": "NOTOOL hi"}).json()
+        run = agents.fire(f"projects/acme/topics/blog/agents/{name}", trigger="manual", source="command line",
+                          prompt="NOTOOL hi")
         wait_idle(client, run["session"]["id"])
     reads: list = []
     real = store.read_cached
@@ -501,14 +530,14 @@ def _results(client) -> list[dict]:
 def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client, topic):
     _on(client)
     _create(client)
-    first = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL plan the post"}).json()
+    first = _run("NOTOOL plan the post")
     sid = first["session"]["id"]
     wait_idle(client, sid)
     res = wait_for(lambda: _results(client))
     a = client.get("/api/agents/acme/blog/writer").json()
     assert a["thread_unread"] == 1 and a["running_sessions"] == [] and a["waiting"] == 0
     # reply to the result: the same session goes on (no new session, the task is not framed)
-    r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL now point 2", "reply_to": res[-1]["id"]}).json()
+    r = _run("NOTOOL now point 2", reply_to=res[-1]["id"])
     assert r["started"] and r["continued"] and r["session"]["id"] == sid
     wait_idle(client, sid)
     assert _calls()[-1]["prompt"] == "NOTOOL now point 2"
@@ -516,13 +545,13 @@ def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client,
     assert runs[-1]["reply_to"] == res[-1]["id"] and runs[-1]["session"] == sid
     wait_for(lambda: len(_results(client)) == 2)
     # a new message (no reply): a new session, with the last results as framed context
-    n = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL something else"}).json()
+    n = _run("NOTOOL something else")
     assert n["session"]["id"] != sid and not n.get("continued")
     wait_idle(client, n["session"]["id"])
     p = _calls()[-1]["prompt"]
     assert p.startswith("NOTOOL something else") and "your last results in your thread" in p and "THREAD-" in p
     # an unknown reply_to: a new session as usual
-    x = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL x", "reply_to": "nope"}).json()
+    x = _run("NOTOOL x", reply_to="nope")
     assert x["started"]
     wait_idle(client, x["session"]["id"])
     wait_for(lambda: len(_results(client)) == 4)        # its result is in before seen (a later one is unread again)
@@ -599,7 +628,7 @@ def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
     from maxxing import agents
     _on(client)
     _create(client)
-    run = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()["session"]["id"]
+    run = lambda t: _run(f"NOTOOL {t}")["session"]["id"]
     archived = lambda sid: client.get(f"/api/sessions/{sid}").json()["archived"]
     a = run("one")
     wait_idle(client, a)
@@ -860,3 +889,74 @@ def test_a_silent_agent_works_without_calling_the_user(client, topic, monkeypatc
     wait_idle(client, run["session"]["id"])
     wait_for(lambda: sent)
     assert client.get("/api/agents/acme/blog/writer").json()["thread_unread"] >= 1
+
+
+def test_the_owner_chats_in_one_conversation(client, topic, monkeypatch):
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    say = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()
+    first = say("one")
+    sid = first["session"]["id"]
+    wait_idle(client, sid)
+    wait_for(lambda: _results(client))
+    # the next message goes on in the same session, as typed (no context added: Claude has it all)
+    r = say("two")
+    assert r["started"] and r["continued"] and r["session"]["id"] == sid
+    wait_idle(client, sid)
+    assert _calls()[-1]["prompt"] == "NOTOOL two"
+    res = wait_for(lambda: len(_results(client)) == 2 and _results(client))
+    assert res[-1]["session"] == sid and res[-1]["text"] != res[0]["text"]     # this turn's answer, not the first
+    runs = [m for m in agents.thread(A) if m["kind"] == "run"]
+    assert all(m["owner"] for m in runs) and runs[0]["chat"] == "new" and "chat" not in runs[1]
+    # outside text (a forward on Telegram), a cron, a script: their own session, the conversation is not touched
+    for kw in ({"trigger": "telegram", "text": "forwarded mail", "source": "telegram"},
+               {"trigger": "cron:c_1", "prompt": "NOTOOL routine", "source": "cron"},
+               {"trigger": "manual", "source": "command line", "prompt": "NOTOOL from a script"}):
+        x = agents.fire(A, **kw)
+        assert x["started"] and x["session"]["id"] != sid and not x.get("continued")
+        wait_idle(client, x["session"]["id"])
+    assert say("three")["session"]["id"] == sid
+    wait_idle(client, sid)
+    # a message typed while it works waits in its queue, even when that run holds the rest of the budget
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0}})
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
+    assert say("four")["session"]["id"] == sid
+    queued = say("five")
+    assert queued["started"] and queued["session"]["id"] == sid
+    assert agents.fire(A, trigger="feed:t_1", prompt="NOTOOL x", wait=True)["reason"] == "busy"
+    wait_for(lambda: _calls()[-1]["prompt"] == "NOTOOL five")
+    wait_idle(client, sid)
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0")
+    # New conversation (button, Telegram /new): the next message starts one, with the last results as context
+    assert client.post("/api/agents/acme/blog/writer/chat/new").json() == {"ok": True}
+    assert [m["text"] for m in agents.thread(A) if m["kind"] == "note"][-1] == "New conversation"
+    n = say("six")
+    assert n["session"]["id"] != sid and not n.get("continued")
+    wait_idle(client, n["session"]["id"])
+    assert "your last results in your thread" in _calls()[-1]["prompt"]
+    # silent for longer than chat_idle_h: a new conversation
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"chat_idle_h": 1}})
+    wait_for(lambda: any(m["session"] == n["session"]["id"] for m in _results(client)))   # its turn end is written
+    with agents._lock:
+        st = agents._read_state(A)
+        st["chat"]["at"] -= 7200
+        agents._write_state(A, st)
+    with store.edit(n["session"]["id"]) as m:
+        m["finished_at"] -= 7200
+    assert say("seven")["session"]["id"] != n["session"]["id"]
+
+
+def test_agents_made_before_the_conversation_have_it_too(client, topic):
+    _on(client)
+    _create(client)
+    f = agents.folder(A) / "agent.json"
+    data = json.loads(f.read_text())
+    data["chat"] = False                                  # an agent.json of a beta that had the switch
+    f.write_text(json.dumps(data))
+    assert "chat" not in agents.load(A)
+    one = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL one"}).json()
+    wait_idle(client, one["session"]["id"])
+    two = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL two"}).json()
+    assert two["session"]["id"] == one["session"]["id"]
+    wait_idle(client, two["session"]["id"])

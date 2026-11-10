@@ -66,6 +66,26 @@ export function ThreadApprovalBody({ m, live, decided }: { m: AgentMessage; live
   )
 }
 
+/** A request of the conversation once answered: one line between the messages (what was asked, what was decided),
+ *  the tool call itself shows among the steps of the answer. */
+export function ApprovalLine({ m, decided }: { m: AgentMessage; decided?: AgentMessage }) {
+  const t = useT()
+  const st = decided?.status || ''
+  const o = OUTCOME[st] || { icon: Clock, tone: 'text-muted-foreground', key: 'agents.approval.closed' as const }
+  const Icon = o.icon
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:ml-10" data-testid="agent-approval-line" data-status={st || 'closed'}>
+      <ShieldCheck className="size-3.5 shrink-0" />
+      <span className={cn('inline-flex shrink-0 items-center gap-1 font-medium', o.tone)}>
+        <Icon className="size-3" /> {t(o.key)}
+      </span>
+      <span className="min-w-0 truncate font-mono text-[11px]">
+        <Sensitive>{m.text}</Sensitive>
+      </span>
+    </div>
+  )
+}
+
 /** The "waiting for your OK" bubble of a desk as a button: it opens a centered window (a bottom sheet on a phone) with
  *  the waiting requests, Allow / Deny, without leaving the Office (the desk itself still opens the agent). The window
  *  closes once nothing waits any more. */

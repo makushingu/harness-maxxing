@@ -97,11 +97,13 @@ export type WorkspaceTree = { root: string; projects: Project[] }
 /** The pixel character of an agent: `color` = outfit (one of the accent colours, tells projects apart). */
 export type AgentAvatar = { color: string; skin: string; hair: string; hair_color: string; face: string; accessory: string }
 export type AgentAvatarOptions = Record<keyof AgentAvatar, string[]>
-export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_s: number; debounce_s: number }
+export type AgentLimits = { usd_per_day: number; runs_per_hour: number; timeout_s: number; debounce_s: number; /** `chat`: hours of silence after which a new conversation starts (0 = never) */ chat_idle_h?: number }
 export type AgentTrigger = { id: string; kind: 'feed'; enabled: boolean; source: string; levels: FeedLevel[]; match: string; prompt: string; hook_id?: string }
 export type AgentTriggerInput = Partial<Omit<AgentTrigger, 'kind'>> & { kind?: 'feed' }
 export type AgentThreadKind = 'note' | 'run' | 'result' | 'skip' | 'approval'
-export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string; /** approval / its note: the request id */ approval?: string; /** note of an approval: allow, deny, timeout, expired */ status?: string; /** run: the files sent with it (absolute paths) */ attachments?: string[] }
+export type AgentMessage = { id: string; at: number; kind: AgentThreadKind; text: string; trigger?: string; source?: string; session?: string; ok?: boolean; cost?: number; reason?: string; /** run: the thread message it answers (its session went on) */ reply_to?: string; /** approval / its note: the request id */ approval?: string; /** note of an approval: allow, deny, timeout, expired */ status?: string; /** run: the files sent with it (absolute paths) */ attachments?: string[]; /** run: typed by the owner (page, Telegram) */ owner?: boolean; /** run: it started a new conversation */ chat?: 'new'; /** result: the tools its turn used (the last 40), how many in all, its model and duration */ tools?: AgentStep[]; tools_total?: number; model?: string; duration_ms?: number; /** note of a change: the files changed */ files?: string[] }
+/** A tool a turn of an agent used, as kept in its thread. */
+export type AgentStep = { name: string; summary: string; error?: boolean }
 export type AgentRuleTool = 'Bash' | 'Write' | 'Edit' | 'WebFetch' | '*'
 /** "Refuse <tool> when it contains <match>", `reason` shown to Claude. */
 export type AgentRule = { tool: AgentRuleTool; match: string; reason: string }
@@ -147,6 +149,8 @@ export type Agent = {
   rules: AgentRule[]
   /** callable by Claude as a subagent from the normal sessions of its topic */
   subagent: boolean
+  /** the model of the owner's conversation ('' = `model`) */
+  chat_model?: string
   limits: AgentLimits
   triggers: AgentTrigger[]
   /** mailboxes of the E-mail page it may use (none by default) */
@@ -162,6 +166,10 @@ export type Agent = {
   last_run?: AgentMessage | null
   running_now?: number
   running_sessions?: { id: string; title: string; started?: number }[]
+  /** the conversation the owner's next message goes on in (`chat`), null = a new one */
+  chat_session?: string | null
+  /** the owner's last conversation (to read it again once a new one is due) */
+  last_chat_session?: string | null
   /** results posted after the user last opened the agent */
   thread_unread?: number
   /** approval requests of its running sessions */
@@ -178,6 +186,10 @@ export type AgentTemplate = {
   role: string
   /** what the user still has to connect */
   needs: string
+  /** the message an idea of a new agent's conversation puts in the box (My job / When / Results / Never without me) */
+  brief: string
+  /** shown first among the ideas (the others behind "More ideas") */
+  first: boolean
   avatar: AgentAvatar
   permission_mode: PermissionMode
   approvals: boolean
@@ -301,6 +313,7 @@ export type AgentInput = {
   writable?: string[]
   rules?: AgentRule[]
   subagent?: boolean
+  chat_model?: string
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
   mail?: MailGrantInput[]
@@ -357,6 +370,8 @@ export type Approval = {
   session: string
   agent_path: string
   tool: string
+  /** agent_change: an agent's conversation asks to change its safety settings (input.description = the change) */
+  kind?: string
   /** The tool's input, long strings clipped, secrets redacted. */
   input: Record<string, unknown>
   /** One line: "Bash: git push". */

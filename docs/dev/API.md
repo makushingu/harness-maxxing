@@ -403,7 +403,7 @@ INTERNALS.md#agents); its path is a session path. Every trigger goes through `ag
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/agents` | – | `{agents: [Agent & Status], avatar: {color: [..], skin: [..], hair: [..], hair_color: [..], face: [..], accessory: [..]}}` (the pixel-art character's parts; `color` = an accent colour of the UI, unknown or missing values = a stable pick from the agent's name) |
-| GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
+| GET | `/api/agents/templates?lang=` | – | `{templates: [AgentTemplate]}`: the gallery of ready-made agents (`maxxing/agent_templates.py`), texts in `lang` (default: UI language; English when missing). `AgentTemplate = {id, name, summary, role, needs, brief (the four-line message an idea puts in a new agent's box), first (one of the six ideas shown first), avatar, permission_mode, approvals, allowed_tools, keys, keys_present, limits, cron?: {schedule, prompt}, webhook?: {kind, prompt}}`; nothing is created (the UI fills its form, `maxxing agents create --template`) |
 | POST | `/api/agents` | `{topic_path, name, display_name?, description?, template?, ...AgentFields}` (`template`: a ready-made agent id, its settings under the fields) | `Agent & Status` · `400 bad_template` / `bad_path` / `invalid_name` / `bad_trigger` / `bad_model` / `bad_permission_mode` · `404 not_found` (topic) · `409 exists` / `too_many` (20 per topic) |
 | GET | `/api/agents/{p}/{t}/{a}` | – | `Agent & Status & {crons: [CronJob], webhooks: [{id, name, kind, url, has_secret}], trigger_stats: {<trigger id>: {events, last_event_at}}}` (cron jobs whose `topic_path` is the agent path; the feed hooks behind its webhook triggers, never their secret; events of each feed trigger's source over the feed retention) · `404` |
 | PATCH | `/api/agents/{p}/{t}/{a}` | `{display_name?, description?, ...AgentFields}` | `Agent & Status` (`limits` and `avatar` are merged; `description` rewrites the role in CLAUDE.md) |
@@ -433,7 +433,7 @@ AgentFields = {avatar?: Avatar, enabled?: bool, model?: string, permission_mode?
                keys: the only vault entries its runs get as env vars (none by default, exposed or not).
 Agent  = {path, project, topic, name (folder slug), display_name, description, avatar: Avatar, enabled, model,
           permission_mode, allowed_tools, disallowed_tools, telegram, approvals, trust_outside, keys, limits: Limits,
-          triggers: [Trigger], sandbox: bool (false when missing: agents made before the sandbox; true for new ones),
+          triggers: [Trigger], sandbox: bool (false when missing: agents made before the sandbox; new ones: false, true with a mailbox or a feed trigger),
           domains: [host] (sandbox network allow list, "*.x" ok), writable: [folder of the topic, "." = all],
           rules: [{tool: "Bash"|"Write"|"Edit"|"WebFetch"|"*", match, reason}], subagent: bool,
           created, session_count, archived_count, running, unread}

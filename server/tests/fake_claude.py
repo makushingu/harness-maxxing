@@ -19,6 +19,8 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   MCPUSE:<srv>  calls the tool mcp__<srv>__ping (MCP auto-loading tests)
   MCPLOAD       runs `maxxing mcp load $FAKE_CLAUDE_MCPLOAD` (python -m maxxing) like a turn asking for a server
   APPROVE       asks the --permission-prompt-tool MCP server about a Bash call (approval tests)
+  ASKNET        (stream-json input) asks the host on the control channel to reach example.org (`can_use_tool`
+                SandboxNetworkAccess, like the sandbox) and writes the answer to $FAKE_CLAUDE_DIR/asknet.txt
   REPLY_AS x: t answers t when the turn runs in a folder named x (agent groups; the last such line wins)
   MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
   NORESULT      exits right after the init line (no result), stdin still open
@@ -111,6 +113,7 @@ def _agents(sid: str, model: str, seconds: float) -> None:
 
 EMIT_LOCK = threading.Lock()
 INTERRUPT = threading.Event()
+CONTROL: queue.Queue = queue.Queue()                   # the host's control_response lines (ASKNET)
 EVENTS: queue.Queue = queue.Queue()                    # ("user", text, images) / ("bgdone", name) / ("eof",)
 BG: dict[str, str] = {}                                # background tasks running: task id -> description
 BG_LOCK = threading.Lock()
@@ -142,6 +145,9 @@ def _stdin_reader() -> None:
         try:
             ev = json.loads(line)
         except ValueError:
+            continue
+        if isinstance(ev, dict) and ev.get("type") == "control_response":
+            CONTROL.put(ev)
             continue
         if isinstance(ev, dict) and ev.get("type") == "control_request":
             if (ev.get("request") or {}).get("subtype") == "interrupt":
@@ -506,6 +512,19 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
             "parent_tool_use_id": None, "session_id": sid, "uuid": str(uuid.uuid4())})
     if "APPROVE" in prompt:
         _approve(sid, model)
+    if "ASKNET" in prompt:
+        rid = "req-" + uuid.uuid4().hex[:8]
+        emit({"type": "control_request", "request_id": rid, "request": {
+            "subtype": "can_use_tool", "tool_name": "SandboxNetworkAccess", "input": {"host": "example.org"},
+            "tool_use_id": "toolu_net", "description": "Allow network connection to example.org?"}})
+        try:
+            got = CONTROL.get(timeout=float(os.environ.get("FAKE_CLAUDE_ASK_S", "20")))
+            r = got["response"]
+            answer = r["response"]["behavior"] if r.get("request_id") == rid else "wrong id"
+        except queue.Empty:
+            answer = "no answer"
+        with open(STORE / "asknet.txt", "a") as f:
+            f.write(answer + "\n")
     import re as _re
     for srv in _re.findall(r"MCPUSE:([A-Za-z0-9_-]+)", prompt):
         uid = "toolu_" + uuid.uuid4().hex[:20]
