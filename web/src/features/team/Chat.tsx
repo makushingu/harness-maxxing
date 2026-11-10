@@ -464,7 +464,7 @@ function ChatHeader({ team, chat, title, compact, writing }: { team: TeamState |
           {face}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-1.5">
+      <PopoverContent align="start" className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-64 overflow-y-auto p-1.5">
         <div className="px-2 pt-1 pb-1.5 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.members', { count: members.length + 1 })}</div>
         {[...members, [team?.me || 'me', personOf(team, team?.me || 'me')] as const].map(([id, p]) => (
           <div key={id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
