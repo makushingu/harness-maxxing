@@ -12,6 +12,10 @@ New:
   the next one; a model you chose on a topic, a job or an agent never changes. Short titles, the connection test and
   Team summaries always use the newest Haiku or Sonnet.
 
+Fixed:
+- **Restoring a deleted scheduled job on a full disk no longer leaves it in the crontab.** If the job cannot be saved,
+  the crontab goes back to what it was, as it already did when you create, change or delete a job.
+
 ## 2.0.0-alpha.137 - 2026-11-10
 
 Fixed:

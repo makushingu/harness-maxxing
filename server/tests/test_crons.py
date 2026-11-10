@@ -79,6 +79,20 @@ def test_a_failed_save_puts_the_crontab_back(monkeypatch):
     assert crons.read_crontab() == before
 
 
+def test_a_failed_save_of_a_restore_puts_the_crontab_back(monkeypatch):
+    gone = crons.create_job({"name": "Gone", "schedule": "@hourly", "command": "true"})
+    crons.delete_job(gone["id"])
+    before = crons.read_crontab()
+    assert f"cron run {gone['id']}" not in before
+
+    def full(*a, **k):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(crons, "_save_raw", full)
+    with pytest.raises(OSError):
+        crons.restore_job(gone["id"])
+    assert crons.read_crontab() == before                           # no line for a job that jobs.json does not hold
+
+
 @pytest.mark.parametrize("field", ["name", "command"])
 def test_a_lone_surrogate_is_refused_before_the_crontab(monkeypatch, field):
     keep = crons.create_job({"name": "Keep", "schedule": "@hourly", "command": "true"})

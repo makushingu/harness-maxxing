@@ -15,6 +15,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`claude_update.installed_server()`, split out of `runs_here()`; `MAXXING_CLAUDE_MODELS=0|1`). `titles.MODEL`,
   `api.claude.TEST_MODEL` = `haiku`, `team.SUMMARY_MODEL` = `sonnet` (Claude Code family names). Telegram fallback
   list: Haiku 5.5 instead of 4.5. Tests `test_claude_models.py`.
+- `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
+  then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
+  save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
 
 ## 2.0.0-alpha.137 - 2026-11-10
 
