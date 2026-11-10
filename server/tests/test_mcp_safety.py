@@ -404,3 +404,27 @@ def test_login_start_refuses_unknown_servers_and_caps_open_attempts(env):  # noq
     finally:
         for k in list(mcp._logins):
             mcp.login_cancel(k)
+
+
+def test_connect_again_during_a_finish_does_not_cancel_it(env, monkeypatch):  # noqa: F811
+    from maxxing import mcp
+    monkeypatch.setenv("FAKE_CLAUDE_LOGIN_DELAY", "1.5")
+    mcp.add("ads", {"type": "http", "url": "https://ads.example.com/mcp"}, None)
+    sid = mcp.servers()[0]["id"]
+    first = mcp.login_start(sid, wait=10)
+    res: dict = {}
+
+    def finish():
+        try:
+            res["ok"] = mcp.login_finish(first["login"], "http://localhost:4321/callback?code=abc", wait=10)["ok"]
+        except mcp.McpError as e:
+            res["err"] = e.code
+    t = threading.Thread(target=finish)
+    t.start()
+    deadline = time.time() + 5
+    while not mcp._logins[first["login"]].finishing and time.time() < deadline:
+        time.sleep(0.02)
+    second = mcp.login_start(sid, wait=10)
+    t.join(15)
+    assert res == {"ok": True}
+    mcp.login_cancel(second["login"])

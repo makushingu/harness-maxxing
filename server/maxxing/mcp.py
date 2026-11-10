@@ -889,7 +889,8 @@ def _register(key: str, lg: _Login) -> None:
         if _too_many(lg.sid):                            # others started meanwhile
             lg.close()
             raise McpError(429, "too_many_logins", "too many connections in progress: finish or cancel one")
-        gone = [_logins.pop(k) for k, o in list(_logins.items()) if o.sid == lg.sid]
+        gone = [_logins.pop(k) for k, o in list(_logins.items())     # a finish in progress ends by itself
+                if o.sid == lg.sid and not o.finishing]
         _logins[key] = lg
         if _reaper["thread"] is None:
             _reaper["thread"] = threading.Thread(target=_reap, name="mcp-login-gc", daemon=True)
