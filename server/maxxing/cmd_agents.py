@@ -7,7 +7,10 @@
   maxxing agents on <agent> | off <agent>    switch an agent on or off
   maxxing agents create <p>/<t>/<a> --role … create an agent (what a session runs when the user asks for one)
   maxxing agents show <agent>                its agent.json, role, triggers, cron jobs, webhook URLs (JSON)
-  maxxing agents cron <agent> --schedule …   add a schedule (a Claude cron job in the agent folder)
+  maxxing agents set <agent> FIELD=VALUE …   change its settings (in its own conversation, a safety setting waits for
+                                             the owner's OK)
+  maxxing agents cron <agent> --schedule …   add a schedule (a Claude cron job in the agent folder); --job ID changes
+                                             or removes (--remove) one of its schedules
   maxxing agents webhook <agent> [--kind …]  add a webhook (a feed hook + a feed trigger on it); prints its URL
   maxxing agents watch <agent> --source …    add a feed trigger on existing events (a source, levels, words)
   maxxing agents export <agent> [-o FILE]    the agent as a Claude Code agent file (.claude/agents/<name>.md)
@@ -120,11 +123,21 @@ def _configure(p) -> None:
     g = gs.add_parser("say", help="write to the group as the owner (the members answer in turn)")
     g.add_argument("group", help="<project>/<group>")
     g.add_argument("text", nargs="+")
-    s = sub.add_parser("cron", help="add a schedule to an agent")
+    s = sub.add_parser("set", help="change an agent's settings (its manager: a safety setting waits for the owner's OK)")
     s.add_argument("agent")
-    s.add_argument("--schedule", required=True, help='5-field cron, server time zone, e.g. "0 8 * * 1"')
+    s.add_argument("values", nargs="*", help='FIELD=VALUE (JSON values: approvals=true, domains=\'["example.com"]\', '
+                                            'limits.usd_per_day=3, model=sonnet)')
+    s.add_argument("--json", dest="fields", default="", help="the fields as one JSON object")
+    s = sub.add_parser("cron", help="add a schedule to an agent, or change / remove one of its schedules (--job)")
+    s.add_argument("agent")
+    s.add_argument("--schedule", default="", help='5-field cron, server time zone, e.g. "0 8 * * 1"')
     s.add_argument("--prompt", default="", help='what to do each time (default "Run your routine.")')
     s.add_argument("--name", default="", help="name of the cron job")
+    s.add_argument("--job", default="", help="change this cron job of the agent (its id: `maxxing agents show`)")
+    s.add_argument("--remove", action="store_true", help="with --job: remove it")
+    onoff = s.add_mutually_exclusive_group()
+    onoff.add_argument("--on", dest="enabled", action="store_const", const=True, default=None)
+    onoff.add_argument("--off", dest="enabled", action="store_const", const=False)
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("webhook", help="add a webhook to an agent and print its URL")
     s.add_argument("agent")
@@ -454,6 +467,83 @@ def _group(a) -> int:
     return 2
 
 
+def _values(a) -> dict:
+    """`set` FIELD=VALUE words (+ --json) -> agent.json fields; a.b=VALUE goes in the object a (limits.usd_per_day)."""
+    out: dict = {}
+    if a.fields:
+        d = json.loads(a.fields)
+        if not isinstance(d, dict):
+            raise ValueError("--json: a JSON object")
+        out.update(d)
+    for w in a.values:
+        k, sep, v = w.partition("=")
+        if not sep or not k.strip():
+            raise ValueError(f"{w!r}: FIELD=VALUE")
+        try:
+            val = json.loads(v)
+        except ValueError:
+            val = v
+        k = k.strip()
+        if "." in k:
+            top, sub = k.split(".", 1)
+            out.setdefault(top, {})
+            if not isinstance(out[top], dict):
+                raise ValueError(f"{top}: an object")
+            out[top][sub] = val
+        else:
+            out[k] = val
+    if not out:
+        raise ValueError("Nothing to change: FIELD=VALUE ... or --json '{...}'")
+    return out
+
+
+def _set(path: str, a) -> int:
+    from . import agents
+    try:
+        fields = _values(a)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    turn = _turn()
+    if turn.get("manager") and turn["path"] == path:
+        r = agents.request_change(path, fields, session=turn["session"])
+    else:                                              # the owner (shell, session): everything at once
+        agents.update(path, fields)
+        r = {"applied": sorted(fields), "asked": [], "request": ""}
+    if r["applied"]:
+        print("changed: " + ", ".join(r["applied"]))
+    if r["asked"]:
+        print("waiting for the owner's OK (safety settings, applied once allowed): " + ", ".join(r["asked"]))
+    return 0
+
+
+def _cron_job(path: str, a) -> int:
+    from . import bus, crons
+    job = crons.get_job(a.job)
+    if not job or job.get("topic_path") != path:
+        print(f"{a.job}: not a cron job of this agent (see `maxxing agents show`)", file=sys.stderr)
+        return 2
+    if a.remove:
+        crons.delete_job(a.job)
+        bus.invalidate("crons", "agents")
+        print(f"schedule removed: {a.job}")
+        return 0
+    fields = {k: v for k, v in (("schedule", a.schedule), ("prompt", a.prompt), ("name", a.name)) if v}
+    if a.enabled is not None:
+        fields["enabled"] = a.enabled
+    if not fields:
+        print("Nothing to change: --schedule, --prompt, --name, --on / --off or --remove", file=sys.stderr)
+        return 2
+    try:
+        crons.update_job(a.job, fields)
+    except crons.CronError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    bus.invalidate("crons", "agents")
+    print(f"schedule changed: {a.job} ({', '.join(sorted(fields))})")
+    return 0
+
+
 def _handler(a) -> int:
     from . import agents
     if a.agents_cmd == "list":
@@ -509,15 +599,22 @@ def _handler(a) -> int:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
                                                     "approvals", "trust_outside", "keys", "telegram", "silent", "sandbox", "domains",
-                                                    "writable", "rules", "subagent", "chat", "limits", "triggers")},
+                                                    "writable", "rules", "subagent", "chat", "chat_model", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
                           "webhooks": [{k: v for k, v in h.items() if not own or k != "url"}
                                        for h in agents.hooks(path)]}, indent=2, ensure_ascii=False))
         return 0
     try:
+        if a.agents_cmd == "set":
+            return _set(path, a)
+        if a.agents_cmd == "cron" and a.job:
+            return _cron_job(path, a)
         if a.agents_cmd == "cron":
-            job = agents.add_cron(path, a.schedule, a.prompt, a.name)
+            if not a.schedule:
+                print("--schedule is needed to add a schedule (or --job ID to change one)", file=sys.stderr)
+                return 2
+            job = agents.add_cron(path, a.schedule, a.prompt, a.name, enabled=a.enabled is not False)
             print(json.dumps({"cron": job.get("id")}) if a.json else f"schedule added: {job.get('id')} ({a.schedule})")
             return 0
         if a.agents_cmd == "webhook":

@@ -13,6 +13,12 @@ New:
   e-mails and other agents still start sessions of their own. On for new agents; for an existing one, switch on
   **One conversation** in its Settings -> Limits. While it works, the conversation shows what it writes as it comes.
   Your own messages no longer count in its runs per hour.
+- **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
+  add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what
+  keeps it safe (sandbox, sites, keys, approvals, budget...) shows up as a card with the change written out:
+  **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
+  (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
+  (Settings -> Model).
 - **New Claude models show up by themselves**: once a day Harness Maxxing asks Anthropic which models exist and
   lists the newest Opus, Sonnet, Haiku and Fable everywhere you pick a model (Settings, topics, jobs, agents,
   Telegram `/model`), without waiting for an update. If your default model is the newest of its family, it follows

@@ -691,7 +691,7 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
         <div className="mx-auto mt-1 flex max-w-3xl items-center justify-end gap-2 px-1 text-[11px] text-muted-foreground" data-testid="agent-chat-bar">
           {a.chat_session ? (
             <>
-              <span>{t('agents.chat.goesOn')}</span>
+              <span title={t('agents.chat.manager')}>{t('agents.chat.goesOn')}</span>
               <button type="button" onClick={() => fresh.mutate({ path: a.path })} disabled={fresh.isPending} className="inline-flex items-center gap-1 rounded text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-new-chat">
                 <MessageSquarePlus className="size-3" /> {t('agents.chat.new')}
               </button>
@@ -751,7 +751,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
         <p className="text-xs text-muted-foreground">{t('agents.when.manual')}</p>
         <AgentTriggers agent={a} onMailSettings={() => setAdvanced('mail')} />
         <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground" data-testid="agent-self-locked">
-          <Lock className="mt-px size-3 shrink-0" /> {t('agents.edit.selfLocked')}
+          <Lock className="mt-px size-3 shrink-0" /> {t(a.chat ? 'agents.edit.selfLockedChat' : 'agents.edit.selfLocked')}
         </p>
       </PanelSection>
 

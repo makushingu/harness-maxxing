@@ -396,7 +396,8 @@ class Runner:
         from maxxing import agents                      # an agent folder: its model and tool lists
         env = meta.get("env") or {}
         agent = agents.run_settings(meta.get("path") or "", env.get("MAXXING_AGENT_OUTSIDE") == "1",
-                                    session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""))
+                                    session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""),
+                                    manager=agents.manager_turn(meta))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session

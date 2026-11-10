@@ -149,6 +149,8 @@ export type Agent = {
   subagent: boolean
   /** the owner's messages (agent page, Telegram) go on in one conversation instead of a new session each */
   chat?: boolean
+  /** the model of the owner's conversation ('' = `model`) */
+  chat_model?: string
   limits: AgentLimits
   triggers: AgentTrigger[]
   /** mailboxes of the E-mail page it may use (none by default) */
@@ -306,6 +308,7 @@ export type AgentInput = {
   rules?: AgentRule[]
   subagent?: boolean
   chat?: boolean
+  chat_model?: string
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
   mail?: MailGrantInput[]
@@ -362,6 +365,8 @@ export type Approval = {
   session: string
   agent_path: string
   tool: string
+  /** agent_change: an agent's conversation asks to change its safety settings (input.description = the change) */
+  kind?: string
   /** The tool's input, long strings clipped, secrets redacted. */
   input: Record<string, unknown>
   /** One line: "Bash: git push". */

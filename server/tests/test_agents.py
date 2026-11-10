@@ -60,7 +60,7 @@ def test_create_folder_tree_and_paths(client, topic, mx):
 
 def test_update_role_settings_and_runner_flags(client, topic):
     _on(client)
-    before = _create(client)["avatar"]
+    before = _create(client, chat=False)["avatar"]
     r = client.patch(f"/api/agents/acme/blog/writer", json={
         "description": "New role.", "model": "sonnet", "permission_mode": "acceptEdits",
         "allowed_tools": ["Read", "Bash(git:*)"], "limits": {"usd_per_day": 1.5}, "avatar": {"face": "wink"}})
@@ -194,7 +194,7 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
 def test_an_agent_turn_has_one_system_note_with_the_owner_note_and_the_subagents_rule(client, topic):
     from maxxing.sessions import spawn
     _on(client)
-    _create(client)
+    _create(client, chat=False)
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
@@ -913,9 +913,11 @@ def test_the_owner_chats_in_one_conversation(client, topic, monkeypatch):
     assert "your last results in your thread" in _calls()[-1]["prompt"]
     # silent for longer than chat_idle_h: a new conversation
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"chat_idle_h": 1}})
-    st = agents._read_state(A)
-    st["chat"]["at"] -= 7200
-    agents._write_state(A, st)
+    wait_for(lambda: any(m["session"] == n["session"]["id"] for m in _results(client)))   # its turn end is written
+    with agents._lock:
+        st = agents._read_state(A)
+        st["chat"]["at"] -= 7200
+        agents._write_state(A, st)
     with store.edit(n["session"]["id"]) as m:
         m["finished_at"] -= 7200
     assert say("seven")["session"]["id"] != n["session"]["id"]

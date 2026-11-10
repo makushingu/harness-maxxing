@@ -142,6 +142,10 @@ The page is a **conversation** with the agent, like a contact in a chat app:
   0 = never) or when the last one failed. A new conversation gets the agent's last results as context, so "and the
   second point?" still makes sense. Agents made before this option keep a new session per message until you switch
   **One conversation** on in their Settings -> Limits.
+- **In the conversation, the agent manages itself** (see [Who changes an agent](#who-changes-an-agent)): ask it to
+  rewrite its role, add a schedule or stop a webhook, and it does it. A change of its safety settings shows up as a
+  card to allow, and a command that needs more than its sandbox asks you first. Its conversation can use another
+  model than its runs (**Model of the conversation**, Settings -> Model).
 - **Files**: the paperclip, a paste or a drop attaches up to 10 files to your message (a photo, a PDF, a brief), as in
   a session. They are saved in the agent's folder, under `attachments/`, and the agent reads them; with the sandbox
   that folder is read only for the agent. A message can be only files.
@@ -321,10 +325,29 @@ vault: the turn still runs as the server's user, MCP servers and tools you allow
 
 ### Who changes an agent
 
-Only you. In every run, sandboxed or not, the agent is told that its role, settings and triggers are yours, and
-`maxxing agents create|cron|webhook|watch|on|off|import` is refused: when something should change, it says so in its
-answer. Without the sandbox nothing can stop it from editing its files, so a run that changes its `agent.json` or
-`CLAUDE.md` is reported in its conversation ("This run changed ...").
+You, and the agent when **you** ask it in its conversation.
+
+- **Its runs** (schedules, webhooks, e-mails, notifications, other agents, a Telegram forward) never change it: they
+  are told that its role, settings and triggers are yours, and `maxxing agents create|cron|webhook|watch|on|off|set|import`
+  is refused; when something should change, the run says so in its answer. Without the sandbox nothing can stop a run
+  from editing its files, so a run that changes its `agent.json` or `CLAUDE.md` is reported in its conversation
+  ("This run changed ...").
+- **Its conversation with you** (with **One conversation** on) is its manager. It may rewrite its role (`CLAUDE.md`)
+  and its memory, add, change or remove its schedules (`maxxing agents cron <agent> --job <id> --schedule … | --off |
+  --remove`), add webhooks and feed triggers, switch itself off and change its other settings (`maxxing agents set
+  <agent> FIELD=VALUE`: name, model, Telegram, limits such as **New conversation after**). Only on itself: never
+  another agent, never a new one.
+- **A safety setting waits for your OK**: the sandbox, its domains, keys, permission mode, approvals, trusting outside
+  events, writable folders, rules, tool lists, mailboxes, being a subagent, and the budget, runs per hour and timeout.
+  The agent's request shows up as a card in the conversation (and in the Notifications, and on Telegram) with the
+  change written out (`sandbox: on → off`, `domains: + example.com`); **Allow** applies it, **Deny** leaves everything
+  as it was, and the agent hears of your answer with your next message. A request waits up to 7 days.
+- **Its commands stay in its sandbox** in the conversation too (its domains, no secrets), without asking. When one
+  needs more (another site, a file outside its folders), it can run outside the sandbox **once you allow that
+  command** (an approval card). Its runs never can.
+- Text that came from outside (a mail, a page, a webhook) can end up in its memory or its results: the conversation is
+  told it is information, never orders, and only what you write there counts. Outside text never enters the
+  conversation itself: a forward or an event always starts a run of its own.
 
 To change an agent, use its page, or **Edit with Claude** (agent page, top right or in its profile): a new session of
 the agent's topic - with your rights, not the agent's - opens in **Sessions** with the request already started; finish

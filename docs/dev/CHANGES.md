@@ -20,6 +20,25 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   ok)`, which posted the previous turn's answer again in a continued session. UI: `AgentPage.tsx` live text/tool in
   `Working` (`useSessionLog`), `ChatLine` divider, New conversation bar, Reply hidden on the open conversation;
   Settings -> Limits switch + `chat_idle_h` field (`LimitsFields chat`).
+- **Agent manager (the owner's conversation)**: a new chat session gets `MAXXING_AGENT_CHAT=1` in its meta env and no
+  model of its own; `agents.manager_turn(meta)` (chat, no outside, no group) -> `run_settings(manager=True)`: model
+  `chat_model` (new agent.json field, "" = `model`) or `model`, `MANAGER_NOTE` instead of `OWNER_NOTE`, approvals on
+  when sandboxed (else the agent's), `agent_guard.settings(manager=True)`: `allowUnsandboxedCommands: true`,
+  `autoAllowBashIfSandboxed: true`, its `CLAUDE.md` out of denyWrite / `permissions.deny` (the `agents/*/CLAUDE.md`
+  glob dropped), `allow` `Bash(maxxing:*)` + `Edit(/<write dirs>/**)`. `agent_guard.agent_turn()` gives `manager` and
+  `session`; `check_cli` lets the manager run `agents show|set|cron|webhook|watch|on|off` on itself
+  (`AGENT_MANAGER`, `_manages`); `set` joins `AGENT_OWNER_ONLY`. New CLI `maxxing agents set <agent> FIELD=VALUE|--json`
+  (owner: `update()`; manager: `agents.request_change`) and `maxxing agents cron <agent> --job ID [--schedule]
+  [--prompt] [--on|--off] [--remove]` (its own jobs only). `request_change`: validates the whole target with
+  `clean(strict)`, applies the non-safety fields, writes an approval request `{kind: "agent_change", tool: "Agent
+  settings", input: {description}, fields, expires: +7 d}` in `<state>/approvals/`; `approval_mcp.expire(session=)`
+  and the watcher's orphan expiry skip that kind (it expires at `expires`), `prime()` announces it; `approvals.decide`
+  -> `agents.change_decided` (applies on allow) and a `chat_notes` entry in the agent state, prepended to the next
+  owner message ("Since your last message: ..."). `approvals.public` gives `kind`; `status().waiting` counts pending
+  changes. `_fire`: a non-owner message never continues a manager session (reply_to -> new run). `on_turn_end`: a
+  change by the manager is a `changed_chat` note. UI: `ApprovalCard` renders `agent_change` as one line per change,
+  Settings -> Model "Model of the conversation" (`ModelSelect defaultLabel`), the self-locked line says the
+  conversation can. Tests `test_agent_manager.py`.
 - Released from `main` ("Urgent fixes" path). `server/maxxing/claude_models.py`: daily `GET /v1/models`
   (secrets token/API key, else the `claude login` access token while valid, `anthropic-beta: oauth-2025-04-20`),
   newest id per family -> `<state>/claude-models.json`; `service.KNOWN_MODELS` removed, `service.models()` uses

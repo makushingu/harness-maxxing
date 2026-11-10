@@ -64,12 +64,13 @@ export function AgentsOff() {
   )
 }
 
-export function ModelSelect({ value, onChange, id }: { value: string; onChange: (v: string) => void; id?: string }) {
+/** defaultLabel: what the empty value means when it is not the default model (the conversation: "Same as the runs"). */
+export function ModelSelect({ value, onChange, id, defaultLabel }: { value: string; onChange: (v: string) => void; id?: string; defaultLabel?: string }) {
   const t = useT()
   const { data: claude } = useClaudeStatus()
   const models = claude?.models || []
   const options = [
-    { value: '__default', label: claude?.default_model ? t('crons.modelDefaultNamed', { model: models.find((m) => m.id === claude.default_model)?.label || claude.default_model }) : t('crons.modelDefault') },
+    { value: '__default', label: defaultLabel ? defaultLabel : claude?.default_model ? t('crons.modelDefaultNamed', { model: models.find((m) => m.id === claude.default_model)?.label || claude.default_model }) : t('crons.modelDefault') },
     ...models.map((m) => ({ value: m.id, label: m.label })),
     ...(value && !models.some((m) => m.id === value) ? [{ value, label: value }] : []),
   ]

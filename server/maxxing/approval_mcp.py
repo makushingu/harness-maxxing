@@ -100,6 +100,8 @@ def expire(folder: Path, session: str | None = None, ids: set[str] | None = None
         d = read(f)
         if not d or d.get("status") != "pending":
             continue
+        if session is not None and ids is None and d.get("kind") == "agent_change":
+            continue                    # a settings change waits for the owner after the turn (agents.request_change)
         if (ids is not None and d.get("id") not in ids) or (session is not None and d.get("session") != session):
             continue
         d.update(status=reason, decided_at=time.time())

@@ -18,7 +18,7 @@ def _settings(argv: list[str]) -> dict:
 
 def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     _on(client)
-    a = _create(client, permission_mode="bypass", domains=["API.github.com", "https://*.example.com/"],
+    a = _create(client, chat=False, permission_mode="bypass", domains=["API.github.com", "https://*.example.com/"],
                 writable=["drafts", "."])
     assert a["sandbox"] is True and a["domains"] == ["api.github.com", "*.example.com"]
     assert a["writable"] == ["drafts", "."]
@@ -260,7 +260,7 @@ def test_templates_bring_their_domains():
 def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch):
     from maxxing import agent_guard, agents
     _on(client)
-    _create(client)
+    _create(client, chat=False)
     root = client.get("/api/workspace/tree").json()["root"]
     (Path(root) / "projects/acme/topics/blog/.mcp.json").write_text("{}")
     run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
@@ -309,7 +309,7 @@ def test_domain_wildcards_name_a_site_not_an_extension(client, topic, mx):
 
 def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic, mx):
     _on(client)
-    _create(client, writable=["."])
+    _create(client, writable=["."], chat=False)
     assert client.patch("/api/agents/acme/blog/writer", json={"writable": ["agents/other"]}).status_code == 400
     _create(client, name="other")
     root = Path(client.get("/api/workspace/tree").json()["root"])

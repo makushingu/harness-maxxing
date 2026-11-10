@@ -26,10 +26,11 @@ const toolsList = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean)
 
-type Draft = { model: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; rules: AgentRule[] }
+type Draft = { model: string; chatModel: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; rules: AgentRule[] }
 const draftOf = (a: AgentDetail): Draft => ({
   rules: (a.rules || []).map((r) => ({ ...r, reason: r.reason || '' })),
   model: a.model,
+  chatModel: a.chat_model || '',
   permission: a.permission_mode,
   allowed: toolsText(a.allowed_tools),
   disallowed: toolsText(a.disallowed_tools),
@@ -139,6 +140,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
       {
         path: a.path,
         model: d.model,
+        chat_model: d.chatModel,
         permission_mode: d.permission,
         allowed_tools: toolsList(d.allowed),
         disallowed_tools: toolsList(d.disallowed),
@@ -189,6 +191,11 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
             </label>
             <ModelSelect id="ag-model" value={d.model} onChange={(v) => set('model', v)} />
           </div>
+          {a.chat && (
+            <FormField label={t('agents.chat.model')} hint={t('agents.chat.modelHint')}>
+              <ModelSelect id="ag-chat-model" value={d.chatModel} onChange={(v) => set('chatModel', v)} defaultLabel={t('agents.chat.modelSame')} />
+            </FormField>
+          )}
         </Section>
 
         <Section id="may" title={titles.may} description={t('agents.settings.sec.mayDesc')}>

@@ -147,7 +147,7 @@ def public(d: dict) -> dict:
             "tool": d.get("tool") or "", "input": _redact(d.get("input") if isinstance(d.get("input"), dict) else {}),
             "summary": short(str(d.get("tool") or ""), d.get("input")), "at": d.get("at"),
             "expires": d.get("expires"), "status": d.get("status"), "message": d.get("message") or "",
-            "decided_at": d.get("decided_at"), "clipped": bool(d.get("clipped"))}
+            "decided_at": d.get("decided_at"), "clipped": bool(d.get("clipped")), "kind": d.get("kind") or ""}
 
 
 _parsed: dict[str, tuple[tuple[int, int, int], dict | None]] = {}   # path -> ((inode, mtime_ns, size), content)
@@ -233,6 +233,9 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
         _seen[rid] = decision
     if _counts.get(d.get("session") or "", 0) > 0:
         _counts[d["session"]] -= 1
+    if d.get("kind") == "agent_change":
+        from . import agents
+        agents.change_decided(d)
     _note(d)
     _invalidate()
     return public(d)
@@ -401,7 +404,9 @@ def scan(force: bool = False) -> bool:
     final: list[dict] = []
     for d in items:
         rid, st = d["id"], d.get("status")
-        if st == "pending" and now - float(d.get("at") or now) > ORPHAN_GRACE_S and not _running(d.get("session") or ""):
+        change = d.get("kind") == "agent_change"         # outlives its turn, until it expires (agents.request_change)
+        if st == "pending" and (now > float(d.get("expires") or now) if change else
+                                now - float(d.get("at") or now) > ORPHAN_GRACE_S and not _running(d.get("session") or "")):
             with _lock:                         # its turn is gone: nobody waits for it (unless answered meanwhile)
                 cur = approval_mcp.read(_file(rid)) or d
                 if cur.get("status") == "pending":
@@ -439,7 +444,7 @@ def prime() -> None:
     for d in _all():
         if d.get("status") != "pending":
             _feed_done(d)                       # answered or expired while the server was down: its event says so
-        elif _running(d.get("session") or "") and _feed_new(d) is not False:
+        elif (_running(d.get("session") or "") or d.get("kind") == "agent_change") and _feed_new(d) is not False:
             _post(d, "approval", short(str(d.get("tool") or ""), d.get("input")), status="pending")
             _telegram("notify_approval", d)
         if d.get("status") != "pending" and now - float(d.get("decided_at") or d.get("at") or now) > KEEP_S:
