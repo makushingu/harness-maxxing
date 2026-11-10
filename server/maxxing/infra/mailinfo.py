@@ -303,7 +303,7 @@ def dns_facts(domain: str) -> dict:
             for a in dnsinfo._query(c, domain, "MX"):
                 if a.get("type") == 15:
                     prio, _, host = a["data"].partition(" ")
-                    mx.append({"prio": int(prio) if prio.isdigit() else 0, "host": host.strip().rstrip(".").lower()})
+                    mx.append({"prio": int(prio) if prio.isascii() and prio.isdigit() else 0, "host": host.strip().rstrip(".").lower()})
             out["mx"] = sorted(mx, key=lambda m: (m["prio"], m["host"]))
             out["spf"] = [t for t in _txt(c, domain) if t.lower().startswith("v=spf1")]
             out["spf_lookups"] = None

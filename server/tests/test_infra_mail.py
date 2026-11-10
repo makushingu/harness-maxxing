@@ -371,3 +371,17 @@ def test_api_and_cli(client, org, monkeypatch, capsys):  # noqa: F811
     finally:
         for s in servers:
             s.close()
+
+
+def test_an_odd_mx_priority_does_not_hide_the_other_dns_facts():
+    import maxxing.infra.dnsinfo as di
+    dns = {("ex.com", "MX"): [{"type": 15, "data": "\u00b2 mx.ex.net."}], **{k: txt(*([r] for r in v)) for k, v in
+           {("ex.com", "TXT"): ["v=spf1 -all"], ("_dmarc.ex.com", "TXT"): ["v=DMARC1; p=reject"]}.items()}}
+    old = di._query
+    di._query = lambda c, name, rtype: dns.get((name, rtype)) or []
+    try:
+        facts = mailinfo.dns_facts("ex.com")
+    finally:
+        di._query = old
+    assert "error" not in facts and facts["mx"] == [{"prio": 0, "host": "mx.ex.net"}]
+    assert facts["spf"] == ["v=spf1 -all"] and facts["dmarc"] == ["v=DMARC1; p=reject"]
