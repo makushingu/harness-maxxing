@@ -45,6 +45,9 @@ Fixed:
   stops without an answer (stopped, server restarted) shows its error in the flow, never the answer before it.
 - **New agent**: a name without a letter from a to z or a digit says why it cannot be used.
 - **Extension pages** no longer reload several times while they open.
+- **The Extensions page can be opened again**: Settings -> Pages -> **All pages**, or **Extensions** in the search
+  (Ctrl K), lists every extension page, pinned or not; the guide said it was in the sidebar, which now shows only the
+  pinned ones.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 

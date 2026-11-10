@@ -16,6 +16,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   answer, tools or model (no `at`: the old last-result rule). UI: `fetchAgentThreadBefore` (`?before=`, pages of
   200 when the flow is scrolled to its top, view kept in place); the composer's model is the agent's
   (`chat_model` or `model`) unless picked, and is sent only when picked; `NewAgentForm` explains an empty slug.
+- The `/x` hub (`pages/ext/hub.tsx`) had no link left since the sidebar shows only pinned pages: `CommandPalette`
+  gets `nav:x` (keywords extensions, pages, plugins) and Settings -> Pages an **All pages** button (`ext.allPages`, unused
+  until now); `docs/user/13-page-extensions.md` says where it is. `tests/test_web_ext_hub.py` checks both links.
 - `pages/ext/index.tsx`: `t` / `navigate` read through a ref, not effect deps (`useT()` changes with each
   dictionary group: ~10 remounts of an extension page while it opened).
 - **Agent chat** (every agent, no switch: a `chat` key left in an agent.json is dropped by `clean()`):
