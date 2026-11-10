@@ -424,6 +424,37 @@ def test_the_settings_page_never_builds_the_ui_inside_its_request(ui, monkeypatc
     assert smartupdate.cached_preflight()["ui_build"]["status"] == "ok"
 
 
+def test_a_background_ui_check_that_fails_is_not_started_again_on_every_poll(ui, monkeypatch):
+    import asyncio
+    import threading
+    from maxxing.api import system
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "x") == 0
+    assert webbuild.build()["ok"]
+    _upstream_release(work, "1.1.0")
+    later = smartupdate.check_ui_later
+    monkeypatch.setattr(smartupdate, "check_ui_later", lambda: True)
+    assert asyncio.run(system.update_preflight(refresh=True))["ui_build"]["status"] == "pending"
+    monkeypatch.setattr(smartupdate, "check_ui_later", later)
+    real, calls = smartupdate.preflight, []
+
+    def preflight(*a, ui_check=False, **k):
+        if ui_check:
+            calls.append(1)
+            raise OSError("No space left on device")
+        return real(*a, ui_check=ui_check, **k)
+    monkeypatch.setattr(smartupdate, "preflight", preflight)
+    for _ in range(3):                                             # the Updates page polls
+        rep = asyncio.run(system.update_preflight())
+        for t in threading.enumerate():
+            if t.name == "preflight-ui":
+                t.join(60)
+    assert calls == [1]
+    ui_build = smartupdate.cached_preflight()["ui_build"]
+    assert ui_build["status"] == "failed" and "No space left" in ui_build["error"]
+
+
 def test_a_ui_never_built_here_is_not_blamed_on_new_build_tools(ui, capsys):
     clone, work = ui["clone"], ui["work"]
     _edit(clone)

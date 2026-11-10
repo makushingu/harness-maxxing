@@ -205,12 +205,26 @@ def check_ui_later() -> bool:
     def run() -> None:
         try:
             preflight(None, False, ui_check=True)
-        except Exception:  # noqa: BLE001 - a background check never takes anything down
+        except Exception as e:  # noqa: BLE001 - a background check never takes anything down
             log.exception("preflight: web UI check failed")
+            _ui_check_failed(e)
         finally:
             _ui_check.release()
     threading.Thread(target=run, name="preflight-ui", daemon=True).start()
     return True
+
+
+def _ui_check_failed(e: Exception) -> None:
+    """The cached report says the check failed: left pending, every poll of the Updates page started it again."""
+    try:
+        rep = _read(PREFLIGHT)
+        if rep and (rep.get("ui_build") or {}).get("status") == "pending":
+            rep["ui_build"] = {"status": "failed", "error": f"the check could not run: {e}"[-1500:]}
+            if rep.get("verdict") == "simple":
+                rep["verdict"] = "adapt"
+            _write(PREFLIGHT, rep)
+    except Exception:  # noqa: BLE001
+        log.exception("preflight: could not record the failed web UI check")
 
 
 def _target_notes(current: str, latest: str, target: str) -> list[dict]:
