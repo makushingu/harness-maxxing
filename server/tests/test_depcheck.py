@@ -78,3 +78,45 @@ def test_memory_check(tmp_path, monkeypatch):
     assert cmd_core.check_memory()["level"] == "warn"
     mi.write_text("MemTotal:        4194304 kB\nSwapTotal:             0 kB\n")
     assert cmd_core.check_memory()["level"] == "ok"
+
+
+def test_answers_are_capped_in_size_and_time(monkeypatch):
+    import threading
+    import time
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    import pytest
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            try:
+                if self.path == "/big":
+                    for _ in range(40):
+                        self.wfile.write(b" " * (1 << 16))
+                else:                                   # one byte every 0.1 s, forever
+                    for _ in range(600):
+                        self.wfile.write(b" ")
+                        self.wfile.flush()
+                        time.sleep(0.1)
+            except OSError:
+                pass
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_port}"
+    monkeypatch.setattr(depcheck, "ANSWER_MAX", 1 << 20)
+    try:
+        with pytest.raises(ValueError):
+            depcheck._get_json(base + "/big", 2)
+        t0 = time.monotonic()
+        with pytest.raises(TimeoutError):
+            depcheck._get_json(base + "/drip", 0.5)
+        assert time.monotonic() - t0 < 5
+    finally:
+        srv.shutdown()
+        srv.server_close()
