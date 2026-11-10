@@ -3353,7 +3353,7 @@ async def forget() -> None:
     mutate_tg(fn)
     for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path(), _msgs_path(),
               Path(f"{_msgs_path()}-wal"), Path(f"{_msgs_path()}-shm"), _msgs_path().with_name("messages.json"),
-              config.state_dir("telegram") / "notes.json"):
+              _new_path(), config.state_dir("telegram") / "notes.json"):
         try:
             p.unlink()
         except OSError:

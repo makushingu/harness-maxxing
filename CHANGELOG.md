@@ -12,6 +12,10 @@ New:
   the next one; a model you chose on a topic, a job or an agent never changes. Short titles, the connection test and
   Team summaries always use the newest Haiku or Sonnet.
 
+Fixed:
+- **Forgetting the Telegram bot also forgets a message that was waiting for its topic.** Before, the "Where should
+  this session go?" question and your message came back when you linked a bot again.
+
 ## 2.0.0-alpha.137 - 2026-11-10
 
 Fixed:

@@ -15,6 +15,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`claude_update.installed_server()`, split out of `runs_here()`; `MAXXING_CLAUDE_MODELS=0|1`). `titles.MODEL`,
   `api.claude.TEST_MODEL` = `haiku`, `team.SUMMARY_MODEL` = `sonnet` (Claude Code family names). Telegram fallback
   list: Haiku 5.5 instead of 4.5. Tests `test_claude_models.py`.
+- `telegram.gateway.forget()` also deletes `new.json` (`_new_path()`, the messages waiting for the "where?" answer).
+  It was left behind, so `_new_restore()` revived the pending question after the next link. Test added in
+  `tests/test_telegram_reliability.py` (`test_forgetting_the_bot_drops_a_pending_where_question`).
 
 ## 2.0.0-alpha.137 - 2026-11-10
 

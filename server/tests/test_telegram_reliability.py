@@ -214,6 +214,16 @@ async def test_where_question_survives_a_restart(api, tg, svc):
     await wait_for(lambda: json.loads(gateway._new_path().read_text()) == {}, what="forgotten")
 
 
+async def test_forgetting_the_bot_drops_a_pending_where_question(api, tg):
+    await _link(api, tg)
+    tg.message("remember the milk")
+    await wait_for(lambda: any("Where should" in t for t in _texts(tg)), what="where?")
+    await wait_for(lambda: json.loads(gateway._new_path().read_text()).get("0", {}).get("asked"), what="saved")
+    assert (await api.delete("/api/telegram")).json()["ok"]
+    # like every other state file of the bridge: nothing of the forgotten bot may come back when a bot is linked again
+    assert config.read_json(gateway._new_path(), {}) == {}
+
+
 async def test_session_being_made_at_a_restart_is_announced(api, tg, svc):
     config.write_json(gateway._new_path(), {"0": {"msgs": [{"text": "lost one"}], "name": "", "title": "",
                                                   "chat": 555, "thread": None, "asked": 9, "starting": True}})
