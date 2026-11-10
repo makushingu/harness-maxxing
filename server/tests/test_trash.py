@@ -295,6 +295,19 @@ def _agent(client, name="writer"):
     return f"projects/acme/topics/blog/agents/{name}"
 
 
+def test_an_agent_of_a_topic_in_the_trash_waits_for_the_topic(client, topic, mx):
+    _agent(client)
+    assert client.delete("/api/agents/acme/blog/writer").status_code == 200
+    assert client.delete("/api/workspace/projects/acme/topics/blog").status_code == 200
+    by_kind = {i["kind"]: i for i in _items(client)}
+    r = client.post(f"/api/trash/{by_kind['agent']['id']}/restore")
+    assert r.status_code == 409 and r.json()["error"] == "topic_in_trash"
+    assert not (mx["ws"] / topic).exists()
+    assert client.post(f"/api/trash/{by_kind['topic']['id']}/restore").json()["restored_to"] == topic
+    r = client.post(f"/api/trash/{by_kind['agent']['id']}/restore").json()
+    assert r["restored_to"] == f"{topic}/agents/writer"
+
+
 def test_a_new_agent_in_a_recreated_topic_starts_empty_and_the_restored_topic_gets_its_thread(client, topic):
     from maxxing import agents, crons
     a = _agent(client)

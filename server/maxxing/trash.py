@@ -300,10 +300,11 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
     return done
 
 
-def _project_in_trash(folder: Path) -> bool:
+def _in_trash(folder: Path, kind: str) -> bool:
+    """A deleted project / topic that was at `folder` waits in the trash."""
     for p in _entries():
         side = _side(p)
-        if side.get("original") == str(folder) and _kind(p, side) == "project":
+        if side.get("original") == str(folder) and _kind(p, side) == kind:
             return True
     return False
 
@@ -338,9 +339,15 @@ def restore(item_id: str) -> dict[str, Any]:
     parents = original.resolve().parents                    # a sidecar never sends a file out of the roots
     if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):
         raise TrashError(409, "not_restorable", "This item cannot be restored from here")
-    if kind == "topic" and not original.parent.parent.is_dir() and _project_in_trash(original.parent.parent):
-        # restoring it first would make a bare project folder, and the project then come back as "-restored"
-        raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
+    # Restoring a topic (an agent) first would make a bare project (topic) folder, which then came back as
+    # "-restored", apart from what it holds.
+    if kind in ("topic", "agent"):
+        topic_dir = original.parent.parent
+        project_dir = topic_dir.parent.parent if kind == "agent" else topic_dir
+        if not project_dir.is_dir() and _in_trash(project_dir, "project"):
+            raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
+        if kind == "agent" and not topic_dir.is_dir() and _in_trash(topic_dir, "topic"):
+            raise TrashError(409, "topic_in_trash", "Its topic is in the trash: restore the topic first")
     dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
