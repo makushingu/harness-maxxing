@@ -343,7 +343,7 @@ function WorkspaceStep({ onNext, onBack }: { onNext: () => void; onBack: () => v
                     <CreateProjectTopic onCreated={(tp) => setCreated(tp.path)} />
                   </div>
                 ) : (
-                  <button type="button" className="w-fit text-sm font-medium text-primary hover:underline" onClick={() => setOwn(true)}>
+                  <button type="button" className="w-fit text-sm font-medium text-primary hover:underline pointer-coarse:min-h-10 pointer-coarse:px-2" onClick={() => setOwn(true)}>
                     {t('onb.workspace.own')}
                   </button>
                 )}
