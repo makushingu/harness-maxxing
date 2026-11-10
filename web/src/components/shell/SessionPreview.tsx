@@ -159,7 +159,9 @@ export function PreviewShell({
     const a = anchor.getBoundingClientRect()
     const h = el.offsetHeight
     const top = Math.max(8, Math.min(a.top - 10, window.innerHeight - h - 8))
-    setPos((p) => (p && p.left === r.right && p.top === top ? p : { left: r.right, top }))
+    // a narrow window (two sidebars open at 768-1023 px): over the rail rather than cut at the right edge
+    const left = Math.max(8, Math.min(r.right, window.innerWidth - el.offsetWidth - 8))
+    setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }))
   }, [anchor, rail])
   React.useLayoutEffect(place)
   React.useEffect(() => {

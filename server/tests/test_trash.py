@@ -187,6 +187,26 @@ def test_long_name_cut_inside_a_character_still_lists(client, mx):
     assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200 and f.read_text() == "x"
 
 
+def test_a_file_name_that_is_not_utf8_goes_to_the_trash_and_the_trash_still_lists(client, mx):
+    f = mx["files"] / os.fsdecode(b"bad\xff.txt")
+    f.write_text("x")
+    r = client.post("/api/files/delete", content=json.dumps({"path": str(f)}),
+                    headers={"Content-Type": "application/json"})
+    assert r.status_code == 200 and not f.exists()
+    r = client.get("/api/trash")
+    assert r.status_code == 200
+    it = _items(client)[0]
+    assert it["name"] == "bad\ufffd.txt" and it["restorable"]
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200
+    assert (mx["files"] / "bad\ufffd.txt").read_text() == "x"
+
+
+def test_an_old_entry_named_outside_utf8_does_not_break_the_listing(client, mx):
+    (trash.trash_dir() / os.fsdecode(b"20260101-000000-bad\xff.txt")).write_text("x")
+    assert client.get("/api/trash").status_code == 200 and _items(client) == []
+    assert client.delete("/api/trash").status_code == 200 and not any(trash.trash_dir().iterdir())
+
+
 def test_deleted_json_file_is_listed_restored_and_emptied(client, mx):
     f = mx["files"] / "export.json"
     f.write_text('{"a": 1}')
@@ -273,6 +293,42 @@ def _agent(client, name="writer"):
     r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": name})
     assert r.status_code == 200, r.text
     return f"projects/acme/topics/blog/agents/{name}"
+
+
+def test_an_agent_of_a_topic_in_the_trash_waits_for_the_topic(client, topic, mx):
+    _agent(client)
+    assert client.delete("/api/agents/acme/blog/writer").status_code == 200
+    assert client.delete("/api/workspace/projects/acme/topics/blog").status_code == 200
+    by_kind = {i["kind"]: i for i in _items(client)}
+    r = client.post(f"/api/trash/{by_kind['agent']['id']}/restore")
+    assert r.status_code == 409 and r.json()["error"] == "topic_in_trash"
+    assert not (mx["ws"] / topic).exists()
+    assert client.post(f"/api/trash/{by_kind['topic']['id']}/restore").json()["restored_to"] == topic
+    r = client.post(f"/api/trash/{by_kind['agent']['id']}/restore").json()
+    assert r["restored_to"] == f"{topic}/agents/writer"
+
+
+def test_what_a_cut_restore_left_behind_is_purged(client, mx):
+    t = trash.trash_dir()
+    t.mkdir(parents=True, exist_ok=True)
+    old = time.time() - 40 * 86400
+    left = [t / "20260101-000000-project-acme.sessions", t / "20260101-000000-project-acme.agents",
+            t / "20260101-000000-notes.md.json"]
+    left[0].mkdir()
+    (left[0] / "x.json").write_text("{}")
+    left[1].mkdir()
+    left[2].write_text("{}")
+    kept = t / "20260101-000000-draft.md"                    # a real item with its sidecar stays
+    kept.write_text("x")
+    (t / "20260101-000000-draft.md.json").write_text(json.dumps({"original": str(mx["files"] / "draft.md"),
+                                                                "at": time.time()}))
+    for p in left:
+        os.utime(p, (old, old))
+    assert trash.purge_old() == 0
+    assert not any(p.exists() for p in left) and kept.exists()
+    left[0].mkdir()                                          # emptying the trash takes them too
+    os.utime(left[0], (old, old))
+    assert client.delete("/api/trash").status_code == 200 and not any(t.iterdir())
 
 
 def test_a_new_agent_in_a_recreated_topic_starts_empty_and_the_restored_topic_gets_its_thread(client, topic):

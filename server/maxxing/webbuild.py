@@ -21,6 +21,7 @@ import signal
 import stat
 import subprocess
 import tempfile
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -116,11 +117,72 @@ def _context() -> dict[str, Any] | None:
     return {"base": base, "customs": ids, "customized": customized}
 
 
+CONTEXT_TTL = 60.0                               # _context() reused at most this long while git stays the same
+_ctx_cache: dict[str, Any] = {}
+_refresh = threading.Lock()                      # one look at the sources at a time, the others reuse its answer
+
+
+def _git_sig(code: Path) -> tuple:
+    """What moves when a commit, a reset, a checkout or a fetch changes what _context() would say (not the index:
+    `git status` itself rewrites it)."""
+    names = ["HEAD", "ORIG_HEAD", "FETCH_HEAD", "packed-refs"]
+    try:
+        head = (code / ".git" / "HEAD").read_text(errors="replace").strip()
+    except OSError:
+        head = ""
+    if head.startswith("ref: refs/") and ".." not in head:
+        names.append(head[5:])                     # the branch the customizations are committed on
+    out = []
+    for name in names:
+        try:
+            out.append(os.stat(code / ".git" / name).st_mtime_ns)
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
+def _cached_context(key: str | None) -> dict[str, Any] | None:
+    """_context() for sources edited since the last build: its git commands (merge-base, log, status) run again only
+    when the sources or git change, or after CONTEXT_TTL - not on every recheck of active_dist."""
+    sig = (key, _git_sig(config.CODE), config.CODE)
+    if _ctx_cache.get("sig") == sig and time.monotonic() - _ctx_cache["at"] < CONTEXT_TTL:
+        return _ctx_cache["ctx"]
+    ctx = _context()
+    _ctx_cache.update(sig=sig, at=time.monotonic(), ctx=ctx)
+    return ctx
+
+
 def _still_valid(stamp: dict[str, Any], ctx: dict[str, Any] | None) -> bool:
     """A build whose sources were edited since may stay served: same upstream base, none of its customizations
     dropped, and the UI is still customized."""
     return bool(ctx and ctx["customized"] and stamp.get("base") and stamp["base"] == ctx["base"]
                 and isinstance(stamp.get("customs"), list) and set(stamp["customs"]) <= set(ctx["customs"]))
+
+
+def _recover_swap() -> None:
+    """A build stopped between its two renames (a restart, a kill) left web-dist missing and web-dist.old beside
+    it: that is the build that was served, put back - unless a build is running (it is mid-swap)."""
+    final = build_dir()
+    old = final.with_name(final.name + ".old")
+    if final.exists() or not (old / "index.html").is_file():
+        return
+    try:
+        fh = open(config.STATE / "web-build.lock", "w")
+    except OSError:
+        return
+    with fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:                                 # a build holds the lock
+            return
+        try:
+            if not final.exists() and old.is_dir():
+                old.rename(final)
+                log.warning("web build swap was cut short: the customized UI was put back")
+        except OSError:
+            log.exception("could not put back %s", old)
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def active_dist(ttl: float = 5.0) -> Path:
@@ -129,11 +191,17 @@ def active_dist(ttl: float = 5.0) -> Path:
     the shipped web/dist. Rechecked at most every `ttl` seconds."""
     if os.environ.get("MAXXING_WEB_DIST"):
         return config.WEB_DIST
-    now = time.monotonic()
-    if (_active.get("path") is not None and _active.get("shipped") == (config.WEB_DIST, config.STATE)
-            and now - _active.get("at", 0.0) < ttl):
-        return _active["path"]
+    with _refresh:
+        now = time.monotonic()
+        if (_active.get("path") is not None and _active.get("shipped") == (config.WEB_DIST, config.STATE)
+                and now - _active.get("at", 0.0) < ttl):
+            return _active["path"]
+        return _look(now)
+
+
+def _look(now: float) -> Path:
     path = config.WEB_DIST
+    _recover_swap()
     local = [d for d in (build_dir(), _prev_dir()) if (d / "index.html").is_file() and _stamp(d).get("key")]
     if local:
         try:
@@ -144,7 +212,7 @@ def active_dist(ttl: float = 5.0) -> Path:
         path = next((d for d in local if key and _stamp(d)["key"] == key), None)
         if path is None:
             try:
-                ctx = _context()
+                ctx = _cached_context(key)
             except Exception:
                 log.exception("customizations unreadable, the shipped web UI is served")
                 ctx = None
@@ -177,6 +245,7 @@ def _sweep(parent: Path, pattern: str, age: float = 3600) -> None:
 
 def forget() -> None:
     _active.clear()
+    _ctx_cache.clear()
 
 
 # ---- what needs a build ---------------------------------------------------------------------------------------

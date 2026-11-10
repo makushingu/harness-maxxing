@@ -362,6 +362,7 @@ class Runner:
     # ---- one turn ------------------------------------------------------------------------
     def turn(self, item: dict) -> str | None:
         """Run one queue item; returns an error string when the turn failed (None when ok)."""
+        handed = self.keep_proc                        # the previous turn left its process to this item
         self.keep_proc = False                         # set again only when this turn hands its process over
         meta = store.read(self.sid) or {}
         cfg = config.load_config()
@@ -441,8 +442,8 @@ class Runner:
 
         csid, fresh = meta.get("csid") or self.sid, bool(meta.get("fresh", True))
         live = self.proc
-        if live is not None and item.get("steer") and live.stream and not live.stdin.closed and live.alive() \
-                and not fresh:                         # the steered message joins the running process
+        if live is not None and (item.get("steer") or handed) and live.stream and not live.stdin.closed \
+                and live.alive() and not fresh:        # the steered (or next) message joins the running process
             a = self._attempt_in(live, prompt, timeout_s, csid, store.thread_prev_cost(meta, csid))
         else:
             self._end_proc()
@@ -642,6 +643,7 @@ class Runner:
         """Claude's output into the log until the process ends - or until a steer hands it over (a.handover)."""
         p = pr.p
         timer = None
+        looked = 0.0                                   # last look at the queue while only background tasks ran
         if timeout_s:
             def on_timeout() -> None:
                 a.timed_out = True
@@ -684,6 +686,17 @@ class Runner:
                     return a                       # (stderr: reported once, when the process ends)
                 if pr.stream and pr.turn_done and not pr.tasks and not pr.stdin.closed:
                     pr.stdin.close()                   # the turn is over: Claude exits (as with a text prompt)
+                elif pr.stream and pr.turn_done and pr.tasks and not pr.stdin.closed and pr.alive() \
+                        and not self.stop_flag.is_set() and time.monotonic() - looked >= 1.0:
+                    # Claude answered, only background tasks run (a dev server may never end): a message sent
+                    # meanwhile goes to the same process at once instead of waiting in the queue for the tasks.
+                    looked = time.monotonic()
+                    if self._queued():
+                        for h in a.held:
+                            self._write_line(h)
+                        a.held = []
+                        a.handover, a.rc = True, 0
+                        return a
         finally:
             if timer:
                 timer.cancel()
@@ -699,6 +712,10 @@ class Runner:
                 self.proc = None
         self._release(pr)
         return a
+
+    def _queued(self) -> bool:
+        q = (store.read(self.sid) or {}).get("queue") or []
+        return bool(q) and isinstance(q[0], dict) and not q[0].get("held")
 
     def _steer_step(self, pr: _Proc) -> bool:
         """One pass of a pending steer: True when the process can take the steered message now (the step it was

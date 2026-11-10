@@ -333,6 +333,8 @@ def _mount_spa(app: FastAPI) -> None:
                 if "x-forwarded-for" not in request.headers and _accepts(dict(request.headers), "gzip"):
                     got = await asyncio.to_thread(_json_gz, f)
                     if got is not None:
+                        if request.headers.get("if-none-match") == got[1]:   # revalidation: nothing to resend
+                            return Response(status_code=304, headers={**vary, "ETag": got[1]})
                         return Response(got[0], media_type="application/json",
                                         headers={**vary, "Content-Encoding": "gzip", "ETag": got[1]})
                 return FileResponse(f, headers=vary)

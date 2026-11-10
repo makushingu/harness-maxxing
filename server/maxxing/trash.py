@@ -215,6 +215,10 @@ def _build(t: Path, root: Path) -> list[dict[str, Any]]:
         for name in set(_sizes) - {p.name for p in entries}:
             del _sizes[name]
     for p in entries:
+        try:
+            p.name.encode("utf-8")
+        except UnicodeEncodeError:                 # left by an older version: not listable, still emptied/purged
+            continue
         side = _side(p)
         try:
             at = float(side.get("at") or p.stat().st_mtime)
@@ -296,10 +300,11 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
     return done
 
 
-def _project_in_trash(folder: Path) -> bool:
+def _in_trash(folder: Path, kind: str) -> bool:
+    """A deleted project / topic that was at `folder` waits in the trash."""
     for p in _entries():
         side = _side(p)
-        if side.get("original") == str(folder) and _kind(p, side) == "project":
+        if side.get("original") == str(folder) and _kind(p, side) == kind:
             return True
     return False
 
@@ -334,13 +339,18 @@ def restore(item_id: str) -> dict[str, Any]:
     parents = original.resolve().parents                    # a sidecar never sends a file out of the roots
     if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):
         raise TrashError(409, "not_restorable", "This item cannot be restored from here")
-    if kind == "topic" and not original.parent.parent.is_dir() and _project_in_trash(original.parent.parent):
-        # restoring it first would make a bare project folder, and the project then come back as "-restored"
-        raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
+    # Restoring a topic (an agent) first would make a bare project (topic) folder, which then came back as
+    # "-restored", apart from what it holds.
+    if kind in ("topic", "agent"):
+        topic_dir = original.parent.parent
+        project_dir = topic_dir.parent.parent if kind == "agent" else topic_dir
+        if not project_dir.is_dir() and _in_trash(project_dir, "project"):
+            raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
+        if kind == "agent" and not topic_dir.is_dir() and _in_trash(topic_dir, "topic"):
+            raise TrashError(409, "topic_in_trash", "Its topic is in the trash: restore the topic first")
     dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
-    p.with_name(p.name + ".json").unlink(missing_ok=True)
     n = 0
     sess = p.with_name(p.name + ".sessions")
     if sess.is_dir():
@@ -356,6 +366,7 @@ def restore(item_id: str) -> dict[str, Any]:
             agents.from_trash(box, _ws_rel(original), _ws_rel(dest))
         except (ValueError, OSError):                       # its crons, thread and state stay in the box
             log.exception("agents of %s not restored (state left in %s)", dest, box)
+    p.with_name(p.name + ".json").unlink(missing_ok=True)   # last: what is left without it is purged as orphans
     if kind == "project":                                   # its agent groups get their conversations back
         try:
             from . import agent_rooms
@@ -387,10 +398,32 @@ def _remove(p: Path) -> None:
     shutil.rmtree(p.with_name(p.name + ".agents"), ignore_errors=True)
 
 
+def _drop_orphans(older_than: float) -> None:
+    """Sidecars, .sessions and .agents folders whose item is gone (a restore cut short, a crash): never listed,
+    so removed here once they are older than `older_than` seconds (a delete in progress writes its sidecar
+    first)."""
+    cutoff = time.time() - older_than
+    for p in list(trash_dir().iterdir()):
+        suffix = next((s for s in (".json", ".sessions", ".agents") if p.name.endswith(s)), None)
+        if suffix is None or p.name in SKIP or p.with_name(p.name + ".json").exists():
+            continue
+        base = p.with_name(p.name[:-len(suffix)])
+        try:
+            if base.exists() or base.is_symlink() or p.lstat().st_mtime >= cutoff:
+                continue
+        except OSError:
+            continue
+        if p.is_dir() and not p.is_symlink():
+            shutil.rmtree(p, ignore_errors=True)
+        else:
+            p.unlink(missing_ok=True)
+
+
 def empty() -> int:
     items = _entries()
     for p in items:
         _remove(p)
+    _drop_orphans(60)
     bus.invalidate("trash")
     return len(items)
 
@@ -403,6 +436,7 @@ def purge_old(days: int = KEEP_DAYS) -> int:
         if at < cutoff:
             _remove(p)
             n += 1
+    _drop_orphans(days * 86400)
     return n
 
 

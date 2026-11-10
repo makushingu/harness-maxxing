@@ -550,7 +550,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
                     }}
                     disabled={clearingQueue}
                     aria-label={t('sessions.queue.clear')}
-                    className="ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="relative ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     <X className="size-3.5" />
                   </button>
@@ -570,21 +570,21 @@ export const Composer = React.forwardRef<ComposerHandle, {
               <span className="flex shrink-0 items-center gap-1.5">
                 {onTakeQueue && (
                   <Tooltip content={t('sessions.queue.editTip')}>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8" onClick={() => void editQueue()} loading={taking} disabled={steerPending}>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={() => void editQueue()} loading={taking} disabled={steerPending}>
                       <Pencil className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.edit')}</span>
                     </Button>
                   </Tooltip>
                 )}
                 {onAsk && running && (
                   <Tooltip content={t('aside.askTip')}>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8" onClick={onAsk} loading={asking} disabled={steerPending}>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={onAsk} loading={asking} disabled={steerPending}>
                       <MessageCircleQuestion className="size-3.5" /> <span className="max-sm:sr-only">{t('aside.ask')}</span>
                     </Button>
                   </Tooltip>
                 )}
                 {onSteer && running && (
                   <Tooltip content={t('sessions.queue.steerTip')}>
-                    <Button size="sm" className="h-7 px-2.5 text-xs max-md:h-8" onClick={onSteer} loading={steering || steerPending} disabled={steerPending}>
+                    <Button size="sm" className="h-7 px-2.5 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10" onClick={onSteer} loading={steering || steerPending} disabled={steerPending}>
                       <CornerDownRight className="size-3.5" /> {t('sessions.queue.steerShort')}
                     </Button>
                   </Tooltip>
@@ -616,7 +616,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
                       type="button"
                       onClick={() => setQuotes([])}
                       aria-label={t('sessions.quote.clear')}
-                      className="ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      className="relative ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       <X className="size-3.5" />
                     </button>

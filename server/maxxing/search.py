@@ -362,8 +362,10 @@ def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, 
 def _file_stat(fp: str, base: str) -> os.stat_result | None:
     """stat of a file worth reading, else None: only regular files (reading a FIFO named notes.md would block
     the whole index), and a link only when it points inside the workspace (else any file the service can
-    read - a key, a config - would land in the index and the search results)."""
+    read - a key, a config - would land in the index and the search results). A name that is not valid UTF-8
+    (here or in a parent folder) is skipped: SQLite cannot store it and the whole pass would fail on it."""
     try:
+        fp.encode("utf-8")
         st = os.stat(fp)
         if not stat.S_ISREG(st.st_mode):
             return None
@@ -371,7 +373,7 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
             root = os.path.realpath(base)
             if os.path.commonpath([os.path.realpath(fp), root]) != root:
                 return None
-    except (OSError, ValueError):
+    except (OSError, ValueError):                            # UnicodeEncodeError is a ValueError
         return None
     return st
 

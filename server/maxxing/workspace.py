@@ -657,15 +657,24 @@ def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) 
         # decode, not fsdecode: a cut inside a multi-byte character would leave lone surrogates in the item id,
         # which the trash listing then fails to encode (500 on the whole Trash page)
         label = raw[:180].decode("utf-8", "ignore") + "-" + hashlib.sha1(raw).hexdigest()[:10]
+    else:                                                # a name that is not UTF-8: same reason
+        label = raw.decode("utf-8", "replace")
     base = f"{stamp}-{label}"
     dest, n = trash / base, 1
     while dest.exists() or dest.with_name(dest.name + ".json").exists():
         n += 1
         dest = trash / f"{base}-{n}"
-    shutil.move(str(src), str(dest))
-    side: dict = {"original": str(src), "at": time.time()}
-    side["kind"] = kind or ("folder" if dest.is_dir() else "file")
-    config.write_json(dest.with_name(dest.name + ".json"), side)
+    # The sidecar first (a file never sits in the trash without it), its path in UTF-8: one that is not comes back
+    # under a readable name.
+    side: dict = {"original": os.fsencode(str(src)).decode("utf-8", "replace"), "at": time.time()}
+    side["kind"] = kind or ("folder" if src.is_dir() else "file")
+    sidecar = dest.with_name(dest.name + ".json")
+    config.write_json(sidecar, side)
+    try:
+        shutil.move(str(src), str(dest))
+    except BaseException:
+        sidecar.unlink(missing_ok=True)
+        raise
     bus.invalidate("trash")
     return dest
 

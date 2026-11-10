@@ -323,6 +323,38 @@ def test_a_failed_swap_keeps_the_served_build(ui, monkeypatch):
     assert not list(config.STATE.glob("web-dist.new-*"))
 
 
+def test_a_swap_cut_between_its_renames_puts_the_build_back(ui):
+    _edit(ui["clone"])
+    assert webbuild.build()["ok"]
+    old = webbuild.build_dir().with_name("web-dist.old")
+    webbuild.build_dir().rename(old)                         # stopped after the first rename
+    assert _served() == "<p>mine</p>\n"
+    assert webbuild.build_dir().is_dir() and not old.exists()
+
+
+def test_edited_sources_do_not_rerun_the_git_context_on_every_recheck(ui, monkeypatch):
+    import threading
+    clone = ui["clone"]
+    _edit(clone)
+    assert webbuild.build()["ok"]
+    _edit(clone, "<p>being edited</p>\n")
+    calls = []
+    real = webbuild._context
+    monkeypatch.setattr(webbuild, "_context", lambda: calls.append(1) or real())
+    webbuild.forget()
+    threads = [threading.Thread(target=webbuild.active_dist, kwargs={"ttl": 0}) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    for _ in range(10):                                      # rechecks past the 5 s cache
+        assert (webbuild.active_dist(ttl=0) / "index.html").read_text() == "<p>mine</p>\n"
+    assert len(calls) == 1
+    assert run_cli("custom", "save", "My header", "--why", "the user wanted it") == 0   # git moved: looked again
+    webbuild.active_dist(ttl=0)
+    assert len(calls) == 2
+
+
 def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
     import os
     import time
@@ -390,6 +422,37 @@ def test_the_settings_page_never_builds_the_ui_inside_its_request(ui, monkeypatc
         if t.name == "preflight-ui":
             t.join(60)
     assert smartupdate.cached_preflight()["ui_build"]["status"] == "ok"
+
+
+def test_a_background_ui_check_that_fails_is_not_started_again_on_every_poll(ui, monkeypatch):
+    import asyncio
+    import threading
+    from maxxing.api import system
+    clone, work = ui["clone"], ui["work"]
+    _edit(clone)
+    assert run_cli("custom", "save", "My header", "--why", "x") == 0
+    assert webbuild.build()["ok"]
+    _upstream_release(work, "1.1.0")
+    later = smartupdate.check_ui_later
+    monkeypatch.setattr(smartupdate, "check_ui_later", lambda: True)
+    assert asyncio.run(system.update_preflight(refresh=True))["ui_build"]["status"] == "pending"
+    monkeypatch.setattr(smartupdate, "check_ui_later", later)
+    real, calls = smartupdate.preflight, []
+
+    def preflight(*a, ui_check=False, **k):
+        if ui_check:
+            calls.append(1)
+            raise OSError("No space left on device")
+        return real(*a, ui_check=ui_check, **k)
+    monkeypatch.setattr(smartupdate, "preflight", preflight)
+    for _ in range(3):                                             # the Updates page polls
+        rep = asyncio.run(system.update_preflight())
+        for t in threading.enumerate():
+            if t.name == "preflight-ui":
+                t.join(60)
+    assert calls == [1]
+    ui_build = smartupdate.cached_preflight()["ui_build"]
+    assert ui_build["status"] == "failed" and "No space left" in ui_build["error"]
 
 
 def test_a_ui_never_built_here_is_not_blamed_on_new_build_tools(ui, capsys):

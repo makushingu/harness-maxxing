@@ -792,17 +792,20 @@ def share_profile() -> None:
     """The user changed their name, emoji, color or photo: every contact gets it, and the members of our groups who
     are not contacts get the photo version, through one of their group keys (queued like a message; a newer change
     replaces one still waiting)."""
-    with _lock:
+    profile = _profile()
+    now = time.time()
+    with _lock:                                # one write of team.json, even for hundreds of group members
         doc = _load()
         addrs = [a for a, p in doc["peers"].items() if p.get("status") == "accepted"]
         members = [(a, next(iter(p["group_keys"]))) for a, p in doc["peers"].items()
                    if p.get("status") != "accepted" and p.get("group_keys")]
         doc["outbox"] = [o for o in doc["outbox"] if (o.get("event") or {}).get("type") != "profile"]
+        _queue(doc, addrs, {"type": "profile", "profile": profile}, None, now)
+        for a, chat in members:
+            _queue(doc, [a], {"type": "profile", "chat": chat, "profile": {"photo": profile["photo"]}}, None, now)
         config.write_json(_path(), doc, mode=0o600)
-    profile = _profile()
-    send(addrs, {"type": "profile", "profile": profile})
-    for a, chat in members:
-        send([a], {"type": "profile", "chat": chat, "profile": {"photo": profile["photo"]}})
+    if addrs or members:
+        _wake.set()
 
 
 def has_link(address: str, chat: str) -> bool:
@@ -836,14 +839,17 @@ def send(addresses: list[str], event: dict, msg: str | None = None) -> None:
     """Queue an event for each address (delivered by the worker, retried for OUTBOX_DAYS)."""
     if not addresses:
         return
-    now = time.time()
     with _lock:
         doc = _load()
-        for a in addresses:
-            doc["outbox"].append({"id": _b64(secrets.token_bytes(8)), "to": a, "event": event, "tries": 0, "next": now,
-                                  "created": now, "chat": event.get("chat"), "msg": msg})
+        _queue(doc, addresses, event, msg, time.time())
         config.write_json(_path(), doc, mode=0o600)
     _wake.set()
+
+
+def _queue(doc: dict, addresses: list[str], event: dict, msg: str | None, now: float) -> None:
+    for a in addresses:
+        doc["outbox"].append({"id": _b64(secrets.token_bytes(8)), "to": a, "event": event, "tries": 0, "next": now,
+                              "created": now, "chat": event.get("chat"), "msg": msg})
 
 
 def _run_outbox() -> None:
