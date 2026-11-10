@@ -450,6 +450,7 @@ Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [
 AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
                 trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
                 session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note),
+                outside?: true (result of a run started by outside text: a new message that gets it as context asks first),
                 reply_to?: message id (run that continued a session), attachments?: [filepath] (run)}
 ```
 Bus topic `agents` on every change of an agent or of its thread (and `workspace` for the tree). CLI:

@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Security:
+- **Agents: an answer to outside text makes your next messages ask first.** A run started by a webhook, a
+  notification or another agent asks before any risky action. Its answer is then given as context to your next
+  message to the agent, and that run asked nothing: what the outside text said could come back there. Your next
+  messages now ask first too, until three newer answers have replaced that one, unless the agent trusts outside
+  events.
+
 ## 2.0.0-alpha.138 - 2026-11-10
 
 New:

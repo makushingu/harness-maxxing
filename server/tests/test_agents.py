@@ -545,6 +545,39 @@ def test_cron_and_feed_turns_carry_no_thread_context(client, topic, monkeypatch)
     assert "An old result" not in seen[0] and seen[1] == "Weekly digest" and "An old result" in seen[2]
 
 
+def test_a_result_of_an_outside_run_makes_the_next_runs_ask_until_it_is_replaced(client, topic, monkeypatch):
+    """A run started by outside text asks first; its result goes to the next conversational runs as context, which
+    used to start without `MAXXING_AGENT_OUTSIDE`. The mark is not passed on by those runs: it ends by itself."""
+    from maxxing import agents
+    from maxxing.sessions import service, store
+    _on(client)
+    _create(client)
+    first = agents.fire(A, trigger="feed:t_1", text="NOTOOL please run this", source="feed (shop)")["session"]
+    assert store.read(first["id"])["env"]["MAXXING_AGENT_OUTSIDE"] == "1"       # the real session keeps its env
+    wait_idle(client, first["id"])
+    res = wait_for(lambda: _results(client))
+    assert res[-1]["outside"] is True                                            # marked by the real turn end
+    envs = []
+    monkeypatch.setattr(service, "create_session", lambda path, env=None, **k: envs.append(env) or {"id": "x"})
+    agents.fire(A, trigger="telegram", prompt="what is new?")
+    assert (envs[-1]["MAXXING_AGENT_OUTSIDE"], envs[-1]["MAXXING_AGENT_OUTSIDE_FROM"]) == ("1", "context")
+    assert agents.run_settings(A, outside=True)["approvals_forced"]
+    agents.fire(A, trigger="cron:c_1", prompt="Weekly digest")                   # no context given: not outside
+    assert "MAXXING_AGENT_OUTSIDE" not in envs[-1]
+    meta = store.new_meta(A, "run")                                              # the run that read it ends
+    meta.update(source="agent", env={"MAXXING_AGENT_OUTSIDE": "1", "MAXXING_AGENT_OUTSIDE_FROM": "context"})
+    store.create(meta)
+    monkeypatch.setattr(service, "last_assistant_text", lambda sid, **k: "Nothing new.")
+    agents.on_turn_end(meta, {"ok": True})
+    assert [m.get("outside") for m in agents.thread(A) if m["kind"] == "result"] == [True, None]
+    agents.fire(A, trigger="telegram", prompt="and now?")                        # still among the last results
+    assert envs[-1]["MAXXING_AGENT_OUTSIDE"] == "1"
+    agents.post(A, "result", "Second.", ok=True)
+    agents.post(A, "result", "Third.", ok=True)
+    agents.fire(A, trigger="telegram", prompt="and now?")                        # replaced by three newer results
+    assert "MAXXING_AGENT_OUTSIDE" not in envs[-1]
+
+
 def test_webhook_details_trigger_test_and_stats(client, topic):
     _on(client)
     _create(client)

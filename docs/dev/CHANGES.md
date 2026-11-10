@@ -5,6 +5,20 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- `agents`: outside provenance follows a result into the next run. `on_turn_end` marks the `result` message
+  `outside: true` when the session was started by outside text (`MAXXING_AGENT_OUTSIDE=1` without
+  `MAXXING_AGENT_OUTSIDE_FROM=context`; in a group, `agent_rooms.turn_outside`); new `_context(path) -> (text,
+  outside)` (`context()` unchanged for callers) says whether one of the results it frames carries the mark; `_fire`
+  sets `MAXXING_AGENT_OUTSIDE=1` and `MAXXING_AGENT_OUTSIDE_FROM=context` for a `manual` / `telegram` / `agent:` start
+  whose context holds one, so `run_settings` forces approvals unless `trust_outside`. The result of such a run is not
+  marked: the mark does not renew itself, it lasts while the marked result is among the last `CONTEXT_RESULTS` (3).
+  Accepted limit: what that run repeats of the outside text is unmarked one run later. API.md: `AgentMessage.outside?`.
+  Results written before this change carry no mark. Not covered: a `reply_to` continuation started with outside
+  `text` from another caller than Telegram (which already never uses `reply_to` with outside data). Test:
+  `test_agents.py::test_a_result_of_an_outside_run_makes_the_next_runs_ask_until_it_is_replaced`.
+
 ## 2.0.0-alpha.138 - 2026-11-10
 
 - Released from `main` ("Urgent fixes" path). `server/maxxing/claude_models.py`: daily `GET /v1/models`
