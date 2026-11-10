@@ -3100,6 +3100,7 @@ export const en = {
   'agents.conv.working': "{name} is working…",
   'agents.flow.today': 'Today',
   'agents.flow.yesterday': 'Yesterday',
+  'agents.flow.step': '1 step',
   'agents.flow.steps': '{n} steps',
   'agents.flow.earlier': '{n} earlier steps',
   'agents.flow.memory': 'Memory updated',

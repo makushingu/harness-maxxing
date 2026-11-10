@@ -28,7 +28,7 @@ import {
 } from '@/components/ui'
 import { ModelPicker } from '@/pages/sessions/Widgets'
 import { Page, PageHeader } from '@/components/shell/Page'
-import { absTopicDir, filesUrl, fmtCost, modelLabel, toolIcon } from '@/pages/sessions/util'
+import { absTopicDir, filesUrl, fmtCost, modelLabel, relPaths, toolIcon, type PathBases } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings, type SectionId } from './AgentSettings'
@@ -321,6 +321,8 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
   const own = React.useMemo(() => ownSessions(a, msgs), [a, msgs])
   const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
   const asks = useThreadApprovals(a.path, msgs)
+  const { data: ws } = useWorkspace()
+  const bases = React.useMemo<PathBases>(() => ({ topicDir: absTopicDir(ws, a.path), wsRoot: ws?.root || null }), [ws, a.path])
   const running = a.running_sessions || []
   const box = React.useRef<HTMLDivElement>(null)
   const last = msgs[msgs.length - 1]?.id
@@ -334,6 +336,7 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
 
   const rows: { key: string; session?: string; node: React.ReactNode }[] = []
   let day = ''
+  let talked = false
   for (const m of msgs) {
     if (asks.merged(m)) continue
     if (dayOf(m.at) !== day) {
@@ -342,12 +345,13 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
     }
     let node: React.ReactNode
     if (m.kind === 'note' && m.status === 'new_chat') node = <Divider testid="agent-new-chat-line">{t('agents.chat.new')}</Divider>
-    else if (m.kind === 'note' && m.status === 'changed_chat') node = <ChangeLine icon={Settings2} text={changedText(t, m.files)} />
+    else if (m.kind === 'note' && m.status === 'changed_chat') node = <ChangeLine apart icon={Settings2} text={changedText(t, m.files)} />
     else if (m.kind === 'run' && byOwner(m)) {
-      // a conversation that started afresh (6 h without a word): said once, above the message that opened it
-      if (m.chat === 'new' && rows.length && !String(rows[rows.length - 1].key).startsWith('new:'))
+      // a conversation that started afresh (6 h without a word, not the first one): said above the message that opened it
+      if (m.chat === 'new' && talked && !String(rows[rows.length - 1]?.key).startsWith('new:'))
         rows.push({ key: `new:${m.id}`, node: <Divider>{t('agents.chat.new')}</Divider> })
       node = <OwnerMessage m={m} answers={m.reply_to ? byId.get(m.reply_to) : undefined} />
+      talked = true
     } else if (m.kind === 'run') node = <TriggerCard m={m} crons={jobs} />
     else if (m.kind === 'result')
       node = <AgentTurn m={m} agent={a} chat={!!m.session && own.has(m.session)} onReply={onReply} />
@@ -388,6 +392,7 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
       data-thread
     >
       <AnswerContext owner={{ agent: a.path }}>
+        <StepBases.Provider value={bases}>
         <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
           {isLoading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
@@ -405,6 +410,7 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
             rows.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)
           )}
         </div>
+        </StepBases.Provider>
       </AnswerContext>
     </div>
   )
@@ -475,15 +481,22 @@ function TriggerCard({ m, crons }: { m: AgentMessage; crons: Cron[] }) {
 
 type Step = { name: string; summary: string; state: 'ok' | 'error' | 'running' }
 
+/** The folders the paths of the steps are shown relative to: the agent's folder ("memory.md"), then the workspace. */
+const StepBases = React.createContext<PathBases>({ topicDir: null, wsRoot: null })
+
 /** One step of a turn, as a tool line of a session (its details are in the run). */
 function StepRow({ s }: { s: Step }) {
   const Icon = toolIcon(s.name)
+  const bases = React.useContext(StepBases)
+  // the server's summary starts with the tool's name ("Bash: ls", "Read /x"): the name is already said
+  const full = s.summary.startsWith(s.name) ? s.summary.slice(s.name.length).replace(/^[:\s]+/, '') : s.summary
+  const shown = relPaths(full, bases)
   return (
     <div className={cn('flex h-8 min-w-0 items-center gap-2 rounded-lg border bg-card/60 px-2.5 text-[13px]', s.state === 'error' && 'border-destructive/40')} data-testid="agent-step">
       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="shrink-0 font-medium">{s.name.replace(/^mcp__/, '')}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
-        <Sensitive>{s.summary}</Sensitive>
+      <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground" title={shown !== full ? full : undefined}>
+        <Sensitive>{shown}</Sensitive>
       </span>
       {s.state === 'running' ? (
         <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
@@ -505,7 +518,7 @@ function StepsFold({ steps, total }: { steps: Step[]; total: number }) {
     <div className="min-w-0 overflow-hidden rounded-lg border bg-card/60 text-[13px]" data-testid="agent-steps">
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-accent/60 max-md:h-10">
         <Layers className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="shrink-0 font-medium">{t('agents.flow.steps', { n: total })}</span>
+        <span className="shrink-0 font-medium">{total === 1 ? t('agents.flow.step') : t('agents.flow.steps', { n: total })}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">{names}</span>
         {steps.some((s) => s.state === 'error') && <AlertCircle className="size-3.5 shrink-0 text-destructive" />}
         <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
@@ -528,9 +541,9 @@ function StepList({ steps, total, className }: { steps: Step[]; total: number; c
 }
 
 /** A line of what the agent changed of itself (its memory, its role, its settings). */
-function ChangeLine({ icon: Icon, text }: { icon: React.ComponentType<{ className?: string }>; text: string }) {
+function ChangeLine({ icon: Icon, text, apart }: { icon: React.ComponentType<{ className?: string }>; text: string; apart?: boolean }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-success/30 bg-success/8 px-2.5 py-1.5 text-[13px] sm:ml-10" data-testid="agent-change">
+    <div className={cn('flex min-w-0 items-center gap-2 rounded-lg border border-success/30 bg-success/8 px-2.5 py-1.5 text-[13px]', apart && 'sm:ml-10')} data-testid="agent-change">
       <Icon className="size-3.5 shrink-0 text-success" />
       <span className="min-w-0 flex-1">{text}</span>
     </div>

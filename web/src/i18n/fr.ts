@@ -3082,6 +3082,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.conv.working': "{name} travaille…",
   'agents.flow.today': "Aujourd'hui",
   'agents.flow.yesterday': 'Hier',
+  'agents.flow.step': '1 étape',
   'agents.flow.steps': '{n} étapes',
   'agents.flow.earlier': '{n} étapes plus tôt',
   'agents.flow.memory': 'Mémoire mise à jour',
