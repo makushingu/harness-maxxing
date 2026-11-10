@@ -78,6 +78,12 @@ export default function ExtensionPage() {
 
   // The extensions list is a shell query (there at boot): wait for it to know page.js's version.
   const version = exts ? (ext?.page_v ?? 0) : null
+  // `t` changes each time a dictionary group arrives (pages prefetched in the background, a few in the first seconds)
+  // and `navigate` may change too: read through a ref, so that they never remount the page (its state, an open form).
+  const latest = React.useRef({ navigate, t })
+  React.useEffect(() => {
+    latest.current = { navigate, t }
+  })
   React.useEffect(() => {
     const el = host.current
     if (!el || !id || version === null) return
@@ -88,10 +94,10 @@ export default function ExtensionPage() {
       id,
       api: (path, opts = {}) =>
         request(`/api/ext/${seg(id)}/${path.replace(/^\/+/, '')}`, { method: opts.method || 'GET', body: opts.method && opts.method !== 'GET' ? (opts.body ?? {}) : undefined, query: opts.query }),
-      navigate: (to) => navigate(to),
+      navigate: (to) => latest.current.navigate(to),
       theme,
       lang,
-      t: (key) => tDyn(t, key),
+      t: (key) => tDyn(latest.current.t, key),
       icon: iconSvg,
     }
     // Versioned by page.js's mtime: the module is downloaded and evaluated once, an edited file gets a new URL.
@@ -101,7 +107,7 @@ export default function ExtensionPage() {
       .then((mod: { mount?: Mount; default?: { mount?: Mount } }) => {
         if (cancelled) return
         const mount = mod.mount || mod.default?.mount
-        if (typeof mount !== 'function') throw new Error(t('ext.noMount'))
+        if (typeof mount !== 'function') throw new Error(latest.current.t('ext.noMount'))
         el.replaceChildren()
         cleanup = mount(el, ctx)
         setState({ status: 'ready' })
@@ -118,7 +124,7 @@ export default function ExtensionPage() {
       }
       el.replaceChildren()
     }
-  }, [id, version, theme, lang, navigate, t, attempt])
+  }, [id, version, theme, lang, attempt])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
