@@ -1010,19 +1010,23 @@ def last_user_message(sid: str) -> dict | None:
     return None
 
 
+def _ended_turn(sid: str, evs: list[dict]) -> tuple[int, int]:
+    """(start, end) of the last turn that ended in `evs`: end = its `result` (len(evs) when it died without one).
+    A user message after the last result is the next turn when the session still runs (a message queued meanwhile),
+    else the turn that died."""
+    end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), None)
+    last_user = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "user"), -1)
+    if end is None or (last_user > end and (store.read(sid) or {}).get("state") != "running"):
+        return last_user + 1, len(evs)
+    return next((i + 1 for i in range(end - 1, -1, -1) if evs[i]["type"] == "user"), 0), end
+
+
 def ended_turn_text(sid: str) -> str:
     """What the last turn that ended wrote ("" if nothing): when the next turn (a message queued meanwhile) has
     started already, still the answer of the one that ended, never a reply of the turn before it."""
     evs = _tail_events(sid)
-    end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), None)
-    if end is None:                           # it ended without a result (a crash): its own text so far
-        return last_assistant_text(sid, turn_only=True)
-    for ev in reversed(evs[:end]):
-        if ev["type"] == "assistant":
-            return ev["text"]
-        if ev["type"] == "user":
-            return ""
-    return ""
+    start, end = _ended_turn(sid, evs)
+    return next((ev["text"] for ev in reversed(evs[start:end]) if ev["type"] == "assistant"), "")
 
 
 STEPS_MAX = 40                                # tools kept per turn in the agent's thread (the run shows them all)
@@ -1032,8 +1036,7 @@ def ended_turn_steps(sid: str) -> dict:
     """The tools the last turn that ended used ({name, summary, error?}, the last STEPS_MAX), with its model and
     duration: what the agent page shows under the turn's answer without reading its whole log."""
     evs = _tail_events(sid)
-    end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), len(evs))
-    start = next((i + 1 for i in range(end - 1, -1, -1) if evs[i]["type"] == "user"), 0)
+    start, end = _ended_turn(sid, evs)
     uses: list[dict] = []
     failed: set[str] = set()
     for ev in evs[start:end]:
