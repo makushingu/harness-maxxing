@@ -20,7 +20,8 @@ itself lives. Agents' runs never show in Sessions: the Agents page has its own l
 topic, a dot for running / waiting for you / to read / failed / off), grouped by project, in the second bar next to
 the sidebar on a computer (see [Sessions](04-sessions.md#layout)). From top to bottom: the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
 *Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). **New group** and **New agent**
-sit at the top right of the Office; to find an agent or a group, use
+sit at the top right of the Office, and a **+** beside the Office link in the list opens New agent from any page of
+Agents; to find an agent or a group, use
 **Ctrl/⌘+K**. In the Sessions list, a topic's agents show **under its row**: their
 face, their name and a dot when one works, waits for you, has something to read or failed (the ones that need you
 first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
