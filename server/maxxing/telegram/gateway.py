@@ -1416,7 +1416,7 @@ class Gateway:
         pieces of one gesture (an album, a long text Telegram split, a forward and its comment) start one run."""
         key = f"agent:{path}"
         if cmd and cmd != "start":
-            self._lane(key, lambda: self._agent_command(msg, path), "agent", msg)
+            self._lane(key, lambda: self._agent_command(msg, path, cmd), "agent", msg)
             return
         gk = f"{self._paste_key(msg)}|{path}"
         now = time.monotonic()
@@ -1454,8 +1454,13 @@ class Gateway:
                 self._inflight_drop(m)
         self._lane(key, run, "agent")
 
-    async def _agent_command(self, msg: dict, path: str) -> None:
+    async def _agent_command(self, msg: dict, path: str, cmd: str = "") -> None:
         name = await asyncio.to_thread(_agent_display, path)
+        if cmd == "new":                            # the next message starts a new conversation with the agent
+            from .. import agents
+            await asyncio.to_thread(agents.new_chat, path)
+            await self._reply(msg, _w("agent_new_chat", name=name), silent=True, bind={"agent": path})
+            return
         await self._reply(msg, _w("agent_command", name=name), silent=True)
 
     async def _agent_message(self, msgs: list[dict], path: str, texts: list[str]) -> None:

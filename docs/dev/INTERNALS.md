@@ -237,7 +237,8 @@ call it), only the API and the page are cut.
   "agent"`, `cron: True` = no Telegram session thread, out of the human lists; env `MAXXING_AGENT`,
   `MAXXING_AGENT_TRIGGER`, `MAXXING_AGENT_DEPTH`, + `MAXXING_AGENT_OUTSIDE=1` when `text` is given or when the
   `context()` it gets holds a result marked `outside`: one written by a run started with `text`, see `on_turn_end`;
-  such a start also gets `MAXXING_AGENT_OUTSIDE_FROM=context` and its own result is not marked) and a `run`
+  such a start also gets `MAXXING_AGENT_OUTSIDE_FROM=context` and its own result is not marked; the owner's new
+  conversation gets no marked result at all) and a `run`
   message. `reply_to` (a thread message id) sends the message to that message's session instead
   (`service.send_message`, `continued: true`); a new `manual` / `telegram` / `agent:` start gets `context()` = the last
   3 results (500 characters each) between `THREAD-<hex>` markers; cron and feed runs get nothing. `tidy(path)` runs

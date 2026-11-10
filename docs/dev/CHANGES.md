@@ -7,17 +7,120 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
-- `agents`: outside provenance follows a result into the next run. `on_turn_end` marks the `result` message
+- `agents`: outside provenance follows a result into the next session. `on_turn_end` marks the `result` message
   `outside: true` when the session was started by outside text (`MAXXING_AGENT_OUTSIDE=1` without
-  `MAXXING_AGENT_OUTSIDE_FROM=context`; in a group, `agent_rooms.turn_outside`); new `_context(path) -> (text,
-  outside)` (`context()` unchanged for callers) says whether one of the results it frames carries the mark; `_fire`
-  sets `MAXXING_AGENT_OUTSIDE=1` and `MAXXING_AGENT_OUTSIDE_FROM=context` for a `manual` / `telegram` / `agent:` start
-  whose context holds one, so `run_settings` forces approvals unless `trust_outside`. The result of such a run is not
-  marked: the mark does not renew itself, it lasts while the marked result is among the last `CONTEXT_RESULTS` (3).
-  Accepted limit: what that run repeats of the outside text is unmarked one run later. API.md: `AgentMessage.outside?`.
-  Results written before this change carry no mark. Not covered: a `reply_to` continuation started with outside
-  `text` from another caller than Telegram (which already never uses `reply_to` with outside data). Test:
-  `test_agents.py::test_a_result_of_an_outside_run_makes_the_next_runs_ask_until_it_is_replaced`.
+  `MAXXING_AGENT_OUTSIDE_FROM=context`; in a group, `agent_rooms.turn_outside`). New `_context(path, own) -> (text,
+  outside)` (`context()` unchanged for callers). A new conversation of the owner (`_owner_chat`) gets `own=True`: the
+  marked results are left out of its context, since outside text never enters the owner's conversation (and
+  `MAXXING_AGENT_OUTSIDE` would take the manager away from it). Any other start that gets the context (a script's
+  `agents run`) and finds a marked result in it gets `MAXXING_AGENT_OUTSIDE=1` + `MAXXING_AGENT_OUTSIDE_FROM=context`,
+  so `run_settings` forces approvals unless `trust_outside`; its own result is not marked, so the mark does not renew
+  itself: it lasts while the marked result is among the last `CONTEXT_RESULTS` (3). Accepted limit: what that run
+  repeats of the outside text is unmarked one run later. API.md: `AgentMessage.outside?`. Results written before
+  this change carry no mark. Test:
+  `test_agents.py::test_the_result_of_an_outside_run_keeps_its_provenance_in_the_next_sessions`.
+
+## 2.0.0-alpha.139 - 2026-11-10
+
+- Fixes before release: `agent_guard._manages` reads the target with `cmd_agents._configure`'s parser
+  (`parse_known_args`; `--name writer other` targets `other`) and `cmd_agents._handler` refuses a manager command of
+  `AGENT_OWNER_ONLY` on another agent; `silent` / `loud` joined `AGENT_OWNER_ONLY` (and `AGENT_MANAGER`);
+  `check_cli` takes `-h` / `--help` as help only before `--`. `on_turn_end` finds the ended turn by
+  `last_turn.at` (the runner writes the `mx_user` time there) and `turn_died` (watcher: error without a recorded
+  turn): `service._ended_turn(evs, at, died)` -> `ended_turn_text` / `ended_turn_steps` never take another turn's
+  answer, tools or model (no `at`: the old last-result rule). UI: `fetchAgentThreadBefore` (`?before=`, pages of
+  200 when the flow is scrolled to its top, view kept in place); the composer's model is the agent's
+  (`chat_model` or `model`) unless picked, and is sent only when picked; `NewAgentForm` explains an empty slug.
+- `pages/ext/index.tsx`: `t` / `navigate` read through a ref, not effect deps (`useT()` changes with each
+  dictionary group: ~10 remounts of an extension page while it opened).
+- **Agent chat** (every agent, no switch: a `chat` key left in an agent.json is dropped by `clean()`):
+  `limits.chat_idle_h` (6, 0-720). `agents._fire`: the owner's own words
+  (`_owner_chat`: trigger manual/telegram, source manual/telegram, no outside `text`) go on in the session kept in
+  `<state>/agents/<key>.json` `chat: {session, at}` (`_chat_session`: gone, failed, other path or idle > chat_idle_h
+  -> new session, which gets `context()` as before). `new_chat()` + `POST /api/agents/{p}/{t}/{n}/chat/new` +
+  Telegram `/new` in an agent thread (`agent_new_chat` text). Run posts carry `owner: true` (and `chat: "new"` when
+  they open a conversation); `gate(owner=True)` skips runs_per_hour and `_runs_last_hour` leaves owner runs out; a
+  `busy` owner message that goes on in the running session is let through (`_joins_running`: it queues under that
+  run's hold). `status()` gives `chat_session`. `on_turn_end` reads `service.ended_turn_text()` (the answer of the
+  last turn with a `result`, even when a queued turn already started) instead of `last_assistant_text(turn_only=not
+  ok)`, which posted the previous turn's answer again in a continued session. UI: `AgentPage.tsx` live text/tool in
+  `Working` (`useSessionLog`), `ChatLine` divider, New conversation bar, Reply hidden on the open conversation;
+  Settings -> Limits switch + `chat_idle_h` field (`LimitsFields chat`).
+- **Agent page = one flow** (`AgentPage.tsx` `AgentCenter` -> `Flow` + `Composer`, no tabs, no `SessionColumn`): the
+  thread oldest first with day lines; owner runs = bubbles on the right (reply tag when `reply_to`); other runs =
+  `TriggerCard` (icon by trigger); results = `AgentTurn` in `AgentBubble` (avatar): a turn of an own session
+  (`ownSessions`: chat, last chat, sessions of owner runs without `reply_to`) shows its steps as rows (`StepList`) and
+  a `ResultLine` (model, duration, cost), a run's result folds them (`StepsFold`) with Reply / Open the run / Continue;
+  "Memory updated" when a step edited `memory.md`; `changed_chat` notes = a green `ChangeLine`; `new_chat` notes and
+  a `chat: "new"` owner run after an earlier one = a "New conversation" line; each running session = `LiveTurn`
+  (steps and text of its current turn from `useSessionLog`, Stop; Open the run for a run only) right under the last
+  message of its session. A conversation turn has no link to a session view and is never folded (`FOLD_CHARS` only for
+  runs); its answered approvals are one line (`approvals.tsx` `ApprovalLine`). The manager may run itself:
+  `maxxing agents run <itself>` in a manager turn (`AGENT_MANAGER` += run) = `fire(trigger manual, source
+  "conversation")`, a run of its own ("Started at your request, from the conversation"); `MANAGER_NOTE` tells it to
+  do so when asked to do its routine now; the conversation hands its hold of the day's budget over to that run
+  (`agents.hand_over`), else the run would find it all held (busy).
+- **Conversation from the Office**: `AgentsOverview` keeps `?chat=<agent path>` and gives `office.tsx` `OfficeChat`
+  ({open, current}) to the desks (`useDesk`, `AgentTile`): a desk toggles the panel instead of navigating (outside the
+  Office the desk still opens the page). Panel = `AgentPage.tsx` `AgentChatPanel` (header + `AgentCenter`), docked
+  440 px from 1024 px, else a `Sheet`. Extension views get `chat_route` per agent (`OfficeCustom`, the current
+  pathname + `?chat=`).
+- **Agents, simpler**: `agents.create()` defaults `sandbox` to whether the fields
+  read outside text (`mail`, a `feed` trigger); `cmd_agents create` sets it for a webhook / mail template, `--sandbox`
+  added; imports are free. `request_change` applies at once what only makes the agent safer (`_safer`,
+  `_safer_limit`: sandbox on, approvals on, trust off, a stricter mode, subsets of domains / writable (any when the
+  sandbox comes on) / keys / allowed tools, supersets of disallowed tools and rules, lower limits; mail and subagent
+  always asked). `MANAGER_NEW` joins the manager's system note while its role (CLAUDE.md description) is empty.
+  UI: `CreateAgent.tsx` = `NewAgentForm` (where + name + random character -> `POST /api/agents` with an empty
+  description -> the agent page); the old 3-step form, `QuickCreate`, the gallery cards, `EditWithClaude` /
+  `useCreateWithClaude` are gone (`draftUrl` stays for groups and custom Office views); the empty conversation of an
+  agent without role shows the templates as `Suggestions` (`AgentComposerApi.fill`). `AgentSettings.tsx`: sections
+  `essential | protection | mail | advanced` (`SectionId`; `?settings=mail` unchanged), `LimitsFields part`,
+  `readsOutside()`; 46 unused texts dropped.
+  Then: `MANAGER_NEW` sets the agent up in one turn from a brief (My job / When / Results / Never without me),
+  freedoms decided by rule, questions only for what it cannot guess; `schedule_zone_note()` (config `timezone`) joins
+  every manager note and `agents cron` prints the zone (the server clock may differ: `system_clock: keep`).
+  `agent_templates.BRIEFS` / `brief()` / `FIRST_IDEAS` -> `brief`, `first` in `GET /api/agents/templates`;
+  `Suggestions`: Blank brief + 6 ideas + "more", `fill()` selects the first `[…]`. Profile: one add-trigger menu
+  (`agent-add-trigger`; Telegram row only when on), guards = budget + Free/Protected line (opens the Protection
+  section) + approvals / keys when set; group link under Settings; `CronRow` shows `settings.timezone` when it is
+  not the browser's. Skill `maxxing-agents`: same brief and rules.
+- Removed the text as it is written (`--include-partial-messages`, `<sid>.live`, the SSE `partial` frame,
+  `partialText`): not needed. The runner still drops `stream_event` lines. The manager's sandboxed turns pre-allow
+  `agent_guard.MANAGER_SAFE` (Read, Glob, Grep, WebSearch; the deny rules still win).
+- "New conversation" moved under the box; "Edit with Claude" only in the profile. Results now carry the
+  turn's steps: `service.ended_turn_steps(sid)` -> `tools` ([{name, summary (160 chars), error?}], the last 40),
+  `tools_total`, `model`, `duration_ms` (omitted when empty); older results have none. `RunView` goes back to the
+  agent page (no `?tab`). The chat notes (change requests answered) go into the manager turn's system note
+  (`run_settings`) instead of the owner's message, so a message typed in the session's own box gets them too.
+  `BUS_TURN_KEYS` += agent one/thread (a run started by another process reaches the page by the session watcher).
+  Settings: the `chat_model` picker is gone from the UI (field kept).
+- **Agent manager (the owner's conversation)**: a new chat session gets `MAXXING_AGENT_CHAT=1` in its meta env and no
+  model of its own; `agents.manager_turn(meta)` (chat, no outside, no group) -> `run_settings(manager=True)`: model
+  `chat_model` (new agent.json field, "" = `model`) or `model`, `MANAGER_NOTE` instead of `OWNER_NOTE`, approvals on
+  when sandboxed (else the agent's), `agent_guard.settings(manager=True)`: `allowUnsandboxedCommands: true`,
+  `autoAllowBashIfSandboxed: true`, its `CLAUDE.md` out of denyWrite / `permissions.deny` (the `agents/*/CLAUDE.md`
+  glob dropped), `allow` `Bash(maxxing:*)` + `Edit(/<write dirs>/**)`. `agent_guard.agent_turn()` gives `manager` and
+  `session`; `check_cli` lets the manager run `agents show|set|cron|webhook|watch|on|off` on itself
+  (`AGENT_MANAGER`, `_manages`); `set` joins `AGENT_OWNER_ONLY`. New CLI `maxxing agents set <agent> FIELD=VALUE|--json`
+  (owner: `update()`; manager: `agents.request_change`) and `maxxing agents cron <agent> --job ID [--schedule]
+  [--prompt] [--on|--off] [--remove]` (its own jobs only). `request_change`: validates the whole target with
+  `clean(strict)`, applies the non-safety fields, writes an approval request `{kind: "agent_change", tool: "Agent
+  settings", input: {description}, fields, expires: +7 d}` in `<state>/approvals/`; `approval_mcp.expire(session=)`
+  and the watcher's orphan expiry skip that kind (it expires at `expires`), `prime()` announces it; `approvals.decide`
+  -> `agents.change_decided` (applies on allow) and a `chat_notes` entry in the agent state, prepended to the next
+  owner message ("Since your last message: ..."). `approvals.public` gives `kind`; `status().waiting` counts pending
+  changes. `_fire`: a non-owner message never continues a manager session (reply_to -> new run). `on_turn_end`: a
+  change by the manager is a `changed_chat` note. UI: `ApprovalCard` renders `agent_change` as one line per change,
+  Settings -> Model "Model of the conversation" (`ModelSelect defaultLabel`), the self-locked line says the
+  conversation can. Tests `test_agent_manager.py`.
+- Runner: Claude Code's own permission questions on the control channel (`control_request` `can_use_tool`, e.g. the
+  sandbox's `SandboxNetworkAccess {host}` for a host outside the domains) were never answered, so the command waited
+  until its timeout. `_can_use_tool` answers them in a thread: through `approval_mcp.ask(ctx=...)` when the turn has
+  approvals (an approval card), else a deny at once. `approvals.summary` reads `host`. `agent_guard.check_cli` never
+  refuses `-h` / `--help`, and refuses any command run inside the sandbox (`in_the_sandbox()`: an agent turn's unit
+  whose state is hidden; a command line with a pipe, `;`, `&&` is sandboxed as a whole and its writes would vanish).
+  fake_claude: `ASKNET`. `public()` gives `chat_model`.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 

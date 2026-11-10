@@ -37,6 +37,10 @@ export function useRoom(project: string, agents: Agent[], index: number, layout:
   return { dnd, emoji, color, cols, fillers, create }
 }
 
+/** The Office's conversation panel: a desk opens its agent's conversation next to the Office (null outside the
+ *  Office: the desk opens the agent's page). */
+export const OfficeChat = React.createContext<{ open: (path: string) => void; current: string | null } | null>(null)
+
 /** An agent's desk: its status and the props of the cell that opens it (a link: click, Enter or Space; draggable). */
 export function useDesk(a: Agent, index: number, layout: AgentsLayoutApi) {
   const t = useT()
@@ -44,7 +48,8 @@ export function useDesk(a: Agent, index: number, layout: AgentsLayoutApi) {
   const navigate = useNavigate()
   const dnd = useReorder({ kind: 'agent', id: a.path, project: a.project, index }, (path) => layout.moveAgent(path, a))
   const st = statusOf(a, t, lang)
-  const open = () => navigate(agentRoute(a))
+  const chat = React.useContext(OfficeChat)
+  const open = () => (chat ? chat.open(a.path) : navigate(agentRoute(a)))
   const props = {
     role: 'link',
     tabIndex: 0,
@@ -54,6 +59,7 @@ export function useDesk(a: Agent, index: number, layout: AgentsLayoutApi) {
     ...dnd.props,
     'data-state': st.id,
     'data-path': a.path,
+    'aria-current': chat?.current === a.path ? ('true' as const) : undefined,
   }
   return { st, dnd, props }
 }

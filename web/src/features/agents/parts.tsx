@@ -64,12 +64,13 @@ export function AgentsOff() {
   )
 }
 
-export function ModelSelect({ value, onChange, id }: { value: string; onChange: (v: string) => void; id?: string }) {
+/** defaultLabel: what the empty value means when it is not the default model (the conversation: "Same as the runs"). */
+export function ModelSelect({ value, onChange, id, defaultLabel }: { value: string; onChange: (v: string) => void; id?: string; defaultLabel?: string }) {
   const t = useT()
   const { data: claude } = useClaudeStatus()
   const models = claude?.models || []
   const options = [
-    { value: '__default', label: claude?.default_model ? t('crons.modelDefaultNamed', { model: models.find((m) => m.id === claude.default_model)?.label || claude.default_model }) : t('crons.modelDefault') },
+    { value: '__default', label: defaultLabel ? defaultLabel : claude?.default_model ? t('crons.modelDefaultNamed', { model: models.find((m) => m.id === claude.default_model)?.label || claude.default_model }) : t('crons.modelDefault') },
     ...models.map((m) => ({ value: m.id, label: m.label })),
     ...(value && !models.some((m) => m.id === value) ? [{ value, label: value }] : []),
   ]
@@ -166,17 +167,22 @@ function NumberInput({ value, onValue, ...rest }: { value: number; onValue: (n: 
 }
 
 /** Daily budget, runs per hour, time limit, grouping window. */
-export function LimitsFields({ value, onChange }: { value: AgentLimits; onChange: (l: AgentLimits) => void }) {
+/** The limits of an agent; part: only its daily budget (`budget`), or all but it (`rest`). */
+export function LimitsFields({ value, onChange, part }: { value: AgentLimits; onChange: (l: AgentLimits) => void; part?: 'budget' | 'rest' }) {
   const t = useT()
-  const num = (k: keyof AgentLimits, scale = 1) => ({
+  const num = (k: Exclude<keyof AgentLimits, 'chat_idle_h'>, scale = 1) => ({
     value: Math.round((value[k] / scale) * 100) / 100,
     onValue: (n: number) => onChange({ ...value, [k]: k === 'usd_per_day' ? n : Math.round(n * scale) }),
   })
+  const budget = (
+    <FormField label={t('agents.limits.usd')} hint={t('agents.limits.usdHint')}>
+      <NumberInput {...num('usd_per_day')} data-testid="limit-usd" />
+    </FormField>
+  )
+  if (part === 'budget') return budget
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <FormField label={t('agents.limits.usd')} hint={t('agents.limits.usdHint')}>
-        <NumberInput {...num('usd_per_day')} data-testid="limit-usd" />
-      </FormField>
+      {part !== 'rest' && budget}
       <FormField label={t('agents.limits.runs')} hint={t('agents.limits.runsHint')}>
         <NumberInput {...num('runs_per_hour')} />
       </FormField>
@@ -186,6 +192,11 @@ export function LimitsFields({ value, onChange }: { value: AgentLimits; onChange
       <FormField label={t('agents.limits.debounce')} hint={t('agents.limits.debounceHint')}>
         <NumberInput {...num('debounce_s')} />
       </FormField>
+      {value.chat_idle_h !== undefined && (
+        <FormField label={t('agents.limits.chatIdle')} hint={t('agents.limits.chatIdleHint')}>
+          <NumberInput value={value.chat_idle_h} onValue={(n) => onChange({ ...value, chat_idle_h: Math.round(n) })} data-testid="limit-chat-idle" />
+        </FormField>
+      )}
     </div>
   )
 }
