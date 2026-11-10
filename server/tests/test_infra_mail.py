@@ -318,6 +318,11 @@ def test_spf_redirect_is_ignored_with_all_loops_are_errors_and_the_redirect_targ
                          ("a.net", "TXT"): ["v=spf1 include:c.net ~all"], ("b.net", "TXT"): ["v=spf1 include:c.net ~all"],
                          ("c.net", "TXT"): ["v=spf1 a ~all"]})
     assert codes == [] and not facts["spf_loop"]
+    # an include reached twice costs its lookups twice: 2 + 2 x (1 + 6) = 16 (was counted 10, no problem shown)
+    facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 include:a.x include:b.x -all"],
+                         ("a.x", "TXT"): ["v=spf1 include:c.x ~all"], ("b.x", "TXT"): ["v=spf1 include:c.x ~all"],
+                         ("c.x", "TXT"): ["v=spf1 a mx a:q mx:r ptr exists:z ~all"]})
+    assert facts["spf_lookups"] == 16 and codes == ["spf_lookups"]
     # the `all` that applies through redirect= (also through a chain of them)
     for end, want in (("+all", ["spf_redirect_all"]), ("all", ["spf_redirect_all"]), ("?all", ["spf_neutral"]),
                       ("", ["spf_neutral"]), ("-all", []), ("~all", [])):
