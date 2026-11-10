@@ -382,3 +382,25 @@ def test_a_fifo_or_huge_mcp_json_does_not_block_the_list(env):  # noqa: F811
     t.start()
     t.join(5)
     assert out and not [s for s in out[0] if s["scope"] == "project"]
+
+
+def test_login_start_refuses_unknown_servers_and_caps_open_attempts(env):  # noqa: F811
+    from maxxing import mcp
+    with pytest.raises(mcp.McpError) as e:
+        mcp.login_start("local||nobody", wait=1)
+    assert e.value.status == 404 and e.value.code == "not_found" and not mcp._logins
+    for i in range(mcp.MAX_LOGINS + 2):
+        mcp.add(f"s{i}", {"type": "http", "url": f"https://s{i}.example.com/mcp"}, None)
+    ids = sorted(s["id"] for s in mcp.servers())
+    try:
+        started = [mcp.login_start(sid, wait=10) for sid in ids[:mcp.MAX_LOGINS]]
+        with pytest.raises(mcp.McpError) as e:
+            mcp.login_start(ids[-1], wait=10)
+        assert e.value.status == 429 and e.value.code == "too_many_logins"
+        assert len(mcp._logins) == mcp.MAX_LOGINS
+        assert mcp.login_start(ids[0], wait=10)["login"]            # Connect again on an open one replaces it
+        mcp.login_cancel(started[1]["login"])
+        assert mcp.login_start(ids[-1], wait=10)["login"]
+    finally:
+        for k in list(mcp._logins):
+            mcp.login_cancel(k)
