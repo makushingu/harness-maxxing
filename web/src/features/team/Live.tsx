@@ -48,7 +48,7 @@ function useMessageNotifier() {
     if (!enabled) return
     const away = document.hidden || !document.hasFocus()
     const onScreen = (id: string) =>
-      (location.pathname.startsWith('/team') && new URLSearchParams(location.search).get('chat') === id) || (ui.docked.includes(id) && !location.pathname.startsWith('/team'))
+      (location.pathname.startsWith('/team') && new URLSearchParams(location.search).get('chat') === id) || (bubbles && !ui.hidden && ui.docked.includes(id))
     let rang = false
     for (const c of fresh) {
       if (!away && onScreen(c.id)) continue
