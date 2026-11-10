@@ -21,26 +21,39 @@ role must work on the topic's files, write their full path in the role (or tell 
 Docs: `docs/user/30-agents.md` (Docs -> Agents).
 
 ## Create one when the user asks ("I want an agent that…")
-Do it from the session with the CLI; never send the user to the UI. First look at the ready-made agents
-(`maxxing agents templates`: support, sales, orders, watch, pr-review, writer, uptime, feedback): when one fits,
-`maxxing agents create <p>/<t>/<a> --template <id> [--name …] [--role-file …] [--keys …]` gives its safe settings and
-first trigger; adapt the role (sites to watch, the shop, the tone) with `--role-file`, then say what is left to
-connect (printed as `to connect:`). Ask as little as possible:
-infer what the request already says, use the defaults below for the rest, and ask **at most 3 questions in
-one message**, only those you cannot infer:
+Do it from the session with the CLI; never send the user to the UI. Fill in the agent's **brief** yourself from
+the request - the same four lines a new agent asks for on its page:
+
+```
+My job: …            (what it does, for whom, what it reads and produces)
+When: …              (a schedule, a webhook, a feed event, a mailbox, "when I write to it")
+Results: …           (here = its conversation; Telegram; a file; a draft in the mailbox)
+Never without me: …  (send, pay, publish, delete, write to customers… or nothing)
+```
+
+Infer every line you can, take the defaults below for the rest, and **ask only what you really need and cannot
+find or guess** (which shop, which sites, which mailbox), all in one message, showing the brief with the gaps
+marked `[…]`. When the user does not know or does not mind, take a sensible default and say which. Never ask to
+confirm what is clear, never ask about the settings below: decide them with the rules.
+First look at the ready-made agents (`maxxing agents templates`: support, sales, orders, watch, pr-review, writer,
+uptime, feedback, mail-sort, mail-support, mail-invoices): when one fits,
+`maxxing agents create <p>/<t>/<a> --template <id> [--name …] [--role-file …] [--keys …]` gives its safe settings
+and first trigger; adapt the role (sites to watch, the shop, the tone) with `--role-file`, then say what is left
+to connect (printed as `to connect:`).
 
 | To decide | Infer / default | Ask only if |
 |---|---|---|
-| **Where** (topic) | the topic of this session if the agent's work belongs there; else the topic whose files it works on (`ls {{WORKSPACE}}/projects/*/topics/`) | several topics fit, or none (then offer to create the topic first) |
+| **Where** (topic) | the topic of this session if the agent's work belongs there; else the topic whose files it works on (`ls {{WORKSPACE}}/projects/*/topics/`); `general/inbox` when nothing fits | several topics fit equally well |
 | **What it does** (role) | write it yourself from the request: what it is for, what it reads, what it produces and where (a file, the thread, a task), what it must never do | the output is unclear ("a report" - where? for whom?) |
-| **When it runs** | "every morning / each Monday" -> schedule; "when an order / a payment / a PR / a form arrives" -> webhook of that service; "when the feed shows…" -> feed trigger on an existing source; "I'll write to it" -> Telegram or manual | nothing in the request says when |
-| **Results** | its Activity thread (always); Telegram if the user wants it on the phone | - |
-| **Safety** | runs started by outside text (webhook, feed, another agent) always ask before risky actions (never `--trust-outside` unless the user insists); `--approvals` if even its own runs may send, pay, delete or publish; `--keys A,B` = only the vault keys it needs (none by default); budget $2/day, 6 runs/hour | it acts on money, customers or public posts |
-| **Sandbox** | off by default (free, like a session); `--sandbox` when it reads outside text (mails, webhooks, web pages, the feed: on by itself for a mailbox, a feed trigger or a webhook template): its commands write only in its folder (`--writable drafts,site` = folders of the topic too; give the folders it needs, `.` only if it must edit files at the topic's root: never `agents/`, the topic's CLAUDE.md / memory.md / .claude, nor new files at the root) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default) | it reads outside text and its role calls an API whose host you cannot deduce |
+| **When it runs** | "every morning / each Monday" -> schedule, **in the time zone of Settings -> General** (`maxxing status`, config `timezone`; "8 in the morning" = `0 8 * * *`, never converted to the server's clock); "when an order / a payment / a PR / a form arrives" -> webhook of that service; "when the feed shows…" -> feed trigger on an existing source; "I'll write to it" -> no trigger (its page, Telegram) | nothing in the request says when |
+| **Results** | its conversation (always); Telegram if the user wants it on the phone | - |
+| **Safety** | runs started by outside text (webhook, feed, another agent) always ask before risky actions (never `--trust-outside` unless the user insists); `--approvals` when it sends, pays, deletes, publishes or writes to customers; `--keys A,B` = only the vault keys it needs (none by default); budget $2/day, 6 runs/hour | - |
+| **Sandbox** | off by default (free, like a session); `--sandbox` when it reads outside text (mails, webhooks, web pages, the feed: on by itself for a mailbox, a feed trigger or a webhook template): its commands write only in its folder (`--writable drafts,site` = folders of the topic too; give the folders it needs, `.` only if it must edit files at the topic's root: never `agents/`, the topic's CLAUDE.md / memory.md / .claude, nor new files at the root) and reach only `--domains api.example.com,*.shop.com` (the APIs its role calls: deduce them; none by default) | its role calls an API whose host you cannot deduce |
 | **Name** | short and human ("Game Dev", "Support"); folder = lowercase-dashes of it | - |
 
-Then, before creating, show a short summary (name, topic, role in 2-3 lines, trigger in plain words,
-safety, budget) and create it once the user agrees (or right away if the request was complete and clear):
+When the request was complete, create it right away; otherwise create it once the user has filled the gaps.
+Then show a short summary (name, topic, role in 2-3 lines, when in plain words with the time zone, where the
+results go, protection, budget). The commands:
 ```bash
 cat > /tmp/role.md <<'EOF'
 Reads the players' feedback on Language Game and turns it into an improvement plan: groups similar

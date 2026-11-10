@@ -132,7 +132,7 @@ def _configure(p) -> None:
     s.add_argument("--json", dest="fields", default="", help="the fields as one JSON object")
     s = sub.add_parser("cron", help="add a schedule to an agent, or change / remove one of its schedules (--job)")
     s.add_argument("agent")
-    s.add_argument("--schedule", default="", help='5-field cron, server time zone, e.g. "0 8 * * 1"')
+    s.add_argument("--schedule", default="", help='5-field cron in the time zone of Settings -> General, e.g. "0 8 * * 1"')
     s.add_argument("--prompt", default="", help='what to do each time (default "Run your routine.")')
     s.add_argument("--name", default="", help="name of the cron job")
     s.add_argument("--job", default="", help="change this cron job of the agent (its id: `maxxing agents show`)")
@@ -521,6 +521,11 @@ def _set(path: str, a) -> int:
     return 0
 
 
+def _zone() -> str:
+    from . import config
+    return config.load_config().get("timezone") or "UTC"
+
+
 def _cron_job(path: str, a) -> int:
     from . import bus, crons
     job = crons.get_job(a.job)
@@ -544,7 +549,7 @@ def _cron_job(path: str, a) -> int:
         print(str(e), file=sys.stderr)
         return 2
     bus.invalidate("crons", "agents")
-    print(f"schedule changed: {a.job} ({', '.join(sorted(fields))})")
+    print(f"schedule changed: {a.job} ({', '.join(sorted(fields))}; times in {_zone()})")
     return 0
 
 
@@ -619,7 +624,7 @@ def _handler(a) -> int:
                 print("--schedule is needed to add a schedule (or --job ID to change one)", file=sys.stderr)
                 return 2
             job = agents.add_cron(path, a.schedule, a.prompt, a.name, enabled=a.enabled is not False)
-            print(json.dumps({"cron": job.get("id")}) if a.json else f"schedule added: {job.get('id')} ({a.schedule})")
+            print(json.dumps({"cron": job.get("id")}) if a.json else f"schedule added: {job.get('id')} ({a.schedule}, {_zone()})")
             return 0
         if a.agents_cmd == "webhook":
             hook = agents.add_webhook(path, a.kind, a.prompt, _levels(a.levels), a.match)["hook"]
