@@ -3,6 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.136 - 2026-11-10
+
+Fixed:
+- **Writing on a phone keeps the answer in sight.** While you type in a session's message box on a phone or a tablet,
+  the box takes at most a third of the screen (its text scrolls inside) and the project line of that session steps
+  aside; held sideways, its header steps aside too, so the box and its send button stay above the keyboard.
+  Everything comes back when the keyboard closes.
+
 ## 2.0.0-alpha.135 - 2026-11-09
 
 Changed:

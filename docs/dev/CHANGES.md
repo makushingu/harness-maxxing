@@ -5,6 +5,14 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.136 - 2026-11-10
+
+- Released from `main` ("Urgent fixes" path). Phone keyboard and the session composer (issue #54, idea of PR #55):
+  `styles/globals.css` caps the focused composer textarea (`data-kbd-cap`, `Composer.tsx`) to 30 % of `--vvh` with
+  `overflow-y: auto !important` (the autosize sets it inline), and in the column being typed in
+  (`html[data-kbd] [data-col]:has([data-kbd-cap]:focus)`) hides the place row (`data-kbd-hide`) and, under
+  `max-height: 480px`, the header (`data-kbd-short-hide`, `Column.tsx`). Test `test_web_mobile.py`, DESIGN.md, doc 04.
+
 ## 2.0.0-alpha.135 - 2026-11-09
 
 - Agent preview card (`features/agents/AgentHover.tsx` + `AgentPreview.tsx`, FEU's `ff43b2c76`): gated by
