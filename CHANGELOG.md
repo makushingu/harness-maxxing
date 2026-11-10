@@ -12,6 +12,10 @@ New:
   the next one; a model you chose on a topic, a job or an agent never changes. Short titles, the connection test and
   Team summaries always use the newest Haiku or Sonnet.
 
+Fixed:
+- **A skill whose description is written as a `|-` or `|+` block no longer starts with a stray dash or plus sign.**
+  The Skills list now shows the text of these blocks as written.
+
 ## 2.0.0-alpha.137 - 2026-11-10
 
 Fixed:
