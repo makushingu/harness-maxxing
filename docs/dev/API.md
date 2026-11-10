@@ -61,7 +61,7 @@ failure. With no recent result the server verifies in the background (`claude -p
 at startup and at most every 6 h; a background timeout/network error does not mark the sign-in as failed.
 `checked_at:null` = configured but not verified yet.
 
-`models` = known ids (claude-opus-5-5, claude-sonnet-5-5, claude-haiku-4-5-20251001, claude-fable-5-1, …) + ids observed in logs.
+`models` = the newest model of each family read from Anthropic once a day (`claude_models`; before the first read claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1) + ids observed in logs.
 
 ## Workspace
 | GET | `/api/workspace/tree` | – | `{root, projects:[Project]}` |

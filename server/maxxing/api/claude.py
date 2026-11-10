@@ -14,13 +14,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import claude_auth, claude_update, config
+from .. import claude_auth, claude_models, claude_update, config
 from ..security import require_auth
 from ..sessions import service, spawn
 
 router = APIRouter(prefix="/api/claude", tags=["claude"], dependencies=[Depends(require_auth)])
 
-TEST_MODEL = "claude-haiku-4-5-20251001"
+TEST_MODEL = "haiku"          # Claude Code's name for its newest Haiku
 TEST_PROMPT = "Reply with the single word: ok"
 TEST_TIMEOUT_S = 90
 PERMISSION_MODES = ("bypass", "acceptEdits", "default", "ask")
@@ -146,6 +146,7 @@ async def startup() -> None:
     if os.environ.get("MAXXING_AUTH_CHECK", "1") != "0":
         _task = asyncio.create_task(_checker())
     claude_update.start()
+    claude_models.start()
 
 
 async def shutdown() -> None:
@@ -154,6 +155,7 @@ async def shutdown() -> None:
         _task.cancel()
         _task = None
     claude_update.stop()
+    claude_models.stop()
 
 
 # ---- endpoints -----------------------------------------------------------------------------

@@ -20,7 +20,7 @@ from . import spawn, store
 
 log = logging.getLogger("maxxing.titles")
 
-MODEL = "claude-haiku-4-5-20251001"     # the cheapest model of service.KNOWN_MODELS
+MODEL = "haiku"                         # Claude Code's name for its newest Haiku (the cheapest family)
 TIMEOUT_S = 30
 MESSAGE_CHARS = 1000                    # only the start of the message is sent
 MAX_CHARS = 60                          # a model answer longer than this is not a title

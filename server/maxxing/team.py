@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 ME = "me"
 TEXT_MAX = 8000
-SUMMARY_MODEL = "claude-sonnet-5-5"
+SUMMARY_MODEL = "sonnet"       # Claude Code's name for its newest Sonnet
 SUMMARY_TIMEOUT_S = 120
 SUMMARY_MESSAGES = 200         # at most this many messages are summarized
 FILES_MAX = 10                  # files per message

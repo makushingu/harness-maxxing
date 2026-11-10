@@ -13,7 +13,7 @@ def test_status_with_fake_claude(client, mx, monkeypatch, tmp_path):
                          "error": None}
     assert r["permission_mode"] == "bypass" and r["default_model"] == ""
     ids = [m["id"] for m in r["models"]]
-    assert "claude-opus-5-5" in ids and "claude-haiku-4-5-20251001" in ids
+    assert "claude-opus-5-5" in ids and "claude-haiku-5-5" in ids
     assert {"id": "claude-opus-5-5", "label": "Opus 5.5"}.items() <= next(m for m in r["models"] if m["id"] == "claude-opus-5-5").items()
 
 
@@ -36,7 +36,7 @@ def test_auth_store_test_delete(client, mx, monkeypatch, tmp_path):
     r = client.post("/api/claude/auth", json={"kind": "api_key", "value": "sk-ant-api-0123456789"}).json()
     assert r["ok"] and config.get_secret("claude_oauth_token") == ""      # one credential at a time
     t = client.post("/api/claude/test").json()
-    assert t["ok"] and t["model"] == "claude-haiku-4-5-20251001" and t["ms"] >= 0
+    assert t["ok"] and t["model"] == "haiku" and t["ms"] >= 0
     assert client.post("/api/claude/auth", json={"kind": "api_key", "value": "short"}).status_code == 400
     assert client.post("/api/claude/auth", json={"kind": "nope", "value": "x" * 20}).status_code == 422
     assert client.delete("/api/claude/auth").json() == {"ok": True}

@@ -131,6 +131,15 @@ side by side). Claude Code's own habit is to send them to the background, where 
 back, which is slower; `"background_agents": true` in config.json goes back to it. You can always ask Claude for a
 background agent in your message.
 
+## New Claude models
+
+Once a day the server asks Anthropic which Claude models exist (with the Claude account it is signed in with) and
+keeps the newest Opus, Sonnet, Haiku and Fable: the model lists (default model, topics, jobs, agents, Telegram
+`/model`) show them as soon as Anthropic releases them, without an update of Harness Maxxing. If your default model
+is the newest of its family (say Sonnet 5.5) and a newer one comes out (Sonnet 6), the default follows it. A model
+you chose on a topic, a job or an agent is never changed. Short titles, the connection test and Team summaries
+always use the newest Haiku or Sonnet.
+
 ## Claude Code updates
 
 **Update Claude Code automatically** (off by default): every 6 hours the server looks for a newer **stable** Claude

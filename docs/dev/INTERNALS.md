@@ -88,7 +88,7 @@ Python modules call each other only through these functions. Keep signatures sta
 - `refine(sid, current, message) -> str | None` - `heuristic(message)`, or `ask_claude(message) or heuristic(message)`
   with config `short_titles_model` (default false: a call per new session counts in the Claude plan), written under
   `store.edit` only if the title is still `current` (the provisional one), then `bus.invalidate("sessions")`.
-- `ask_claude(message) -> str | None` - `claude -p --output-format json --model claude-haiku-4-5-20251001 --tools ""
+- `ask_claude(message) -> str | None` - `claude -p --output-format json --model haiku --tools ""
   --no-session-persistence --strict-mcp-config --system-prompt …`, stdin = first 1000 chars, cwd
   `<state>/claude-titles`, env `spawn.claude_env(None, "default")`, timeout 30 s; answer through `clean()`.
 - `heuristic(message) -> str` - first sentence, leading FR/EN filler removed, cut at 40 chars on a word.
@@ -115,6 +115,21 @@ Python modules call each other only through these functions. Keep signatures sta
   target per 24 h (`<state>/auto-update.json` `tried`); busy is checked again after the preflight. The update is
   `api/system._spawn_update(smart=False)`: the usual `maxxing update` (rolls itself back when the new version does not
   start) without the Harness session of the Update button.
+
+## maxxing.claude_models
+
+- Once a day (first pass 60 s after the start, `MAXXING_CLAUDE_MODELS_DELAY`), `refresh()` reads
+  `GET https://api.anthropic.com/v1/models` with the server's Claude credentials (secrets `claude_oauth_token` /
+  `anthropic_api_key`, else the `claude login` access token while valid; OAuth needs `anthropic-beta: oauth-2025-04-20`)
+  and keeps the newest id of each family (opus, sonnet, haiku, fable; dates are not versions). State
+  `<state>/claude-models.json` = {checked_at, latest, all, error}; a failed read is retried after 1 h, the last list
+  stays (`FALLBACK` before the first read).
+- `latest()` feeds `service.models()` (model pickers, Telegram `/model`, Claude settings).
+- When a family gets a newer model and config `default_model` was the previous newest of that family, it moves to the
+  new one (`_follow_default`). Models picked on a topic, a job or an agent never move.
+- Only the installed server runs the loop (`claude_update.installed_server()`); `MAXXING_CLAUDE_MODELS=0|1` forces it.
+- Fixed internal calls use Claude Code's family names (`--model haiku` for titles and the test call, `sonnet` for
+  Team summaries): Claude Code resolves them to its newest model.
 
 ## maxxing.claude_update
 - Claude Code updated while the server is idle (turns run with its own update check off: quiet start). Loop started by
