@@ -123,3 +123,22 @@ def test_no_hang_when_claude_exits_without_a_result(client, topic):
     sid = client.post("/api/sessions", json={"path": topic, "message": "NORESULT"}).json()["id"]
     s = wait_idle(client, sid, 15)
     assert s["state"] == "error" or s["error"] is not None or s["turns"] == 1
+
+
+def test_a_message_sent_while_only_background_tasks_run_is_answered_at_once(client, topic, mx, monkeypatch):
+    """A background command that never ends (a dev server) no longer holds the next message in the queue."""
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S", "60")
+    sid = client.post("/api/sessions", json={"path": topic, "message": "BGTASK:dev NOTOOL"}).json()["id"]
+    wait_for(lambda: any(e["type"] == "result" for e in _raw(mx, sid)), 10)          # answered, the task runs on
+    t0 = time.time()
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "next one NOTOOL"})
+    wait_for(lambda: [e["type"] for e in _raw(mx, sid) if e["type"] in ("mx_user", "mx_done", "result")]
+             == ["mx_user", "result", "mx_done", "mx_user", "result"], 10)
+    assert time.time() - t0 < 10
+    assert [x.get("continued", False) for x in calls(mx)] == [False, True]           # the same process
+    assert not (mx["fake_dir"] / "bg-dev.done").exists()                              # the task still runs
+    evs = all_events(client, sid)
+    assert not any(e["type"] == "note" for e in evs)
+    assert not any("interrupted your previous turn" in e["text"] for e in evs if e["type"] == "assistant")
+    client.post(f"/api/sessions/{sid}/stop")
+    assert wait_idle(client, sid, 20)["turns"] == 2
