@@ -11,9 +11,11 @@ New:
   and costs less; a message typed while it works waits for its turn. **New conversation** (under the box, or `/new`
   on Telegram) starts a fresh one, and so do 6 hours without a message (adjustable). Its schedules, webhooks,
   e-mails and other agents still start sessions of their own. Every agent works this way, existing ones too.
-  On its page the conversation is a session like the ones of the Sessions page (answer as it is written, commands,
-  model picker, Stop); its automations have their own **Runs** tab, and one running now shows as a bar above the
-  conversation. Your own messages no longer count in its runs per hour.
+  Its page is now **one flow**, like a chat: your messages on the right, its answers on the left with its avatar, as
+  they are written, with every command and file it used and what it changed of itself (its memory, its role, its
+  settings) in green. What its schedules, webhooks, e-mails and other agents started shows in the same flow: what
+  started each run, then its answer with its steps folded in one line (**Reply** goes on with that run). Your own
+  messages no longer count in its runs per hour.
 - **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
   add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what
   keeps it safe (sandbox, sites, keys, approvals, budget...) shows up as a card with the change written out:

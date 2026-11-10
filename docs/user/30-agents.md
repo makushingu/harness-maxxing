@@ -128,34 +128,30 @@ which files or keys it uses, and what it must never do. Keep it short; it learns
 
 ## The agent page
 
-The page has two tabs.
+The page is **one flow**, like a chat, with the box to write to it at the bottom: your messages on the right, the
+agent's answers on the left with its avatar, and what its automations did, all in the order it happened (a line
+between days).
 
-**Conversation** is your conversation with the agent, and it is a **session** like the ones of the Sessions page: its
-answer shows as it is written, with every command and file, the model picker in the box, **Stop**, plan mode, the
-approvals, files (paperclip, paste, drop), dictation, quotes.
-
+- **Its answers come as they are written**, as in a session: each command and file it uses shows as a line while it
+  works (**Stop** stops the turn), then its answer with the model, the time and the cost. **Details** opens the whole
+  turn (every command, every file, live).
 - **It is one conversation**: your messages, here or on Telegram, go on in **the same session**. The agent remembers
-  everything you said and what it already read or did, so it answers faster and costs less. **New conversation** (at
-  the top) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New conversation
-  after**, in Settings -> Limits; 0 = never) or when the last one failed. Before the first message of a new one you
-  pick its model in the box, and **Read the last conversation again** opens the one before. A new conversation gets
-  the agent's last results as context, so "and the second point?" still makes sense.
+  everything you said and what it already read or did, so it answers faster and costs less. **New conversation**
+  (under the box) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New
+  conversation after**, in Settings -> Limits; 0 = never) or when the last one failed. A new conversation gets the
+  agent's last results as context, so "and the second point?" still makes sense. The model is picked under the box.
 - **In the conversation, the agent manages itself** (see [Who changes an agent](#who-changes-an-agent)): ask it to
-  rewrite its role, add a schedule or stop a webhook, and it does it. A change of its safety settings shows up as a
-  card to allow, and a command that needs more than its sandbox asks you first.
-- **An automation running now** shows as a bar above the conversation (what started it and what it does); click it to
-  watch the run.
-
-**Runs** shows what its **schedules, webhooks, notifications, e-mails, other agents and commands** started. Each one is
-a session of its own, with its own rules, never mixed with your conversation (a forward on Telegram too: outside text,
-see [Safety](#safety)):
-
-- **What started each run** (dashed), then **its result**: one card per answer, long ones folded (**Read all**), with
-  the cost. While a run works, its "working…" bubble shows what it is writing and the command it runs, as it comes;
-  when it waits for your OK, the bubble says so. A dot on the tab says a run is going on.
-- **Open the run** shows the whole session (every command, every file) right in the Agents page, live, with its box to
-  go on with it and a way back to the Runs tab. A link to an agent's session (Telegram, a notification, the search)
-  opens it there too. A reply in its Telegram thread to one of its results goes on with that run's session.
+  remember something, rewrite its role, add a schedule or stop a webhook, and it does it; what it changed of itself
+  shows in green (**Memory updated**, **Changed its role**). A change of its safety settings shows up as a card to
+  allow, and a command that needs more than its sandbox asks you first.
+- **What its schedules, webhooks, notifications, e-mails, other agents and commands started** shows in the same flow:
+  what started each run (dashed), then its answer with its steps folded in one line (**7 steps**, click to see
+  them). Each run is a session of its own, with its own rules, never mixed with your conversation (a forward on
+  Telegram too: outside text, see [Safety](#safety)). While a run works, its steps and its text show as they come.
+- **Reply** under a run's answer goes on with that run (your message says which one); **Open the run** shows the
+  whole session right in the Agents page, live, with its box to go on with it. A link to an agent's session
+  (Telegram, a notification, the search) opens it there too. A reply in its Telegram thread to one of its results
+  goes on with that run's session.
 - **Its answers** open file links in the preview, show images and videos as thumbnails and audio with a player, and
   have a copy menu. Only the files of the agent's own folders (its folder and its writable folders) get a link or a
   preview: any other path stays plain text, since an answer can repeat text from a mail or a webhook.

@@ -20,14 +20,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   ok)`, which posted the previous turn's answer again in a continued session. UI: `AgentPage.tsx` live text/tool in
   `Working` (`useSessionLog`), `ChatLine` divider, New conversation bar, Reply hidden on the open conversation;
   Settings -> Limits switch + `chat_idle_h` field (`LimitsFields chat`).
-- **Agent page = the conversation as a session**: `AgentPage.tsx` `AgentCenter` with tabs (`?tab=runs`): Conversation
-  = `SessionColumn` (solo, `agentRun`) on `chat_session`, or `StartChat` (agent composer + `ModelPicker`, `POST .../run`
-  `model` -> `fire(model=)` = the new chat session's model, default `chat_model` then `model`; link to
-  `last_chat_session`); `AutoRunBar` per running session that is not the owner's (`ownSessions`: chat, last chat,
-  sessions of runs with `owner`/source manual|telegram; a `maxxing agents run` is trigger manual + source
-  `command line` = an automation). Runs = the thread without the owner's sessions, no reply box. `status()` adds
-  `last_chat_session` (`<state>/agents/<key>.json` `last_chat`, set by `new_chat()` and when `_chat_mark` replaces
-  the conversation). The chat notes (change requests answered) go into the manager turn's system note
+- **Agent page = one flow** (`AgentPage.tsx` `AgentCenter` -> `Flow` + `Composer`, no tabs, no `SessionColumn`): the
+  thread oldest first with day lines; owner runs = bubbles on the right (reply tag when `reply_to`); other runs =
+  `TriggerCard` (icon by trigger); results = `AgentTurn` in `AgentBubble` (avatar): a turn of an own session
+  (`ownSessions`: chat, last chat, sessions of owner runs without `reply_to`) shows its steps as rows (`StepList`) and
+  a `ResultLine` (model, duration, cost), a run's result folds them (`StepsFold`) with Reply / Open the run / Continue;
+  "Memory updated" when a step edited `memory.md`; `changed_chat` notes = a green `ChangeLine`; `new_chat` notes and
+  a `chat: "new"` owner run after an earlier one = a "New conversation" line; each running session = `LiveTurn`
+  (steps and text of its current turn from `useSessionLog`, Stop, Details) right under the last message of its
+  session. "New conversation" moved under the box; "Edit with Claude" only in the profile. Results now carry the
+  turn's steps: `service.ended_turn_steps(sid)` -> `tools` ([{name, summary (160 chars), error?}], the last 40),
+  `tools_total`, `model`, `duration_ms` (omitted when empty); older results have none. `RunView` goes back to the
+  agent page (no `?tab`). The chat notes (change requests answered) go into the manager turn's system note
   (`run_settings`) instead of the owner's message, so a message typed in the session's own box gets them too.
   `BUS_TURN_KEYS` += agent one/thread (a run started by another process reaches the page by the session watcher).
   Settings: the `chat_model` picker is gone from the UI (field kept).
