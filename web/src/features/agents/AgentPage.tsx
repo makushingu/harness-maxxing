@@ -18,7 +18,7 @@ import {
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentTemplates, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
+  agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentTemplates, useAgentThread, fetchAgentThreadBefore, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
@@ -361,10 +361,22 @@ function Divider({ children, testid }: { children: React.ReactNode; testid?: str
   )
 }
 
+const THREAD_PAGE = 200
+
 function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (m: AgentMessage) => void; onSuggest?: (text: string) => void }) {
   const t = useT()
-  const { data, isLoading, error } = useAgentThread(a.path)
-  const msgs = React.useMemo(() => data?.messages || [], [data])
+  const { data, isLoading, error } = useAgentThread(a.path, THREAD_PAGE)
+  const latest = React.useMemo(() => data?.messages || [], [data])
+  // Older messages, loaded when scrolled to the top (the newest page stays live).
+  const [older, setOlder] = React.useState<AgentMessage[]>([])
+  const [olderDone, setOlderDone] = React.useState(false)
+  const [loadingOlder, setLoadingOlder] = React.useState(false)
+  const msgs = React.useMemo(() => {
+    if (!older.length) return latest
+    const ids = new Set(latest.map((m) => m.id))
+    return [...older.filter((m) => !ids.has(m.id)), ...latest]
+  }, [older, latest])
+  const more = !olderDone && latest.length >= THREAD_PAGE
   const { data: crons } = useCrons()
   const jobs = crons?.jobs || []
   const own = React.useMemo(() => ownSessions(a, msgs), [a, msgs])
@@ -382,6 +394,26 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [])
   React.useLayoutEffect(follow, [last, running.length, follow])
+  // Loading older messages keeps what is on screen in place (the page grows above it).
+  const keep = React.useRef<number | null>(null)
+  React.useLayoutEffect(() => {
+    const el = box.current
+    if (el && keep.current !== null) el.scrollTop += el.scrollHeight - keep.current
+    keep.current = null
+  }, [older])
+  const loadOlder = React.useCallback(() => {
+    const first = msgs[0]
+    if (!more || loadingOlder || !first) return
+    setLoadingOlder(true)
+    fetchAgentThreadBefore(a.path, first.at, THREAD_PAGE)
+      .then((r) => {
+        keep.current = box.current?.scrollHeight ?? null
+        if (r.messages.length < THREAD_PAGE) setOlderDone(true)
+        setOlder((o) => [...r.messages, ...o])
+      })
+      .catch(() => setOlderDone(true))
+      .finally(() => setLoadingOlder(false))
+  }, [a.path, msgs, more, loadingOlder])
 
   const rows: { key: string; session?: string; node: React.ReactNode }[] = []
   let day = ''
@@ -435,6 +467,7 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
       onScroll={(e) => {
         const el = e.currentTarget
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+        if (el.scrollTop < 200) loadOlder()
       }}
       className="min-h-0 flex-1 overflow-y-auto"
       aria-live="polite"
@@ -450,6 +483,15 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
             <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
           ) : (
             <>
+              {more && (
+                <div className="flex justify-center py-1" data-testid="agent-thread-older">
+                  {loadingOlder ? (
+                    <Skeleton className="h-6 w-40 rounded-full" />
+                  ) : (
+                    <Button variant="ghost" size="sm" onClick={loadOlder}>{t('agents.flow.older')}</Button>
+                  )}
+                </div>
+              )}
               {rows.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)}
               {/* nothing said yet (notes such as "Agent created" aside): its greeting, and ideas when it has no role */}
               {!running.length && !msgs.some((m) => m.kind !== 'note') && (
@@ -890,7 +932,11 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
   const t = useT()
   const run = useRunAgent()
   const fresh = useNewAgentChat()
-  const [model, setModel] = React.useState(a.chat_model || a.model || '')
+  // The agent's model unless one is picked in the box; a change of its settings (page, its conversation) wins again.
+  const setting = a.chat_model || a.model || ''
+  const [picked, setModel] = React.useState<string | null>(null)
+  React.useEffect(() => setModel(null), [setting])
+  const model = picked ?? setting
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
@@ -958,7 +1004,7 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
     files.clear()
     // mutateAsync: its answer arrives even once this box is gone (another agent opened): the message never stays
     // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
-    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths, model: model || undefined }).then(
+    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths, model: picked || undefined }).then(
       (r) => {
         if (r.started) {
           if (alive.current) onCancelReply()

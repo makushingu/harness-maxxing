@@ -71,6 +71,10 @@ export function useAgentSandbox(enabled = true) {
 export function useAgent(path: string | null) {
   return useQuery({ queryKey: agentKeys.one(path || ''), queryFn: () => api.get<AgentDetail>(agentUrl(path!)), enabled: !!path })
 }
+/** Thread messages older than `before` (the flow loads them when scrolled to its top), oldest first. */
+export function fetchAgentThreadBefore(path: string, before: number, limit = 100) {
+  return api.get<{ messages: AgentMessage[] }>(agentUrl(path, '/thread'), { limit, before })
+}
 export function useAgentThread(path: string | null, limit = 200) {
   return useQuery({
     queryKey: agentKeys.thread(path || ''),

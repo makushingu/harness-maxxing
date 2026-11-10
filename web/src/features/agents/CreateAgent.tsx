@@ -102,7 +102,11 @@ export function NewAgentForm({ topicPath, onImport, onDone }: { topicPath?: stri
     >
       <div className="flex items-end gap-3">
         <AgentAvatarIcon avatar={avatar} size={48} animate />
-        <FormField label={t('agents.create.name')} className="min-w-0 flex-1">
+        <FormField
+          label={t('agents.create.name')}
+          className="min-w-0 flex-1"
+          error={display.trim() && !SLUG_RE.test(slug) ? t('agents.create.nameLatin') : undefined}
+        >
           <Input value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={60} placeholder={t('agents.create.namePlaceholder')} autoFocus data-testid="agent-name" />
         </FormField>
         <Button type="button" variant="outline" size="icon" onClick={() => setAvatar(randomAvatar(project ? colorOf(project) : undefined))} aria-label={t('agents.avatar.random')} title={t('agents.avatar.random')}>
