@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { create } from 'zustand'
 import { NavLink, useLocation } from 'react-router'
-import { ChevronDown, ChevronRight, CircleHelp, LayoutGrid, Menu, Search } from 'lucide-react'
+import { Blocks, ChevronDown, ChevronRight, CircleHelp, LayoutGrid, Menu, Search } from 'lucide-react'
 import { useAgentsAttention, useFeed, useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
@@ -15,7 +15,7 @@ import { CountBadge, CountDot, NamedIcon, Sensitive, StatusDot } from '@/compone
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
 import { useTour } from '@/tour/store'
-import { navTourId, useNavEntries } from './nav'
+import { navTourId, useNavEntries, useUnpinnedPages } from './nav'
 import { ListSlot, pageListId, usePageListId } from './PageList'
 import { Logo } from './Logo'
 import { healthTone, StatusPanel, useStatusLine } from './HealthIndicator'
@@ -191,6 +191,7 @@ function AgentsTileBadge() {
 function AppPanel() {
   const t = useT()
   const { entries, end } = useNavEntries()
+  const unpinned = useUnpinnedPages()
   const feed = useFeed()
   const unreadFeed = feed.data?.unread ?? 0
   const install = useInstallMode()
@@ -232,6 +233,13 @@ function AppPanel() {
               <span className="max-w-full truncate">{e.ext.name}</span>
             </NavLink>
           ),
+        )}
+        {unpinned > 0 && (
+          // the Extensions page, while an extension page is not pinned: a direct way to it from the menu
+          <NavLink to="/x" end className={linkCls} onClick={close}>
+            <Blocks strokeWidth={1.9} />
+            <span className="max-w-full truncate">{t('ext.hubTitle')}</span>
+          </NavLink>
         )}
       </nav>
 

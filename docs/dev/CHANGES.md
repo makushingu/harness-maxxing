@@ -16,6 +16,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   answer, tools or model (no `at`: the old last-result rule). UI: `fetchAgentThreadBefore` (`?before=`, pages of
   200 when the flow is scrolled to its top, view kept in place); the composer's model is the agent's
   (`chat_model` or `model`) unless picked, and is sent only when picked; `NewAgentForm` explains an empty slug.
+- `nav.useUnpinnedPages()` (page extensions on, without error, not pinned): while > 0, `Sidebar` ends the page rows
+  with `hubItem` (`/x`, `data-tour="nav-extensions"`, not draggable, not in `sidebar_order`) and `TouchNav` adds an
+  Extensions tile. `tests/test_web_ext_hub.py` checks both.
 - The `/x` hub (`pages/ext/hub.tsx`) had no link left since the sidebar shows only pinned pages: `CommandPalette`
   gets `nav:x` (keywords extensions, pages, plugins) and Settings -> Pages an **All pages** button (`ext.allPages`, unused
   until now); `docs/user/13-page-extensions.md` says where it is. `tests/test_web_ext_hub.py` checks both links.
