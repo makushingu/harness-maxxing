@@ -5,6 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.138 - 2026-11-10
+
+- Released from `main` ("Urgent fixes" path). `server/maxxing/claude_models.py`: daily `GET /v1/models`
+  (secrets token/API key, else the `claude login` access token while valid, `anthropic-beta: oauth-2025-04-20`),
+  newest id per family -> `<state>/claude-models.json`; `service.KNOWN_MODELS` removed, `service.models()` uses
+  `claude_models.latest()` (+ `forget_models_cache()`); config `default_model` follows its family when it was the
+  previous newest (`_follow_default`). Started from `api/claude.startup` on the installed server only
+  (`claude_update.installed_server()`, split out of `runs_here()`; `MAXXING_CLAUDE_MODELS=0|1`). `titles.MODEL`,
+  `api.claude.TEST_MODEL` = `haiku`, `team.SUMMARY_MODEL` = `sonnet` (Claude Code family names). Telegram fallback
+  list: Haiku 5.5 instead of 4.5. Tests `test_claude_models.py`.
+
 ## 2.0.0-alpha.137 - 2026-11-10
 
 - Released from `main` ("Urgent fixes" path): the 45 Radar audit fixes validated by FEU and pushed straight to

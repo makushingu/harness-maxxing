@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.138 - 2026-11-10
+
+New:
+- **New Claude models show up by themselves**: once a day Harness Maxxing asks Anthropic which models exist and
+  lists the newest Opus, Sonnet, Haiku and Fable everywhere you pick a model (Settings, topics, jobs, agents,
+  Telegram `/model`), without waiting for an update. If your default model is the newest of its family, it follows
+  the next one; a model you chose on a topic, a job or an agent never changes. Short titles, the connection test and
+  Team summaries always use the newest Haiku or Sonnet.
+
 ## 2.0.0-alpha.137 - 2026-11-10
 
 Fixed:
