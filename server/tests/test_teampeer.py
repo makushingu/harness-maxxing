@@ -394,3 +394,15 @@ def test_deeply_nested_json_is_a_400(client, monkeypatch):
     deep = b"[" * 100000 + b"]" * 100000
     assert client.post("/api/team-peer/hello", content=deep, headers={"Content-Type": "application/json"}).status_code == 400
     assert client.post("/api/team-peer/inbox", content=deep, headers=_signed(key, deep)).status_code == 400
+
+
+def test_ids_with_a_final_newline_are_refused(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    assert _post(client, key, _msg(dm, "one")).status_code == 200
+    assert _post(client, key, _msg(dm, "two", mid="m_0123abcd\n")).status_code == 400
+    reply = _msg(dm, "three", mid="m_0123abce")
+    reply["message"]["reply_to"] = "m_0123abcd\n"
+    assert _post(client, key, reply).status_code == 200
+    msgs = team.messages(dm)["messages"]
+    assert [m["id"] for m in msgs] == ["m_0123abcd", "m_0123abce"] and "reply_to" not in msgs[1]

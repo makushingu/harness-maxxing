@@ -41,7 +41,7 @@ SUMMARY_MESSAGES = 200         # at most this many messages are summarized
 FILES_MAX = 10                  # files per message
 GROUPS_PER_CREATOR = 50         # groups another server's user may open here (they all live in team.json)
 COLORS = ("clay", "blue", "violet", "green", "amber", "rose", "teal", "zinc")
-_ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}$")         # message and poll option ids (the same on every server)
+_ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}\Z")         # message and poll option ids (the same on every server)
 REACTIONS = ("👍", "❤️", "😂", "🎉", "🤔", "👀")
 
 _lock = threading.RLock()
