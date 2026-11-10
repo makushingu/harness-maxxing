@@ -308,6 +308,29 @@ def test_an_agent_of_a_topic_in_the_trash_waits_for_the_topic(client, topic, mx)
     assert r["restored_to"] == f"{topic}/agents/writer"
 
 
+def test_what_a_cut_restore_left_behind_is_purged(client, mx):
+    t = trash.trash_dir()
+    t.mkdir(parents=True, exist_ok=True)
+    old = time.time() - 40 * 86400
+    left = [t / "20260101-000000-project-acme.sessions", t / "20260101-000000-project-acme.agents",
+            t / "20260101-000000-notes.md.json"]
+    left[0].mkdir()
+    (left[0] / "x.json").write_text("{}")
+    left[1].mkdir()
+    left[2].write_text("{}")
+    kept = t / "20260101-000000-draft.md"                    # a real item with its sidecar stays
+    kept.write_text("x")
+    (t / "20260101-000000-draft.md.json").write_text(json.dumps({"original": str(mx["files"] / "draft.md"),
+                                                                "at": time.time()}))
+    for p in left:
+        os.utime(p, (old, old))
+    assert trash.purge_old() == 0
+    assert not any(p.exists() for p in left) and kept.exists()
+    left[0].mkdir()                                          # emptying the trash takes them too
+    os.utime(left[0], (old, old))
+    assert client.delete("/api/trash").status_code == 200 and not any(t.iterdir())
+
+
 def test_a_new_agent_in_a_recreated_topic_starts_empty_and_the_restored_topic_gets_its_thread(client, topic):
     from maxxing import agents, crons
     a = _agent(client)

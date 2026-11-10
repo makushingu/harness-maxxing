@@ -351,7 +351,6 @@ def restore(item_id: str) -> dict[str, Any]:
     dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
-    p.with_name(p.name + ".json").unlink(missing_ok=True)
     n = 0
     sess = p.with_name(p.name + ".sessions")
     if sess.is_dir():
@@ -367,6 +366,7 @@ def restore(item_id: str) -> dict[str, Any]:
             agents.from_trash(box, _ws_rel(original), _ws_rel(dest))
         except (ValueError, OSError):                       # its crons, thread and state stay in the box
             log.exception("agents of %s not restored (state left in %s)", dest, box)
+    p.with_name(p.name + ".json").unlink(missing_ok=True)   # last: what is left without it is purged as orphans
     if kind == "project":                                   # its agent groups get their conversations back
         try:
             from . import agent_rooms
@@ -398,10 +398,32 @@ def _remove(p: Path) -> None:
     shutil.rmtree(p.with_name(p.name + ".agents"), ignore_errors=True)
 
 
+def _drop_orphans(older_than: float) -> None:
+    """Sidecars, .sessions and .agents folders whose item is gone (a restore cut short, a crash): never listed,
+    so removed here once they are older than `older_than` seconds (a delete in progress writes its sidecar
+    first)."""
+    cutoff = time.time() - older_than
+    for p in list(trash_dir().iterdir()):
+        suffix = next((s for s in (".json", ".sessions", ".agents") if p.name.endswith(s)), None)
+        if suffix is None or p.name in SKIP or p.with_name(p.name + ".json").exists():
+            continue
+        base = p.with_name(p.name[:-len(suffix)])
+        try:
+            if base.exists() or base.is_symlink() or p.lstat().st_mtime >= cutoff:
+                continue
+        except OSError:
+            continue
+        if p.is_dir() and not p.is_symlink():
+            shutil.rmtree(p, ignore_errors=True)
+        else:
+            p.unlink(missing_ok=True)
+
+
 def empty() -> int:
     items = _entries()
     for p in items:
         _remove(p)
+    _drop_orphans(60)
     bus.invalidate("trash")
     return len(items)
 
@@ -414,6 +436,7 @@ def purge_old(days: int = KEEP_DAYS) -> int:
         if at < cutoff:
             _remove(p)
             n += 1
+    _drop_orphans(days * 86400)
     return n
 
 
