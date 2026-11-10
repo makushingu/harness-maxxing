@@ -13,10 +13,10 @@ import { errorMessage } from '@/lib/api'
 import { hideMessage } from '@/lib/queries'
 import { reducedMotion } from '@/lib/presence'
 import type { SentItem, Session } from '@/lib/types'
-import { AssistantMessage, ItemRow, UserMessage } from './Items'
+import { ItemRow, UserMessage } from './Items'
 import { onThreadDragEnd, onThreadDragStart } from './contentDrag'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { isShownTask, partialText, setHiddenLocal, taskStatus, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
+import { isShownTask, setHiddenLocal, taskStatus, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
 import type { Pending, Seed } from './store'
 import { fmtElapsed } from './util'
 
@@ -343,7 +343,6 @@ export const Thread = React.forwardRef<ThreadHandle, {
               {serverSent.map((p, i) => (
                 <UserMessage key={`sent${i}`} text={p.text} attachments={p.attachments} source={p.source} voice={p.voice} pending />
               ))}
-              {running && partialText(log) && <AssistantMessage text={partialText(log)} />}
               {running && <RunningRow session={session!} log={log} />}
               {log.deleted && <p className="text-center text-xs text-muted-foreground">{t('sessions.deleted')}</p>}
             </>

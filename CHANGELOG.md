@@ -19,8 +19,9 @@ New:
   of doing the work in the conversation.
 - **Talk to an agent from the Office**: a click on its desk opens its conversation next to the Office (a sheet on a
   phone) instead of leaving it; its page is one click away. Office views made by an extension can open it too.
-- **Answers appear as they are written**: in a session and on an agent's page, Claude's text now shows word by word
-  while it writes, instead of a whole paragraph at once.
+- **Fewer requests in an agent's conversation**: in its sandbox, the agent no longer asks before reading files,
+  searching the web or opening a page of its sites. It still asks to leave its sandbox, to open another site and to
+  change a safety setting.
 - **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
   add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what
   keeps it safe (sandbox, sites, keys, approvals, budget...) shows up as a card with the change written out:

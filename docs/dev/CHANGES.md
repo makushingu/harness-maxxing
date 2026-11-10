@@ -39,12 +39,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Office the desk still opens the page). Panel = `AgentPage.tsx` `AgentChatPanel` (header + `AgentCenter`), docked
   440 px from 1024 px, else a `Sheet`. Extension views get `chat_route` per agent (`OfficeCustom`, the current
   pathname + `?chat=`).
-- **Text as it is written**: the runner passes `--include-partial-messages` (`MAXXING_PARTIAL_TEXT=0` = off); the
-  `stream_event` lines never reach the log: the top-level text block being written goes to `<sid>.live`
-  (`{text, off}`, `off` = log size when the block started, rewritten at most every 0.15 s, removed at the end of the
-  turn; `store.live_path`, `service.read_live`). The session SSE sends a `partial` frame when the file changes (null
-  when it goes); `log.ts` keeps `partial`, `partialText(st)` shows it while `off >= next` (the complete `assistant`
-  event takes over). Shown by `Thread.tsx` (before `RunningRow`) and the agent page `LiveTurn`. "New conversation" moved under the box; "Edit with Claude" only in the profile. Results now carry the
+- Removed the text as it is written (`--include-partial-messages`, `<sid>.live`, the SSE `partial` frame,
+  `partialText`): not needed. The runner still drops `stream_event` lines. The manager's sandboxed turns pre-allow
+  `agent_guard.MANAGER_SAFE` (Read, Glob, Grep, WebSearch; the deny rules still win).
+- "New conversation" moved under the box; "Edit with Claude" only in the profile. Results now carry the
   turn's steps: `service.ended_turn_steps(sid)` -> `tools` ([{name, summary (160 chars), error?}], the last 40),
   `tools_total`, `model`, `duration_ms` (omitted when empty); older results have none. `RunView` goes back to the
   agent page (no `?tab`). The chat notes (change requests answered) go into the manager turn's system note

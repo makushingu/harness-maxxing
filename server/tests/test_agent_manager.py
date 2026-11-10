@@ -38,6 +38,7 @@ def test_the_conversation_is_the_manager_and_the_runs_keep_their_rules(client, t
     assert f"Edit(/{root}/{A}/agent.json)" in deny and f"Edit(/{root}/{A}/CLAUDE.md)" not in deny
     assert f"Edit(/{root}/projects/acme/topics/blog/agents/*/CLAUDE.md)" not in deny
     assert "Bash(maxxing:*)" in allow and f"Edit(/{root}/{A}/**)" in allow
+    assert {"Read", "Glob", "Grep", "WebSearch"} <= set(allow)               # reading and searching: never asked
     assert "manager of this agent" in argv[argv.index("--append-system-prompt") + 1]
     # a run of the same agent (a cron): its sandbox as before, its role locked, its model
     run = agents.fire(A, trigger="cron:c_1", prompt="NOTOOL routine", source="cron")
@@ -45,6 +46,7 @@ def test_the_conversation_is_the_manager_and_the_runs_keep_their_rules(client, t
     assert not agents.manager_turn(store.read(run["session"]["id"]))
     argv = _calls()[-1]["argv"]
     assert argv[argv.index("--model") + 1] == "claude-sonnet-4-5"
+    assert "WebSearch" not in _settings(argv)["permissions"]["allow"]
     sb = _settings(argv)["sandbox"]
     assert sb["allowUnsandboxedCommands"] is False and f"{root}/{A}/CLAUDE.md" in sb["filesystem"]["denyWrite"]
     assert "manager of this agent" not in argv[argv.index("--append-system-prompt") + 1]

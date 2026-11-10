@@ -431,6 +431,12 @@ def mode(requested: str) -> str:
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"
 
 
+# What the owner's conversation does without asking in its sandbox (read, search the web, its domains' pages): the
+# approvals it keeps are for what matters (leaving the sandbox, another site, a safety change, a mail to send).
+# The deny rules (secrets, its settings) still win over these.
+MANAGER_SAFE = ("Read", "Glob", "Grep", "WebSearch")
+
+
 def settings(path: str, a: dict, approvals: bool = False, manager: bool = False) -> dict:
     """The `--settings` part of an agent turn: sandbox (when on) and the hook of its rules. approvals: the turn asks
     before risky tools (the agent's setting, or forced for an outside event): Claude Code would let every sandboxed
@@ -467,7 +473,7 @@ def settings(path: str, a: dict, approvals: bool = False, manager: bool = False)
         out["permissions"] = {"deny": deny,
                               "allow": ([] if approvals and not manager else ["Bash(maxxing:*)"])
                               + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]
-                              + ([f"Edit(/{p}/**)" for p in write] if manager else [])}
+                              + ([f"Edit(/{p}/**)" for p in write] + list(MANAGER_SAFE) if manager else [])}
     if a.get("rules"):
         cmd = hook_command(path)
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}

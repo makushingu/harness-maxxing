@@ -55,8 +55,6 @@ export type LogState = {
   hidden: Record<string, boolean>
   /** Background work (sub-agents, commands), by task id; tool items carry theirs too (`task`). */
   tasks: Record<string, Task>
-  /** The text Claude is writing now (`partial` frames): `off` = the log size when it started (see partialText). */
-  partial: { text: string; off: number } | null
 }
 
 const EARLIER_EVENTS = 200
@@ -78,13 +76,6 @@ const INITIAL: LogState = {
   orphans: {},
   hidden: {},
   tasks: {},
-  partial: null,
-}
-
-/** The text Claude is writing now, '' when none: once the log went past where it started, its complete
- *  `assistant` event has taken over. */
-export function partialText(st: LogState): string {
-  return st.partial && st.partial.off >= st.next ? st.partial.text : ''
 }
 
 const cache = new Map<string, LogState>()
@@ -382,12 +373,6 @@ export function useSessionStream(id: string | null) {
         const evs = data.events || []
         if (evs.some((e) => e?.type === 'result')) void qc.invalidateQueries({ queryKey: ['files', 'list'] })
         if (evs.some((e) => e?.type === 'tool_result' || e?.type === 'result')) refreshSoon(qc)
-      },
-      // The text Claude is writing (null: it writes nothing now).
-      partial: (p: { text: string; off: number } | null) => {
-        if (!id) return
-        const cur = get(id)
-        if (cur.partial || p) put(id, { ...cur, partial: p && typeof p.text === 'string' && typeof p.off === 'number' ? p : null })
       },
       // The log was rewritten under us (compact-logs) or our offset is stale: reload the tail.
       reset: () => {

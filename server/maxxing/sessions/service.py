@@ -732,17 +732,6 @@ def offset_valid(sid: str, offset: int) -> bool:
         return False
 
 
-def read_live(sid: str) -> dict | None:
-    """The text Claude is writing now ({"text", "off"}, runner._partial), None when it writes nothing."""
-    try:
-        d = json.loads(store.live_path(sid).read_text())
-    except (OSError, KeyError, ValueError):
-        return None
-    if not isinstance(d, dict) or not isinstance(d.get("text"), str) or not isinstance(d.get("off"), int):
-        return None
-    return {"text": d["text"], "off": d["off"]}
-
-
 def log_ident(sid: str) -> tuple[int, int] | None:
     """(inode, size) of the raw log: a different inode or a smaller size = the log was rewritten."""
     try:

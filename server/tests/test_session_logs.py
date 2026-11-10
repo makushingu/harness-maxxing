@@ -505,33 +505,3 @@ def test_clip_line_survives_a_lone_surrogate_and_deep_nesting():
     assert clip.clip_line(deep) == deep
     shallow_deep = '{"thinking_tokens": 1, "a": ' + "[" * 2000 + "]" * 2000 + "}"
     assert len(shallow_deep) <= 4096 and clip.drop_line(shallow_deep) is False
-
-
-
-def test_stream_sends_the_text_being_written(client, topic):
-    """<sid>.live (the text Claude is writing, runner._partial) reaches the stream as a `partial` frame."""
-    import asyncio
-
-    from maxxing import security
-    from maxxing.api import sessions as api_sessions
-    sid = _session_with_log(topic, "".join(_turn_lines(i) for i in range(2)))
-    size = store.log_size(sid)
-    store.live_path(sid).write_text(json.dumps({"text": "Hello wor", "off": size}))
-
-    class Req:
-        cookies = {security.COOKIE: security.make_cookie()}
-
-        async def is_disconnected(self):
-            return False
-
-    async def take() -> str:
-        out, frames = "", api_sessions._sse(sid, size, Req())
-        async for f in frames:
-            out += f
-            if "event: partial" in out:
-                break
-        await frames.aclose()
-        return out
-    body = asyncio.run(asyncio.wait_for(take(), 10))
-    data = json.loads(body.split("event: partial", 1)[1].split("data: ", 1)[1].split("\n", 1)[0])
-    assert data == {"text": "Hello wor", "off": size}

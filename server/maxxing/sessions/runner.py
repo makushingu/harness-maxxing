@@ -192,8 +192,6 @@ class Runner:
         self.steer_pending = False                     # a steer the reading loop has to carry out
         self.asks: dict | None = None                  # the turn's approvals (_can_use_tool), None = none
         self.keep_proc = False                         # the last turn handed its process over to the next item
-        self.live: dict | None = None                  # the text Claude is writing now (_partial), None = none
-        self.live_at = 0.0                             # monotonic time it was last written to <sid>.live
 
     # ---- signals -------------------------------------------------------------------------
     def on_sigterm(self, *_: object) -> None:
@@ -427,7 +425,6 @@ class Runner:
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "") if x)
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-        base += ["--include-partial-messages"] if PARTIAL_TEXT else []
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
         base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))
@@ -666,12 +663,8 @@ class Runner:
                 line = raw.strip()
                 if line:
                     ev = _parse(line)
-                    if ev is not None and ev.get("type") == "stream_event":
-                        self._partial(ev)              # the text as it is written: <sid>.live, never the log
+                    if ev is not None and ev.get("type") == "stream_event":   # partial text: never logged
                         ev, line = None, ""
-                    elif ev is not None and ev.get("type") in ("assistant", "result") \
-                            and not ev.get("parent_tool_use_id"):
-                        self._live_end(ev.get("type") == "result")
                     if ev is not None and ev.get("type") == "control_request" and pr.stream:
                         self._can_use_tool(pr, ev)
                     if ev is not None:
@@ -717,7 +710,6 @@ class Runner:
         finally:
             if timer:
                 timer.cancel()
-            self._live_end(True)
         a.rc = p.wait()
         if a.rc in (-9, 137) and pr.oom_before is not None:
             a.oom = (_oom_kills() or 0) > pr.oom_before
@@ -784,56 +776,6 @@ class Runner:
                 "subtype": "success", "request_id": rid, "response": r}}) + "\n")
 
         threading.Thread(target=answer, daemon=True).start()
-
-    def _partial(self, ev: dict) -> None:
-        """A `stream_event` (--include-partial-messages): the text block Claude is writing goes to `<sid>.live`
-        ({"text", "off": the log size when the block started}) at most every PARTIAL_EVERY_S. The client shows it
-        while its log has not gone past `off`: the complete `assistant` line written after it takes over."""
-        if ev.get("parent_tool_use_id"):               # a sub-agent's text: only its result is shown
-            return
-        e = ev.get("event") if isinstance(ev.get("event"), dict) else {}
-        t = e.get("type")
-        if t == "content_block_start":
-            block = e.get("content_block") if isinstance(e.get("content_block"), dict) else {}
-            if block.get("type") == "text":
-                try:
-                    off = store.log_path(self.sid).stat().st_size
-                except OSError:
-                    off = 0
-                self.live, self.live_at = {"text": "", "off": off}, 0.0
-            else:
-                self.live = None
-        elif t == "content_block_delta" and self.live is not None:
-            d = e.get("delta") if isinstance(e.get("delta"), dict) else {}
-            if d.get("type") == "text_delta" and isinstance(d.get("text"), str):
-                self.live["text"] += d["text"]
-                if time.monotonic() - self.live_at >= PARTIAL_EVERY_S:
-                    self._live_write()
-        elif t == "content_block_stop" and self.live is not None:
-            self._live_write()
-            self.live = None
-
-    def _live_write(self) -> None:
-        if not self.live or not self.live["text"].strip():
-            return
-        self.live_at = time.monotonic()
-        try:
-            path = store.live_path(self.sid)
-            tmp = path.with_name(path.name + ".tmp")
-            tmp.write_text(json.dumps(self.live, ensure_ascii=False))
-            os.replace(tmp, path)
-        except (OSError, KeyError):
-            pass
-
-    def _live_end(self, remove: bool) -> None:
-        """The block is complete (its `assistant` line comes): nothing more to write; at the end of the turn the
-        file goes."""
-        self.live = None
-        if remove:
-            try:
-                store.live_path(self.sid).unlink()
-            except (OSError, KeyError):
-                pass
 
     def _write_line(self, line: str) -> None:
         with open(store.log_path(self.sid), "a") as f:
@@ -1236,8 +1178,6 @@ STDOUT_GRACE_S = float(os.environ.get("MAXXING_STDOUT_GRACE_S") or 10)
 # Prompts go to Claude as stream-json user messages with stdin kept open (a steer reaches the same process);
 # MAXXING_STREAM_INPUT=0 = the old way (text prompt, stdin closed at once; a steer kills the turn).
 STREAM_INPUT = os.environ.get("MAXXING_STREAM_INPUT", "1") != "0"
-PARTIAL_TEXT = os.environ.get("MAXXING_PARTIAL_TEXT", "1") != "0"   # the text shown as Claude writes it
-PARTIAL_EVERY_S = 0.15                                 # <sid>.live is rewritten at most this often
 INTERRUPT_WAIT_S = float(os.environ.get("MAXXING_INTERRUPT_WAIT_S") or 15)
 TASK_ENDED = ("completed", "failed", "killed", "stopped", "cancelled", "error")
 

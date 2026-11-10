@@ -137,7 +137,7 @@ The page is **one flow**, like a chat, with the box to write to it at the bottom
 agent's answers on the left with its avatar, and what its automations did, all in the order it happened (a line
 between days).
 
-- **Its answers come as they are written**, word by word: each command and file it uses shows as a line while it
+- **You see it work**: each command and file it uses shows as a line while it
   works (**Stop** stops the turn), then its answer, whole, with the model, the time and the cost. A request it asked
   you to allow (a web search, a site outside its list) stays a line in the flow once answered.
 - **It is one conversation**: your messages, here or on Telegram, go on in **the same session**. The agent remembers

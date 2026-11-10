@@ -41,7 +41,7 @@ import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
 import { AnswerContext, AnswerText } from './answer'
-import { partialText, useSessionLog } from '@/pages/sessions/log'
+import { useSessionLog } from '@/pages/sessions/log'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 /** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
@@ -736,8 +736,7 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
       if (it.kind === 'tool') steps.push({ name: it.use.name, summary: it.use.summary || '', state: !it.result ? 'running' : it.result.is_error ? 'error' : 'ok' })
       else if (it.kind === 'assistant') text = it.ev.text || ''
     }
-    // the text being written now (as it comes), else the last complete one
-    return { steps, text: partialText(log) || text }
+    return { steps, text }
   }, [log])
   React.useLayoutEffect(onWrite, [steps.length, text, onWrite])
   const shown = steps.slice(-12)
