@@ -994,9 +994,20 @@ def _up_whisper(c: dict, explicit: bool = False) -> tuple[str, str]:
         if rec.get(model) is None:
             write_record("whisper", {**rec, model: pinned})
         return "ok", model
-    if voice.model_present(model):                     # another revision: download the pinned one next to it
-        shutil.rmtree(voice.model_path(model), ignore_errors=True)
-    voice.download_model(model)
+    dest, old = voice.model_path(model), None
+    if voice.model_present(model):                     # another revision: set aside until the pinned one is there
+        old = dest.with_name(dest.name + ".old")
+        shutil.rmtree(old, ignore_errors=True)
+        os.replace(dest, old)
+    try:
+        voice.download_model(model)
+    except BaseException:
+        if old is not None:                             # a failed download never leaves voice without a model
+            shutil.rmtree(dest, ignore_errors=True)
+            os.replace(old, dest)
+        raise
+    if old is not None:
+        shutil.rmtree(old, ignore_errors=True)
     write_record("whisper", {**rec, model: pinned})
     return "installed", f"{model} @ {str(pinned)[:8]}"
 
