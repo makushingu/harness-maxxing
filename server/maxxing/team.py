@@ -683,7 +683,7 @@ def _remote_message(frm_pid: str, raw: dict) -> dict:
     raw = raw if isinstance(raw, dict) else {}
     kind = raw.get("kind") if raw.get("kind") in ("text", "summary", "poll") else "text"
     now = time.time()
-    at = min(_finite(raw.get("at") or now, now), now)
+    at = max(min(_finite(raw.get("at") or now, now), now), 0.0)
     mid = str(raw.get("id") or "")
     if not _ID.match(mid):
         raise TeamError(400, "bad_id", "Bad message id")

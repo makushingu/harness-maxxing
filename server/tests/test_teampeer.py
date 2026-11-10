@@ -424,3 +424,12 @@ def test_remote_polls_need_two_distinct_valid_options(client, monkeypatch):
     assert _post(client, key, _poll(dm, ok, mid="m_0000bbbb")).status_code == 200
     poll = team.messages(dm)["messages"][-1]["poll"]
     assert [o["id"] for o in poll["options"]] == ["o_00000001", "o_00000002"]
+
+
+def test_a_remote_date_before_1970_is_clamped(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    ev = _msg(dm)
+    ev["message"]["at"] = -1e20
+    assert _post(client, key, ev).status_code == 200
+    assert team.messages(dm)["messages"][0]["at"] == 0
