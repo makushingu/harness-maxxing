@@ -912,7 +912,7 @@ function ColumnHeader({
   if (variant === 'mobile')
     // phone / tablet: app bar (☰ logo ⋯ ⊞), then the session's title, then its topic and what it used
     return (
-      <header className="relative shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
+      <header data-kbd-short-hide="" className="relative shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
         {maxxing && <MaxxingMeter strip />}
         <div className="flex h-11 min-w-0 items-center gap-1">
           <TouchSessionsButton className="-ml-2" />
@@ -942,7 +942,7 @@ function ColumnHeader({
             </Button>
           )}
         </div>
-        <div className="mt-0.5 flex h-6 min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
+        <div data-kbd-hide="" className="mt-0.5 flex h-6 min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
           {session ? (
             <>
               <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace} />
@@ -965,7 +965,7 @@ function ColumnHeader({
       </header>
     )
   return (
-    <header ref={headRef} data-col-head className={cn('shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
+    <header ref={headRef} data-col-head data-kbd-short-hide="" className={cn('shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
       <div className="flex h-9 min-w-0 items-center gap-1 pointer-coarse:h-10">
         {variant === 'column' && <DragGrip colKey={col.key} />}
         {session ? <InlineTitle value={session.title} onSave={onRename} /> : <Skeleton className="h-4 w-40" />}
@@ -1025,7 +1025,7 @@ function ColumnHeader({
           )}
         </div>
       </div>
-      <div className={cn('flex h-5 min-w-0 items-center gap-2 text-[11px] text-muted-foreground', slim && 'hidden')}>
+      <div data-kbd-hide="" className={cn('flex h-5 min-w-0 items-center gap-2 text-[11px] text-muted-foreground', slim && 'hidden')}>
         {session ? (
           <>
             <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace} />

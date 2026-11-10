@@ -65,6 +65,23 @@ html[data-kbd] {
   --safe-bottom-ui: 0px;
 }
 
+/* Typing in a session's message box on a touch screen (keyboard up): the box takes at most a third of what is left on
+   screen, so the answer stays readable (its text scrolls inside beyond that), and the place row of THAT session steps
+   aside. On a short screen (a phone held sideways) its header steps aside too, or the box and its send button fall
+   below the keyboard. Only while that box has the focus: renaming the session or any other field changes nothing. */
+html[data-kbd] [data-kbd-cap]:focus {
+  max-height: max(4.5rem, calc(var(--vvh, 100dvh) * 0.3));
+  overflow-y: auto !important; /* the autosize sets overflow-y inline from its own maxRows, not from this cap */
+}
+html[data-kbd] [data-col]:has([data-kbd-cap]:focus) [data-kbd-hide] {
+  display: none;
+}
+@media (max-height: 480px) {
+  html[data-kbd] [data-col]:has([data-kbd-cap]:focus) [data-kbd-short-hide] {
+    display: none;
+  }
+}
+
 .dark {
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);

@@ -137,6 +137,11 @@ domain components reused by onboarding **and** settings: `ClaudeConnect`, `Claud
   layout covered by the iOS keyboard) and `--vvh` (visual viewport height) keep bottom sheets above the keys. Fixed
   bottom elements use `bottom-[var(--kbd-inset)]` when they hold a field. The document never scrolls: iOS leaves it
   scrolled after the keyboard or a return from the background, so it is put back at 0.
+- Typing in a session (`styles/globals.css`, only while the composer textarea `data-kbd-cap` has the focus under
+  `html[data-kbd]`, so other fields never trigger it): the textarea stops at 30 % of `--vvh` and scrolls inside; in the
+  column being typed in (`[data-col]:has(...)`, other columns of a tablet keep theirs) the session's place row
+  (`data-kbd-hide`) steps aside, and under `max-height: 480px` (sideways) its header (`data-kbd-short-hide`) too,
+  so the box and its send button stay above the keyboard.
 - Closing animations: `data-[state=closed]:animate-sheet-down` / `animate-overlay-out` / `animate-out` (Radix keeps
   the element until the animation ends).
 - Full-screen layers of the installed app (session on a phone) go back with a swipe from the left edge
