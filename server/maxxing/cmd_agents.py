@@ -642,6 +642,11 @@ def _handler(a) -> int:
         r = agents.fire(path, trigger="manual", source="command line",
                         **({"text": text} if a.data else {"prompt": text}))
         return _print_fire(path, r, a.json)
+    if a.agents_cmd == "run" and sender == path and turn.get("manager"):
+        # the owner asked its conversation to run the automation now: a run of its own (a new session, shown as an
+        # automation in the flow), not the work done inside the conversation
+        r = agents.fire(path, trigger="manual", source="conversation", prompt=text)
+        return _print_fire(path, r, a.json)
     # send (or run from an agent's turn): from one agent's turn to another agent - the text is the sender's output,
     # framed as data, one hop more
     if sender == path:

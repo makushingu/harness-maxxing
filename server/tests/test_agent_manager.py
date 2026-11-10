@@ -151,6 +151,15 @@ def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monke
     assert cli.main(["agents", "cron", "writer", "--job", foreign["id"], "--remove"]) == 2
     assert cli.main(["agents", "cron", "writer", "--job", cid, "--remove"]) == 0
     assert crons.get_job(cid) is None and crons.get_job(foreign["id"])
+    # "run your routine now": a run of its own (an automation started from the conversation)
+    assert agent_guard.check_cli(["agents", "run", "writer"]) is None
+    capsys.readouterr()
+    assert cli.main(["agents", "run", "writer", "write today's NOTOOL", "--json"]) == 0
+    sid = json.loads(capsys.readouterr().out)["session"]
+    wait_idle(client, sid)
+    run = [m for m in agents.thread(A) if m.get("kind") == "run" and m.get("session") == sid][-1]
+    assert run["trigger"] == "manual" and run["source"] == "conversation" and not run.get("owner")
+    assert agents._open_chat(A) != sid
     # the owner (no agent turn): everything at once
     monkeypatch.delenv("MAXXING_AGENT_CHAT")
     monkeypatch.delenv("MAXXING_AGENT")

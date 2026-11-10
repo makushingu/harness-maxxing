@@ -606,7 +606,7 @@ def sandboxed_session(sid8: str) -> str | None:
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
 AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "set", "import", "sandbox-setup", "group"}
 # ...but the owner's conversation with an agent (its manager) runs these on that agent itself
-AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "set", "show"}
+AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "set", "show", "run"}
 
 
 def _manages(turn: dict, words: list[str]) -> bool:

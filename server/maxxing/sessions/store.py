@@ -77,6 +77,11 @@ def log_path(sid: str) -> Path:
     return _path(sid, ".log")
 
 
+def live_path(sid: str) -> Path:
+    """The text Claude is writing now (runner._partial): rewritten while it writes, removed at the end of a turn."""
+    return _path(sid, ".live")
+
+
 def new_id() -> str:
     return str(uuid.uuid4())
 
@@ -325,7 +330,7 @@ def list_ids() -> list[str]:
 
 
 def remove(sid: str) -> None:
-    for ext in (".json", ".log", ".lock", ".run"):
+    for ext in (".json", ".log", ".lock", ".run", ".live"):
         try:
             _path(sid, ext).unlink()
         except (FileNotFoundError, KeyError):

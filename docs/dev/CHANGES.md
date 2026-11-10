@@ -27,8 +27,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   a `ResultLine` (model, duration, cost), a run's result folds them (`StepsFold`) with Reply / Open the run / Continue;
   "Memory updated" when a step edited `memory.md`; `changed_chat` notes = a green `ChangeLine`; `new_chat` notes and
   a `chat: "new"` owner run after an earlier one = a "New conversation" line; each running session = `LiveTurn`
-  (steps and text of its current turn from `useSessionLog`, Stop, Details) right under the last message of its
-  session. "New conversation" moved under the box; "Edit with Claude" only in the profile. Results now carry the
+  (steps and text of its current turn from `useSessionLog`, Stop; Open the run for a run only) right under the last
+  message of its session. A conversation turn has no link to a session view and is never folded (`FOLD_CHARS` only for
+  runs); its answered approvals are one line (`approvals.tsx` `ApprovalLine`). The manager may run itself:
+  `maxxing agents run <itself>` in a manager turn (`AGENT_MANAGER` += run) = `fire(trigger manual, source
+  "conversation")`, a run of its own ("Started at your request, from the conversation"); `MANAGER_NOTE` tells it to
+  do so when asked to do its routine now.
+- **Text as it is written**: the runner passes `--include-partial-messages` (`MAXXING_PARTIAL_TEXT=0` = off); the
+  `stream_event` lines never reach the log: the top-level text block being written goes to `<sid>.live`
+  (`{text, off}`, `off` = log size when the block started, rewritten at most every 0.15 s, removed at the end of the
+  turn; `store.live_path`, `service.read_live`). The session SSE sends a `partial` frame when the file changes (null
+  when it goes); `log.ts` keeps `partial`, `partialText(st)` shows it while `off >= next` (the complete `assistant`
+  event takes over). Shown by `Thread.tsx` (before `RunningRow`) and the agent page `LiveTurn`. "New conversation" moved under the box; "Edit with Claude" only in the profile. Results now carry the
   turn's steps: `service.ended_turn_steps(sid)` -> `tools` ([{name, summary (160 chars), error?}], the last 40),
   `tools_total`, `model`, `duration_ms` (omitted when empty); older results have none. `RunView` goes back to the
   agent page (no `?tab`). The chat notes (change requests answered) go into the manager turn's system note

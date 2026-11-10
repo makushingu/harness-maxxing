@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from .. import media, security, streamcap
 from .. import uploads as upload_limits
 from ..security import require_auth
-from ..sessions import costfix, maintenance, service, wake
+from ..sessions import costfix, maintenance, service, store, wake
 from ..sessions.service import SessionError
 
 router = APIRouter(prefix="/api", tags=["sessions"], dependencies=[Depends(require_auth)])
@@ -258,6 +258,14 @@ def _probe(sid: str) -> tuple[tuple[int, int] | None, tuple[int, int, int] | Non
     return service.log_ident(sid), service.meta_ident(sid)
 
 
+def _live_ident(sid: str) -> tuple[int, int] | None:
+    try:
+        st = store.live_path(sid).stat()
+    except (OSError, KeyError):
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
 def _read_tick(sid: str, offset: int | None, session: bool) -> tuple[list[dict], int | None, bool, dict | None]:
     """New events from `offset` (None = the log did not grow), whether more are waiting, and the Session (when
     asked). Raises SessionError when the session is gone."""
@@ -285,6 +293,7 @@ async def _sse(sid: str, offset: int, request: Request) -> AsyncIterator[str]:
     seen_meta: tuple[int, int, int] | None = None      # meta file stat when `s` was read
     read_at = 0.0
     changed_at = time.monotonic()                      # last new event or state frame
+    live: tuple[int, int] | None = None                # <sid>.live last sent (the text Claude is writing)
     while True:
         if await request.is_disconnected():
             return
@@ -328,6 +337,11 @@ async def _sse(sid: str, offset: int, request: Request) -> AsyncIterator[str]:
                     last_out = changed_at = time.monotonic()
         if more:
             continue                                   # a long backlog: keep reading
+        cur_live = _live_ident(sid)
+        if cur_live != live:                           # after the events: `off` is checked against what was sent
+            live = cur_live
+            yield _frame("partial", await asyncio.to_thread(service.read_live, sid) if cur_live else None)
+            last_out = changed_at = time.monotonic()
         if time.monotonic() - last_out >= HEARTBEAT_S:
             yield ": ping\n\n"
             last_out = time.monotonic()

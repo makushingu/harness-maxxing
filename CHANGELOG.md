@@ -15,7 +15,10 @@ New:
   they are written, with every command and file it used and what it changed of itself (its memory, its role, its
   settings) in green. What its schedules, webhooks, e-mails and other agents started shows in the same flow: what
   started each run, then its answer with its steps folded in one line (**Reply** goes on with that run). Your own
-  messages no longer count in its runs per hour.
+  messages no longer count in its runs per hour. Ask it to do its routine now and it starts a run of its own instead
+  of doing the work in the conversation.
+- **Answers appear as they are written**: in a session and on an agent's page, Claude's text now shows word by word
+  while it writes, instead of a whole paragraph at once.
 - **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
   add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what
   keeps it safe (sandbox, sites, keys, approvals, budget...) shows up as a card with the change written out:

@@ -132,9 +132,9 @@ The page is **one flow**, like a chat, with the box to write to it at the bottom
 agent's answers on the left with its avatar, and what its automations did, all in the order it happened (a line
 between days).
 
-- **Its answers come as they are written**, as in a session: each command and file it uses shows as a line while it
-  works (**Stop** stops the turn), then its answer with the model, the time and the cost. **Details** opens the whole
-  turn (every command, every file, live).
+- **Its answers come as they are written**, word by word: each command and file it uses shows as a line while it
+  works (**Stop** stops the turn), then its answer, whole, with the model, the time and the cost. A request it asked
+  you to allow (a web search, a site outside its list) stays a line in the flow once answered.
 - **It is one conversation**: your messages, here or on Telegram, go on in **the same session**. The agent remembers
   everything you said and what it already read or did, so it answers faster and costs less. **New conversation**
   (under the box) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New
@@ -147,7 +147,11 @@ between days).
 - **What its schedules, webhooks, notifications, e-mails, other agents and commands started** shows in the same flow:
   what started each run (dashed), then its answer with its steps folded in one line (**7 steps**, click to see
   them). Each run is a session of its own, with its own rules, never mixed with your conversation (a forward on
-  Telegram too: outside text, see [Safety](#safety)). While a run works, its steps and its text show as they come.
+  Telegram too: outside text, see [Safety](#safety)). While a run works, its steps and its text show as they come;
+  **Open the run** shows the whole session.
+- **"Do your routine now"**: ask it in the conversation ("write today's article", "run your automation") and the agent
+  starts a run of its own (shown as *Started at your request, from the conversation*) instead of doing the work in
+  the conversation; questions, research and small tasks stay in the conversation.
 - **Reply** under a run's answer goes on with that run (your message says which one); **Open the run** shows the
   whole session right in the Agents page, live, with its box to go on with it. A link to an agent's session
   (Telegram, a notification, the search) opens it there too. A reply in its Telegram thread to one of its results

@@ -11,6 +11,8 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   RESUME_FAIL   with --resume: fails like the real CLI when the thread is gone
   PAUSE         short turn (~1.5 s) - for queue tests
   NOTOOL        no tool call
+  PARTIAL       with --include-partial-messages: writes "Hello world, slowly." in stream_event deltas (0.3 s
+                apart), then its assistant line
   ORPHAN        leaves a background program holding stdout open (30 s)
   CHATTY        leaves a background program writing to stdout every 0.1 s (30 s)
   HUGE          a 3 MB tool result, an image result and a 100 kB Write input (log clipping tests)
@@ -479,6 +481,14 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
             if i % 50 == 0:
                 emit({"type": "tool_progress", "tool_use_id": "toolu_slow", "tool_name": "Bash",
                       "elapsed_time_seconds": i // 10, "session_id": sid})
+    if "PARTIAL" in prompt and "--include-partial-messages" in sys.argv:
+        se = lambda e: emit({"type": "stream_event", "event": e, "session_id": sid, "parent_tool_use_id": None})  # noqa: E731
+        se({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
+        for part in ("Hello ", "world, ", "slowly."):
+            se({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": part}})
+            time.sleep(0.3)
+        emit(msg(sid, model, [{"type": "text", "text": "Hello world, slowly."}]))
+        se({"type": "content_block_stop", "index": 0})
     if "AGENTS" in prompt:                               # two background sub-agents and a background command
         _agents(sid, model, float(os.environ.get("FAKE_CLAUDE_AGENTS_S", "1.5")))
     if "PAUSE" in prompt and INTERRUPT.wait(1.5):

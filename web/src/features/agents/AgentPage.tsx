@@ -12,7 +12,7 @@
 import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
+  AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -35,13 +35,13 @@ import { AgentSettings, type SectionId } from './AgentSettings'
 import { EditWithClaude } from './EditWithClaude'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
-import { ThreadApprovalBody, useThreadApprovals } from './approvals'
+import { ApprovalLine, ThreadApprovalBody, useThreadApprovals } from './approvals'
 import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
 import { AnswerContext, AnswerText } from './answer'
-import { useSessionLog } from '@/pages/sessions/log'
+import { partialText, useSessionLog } from '@/pages/sessions/log'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 /** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
@@ -232,6 +232,7 @@ function EnabledSwitch({ agent: a }: { agent: AgentDetail }) {
 export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>, crons: Cron[] = []): string {
   const tr = m.trigger || ''
   if (tr === 'manual' && m.source === 'command line') return t('agents.from.command')
+  if (tr === 'manual' && m.source === 'conversation') return t('agents.from.conversation')
   if (tr === 'manual' || m.source === 'manual') return t('agents.from.manual')
   if (tr.startsWith('cron:')) {
     const j = crons.find((c) => c.id === tr.slice(5))
@@ -252,6 +253,7 @@ function triggerIcon(m: Pick<AgentMessage, 'trigger' | 'source'>) {
   if (/mail/i.test(m.source || '')) return Mail
   if (tr.startsWith('feed:')) return Zap
   if (m.source === 'command line') return SquareTerminal
+  if (m.source === 'conversation') return MessageSquare
   return PlayCircle
 }
 
@@ -361,6 +363,7 @@ function Flow({ agent: a, onReply }: { agent: AgentDetail; onReply: (m: AgentMes
           m={m}
           agent={a}
           crons={jobs}
+          chat={!!m.session && own.has(m.session)}
           live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
           decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
         />
@@ -600,7 +603,7 @@ function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: Age
   const [open, setOpen] = React.useState(false)
   const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
   const failed = m.ok === false
-  const long = (m.text || '').length > FOLD_CHARS
+  const long = !chat && (m.text || '').length > FOLD_CHARS     // a run's report folds, an answer never does
   const steps: Step[] = (m.tools || []).map((s) => ({ name: s.name, summary: s.summary, state: s.error ? 'error' : 'ok' }))
   const total = Math.max(m.tools_total || 0, steps.length)
   return (
@@ -657,9 +660,9 @@ function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: Age
             <Reply className="size-3" /> {t('agents.conv.reply')}
           </button>
         )}
-        {m.session && (
+        {!chat && m.session && (
           <Link to={agentRunRoute(a.path, m.session)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
-            <PlayCircle className="size-3" /> {chat ? t('agents.flow.details') : t('agents.thread.openRun')}
+            <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
           </Link>
         )}
         {!chat && m.session && <ContinueButton agent={a} sid={m.session} variant="link" />}
@@ -687,8 +690,9 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
       if (it.kind === 'tool') steps.push({ name: it.use.name, summary: it.use.summary || '', state: !it.result ? 'running' : it.result.is_error ? 'error' : 'ok' })
       else if (it.kind === 'assistant') text = it.ev.text || ''
     }
-    return { steps, text }
-  }, [log.items])
+    // the text being written now (as it comes), else the last complete one
+    return { steps, text: partialText(log) || text }
+  }, [log])
   React.useLayoutEffect(onWrite, [steps.length, text, onWrite])
   const shown = steps.slice(-12)
   return (
@@ -721,9 +725,11 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
         <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50 pointer-coarse:min-h-10" onClick={() => stop.mutate(sid)} disabled={stop.isPending} data-testid="agent-stop">
           <Square className="size-3" /> {t('agents.flow.stop')}
         </button>
-        <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
-          <PlayCircle className="size-3" /> {chat ? t('agents.flow.details') : t('agents.thread.openRun')}
-        </Link>
+        {!chat && (
+          <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
+            <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
+          </Link>
+        )}
       </div>
     </AgentBubble>
   )
@@ -731,11 +737,13 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
 
 /** The other messages of the thread: a note, a run not started (and why), a request for the owner's OK. */
 function ThreadMessage({
-  m, agent: a, crons, live, decided,
+  m, agent: a, crons, chat, live, decided,
 }: {
   m: AgentMessage
   agent: AgentDetail
   crons: Cron[]
+  /** of the conversation: an answered request is one line, and there is no run to open */
+  chat?: boolean
   /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
   live?: Approval
   decided?: AgentMessage
@@ -760,6 +768,7 @@ function ThreadMessage({
       </div>
     )
   // approval: the agent asks
+  if (chat && !live) return <ApprovalLine m={m} decided={decided} />
   return (
     <AgentBubble
       agent={a}
@@ -772,7 +781,7 @@ function ThreadMessage({
       }
     >
       <ThreadApprovalBody m={m} live={live} decided={decided} />
-      {m.session && (
+      {m.session && !chat && (
         <Link to={agentRunRoute(a.path, m.session)} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
           <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
         </Link>
