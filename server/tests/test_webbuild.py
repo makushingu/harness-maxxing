@@ -323,6 +323,15 @@ def test_a_failed_swap_keeps_the_served_build(ui, monkeypatch):
     assert not list(config.STATE.glob("web-dist.new-*"))
 
 
+def test_a_swap_cut_between_its_renames_puts_the_build_back(ui):
+    _edit(ui["clone"])
+    assert webbuild.build()["ok"]
+    old = webbuild.build_dir().with_name("web-dist.old")
+    webbuild.build_dir().rename(old)                         # stopped after the first rename
+    assert _served() == "<p>mine</p>\n"
+    assert webbuild.build_dir().is_dir() and not old.exists()
+
+
 def test_a_timed_out_build_step_leaves_no_process_behind(tmp_path):
     import os
     import time

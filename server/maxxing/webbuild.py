@@ -123,6 +123,32 @@ def _still_valid(stamp: dict[str, Any], ctx: dict[str, Any] | None) -> bool:
                 and isinstance(stamp.get("customs"), list) and set(stamp["customs"]) <= set(ctx["customs"]))
 
 
+def _recover_swap() -> None:
+    """A build stopped between its two renames (a restart, a kill) left web-dist missing and web-dist.old beside
+    it: that is the build that was served, put back - unless a build is running (it is mid-swap)."""
+    final = build_dir()
+    old = final.with_name(final.name + ".old")
+    if final.exists() or not (old / "index.html").is_file():
+        return
+    try:
+        fh = open(config.STATE / "web-build.lock", "w")
+    except OSError:
+        return
+    with fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:                                 # a build holds the lock
+            return
+        try:
+            if not final.exists() and old.is_dir():
+                old.rename(final)
+                log.warning("web build swap was cut short: the customized UI was put back")
+        except OSError:
+            log.exception("could not put back %s", old)
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def active_dist(ttl: float = 5.0) -> Path:
     """The web build to serve: MAXXING_WEB_DIST when set (dev, tests), else this server's own build when it matches
     the web sources on disk, or still fits the code (see _still_valid: sources edited since, no new build yet), else
@@ -134,6 +160,7 @@ def active_dist(ttl: float = 5.0) -> Path:
             and now - _active.get("at", 0.0) < ttl):
         return _active["path"]
     path = config.WEB_DIST
+    _recover_swap()
     local = [d for d in (build_dir(), _prev_dir()) if (d / "index.html").is_file() and _stamp(d).get("key")]
     if local:
         try:
