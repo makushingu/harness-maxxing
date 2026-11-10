@@ -17,7 +17,9 @@ import re
 LIMIT = 4096
 
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]{0,30})\s*$")
-_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
+# The closing "###" is stripped in code: a lazy group before "\s*#*\s*$" backtracks
+# cubically on a long run of spaces.
+_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*)$")
 _BULLET = re.compile(r"^(\s*)[-*+]\s+(.*)$")
 _NUMBERED = re.compile(r"^(\s*)(\d{1,3})[.)]\s+(.*)$")
 _QUOTE = re.compile(r"^\s{0,3}>\s?(.*)$")
@@ -132,7 +134,7 @@ def _line(raw: str) -> str:
         return "──────────"
     m = _HEADING.match(raw)
     if m:
-        return f"<b>{inline(m.group(1))}</b>"
+        return f"<b>{inline(m.group(1).rstrip().rstrip('#').rstrip())}</b>"
     m = _BULLET.match(raw)
     if m:
         indent = "  " * (len(m.group(1).expandtabs(2)) // 2)

@@ -193,3 +193,14 @@ def test_code_fence_with_a_giant_language_name_is_still_delivered():
     for md in ("```" + "a" * 4100 + "\n\nx\n```", "```" + "a" * 4100 + "\nx\n```"):
         parts = fmt.render(md)
         assert parts and all(len(p) <= fmt.LIMIT for p in parts)
+
+
+def test_heading_with_a_long_run_of_spaces_renders_quickly():
+    import time
+    assert fmt._line("## Title ##") == "<b>Title</b>"
+    assert fmt._line("# a  #  ") == "<b>a</b>"
+    start = time.monotonic()
+    out = fmt._line("# a" + " " * 5000 + "b")
+    # The old lazy pattern took minutes here (cubic backtracking).
+    assert time.monotonic() - start < 1
+    assert out.startswith("<b>a") and out.endswith("b</b>")
