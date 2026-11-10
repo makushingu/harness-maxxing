@@ -406,3 +406,21 @@ def test_ids_with_a_final_newline_are_refused(client, monkeypatch):
     assert _post(client, key, reply).status_code == 200
     msgs = team.messages(dm)["messages"]
     assert [m["id"] for m in msgs] == ["m_0123abcd", "m_0123abce"] and "reply_to" not in msgs[1]
+
+
+def _poll(dm, options, mid="m_0000aaaa"):
+    ev = _msg(dm, "q", mid=mid)
+    ev["message"] |= {"kind": "poll", "poll": {"question": "Q?", "options": options}}
+    return ev
+
+
+def test_remote_polls_need_two_distinct_valid_options(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    assert _post(client, key, _poll(dm, [{"id": "x", "label": "a"}, {"id": "y", "label": "b"}])).status_code == 400
+    same = [{"id": "o_00000001", "label": "a"}, {"id": "o_00000001", "label": "b"}]
+    assert _post(client, key, _poll(dm, same)).status_code == 400
+    ok = same + [{"id": "o_00000002", "label": "c"}]
+    assert _post(client, key, _poll(dm, ok, mid="m_0000bbbb")).status_code == 200
+    poll = team.messages(dm)["messages"][-1]["poll"]
+    assert [o["id"] for o in poll["options"]] == ["o_00000001", "o_00000002"]
