@@ -32,6 +32,15 @@ class RedactSecrets(logging.Filter):
         clean = redact(msg)
         if clean != msg:
             record.msg, record.args = clean, None
+        if record.exc_info and not record.exc_text:     # the handler formats the traceback later, unfiltered
+            try:
+                record.exc_text = logging.Formatter().formatException(record.exc_info)
+            except Exception:  # noqa: BLE001
+                pass
+        if record.exc_text:
+            record.exc_text = redact(record.exc_text)
+        if record.stack_info:
+            record.stack_info = redact(record.stack_info)
         return True
 
 
@@ -43,3 +52,7 @@ def setup(level: int = logging.INFO) -> None:
     for h in logging.getLogger().handlers:
         if not any(isinstance(x, RedactSecrets) for x in h.filters):
             h.addFilter(f)
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):   # own handlers, no propagation to the root
+        lg = logging.getLogger(name)                               # a logger filter survives uvicorn's dictConfig
+        if not any(isinstance(x, RedactSecrets) for x in lg.filters):
+            lg.addFilter(f)

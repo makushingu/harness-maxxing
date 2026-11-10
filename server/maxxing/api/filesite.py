@@ -140,9 +140,12 @@ async def site(token: str, rel: str):
         if _hidden(p.relative_to(root)) or p.suffix.lower().lstrip(".") not in ASSETS:
             raise _err(403, "forbidden", "Hidden files and documents are not served in a preview")
     else:
-        p = (folder / rel).resolve()
-        if p.is_dir():
-            p = (p / "index.html").resolve()
+        try:
+            p = (folder / rel).resolve()
+            if p.is_dir():
+                p = (p / "index.html").resolve()
+        except OSError:                            # a name longer than 255 bytes (ENAMETOOLONG): was a 500
+            raise _err(404, "not_found", "File not found") from None
         if not _inside(p, base) or not _inside(p, root) or _hidden(p.relative_to(base)):
             raise _err(403, "forbidden", "Outside the page folder")
         ext = p.suffix.lower().lstrip(".")
@@ -153,7 +156,11 @@ async def site(token: str, rel: str):
         if "attachments" in p.relative_to(base).parts and (base == ws or ws in base.parents) and ext not in MEDIA:
             # a page in a topic folder may show the pictures and videos sent in its chats, not the other files
             raise _err(403, "forbidden", "A topic's attachments are served to a page as pictures and media only")
-    if not p.is_file():
+    try:
+        found = p.is_file()
+    except OSError:
+        found = False
+    if not found:
         raise _err(404, "not_found", "File not found")
     return FileResponse(p, media_type=_mime(p), headers={
         "Content-Security-Policy": SANDBOX, "X-Content-Type-Options": "nosniff",

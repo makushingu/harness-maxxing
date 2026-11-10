@@ -48,6 +48,7 @@ ANSI_RE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -/]*[@-
 URL_RE = re.compile(r"https?://[^\s\x07\x1b'\"<>]+")
 CLI_TIMEOUT = 60
 LOGIN_TTL = 15 * 60
+MAX_LOGINS = 4                        # connection attempts open at once (each keeps a claude process)
 GC_EVERY = 30                                       # s between two sweeps of abandoned OAuth logins
 # Marks of `claude mcp list` (they changed between versions: ✓ then ✔); the words decide when the mark is unknown.
 STATES = {"✓": "connected", "✔": "connected", "!": "needs_auth", "⚠": "needs_auth", "✗": "failed", "✘": "failed",
@@ -878,10 +879,18 @@ def _reap() -> None:
                 return
 
 
+def _too_many(sid: str) -> bool:
+    return sum(1 for o in _logins.values() if o.sid != sid) >= MAX_LOGINS
+
+
 def _register(key: str, lg: _Login) -> None:
     """Keep the login; an older one for the same server (the user clicked Connect again) is replaced."""
     with _logins_lock:
-        gone = [_logins.pop(k) for k, o in list(_logins.items()) if o.sid == lg.sid]
+        if _too_many(lg.sid):                            # others started meanwhile
+            lg.close()
+            raise McpError(429, "too_many_logins", "too many connections in progress: finish or cancel one")
+        gone = [_logins.pop(k) for k, o in list(_logins.items())     # a finish in progress ends by itself
+                if o.sid == lg.sid and not o.finishing]
         _logins[key] = lg
         if _reaper["thread"] is None:
             _reaper["thread"] = threading.Thread(target=_reap, name="mcp-login-gc", daemon=True)
@@ -901,7 +910,12 @@ def login_start(sid: str, wait: float = 30.0) -> dict:
     scope, folder, name = parse_id(sid)
     _gc()
     cwd = _cwd(folder)                                   # before the pty: a missing folder leaks nothing
+    if sid not in {s["id"] for s in servers()}:
+        raise McpError(404, "not_found", f"no MCP server {name} here")
     _drop_logins_of(sid)                                 # one CLI per server (they would race on the callback)
+    with _logins_lock:
+        if _too_many(sid):
+            raise McpError(429, "too_many_logins", "too many connections in progress: finish or cancel one")
     master, slave = pty.openpty()
     try:
         proc = subprocess.Popen([_bin(), "mcp", "login", "--no-browser", "--", name], cwd=cwd, env=_env(),

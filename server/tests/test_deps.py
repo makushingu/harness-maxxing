@@ -474,3 +474,52 @@ def test_verify_rehashes_only_changed_files_and_doctor_asks_versions_once(st, tm
     asked["n"] = 0
     cmd_core.check_managed_deps()
     assert asked["n"] == len(deps.load())                        # doctor: one `installed()` per component
+
+
+def test_concurrent_record_writes_keep_every_entry(st):
+    errors = []
+
+    def write(i):
+        try:
+            for j in range(15):
+                deps.write_record(f"t{i}", {"version": str(j), "files": {}})
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+    ts = [threading.Thread(target=write, args=(i,)) for i in range(8)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert errors == [] and set(deps.read_record()) == {f"t{i}" for i in range(8)}
+    assert not list(deps.record_path().parent.glob("*.tmp"))
+
+
+def test_failed_voice_model_update_keeps_the_old_model(st, monkeypatch, tmp_path):
+    from maxxing import voice
+    models = tmp_path / "models"
+    monkeypatch.setattr(voice, "models_dir", lambda: models)
+    monkeypatch.setattr(voice, "settings", lambda: {"engine": "local", "model": "base"})
+    monkeypatch.setattr(voice, "local_installed", lambda: True)
+    (models / "base").mkdir(parents=True)
+    for f in ("model.bin", "config.json"):
+        (models / "base" / f).write_text("old")
+    deps.write_record("whisper", {"base": "0" * 40})
+    c = {"revisions": {"base": "1" * 40}}
+
+    def broken(name):
+        (models / name).mkdir()
+        (models / name / "model.bin").write_text("partial")
+        raise voice.VoiceError(502, "download_failed", "network down")
+    monkeypatch.setattr(voice, "download_model", broken)
+    with pytest.raises(voice.VoiceError):
+        deps._up_whisper(c)
+    assert (models / "base" / "model.bin").read_text() == "old" and voice.model_present("base")
+    assert deps.read_record()["whisper"]["base"] == "0" * 40
+
+    def ok(name):
+        (models / name).mkdir()
+        for f in ("model.bin", "config.json"):
+            (models / name / f).write_text("new")
+    monkeypatch.setattr(voice, "download_model", ok)
+    assert deps._up_whisper(c)[0] == "installed"
+    assert (models / "base" / "model.bin").read_text() == "new" and not (models / "base.old").exists()

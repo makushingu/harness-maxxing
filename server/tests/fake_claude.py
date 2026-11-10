@@ -339,6 +339,7 @@ def mcp(args: list[str]) -> int:
         sys.stdout.write(f"Open this link: \x1b]8;;{url}\x07{url[:30]}\x1b]8;;\x07\nOr paste the redirect URL here: ")
         sys.stdout.flush()
         line = sys.stdin.readline()
+        time.sleep(float(os.environ.get("FAKE_CLAUDE_LOGIN_DELAY") or 0))
         if "code=" not in line:
             print("\nAuthentication failed: no code", file=sys.stderr)
             return 1

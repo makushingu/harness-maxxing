@@ -167,3 +167,15 @@ def test_site_path_with_a_nul_byte_is_a_404(client, tree):  # noqa: F811
     base = url.rsplit("/", 1)[0]
     assert client.get(base + "/a%00.css").status_code == 404
     assert client.get(base + "/a.css").status_code == 200
+
+
+def test_site_path_with_a_too_long_name_is_a_404(client, tree):  # noqa: F811
+    site = tree / "longsite"
+    site.mkdir()
+    (site / "index.html").write_text("hi")
+    (site / "a.css").write_text("b")
+    url = client.get("/api/files/site-url", params={"path": str(site / "index.html")}).json()["url"]
+    base = url.rsplit("/", 1)[0]
+    for rel in ("a" * 300, "a" * 300 + ".css", "a" * 300 + "/x.css"):
+        assert client.get(f"{base}/{rel}").status_code == 404, rel
+    assert client.get(base + "/a.css").status_code == 200

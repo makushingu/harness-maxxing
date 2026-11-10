@@ -10,6 +10,7 @@ Standard library only (the CLI stays fast); the network is used by `update` and 
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -133,17 +134,26 @@ def read_record() -> dict:
 
 
 def write_record(name: str, entry: dict | None) -> None:
-    rec = read_record()
-    if entry is None:
-        rec.pop(name, None)
-    else:
-        rec[name] = {**entry, "at": int(time.time())}
+    """Read-modify-write under a lock (a voice model download and an update can write at once), own temp file."""
     p = record_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")
-    tmp.write_text(json.dumps(rec, indent=1, sort_keys=True))
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, p)
+    with open(p.with_name("deps.lock"), "a") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        rec = read_record()
+        if entry is None:
+            rec.pop(name, None)
+        else:
+            rec[name] = {**entry, "at": int(time.time())}
+        fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".deps.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(json.dumps(rec, indent=1, sort_keys=True))
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, p)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
 
 
 def file_sha(p: Path) -> str:
@@ -984,9 +994,20 @@ def _up_whisper(c: dict, explicit: bool = False) -> tuple[str, str]:
         if rec.get(model) is None:
             write_record("whisper", {**rec, model: pinned})
         return "ok", model
-    if voice.model_present(model):                     # another revision: download the pinned one next to it
-        shutil.rmtree(voice.model_path(model), ignore_errors=True)
-    voice.download_model(model)
+    dest, old = voice.model_path(model), None
+    if voice.model_present(model):                     # another revision: set aside until the pinned one is there
+        old = dest.with_name(dest.name + ".old")
+        shutil.rmtree(old, ignore_errors=True)
+        os.replace(dest, old)
+    try:
+        voice.download_model(model)
+    except BaseException:
+        if old is not None:                             # a failed download never leaves voice without a model
+            shutil.rmtree(dest, ignore_errors=True)
+            os.replace(old, dest)
+        raise
+    if old is not None:
+        shutil.rmtree(old, ignore_errors=True)
     write_record("whisper", {**rec, model: pinned})
     return "installed", f"{model} @ {str(pinned)[:8]}"
 

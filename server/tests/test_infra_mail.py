@@ -318,6 +318,11 @@ def test_spf_redirect_is_ignored_with_all_loops_are_errors_and_the_redirect_targ
                          ("a.net", "TXT"): ["v=spf1 include:c.net ~all"], ("b.net", "TXT"): ["v=spf1 include:c.net ~all"],
                          ("c.net", "TXT"): ["v=spf1 a ~all"]})
     assert codes == [] and not facts["spf_loop"]
+    # an include reached twice costs its lookups twice: 2 + 2 x (1 + 6) = 16 (was counted 10, no problem shown)
+    facts, codes = _spf({("ex.com", "TXT"): ["v=spf1 include:a.x include:b.x -all"],
+                         ("a.x", "TXT"): ["v=spf1 include:c.x ~all"], ("b.x", "TXT"): ["v=spf1 include:c.x ~all"],
+                         ("c.x", "TXT"): ["v=spf1 a mx a:q mx:r ptr exists:z ~all"]})
+    assert facts["spf_lookups"] == 16 and codes == ["spf_lookups"]
     # the `all` that applies through redirect= (also through a chain of them)
     for end, want in (("+all", ["spf_redirect_all"]), ("all", ["spf_redirect_all"]), ("?all", ["spf_neutral"]),
                       ("", ["spf_neutral"]), ("-all", []), ("~all", [])):
@@ -366,3 +371,35 @@ def test_api_and_cli(client, org, monkeypatch, capsys):  # noqa: F811
     finally:
         for s in servers:
             s.close()
+
+
+def test_an_odd_mx_priority_does_not_hide_the_other_dns_facts():
+    import maxxing.infra.dnsinfo as di
+    dns = {("ex.com", "MX"): [{"type": 15, "data": "\u00b2 mx.ex.net."}], **{k: txt(*([r] for r in v)) for k, v in
+           {("ex.com", "TXT"): ["v=spf1 -all"], ("_dmarc.ex.com", "TXT"): ["v=DMARC1; p=reject"]}.items()}}
+    old = di._query
+    di._query = lambda c, name, rtype: dns.get((name, rtype)) or []
+    try:
+        facts = mailinfo.dns_facts("ex.com")
+    finally:
+        di._query = old
+    assert "error" not in facts and facts["mx"] == [{"prio": 0, "host": "mx.ex.net"}]
+    assert facts["spf"] == ["v=spf1 -all"] and facts["dmarc"] == ["v=DMARC1; p=reject"]
+
+
+def test_dmarc_parents_stop_at_the_registrable_domain_and_spf_reads_stop_at_the_deadline(monkeypatch):
+    import maxxing.infra.dnsinfo as di
+    asked = []
+    monkeypatch.setattr(di, "_query", lambda c, name, rtype: asked.append(name) or [])
+    mailinfo.dns_facts("shop.example.co.uk")
+    assert "_dmarc.example.co.uk" in asked and "_dmarc.co.uk" not in asked and "_dmarc.uk" not in asked
+    asked.clear()
+    mailinfo.dns_facts(".".join(["a"] * 50) + ".example.com")
+    assert len([n for n in asked if n.startswith("_dmarc.")]) <= 8 and len(asked) <= 20
+    # past the deadline no new SPF target is read
+    zone = {("ex.com", "TXT"): txt(["v=spf1 include:a.net include:b.net -all"])}
+    monkeypatch.setattr(di, "_query", lambda c, name, rtype: asked.append(name) or zone.get((name, rtype)) or [])
+    monkeypatch.setattr(mailinfo, "DNS_FACTS_S", -1)
+    asked.clear()
+    mailinfo.dns_facts("ex.com")
+    assert "a.net" not in asked and "b.net" not in asked

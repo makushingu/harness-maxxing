@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import tomllib
 from pathlib import Path
 
@@ -19,20 +20,36 @@ CLAUDE_TAGS = "https://registry.npmjs.org/-/package/@anthropic-ai/claude-code/di
 # Claude Code lists every skill (name + description) in the system prompt within a budget (about 1% of the context
 # window, 8 000 characters when unknown); past it, the descriptions of the least used skills are dropped.
 SKILL_LISTING_BUDGET = 8000
+ANSWER_MAX = 8 * 1024 * 1024        # an OSV batch of 500 packages is well under 1 MB
+
+
+def _read_json(r, timeout: float):
+    """urlopen's timeout counts per socket read: a server dribbling a byte now and then never ends, and a huge answer
+    is all read in memory. Read by blocks, at most ANSWER_MAX bytes, within 3 x timeout overall."""
+    deadline = time.monotonic() + 3 * timeout
+    read = getattr(r, "read1", None) or r.read
+    out = bytearray()
+    while b := read(1 << 16):
+        out += b
+        if len(out) > ANSWER_MAX:
+            raise ValueError("the answer is too large")
+        if time.monotonic() > deadline:
+            raise TimeoutError("the answer took too long")
+    return json.loads(out)
 
 
 def _post_json(url: str, body: dict, timeout: float = 30) -> dict:
     import urllib.request
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)
+        return _read_json(r, timeout)
 
 
 def _get_json(url: str, timeout: float = 6) -> dict:
     import urllib.request
     with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/json"}),
                                 timeout=timeout) as r:
-        return json.load(r)
+        return _read_json(r, timeout)
 
 
 # ---- installed packages --------------------------------------------------------------------

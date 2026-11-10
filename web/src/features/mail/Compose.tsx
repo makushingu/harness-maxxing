@@ -214,6 +214,26 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     }
   }
 
+  // A send or save in flight holds the page busy (no update reload). TanStack Query skips the onSettled given to
+  // mutate() once this dialog is gone (New message, Reply while sending): the hold is given back at unmount instead.
+  const held = React.useRef(0)
+  const hold = () => {
+    held.current++
+    busyStart()
+  }
+  const release = () => {
+    if (held.current <= 0) return
+    held.current--
+    busyEnd()
+  }
+  React.useEffect(
+    () => () => {
+      while (held.current > 0) release()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+
   const doSend = async () => {
     if (inFlight.current || busy) return
     setError(null)
@@ -223,14 +243,14 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     if (unsure && !window.confirm(t('mail.compose.resendConfirm'))) return
     if (!subject.trim() && !window.confirm(t('mail.compose.noSubjectConfirm'))) return
     inFlight.current = true
-    busyStart()
+    hold()
     const sent = draft
     setReading(true)
     const ready = await readSource()
     setReading(false)
     if (!ready) {
       inFlight.current = false
-      busyEnd()
+      release()
       return
     }
     send.mutate(
@@ -251,7 +271,7 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
         },
         onSettled: () => {
           inFlight.current = false
-          busyEnd()
+          release()
         },
       },
     )
@@ -260,12 +280,12 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     if (inFlight.current || busy) return
     setError(null)
     inFlight.current = true
-    busyStart()
+    hold()
     const previous = draft && draft.acc === acc ? draft : undefined
     const done = () => {
       setReading(false)
       inFlight.current = false
-      busyEnd()
+      release()
     }
     setReading(true)
     const ready = await readSource()

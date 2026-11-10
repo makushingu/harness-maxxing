@@ -81,15 +81,43 @@ def checks_enabled() -> bool:
 
 
 # ---- probes -------------------------------------------------------------------------------------
+PROBE_OUT_MAX = 8 * 1024 * 1024
+_PROBE_LISTS = ("sites", "databases", "buckets", "containers", "listeners")
+
+
+def _probe_json(out: str, bad: str) -> dict:
+    """A probe's answer as build() reads it: an object whose lists hold objects, else an error for that server only
+    (a remote server prints what it likes: `[1]` once stopped the refresh of every server)."""
+    if len(out) > PROBE_OUT_MAX:
+        return {"error": "the probe answer is too large"}
+    try:
+        p = json.loads(out)
+    except (ValueError, RecursionError):
+        return {"error": bad}
+    if not isinstance(p, dict):
+        return {"error": bad}
+    for k in _PROBE_LISTS:
+        v = p.get(k)
+        p[k] = [x for x in v if isinstance(x, dict)] if isinstance(v, list) else []
+    for k in ("server", "errors"):
+        if not isinstance(p.get(k), dict):
+            p.pop(k, None)
+    if not isinstance(p.get("web_servers"), list):
+        p.pop("web_servers", None)
+    if p.get("error") is not None and not isinstance(p["error"], str):
+        p["error"] = str(p["error"])[:300]
+    return p
+
+
 def probe_local(opts: dict) -> dict:
     try:
         r = subprocess.run([sys.executable, str(PROBE), json.dumps(opts)], capture_output=True, text=True,
                            timeout=PROBE_TIMEOUT, errors="replace")
-        return json.loads(r.stdout) if r.stdout.strip() else {"error": (r.stderr.strip().splitlines() or ["probe failed"])[-1][:300]}
+        if not r.stdout.strip():
+            return {"error": (r.stderr.strip().splitlines() or ["probe failed"])[-1][:300]}
     except subprocess.TimeoutExpired:
         return {"error": f"the probe took more than {PROBE_TIMEOUT} s"}
-    except ValueError:
-        return {"error": "the probe printed something that is not JSON"}
+    return _probe_json(r.stdout, "the probe printed something that is not JSON")
 
 
 def _result(f, base: dict | None = None) -> dict:
@@ -123,10 +151,7 @@ def probe_remote(s: dict, opts: dict) -> dict:
         if r.returncode == 127 or "python3: not found" in r.stderr or "command not found" in r.stderr:
             err = "python3 is not installed on that server"
         return {"error": err[:300]}
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {"error": "the server answered something that is not JSON"}
+    return _probe_json(r.stdout, "the server answered something that is not JSON")
 
 
 # ---- checks -------------------------------------------------------------------------------------

@@ -56,7 +56,7 @@ function Preview({ plan }: { plan: ImportPlan }) {
   const t = useT()
   const topics = plan.projects.reduce((a, p) => a + p.topics.length, 0)
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Num n={plan.projects.length} label={t('import.projects')} />
         <Num n={topics} label={t('import.topics')} />
@@ -65,18 +65,22 @@ function Preview({ plan }: { plan: ImportPlan }) {
       </div>
       <ul className="divide-y rounded-lg border">
         {plan.projects.map((p) => (
-          <li key={p.name} className="grid gap-1.5 px-3 py-2.5">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <FolderKanban className="size-4 text-muted-foreground" />
-              <Sensitive>{p.name}</Sensitive>
+          <li key={p.name} className="grid min-w-0 gap-1.5 px-3 py-2.5">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <FolderKanban className="size-4 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                <Sensitive>{p.name}</Sensitive>
+              </span>
               <Badge variant={p.exists ? 'muted' : 'default'}>{p.exists ? t('import.merge') : t('import.new')}</Badge>
             </span>
             {p.topics.length > 0 && (
               <span className="flex flex-wrap gap-1.5 pl-6">
                 {p.topics.map((tp) => (
-                  <span key={tp.name} className={cn('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs', tp.exists ? 'text-muted-foreground' : 'border-primary/40 text-foreground')}>
-                    {tp.exists ? <GitMerge className="size-3" /> : <FolderPlus className="size-3" />}
-                    <Sensitive>{tp.name}</Sensitive>
+                  <span key={tp.name} className={cn('inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs', tp.exists ? 'text-muted-foreground' : 'border-primary/40 text-foreground')}>
+                    {tp.exists ? <GitMerge className="size-3 shrink-0" /> : <FolderPlus className="size-3 shrink-0" />}
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      <Sensitive>{tp.name}</Sensitive>
+                    </span>
                     <span className="text-muted-foreground tabular-nums">· {tp.files}</span>
                   </span>
                 ))}
@@ -93,7 +97,7 @@ function Preview({ plan }: { plan: ImportPlan }) {
           <li className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
             <Sparkles className="size-4 text-muted-foreground" /> {t('import.skills')}
             {plan.skills.map((s) => (
-              <Badge key={s} variant="muted">
+              <Badge key={s} variant="muted" className="max-w-full shrink whitespace-normal [overflow-wrap:anywhere]">
                 {s}
               </Badge>
             ))}
@@ -103,7 +107,7 @@ function Preview({ plan }: { plan: ImportPlan }) {
           <li className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
             <FileArchive className="size-4 text-muted-foreground" /> {t('import.aside')}
             {plan.aside.slice(0, 8).map((s) => (
-              <Badge key={s} variant="muted">
+              <Badge key={s} variant="muted" className="max-w-full shrink whitespace-normal [overflow-wrap:anywhere]">
                 {s}
               </Badge>
             ))}
@@ -114,7 +118,7 @@ function Preview({ plan }: { plan: ImportPlan }) {
       <p className="text-xs text-muted-foreground">{t('import.neverOverwrite')}</p>
       {plan.secrets.length > 0 && (
         <Callout tone="warning" title={t('import.secrets', { count: plan.secrets.length })}>
-          <ul className="mt-1 grid gap-0.5 font-mono text-xs">
+          <ul className="mt-1 grid gap-0.5 font-mono text-xs [overflow-wrap:anywhere]">
             {plan.secrets.slice(0, 6).map((s) => (
               <li key={s.file}>
                 {s.file} ({s.kinds.join(', ')})
@@ -124,7 +128,7 @@ function Preview({ plan }: { plan: ImportPlan }) {
           <p className="mt-1.5">{t('import.secretsHint')}</p>
         </Callout>
       )}
-      {plan.skipped.length > 0 && <Callout tone="info" title={t('import.skipped', { count: plan.skipped.length })}>{plan.skipped.slice(0, 4).map((s) => `${s.file} (${s.reason})`).join(' · ')}</Callout>}
+      {plan.skipped.length > 0 && <Callout tone="info" title={t('import.skipped', { count: plan.skipped.length })}><span className="[overflow-wrap:anywhere]">{plan.skipped.slice(0, 4).map((s) => `${s.file} (${s.reason})`).join(' · ')}</span></Callout>}
     </div>
   )
 }
@@ -164,10 +168,10 @@ export function ImportWizard({ onDone, compact, autoFinish }: { onDone?: (r: Imp
 
   if (result)
     return (
-      <div className="grid gap-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
         <Callout tone="success" title={t('import.done', { projects: result.projects.length, topics: result.topics.length, files: result.files })}>
           {result.merged.length > 0 && <p>{t('import.mergedInto', { count: result.merged.length })}</p>}
-          <p className="mt-1 font-mono text-xs">
+          <p className="mt-1 font-mono text-xs [overflow-wrap:anywhere]">
             <Sensitive>{result.report}</Sensitive>
           </p>
         </Callout>
