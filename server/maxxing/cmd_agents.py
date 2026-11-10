@@ -509,7 +509,7 @@ def _handler(a) -> int:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
                                                     "approvals", "trust_outside", "keys", "telegram", "silent", "sandbox", "domains",
-                                                    "writable", "rules", "subagent", "limits", "triggers")},
+                                                    "writable", "rules", "subagent", "chat", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
                           "webhooks": [{k: v for k, v in h.items() if not own or k != "url"}

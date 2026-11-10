@@ -124,10 +124,14 @@ def test_guards_disabled_budget_rate(client, topic, monkeypatch):
     monkeypatch.setattr(agents, "day_cost", lambda path, when=None: 5.0)
     assert client.post("/api/agents/acme/blog/writer/run", json={}).json()["reason"] == "budget"
     monkeypatch.setattr(agents, "day_cost", lambda path, when=None: 0.0)
-    first = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL a"}).json()
+    first = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")
     assert first["started"]
     wait_idle(client, first["session"]["id"])
-    assert client.post("/api/agents/acme/blog/writer/run", json={}).json()["reason"] == "rate"
+    # the hourly limit stops a script or a trigger in a loop, never the owner typing on the agent page
+    assert agents.fire(A, trigger="manual", source="command line")["reason"] == "rate"
+    again = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL b"}).json()
+    assert again["started"]
+    wait_idle(client, first["session"]["id"])
     skips = [m for m in agents.thread(A) if m["kind"] == "skip"]
     assert [m["reason"] for m in skips] == ["disabled", "budget", "rate"]
 
@@ -138,9 +142,9 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     _create(client)
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
-    first = agents.fire(A, trigger="manual", prompt="NOTOOL a")
+    first = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")
     assert first["started"]
-    assert agents.fire(A, trigger="manual", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
     assert agents.fire(A, trigger="feed:t_1", prompt="NOTOOL c", wait=True) == {"started": False, "reason": "busy"}
     assert [m["reason"] for m in agents.thread(A) if m["kind"] == "skip"] == ["busy"]   # wait: nothing posted
     from maxxing import feed
@@ -150,7 +154,7 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     assert argv[argv.index("--max-budget-usd") + 1] == "2.00"
     wait_for(lambda: not agents._read_state(A).get("held"))                            # released at the turn end
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.02")
-    again = agents.fire(A, trigger="manual", prompt="NOTOOL d")
+    again = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL d")
     assert again["started"]
     wait_idle(client, again["session"]["id"])
     argv = _calls()[-1]["argv"]
@@ -158,7 +162,7 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     # runs per hour: two triggers at the same moment, one slot left -> one run
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0, "runs_per_hour": 3}})
     out: list = []
-    ts = [threading.Thread(target=lambda: out.append(agents.fire(A, trigger="manual", prompt="NOTOOL e")))
+    ts = [threading.Thread(target=lambda: out.append(agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL e")))
           for _ in range(2)]
     [t.start() for t in ts]
     [t.join() for t in ts]
@@ -174,7 +178,7 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
     _create(client)
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0, "runs_per_hour": 0}})
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "1.5")
-    sid = agents.fire(A, trigger="manual", prompt="NOTOOL a")["session"]["id"]
+    sid = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")["session"]["id"]
     wait_for(lambda: (store.read(sid) or {}).get("state") == "running")
     with store.edit(sid) as m:                     # a 2nd turn queued while the 1st runs (mcp_auto, a compaction...)
         m["queue"] = (m.get("queue") or []) + [{"text": "NOTOOL second", "attachments": [], "source": "system"}]
@@ -182,7 +186,7 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
     wait_for(lambda: any(m["kind"] == "result" for m in agents.thread(A)), timeout=5)   # turn 1's end was handled
     assert (store.read(sid) or {}).get("state") == "running"                            # turn 2 runs
     assert sid in (agents._read_state(A).get("held") or {})
-    assert agents.fire(A, trigger="manual", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
     wait_idle(client, sid, timeout=20)
     wait_for(lambda: not agents._read_state(A).get("held"))                            # released at its own end
 
@@ -264,7 +268,8 @@ def test_the_agents_list_reads_the_sessions_once(client, topic, monkeypatch):
     _create(client)
     assert client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "editor"}).status_code == 200
     for name in ("writer", "editor"):
-        run = client.post(f"/api/agents/acme/blog/{name}/run", json={"text": "NOTOOL hi"}).json()
+        run = agents.fire(f"projects/acme/topics/blog/agents/{name}", trigger="manual", source="command line",
+                          prompt="NOTOOL hi")
         wait_idle(client, run["session"]["id"])
     reads: list = []
     real = store.read_cached
@@ -500,7 +505,7 @@ def _results(client) -> list[dict]:
 
 def test_a_reply_goes_on_with_the_session_a_new_message_gets_the_context(client, topic):
     _on(client)
-    _create(client)
+    _create(client, chat=False)                          # one session per message (agents made before `chat`)
     first = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL plan the post"}).json()
     sid = first["session"]["id"]
     wait_idle(client, sid)
@@ -598,7 +603,7 @@ def test_feed_post_from_an_agent_turn_cannot_start_itself(client, topic, monkeyp
 def test_finished_sessions_fold_away_once_read(client, topic, monkeypatch):
     from maxxing import agents
     _on(client)
-    _create(client)
+    _create(client, chat=False)
     run = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()["session"]["id"]
     archived = lambda sid: client.get(f"/api/sessions/{sid}").json()["archived"]
     a = run("one")
@@ -860,3 +865,72 @@ def test_a_silent_agent_works_without_calling_the_user(client, topic, monkeypatc
     wait_idle(client, run["session"]["id"])
     wait_for(lambda: sent)
     assert client.get("/api/agents/acme/blog/writer").json()["thread_unread"] >= 1
+
+
+def test_the_owner_chats_in_one_conversation(client, topic, monkeypatch):
+    from maxxing.sessions import store
+    _on(client)
+    assert _create(client)["chat"] is True                  # on for new agents
+    say = lambda t: client.post("/api/agents/acme/blog/writer/run", json={"text": f"NOTOOL {t}"}).json()
+    first = say("one")
+    sid = first["session"]["id"]
+    wait_idle(client, sid)
+    wait_for(lambda: _results(client))
+    # the next message goes on in the same session, as typed (no context added: Claude has it all)
+    r = say("two")
+    assert r["started"] and r["continued"] and r["session"]["id"] == sid
+    wait_idle(client, sid)
+    assert _calls()[-1]["prompt"] == "NOTOOL two"
+    res = wait_for(lambda: len(_results(client)) == 2 and _results(client))
+    assert res[-1]["session"] == sid and res[-1]["text"] != res[0]["text"]     # this turn's answer, not the first
+    runs = [m for m in agents.thread(A) if m["kind"] == "run"]
+    assert all(m["owner"] for m in runs) and runs[0]["chat"] == "new" and "chat" not in runs[1]
+    # outside text (a forward on Telegram), a cron, a script: their own session, the conversation is not touched
+    for kw in ({"trigger": "telegram", "text": "forwarded mail", "source": "telegram"},
+               {"trigger": "cron:c_1", "prompt": "NOTOOL routine", "source": "cron"},
+               {"trigger": "manual", "source": "command line", "prompt": "NOTOOL from a script"}):
+        x = agents.fire(A, **kw)
+        assert x["started"] and x["session"]["id"] != sid and not x.get("continued")
+        wait_idle(client, x["session"]["id"])
+    assert say("three")["session"]["id"] == sid
+    wait_idle(client, sid)
+    # a message typed while it works waits in its queue, even when that run holds the rest of the budget
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 2.0}})
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
+    assert say("four")["session"]["id"] == sid
+    queued = say("five")
+    assert queued["started"] and queued["session"]["id"] == sid
+    assert agents.fire(A, trigger="feed:t_1", prompt="NOTOOL x", wait=True)["reason"] == "busy"
+    wait_for(lambda: _calls()[-1]["prompt"] == "NOTOOL five")
+    wait_idle(client, sid)
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0")
+    # New conversation (button, Telegram /new): the next message starts one, with the last results as context
+    assert client.post("/api/agents/acme/blog/writer/chat/new").json() == {"ok": True}
+    assert [m["text"] for m in agents.thread(A) if m["kind"] == "note"][-1] == "New conversation"
+    n = say("six")
+    assert n["session"]["id"] != sid and not n.get("continued")
+    wait_idle(client, n["session"]["id"])
+    assert "your last results in your thread" in _calls()[-1]["prompt"]
+    # silent for longer than chat_idle_h: a new conversation
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"chat_idle_h": 1}})
+    st = agents._read_state(A)
+    st["chat"]["at"] -= 7200
+    agents._write_state(A, st)
+    with store.edit(n["session"]["id"]) as m:
+        m["finished_at"] -= 7200
+    assert say("seven")["session"]["id"] != n["session"]["id"]
+
+
+def test_agents_made_before_chat_keep_one_session_per_message(client, topic):
+    _on(client)
+    _create(client)
+    f = agents.folder(A) / "agent.json"
+    data = json.loads(f.read_text())
+    data.pop("chat")                                      # an agent.json written before the field existed
+    f.write_text(json.dumps(data))
+    assert agents.load(A)["chat"] is False
+    one = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL one"}).json()
+    wait_idle(client, one["session"]["id"])
+    two = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL two"}).json()
+    assert two["session"]["id"] != one["session"]["id"]
+    wait_idle(client, two["session"]["id"])

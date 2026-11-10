@@ -6,8 +6,9 @@ section: Using Harness Maxxing
 An **agent** is a lasting role inside a topic: a blog writer in `acme / blog`, an order handler in `acme / shop`, a
 lead sorter in `acme / sales`. It has its own role (what it does, how, what it must never do), its own memory, a
 little character as its face, and it starts by itself when something happens: a time of day, a webhook, a
-notification, a message in its Telegram thread, or another agent handing it work. Every start is a new session,
-kept like any other, within limits you set (on/off, a daily budget, runs per hour).
+notification, a message in its Telegram thread, or another agent handing it work. Each of these starts a new session,
+kept like any other, within limits you set (on/off, a daily budget, runs per hour). When **you** write to it, it is a
+chat: your messages go on in one conversation (see [The agent page](#the-agent-page)).
 
 Agents are **on for a new install** (since 2.0.0a132; an older install keeps what it had): switch them on or off in
 **Settings -> Features -> Agents**. An **Agents** entry appears in the
@@ -130,10 +131,17 @@ which files or keys it uses, and what it must never do. Keep it short; it learns
 The page is a **conversation** with the agent, like a contact in a chat app:
 
 - **What started each run**: your message (on the right), or an event, a schedule, another agent (dashed).
-- **Its results**: one card per run, long ones folded (**Read all**), with the cost and a link to the session. While it
-  works, a "working…" bubble links to the live session; when it waits for your OK, the bubble says so.
-- **Writing to it** (the box at the bottom) starts a **new session**; it gets its last results as context, so "and the
-  second point?" makes sense.
+- **Its results**: one card per answer, long ones folded (**Read all**), with the cost and a link to the session. While
+  it works, the "working…" bubble shows what it is writing and the command it runs, as it comes, and links to the live
+  session; when it waits for your OK, the bubble says so.
+- **Writing to it is a chat** (**One conversation**, on for new agents): your messages, here or on Telegram, go on in
+  **the same session**. The agent remembers everything you said and what it already read or did, so it answers faster
+  and costs less (Claude reuses the conversation instead of starting over). A message typed while it works waits for
+  its turn in the same conversation. Under the box, **New conversation** starts a fresh one with your next message; a
+  new one also starts by itself after 6 hours without a message (**New conversation after**, in Settings -> Limits;
+  0 = never) or when the last one failed. A new conversation gets the agent's last results as context, so "and the
+  second point?" still makes sense. Agents made before this option keep a new session per message until you switch
+  **One conversation** on in their Settings -> Limits.
 - **Files**: the paperclip, a paste or a drop attaches up to 10 files to your message (a photo, a PDF, a brief), as in
   a session. They are saved in the agent's folder, under `attachments/`, and the agent reads them; with the sandbox
   that folder is read only for the agent. A message can be only files.
@@ -147,9 +155,11 @@ The page is a **conversation** with the agent, like a contact in a chat app:
 - **Its answers** open file links in the preview, show images and videos as thumbnails and audio with a player, and
   have a copy menu. Only the files of the agent's own folders (its folder and its writable folders) get a link or a
   preview: any other path stays plain text, since an answer can repeat text from a mail or a webhook.
-- **Reply** on a result goes on with **that result's session**: same context, nothing to explain again. A reply in its
-  Telegram thread to one of its results does the same.
-- The **schedule, webhook and notification runs stay separate**: each one is a new session of its own.
+- **Reply** on a result of another session (a schedule run, an older conversation) goes on with **that result's
+  session**: same context, nothing to explain again. A reply in its Telegram thread to one of its results does the
+  same.
+- The **schedule, webhook, notification, e-mail and agent runs stay separate**: each one is a new session of its own,
+  never mixed with your conversation. So does a forward on Telegram (outside text, see [Safety](#safety)).
 - **Open the run** shows the whole session (every command, every file) right in the Agents page, with a way back to
   the conversation. A link to an agent's session (Telegram, a notification, the search) opens it there too.
 - **Continue in Sessions** turns a run into a normal session of the topic: same history, same Claude thread (the run
@@ -204,7 +214,8 @@ which starts A) stop after 3 hops, like `maxxing agents send`.
 |---|---|---|
 | **On / off** | on | an agent switched off starts for nothing (its schedule runs are skipped) |
 | **Daily budget** | 2 USD | once today's sessions of the agent cost that much, it waits until tomorrow (the day of your time zone in Settings); a turn that reaches it is stopped in the middle (Claude Code `--max-budget-usd`); a run holds what is left of the day until it ends, so a trigger meanwhile is skipped (feed events wait for it) (0 = no budget; 0.01 USD at least otherwise, 1000 at most) |
-| **Runs per hour** | 6 | more starts in the same hour are refused (0 = no limit, 120 at most). A negative value or one above the maximum is refused when you save |
+| **Runs per hour** | 6 | more starts by its triggers and scripts in the same hour are refused (0 = no limit, 120 at most); your own messages (agent page, Telegram) never count. A negative value or one above the maximum is refused when you save |
+| **New conversation after** | 6 h | with **One conversation** on: after this long without a message, your next one starts a new conversation (0 = never, 720 at most) |
 | **Time limit** | 30 min | a run is stopped after this |
 | **Grouping delay** | 60 s | events closer than this go into one run |
 
@@ -243,8 +254,9 @@ Turn on **Telegram** in the agent's settings: it gets its **own thread** in your
 (`🤖 Writer · acme/blog`). Each result is posted there, and anything you write there - text, a photo, a file, a voice
 note - starts the agent with it as the task (the bot answers "⏳ Writer is on it.", or why it did not start). An
 album, a long text Telegram splits, or a forward with your comment start **one** run.
-**Reply** to one of its results to go on with that result's session. Commands
-(`/new`, `/stop`...) work in session threads, not here. Without threads (topics off for the bot), results come into
+With **One conversation** on, your messages there go on in the same conversation as on the agent page, and `/new`
+starts a new one. **Reply** to one of its results to go on with that result's session. The other commands
+(`/stop`...) work in session threads, not here. Without threads (topics off for the bot), results come into
 the main chat with the agent's name in front. See [Telegram](telegram).
 
 ## Safety

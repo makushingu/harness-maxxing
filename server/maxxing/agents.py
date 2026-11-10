@@ -76,6 +76,7 @@ LIMITS = {  # name: (default, min, max)
     "timeout_s": (1800, 60, 86400),
     "debounce_s": (60, 0, 3600),               # feed / Telegram events closer than this go in one turn
     "approval_timeout_s": (1800, 30, 86400),   # `approvals`: a tool call nobody answered is denied after this
+    "chat_idle_h": (6, 0, 720),                # `chat`: after this long without a message, a new conversation (0 = never)
 }
 TRIGGER_KINDS = ("feed",)                      # stored in agent.json; cron triggers are cron jobs (crons.py)
 MAX_TRIGGERS = 10
@@ -510,6 +511,8 @@ def clean(data: Any, strict: bool = False) -> dict:
             "sandbox": bool(d.get("sandbox")), "domains": _clean_domains(d.get("domains"), strict),
             "writable": _clean_writable(d.get("writable"), strict), "rules": _clean_rules(d.get("rules"), strict),
             "subagent": bool(d.get("subagent")), "mail": _clean_mail(d.get("mail"), strict),
+            # chat: the owner's messages go on in one conversation (off for agents made before it existed)
+            "chat": bool(d.get("chat")),
             "limits": limits, "triggers": triggers,
             "created": c if isinstance(c := d.get("created"), (int, float)) and math.isfinite(c) else time.time()}
 
@@ -661,7 +664,7 @@ def public(path: str, stats: dict | None = None) -> dict:
     return {"path": path, "project": p[0], "topic": p[1], "name": p[2], "display_name": a["name"] or p[2],
             "description": workspace.read_description(folder(path)), **{k: a[k] for k in (
                 "avatar", "enabled", "model", "permission_mode", "allowed_tools", "disallowed_tools", "telegram",
-                "silent", "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent",
+                "silent", "approvals", "trust_outside", "keys", "sandbox", "domains", "writable", "rules", "subagent", "chat",
                 "mail", "limits", "triggers", "created")}, "broken": bool(a.get("broken")),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0),
             "running": st.get("running", 0), "unread": 0 if a["silent"] else st.get("unread", 0)}
@@ -726,7 +729,7 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
         raise AgentError(409, "too_many", f"At most {MAX_PER_TOPIC} agents per topic")
     f = dict(fields or {})
     description = _utf8(str(f.pop("description", "") or ""))
-    data = clean({"sandbox": True, **f, "created": time.time()}, strict=True)
+    data = clean({"sandbox": True, "chat": True, **f, "created": time.time()}, strict=True)
     try:
         folder(path).mkdir(parents=True)
     except FileExistsError:                             # created by a request at the same moment
@@ -1185,11 +1188,11 @@ def day_cost(path: str, when: float | None = None, metas: list[dict] | None = No
 def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
     cutoff = time.time() - 3600
     return sum(1 for m in (thread(path, 500) if msgs is None else msgs)    # a group's turns: the group's limits
-               if m.get("kind") == "run" and not m.get("group") and (m.get("at") or 0) > cutoff)
+               if m.get("kind") == "run" and not m.get("group") and not m.get("owner") and (m.get("at") or 0) > cutoff)
 
 
 def status(path: str, metas: list[dict] | None = None) -> dict:
-    """{cost_today, runs_last_hour, last_run, running_now, running_sessions, thread_unread, waiting, alerts}.
+    """{cost_today, runs_last_hour, last_run, running_now, running_sessions, thread_unread, waiting, alerts, chat_session}.
     metas: the agent's session metas when the caller has them (list_agents: one pass for every agent)."""
     metas = _metas(path) if metas is None else metas
     msgs = thread(path, 500)
@@ -1206,7 +1209,16 @@ def status(path: str, metas: list[dict] | None = None) -> dict:
                                   "started": m.get("spawned_at") or m.get("updated")} for m in running],
             "thread_unread": 0 if silent(path) else sum(1 for m in msgs if m.get("kind") == "result"
                                                         and (m.get("at") or 0) > seen),
-            "waiting": waiting, "alerts": _alert_count(path)}
+            "waiting": waiting, "alerts": _alert_count(path), "chat_session": _open_chat(path)}
+
+
+def _open_chat(path: str) -> str | None:
+    """The conversation the owner's next message goes on in (None: the next one starts a new session)."""
+    try:
+        a = load(path)
+        return _chat_session(path, a) if a["chat"] else None
+    except Exception:  # noqa: BLE001 - a status never fails on it
+        return None
 
 
 def _alert_count(path: str) -> int:
@@ -1327,9 +1339,10 @@ def test_trigger(path: str, tid: str) -> dict:
     return {"event": ev}
 
 
-def gate(path: str) -> str | None:
+def gate(path: str, owner: bool = False) -> str | None:
     """Why a trigger may not start a turn now (None = it may): disabled, budget, busy (the rest of the budget is held
-    by runs in progress), rate. fire() asks it again under _lock, with the start of the run."""
+    by runs in progress), rate. fire() asks it again under _lock, with the start of the run. owner: the owner's own
+    message (agent page, Telegram): runs_per_hour guards against triggers in a loop, never against the owner."""
     if not exists(path):
         return "missing"
     a = load(path)
@@ -1343,7 +1356,7 @@ def gate(path: str) -> str | None:
         held = _held(_read_state(path))
         if held and spent + held >= lim["usd_per_day"] - 0.01:
             return "busy"
-    if lim["runs_per_hour"] and _runs_last_hour(path) >= lim["runs_per_hour"]:
+    if lim["runs_per_hour"] and not owner and _runs_last_hour(path) >= lim["runs_per_hour"]:
         return "rate"
     return None
 
@@ -1417,6 +1430,61 @@ def _local(when: float) -> str:
 CONTEXT_RESULTS = 3            # a new conversational message carries the last results of the thread...
 CONTEXT_CHARS = 500            # ...each cut to this many characters
 CONVERSATIONAL = ("manual", "telegram")
+CHAT_SOURCES = ("manual", "telegram")   # the owner typing (agent page, Telegram): not a script's `agents run`
+
+
+def _owner_chat(trigger: str, source: str, text: str) -> bool:
+    """The owner's own words (no outside text): a message of the conversation, not a run of an automation."""
+    return trigger in CONVERSATIONAL and source in CHAT_SOURCES and not text
+
+
+def _chat_session(path: str, a: dict) -> str | None:
+    """The conversation the owner's next message goes on in (`chat` on), None = a new one: none yet, gone, failed,
+    or silent for longer than limits.chat_idle_h."""
+    from .sessions import service, store
+    c = _read_state(path).get("chat")
+    sid = c.get("session") if isinstance(c, dict) else None
+    if not (sid and service.session_exists(sid)):
+        return None
+    m = store.read_cached(sid) or {}
+    if m.get("path") != path or m.get("error") and m.get("state") != "running":
+        return None
+    idle = a["limits"]["chat_idle_h"]
+    last = max(float(c.get("at") or 0), float(m.get("finished_at") or 0))
+    if idle and m.get("state") != "running" and not m.get("queue") and time.time() - last > idle * 3600:
+        return None
+    return sid
+
+
+def _chat_mark(path: str, sid: str) -> None:
+    with _lock:
+        st = _read_state(path)
+        st["chat"] = {"session": sid, "at": time.time()}
+        _write_state(path, st)
+
+
+def _joins_running(path: str, reply_to: str | None) -> bool:
+    """The owner's message goes on in a session that is running now (its conversation, or the run it replies to):
+    it waits in that session's queue, under the budget that run holds."""
+    from .sessions import store
+    try:
+        a = load(path)
+    except Exception:  # noqa: BLE001
+        return False
+    sid = _reply_session(path, reply_to) if reply_to else (_chat_session(path, a) if a["chat"] else None)
+    m = store.read_cached(sid) if sid else None
+    return bool(m and (m.get("state") == "running" or m.get("queue")))
+
+
+def new_chat(path: str) -> bool:
+    """The owner's next message starts a new conversation (button, Telegram /new) -> whether one was open."""
+    with _lock:
+        st = _read_state(path)
+        had = bool(st.pop("chat", None))
+        _write_state(path, st)
+    if had:
+        post(path, "note", "New conversation", status="new_chat")
+    return had
 
 
 def _reply_session(path: str, reply_to: str) -> str | None:
@@ -1459,10 +1527,13 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
 
 def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attachments: list[str] | None,
           depth: int, cron_env: dict | None, timeout_s: int | None, reply_to: str | None, wait: bool) -> dict:
+    owner = _owner_chat(trigger, source, text)
     if depth > MAX_DEPTH:
         reason = "depth"
     else:
-        reason = gate(path)
+        reason = gate(path, owner=owner)
+    if reason == "busy" and owner and _joins_running(path, reply_to):
+        reason = None                                   # it waits in the queue of the run that holds the budget
     if reason == "busy" and wait:
         return {"started": False, "reason": reason}
     if reason:
@@ -1480,12 +1551,19 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
         log.exception("agent %s: tidy", path)
     message = frame(prompt, text, source) if text else (prompt or "Run your routine.")
     sid = _reply_session(path, reply_to) if reply_to else None
+    chat = owner and a["chat"]
+    if not sid and chat:
+        sid = _chat_session(path, a)
+    own = {"owner": True} if owner else {}
     if sid:
         r = service.send_message(sid, message, attachments=attachments, source="agent")
         _hold_left(path, a, sid)
         _snapshot(path, sid)
+        if chat and not reply_to:
+            _chat_mark(path, sid)
         post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=sid,
-             reply_to=reply_to, **({"attachments": list(attachments)} if attachments else {}))
+             **({"reply_to": reply_to} if reply_to else {}), **own,
+             **({"attachments": list(attachments)} if attachments else {}))
         return {"started": True, "continued": True, "session": r["session"]}
     if trigger in CONVERSATIONAL or trigger.startswith("agent:"):
         ctx = context(path)
@@ -1501,8 +1579,10 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                permission_mode=a["permission_mode"])
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
-    post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"],
-         **({"attachments": list(attachments)} if attachments else {}))
+    if chat:
+        _chat_mark(path, s["id"])
+    post(path, "run", (text or prompt or "")[:600], trigger=trigger, source=source, session=s["id"], **own,
+         **({"chat": "new"} if chat else {}), **({"attachments": list(attachments)} if attachments else {}))
     return {"started": True, "session": s}
 
 
@@ -1637,8 +1717,8 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         return
     from .sessions import service
     ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
-    try:                                # a failed turn: its own text only, never the answer of the turn before
-        text = service.last_assistant_text(session["id"], turn_only=not ok) or ""
+    try:                                # this turn's own text, never the answer of the turn before (a conversation goes on)
+        text = service.ended_turn_text(session["id"]) or ""
     except Exception:
         text = ""
     if not ok and not text:

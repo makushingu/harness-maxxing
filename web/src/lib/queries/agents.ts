@@ -147,6 +147,12 @@ export function useAgentSeen() {
     errorToast: false,
   })
 }
+/** The owner's next message starts a new conversation. */
+export function useNewAgentChat() {
+  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/chat/new'), {}), {
+    invalidate: [agentKeys.all],
+  })
+}
 export function useTestAgentTrigger() {
   return useMut(({ path, tid }: { path: string; tid: string }) => api.post<{ event: unknown }>(agentUrl(path, `/triggers/${tid}/test`), {}), {
     invalidate: [agentKeys.all, qk.feed.all],

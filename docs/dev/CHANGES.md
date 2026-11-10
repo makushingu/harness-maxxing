@@ -7,6 +7,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 
+- **Agent chat**: `agent.json` `chat` (bool; `create()` sets it,
+  missing = off for older agents) + `limits.chat_idle_h` (6, 0-720). `agents._fire`: the owner's own words
+  (`_owner_chat`: trigger manual/telegram, source manual/telegram, no outside `text`) go on in the session kept in
+  `<state>/agents/<key>.json` `chat: {session, at}` (`_chat_session`: gone, failed, other path or idle > chat_idle_h
+  -> new session, which gets `context()` as before). `new_chat()` + `POST /api/agents/{p}/{t}/{n}/chat/new` +
+  Telegram `/new` in an agent thread (`agent_new_chat` text). Run posts carry `owner: true` (and `chat: "new"` when
+  they open a conversation); `gate(owner=True)` skips runs_per_hour and `_runs_last_hour` leaves owner runs out; a
+  `busy` owner message that goes on in the running session is let through (`_joins_running`: it queues under that
+  run's hold). `status()` gives `chat_session`. `on_turn_end` reads `service.ended_turn_text()` (the answer of the
+  last turn with a `result`, even when a queued turn already started) instead of `last_assistant_text(turn_only=not
+  ok)`, which posted the previous turn's answer again in a continued session. UI: `AgentPage.tsx` live text/tool in
+  `Working` (`useSessionLog`), `ChatLine` divider, New conversation bar, Reply hidden on the open conversation;
+  Settings -> Limits switch + `chat_idle_h` field (`LimitsFields chat`).
 - Released from `main` ("Urgent fixes" path). `server/maxxing/claude_models.py`: daily `GET /v1/models`
   (secrets token/API key, else the `claude login` access token while valid, `anthropic-beta: oauth-2025-04-20`),
   newest id per family -> `<state>/claude-models.json`; `service.KNOWN_MODELS` removed, `service.models()` uses

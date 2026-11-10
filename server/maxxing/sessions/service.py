@@ -1010,6 +1010,21 @@ def last_user_message(sid: str) -> dict | None:
     return None
 
 
+def ended_turn_text(sid: str) -> str:
+    """What the last turn that ended wrote ("" if nothing): when the next turn (a message queued meanwhile) has
+    started already, still the answer of the one that ended, never a reply of the turn before it."""
+    evs = _tail_events(sid)
+    end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), None)
+    if end is None:                           # it ended without a result (a crash): its own text so far
+        return last_assistant_text(sid, turn_only=True)
+    for ev in reversed(evs[:end]):
+        if ev["type"] == "assistant":
+            return ev["text"]
+        if ev["type"] == "user":
+            return ""
+    return ""
+
+
 def last_result(sid: str) -> dict | None:
     for ev in reversed(_tail_events(sid)):
         if ev["type"] == "result":

@@ -49,6 +49,7 @@ class Limits(BaseModel):
     timeout_s: Optional[int] = None
     debounce_s: Optional[int] = None
     approval_timeout_s: Optional[int] = None
+    chat_idle_h: Optional[int] = None
 
 
 class Trigger(BaseModel):
@@ -98,6 +99,7 @@ class AgentIn(BaseModel):
     writable: Optional[list[str]] = Field(default=None, max_length=20)
     rules: Optional[list[Rule]] = Field(default=None, max_length=20)
     subagent: Optional[bool] = None
+    chat: Optional[bool] = None          # the owner's messages go on in one conversation
     mail: Optional[list[dict]] = Field(default=None, max_length=10)    # mailboxes of the E-mail page (mail/access.py)
 
 
@@ -308,6 +310,16 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
     except Exception as e:     # SessionError (bad model...)
         raise HTTPException(getattr(e, "status", 500),
                             detail={"error": getattr(e, "code", "run_failed"), "message": str(e)}) from None
+
+
+@router.post("/{project}/{topic}/{name}/chat/new")
+def agent_new_chat(project: str, topic: str, name: str):
+    """The next message of the owner starts a new conversation."""
+    _on()
+    path = _path(project, topic, name)
+    if not agents.exists(path):
+        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
+    return {"ok": agents.new_chat(path)}
 
 
 @router.post("/{project}/{topic}/{name}/seen")

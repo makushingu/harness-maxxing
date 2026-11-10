@@ -6,6 +6,13 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## 2.0.0-alpha.138 - 2026-11-10
 
 New:
+- **Talk to an agent like in a chat**: your messages to an agent (its page, Telegram) now go on in one conversation
+  instead of starting a new session each time. It remembers what you said and what it already did, answers faster
+  and costs less; a message typed while it works waits for its turn. **New conversation** (under the box, or `/new`
+  on Telegram) starts a fresh one, and so do 6 hours without a message (adjustable). Its schedules, webhooks,
+  e-mails and other agents still start sessions of their own. On for new agents; for an existing one, switch on
+  **One conversation** in its Settings -> Limits. While it works, the conversation shows what it writes as it comes.
+  Your own messages no longer count in its runs per hour.
 - **New Claude models show up by themselves**: once a day Harness Maxxing asks Anthropic which models exist and
   lists the newest Opus, Sonnet, Haiku and Fable everywhere you pick a model (Settings, topics, jobs, agents,
   Telegram `/model`), without waiting for an update. If your default model is the newest of its family, it follows

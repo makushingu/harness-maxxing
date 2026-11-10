@@ -10,12 +10,12 @@
 import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
+  agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentThread, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useWorkspace, useWriteFile,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
 import { fmtDate, fmtRelative } from '@/lib/format'
@@ -39,6 +39,7 @@ import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
 import { AnswerContext, AnswerText } from './answer'
+import { useSessionLog } from '@/pages/sessions/log'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 /** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
@@ -292,17 +293,19 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
             ) : (
               msgs
                 .filter((m) => !asks.merged(m))
-                .map((m) => (
-                  <ThreadMessage
-                    key={m.id}
-                    m={m}
-                    agent={a}
-                    crons={crons?.jobs || []}
-                    answers={m.reply_to ? byId.get(m.reply_to) : undefined}
-                    onReply={setReplyTo}
-                    live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
-                    decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
-                  />
+                .map((m, i, shown) => (
+                  <React.Fragment key={m.id}>
+                    {m.chat === 'new' && newChatLine(shown, i) && <ChatLine />}
+                    <ThreadMessage
+                      m={m}
+                      agent={a}
+                      crons={crons?.jobs || []}
+                      answers={m.reply_to ? byId.get(m.reply_to) : undefined}
+                      onReply={setReplyTo}
+                      live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
+                      decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
+                    />
+                  </React.Fragment>
                 ))
             )}
             {(a.running_sessions || []).map((s) => (
@@ -317,9 +320,45 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
   )
 }
 
-/** A running session of the agent: "working…", or "waiting for your OK" with the way to answer. */
+/** A new conversation begins here: drawn unless it is the very first message or the "New conversation" note
+ *  (the button) is just above. */
+function newChatLine(msgs: AgentMessage[], i: number): boolean {
+  const before = msgs.slice(0, i).filter((m) => m.kind !== 'note' || m.status === 'new_chat')
+  return before.length > 0 && before[before.length - 1].status !== 'new_chat'
+}
+
+function ChatLine() {
+  const t = useT()
+  return (
+    <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground" data-kind="new-chat">
+      <span className="h-px flex-1 bg-border" aria-hidden />
+      <MessageSquarePlus className="size-3.5" /> {t('agents.chat.started')}
+      <span className="h-px flex-1 bg-border" aria-hidden />
+    </div>
+  )
+}
+
+/** What the agent is writing in this turn (after the last message it got), and the tool it is using now. */
+function useLiveTurn(sid: string): { text: string; tool: string } {
+  const log = useSessionLog(sid)
+  return React.useMemo(() => {
+    let text = ''
+    let tool = ''
+    for (let i = log.items.length - 1; i >= 0; i--) {
+      const it = log.items[i]
+      if (it.kind === 'user') break
+      if (it.kind === 'assistant' && !text) text = it.ev.text || ''
+      if (it.kind === 'tool' && !text && !tool && !it.result) tool = it.use.summary || it.use.name
+    }
+    return { text, tool }
+  }, [log.items])
+}
+
+/** A running session of the agent: "working…" with what it writes as it comes, or "waiting for your OK" with the
+ *  way to answer. */
 function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; waiting: boolean }) {
   const t = useT()
+  const live = useLiveTurn(sid)
   return (
     <div className="flex items-start gap-2" data-kind="working">
       <AgentAvatarIcon avatar={a.avatar} size={32} />
@@ -328,6 +367,18 @@ function Working({ agent: a, sid, waiting }: { agent: AgentDetail; sid: string; 
           {waiting ? <ShieldCheck className="size-4 text-warning" /> : <StatusDot tone="running" pulse className="size-2" />}
           {waiting ? t('agents.conv.waiting', { name: a.display_name }) : t('agents.conv.working', { name: a.display_name })}
         </span>
+        {!waiting && live.text && (
+          <div className="min-w-0 text-sm" data-testid="agent-live-text">
+            <Sensitive block>
+              <AnswerText text={live.text} />
+            </Sensitive>
+          </div>
+        )}
+        {!waiting && live.tool && (
+          <span className="truncate font-mono text-[11px] text-muted-foreground" data-testid="agent-live-tool">
+            <Sensitive>{live.tool}</Sensitive>
+          </span>
+        )}
         <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
           <PlayCircle className="size-3" /> {waiting ? t('agents.conv.waitingOpen') : t('agents.conv.follow')}
         </Link>
@@ -478,7 +529,7 @@ function ThreadMessage({
               {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
             </button>
           )}
-          {m.kind === 'result' && m.session && (
+          {m.kind === 'result' && m.session && m.session !== a.chat_session && (
             <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary pointer-coarse:min-h-10" onClick={() => onReply(m)} data-testid="agent-reply">
               <Reply className="size-3" /> {t('agents.conv.reply')}
             </button>
@@ -505,6 +556,7 @@ type AgentComposerApi = { quote: (text: string, from: string | null) => void }
 function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
   const run = useRunAgent()
+  const fresh = useNewAgentChat()
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
@@ -635,6 +687,20 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
           </>
         )}
       </div>
+      {a.chat && a.enabled && !replyTo && (
+        <div className="mx-auto mt-1 flex max-w-3xl items-center justify-end gap-2 px-1 text-[11px] text-muted-foreground" data-testid="agent-chat-bar">
+          {a.chat_session ? (
+            <>
+              <span>{t('agents.chat.goesOn')}</span>
+              <button type="button" onClick={() => fresh.mutate({ path: a.path })} disabled={fresh.isPending} className="inline-flex items-center gap-1 rounded text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-new-chat">
+                <MessageSquarePlus className="size-3" /> {t('agents.chat.new')}
+              </button>
+            </>
+          ) : (
+            <span>{t('agents.chat.next')}</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

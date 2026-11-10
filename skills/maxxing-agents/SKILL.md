@@ -115,11 +115,18 @@ another `source` than the ones its own feed triggers watch: from its own turn, `
 source (exit 2).
 
 ## Sessions of an agent (how a conversation works)
-- Every start is a **new session** in the agent folder, except a **reply**: `POST /api/agents/<p>/<t>/<a>/run
-  {text, reply_to: <thread message id>}` (the Reply button, or a Telegram reply to one of its results) sends the
-  text to the session that produced that message, which goes on with its whole context.
-- A new message typed by the user (page, Telegram) or handed by another agent gets the agent's **last 3 results**
-  appended as framed context. Schedule and feed runs get nothing: they stay isolated.
+- **The owner's messages are a chat** (`chat: true` in agent.json, the default for new agents; "One conversation"
+  in its Settings -> Limits): what the user types on the agent page or in its Telegram thread goes on in **one
+  session** (kept in the agent's state, `chat`), so it keeps its whole context. A new conversation starts after
+  `limits.chat_idle_h` hours without a message (6; 0 = never), when the last one failed, or on **New conversation**
+  (`POST /api/agents/<p>/<t>/<a>/chat/new`, Telegram `/new` in its thread). The owner's messages never count in
+  `runs_per_hour`. With `chat` off (agents made before it), each message is a new session.
+- Every other start is a **new session** in the agent folder (schedules, webhooks, feed, e-mail, another agent,
+  `maxxing agents run` from a script, a Telegram forward = outside text), except a **reply**: `POST
+  /api/agents/<p>/<t>/<a>/run {text, reply_to: <thread message id>}` (the Reply button, or a Telegram reply to one of
+  its results) sends the text to the session that produced that message, which goes on with its whole context.
+- A new conversation, or a message handed by another agent, gets the agent's **last 3 results** appended as framed
+  context. Schedule and feed runs get nothing: they stay isolated.
 - A turn written directly in one of its sessions (Sessions page) also posts its result in the agent's thread.
 - Its thread: `{{STATE_DIR}}/agents/<p>__<t>__<a>.jsonl` (`run` with `reply_to` when it continued a session,
   `result` with `session` and `cost`).

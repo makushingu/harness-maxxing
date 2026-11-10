@@ -235,7 +235,10 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
         </Section>
 
         <Section id="limits" title={titles.limits} description={t('agents.limits.desc')}>
-          <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} />
+          <SettingRow label={t('agents.chat.setting')} description={t('agents.chat.settingDesc')} htmlFor="ag-chat">
+            <Switch id="ag-chat" checked={!!a.chat} onCheckedChange={(v) => patch.mutate({ path: a.path, chat: v })} data-testid="agent-chat" />
+          </SettingRow>
+          <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} chat={!!a.chat} />
         </Section>
 
         <Section id="claude" title={titles.claude} description={t('agents.settings.sec.claudeDesc')}>
