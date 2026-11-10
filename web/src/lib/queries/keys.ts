@@ -48,6 +48,7 @@ export const qk = {
   secrets: ['secrets'] as const,
   secretFiles: ['secret-files'] as const,
   health: ['health'] as const,
+  healthHistory: (range: string) => ['health-history', range] as const,  // not under ['health']: its invalidations would refetch it
   system: {
     services: ['system', 'services'] as const,
     logs: (unit: string, lines: number) => ['system', 'logs', unit, lines] as const,

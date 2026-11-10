@@ -814,6 +814,10 @@ export type SecretPutBody = { value?: string; note?: string; expose?: boolean; c
 /* ---------------------------------------------------------------- System */
 /** `seen`: marked as seen - it does not count in the sidebar until it changes or for 24 h. */
 export type HealthIssue = { level: 'info' | 'warn' | 'error'; code: string; text: string; id?: string; seen?: boolean }
+/** /api/system/health/history: one sample every 5 min (24h) or averaged by 30 min (7d, with cpu_max). */
+export type HealthPoint = { t: number; cpu: number | null; mem: number | null; disk: number | null; load: number | null; cpu_max?: number | null }
+export type HealthHistory = { range: '24h' | '7d'; step: number; points: HealthPoint[] }
+
 export type Health = {
   ok: boolean
   issues: HealthIssue[]

@@ -1,11 +1,11 @@
 import * as React from 'react'
 import { Play, RefreshCw, RotateCw, Square } from 'lucide-react'
-import { useHealth, useLogs, useServiceAction, useServices, useSettings, useSaveSettings } from '@/lib/queries'
+import { useHealth, useHealthHistory, useLogs, useServiceAction, useServices, useSettings, useSaveSettings } from '@/lib/queries'
 import { fmtRelative } from '@/lib/format'
-import type { ServiceAction } from '@/lib/types'
+import type { HealthPoint, ServiceAction } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { Badge, Button, FormField, Input, Select, Sensitive, Skeleton, Spinner, StatusDot, confirm, toast } from '@/components/ui'
+import { Badge, Button, FormField, Input, Segmented, Select, Sensitive, Skeleton, Spinner, StatusDot, confirm, toast } from '@/components/ui'
 import { HealthSummary } from '@/components/shell/HealthIndicator'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -180,10 +180,107 @@ function AddressCard() {
   )
 }
 
+type HistoryKey = 'cpu' | 'mem' | 'disk'
+
+/** One line chart of a percentage (0-100 %), gaps kept where the server was off; the summary is also its label. */
+function UsageChart({ points, k, name, range, step }: { points: HealthPoint[]; k: HistoryKey; name: string; range: string; step: number }) {
+  const t = useT()
+  const lang = useLang()
+  const W = 600
+  const H = 72
+  const vals = points.map((p) => p[k]).filter((v): v is number => v != null)
+  const now = vals.at(-1)
+  const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+  const peaks = k === 'cpu' ? points.map((p) => p.cpu_max ?? p.cpu).filter((v): v is number => v != null) : vals
+  const peak = peaks.length ? Math.max(...peaks) : null
+  const pct = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '–' : lang === 'en' ? `${Math.round(v)}%` : `${Math.round(v)} %`)
+  const t0 = points[0]?.t ?? 0
+  const span = Math.max((points.at(-1)?.t ?? 0) - t0, step)
+  // a new segment after a gap longer than two steps (the server or Harness was off); a lone point is a dot
+  const segments: string[][] = []
+  let cur: string[] = []
+  points.forEach((p, i) => {
+    const v = p[k]
+    if (v == null || (i > 0 && p.t - points[i - 1].t > 2 * step)) {
+      if (cur.length) segments.push(cur)
+      cur = []
+    }
+    if (v != null) cur.push(`${(((p.t - t0) / span) * W).toFixed(1)},${(H - 2 - (Math.min(v, 100) / 100) * (H - 4)).toFixed(1)}`)
+  })
+  if (cur.length) segments.push(cur)
+  const label = t('system.history.chart', { name, range, now: pct(now), avg: pct(avg), max: pct(peak) })
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+        <span className="font-medium">{name}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">{t('system.history.stats', { now: pct(now), avg: pct(avg), max: pct(peak) })}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label} className="h-[72px] w-full overflow-visible">
+        {[0, 50, 100].map((g) => (
+          <line key={g} x1={0} x2={W} y1={H - 2 - (g / 100) * (H - 4)} y2={H - 2 - (g / 100) * (H - 4)} className="stroke-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        ))}
+        {segments.map((s, i) =>
+          s.length > 1 ? (
+            <polyline key={i} points={s.join(' ')} fill="none" className="stroke-primary" strokeWidth={1.75} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          ) : (
+            // zero-length line with round caps: a dot that keeps its size whatever the chart's stretch
+            <line key={i} x1={s[0].split(',')[0]} y1={s[0].split(',')[1]} x2={s[0].split(',')[0]} y2={s[0].split(',')[1]} className="stroke-primary" strokeWidth={4} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          ),
+        )}
+      </svg>
+    </div>
+  )
+}
+
+function HistoryCard() {
+  const t = useT()
+  const lang = useLang()
+  const [range, setRange] = React.useState<'24h' | '7d'>('24h')
+  const { data, isLoading } = useHealthHistory(range)
+  const points = data?.points ?? []
+  const time = (s: number) => new Date(s * 1000).toLocaleString(lang, range === '24h' ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', hour: '2-digit' })
+  return (
+    <SettingsCard
+      title={t('system.history')}
+      description={t('system.historyDesc')}
+      actions={
+        <Segmented<'24h' | '7d'>
+          size="sm"
+          value={range}
+          onChange={setRange}
+          aria-label={t('system.history.range')}
+          options={[
+            { value: '24h', label: t('system.history.24h') },
+            { value: '7d', label: t('system.history.7d') },
+          ]}
+        />
+      }
+    >
+      {isLoading ? (
+        <Skeleton className="h-48" />
+      ) : points.length < 2 ? (
+        <p className="text-sm text-muted-foreground">{t('system.history.empty')}</p>
+      ) : (
+        <div className="grid gap-5">
+          {(['cpu', 'mem', 'disk'] as const).map((k) => (
+            <UsageChart key={k} points={points} k={k} step={data!.step} range={t(`system.history.${range}`)}
+              name={t(k === 'cpu' ? 'health.cpu' : k === 'mem' ? 'health.memory' : 'health.disk')} />
+          ))}
+          <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+            <span>{time(points[0].t)}</span>
+            <span>{time(points.at(-1)!.t)}</span>
+          </div>
+        </div>
+      )}
+    </SettingsCard>
+  )
+}
+
 export function SystemSection() {
   return (
     <SectionStack>
       <HealthCard />
+      <HistoryCard />
       <ServicesCard />
       <AddressCard />
       <LogsCard />

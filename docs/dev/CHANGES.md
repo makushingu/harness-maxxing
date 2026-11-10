@@ -7,6 +7,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.139 - 2026-11-10
 
+- Usage history (`health.record_history` / `health.history`): `_alerts_pass` (every 30 s, in a thread, the only writer)
+  adds a sample from the cached `collect()` at most every 285 s to `STATE/health-history.json`
+  `{"v":2, "points":[[t, cpu, mem, disk, load] | [t, cpu, mem, disk, load, cpu_max, n]]}`: samples for the last 24 h,
+  older ones folded by half hour (weighted by `n`), 7 days kept, compact JSON (`config.write_json(..., indent=None)`,
+  new parameter): ~20 KB rewritten every 5 min. A clock set back keeps the rows (up to a day ahead) and samples at
+  once; a damaged file starts again. `GET /api/system/health/history?range=24h|7d` (`400 bad_range`):
+  `{range, step, points:[{t, cpu, mem, disk, load, cpu_max?}]}`. Web: `HistoryCard` in Settings -> System (SVG
+  polylines, a new segment after a gap > 2 steps, a lone sample as a dot), query `["health-history", range]`
+  refetched every 5 min.
 - Fixes before release: `agent_guard._manages` reads the target with `cmd_agents._configure`'s parser
   (`parse_known_args`; `--name writer other` targets `other`) and `cmd_agents._handler` refuses a manager command of
   `AGENT_OWNER_ONLY` on another agent; `silent` / `loud` joined `AGENT_OWNER_ONLY` (and `AGENT_MANAGER`);

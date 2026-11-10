@@ -192,7 +192,8 @@ _UMASK = os.umask(0o022)
 os.umask(_UMASK)
 
 
-def _atomic_write(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None) -> None:
+def _atomic_write(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None,
+                  *, indent: int | None = 2) -> None:
     """Exclusive temp file (mkstemp: no predictable name to hijack), right permissions before any byte
     is written (`mode`, else the existing file's, else the umask default), then rename. `before_replace` runs right
     before the rename, once the bytes are on disk: raising there leaves the file as it was."""
@@ -209,7 +210,7 @@ def _atomic_write(path: Path, data: Any, mode: int | None = None, before_replace
     try:
         os.fchmod(fd, mode)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            json.dump(data, f, indent=indent, ensure_ascii=False, separators=None if indent else (",", ":"))
             f.flush()
             os.fsync(f.fileno())                        # on disk before the rename: a power cut never leaves it empty
         if before_replace is not None:
@@ -245,17 +246,24 @@ def tighten_state() -> int:
     return n
 
 
-def write_json(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None) -> None:
-    """Atomic JSON write usable by every module (sessions, crons, tasks…); `before_replace`: see _atomic_write."""
+def _compact(indent: int | None) -> dict:
+    """The indent keyword only when it is not the default: every other call stays exactly as it was."""
+    return {} if indent == 2 else {"indent": indent}
+
+
+def write_json(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None,
+               indent: int | None = 2) -> None:
+    """Atomic JSON write usable by every module (sessions, crons, tasks…); `before_replace`: see _atomic_write;
+    `indent=None`: compact (a file rewritten often)."""
     if Path(path) in (config_path(), secrets_path()):
         with _lock:
             _keep_damaged(Path(path))
             try:
-                _atomic_write(Path(path), data, mode, before_replace)
+                _atomic_write(Path(path), data, mode, before_replace, **_compact(indent))
             finally:
                 _forget_secrets()
         return
-    _atomic_write(Path(path), data, mode, before_replace)    # unique temp file + rename: no lock (never the machine-wide one)
+    _atomic_write(Path(path), data, mode, before_replace, **_compact(indent))    # unique temp file + rename: no lock (never the machine-wide one)
 
 
 def read_json(path: Path, default: Any = None) -> Any:

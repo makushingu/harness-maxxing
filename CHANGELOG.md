@@ -39,6 +39,10 @@ New:
   **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
   (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
   (the model picker in its box).
+- **Usage history**: Settings -> System shows how busy the server was - CPU, memory and disk over the last 24 hours
+  or 7 days, with the current, average and peak value of each. A sample is taken every 5 minutes and kept 7 days
+  (the 7-day view averages each half hour and keeps its CPU peak), so a slow evening or a disk filling up shows at
+  a glance.
 
 Fixed:
 - **Agents**: an agent's conversation changes that agent only, whatever the order of its options; a run that

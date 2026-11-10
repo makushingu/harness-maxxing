@@ -372,6 +372,7 @@ Telegram: voice notes and video notes in a session thread (not audio files: atta
 
 ## System
 | GET | `/api/system/health` | – | `{ok, issues:[{level, code, text}], cpu_pct, load, mem:{total,avail}, disk:{total,free,pct}, uptime_s, claude_auth, claude_auth_error, claude_checked_at, backup_age_h, failed_logins_1h, at}` (each issue also has `id` and `seen`; issue `claude_auth`: "Claude is not connected" or "Claude sign-in expired…") (cached 30 s, `?force=1`) |
+| GET | `/api/system/health/history?range=24h\|7d` | – | `{range, step, points:[{t, cpu, mem, disk, load}]}` (percent; `load` = 1-min load average): 24h = the samples, one every 5 min; 7d = averaged by 30 min, each point with `cpu_max` too. Recorded by the feed's alerts pass (`health.record_history`, from the cached health) in `<state>/health-history.json`, 7 days kept · `400 bad_range` |
 | POST | `/api/system/health/seen` | `{id, seen=true}` | the health above, fresh - marks a current issue as seen (or not): it stops counting in the sidebar dot until its text changes (numbers left out of the `id`) or for 24 h; marks in `<state>/health-seen.json` · `404 not_found` |
 | GET | `/api/system/services` | – | `[{name, label, active:bool, enabled:bool, since:float\|null, state}]` (claude-maxxing, caddy, tailscaled, cron + config `services_extra`; units not installed are omitted; one `systemctl show` call, cached 10 s, dropped by a service action) |
 | POST | `/api/system/services/{name}/{start\|stop\|restart}` | – | `{ok}` (self restart deferred 2 s) |

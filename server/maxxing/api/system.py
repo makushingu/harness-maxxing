@@ -33,6 +33,14 @@ async def get_health(force: bool = False):
     return await asyncio.to_thread(health.collect, force)
 
 
+@router.get("/system/health/history")
+async def get_health_history(range: str = "24h"):  # noqa: A002 - the query parameter's name
+    """Usage samples (CPU, memory, disk, load): 24h = every 5 min, 7d = averaged by half hour."""
+    if range not in health.HISTORY_RANGES:
+        raise _err(400, "bad_range", "range must be 24h or 7d")
+    return await asyncio.to_thread(health.history, range)
+
+
 class SeenBody(BaseModel):
     id: str
     seen: bool = True

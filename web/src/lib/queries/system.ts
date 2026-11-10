@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Changelog, Health, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
+import type { Changelog, Health, HealthHistory, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -11,6 +11,14 @@ export function useHealth(enabled = true) {
     ...healthQuery(),
     refetchInterval: 60_000,
     enabled,
+  })
+}
+/** Usage history of Settings -> System (a new sample every 5 min on the server). */
+export function useHealthHistory(range: '24h' | '7d') {
+  return useQuery({
+    queryKey: qk.healthHistory(range),
+    queryFn: () => api.get<HealthHistory>('/api/system/health/history', { range }),
+    refetchInterval: 300_000,
   })
 }
 /** Mark a health issue as seen (or not): the answer is the fresh health. */

@@ -152,6 +152,10 @@ def _alerts_pass() -> None:
         health.sync_feed()
     except Exception:  # noqa: BLE001
         log.exception("feed: health pass failed")
+    try:
+        health.record_history()                     # one sample every 5 min (Settings -> System, usage history)
+    except Exception:  # noqa: BLE001
+        log.exception("feed: usage history failed")
     if config.load_config().get("agents_page"):
         try:
             agents.check_alerts()

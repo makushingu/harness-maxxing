@@ -597,3 +597,99 @@ try:                                                          # baseline at impo
     cpu_pct()
 except Exception:  # noqa: BLE001
     pass
+
+
+# Usage history (Settings -> System) in <state>/health-history.json, written by one process (the server's alerts pass,
+# every 30 s, off the event loop) from the cached collect(): no extra system read. The last 24 h keep one sample every
+# HISTORY_STEP_S; older ones are folded into half-hour rows (HISTORY_ROLLUP_S) as the 7-day view shows them, kept
+# HISTORY_KEEP_S. Compact rows, compact JSON: ~25 KB rewritten every 5 min (an SD card or a small VPS disk is spared).
+HISTORY_STEP_S = 300
+HISTORY_ROLLUP_S = 1800
+HISTORY_RAW_S = 86400
+HISTORY_KEEP_S = 7 * 86400
+HISTORY_RANGES = {"24h": (HISTORY_RAW_S, HISTORY_STEP_S), "7d": (HISTORY_KEEP_S, HISTORY_ROLLUP_S)}  # (span, step)
+_FIELDS = ("cpu", "mem", "disk", "load")
+# a row: [t, cpu, mem, disk, load] (one sample) or [t, cpu, mem, disk, load, cpu_max, n] (half hour of n samples)
+
+_history_last: tuple[Path, float] | None = None  # (file, time) of the last sample: skips reading the file every 30 s
+
+
+def history_path() -> Path:
+    return config.STATE / "health-history.json"
+
+
+def _num(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _read_history() -> list[list]:
+    """The rows, sorted by time; a damaged file or row is dropped (the history starts again)."""
+    try:
+        data = json.loads(history_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rows = data.get("points") if isinstance(data, dict) and data.get("v") == 2 else None
+    if not isinstance(rows, list):
+        return []
+    ok = [r for r in rows if isinstance(r, list) and len(r) in (5, 7) and _num(r[0]) is not None]
+    return sorted(ok, key=lambda r: r[0])
+
+
+def _sample(h: dict) -> list:
+    mem, dsk = h.get("mem") or {}, h.get("disk") or {}
+    used = (mem.get("total") or 0) - (mem.get("avail") or 0)
+    pct = lambda v: round(float(v), 1) if _num(v) is not None else None  # noqa: E731
+    return [pct(h.get("cpu_pct")), pct(used / mem["total"] * 100) if mem.get("total") else None,
+            pct(dsk.get("pct")), pct((h.get("load") or [None])[0])]
+
+
+def _fold(rows: list[list]) -> list[list]:
+    """Half-hour rows from samples and older half-hour rows (weighted by their sample count)."""
+    groups: dict[int, list[list]] = {}
+    for r in rows:
+        groups.setdefault(int(r[0] // HISTORY_ROLLUP_S), []).append(r)
+    out = []
+    for g, rs in sorted(groups.items()):
+        weight = [r[6] if len(r) == 7 and _num(r[6]) else 1 for r in rs]
+        vals = []
+        for i in range(1, 5):
+            pairs = [(r[i], w) for r, w in zip(rs, weight) if _num(r[i]) is not None]
+            vals.append(round(sum(v * w for v, w in pairs) / sum(w for _, w in pairs), 1) if pairs else None)
+        peaks = [_num(r[5] if len(r) == 7 else r[1]) for r in rs]
+        peak = max((p for p in peaks if p is not None), default=None)
+        out.append([g * HISTORY_ROLLUP_S, *vals, peak, sum(weight)])
+    return out
+
+
+def record_history(now: float | None = None) -> bool:
+    """Adds one sample when the last is HISTORY_STEP_S old (a few seconds early is fine: the pass runs every 30 s)."""
+    global _history_last
+    now = time.time() if now is None else now
+    # -60: a clock set back by more than a minute samples again instead of waiting until it catches up
+    if _history_last and -60 <= now - _history_last[1] < HISTORY_STEP_S - 15 and _history_last[0] == history_path():
+        return False                                            # too early: the file is not even read
+    rows = _read_history()
+    if rows and -60 <= now - rows[-1][0] < HISTORY_STEP_S - 15:
+        _history_last = (history_path(), rows[-1][0])
+        return False
+    # kept: the last 7 days, and rows ahead of a clock set back (up to a day) instead of losing them
+    rows = [r for r in rows if -HISTORY_RAW_S <= now - r[0] <= HISTORY_KEEP_S] + [[round(now), *_sample(collect())]]
+    rows.sort(key=lambda r: r[0])
+    cut = (now - HISTORY_RAW_S) // HISTORY_ROLLUP_S * HISTORY_ROLLUP_S      # whole half hours only are folded
+    rows = _fold([r for r in rows if r[0] < cut]) + [r for r in rows if r[0] >= cut]
+    config.write_json(history_path(), {"v": 2, "points": rows}, indent=None)
+    _history_last = (history_path(), round(now))
+    return True
+
+
+def history(span: str = "24h", now: float | None = None) -> dict:
+    """GET /api/system/health/history: the samples of the last 24 h, or 7 days by half hour (with the CPU peak)."""
+    secs, step = HISTORY_RANGES.get(span, HISTORY_RANGES["24h"])
+    now = time.time() if now is None else now
+    rows = [r for r in _read_history() if 0 <= now - r[0] <= secs]
+    if step > HISTORY_STEP_S:
+        rows = _fold(rows)
+        pts = [{"t": int(r[0]), **dict(zip(_FIELDS, r[1:5])), "cpu_max": r[5]} for r in rows]
+    else:
+        pts = [{"t": int(r[0]), **dict(zip(_FIELDS, r[1:5]))} for r in rows if len(r) == 5]
+    return {"range": span if span in HISTORY_RANGES else "24h", "step": step, "points": pts}
