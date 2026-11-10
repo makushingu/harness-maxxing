@@ -385,3 +385,21 @@ def test_an_odd_mx_priority_does_not_hide_the_other_dns_facts():
         di._query = old
     assert "error" not in facts and facts["mx"] == [{"prio": 0, "host": "mx.ex.net"}]
     assert facts["spf"] == ["v=spf1 -all"] and facts["dmarc"] == ["v=DMARC1; p=reject"]
+
+
+def test_dmarc_parents_stop_at_the_registrable_domain_and_spf_reads_stop_at_the_deadline(monkeypatch):
+    import maxxing.infra.dnsinfo as di
+    asked = []
+    monkeypatch.setattr(di, "_query", lambda c, name, rtype: asked.append(name) or [])
+    mailinfo.dns_facts("shop.example.co.uk")
+    assert "_dmarc.example.co.uk" in asked and "_dmarc.co.uk" not in asked and "_dmarc.uk" not in asked
+    asked.clear()
+    mailinfo.dns_facts(".".join(["a"] * 50) + ".example.com")
+    assert len([n for n in asked if n.startswith("_dmarc.")]) <= 8 and len(asked) <= 20
+    # past the deadline no new SPF target is read
+    zone = {("ex.com", "TXT"): txt(["v=spf1 include:a.net include:b.net -all"])}
+    monkeypatch.setattr(di, "_query", lambda c, name, rtype: asked.append(name) or zone.get((name, rtype)) or [])
+    monkeypatch.setattr(mailinfo, "DNS_FACTS_S", -1)
+    asked.clear()
+    mailinfo.dns_facts("ex.com")
+    assert "a.net" not in asked and "b.net" not in asked

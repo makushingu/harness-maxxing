@@ -32,6 +32,7 @@ DNS_TTL_S = 3600
 ZONE_WORKERS = 4                    # Cloudflare zone calls at once (rate limit: 1200 calls / 5 min)
 DOMAIN_WORKERS = 6
 MAX_DOMAINS = 60
+DNS_FACTS_S = 20.0                  # a whole dns_facts(): past it no new SPF target or DMARC parent is read
 SPF_MAX_QUERIES = 12                # DNS queries spent following include: / redirect= of one domain
 DKIM_SELECTORS = ("google", "selector1", "selector2", "default", "mail", "k1", "cf2024-1", "dkim")
 
@@ -264,7 +265,7 @@ def _spf_walk(c: httpx.Client, record: str, st: dict, path: tuple[str, ...], dep
             return 0, None
         if target in st["seen"]:            # read once, but receivers count it on every pass (RFC 7208 4.6.4)
             return st["seen"][target]
-        if depth >= 4 or st["budget"] <= 0:
+        if depth >= 4 or st["budget"] <= 0 or time.time() > st.get("until", float("inf")):
             return 0, None
         st["seen"][target] = (0, None)      # while it is being read
         st["budget"] -= 1
@@ -296,7 +297,9 @@ def _spf_walk(c: httpx.Client, record: str, st: dict, path: tuple[str, ...], dep
 def dns_facts(domain: str) -> dict:
     """{mx: [{prio, host}], spf: [records], spf_lookups, spf_loop, spf_redirect, spf_redirect_all, dmarc: [records],
     dmarc_parent, dkim: [selectors found], checked} or {error, checked}."""
+    from .build import registrable
     out: dict[str, Any] = {"checked": int(time.time())}
+    until = time.time() + DNS_FACTS_S
     try:
         with httpx.Client(timeout=8) as c:
             mx = []
@@ -308,22 +311,27 @@ def dns_facts(domain: str) -> dict:
             out["spf"] = [t for t in _txt(c, domain) if t.lower().startswith("v=spf1")]
             out["spf_lookups"] = None
             if len(out["spf"]) == 1:
-                st: dict[str, Any] = {"budget": SPF_MAX_QUERIES, "seen": {}}
+                st: dict[str, Any] = {"budget": SPF_MAX_QUERIES, "seen": {}, "until": until}
                 out["spf_lookups"], qual = _spf_walk(c, out["spf"][0], st, (domain,))
                 out["spf_loop"] = st.get("loop")                # include:/redirect= target already on the chain
                 if st.get("redirect"):          # the `all` that applies comes from the redirect= target
                     out["spf_redirect"], out["spf_redirect_all"] = st["redirect"], qual
             out["dmarc"] = [t for t in _txt(c, f"_dmarc.{domain}") if t.lower().startswith("v=dmarc1")]
             if not out["dmarc"]:        # a subdomain without its own record: receivers apply the parent's (RFC 7489)
-                labels = domain.split(".")
-                for i in range(1, len(labels) - 1):
-                    parent = ".".join(labels[i:])
+                labels, org = domain.split("."), registrable(domain)
+                parents = [".".join(labels[i:]) for i in range(1, len(labels) - 1)]
+                parents = [p for p in parents if p == org or p.endswith("." + org)][-7:]   # never a public suffix
+                for parent in parents:
+                    if time.time() > until:
+                        break
                     rec = [t for t in _txt(c, f"_dmarc.{parent}") if t.lower().startswith("v=dmarc1")]
                     if rec:
                         out["dmarc_parent"] = {"domain": parent, "records": rec}
                         break
-            out["dkim"] = [s for s in DKIM_SELECTORS
-                           if any(re.search(r"(^|;)p=[^;]+", t.replace(" ", "")) for t in _txt(c, f"{s}._domainkey.{domain}"))]   # "p=" alone: a revoked key
+            with ThreadPoolExecutor(max_workers=len(DKIM_SELECTORS)) as ex:          # at once, not 8 x 8 s
+                keys = list(ex.map(lambda s: _txt(c, f"{s}._domainkey.{domain}"), DKIM_SELECTORS))
+            out["dkim"] = [s for s, txts in zip(DKIM_SELECTORS, keys)
+                           if any(re.search(r"(^|;)p=[^;]+", t.replace(" ", "")) for t in txts)]   # "p=" alone: a revoked key
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
         return {"error": str(e)[:120] or type(e).__name__, "checked": out["checked"]}
     return out
