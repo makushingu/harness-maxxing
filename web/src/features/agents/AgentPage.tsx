@@ -1095,7 +1095,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
 
       {/* protection and budget: what keeps it safe, in plain words; a click opens the setting */}
       <PanelSection title={t('agents.panel.guards')}>
-        <div className="grid gap-1.5 text-xs">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5 text-xs">
           <div className="flex items-center gap-2">
             <span className="flex-1">{lim.usd_per_day > 0 ? t('agents.panel.budget') : t('agents.panel.noBudget')}</span>
             <span className="text-muted-foreground tabular-nums">
