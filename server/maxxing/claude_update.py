@@ -291,6 +291,11 @@ def runs_here() -> bool:
     flag = os.environ.get("MAXXING_CLAUDE_UPDATE", "")
     if flag in ("0", "1"):
         return flag == "1"
+    return installed_server()
+
+
+def installed_server() -> bool:
+    """The installed server (not a dev server or a test copy of the state on the same machine)."""
     if os.path.realpath(config.STATE) == os.path.realpath(DEFAULT_STATE):
         return True
     try:                                               # installed with another STATE_DIR: the service itself

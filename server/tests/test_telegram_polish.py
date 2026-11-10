@@ -108,7 +108,7 @@ def test_resolve_model():
     models = gateway.FALLBACK_MODELS
     assert gateway.resolve_model("opus", models) == "claude-opus-5-5"
     assert gateway.resolve_model("Sonnet 5.5", models) == "claude-sonnet-5-5"
-    assert gateway.resolve_model("claude-haiku-4-5-20251001", models) == "claude-haiku-4-5-20251001"
+    assert gateway.resolve_model("claude-haiku-5-5", models) == "claude-haiku-5-5"
     assert gateway.resolve_model("default", models) == ""
     assert gateway.resolve_model("gpt-5", models) is None
     assert gateway.resolve_model("5", models) is None

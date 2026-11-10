@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import bus, config, voice, workspace
+from .. import bus, claude_models, config, voice, workspace
 from . import clip, normalize, spawn, store, titles, voicejobs, wake
 from .runner import SUMMARY_PROMPT  # noqa: F401  (also used by the runner's automatic compaction)
 
@@ -30,7 +30,6 @@ BACK_CHUNK = 256 * 1024               # backward reading step
 BACK_SCAN_MAX = 64 * 1024 * 1024      # max bytes scanned by one read_back call (then more_before)
 TASK_START_SCAN_MAX = 32 * 1024 * 1024  # how far back read_back looks for the task_started of a task in its page
 STOP_WAIT_S = 10.0
-KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"]
 _MODEL_RE = re.compile(rb'"model"\s*:\s*"(claude-[a-z0-9.-]+)"')
 # a model id given by a client: passed to `claude --model`, so no option, no NUL, no control character
 _MODEL_ID = re.compile(r"[A-Za-z0-9._:@/\[\]][A-Za-z0-9._:@/\[\]-]{0,99}")
@@ -1046,12 +1045,18 @@ def _label(mid: str) -> str:
 _models_seen: dict[str, tuple[int, int, set[str]]] = {}    # session -> (log inode, bytes scanned, models seen)
 
 
+def forget_models_cache() -> None:
+    global _models_cache
+    _models_cache = (0.0, [])
+
+
 def models() -> list[dict]:
-    """Known model ids + ids seen in session logs (cached 60 s; each pass reads only what was appended)."""
+    """The newest model of each family (claude_models, read from Anthropic once a day) + ids seen in session logs
+    (cached 60 s; each pass reads only what was appended)."""
     global _models_cache
     if time.time() - _models_cache[0] < 60:
         return _models_cache[1]
-    seen = set(KNOWN_MODELS)
+    seen = set(claude_models.latest())
     windows: dict = {}
     for sid in store.list_ids():
         try:
@@ -1072,7 +1077,7 @@ def models() -> list[dict]:
             pass
     if windows:
         store.record_windows({"modelUsage": windows})     # windows of models seen before this field existed
-    fam = {"opus": 0, "sonnet": 1, "haiku": 2}
+    fam = {"opus": 0, "sonnet": 1, "haiku": 2, "fable": 3}
 
     def key(mid: str) -> tuple:
         parts = mid.split("-")
