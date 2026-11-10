@@ -105,6 +105,9 @@ def test_emoji_data_is_sent_compressed_without_a_proxy(spa):
     assert r.status_code == 200 and r.headers["content-encoding"] == "gzip" and r.content == data
     assert int(r.headers["content-length"]) < len(data) // 10 and r.headers["etag"]
     assert c.head("/emojibase/fr/data.json", headers={"Accept-Encoding": "gzip"}).headers["etag"] == r.headers["etag"]
+    # revalidation with the ETag: a 304, not the whole file again
+    r304 = c.get("/emojibase/fr/data.json", headers={"Accept-Encoding": "gzip", "If-None-Match": r.headers["etag"]})
+    assert r304.status_code == 304 and not r304.content and r304.headers["etag"] == r.headers["etag"]
     # behind the proxy (it compresses), or a client without gzip: the file as is
     for h in ({"Accept-Encoding": "gzip", "X-Forwarded-For": "1.2.3.4"}, {"Accept-Encoding": "identity"}):
         r = c.get("/emojibase/fr/data.json", headers=h)
