@@ -1,8 +1,11 @@
-// One agent (/agents/<project>/<topic>/<name>) as a conversation, like a contact in a chat app:
-// - the thread fills the page: what started each run (an event, a schedule, your message), the agent's results
-//   (long ones folded), a "working…" bubble per running session, a callout when it waits for your OK;
-// - the box at the bottom writes to it: a new message starts a new session (the server adds its last results as
-//   context), "Reply" on a result goes on with that result's session (same context, same session);
+// One agent (/agents/<project>/<topic>/<name>), two tabs:
+// - Conversation: the owner's conversation with it IS a session (the same column as the Sessions page: messages as
+//   they come, tools, model, Stop, approvals); in it the agent is its own manager (role, memory, schedules; a safety
+//   setting waits for the owner's OK). No conversation open (a new one, 6 h idle): a box starts one (model picked
+//   there), with a link to read the last one again. An automation running now shows as a bar above it;
+// - Runs (?tab=runs): what its automations did (schedules, webhooks, e-mails, other agents), each in a session of its
+//   own with its own rules: what started it, a "working…" bubble with what it writes as it comes, its result, a
+//   callout when it waits for your OK; a run opens in place (RunView);
 // - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
 //   webhook address, what came in, test), guards, memory, advanced settings (a sheet), "Edit with Claude" (a session
 //   of its topic configures it: an agent cannot change its own role or settings).
@@ -10,7 +13,7 @@
 import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, Info, KeyRound, Lock, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, ExternalLink, History, Info, KeyRound, Lock, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, StickyNote, UsersRound, X, XCircle, Zap,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -22,8 +25,11 @@ import { fmtDate, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCompact, useMediaQuery } from '@/stores/media'
 import {
-  Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
+  Badge, Button, EmptyState, Segmented, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
+import { SessionColumn } from '@/pages/sessions/Column'
+import type { Col } from '@/pages/sessions/store'
+import { ModelPicker } from '@/pages/sessions/Widgets'
 import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
@@ -34,7 +40,6 @@ import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { ThreadApprovalBody, useThreadApprovals } from './approvals'
 import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
-import { QuotePill } from '@/pages/sessions/Quote'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
@@ -170,7 +175,7 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
       />
       <div className="flex min-h-0 flex-1">
         {/* keyed: a reply started on one agent never goes with a message to another */}
-        <Conversation key={a.path} agent={a} />
+        <AgentCenter key={a.path} agent={a} />
         {wide && (
           <aside className="w-[360px] shrink-0 overflow-y-auto border-l" data-testid="agent-profile">
             <Profile agent={a} />
@@ -244,30 +249,161 @@ export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>
   return m.source || tr || t('agents.from.manual')
 }
 
-function Conversation({ agent: a }: { agent: AgentDetail }) {
+/** The sessions of the owner's conversations (now, the last one, and every session an own message started or went
+ *  on in): the Conversation tab; every other session of the agent is a run of an automation. */
+function ownSessions(a: AgentDetail, msgs: AgentMessage[]): Set<string> {
+  const own = new Set<string>()
+  if (a.chat_session) own.add(a.chat_session)
+  if (a.last_chat_session) own.add(a.last_chat_session)
+  for (const m of msgs) if (m.kind === 'run' && m.session && (m.owner || isMine(m))) own.add(m.session)
+  return own
+}
+
+type Tab = 'chat' | 'runs'
+
+function AgentCenter({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
-  const { data, isLoading, error } = useAgentThread(a.path)
-  const { data: crons } = useCrons()
-  const seen = useAgentSeen()
-  const box = React.useRef<HTMLDivElement>(null)
-  const composer = React.useRef<AgentComposerApi>(null)
-  const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
+  const [search, setSearch] = useSearchParams()
+  const tab: Tab = search.get('tab') === 'runs' ? 'runs' : 'chat'
+  const setTab = (v: Tab) =>
+    setSearch(
+      (p) => {
+        const n = new URLSearchParams(p)
+        if (v === 'runs') n.set('tab', 'runs')
+        else n.delete('tab')
+        return n
+      },
+      { replace: true },
+    )
+  const { data } = useAgentThread(a.path)
   const msgs = React.useMemo(() => data?.messages || [], [data])
-  const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
+  const own = React.useMemo(() => ownSessions(a, msgs), [a, msgs])
+  const autos = (a.running_sessions || []).filter((s) => !own.has(s.id))
+  const fresh = useNewAgentChat()
+  // Reading the page = its results are read (again when a new one comes in while it is open).
+  const seen = useAgentSeen()
+  const unread = a.thread_unread || 0
+  const seenMutate = seen.mutate
+  React.useEffect(() => {
+    if (unread > 0) seenMutate({ path: a.path })
+  }, [unread, a.path, seenMutate])
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 md:px-4" data-testid="agent-tabs">
+        <Segmented<Tab>
+          size="sm"
+          value={tab}
+          onChange={setTab}
+          aria-label={a.display_name}
+          options={[
+            { value: 'chat', label: t('agents.tab.chat'), icon: <MessageSquare /> },
+            {
+              value: 'runs',
+              icon: <Zap />,
+              label: (
+                <span className="inline-flex items-center gap-1.5" data-testid="agent-tab-runs">
+                  {t('agents.tab.runs')}
+                  {autos.length > 0 && <StatusDot tone="running" pulse label={t('agents.runningNow')} className="size-1.5" />}
+                </span>
+              ),
+            },
+          ]}
+        />
+        <span className="flex-1" />
+        {tab === 'chat' && a.chat_session && (
+          <Tooltip content={t('agents.chat.newHint')}>
+            <Button variant="ghost" size="sm" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">
+              <MessageSquarePlus /> <span className="max-sm:sr-only">{t('agents.chat.new')}</span>
+            </Button>
+          </Tooltip>
+        )}
+      </div>
+      {tab === 'chat' && autos.map((s) => <AutoRunBar key={s.id} agent={a} sid={s.id} msgs={msgs} waiting={(a.waiting || 0) > 0} />)}
+      {tab === 'chat' ? <ChatPane agent={a} /> : <Runs agent={a} msgs={msgs} own={own} />}
+    </div>
+  )
+}
+
+/** An automation running now, above the conversation: what started it, what it does, a link to watch it. */
+function AutoRunBar({ agent: a, sid, msgs, waiting }: { agent: AgentDetail; sid: string; msgs: AgentMessage[]; waiting: boolean }) {
+  const t = useT()
+  const { data: crons } = useCrons()
+  const live = useLiveTurn(sid)
+  const start = msgs.find((m) => m.kind === 'run' && m.session === sid)
+  const now = live.tool || firstLine(live.text)
+  return (
+    <Link
+      to={agentRunRoute(a.path, sid)}
+      className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted md:px-4 pointer-coarse:min-h-10"
+      data-testid="agent-auto-running"
+    >
+      {waiting ? <ShieldCheck className="size-3.5 shrink-0 text-warning" /> : <StatusDot tone="running" pulse className="size-2 shrink-0" />}
+      <span className="shrink-0 font-medium">{start ? t('agents.thread.started', { from: triggerLabel(t, start, crons?.jobs || []) }) : t('agents.auto.running')}</span>
+      {now && (
+        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+          <Sensitive>{now}</Sensitive>
+        </span>
+      )}
+      <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-primary">
+        <PlayCircle className="size-3" /> {t('agents.conv.follow')}
+      </span>
+    </Link>
+  )
+}
+
+/** The owner's conversation: the session itself (same column as Sessions), or a box that starts one. */
+function ChatPane({ agent: a }: { agent: AgentDetail }) {
+  const sid = a.chat_session || ''
+  const col = React.useMemo<Col>(() => ({ key: `chat:${sid}`, kind: 'session', id: sid }), [sid])
+  if (!sid) return <StartChat agent={a} />
+  return (
+    // the page header above already leaves room for the notch
+    <div className="flex min-h-0 flex-1 flex-col" style={{ '--safe-top': '0px' } as React.CSSProperties} data-testid="agent-chat-session">
+      <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" agentRun />
+    </div>
+  )
+}
+
+function StartChat({ agent: a }: { agent: AgentDetail }) {
+  const t = useT()
+  return (
+    <div className="flex min-w-0 flex-1 flex-col" data-testid="agent-start-chat">
+      <div className="grid min-h-0 flex-1 content-center overflow-y-auto px-4 py-6">
+        <div className="mx-auto grid max-w-md justify-items-center gap-3 text-center">
+          <AgentAvatarIcon avatar={a.avatar} size={56} />
+          <p className="text-base font-medium">
+            <Sensitive length={8}>{t('agents.chat.startTitle', { name: a.display_name })}</Sensitive>
+          </p>
+          <p className="text-sm text-muted-foreground">{t('agents.chat.startDesc')}</p>
+          {a.last_chat_session && (
+            <Link to={agentRunRoute(a.path, a.last_chat_session)} className="inline-flex items-center gap-1 text-sm text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-last-chat">
+              <History className="size-3.5" /> {t('agents.chat.last')}
+            </Link>
+          )}
+        </div>
+      </div>
+      <Composer agent={a} replyTo={null} onCancelReply={() => {}} />
+    </div>
+  )
+}
+
+/** The runs of its automations (the owner's own conversations left out: they are the Conversation tab). */
+function Runs({ agent: a, msgs: all, own }: { agent: AgentDetail; msgs: AgentMessage[]; own: Set<string> }) {
+  const t = useT()
+  const { isLoading, error } = useAgentThread(a.path)
+  const { data: crons } = useCrons()
+  const box = React.useRef<HTMLDivElement>(null)
+  const msgs = React.useMemo(() => all.filter((m) => !(m.session && own.has(m.session)) && !(m.kind === 'run' && isMine(m)) && m.status !== 'new_chat'), [all, own])
+  const byId = React.useMemo(() => new Map(all.map((m) => [m.id, m])), [all])
   const asks = useThreadApprovals(a.path, msgs)
+  const running = (a.running_sessions || []).filter((s) => !own.has(s.id))
   const last = msgs[msgs.length - 1]?.id
   // Newest at the bottom: follow it when a message arrives (unless the user scrolled up to read).
   const stick = React.useRef(true)
   React.useLayoutEffect(() => {
     const el = box.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [last, a.running_now])
-  // Reading the page = its results are read (again when a new one comes in while it is open).
-  const unread = a.thread_unread || 0
-  const seenMutate = seen.mutate
-  React.useEffect(() => {
-    if (unread > 0) seenMutate({ path: a.path })
-  }, [unread, a.path, seenMutate])
+  }, [last, running.length])
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -288,52 +424,29 @@ function Conversation({ agent: a }: { agent: AgentDetail }) {
               [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
             ) : error ? (
               <EmptyState tone="error" compact title={t('agents.thread.error')} description={errorMessage(error)} />
-            ) : !msgs.length ? (
-              <EmptyState icon={StickyNote} compact title={t('agents.thread.empty')} description={t('agents.thread.emptyDesc')} />
+            ) : !msgs.length && !running.length ? (
+              <EmptyState icon={StickyNote} compact title={t('agents.runs.empty')} description={t('agents.runs.emptyDesc')} />
             ) : (
               msgs
                 .filter((m) => !asks.merged(m))
-                .map((m, i, shown) => (
-                  <React.Fragment key={m.id}>
-                    {m.chat === 'new' && newChatLine(shown, i) && <ChatLine />}
-                    <ThreadMessage
-                      m={m}
-                      agent={a}
-                      crons={crons?.jobs || []}
-                      answers={m.reply_to ? byId.get(m.reply_to) : undefined}
-                      onReply={setReplyTo}
-                      live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
-                      decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
-                    />
-                  </React.Fragment>
+                .map((m) => (
+                  <ThreadMessage
+                    key={m.id}
+                    m={m}
+                    agent={a}
+                    crons={crons?.jobs || []}
+                    answers={m.reply_to ? byId.get(m.reply_to) : undefined}
+                    live={m.kind === 'approval' && m.approval ? asks.live.get(m.approval) : undefined}
+                    decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
+                  />
                 ))
             )}
-            {(a.running_sessions || []).map((s) => (
+            {running.map((s) => (
               <Working key={s.id} agent={a} sid={s.id} waiting={(a.waiting || 0) > 0} />
             ))}
           </div>
         </AnswerContext>
       </div>
-      <QuotePill scope={box} selector="[data-quote]" onQuote={(q, el) => composer.current?.quote(q, isOwnRun(el) ? null : a.display_name)} />
-      <Composer key={a.path} ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
-    </div>
-  )
-}
-
-/** A new conversation begins here: drawn unless it is the very first message or the "New conversation" note
- *  (the button) is just above. */
-function newChatLine(msgs: AgentMessage[], i: number): boolean {
-  const before = msgs.slice(0, i).filter((m) => m.kind !== 'note' || m.status === 'new_chat')
-  return before.length > 0 && before[before.length - 1].status !== 'new_chat'
-}
-
-function ChatLine() {
-  const t = useT()
-  return (
-    <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground" data-kind="new-chat">
-      <span className="h-px flex-1 bg-border" aria-hidden />
-      <MessageSquarePlus className="size-3.5" /> {t('agents.chat.started')}
-      <span className="h-px flex-1 bg-border" aria-hidden />
     </div>
   )
 }
@@ -394,7 +507,8 @@ function ThreadMessage({
   agent: AgentDetail
   crons: Cron[]
   answers?: AgentMessage
-  onReply: (m: AgentMessage) => void
+  /** Reply on a result (its session goes on): none in the runs list, a run opens in place to go on with it */
+  onReply?: (m: AgentMessage) => void
   /** approval: the request while it waits (Allow / Deny), then its note (what was decided) */
   live?: Approval
   decided?: AgentMessage
@@ -529,7 +643,7 @@ function ThreadMessage({
               {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
             </button>
           )}
-          {m.kind === 'result' && m.session && m.session !== a.chat_session && (
+          {onReply && m.kind === 'result' && m.session && m.session !== a.chat_session && (
             <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary pointer-coarse:min-h-10" onClick={() => onReply(m)} data-testid="agent-reply">
               <Reply className="size-3" /> {t('agents.conv.reply')}
             </button>
@@ -544,19 +658,13 @@ function ThreadMessage({
 
 const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
 
-/** A message of the owner (a run he started, right-aligned), not something the agent wrote. */
-const isOwnRun = (el: Element) => {
-  const m = el.closest('[data-kind]')
-  return m?.getAttribute('data-kind') === 'run' && m.classList.contains('ml-auto')
-}
-
 /** What the conversation hands to the box: a quoted selection (`from`: the agent that wrote it, null = the owner). */
 type AgentComposerApi = { quote: (text: string, from: string | null) => void }
 
 function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
   const run = useRunAgent()
-  const fresh = useNewAgentChat()
+  const [model, setModel] = React.useState(a.chat_model || a.model || '')
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
@@ -613,7 +721,7 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
     files.clear()
     // mutateAsync: its answer arrives even once this box is gone (another agent opened): the message never stays
     // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
-    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths }).then(
+    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths, model: model || undefined }).then(
       (r) => {
         if (r.started) {
           if (alive.current) onCancelReply()
@@ -688,17 +796,8 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
         )}
       </div>
       {a.enabled && !replyTo && (
-        <div className="mx-auto mt-1 flex max-w-3xl items-center justify-end gap-2 px-1 text-[11px] text-muted-foreground" data-testid="agent-chat-bar">
-          {a.chat_session ? (
-            <>
-              <span title={t('agents.chat.manager')}>{t('agents.chat.goesOn')}</span>
-              <button type="button" onClick={() => fresh.mutate({ path: a.path })} disabled={fresh.isPending} className="inline-flex items-center gap-1 rounded text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-new-chat">
-                <MessageSquarePlus className="size-3" /> {t('agents.chat.new')}
-              </button>
-            </>
-          ) : (
-            <span>{t('agents.chat.next')}</span>
-          )}
+        <div className="mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
+          <ModelPicker chosen={model} onChange={setModel} />
         </div>
       )}
     </div>

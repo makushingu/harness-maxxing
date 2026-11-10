@@ -166,6 +166,8 @@ export type Agent = {
   running_sessions?: { id: string; title: string; started?: number }[]
   /** the conversation the owner's next message goes on in (`chat`), null = a new one */
   chat_session?: string | null
+  /** the owner's last conversation (to read it again once a new one is due) */
+  last_chat_session?: string | null
   /** results posted after the user last opened the agent */
   thread_unread?: number
   /** approval requests of its running sessions */

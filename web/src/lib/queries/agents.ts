@@ -136,8 +136,8 @@ export function useDeleteAgent() {
 }
 export function useRunAgent() {
   return useMut(
-    ({ path, text, reply_to, attachments }: { path: string; text?: string; reply_to?: string; attachments?: string[] }) =>
-      api.post<AgentRunResult>(agentUrl(path, '/run'), { text: text || undefined, reply_to: reply_to || undefined, attachments: attachments?.length ? attachments : undefined }),
+    ({ path, text, reply_to, attachments, model }: { path: string; text?: string; reply_to?: string; attachments?: string[]; model?: string }) =>
+      api.post<AgentRunResult>(agentUrl(path, '/run'), { text: text || undefined, reply_to: reply_to || undefined, attachments: attachments?.length ? attachments : undefined, model: model || undefined }),
     { invalidate: [agentKeys.all] },
   )
 }

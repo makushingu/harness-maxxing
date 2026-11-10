@@ -96,9 +96,18 @@ def test_a_safety_change_waits_for_the_owner(client, topic, mx):
     approvals.decide(r["request"], "allow")
     a = agents.load(A)
     assert a["sandbox"] is False and a["domains"] == ["api.github.com", "example.com"] and a["limits"]["usd_per_day"] == 9
-    _say(client, "next")
+    # typed in the session's own box (the agent page shows the conversation as a session): heard once, in the
+    # turn's system note, never in what the owner wrote
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL next"})
     wait_idle(client, sid)
-    assert _calls()[-1]["prompt"].startswith("Since your last message:\n- The owner allowed your settings change")
+    argv = _calls()[-1]["argv"]
+    note = argv[argv.index("--append-system-prompt") + 1]
+    assert "Since your last message:\n- The owner allowed your settings change" in note
+    assert _calls()[-1]["prompt"] == "NOTOOL next"
+    _say(client, "again")
+    wait_idle(client, sid)
+    argv = _calls()[-1]["argv"]
+    assert "Since your last message" not in argv[argv.index("--append-system-prompt") + 1]
     # denied: nothing changes
     r2 = agents.request_change(A, {"approvals": True}, session=sid)
     approvals.decide(r2["request"], "deny", message="not now")
@@ -191,3 +200,19 @@ def test_maxxing_inside_the_sandbox_is_refused(monkeypatch, tmp_path):
     (tmp_path / "hidden").mkdir()
     (tmp_path / "hidden" / "config.json").write_text("{}")
     assert "alone on its command line" not in (agent_guard.check_cli(["agents", "set", "writer", "model=x"]) or "")
+
+
+def test_the_owner_picks_the_model_of_a_new_conversation_and_finds_the_last_one(client, topic):
+    _on(client)
+    _create(client, model="sonnet")
+    r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi", "model": "haiku"}).json()
+    sid = r["session"]["id"]
+    assert r["session"]["model"] == "haiku"
+    wait_idle(client, sid)
+    assert client.get("/api/agents/acme/blog/writer").json()["chat_session"] == sid
+    assert client.post("/api/agents/acme/blog/writer/chat/new").json()["ok"]
+    a = client.get("/api/agents/acme/blog/writer").json()
+    assert a["chat_session"] is None and a["last_chat_session"] == sid
+    n = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL again"}).json()["session"]
+    assert n["model"] == "sonnet"                         # no pick: the agent's model
+    wait_idle(client, n["id"])

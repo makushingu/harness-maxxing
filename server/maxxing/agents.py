@@ -639,7 +639,9 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
                 "sandbox": box, "settings": agent_guard.settings(path, a, approvals=appr, manager=True),
                 "approvals": appr, "approvals_forced": False, "manager": True,
                 "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"],
-                "system_note": MANAGER_NOTE.format(box=MANAGER_BOX if box else "")}
+                # its change requests answered since its last turn (said once, whatever box the owner typed in)
+                "system_note": "\n\n".join(x for x in (MANAGER_NOTE.format(box=MANAGER_BOX if box else ""),
+                                                        _take_chat_notes(path)) if x)}
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a, approvals=a["approvals"] or forced),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
@@ -1370,7 +1372,8 @@ def status(path: str, metas: list[dict] | None = None) -> dict:
                                   "started": m.get("spawned_at") or m.get("updated")} for m in running],
             "thread_unread": 0 if silent(path) else sum(1 for m in msgs if m.get("kind") == "result"
                                                         and (m.get("at") or 0) > seen),
-            "waiting": waiting, "alerts": _alert_count(path), "chat_session": _open_chat(path)}
+            "waiting": waiting, "alerts": _alert_count(path), "chat_session": _open_chat(path),
+            "last_chat_session": _last_chat(path)}
 
 
 def _open_chat(path: str) -> str | None:
@@ -1380,6 +1383,14 @@ def _open_chat(path: str) -> str | None:
         return _chat_session(path, a)
     except Exception:  # noqa: BLE001 - a status never fails on it
         return None
+
+
+def _last_chat(path: str) -> str | None:
+    """The owner's last conversation, still there once a new one is due (idle, New conversation): to read it again."""
+    from .sessions import service
+    c = _read_state(path).get("chat") or _read_state(path).get("last_chat")
+    sid = c.get("session") if isinstance(c, dict) else None
+    return sid if sid and service.session_exists(sid) else None
 
 
 def _alert_count(path: str) -> int:
@@ -1620,6 +1631,9 @@ def _chat_session(path: str, a: dict) -> str | None:
 def _chat_mark(path: str, sid: str) -> None:
     with _lock:
         st = _read_state(path)
+        old = st.get("chat")
+        if isinstance(old, dict) and old.get("session") != sid:
+            st["last_chat"] = old
         st["chat"] = {"session": sid, "at": time.time()}
         _write_state(path, st)
 
@@ -1646,7 +1660,10 @@ def new_chat(path: str) -> bool:
     """The owner's next message starts a new conversation (button, Telegram /new) -> whether one was open."""
     with _lock:
         st = _read_state(path)
-        had = bool(st.pop("chat", None))
+        c = st.pop("chat", None)
+        had = bool(c)
+        if had:
+            st["last_chat"] = c
         _write_state(path, st)
     if had:
         post(path, "note", "New conversation", status="new_chat")
@@ -1679,20 +1696,23 @@ def context(path: str) -> str:
 
 def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: str = "manual",
          attachments: list[str] | None = None, depth: int = 0, cron_env: dict | None = None,
-         timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False) -> dict:
+         timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False, model: str | None = None) -> dict:
     """Start a new session of the agent -> {started: bool, session?, reason?, continued?}.
     trigger: "manual", "cron:<job id>", "feed:<trigger id>", "telegram", "agent:<from path>".
     reply_to: the id of a thread message; its session goes on with this message (no new session).
     wait: the caller tries again later when the budget is held by a run in progress (reason busy, nothing posted).
+    model: the model of a new conversation of the owner (picked by the owner; default chat_model, then model).
     The guards and the start are one step under _lock: triggers arriving together never pass the same guard."""
     text, prompt = _utf8(text or ""), _utf8(prompt or "")    # a lone surrogate could not be stored (500)
     with _lock:
         return _fire(path, trigger=trigger, text=text, prompt=prompt, source=source, attachments=attachments,
-                     depth=depth, cron_env=cron_env, timeout_s=timeout_s, reply_to=reply_to, wait=wait)
+                     depth=depth, cron_env=cron_env, timeout_s=timeout_s, reply_to=reply_to, wait=wait,
+                     model=model)
 
 
 def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attachments: list[str] | None,
-          depth: int, cron_env: dict | None, timeout_s: int | None, reply_to: str | None, wait: bool) -> dict:
+          depth: int, cron_env: dict | None, timeout_s: int | None, reply_to: str | None, wait: bool,
+          model: str | None = None) -> dict:
     owner = _owner_chat(trigger, source, text)
     if depth > MAX_DEPTH:
         reason = "depth"
@@ -1723,10 +1743,6 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     if not sid and chat:
         sid = _chat_session(path, a)
     own = {"owner": True} if owner else {}
-    if owner and (sid is None and chat or sid and _is_manager(sid)):
-        notes = _take_chat_notes(path)
-        if notes:
-            message = f"{notes}\n\n{message}"
     if sid:
         r = service.send_message(sid, message, attachments=attachments, source="agent")
         _hold_left(path, a, sid)
@@ -1746,8 +1762,9 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
            **({"MAXXING_AGENT_OUTSIDE": "1"} if text else {}),
            **({"MAXXING_AGENT_CHAT": "1"} if chat else {}),      # its manager (run_settings, agent_guard)
            **(cron_env or {})}
-    # the conversation: no model of its own, the runner takes chat_model (or model) at each turn
-    s = service.create_session(path, message=message, title=title, model=None if chat else (a["model"] or None),
+    # the conversation: the model the owner picked, then changed in its box like any session's
+    s = service.create_session(path, message=message, title=title,
+                               model=((model or a["chat_model"]) if chat else None) or a["model"] or None,
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=timeout_s or a["limits"]["timeout_s"],
                                permission_mode=a["permission_mode"])
