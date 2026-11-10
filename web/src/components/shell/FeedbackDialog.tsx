@@ -51,14 +51,14 @@ export function FeedbackDialog() {
     setShooting(true)
     const ui = useUI.getState()
     const hide = blur && !ui.presentation          // presentation mode only for the shot, then back as it was
-    if (hide) ui.setPresentation(true)
+    if (hide) useUI.setState({ presentation: true, presentationShot: true })
     try {
       await new Promise((ok) => setTimeout(ok, 120))   // the dialog's close animation, the masks rendered
       setShotUrl(await shootZone(z, useUI.getState().presentation))
     } catch {
       setShotErr(true)
     } finally {
-      if (hide) useUI.getState().setPresentation(false)
+      if (hide) useUI.setState({ presentation: false, presentationShot: false })
       setShooting(false)
     }
   }, [blur]) // eslint-disable-line react-hooks/exhaustive-deps
