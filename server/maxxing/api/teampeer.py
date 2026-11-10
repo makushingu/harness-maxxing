@@ -42,7 +42,7 @@ async def hello(request: Request):
     _on()
     try:
         body = json.loads(await request.body())
-    except ValueError:
+    except (ValueError, RecursionError):
         raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
     return await _call(teampeer.hello, body if isinstance(body, dict) else {}, _ip(request))
 
@@ -54,7 +54,7 @@ async def inbox(request: Request):
     frm, scope = await _call(teampeer.verify, "POST", "/api/team-peer/inbox", dict(request.headers), raw, _ip(request))
     try:
         event = json.loads(raw)
-    except ValueError:
+    except (ValueError, RecursionError):
         raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
     if not isinstance(event, dict):
         raise HTTPException(400, detail={"error": "bad_request", "message": "Object expected"})

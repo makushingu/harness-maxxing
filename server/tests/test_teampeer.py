@@ -387,3 +387,10 @@ def test_vote_or_react_on_an_unknown_message_is_ignored_not_retried(client, monk
                                        "on": True}).status_code == 200
         assert _post(client, lea_key, {"type": "vote", "chat": chat, "msg": "m_99999999",
                                        "options": ["o_1"]}).status_code == 200
+
+
+def test_deeply_nested_json_is_a_400(client, monkeypatch):
+    key = _setup(monkeypatch)
+    deep = b"[" * 100000 + b"]" * 100000
+    assert client.post("/api/team-peer/hello", content=deep, headers={"Content-Type": "application/json"}).status_code == 400
+    assert client.post("/api/team-peer/inbox", content=deep, headers=_signed(key, deep)).status_code == 400
