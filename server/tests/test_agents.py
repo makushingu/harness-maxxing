@@ -228,6 +228,27 @@ def test_a_negative_or_too_big_limit_is_refused_and_a_tiny_budget_stays_a_budget
     assert agents.clean({"limits": {"usd_per_day": -1, "runs_per_hour": -3}})["limits"] == agents.clean({})["limits"]
 
 
+@pytest.mark.parametrize("triggers", [{"kind": "feed"}, 3, "feed", None])
+def test_a_mistyped_triggers_value_means_no_triggers(triggers):
+    assert agents.clean({"triggers": triggers})["triggers"] == []
+
+
+def test_an_avatar_value_that_is_not_a_string_is_dropped_like_an_unknown_one():
+    a = agents.clean({"avatar": {"color": ["blue"]}})["avatar"]
+    assert set(a) == set(agents.AVATAR) and all(a[k] in v for k, v in agents.AVATAR.items())
+    assert a == agents.clean({"avatar": {"color": 5}})["avatar"]
+    assert a == agents.clean({"avatar": {"color": "nope"}})["avatar"]           # same fallback as an unknown string
+
+
+@pytest.mark.parametrize("data", [{"triggers": {"kind": "feed"}}, {"triggers": 3}, {"avatar": {"color": ["blue"]}}])
+def test_a_mistyped_agent_file_loads_as_a_normal_agent(tmp_path, data):
+    f = tmp_path / "agent.json"
+    f.write_text(json.dumps(data))
+    a = agents._parse_file(f)
+    assert not a.get("broken") and a["enabled"] is True
+    assert a["triggers"] == [] and all(a["avatar"][k] in v for k, v in agents.AVATAR.items())
+
+
 def test_the_list_reads_an_agent_thread_again_only_when_it_changed(client, topic, monkeypatch):
     _on(client)
     _create(client)

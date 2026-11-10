@@ -15,6 +15,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`claude_update.installed_server()`, split out of `runs_here()`; `MAXXING_CLAUDE_MODELS=0|1`). `titles.MODEL`,
   `api.claude.TEST_MODEL` = `haiku`, `team.SUMMARY_MODEL` = `sonnet` (Claude Code family names). Telegram fallback
   list: Haiku 5.5 instead of 4.5. Tests `test_claude_models.py`.
+- `agents.clean`: `triggers` is read as a list only when it is one (the slice ran before the `isinstance` check, so a
+  dict raised `KeyError` and an int `TypeError`); `_clean_avatar` looks a value up in `_OLD_AVATAR` only when it is a
+  string (a list was unhashable). `GET /api/agents/<topic>/<agent>` failed with an error for such a file. Tests added
+  in `tests/test_agents.py`.
 
 ## 2.0.0-alpha.137 - 2026-11-10
 

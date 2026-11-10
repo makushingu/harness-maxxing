@@ -12,6 +12,10 @@ New:
   the next one; a model you chose on a topic, a job or an agent never changes. Short titles, the connection test and
   Team summaries always use the newest Haiku or Sonnet.
 
+Fixed:
+- **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
+  not a list, or an avatar value that is not text, is ignored like any other invalid value.
+
 ## 2.0.0-alpha.137 - 2026-11-10
 
 Fixed:
