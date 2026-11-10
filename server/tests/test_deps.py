@@ -474,3 +474,21 @@ def test_verify_rehashes_only_changed_files_and_doctor_asks_versions_once(st, tm
     asked["n"] = 0
     cmd_core.check_managed_deps()
     assert asked["n"] == len(deps.load())                        # doctor: one `installed()` per component
+
+
+def test_concurrent_record_writes_keep_every_entry(st):
+    errors = []
+
+    def write(i):
+        try:
+            for j in range(15):
+                deps.write_record(f"t{i}", {"version": str(j), "files": {}})
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+    ts = [threading.Thread(target=write, args=(i,)) for i in range(8)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert errors == [] and set(deps.read_record()) == {f"t{i}" for i in range(8)}
+    assert not list(deps.record_path().parent.glob("*.tmp"))
