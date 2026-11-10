@@ -30,7 +30,7 @@ export function Callout({ tone = 'info', title, children, className, action, ico
 /** Numbered instruction list (BotFather steps, token creation…). */
 export function Steps({ items, className }: { items: React.ReactNode[]; className?: string }) {
   return (
-    <ol className={cn('grid gap-3', className)}>
+    <ol className={cn('grid grid-cols-[minmax(0,1fr)] gap-3', className)}>
       {items.map((it, i) => (
         <li key={i} className="flex gap-3 text-sm">
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-semibold tabular-nums">{i + 1}</span>
