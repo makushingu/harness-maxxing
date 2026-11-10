@@ -3050,6 +3050,7 @@ export const en = {
   'agents.reason.missing': 'The agent no longer exists',
   'agents.reason.depth': 'Too many hops between agents',
   'agents.from.manual': 'by hand',
+  'agents.from.command': 'by a command (maxxing agents run)',
   'agents.from.cron': 'on schedule',
   'agents.from.cronNamed': 'on schedule ({name})',
   'agents.from.feed': 'on a notification',

@@ -3032,6 +3032,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.reason.missing': "L'agent n'existe plus",
   'agents.reason.depth': "Trop d'échanges entre agents",
   'agents.from.manual': 'à la main',
+  'agents.from.command': 'par une commande (maxxing agents run)',
   'agents.from.cron': 'à heure fixe',
   'agents.from.cronNamed': 'à heure fixe ({name})',
   'agents.from.feed': 'sur une notification',
