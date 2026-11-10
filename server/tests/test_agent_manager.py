@@ -154,7 +154,11 @@ def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monke
     # "run your routine now": a run of its own (an automation started from the conversation)
     assert agent_guard.check_cli(["agents", "run", "writer"]) is None
     capsys.readouterr()
-    assert cli.main(["agents", "run", "writer", "write today's NOTOOL", "--json"]) == 0
+    agents.update(A, {"limits": {**agents.load(A)["limits"], "usd_per_day": 5}})
+    st = agents._read_state(A)                         # the conversation's turn holds the rest of the day...
+    agents._hold(A, st, "c" * 8 + "-0000-4000-8000-" + "0" * 12, 5)
+    monkeypatch.setenv("MAXXING_SESSION", "c" * 8 + "-0000-4000-8000-" + "0" * 12)
+    assert cli.main(["agents", "run", "writer", "write today's NOTOOL", "--json"]) == 0   # ...and hands it over
     sid = json.loads(capsys.readouterr().out)["session"]
     wait_idle(client, sid)
     run = [m for m in agents.thread(A) if m.get("kind") == "run" and m.get("session") == sid][-1]

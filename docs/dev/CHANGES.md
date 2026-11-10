@@ -32,7 +32,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   runs); its answered approvals are one line (`approvals.tsx` `ApprovalLine`). The manager may run itself:
   `maxxing agents run <itself>` in a manager turn (`AGENT_MANAGER` += run) = `fire(trigger manual, source
   "conversation")`, a run of its own ("Started at your request, from the conversation"); `MANAGER_NOTE` tells it to
-  do so when asked to do its routine now.
+  do so when asked to do its routine now; the conversation hands its hold of the day's budget over to that run
+  (`agents.hand_over`), else the run would find it all held (busy).
 - **Text as it is written**: the runner passes `--include-partial-messages` (`MAXXING_PARTIAL_TEXT=0` = off); the
   `stream_event` lines never reach the log: the top-level text block being written goes to `<sid>.live`
   (`{text, off}`, `off` = log size when the block started, rewritten at most every 0.15 s, removed at the end of the

@@ -645,6 +645,7 @@ def _handler(a) -> int:
     if a.agents_cmd == "run" and sender == path and turn.get("manager"):
         # the owner asked its conversation to run the automation now: a run of its own (a new session, shown as an
         # automation in the flow), not the work done inside the conversation
+        agents.hand_over(path, turn.get("session") or "")
         r = agents.fire(path, trigger="manual", source="conversation", prompt=text)
         return _print_fire(path, r, a.json)
     # send (or run from an agent's turn): from one agent's turn to another agent - the text is the sender's output,

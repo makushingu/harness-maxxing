@@ -1577,6 +1577,13 @@ def _release(path: str, sid: str, ended: float) -> None:
             _write_state(path, st)
 
 
+def hand_over(path: str, sid: str) -> None:
+    """The owner's conversation starts the agent's routine as a run of its own (`maxxing agents run` on itself) and
+    stops there: its hold of the day's budget goes to that run (else the run would find it all held: busy)."""
+    if sid:
+        _release(path, sid, time.time())
+
+
 SKIP_TEXT = {"disabled": "The agent is switched off", "budget": "Daily budget reached",
              "busy": "The rest of today's budget is held by the run in progress",
              "rate": "Too many runs in the last hour", "missing": "The agent no longer exists",
