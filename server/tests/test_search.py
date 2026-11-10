@@ -281,6 +281,19 @@ def test_a_link_to_a_file_outside_the_workspace_is_not_indexed(client, mx, tmp_p
     os.symlink(d / "notes.md", d / "inside.md")              # a link inside the workspace is still read
     search.refresh()
     assert sorted(r["title"] for r in _q(client, "zqxsecretvalue123")) == ["inside.md", "notes.md"]
+def test_a_non_utf8_file_name_does_not_stop_the_index(client, mx):
+    d = config.workspace() / "projects" / "acme" / "topics" / "blog"
+    d.mkdir(parents=True)
+    (d / os.fsdecode(b"bad\xff.md")).write_text("fichier mal nomme\n")
+    bad_dir = d / os.fsdecode(b"x\xff")
+    bad_dir.mkdir()
+    (bad_dir / "memory.md").write_text("memoire mal nommee\n")
+    (d / "notes.md").write_text("une note sur le comte\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "comte")] == ["notes.md"]
+    assert _q(client, "nomme") == [] and _q(client, "nommee") == []
+
+
 def test_a_session_whose_title_matches_never_hides_the_others(mx):
     big = _session("", "Kangaroo planning", [("user", f"step {i} of the plan") for i in range(200)])
     others = {_session("", f"Shop {i}", [("user", "we should buy a kangaroo plush")]) for i in range(5)}
