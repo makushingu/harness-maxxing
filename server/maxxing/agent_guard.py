@@ -343,13 +343,17 @@ def locked_paths(path: str) -> list[str]:
     # a missing .mcp.json is not locked: the sandbox would mount a placeholder there for the run, which breaks a
     # `git add -A` in a topic that is a clone; a new one is never trusted in a headless run anyway (its servers need
     # an approval)
-    return out + [str(p) for p in (folder / ".mcp.json", topic / ".mcp.json") if p.exists()]
+    # the topic's .maxxing.json (permission mode and "Always allow" rules of its sessions, inherited by its agents):
+    # only when it exists, like .mcp.json (a new file at the topic's root is never writable)
+    return out + [str(p) for p in (folder / ".mcp.json", topic / ".mcp.json", topic / ".maxxing.json") if p.exists()]
 
 
 # what an agent never writes in its topic, even with `writable: "."`: the other agents (and new ones), the topic's
 # own role and memory (read by every session of the topic), its Claude Code settings, the owner's uploads
-# (attachments/: a file swapped there would be read by the owner's sessions, a link would send the next upload away)
-TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json", "attachments")
+# (attachments/: a file swapped there would be read by the owner's sessions, a link would send the next upload away),
+# its .maxxing.json (the permission mode and "Always allow" rules of the owner's sessions there)
+TOPIC_LOCKED = ("agents", "CLAUDE.md", "CLAUDE.local.md", "memory.md", ".claude", ".mcp.json", "attachments",
+                ".maxxing.json")
 
 
 def writable_dirs(path: str, a: dict) -> list[str]:
@@ -397,7 +401,8 @@ def topic_edit_denied(path: str) -> list[str]:
         out += [f"Edit(/{d}/**)" for d in sorted(ag.iterdir()) if d.is_dir() and d.name != folder.name]
     except OSError:
         pass
-    return out + [f"Edit(/{topic / f})" for f in TOPIC_LOCKED[1:5]] + [f"Edit(/{topic / d}/**)" for d in (".claude", "attachments")]
+    return out + [f"Edit(/{topic / f})" for f in (*TOPIC_LOCKED[1:5], ".maxxing.json")] + \
+        [f"Edit(/{topic / d}/**)" for d in (".claude", "attachments")]
 
 
 def _overlaps(p: Path, q: Path) -> bool:
