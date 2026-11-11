@@ -1277,6 +1277,16 @@ def test_a_probe_entry_without_its_fields_costs_only_its_server():
         assert any(r.startswith("site:good:ok.example.com") for r in res), bad
 
 
+def test_a_malformed_server_section_costs_only_its_server():
+    """`server` with odd ips or disk fields: that server is down (bad_probe), the other servers are still built."""
+    good = {"sites": [{"host": "ok.example.com", "kind": "static", "root": "/srv/ok"}]}
+    for sv in ({"ips": [{}]}, {"ips": ["1.1.1.1"]}, {"ips": "abc"}, {"disk_free": "5", "disk_total": 10}):
+        servers = [{"name": n, "host": "h.example.com"} for n in ("bad", "good")]
+        res = {r["id"]: r for r in build.build({build.LOCAL: {}, "bad": {"server": sv}, "good": good}, servers, {}, {}, {}, {}, "/w", None)}
+        assert res["server:bad"]["status"] == "down" and res["server:bad"]["status_detail"] == "bad_probe", sv
+        assert any(r.startswith("site:good:ok.example.com") for r in res), sv
+
+
 def test_dns_providers_and_hosts_match_whole_labels():
     from maxxing.infra import dnsinfo
     assert dnsinfo.dns_provider(["ns1.surname.com"]) == "other"
