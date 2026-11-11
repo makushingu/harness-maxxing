@@ -21,6 +21,34 @@ def _runs() -> list[dict]:
     return [m for m in agents.thread(A, 500) if m["kind"] == "run"]
 
 
+# ---- Run now ------------------------------------------------------------------------------------------------
+def test_run_now_starts_a_run_of_the_routine_not_a_message_of_the_conversation(client, topic, mx):
+    _on(client)
+    _create(client)
+    chat = _sid(_say(client, "hi"))
+    wait_idle(client, chat)
+    r = client.post("/api/agents/acme/blog/writer/run", json={}).json()     # the Run now button: no text
+    assert r["started"] and not r.get("continued")
+    run = _sid(r)
+    assert run != chat
+    wait_idle(client, run)
+    assert not agents.manager_turn(store.read(run))                       # the routine's rules, not the manager's
+    assert agents._read_state(A)["chat"]["session"] == chat               # the conversation stays the same
+    m = _runs()[-1]
+    assert m["session"] == run and m["source"] == agents.RUN_NOW_SOURCE and not m.get("owner")
+    # the next message of the owner goes on in the conversation
+    assert _sid(_say(client, "and now?")) == chat
+
+
+def test_words_on_the_page_still_go_into_the_conversation(client, topic, mx):
+    _on(client)
+    _create(client)
+    chat = _sid(_say(client, "hi"))
+    wait_idle(client, chat)
+    r = _say(client, "run your routine please")                            # typed: a message, not the button
+    assert r.get("continued") and _sid(r) == chat
+
+
 # ---- the text of a turn that wrote more than the tail read ------------------------------------------------------
 def _big_turn(sid: str, at: float, answer: str, size: int) -> None:
     store.append_log(sid, {"type": "mx_user", "text": "read the reports", "at": at})

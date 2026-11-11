@@ -1689,6 +1689,7 @@ CONTEXT_RESULTS = 3            # a new conversational message carries the last r
 CONTEXT_CHARS = 500            # ...each cut to this many characters
 CONVERSATIONAL = ("manual", "telegram")
 CHAT_SOURCES = ("manual", "telegram")   # the owner typing (agent page, Telegram): not a script's `agents run`
+RUN_NOW_SOURCE = "run now"              # the Run now button: a run of the routine (not in CHAT_SOURCES)
 
 
 def _owner_chat(trigger: str, source: str, text: str) -> bool:

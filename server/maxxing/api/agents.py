@@ -305,6 +305,9 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
     if files and not text:
         text = "See the attached files."
+    if not text and not body.reply_to:
+        # Run now (no words): a run of its routine, like a schedule's - never a message of the conversation
+        return agents.fire(path, trigger="manual", source=agents.RUN_NOW_SOURCE)
     try:                       # typed by the user: an instruction, not outside data (no markers)
         return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None,
                            attachments=files or None, model=(body.model or "").strip() or None)
