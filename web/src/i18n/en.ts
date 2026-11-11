@@ -1447,6 +1447,7 @@ export const en = {
   'infra.why.backup_failed': 'last backup failed',
   'infra.why.deploy_failed': 'last deployment failed',
   'infra.why.list_failed': 'could not list its databases',
+  'infra.why.bad_probe': 'malformed probe answer',
   'infra.why.file_missing': 'file missing',
   'infra.why.missing_permission': 'the key has no read access',
   'infra.why.unavailable': 'unavailable',

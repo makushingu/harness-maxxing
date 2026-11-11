@@ -1266,6 +1266,17 @@ def test_a_malformed_probe_answer_costs_only_its_server(monkeypatch):
     assert res["server:a"]["status"] == "down" and "server:b" in res
 
 
+def test_a_probe_entry_without_its_fields_costs_only_its_server():
+    """Lists of objects missing a required field (a listener without port, a site without host): that server is
+    down, the other servers keep their resources."""
+    good = {"sites": [{"host": "ok.example.com", "kind": "static", "root": "/srv/ok"}]}
+    for bad in ({"listeners": [{}]}, {"containers": [{"name": "x"}]}, {"sites": [{"a": 1}]}, {"databases": [{"path": "/a.db"}]}):
+        servers = [{"name": n, "host": "h.example.com"} for n in ("bad", "good")]
+        res = {r["id"]: r for r in build.build({build.LOCAL: {}, "bad": bad, "good": good}, servers, {}, {}, {}, {}, "/w", None)}
+        assert res["server:bad"]["status"] == "down" and res["server:bad"]["status_detail"] == "bad_probe", bad
+        assert any(r.startswith("site:good:ok.example.com") for r in res), bad
+
+
 def test_dns_providers_and_hosts_match_whole_labels():
     from maxxing.infra import dnsinfo
     assert dnsinfo.dns_provider(["ns1.surname.com"]) == "other"

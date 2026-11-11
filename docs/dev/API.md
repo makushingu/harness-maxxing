@@ -582,7 +582,7 @@ demand. Every route: `409 disabled` when the page is off (except `GET`).
 Resource: `{id, kind: server|site|worker|pages|database|bucket|domain, name, location: local|<server>|cloudflare|hostinger|other,
 provider, urls, status: ok|warn|down|unknown, status_detail (http_<code>, unreachable, timeout, tls_invalid, cert_expiring,
 cert_expired, dns_elsewhere, domain_expiring, domain_expired, missing, disk_low, backup_failed, deploy_failed,
-list_failed, file_missing), details, links:[id], project, note, hidden, declared, missing}`. Ids: `server:<name>`,
+list_failed, file_missing, bad_probe), details, links:[id], project, note, hidden, declared, missing}`. Ids: `server:<name>`,
 `site:<server>:<host><path>`, `db:<server>:<engine>:<container|native>:<db>`, `db:<server>:sqlite:<path>`,
 `db:cloudflare:d1:<name>`, `bucket:<server>:garage:<name>`, `bucket:cloudflare:r2:<name>`, `worker:cloudflare:<name>`,
 `pages:cloudflare:<name>`, `domain:<name>`, `server:hostinger:<id>` (a Hostinger VPS not registered for SSH).

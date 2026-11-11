@@ -147,77 +147,84 @@ def build(probes: dict[str, dict], servers: list[dict], cf: dict | None, hst: di
     # sites, databases, buckets of each server ------------------------------------------------------
     for s in srv_defs:
         name = s["name"]
-        p = probes.get(name) or {}
-        local = name == LOCAL
-        srv_id = f"server:{name}"
-        by_port = {l["port"]: l for l in p.get("listeners") or []}
-        conts = {c["id"]: c for c in p.get("containers") or []}
-        for c in p.get("containers") or []:
-            for pt in c.get("ports") or []:
-                by_port.setdefault(pt["host"], {"port": pt["host"], "container": c["id"]})
-                if by_port[pt["host"]].get("process") == "docker-proxy":
-                    by_port[pt["host"]] = {**by_port[pt["host"]], "container": c["id"]}
-        for site in p.get("sites") or []:
-            host, path = site["host"], site.get("path") or ""
-            rid = f"site:{name}:{host}{path}"
-            urls = []
-            if host != "*" and "*" not in host:
-                scheme = "http" if is_ip(host) or host == "localhost" else "https"
-                urls.append(f"{scheme}://{host}{path}" + ("/" if path else ""))
-            det = {k: site.get(k) for k in ("host", "path", "kind", "upstreams", "root", "redirect", "sandbox", "server")}
-            services = []
-            for up in site.get("upstreams") or []:
-                m = re.match(r"^(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)?:?(\d+)$", up.split("://")[-1])
-                port = int(m.group(1)) if m else None
-                ln = by_port.get(port) if port else None
-                if not ln:
+        before = set(out)
+        try:
+            p = probes.get(name) or {}
+            local = name == LOCAL
+            srv_id = f"server:{name}"
+            by_port = {l["port"]: l for l in p.get("listeners") or []}
+            conts = {c["id"]: c for c in p.get("containers") or []}
+            for c in p.get("containers") or []:
+                for pt in c.get("ports") or []:
+                    by_port.setdefault(pt["host"], {"port": pt["host"], "container": c["id"]})
+                    if by_port[pt["host"]].get("process") == "docker-proxy":
+                        by_port[pt["host"]] = {**by_port[pt["host"]], "container": c["id"]}
+            for site in p.get("sites") or []:
+                host, path = site["host"], site.get("path") or ""
+                rid = f"site:{name}:{host}{path}"
+                urls = []
+                if host != "*" and "*" not in host:
+                    scheme = "http" if is_ip(host) or host == "localhost" else "https"
+                    urls.append(f"{scheme}://{host}{path}" + ("/" if path else ""))
+                det = {k: site.get(k) for k in ("host", "path", "kind", "upstreams", "root", "redirect", "sandbox", "server")}
+                services = []
+                for up in site.get("upstreams") or []:
+                    m = re.match(r"^(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)?:?(\d+)$", up.split("://")[-1])
+                    port = int(m.group(1)) if m else None
+                    ln = by_port.get(port) if port else None
+                    if not ln:
+                        continue
+                    c = conts.get(ln.get("container") or "")
+                    svc = {"port": port, "unit": ln.get("unit"), "process": ln.get("process"), "cwd": ln.get("cwd"),
+                           "container": c["name"] if c else None, "repo": _repo(ln.get("repo") or (c or {}).get("repo"), local)}
+                    services.append(svc)
+                det["services"] = services
+                project = None
+                if local:
+                    project = _project_of(site.get("root"), workspace) or next(
+                        (_project_of(x.get("cwd"), workspace) for x in services if x.get("cwd")), None)
+                r = add(_res(rid, "site", f"{host}{path}", name, "server", urls=urls, details=det, links=[srv_id], project=project))
+                if harness_host and local and host == harness_host and not path:
+                    r["details"]["harness"] = True
+            for db in p.get("databases") or []:
+                eng, where = db["engine"], db.get("where")
+                if eng == "sqlite":
+                    rid = f"db:{name}:sqlite:{db['path']}"
+                    det = {"engine": "sqlite", "path": db["path"], "size": db.get("size"), "modified": db.get("modified"),
+                           "repo": _repo(db.get("repo"), local), "scan_incomplete": db.get("scan_incomplete")}
+                    r = add(_res(rid, "database", Path(db["path"]).name, name, "server", details=det, links=[srv_id],
+                                 project=_project_of(db["path"], workspace) if local else None))
+                    r["status"] = "warn" if db.get("missing") else "ok"
+                    if db.get("missing"):
+                        r["status_detail"] = "file_missing"
                     continue
-                c = conts.get(ln.get("container") or "")
-                svc = {"port": port, "unit": ln.get("unit"), "process": ln.get("process"), "cwd": ln.get("cwd"),
-                       "container": c["name"] if c else None, "repo": _repo(ln.get("repo") or (c or {}).get("repo"), local)}
-                services.append(svc)
-            det["services"] = services
-            project = None
-            if local:
-                project = _project_of(site.get("root"), workspace) or next(
-                    (_project_of(x.get("cwd"), workspace) for x in services if x.get("cwd")), None)
-            r = add(_res(rid, "site", f"{host}{path}", name, "server", urls=urls, details=det, links=[srv_id], project=project))
-            if harness_host and local and host == harness_host and not path:
-                r["details"]["harness"] = True
-        for db in p.get("databases") or []:
-            eng, where = db["engine"], db.get("where")
-            if eng == "sqlite":
-                rid = f"db:{name}:sqlite:{db['path']}"
-                det = {"engine": "sqlite", "path": db["path"], "size": db.get("size"), "modified": db.get("modified"),
-                       "repo": _repo(db.get("repo"), local), "scan_incomplete": db.get("scan_incomplete")}
-                r = add(_res(rid, "database", Path(db["path"]).name, name, "server", details=det, links=[srv_id],
-                             project=_project_of(db["path"], workspace) if local else None))
-                r["status"] = "warn" if db.get("missing") else "ok"
-                if db.get("missing"):
-                    r["status_detail"] = "file_missing"
-                continue
-            holder = db.get("container") or "native"
-            base = {"engine": eng, "where": where, "container": db.get("container"), "image": db.get("image"),
-                    "port": db.get("port"), "version": db.get("version"), "compose_project": db.get("compose_project")}
-            if db.get("databases") is None:
-                rid = f"db:{name}:{eng}:{holder}"
-                r = add(_res(rid, "database", f"{eng} ({holder})", name, "server", details={**base, "error": db.get("error")},
-                             links=[srv_id]))
-                r["status"] = "warn" if db.get("error") else "ok"
-                r["status_detail"] = "list_failed" if db.get("error") else ""
-                continue
-            for x in db["databases"]:
-                rid = f"db:{name}:{eng}:{holder}:{x['name']}"
-                r = add(_res(rid, "database", x["name"], name, "server",
-                             details={**base, "size": x.get("size"), "owner": x.get("owner"), "system": x["name"] in SYSTEM_DBS},
-                             links=[srv_id]))
-                r["status"] = "ok"
-        for g in p.get("buckets") or []:
-            for b in g.get("buckets") or []:
-                rid = f"bucket:{name}:garage:{b['name']}"
-                add(_res(rid, "bucket", b["name"], name, "server", links=[srv_id],
-                         details={"engine": "garage", "bytes": b.get("bytes"), "objects": b.get("objects"),
-                                  "website": b.get("website"), "s3_endpoint": g.get("s3_endpoint")}))["status"] = "ok"
+                holder = db.get("container") or "native"
+                base = {"engine": eng, "where": where, "container": db.get("container"), "image": db.get("image"),
+                        "port": db.get("port"), "version": db.get("version"), "compose_project": db.get("compose_project")}
+                if db.get("databases") is None:
+                    rid = f"db:{name}:{eng}:{holder}"
+                    r = add(_res(rid, "database", f"{eng} ({holder})", name, "server", details={**base, "error": db.get("error")},
+                                 links=[srv_id]))
+                    r["status"] = "warn" if db.get("error") else "ok"
+                    r["status_detail"] = "list_failed" if db.get("error") else ""
+                    continue
+                for x in db["databases"]:
+                    rid = f"db:{name}:{eng}:{holder}:{x['name']}"
+                    r = add(_res(rid, "database", x["name"], name, "server",
+                                 details={**base, "size": x.get("size"), "owner": x.get("owner"), "system": x["name"] in SYSTEM_DBS},
+                                 links=[srv_id]))
+                    r["status"] = "ok"
+            for g in p.get("buckets") or []:
+                for b in g.get("buckets") or []:
+                    rid = f"bucket:{name}:garage:{b['name']}"
+                    add(_res(rid, "bucket", b["name"], name, "server", links=[srv_id],
+                             details={"engine": "garage", "bytes": b.get("bytes"), "objects": b.get("objects"),
+                                      "website": b.get("website"), "s3_endpoint": g.get("s3_endpoint")}))["status"] = "ok"
+        except (KeyError, TypeError, AttributeError, ValueError):   # an entry without its fields (remote probe output)
+            for rid in set(out) - before:
+                del out[rid]
+            if f"server:{name}" in out:
+                out[f"server:{name}"]["status"], out[f"server:{name}"]["status_detail"] = "down", "bad_probe"
 
     # Cloudflare ------------------------------------------------------------------------------------
     cf = cf or {}
