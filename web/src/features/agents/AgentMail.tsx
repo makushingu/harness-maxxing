@@ -12,6 +12,7 @@ import { Button, Checkbox, confirm, FormField, Input, Select, Sensitive, Switch,
 import { Callout } from '@/features/common'
 import { folderLabel } from '@/features/mail/shared'
 import { ListEditor } from './AgentSettings'
+import { useSandboxAutoNote } from './parts'
 
 const RIGHTS: MailRight[] = ['read', 'draft', 'move', 'mark', 'send']
 const APPROVE: MailApproveSend[] = ['always', 'new', 'never']
@@ -24,7 +25,8 @@ export function AgentMail({ agent: a }: { agent: AgentDetail }) {
   const { data: accounts, isLoading } = useMailAccounts(on)
   const patch = usePatchAgent()
   const grants = a.mail || []
-  const save = (list: MailGrant[]) => patch.mutate({ path: a.path, mail: list })
+  const boxedNote = useSandboxAutoNote()
+  const save = (list: MailGrant[]) => patch.mutate({ path: a.path, mail: list }, { onSuccess: boxedNote })
   const setOne = (acc: string, g: Partial<MailGrant>) => save(grants.map((x) => (x.account === acc ? { ...x, ...g } : x)))
   const free = (accounts || []).filter((x) => !grants.some((g) => g.account === x.id))
   const [pick, setPick] = React.useState('')

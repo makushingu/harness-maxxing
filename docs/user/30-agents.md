@@ -160,7 +160,14 @@ between days).
 - **Reply** under a run's answer goes on with that run (your message says which one); **Open the run** shows the
   whole session right in the Agents page, live, with its box to go on with it. A link to an agent's session
   (Telegram, a notification, the search) opens it there too. A reply in its Telegram thread to one of its results
-  goes on with that run's session.
+  goes on with that run's session. **Reply** under one of its answers in a group goes into your conversation with it
+  (that answer comes along so it knows what you mean), never into the group.
+- **Run now** (its menu, the Agents page) starts a run of its routine, like a schedule would: it shows as an
+  automation, never as a message of your conversation.
+- **A message while a run holds the day's budget** (a schedule running, or the turn before a **New conversation**)
+  waits and starts by itself right after that run ends: it is never refused. Automations still wait their turn.
+- **Long texts**: your messages and its answers in the conversation are kept whole (up to 50,000 characters). The
+  report of an automation is kept up to 4,000 characters, marked **cut** when longer; **Open the run** has it all.
 - **Its answers** open file links in the preview, show images and videos as thumbnails and audio with a player, and
   have a copy menu. Only the files of the agent's own folders (its folder and its writable folders) get a link or a
   preview: any other path stays plain text, since an answer can repeat text from a mail or a webhook.
@@ -182,7 +189,7 @@ it starts folded on screens narrower than 1600 px so the conversation keeps its 
   and only when they apply: whether it asks you first, the keys it gets.
 - **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
 - **Settings**, in four sections (the chips on top jump to them): **Essentials** (on, silent, its look, the model, the
-  daily budget); **Protection** (**Free** or **Protected**, below; **Ask me before risky actions**; the keys it gets);
+  **Model of our conversation** (empty = the same as Model; the agent may set it when you ask), the daily budget); **Protection** (**Free** or **Protected**, below; **Ask me before risky actions**; the keys it gets);
   **E-mail** (shown once it has a mailbox, or with **Give it a mailbox**); **Advanced**, folded (permission mode,
   outside events, callable from the topic's sessions, allowed and forbidden tools, rules, the other limits, export as
   a Claude Code file, grouped under Permissions, Tools and rules, Limits and export). Delete is at the bottom.
@@ -251,7 +258,7 @@ Agents never start on notifications of the source *Agents*.
 An agent that should just work in the background: **right-click** it in the list or on the Office (a long press on a
 phone) and tick **Silent**, or turn on **Silent** at the top of its settings. It runs as usual, but never calls you:
 no Telegram message for its results, its notifications land already read (no Telegram, no badge), and its results do
-not count as unread. A small 🔕 shows next to its name. What waits for your answer still shows (an approval, an e-mail
+not count as unread. It still answers, without a sound, what you ask it on Telegram. A small 🔕 shows next to its name. What waits for your answer still shows (an approval, an e-mail
 to OK). The same menu switches it on / off, runs it now, and **Properties…** opens its settings.
 
 ## Telegram
@@ -289,8 +296,11 @@ first, and starts anew instead of going on with an earlier one.
 A new agent is **Free**, like a session: its commands reach the whole server, it works without asking. That suits an
 agent that only reads what you give it. An agent that reads **text from outside** - a mailbox, a webhook, the feed,
 web pages - can be told what to do by that text: **Protected** is advised (settings -> **Protection**), and the
-agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a webhook template on the
-command line, starts Protected. Agents made before keep their setting.
+agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a webhook or mail
+template, starts Protected. A Free agent that gets its **first** mailbox, webhook or feed trigger later (from its
+page, its conversation or the command line) turns Protected at the same moment, and says so; asked by its
+conversation, a mailbox and that switch are one request on the card. If you set it back to **Free** yourself, it
+stays Free: more sources or later changes never switch it again. Agents made before keep their setting.
 
 **Protected** runs it in **Claude Code's sandbox**:
 
@@ -350,8 +360,10 @@ You, and the agent when **you** ask it in its conversation.
   permission mode, approvals off, trusting outside events, more writable folders, fewer rules, tool lists, mailboxes,
   being a subagent, a higher budget, runs per hour or timeout. The agent's request shows up as a card in the
   conversation (and in the Notifications, and on Telegram) with the change written out (`sandbox: on → off`,
-  `domains: + example.com`); **Allow** applies it, **Deny** leaves everything as it was, and the agent hears of your
-  answer with your next message. A request waits up to 7 days. What only makes it **safer** (its sandbox, approvals
+  `domains: + example.com`); **Allow** applies exactly that change to the agent's settings of that moment (what you
+  changed since stays), **Deny** leaves everything as it was, and the agent hears of your answer with your next
+  message. If a value it changes is no longer the one on the card (you changed it since), or the agent was deleted,
+  **Allow** is refused with the reason and nothing is applied: the agent asks again if it still needs it. A request waits up to 7 days. What only makes it **safer** (its sandbox, approvals
   on, fewer keys or sites, a lower budget) is applied at once.
 - **In its sandbox, the conversation does not ask** before reading files, searching the web, opening a page of its
   sites or writing in its folders; its commands stay in the sandbox (its domains, no secrets). When one needs more

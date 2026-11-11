@@ -27,10 +27,11 @@ const toolsList = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean)
 
-type Draft = { model: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; rules: AgentRule[] }
+type Draft = { model: string; chatModel: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; rules: AgentRule[] }
 const draftOf = (a: AgentDetail): Draft => ({
   rules: (a.rules || []).map((r) => ({ ...r, reason: r.reason || '' })),
   model: a.model,
+  chatModel: a.chat_model || '',
   permission: a.permission_mode,
   allowed: toolsText(a.allowed_tools),
   disallowed: toolsText(a.disallowed_tools),
@@ -151,6 +152,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
       {
         path: a.path,
         model: d.model,
+        chat_model: d.chatModel,
         permission_mode: d.permission,
         allowed_tools: toolsList(d.allowed),
         disallowed_tools: toolsList(d.disallowed),
@@ -195,6 +197,10 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label={t('agents.field.model')} hint={t('agents.settings.sec.modelDesc')}>
               <ModelSelect id="ag-model" value={d.model} onChange={(v) => set('model', v)} />
+            </FormField>
+            {/* the model of our conversation, when the agent (or the owner) set one apart: empty = the one above */}
+            <FormField label={t('agents.field.chatModel')} hint={t('agents.settings.sec.chatModelDesc')}>
+              <ModelSelect id="ag-chat-model" value={d.chatModel} onChange={(v) => set('chatModel', v)} defaultLabel={t('agents.field.chatModelSame')} />
             </FormField>
             <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} part="budget" />
           </div>
@@ -444,11 +450,11 @@ export function ListEditor({ value, onChange, placeholder, empty, error, testid 
     onChange([...value, ...items], () => setV(''))
   }
   return (
-    <div className="grid gap-2" data-testid={testid}>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2" data-testid={testid}>
       {value.length ? (
         <ul className="flex flex-wrap gap-1.5">
           {value.map((x) => (
-            <li key={x} className="flex min-w-0 items-center gap-1 rounded-md bg-secondary py-0.5 pr-0.5 pl-2 font-mono text-[12px]">
+            <li key={x} className="flex max-w-full min-w-0 items-center gap-1 rounded-md bg-secondary py-0.5 pr-0.5 pl-2 font-mono text-[12px]">
               <span className="truncate">
                 <Sensitive length={8}>{x}</Sensitive>
               </span>

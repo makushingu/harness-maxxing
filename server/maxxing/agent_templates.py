@@ -324,6 +324,8 @@ def fields(t: dict, keys_present: list[str] | None = None, mail_account: str = "
         out["writable"] = list(t["writable"])
     if t.get("mail") and mail_account:
         out["mail"] = [{"account": mail_account, **t["mail"]}]
+    if t.get("webhook") or t.get("mail"):
+        out["sandbox"] = True               # it will read outside text: protected (its webhook is added after create())
     return out
 
 

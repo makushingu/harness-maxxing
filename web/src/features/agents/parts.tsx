@@ -384,3 +384,11 @@ export function ContinueButton({ agent: a, sid, variant = 'button' }: { agent: P
     </Tooltip>
   )
 }
+
+/** After a save: a free agent that starts reading outside text was put in its sandbox by the server (sandbox_auto). */
+export function useSandboxAutoNote() {
+  const t = useT()
+  return (r: { sandbox_auto?: boolean } | undefined) => {
+    if (r?.sandbox_auto) toast.info(t('agents.sandbox.autoOn'))
+  }
+}

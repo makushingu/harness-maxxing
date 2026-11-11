@@ -309,9 +309,10 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    source: str = "web", notify: bool = False, cron: bool = False,
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
-                   client_id: str | None = None, silent_ok: bool = False) -> dict:
+                   client_id: str | None = None, silent_ok: bool = False, ref: str | None = None) -> dict:
     """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
-    `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT)."""
+    `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
+    `ref`: as send_message's, for the first message."""
     try:
         p = workspace.normalize_path(path)
         workspace.topic_dir(p)
@@ -329,7 +330,7 @@ def create_session(path: str, message: str | None = None, title: str | None = No
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
     store.create(meta)
     first = _item((message or "").strip(), files, source, **_client_ids(client_id),
-                  **({"silent_ok": True} if silent_ok else {}))
+                  **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}))
     if audio:
         _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:
@@ -1023,18 +1024,37 @@ def _ended_turn(evs: list[dict], at: float | None, died: bool) -> tuple[int, int
         start = users[-1] + 1 if users else 0
     elif at:
         start = next((i + 1 for i in reversed(users) if ran(i)), None)
-        if start is None:                     # out of the tail read: nothing of another turn
-            return len(evs), len(evs)
+        if start is None:
+            if any((evs[i].get("at") or 0) < at for i in users):
+                return len(evs), len(evs)     # its message should be in there: nothing of another turn
+            # its message is older than the tail read (a turn that wrote more than the window): the tail starts
+            # inside it, up to the next message (one queued meanwhile)
+            return 0, users[0] if users else len(evs)
     else:                                     # an older runner (no last_turn.at): the turn of the last result
         end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), len(evs))
         return next((i + 1 for i in reversed(users) if i < end), 0), end
     return start, next((i for i in users if i >= start), len(evs))
 
 
+TURN_READ = (512 * 1024, 4 * 1024 * 1024)    # tail read for a turn that ended, then once more for a big turn
+
+
+def _turn_window(sid: str, at: float | None, died: bool) -> tuple[list[dict], int, int]:
+    """The tail of the log and the [start, end) of the turn that ended in it: read further back (once, bounded)
+    when its message is not in the first read; past that, the part of the turn the tail holds (_ended_turn)."""
+    evs: list[dict] = []
+    for n in TURN_READ:
+        evs = _tail_events(sid, nbytes=n)
+        if died or not at or any(ev["type"] == "user" and abs((ev.get("at") or 0) - at) < 1e-3 for ev in evs) \
+                or store.log_size(sid) <= n:
+            break
+    start, end = _ended_turn(evs, at, died)
+    return evs, start, end
+
+
 def ended_turn_text(sid: str, at: float | None = None, died: bool = False) -> str:
     """What the turn that ended wrote ("" if nothing), never a reply of another turn (see _ended_turn)."""
-    evs = _tail_events(sid)
-    start, end = _ended_turn(evs, at, died)
+    evs, start, end = _turn_window(sid, at, died)
     return next((ev["text"] for ev in reversed(evs[start:end]) if ev["type"] == "assistant"), "")
 
 
@@ -1044,8 +1064,7 @@ STEPS_MAX = 40                                # tools kept per turn in the agent
 def ended_turn_steps(sid: str, at: float | None = None, died: bool = False) -> dict:
     """The tools the last turn that ended used ({name, summary, error?}, the last STEPS_MAX), with its model and
     duration: what the agent page shows under the turn's answer without reading its whole log."""
-    evs = _tail_events(sid)
-    start, end = _ended_turn(evs, at, died)
+    evs, start, end = _turn_window(sid, at, died)
     uses: list[dict] = []
     failed: set[str] = set()
     for ev in evs[start:end]:
@@ -1321,6 +1340,8 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
         changed = True
         if (prev[2], prev[3]) != (cur[2], cur[3]):
             ws_changed = True
+            if "/agents/" in (m.get("path") or ""):   # an agent's turn started / ended: its page refetches, not all
+                _agent_turns.add(m["path"])
         # a turn ended, or failed to start (error without a new turn - also when it failed before this watcher
         # ever saw it running: systemd-run refusing within one pass)
         if cur[1] > prev[1] or (prev[2] != "error" and cur[2] == "error" and cur[1] == prev[1]):
@@ -1338,6 +1359,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
 
 
 _firing: set[asyncio.Task] = set()
+_agent_turns: set[str] = set()       # agents whose session started or ended a turn since the last bus message (_scan)
 
 
 async def _fire(session: dict, result: dict | None) -> None:
@@ -1396,7 +1418,9 @@ async def _watch(interval: float) -> None:
                 await asyncio.to_thread(_stamp, t0)
                 stamped, dirty = t0, False
             if changed:
-                bus.invalidate(*(("sessions", "workspace") if ws else ("sessions",)))
+                agent_topics = [f"agents:{p}" for p in sorted(_agent_turns)]
+                _agent_turns.clear()
+                bus.invalidate(*(("sessions", "workspace") if ws else ("sessions",)), *agent_topics)
             for s, r in ends:
                 t = asyncio.get_running_loop().create_task(_fire(s, r))
                 _firing.add(t)                 # keep a reference: an unreferenced task can be collected mid-run

@@ -128,7 +128,7 @@ export function FeedItem({ ev, compact, roomy }: { ev: FeedEvent; compact?: bool
           </span>
         </button>
         {roomy && long && (
-          <button type="button" onClick={() => setMore(!more)} className="justify-self-start text-xs font-medium text-primary hover:underline">
+          <button type="button" onClick={() => setMore(!more)} className="relative justify-self-start text-xs font-medium text-primary hover:underline pointer-coarse:before:absolute pointer-coarse:before:-inset-x-2 pointer-coarse:before:-inset-y-1.5 pointer-coarse:before:content-['']">
             {more ? t('feed.showLess') : t('feed.showMore')}
           </button>
         )}

@@ -244,7 +244,8 @@ def test_a_failed_turn_never_reports_the_answer_of_the_turn_before(client, topic
 def test_a_negative_or_too_big_limit_is_refused_and_a_tiny_budget_stays_a_budget(client, topic):
     _on(client)
     _create(client)
-    for bad in ({"usd_per_day": -1}, {"runs_per_hour": -3}, {"usd_per_day": 5000}, {"timeout_s": 10 ** 6}):
+    for bad in ({"usd_per_day": -1}, {"runs_per_hour": -3}, {"usd_per_day": 5000}, {"timeout_s": 10 ** 6},
+                {"timeout_s": 10 ** 400}):
         r = client.patch("/api/agents/acme/blog/writer", json={"limits": bad})
         assert r.status_code == 400 and r.json()["error"] == "bad_limit", (bad, r.text)
     assert agents.load(A)["limits"]["usd_per_day"] == 2.0 and agents.load(A)["limits"]["runs_per_hour"] == 6
@@ -1021,3 +1022,14 @@ def test_agents_made_before_the_conversation_have_it_too(client, topic):
     two = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL two"}).json()
     assert two["session"]["id"] == one["session"]["id"]
     wait_idle(client, two["session"]["id"])
+
+
+def test_a_rule_with_a_lone_surrogate_is_refused(client, topic):
+    _on(client)
+    _create(client)
+    for rule in ({"tool": "Bash", "match": "x\ud800y"}, {"tool": "Bash", "match": "rm", "reason": "no\udfff"}):
+        r = client.patch("/api/agents/acme/blog/writer", content=json.dumps({"rules": [rule]}),
+                         headers={"Content-Type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "bad_rule", r.text
+    assert client.get("/api/agents").status_code == 200
+    assert agents.clean({"rules": [{"tool": "Bash", "match": "a\ud800"}]})["rules"][0]["match"] == "a?"

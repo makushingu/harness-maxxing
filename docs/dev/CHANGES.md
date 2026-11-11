@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.140 - 2026-11-11
 
 - `agents`: outside provenance follows a result into the next session. `on_turn_end` marks the `result` message
   `outside: true` when the session was started by outside text (`MAXXING_AGENT_OUTSIDE=1` without
@@ -19,6 +19,39 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   repeats of the outside text is unmarked one run later. API.md: `AgentMessage.outside?`. Results written before
   this change carry no mark. Test:
   `test_agents.py::test_the_result_of_an_outside_run_keeps_its_provenance_in_the_next_sessions`.
+- `nav.useUnpinnedPages()` (page extensions on, without error, not pinned): while > 0, `Sidebar` ends the page rows
+  with `hubItem` (`/x`, `data-tour="nav-extensions"`, not draggable, not in `sidebar_order`) and `TouchNav` adds an
+  Extensions tile. `tests/test_web_ext_hub.py` checks both.
+- The `/x` hub (`pages/ext/hub.tsx`) had no link left since the sidebar shows only pinned pages: `CommandPalette`
+  gets `nav:x` (keywords extensions, pages, plugins) and Settings -> Pages an **All pages** button (`ext.allPages`, unused
+  until now); `docs/user/13-page-extensions.md` says where it is. `tests/test_web_ext_hub.py` checks both links.
+- Tasks: the view switch leaves the header below 480 px (was 400: on 393-412 px phones it pushed the touch Menu
+  button to x 398-442, 14 px of it on screen); feed **Show more** gets a `pointer-coarse:before` hit area (50x16 ->
+  66x28, exactly the gap to the title and the actions above and below: it never takes their taps). `tests/test_web_mobile.py` checks both.
+- `telegram.gateway.forget()` also deletes `new.json` (`_new_path()`, the messages waiting for the "where?" answer).
+  It was left behind, so `_new_restore()` revived the pending question after the next link. Test added in
+  `tests/test_telegram_reliability.py` (`test_forgetting_the_bot_drops_a_pending_where_question`).
+- `skills._front`: the block scalar header (`|` or `>`, with the chomping sign `-` or `+`) is stripped by one regex;
+  `|-` and `|+` left their sign at the start of the description ("- Line one"). Test added in `tests/test_skills.py`.
+- `agents.clean`: `triggers` is read as a list only when it is one (the slice ran before the `isinstance` check, so a
+  dict raised `KeyError` and an int `TypeError`); `_clean_avatar` looks a value up in `_OLD_AVATAR` only when it is a
+  string (a list was unhashable). `GET /api/agents/<topic>/<agent>` failed with an error for such a file. Tests added
+  in `tests/test_agents.py`.
+- `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
+  then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
+  save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
+- Radar fixes merged from `main` (one commit each, with its test): `claude_models` (a non-list `data` is a failed
+  read; a preview/variant suffix is not a newer model), `agents.clean` (lone surrogate in a rule -> 400 `bad_rule`, a
+  limit too big for a number -> 400), `infra.probe` (`bad_probe` marks only its server), sessions (a change of Plan
+  mode, model or permissions restarts the process before the next message), web (composer cap kept while Send is
+  tapped, Tasks `tight` below 480 px of page width, agent settings chip track `minmax(0,1fr)`, feed Show more hit area,
+  folded sidebar compact rows under 820 px of height with an edge fade).
+- PR #74 (review of 2.0.0a139, agents): owner messages queue instead of `busy`; Run now fires the routine; a Free agent
+  that gets outside text turns Protected; an allowed safety change applies the values of its card; a sandboxed agent
+  never writes `.maxxing.json`; a turn bigger than the 512 KB tail read keeps its answer; the thread refetches only on
+  its own agent's turns and keeps its place across pages; silent agents answer on Telegram; settings show the
+  conversation's model; French texts say vous. Tests: `test_agents_conv_fixes.py`, `test_agent_safety_changes.py`,
+  `test_agent_turn_bus.py`.
 
 ## 2.0.0-alpha.139 - 2026-11-10
 
@@ -31,12 +64,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   answer, tools or model (no `at`: the old last-result rule). UI: `fetchAgentThreadBefore` (`?before=`, pages of
   200 when the flow is scrolled to its top, view kept in place); the composer's model is the agent's
   (`chat_model` or `model`) unless picked, and is sent only when picked; `NewAgentForm` explains an empty slug.
-- `nav.useUnpinnedPages()` (page extensions on, without error, not pinned): while > 0, `Sidebar` ends the page rows
-  with `hubItem` (`/x`, `data-tour="nav-extensions"`, not draggable, not in `sidebar_order`) and `TouchNav` adds an
-  Extensions tile. `tests/test_web_ext_hub.py` checks both.
-- The `/x` hub (`pages/ext/hub.tsx`) had no link left since the sidebar shows only pinned pages: `CommandPalette`
-  gets `nav:x` (keywords extensions, pages, plugins) and Settings -> Pages an **All pages** button (`ext.allPages`, unused
-  until now); `docs/user/13-page-extensions.md` says where it is. `tests/test_web_ext_hub.py` checks both links.
 - `pages/ext/index.tsx`: `t` / `navigate` read through a ref, not effect deps (`useT()` changes with each
   dictionary group: ~10 remounts of an extension page while it opened).
 - **Agent chat** (every agent, no switch: a `chat` key left in an agent.json is dropped by `clean()`):
@@ -138,15 +165,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`claude_update.installed_server()`, split out of `runs_here()`; `MAXXING_CLAUDE_MODELS=0|1`). `titles.MODEL`,
   `api.claude.TEST_MODEL` = `haiku`, `team.SUMMARY_MODEL` = `sonnet` (Claude Code family names). Telegram fallback
   list: Haiku 5.5 instead of 4.5. Tests `test_claude_models.py`.
-- `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
-  then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
-  save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
-- `skills._front`: the block scalar header (`|` or `>`, with the chomping sign `-` or `+`) is stripped by one regex;
-  `|-` and `|+` left their sign at the start of the description ("- Line one"). Test added in `tests/test_skills.py`.
-- `agents.clean`: `triggers` is read as a list only when it is one (the slice ran before the `isinstance` check, so a
-  dict raised `KeyError` and an int `TypeError`); `_clean_avatar` looks a value up in `_OLD_AVATAR` only when it is a
-  string (a list was unhashable). `GET /api/agents/<topic>/<agent>` failed with an error for such a file. Tests added
-  in `tests/test_agents.py`.
 
 ## 2.0.0-alpha.137 - 2026-11-10
 

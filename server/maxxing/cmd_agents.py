@@ -317,8 +317,6 @@ def _create(a) -> int:
         v = [x.strip() for x in getattr(a, k).split(",") if x.strip()]
         if v:
             fields[k] = v
-    if tpl and (tpl.get("webhook") or tpl.get("mail")):
-        fields["sandbox"] = True                    # it will read outside text: protected (create() sees no webhook)
     if a.sandbox or a.no_sandbox:
         fields["sandbox"] = bool(a.sandbox)
     try:
@@ -334,7 +332,8 @@ def _create(a) -> int:
             print(f"schedule not added: {e}", file=sys.stderr)
     if tpl and tpl.get("webhook"):
         try:
-            hook = agents.add_webhook(r["path"], tpl["webhook"]["kind"], tpl["webhook"]["prompt"], [], "")["hook"]
+            hook = agents.add_webhook(r["path"], tpl["webhook"]["kind"], tpl["webhook"]["prompt"], [], "",
+                                      box=not a.no_sandbox)["hook"]
             extra["webhook"] = hook.get("url")
         except Exception as e:  # noqa: BLE001
             print(f"webhook not added: {e}", file=sys.stderr)
@@ -512,12 +511,15 @@ def _set(path: str, a) -> int:
     if turn.get("manager") and turn["path"] == path:
         r = agents.request_change(path, fields, session=turn["session"])
     else:                                              # the owner (shell, session): everything at once
-        agents.update(path, fields)
-        r = {"applied": sorted(fields), "asked": [], "request": ""}
+        u = agents.update(path, fields)
+        r = {"applied": sorted({*fields, *(["sandbox"] if u.get("sandbox_auto") else [])}), "asked": [], "request": "",
+             "sandbox_auto": u.get("sandbox_auto")}
     if r["applied"]:
         print("changed: " + ", ".join(r["applied"]))
     if r["asked"]:
         print("waiting for the owner's OK (safety settings, applied once allowed): " + ", ".join(r["asked"]))
+    if r.get("sandbox_auto"):
+        print(agents.SANDBOX_AUTO_NOTE)
     return 0
 
 
@@ -632,19 +634,27 @@ def _handler(a) -> int:
             print(json.dumps({"cron": job.get("id")}) if a.json else f"schedule added: {job.get('id')} ({a.schedule}, {_zone()})")
             return 0
         if a.agents_cmd == "webhook":
-            hook = agents.add_webhook(path, a.kind, a.prompt, _levels(a.levels), a.match)["hook"]
+            w = agents.add_webhook(path, a.kind, a.prompt, _levels(a.levels), a.match)
+            hook, boxed = w["hook"], bool(w["agent"].get("sandbox_auto"))
             if a.json:
-                print(json.dumps({k: hook.get(k) for k in ("id", "name", "kind", "url")}))
+                print(json.dumps({**{k: hook.get(k) for k in ("id", "name", "kind", "url")},
+                                  **({"sandbox_auto": True} if boxed else {})}))
             else:
                 print(f"webhook added: source {hook['name']}\nURL: {hook.get('url')}")
+                if boxed:
+                    print(agents.SANDBOX_AUTO_NOTE)
                 if a.kind != "generic":
                     print(f"Set its signing secret in the agent page -> Triggers (a {a.kind} webhook refuses "
                           "deliveries until then).", file=sys.stderr)
             return 0
         if a.agents_cmd == "watch":
-            agents.add_trigger(path, {"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
-                                      "match": a.match, "prompt": a.prompt})
-            print(json.dumps({"agent": path}) if a.json else f"{path} now watches the feed source {a.source.strip()}")
+            u = agents.add_trigger(path, {"kind": "feed", "source": a.source.strip(), "levels": _levels(a.levels),
+                                          "match": a.match, "prompt": a.prompt})
+            boxed = bool(u.get("sandbox_auto"))
+            print(json.dumps({"agent": path, **({"sandbox_auto": True} if boxed else {})}) if a.json
+                  else f"{path} now watches the feed source {a.source.strip()}")
+            if boxed and not a.json:
+                print(agents.SANDBOX_AUTO_NOTE)
             return 0
     except agents.AgentError as e:
         print(e.message, file=sys.stderr)
