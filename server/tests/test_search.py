@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 
 from maxxing import config, search
 from maxxing.sessions import store
@@ -212,7 +213,9 @@ def test_unchanged_sessions_are_not_read_again(client, mx, monkeypatch):
     search.refresh()
     reads = []
     real = store.read
-    monkeypatch.setattr(store, "read", lambda sid: reads.append(sid) or real(sid))
+    me = threading.get_ident()
+    # this thread's reads only: the sessions watcher of the test server reads the same metas on its own (_scan)
+    monkeypatch.setattr(store, "read", lambda sid: (reads.append(sid) if threading.get_ident() == me else None) or real(sid))
     search.refresh()
     search.search("message")
     assert reads == []                                   # nothing changed: no meta parsed again
