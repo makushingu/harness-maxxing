@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.140 - 2026-11-11
 
 Security:
 - **Agents: an answer to outside text stays out of your conversation.** A run started by a webhook, a
@@ -11,6 +11,42 @@ Security:
   session of the agent, which asked nothing: what the outside text said could come back there. A new conversation
   with the agent no longer gets such an answer (it is still in the agent's page), and a run started by a script
   that gets it asks first too, unless the agent trusts outside events.
+
+New:
+- **Extensions in the sidebar while a page is not pinned**: an **Extensions** entry ends the list of pages (a tile of
+  the ⊞ menu on a phone) as long as an extension page is not pinned: one click to the pages that are not in the
+  sidebar. With every page pinned, or no extension, the sidebar stays as it is.
+
+Fixed:
+- **The Extensions page can be opened again**: Settings -> Pages -> **All pages**, or **Extensions** in the search
+  (Ctrl K), lists every extension page, pinned or not; the guide said it was in the sidebar, which now shows only the
+  pinned ones.
+- **Tasks on a phone**: on a 393-412 px screen the view switch no longer pushes the menu button (⊞) off the screen: it
+  sits under the header below 480 px. **Show more** in the notifications is easier to tap.
+- **Forgetting the Telegram bot also forgets a message that was waiting for its topic.** Before, the "Where should
+  this session go?" question and your message came back when you linked a bot again.
+- **A skill whose description is written as a `|-` or `|+` block no longer starts with a stray dash or plus sign.**
+  The Skills list now shows the text of these blocks as written.
+- **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
+  not a list, or an avatar value that is not text, is ignored like any other invalid value.
+
+- **Agents, after the 2.0.0-alpha.139 review**: a message you send while the agent works waits for its turn instead
+  of being refused; **Run now** starts the agent's routine, not a message of the conversation; a Free agent that
+  starts reading outside text (mail, webhook, feed) goes into its sandbox; a safety change you allow applies exactly
+  what its card showed; a sandboxed agent never rewrites its topic settings; a very long answer is no longer lost;
+  the agent's page keeps its place when older messages load and no longer reloads on every other session's turn;
+  silent agents still answer you on Telegram; the settings show the model of the conversation; French texts say
+  « vous ».
+- **Folded sidebar on a low window**: every page stays reachable (compact rows, a fade where rows are hidden).
+- **Agents**: a rule with an invalid character or a limit too big for a number is refused cleanly instead of an
+  error.
+- **Sessions**: a message sent after changing Plan mode, the model or the permissions starts a new process, so the
+  change applies.
+- **Phone**: typing a message, the first tap on Send is no longer lost.
+- **Tasks** beside a wide second sidebar: the view switch leaves the header so **New task** stays on screen.
+- **Agent settings**: a long domain or folder stays inside the sheet.
+- **Infra**: a broken probe entry marks only its own server down.
+- **Claude models**: a preview or variant name is no longer taken for a newer model.
 
 ## 2.0.0-alpha.139 - 2026-11-10
 
@@ -48,20 +84,12 @@ New:
   **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
   (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
   (the model picker in its box).
-- **Extensions in the sidebar while a page is not pinned**: an **Extensions** entry ends the list of pages (a tile of
-  the ⊞ menu on a phone) as long as an extension page is not pinned: one click to the pages that are not in the
-  sidebar. With every page pinned, or no extension, the sidebar stays as it is.
 
 Fixed:
 - **Agents**: an agent's conversation changes that agent only, whatever the order of its options; a run that
   stops without an answer (stopped, server restarted) shows its error in the flow, never the answer before it.
 - **New agent**: a name without a letter from a to z or a digit says why it cannot be used.
 - **Extension pages** no longer reload several times while they open.
-- **The Extensions page can be opened again**: Settings -> Pages -> **All pages**, or **Extensions** in the search
-  (Ctrl K), lists every extension page, pinned or not; the guide said it was in the sidebar, which now shows only the
-  pinned ones.
-- **Tasks on a phone**: on a 393-412 px screen the view switch no longer pushes the menu button (⊞) off the screen: it
-  sits under the header below 480 px. **Show more** in the notifications is easier to tap.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 
@@ -71,14 +99,6 @@ New:
   Telegram `/model`), without waiting for an update. If your default model is the newest of its family, it follows
   the next one; a model you chose on a topic, a job or an agent never changes. Short titles, the connection test and
   Team summaries always use the newest Haiku or Sonnet.
-
-Fixed:
-- **Forgetting the Telegram bot also forgets a message that was waiting for its topic.** Before, the "Where should
-  this session go?" question and your message came back when you linked a bot again.
-- **A skill whose description is written as a `|-` or `|+` block no longer starts with a stray dash or plus sign.**
-  The Skills list now shows the text of these blocks as written.
-- **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
-  not a list, or an avatar value that is not text, is ignored like any other invalid value.
 
 ## 2.0.0-alpha.137 - 2026-11-10
 
