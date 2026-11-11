@@ -2,6 +2,7 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn, mergeRefs } from '@/lib/utils'
+import { useT } from '@/i18n'
 import { sheetIsBottom, useSheetDrag } from './sheet-drag'
 
 export const Sheet = DialogPrimitive.Root
@@ -15,6 +16,7 @@ type Side = 'right' | 'left' | 'bottom'
  * `side="bottom"` forces a bottom sheet everywhere.
  */
 export function SheetContent({ side = 'right', className, children, hideClose, ref, ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { side?: Side; hideClose?: boolean }) {
+  const t = useT()
   const overlay = React.useRef<HTMLDivElement>(null)
   const close = React.useRef<HTMLButtonElement>(null)
   const drag = useSheetDrag(() => close.current?.click(), sheetIsBottom(side === 'bottom'), overlay)
@@ -42,7 +44,7 @@ export function SheetContent({ side = 'right', className, children, hideClose, r
         {!hideClose && (
           <DialogPrimitive.Close className="absolute top-3 right-3 rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:hidden">
             <X className="size-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('common.close')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
