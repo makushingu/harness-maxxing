@@ -27,6 +27,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
   then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
   save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
+- `docs/dev/API.md`: rows for `PUT /api/system/auto-update`, `PUT /api/extensions/pins`, `GET /api/files/preview` and
+  `GET /api/files/archive`, which the code served without a row.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
