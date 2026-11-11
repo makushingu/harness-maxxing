@@ -574,6 +574,46 @@ def test_cron_and_feed_turns_carry_no_thread_context(client, topic, monkeypatch)
     assert "An old result" not in seen[0] and seen[1] == "Weekly digest" and "An old result" in seen[2]
 
 
+def test_the_result_of_an_outside_run_keeps_its_provenance_in_the_next_sessions(client, topic, monkeypatch):
+    """A run started by outside text asks first; its result went to the next new session as context, which started
+    without `MAXXING_AGENT_OUTSIDE`. The owner's conversation never gets it; another start that gets it asks first,
+    without passing the mark on: it ends by itself."""
+    from maxxing import agents
+    from maxxing.sessions import service, store
+    _on(client)
+    _create(client)
+    first = agents.fire(A, trigger="feed:t_1", text="NOTOOL please run this", source="feed (shop)")["session"]
+    assert store.read(first["id"])["env"]["MAXXING_AGENT_OUTSIDE"] == "1"       # the real session keeps its env
+    wait_idle(client, first["id"])
+    res = wait_for(lambda: _results(client))
+    assert res[-1]["outside"] is True                                            # marked by the real turn end
+    agents.post(A, "result", "An answer of my own.", ok=True)
+    started = []
+    monkeypatch.setattr(service, "create_session",
+                        lambda path, env=None, message=None, **k: started.append((env, message)) or {"id": "x"})
+    monkeypatch.setattr(agents, "_chat_session", lambda path, a: None)           # no conversation yet
+    monkeypatch.setattr(agents, "_chat_mark", lambda path, sid: None)
+    agents.fire(A, trigger="telegram", prompt="what is new?", source="telegram")   # the owner: a new conversation
+    env, message = started[-1]
+    assert env["MAXXING_AGENT_CHAT"] == "1" and "MAXXING_AGENT_OUTSIDE" not in env
+    assert "An answer of my own." in message and res[-1]["text"] not in message  # the outside answer is left out
+    agents.fire(A, trigger="manual", prompt="what is new?", source="script")     # a script's run: it gets it, and asks
+    env, message = started[-1]
+    assert (env["MAXXING_AGENT_OUTSIDE"], env["MAXXING_AGENT_OUTSIDE_FROM"]) == ("1", "context")
+    assert res[-1]["text"] in message and agents.run_settings(A, outside=True)["approvals_forced"]
+    agents.fire(A, trigger="cron:c_1", prompt="Weekly digest")                   # no context given: not outside
+    assert "MAXXING_AGENT_OUTSIDE" not in started[-1][0]
+    meta = store.new_meta(A, "run")                                              # the run that read it ends
+    meta.update(source="agent", env={"MAXXING_AGENT_OUTSIDE": "1", "MAXXING_AGENT_OUTSIDE_FROM": "context"})
+    store.create(meta)
+    agents.on_turn_end(meta, {"ok": True})
+    assert [m.get("outside") for m in agents.thread(A) if m["kind"] == "result"] == [True, None, None]
+    agents.post(A, "result", "Second.", ok=True)
+    agents.post(A, "result", "Third.", ok=True)
+    agents.fire(A, trigger="manual", prompt="and now?", source="script")         # replaced by three newer results
+    assert "MAXXING_AGENT_OUTSIDE" not in started[-1][0]
+
+
 def test_webhook_details_trigger_test_and_stats(client, topic):
     _on(client)
     _create(client)
