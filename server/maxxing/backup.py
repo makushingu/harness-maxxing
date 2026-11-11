@@ -91,12 +91,14 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
     ("JSON web token", r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
     # a password written next to its label (accounts.md is backed up): a value of 8+ characters mixing letters and
     # digits, not a sentence ("password: in the vault"), a placeholder (<...>, `...`), a variable ($DB_PASS), a link
-    # nor a password manager's name ("Password: 1Password")
+    # nor a password manager's name ("Password: 1Password") nor the name of the key that holds it ("mdp: SHOP_DB_PASS2",
+    # upper case with an underscore: how a password is meant to be noted next to an account)
     # The lookaheads are bounded: unbounded, a long token such as "password:password:..." rescans the rest of the
     # line at every label and the scan turns quadratic (minutes for a few hundred kB). Quotes around the label and
     # the value are allowed so JSON passwords ("password": "...") are caught too.
     ("password", r"(?i)(?:password|passwd|mot de passe|mdp)[\"']?[ \t]*[:=][ \t]*[\"']?(?!\$)(?![^\s]{0,256}://)"
                  r"(?!(?:1password|bitwarden|keepass\w*|lastpass|dashlane|protonpass|keychain)\b)"
+                 r"(?!(?-i:[A-Z][A-Z0-9]*_[A-Z0-9_]*)(?=[\s,.;:)\]|`'\"]|$))"
                  r"(?=[^\s`'\"<>()]{0,128}\d)(?=[^\s`'\"<>()]{0,128}[A-Za-z])[^\s`'\"<>()]{8,}"),
 ]]
 

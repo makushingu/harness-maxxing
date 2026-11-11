@@ -5,6 +5,12 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- `backup.LEAKS` "password": a value that is a whole upper-case name with an underscore (a vault key name such
+  as `P30J_CF_PASSWORD`) is not a secret; a value that only starts like one is still caught. Tests in
+  `test_backup.py::test_scanner_ignores_names`.
+
 ## 2.0.0-alpha.140 - 2026-11-11
 
 - `agents`: outside provenance follows a result into the next session. `on_turn_end` marks the `result` message

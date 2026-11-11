@@ -105,8 +105,12 @@ def test_scanner_ignores_names():
     assert backup.scan_bytes(text) == []
     for ok in ("password: in the vault (Settings -> Keys)", "mot de passe : `<PASSWORD>`", "passwd = changeme",
                "password: see accounts", "| mdp: 1Password |", "password=$DB_PASS_2024",
-               "- Password: https://vault.bitwarden.com/#/vault?itemId=4f2a", "sk_live_ keys start like this", "the eyJ prefix of a JWT"):
+               "- Password: https://vault.bitwarden.com/#/vault?itemId=4f2a", "sk_live_ keys start like this", "the eyJ prefix of a JWT",
+               "(mdp : SHOP2_CF_PASSWORD)", "password: SMTP_PASS_2024, rotated"):
         assert backup.scan_bytes(ok.encode()) == [], ok
+    # a key name only when it is the whole value: a password that starts like one, or mixed case, is still caught
+    for bad in ("mdp : SHOP2_CF_Xk81mQ", "password: Shop_Db_2024x", "password: ABC_DEF12gh"):
+        assert backup.scan_bytes(bad.encode()) == ["password"], bad
 
 
 def test_scanner_is_linear_on_a_crafted_token():

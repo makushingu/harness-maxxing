@@ -3,6 +3,12 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **Memory backup**: a password noted by the name of its key ("password: SHOP_DB_PASS") no longer stops the
+  nightly backup as a leaked secret.
+
 ## 2.0.0-alpha.140 - 2026-11-11
 
 Security:
