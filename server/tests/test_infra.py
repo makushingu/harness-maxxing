@@ -1173,6 +1173,37 @@ def test_bucket_create_undoes_its_steps_when_one_fails(fake_caddy, monkeypatch):
     assert calls == []
 
 
+def test_bucket_create_undoes_its_steps_when_the_registry_fails(fake_caddy, monkeypatch):
+    """infra.json cannot be written (disk full): the bucket, its key, its site and its vault keys are undone."""
+    calls = []
+
+    def fake_garage(*args, timeout=60):
+        calls.append(args)
+        if args[:2] == ("key", "create"):
+            return 0, "Key ID:              GK123\nSecret key:          s3cr3t\n", ""
+        return 0, "", ""
+
+    declare = registry.declare
+
+    def full(rid, **k):
+        if k.get("kind") == "bucket":
+            raise OSError(28, "No space left on device")
+        return declare(rid, **k)
+    monkeypatch.setattr(actions, "garage_installed", lambda: True)
+    monkeypatch.setattr(actions, "_garage", fake_garage)
+    monkeypatch.setattr(registry, "declare", full)
+    with pytest.raises(OSError):
+        actions.bucket_create("media", public=True)
+    assert ("key", "delete", "--yes", "media-key") in calls and ("bucket", "delete", "--yes", "media") in calls
+    assert vault.get("S3_MEDIA_ACCESS_KEY_ID") is None and vault.get("S3_MEDIA_BUCKET") is None
+    assert not list(fake_caddy.rglob("media.caddy"))
+
+
+def test_pg_databases_keeps_a_name_with_a_space(monkeypatch):
+    monkeypatch.setattr(actions, "_psql", lambda q, *a, **k: (0, "my app\nother\n", ""))
+    assert actions.pg_databases() == ["my app", "other"]
+
+
 def test_pg_create_drops_the_role_when_the_database_fails(org, monkeypatch):
     sql = []
 
@@ -1238,6 +1269,24 @@ def test_a_lone_surrogate_is_refused_by_every_infra_route(client, org):
     assert client.get("/api/infra").status_code == 200
 
 
+def test_a_change_made_during_a_refresh_asks_for_another(org, monkeypatch):
+    """A server removed while the servers are probed: the snapshot was built from the old registry, so it is stale."""
+    monkeypatch.setenv("MAXXING_INFRA_CHECKS", "0")
+    monkeypatch.setattr(providers, "cloudflare", lambda: CF)
+    monkeypatch.setattr(providers, "hostinger", lambda: {"connected": False, "key": None})
+
+    def slow_probe(opts):
+        time.sleep(0.05)                        # past the file clock's tick
+        infra.mark_stale()
+        return _probes(str(org.ws))["local"]
+    monkeypatch.setattr(infra, "probe_local", slow_probe)
+    infra.refresh()
+    assert infra.is_stale(infra.load_snapshot())
+    monkeypatch.setattr(infra, "probe_local", lambda opts: _probes(str(org.ws))["local"])
+    infra.refresh()                             # nothing changed during this one
+    assert not infra.is_stale(infra.load_snapshot())
+
+
 def test_a_note_made_during_a_refresh_stays(org, monkeypatch):
     monkeypatch.setenv("MAXXING_INFRA_CHECKS", "0")
     monkeypatch.setattr(providers, "cloudflare", lambda: CF)
@@ -1275,6 +1324,16 @@ def test_a_probe_entry_without_its_fields_costs_only_its_server():
         res = {r["id"]: r for r in build.build({build.LOCAL: {}, "bad": bad, "good": good}, servers, {}, {}, {}, {}, "/w", None)}
         assert res["server:bad"]["status"] == "down" and res["server:bad"]["status_detail"] == "bad_probe", bad
         assert any(r.startswith("site:good:ok.example.com") for r in res), bad
+
+
+def test_a_malformed_server_section_costs_only_its_server():
+    """`server` with odd ips or disk fields: that server is down (bad_probe), the other servers are still built."""
+    good = {"sites": [{"host": "ok.example.com", "kind": "static", "root": "/srv/ok"}]}
+    for sv in ({"ips": [{}]}, {"ips": ["1.1.1.1"]}, {"ips": "abc"}, {"disk_free": "5", "disk_total": 10}):
+        servers = [{"name": n, "host": "h.example.com"} for n in ("bad", "good")]
+        res = {r["id"]: r for r in build.build({build.LOCAL: {}, "bad": {"server": sv}, "good": good}, servers, {}, {}, {}, {}, "/w", None)}
+        assert res["server:bad"]["status"] == "down" and res["server:bad"]["status_detail"] == "bad_probe", sv
+        assert any(r.startswith("site:good:ok.example.com") for r in res), sv
 
 
 def test_dns_providers_and_hosts_match_whole_labels():

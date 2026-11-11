@@ -30,7 +30,8 @@ credentials, logs, `attachments/`, `.git`, `node_modules`, virtual environments,
   written next to its label such as `password: Hunter2xyz9` or `"password": "…"` - useful in `accounts.md`; UTF-16
   files are read too). If one is found the backup **stops before pushing** and tells you
   which file and which kind of secret (never the value). Remove it from the file – keep only the
-  key name, store the value in Settings -> Keys – and run again.
+  key name (upper-case words joined by underscores, such as `SHOP_DB_PASS2`), store the value in Settings -> Keys – and
+  run again.
 - **Private only**: the repository must be private; this is checked when you configure it and
   again before every push. If it becomes public, backups stop.
 - The GitHub token is stored in `secrets.json` (mode 600) and never written in a git config file.

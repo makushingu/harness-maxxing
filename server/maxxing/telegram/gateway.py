@@ -3691,7 +3691,7 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str 
     tid = _agent_thread_sync(tok, chat, path)
     if tid is None:                                    # threads off: the main chat, the agent's name in front
         head = f"{AGENT_ICON} <b>{fmt.escape(_agent_display(path))}</b>"
-        if parts and len(head) + 1 + len(parts[0]) <= fmt.LIMIT:
+        if parts and _u16(head) + 1 + _u16(parts[0]) <= fmt.LIMIT:      # Telegram counts UTF-16 units
             parts = [f"{head}\n{parts[0]}"] + parts[1:]
         else:
             parts = [head] + parts
@@ -3991,7 +3991,7 @@ def feed_message(ev: dict) -> tuple[str, dict]:
     foot = f"\n<i>{fmt.escape(fmt.head(ev['source'], 200))}</i>"
     raw = ev.get("body") or ""                          # cut before rendering: a cut "&amp;" breaks the HTML
     # markdown (a Claude answer, a report) rendered; escaping grows it ("&" -> "&amp;"): one message at most
-    parts = fmt.render(fmt.head(raw, 700), fmt.LIMIT - len(top) - len(foot) - 3)
+    parts = fmt.render(fmt.head(raw, 700), fmt.LIMIT - _u16(top) - _u16(foot) - 3)
     body = (parts[0] + "\n…" if len(parts) > 1 else parts[0]) if parts else ""
     text = top + (f"\n{body}" if body else "") + foot
     row = [{"text": "🤖 Ask Harness", "callback_data": f"f:{ev['id']}"}]
@@ -4026,12 +4026,12 @@ def notify_cron_report(header: str, body: str = "", markdown: bool = True, loud:
             return
         head = f"<b>{fmt.escape(header)}</b>"
         body = (body or "").strip()
-        room = fmt.LIMIT - len(head) - 2                # the header always shares the first message
+        room = max(fmt.LIMIT - _u16(head) - 2, 1000)    # the header shares the first message (UTF-16 units)
         if markdown:
             parts = fmt.render(fmt.head(body, REPORT_MAX), room) if body else []
         else:                                          # command output: verbatim, in a code block
             parts = fmt.code(body, room) if body else []
-        if parts and len(head) + 2 + len(parts[0]) <= fmt.LIMIT:
+        if parts and _u16(head) + 2 + _u16(parts[0]) <= fmt.LIMIT:
             parts[0] = f"{head}\n\n{parts[0]}" if markdown else f"{head}\n{parts[0]}"
         else:
             parts.insert(0, head)

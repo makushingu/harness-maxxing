@@ -109,7 +109,15 @@ def build(probes: dict[str, dict], servers: list[dict], cf: dict | None, hst: di
         p = probes.get(name) or {}
         sv = p.get("server") or {}
         rid = f"server:{name}"
-        ips = [i["ip"] for i in sv.get("ips") or []]
+        bad = False
+        try:                                               # remote probe output: fields may have any shape
+            ips = [i["ip"] for i in sv.get("ips") or []]
+            if not all(isinstance(i, str) for i in ips):
+                raise TypeError("ip")
+            total = sv.get("disk_total") or 0
+            low = bool(total) and (sv.get("disk_free") or 0) / total < 0.1
+        except (KeyError, TypeError, AttributeError, ValueError, ZeroDivisionError):
+            sv, ips, low, bad = {}, [], False, True
         if s.get("host") and is_ip(s["host"]) and s["host"] not in ips:
             ips.append(s["host"])
         det = {"server": name, "host": s.get("host"), "user": s.get("user"), "ips": ips, "os": sv.get("os"), "cpus": sv.get("cpus"),
@@ -122,11 +130,11 @@ def build(probes: dict[str, dict], servers: list[dict], cf: dict | None, hst: di
             r["details"]["this"] = True
         if p.get("error"):
             r["status"], r["status_detail"] = "down", p["error"]
+        elif bad:
+            r["status"], r["status_detail"] = "down", "bad_probe"
         elif sv:
             r["status"] = "ok"
-            free = sv.get("disk_free") or 0
-            total = sv.get("disk_total") or 0
-            if total and free / total < 0.1:
+            if low:
                 r["status"], r["status_detail"] = "warn", "disk_low"
         for ip in ips:
             ip_owner[ip] = rid

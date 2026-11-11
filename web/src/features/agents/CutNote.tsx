@@ -11,7 +11,7 @@ export function CutNote({ m, path }: { m: AgentMessage; path?: string }) {
     <p className="text-xs text-muted-foreground italic" data-testid="agent-cut">
       {t('agents.thread.cut', { n: m.cut.toLocaleString() })}{' '}
       {path && m.session && (
-        <Link to={agentRunRoute(path, m.session)} className="text-primary not-italic hover:underline">
+        <Link to={agentRunRoute(path, m.session)} className="text-primary not-italic hover:underline pointer-coarse:inline-block pointer-coarse:py-3">
           {t('agents.thread.cutOpen')}
         </Link>
       )}

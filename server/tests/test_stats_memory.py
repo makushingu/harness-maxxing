@@ -57,6 +57,21 @@ def test_memory_files_limit_and_settings(client, mx):
     assert "No line limit" in memory.compact_prompt(0) and "at most 300 lines" in memory.compact_prompt(300)
 
 
+def test_memory_files_skip_what_is_not_a_regular_file_and_read_a_bounded_part(mx, monkeypatch):
+    import os
+    ws = config.workspace()
+    for name, make in (("zero", lambda p: p.symlink_to("/dev/zero")), ("fifo", lambda p: os.mkfifo(p)),
+                       ("big", lambda p: p.write_bytes(b"x\n" * 100))):
+        t = ws / "projects" / name / "topics" / "t"
+        t.mkdir(parents=True)
+        make(t / "memory.md")
+    monkeypatch.setattr(memory, "READ_MAX", 50)
+    by = {f["path"]: f for f in memory.files()}
+    assert "projects/zero/topics/t/memory.md" not in by and "projects/fifo/topics/t/memory.md" not in by
+    big = by["projects/big/topics/t/memory.md"]
+    assert big["bytes"] == 200 and big["lines"] == 25
+
+
 def test_changelog_parse():
     assert changelog.normalize("2.0.0-alpha.6") == changelog.normalize("2.0.0a6") == "2.0.0a6"
     assert changelog.normalize("v2.1.0") == "2.1.0"

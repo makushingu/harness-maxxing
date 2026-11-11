@@ -71,7 +71,9 @@ def mark_stale() -> None:
 
 def is_stale(snap: dict | None) -> bool:
     try:
-        return (_dir() / "stale").stat().st_mtime > ((snap or {}).get("generated_at") or 0)
+        # against the start of the refresh: a server removed while it ran is not in the registry it read
+        snap = snap or {}
+        return (_dir() / "stale").stat().st_mtime > (snap.get("started_at") or snap.get("generated_at") or 0)
     except OSError:
         return False
 
@@ -443,7 +445,7 @@ def refresh() -> dict | None:
                 if not b.get("ok"):
                     _worse(r, "warn", "backup_failed")
         prev = load_snapshot()
-        snap = {"generated_at": int(time.time()), "took_ms": int((time.time() - t0) * 1000), "harness_host": host,
+        snap = {"generated_at": int(time.time()), "started_at": t0, "took_ms": int((time.time() - t0) * 1000), "harness_host": host,
                 "sources": {"servers": {n: {"ok": not p.get("error"), "error": p.get("error"), "took_ms": p.get("took_ms")}
                                         for n, p in probes.items()}, **_source_state(cf, hst),
                             **platforms.source_state(plat)},

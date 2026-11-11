@@ -7,7 +7,8 @@ from maxxing import cli, vault
 
 
 def run(monkeypatch, *argv, stdin=""):
-    monkeypatch.setattr("sys.stdin", io.StringIO(stdin))
+    data = stdin if isinstance(stdin, bytes) else stdin.encode()
+    monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(data), encoding="utf-8"))
     return cli.main(["keys", *argv])
 
 
@@ -46,3 +47,12 @@ def test_a_multi_line_value_keeps_its_final_line_break(mx, monkeypatch, capsys):
     assert capsys.readouterr().out == pem                          # not followed by an empty line
     assert run(monkeypatch, "set", "SSH_KEY", stdin="token\n") == 0
     assert vault.get("SSH_KEY") == "token"                         # one line: `echo "$V" |` adds no break
+
+
+def test_set_refuses_a_value_that_is_not_utf8_or_too_long_without_reading_it_all(mx, monkeypatch, capsys):
+    assert run(monkeypatch, "set", "BIN_KEY", stdin=b"\xff\xfe") == 2
+    assert "not UTF-8" in capsys.readouterr().err and vault.get("BIN_KEY") is None
+    big = io.BytesIO(b"a" * 10_000_000)
+    monkeypatch.setattr("sys.stdin", io.TextIOWrapper(big, encoding="utf-8"))
+    assert cli.main(["keys", "set", "BIG_KEY"]) == 2
+    assert big.tell() < 100_000 and vault.get("BIG_KEY") is None

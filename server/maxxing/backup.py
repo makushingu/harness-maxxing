@@ -92,13 +92,14 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
     # a password written next to its label (accounts.md is backed up): a value of 8+ characters mixing letters and
     # digits, not a sentence ("password: in the vault"), a placeholder (<...>, `...`), a variable ($DB_PASS), a link
     # nor a password manager's name ("Password: 1Password") nor the name of the key that holds it ("mdp: SHOP_DB_PASS2",
-    # upper case with an underscore: how a password is meant to be noted next to an account)
+    # upper case words joined by underscores, each ending with at most two digits, the last one may be a number:
+    # how a password is meant to be noted next to an account; "S3CR3T_P4SS_9X" is not a key name)
     # The lookaheads are bounded: unbounded, a long token such as "password:password:..." rescans the rest of the
     # line at every label and the scan turns quadratic (minutes for a few hundred kB). Quotes around the label and
     # the value are allowed so JSON passwords ("password": "...") are caught too.
     ("password", r"(?i)(?:password|passwd|mot de passe|mdp)[\"']?[ \t]*[:=][ \t]*[\"']?(?!\$)(?![^\s]{0,256}://)"
                  r"(?!(?:1password|bitwarden|keepass\w*|lastpass|dashlane|protonpass|keychain)\b)"
-                 r"(?!(?-i:[A-Z][A-Z0-9]*_[A-Z0-9_]*)(?=[\s,.;:)\]|`'\"]|$))"
+                 r"(?!(?-i:[A-Z]+[0-9]{0,2}(?:_[A-Z]+[0-9]{0,2})*_(?:[A-Z]+[0-9]{0,2}|[0-9]+))(?=[\s,.;:)\]|`'\"]|$))"
                  r"(?=[^\s`'\"<>()]{0,128}\d)(?=[^\s`'\"<>()]{0,128}[A-Za-z])[^\s`'\"<>()]{8,}"),
 ]]
 
