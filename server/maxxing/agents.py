@@ -159,7 +159,7 @@ def _num(v: Any, default: float, lo: float, hi: float, integer: bool, strict: st
     refused instead of cut. Not strict, a negative value there never turns into "no limit": it takes the default."""
     try:
         n = float(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):       # OverflowError: an integer too big for a float (10**400)
         n = float("nan")
     if strict and (not math.isfinite(n) or n > hi or (n < lo and lo == 0)):
         raise AgentError(400, "bad_limit", f"{strict}: a number from {lo:g} to {hi:g}")
