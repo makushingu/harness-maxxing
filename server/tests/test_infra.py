@@ -1173,6 +1173,11 @@ def test_bucket_create_undoes_its_steps_when_one_fails(fake_caddy, monkeypatch):
     assert calls == []
 
 
+def test_pg_databases_keeps_a_name_with_a_space(monkeypatch):
+    monkeypatch.setattr(actions, "_psql", lambda q, *a, **k: (0, "my app\nother\n", ""))
+    assert actions.pg_databases() == ["my app", "other"]
+
+
 def test_pg_create_drops_the_role_when_the_database_fails(org, monkeypatch):
     sql = []
 

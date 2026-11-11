@@ -102,7 +102,7 @@ def pg_databases() -> list[str]:
     code, out, err = _psql("select datname from pg_database where not datistemplate order by 1;")
     if code != 0:
         raise ActionError("cannot list the databases: " + _err(out, err), "psql_failed")
-    return [x for x in out.split() if x]
+    return [x for x in out.splitlines() if x.strip()]        # one per line: a name may hold a space
 
 
 def pg_create(name: str, project: str | None = None) -> dict:
