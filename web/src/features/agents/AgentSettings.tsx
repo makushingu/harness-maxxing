@@ -385,11 +385,11 @@ export function ListEditor({ value, onChange, placeholder, empty, error, testid 
     onChange([...value, ...items], () => setV(''))
   }
   return (
-    <div className="grid gap-2" data-testid={testid}>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2" data-testid={testid}>
       {value.length ? (
         <ul className="flex flex-wrap gap-1.5">
           {value.map((x) => (
-            <li key={x} className="flex min-w-0 items-center gap-1 rounded-md bg-secondary py-0.5 pr-0.5 pl-2 font-mono text-[12px]">
+            <li key={x} className="flex max-w-full min-w-0 items-center gap-1 rounded-md bg-secondary py-0.5 pr-0.5 pl-2 font-mono text-[12px]">
               <span className="truncate">
                 <Sensitive length={8}>{x}</Sensitive>
               </span>
