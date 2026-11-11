@@ -227,3 +227,14 @@ def test_cron_report_and_feed_message_count_their_header_in_utf16(posted):
     ev = {"id": 1, "title": "🔥" * 300, "level": "info", "source": "🔥" * 200, "body": "😀" * 700}
     text, _ = gateway.feed_message(ev)
     assert _u16(text) <= fmt.LIMIT
+
+
+def test_agent_message_counts_its_header_in_utf16(monkeypatch):
+    got = []
+    monkeypatch.setattr(gateway, "token", lambda: "t")
+    monkeypatch.setattr(gateway, "tg_config", lambda: {"chat_id": 1})
+    monkeypatch.setattr(gateway, "_agent_thread_sync", lambda *a: None)
+    monkeypatch.setattr(gateway, "_agent_display", lambda p: "x" * 40)
+    monkeypatch.setattr(gateway, "_send_sync", lambda key, parts, *a, **k: got.append(parts) or True)
+    gateway._agent_send_sync("projects/a/topics/b/agents/c", fmt.render("😀" * 2040), True)
+    assert got and all(_u16(p) <= fmt.LIMIT for p in got[0])

@@ -3691,7 +3691,7 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str 
     tid = _agent_thread_sync(tok, chat, path)
     if tid is None:                                    # threads off: the main chat, the agent's name in front
         head = f"{AGENT_ICON} <b>{fmt.escape(_agent_display(path))}</b>"
-        if parts and len(head) + 1 + len(parts[0]) <= fmt.LIMIT:
+        if parts and _u16(head) + 1 + _u16(parts[0]) <= fmt.LIMIT:      # Telegram counts UTF-16 units
             parts = [f"{head}\n{parts[0]}"] + parts[1:]
         else:
             parts = [head] + parts
