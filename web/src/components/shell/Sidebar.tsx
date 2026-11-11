@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { MessageCircle, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { Blocks, MessageCircle, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
+import { navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
 import { entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -130,6 +130,7 @@ export const Sidebar = React.memo(function Sidebar() {
   const prefetchLink = usePrefetchLink()
   const t = useT()
   const { entries, end } = useNavEntries()
+  const unpinned = useUnpinnedPages()
   const userCollapsed = useUI((s) => s.sidebarCollapsed)
   const toggle = useUI((s) => s.toggleSidebar)
   const tablet = useIsTablet()
@@ -225,6 +226,28 @@ export const Sidebar = React.memo(function Sidebar() {
       </NavLink>
     </Tooltip>
   )
+  /** The Extensions page, after the pages: only while an extension page is not pinned (a direct way to it). */
+  const hubItem = (idx: number) => (
+    <Tooltip key="/x" content={collapsed ? t('ext.hubTitle') : null} side="right">
+      <NavLink
+        to="/x"
+        end
+        {...prefetchLink('/x')}
+        data-tour="nav-extensions"
+        aria-label={collapsed ? t('ext.hubTitle') : undefined}
+        style={{ '--i': idx } as React.CSSProperties}
+        className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
+            <Blocks className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
+            {!collapsed && <span className="flex-1 truncate">{t('ext.hubTitle')}</span>}
+          </>
+        )}
+      </NavLink>
+    </Tooltip>
+  )
   // Dragging saves the whole order (pages and pinned pages) in `sidebar_order`; the pin order follows, so the
   // other lists of pinned pages (Extensions) show them in the same order.
   const drag = useDragOrder(
@@ -307,6 +330,7 @@ export const Sidebar = React.memo(function Sidebar() {
                   if (!e) return null // switched off or unpinned in another tab during a drag
                   return e.page ? navItem(e.page, idx, drag.props(to)) : extItem(e, idx, drag.props(to))
                 })}
+                {unpinned > 0 && hubItem(entries.length)}
               </nav>
             </div>
 
@@ -318,7 +342,7 @@ export const Sidebar = React.memo(function Sidebar() {
                 <UpdateIndicator collapsed={collapsed} />
               </div>
               <HelpMenu collapsed={collapsed} />
-              {end.map((item) => navItem(item, entries.length))}
+              {end.map((item) => navItem(item, entries.length + 1))}
               {/* folded: the way to pin the bar (pinned, the button sits beside the logo) */}
               {collapsed && !tablet && (
                 <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
