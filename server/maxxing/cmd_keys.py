@@ -22,6 +22,8 @@ import sys
 
 from . import cli
 
+VALUE_READ_MAX = 16384 * 4 + 4096      # bytes read by `set`: the vault's 16384 characters in UTF-8, plus blanks
+
 
 def _configure(p) -> None:
     sub = p.add_subparsers(dest="action", required=True)
@@ -199,7 +201,17 @@ def _handler(a) -> int:
         print(v, end="" if v.endswith("\n") else "\n")
         return 0
     if a.action == "set":
-        raw = sys.stdin.read()
+        cap = VALUE_READ_MAX
+        data = sys.stdin.buffer.read(cap + 1)   # bounded: `< /dev/zero` or a huge pipe is refused, not loaded
+        if len(data) > cap:
+            print(f"{a.name}: value must be 1 to 16384 characters", file=sys.stderr)
+            return 2
+        try:
+            raw = data.decode("utf-8")
+        except UnicodeDecodeError:
+            print(f"{a.name}: the value is not UTF-8 text (a binary secret: maxxing keys put-file {a.name} PATH)",
+                  file=sys.stderr)
+            return 2
         value = raw.strip()
         if "\n" in value and raw.rstrip(" \t\r").endswith("\n"):
             value += "\n"          # a multi-line value (PEM, SSH key) keeps its final line break: OpenSSH wants it
