@@ -2,12 +2,15 @@
 memory-compaction skill enforces (Settings -> Memory, `maxxing memory`). See docs/dev/API.md#memory."""
 from __future__ import annotations
 
+import os
+import stat
 import time
 from pathlib import Path
 
 from . import config
 
 DEFAULT_MAX_LINES = 200
+READ_MAX = 8 << 20             # bytes read to count the lines of one file: a bigger one is over any limit anyway
 
 
 def max_lines() -> int:
@@ -33,11 +36,15 @@ def files() -> list[dict]:
     out = []
     for level, p in found:
         try:
-            data = p.read_bytes()
+            st = os.stat(p)
+            if not stat.S_ISREG(st.st_mode):          # a FIFO or a link to /dev/zero would never end
+                continue
+            with open(p, "rb") as f:
+                data = f.read(READ_MAX)
         except OSError:
             continue
         lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
-        out.append({"path": p.relative_to(ws).as_posix(), "level": level, "lines": lines, "bytes": len(data),
+        out.append({"path": p.relative_to(ws).as_posix(), "level": level, "lines": lines, "bytes": max(st.st_size, len(data)),
                     "over": bool(limit) and lines > limit})
     return out
 
