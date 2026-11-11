@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { qk, useForgetBrowsers, useSetTwoFactor } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
 import { useT } from '@/i18n'
-import type { TwoFactorChallenge } from '@/lib/types'
+import type { TelegramChallenge } from '@/lib/types'
 import {
   Button,
   Dialog,
@@ -21,12 +21,12 @@ import { SettingRow } from '@/features/common'
 import { TwoFactorWait } from './TwoFactorWait'
 /** Two-step sign-in: turning it on waits for an approval in Telegram (a broken bridge cannot lock anybody out);
  *  turning it off asks for the current password (a signed-in browser alone cannot remove it). */
-export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }) {
+export function TwoFactorRow({ on, id = 'tg-2fa', label }: { on: boolean; id?: string; label?: string }) {
   const t = useT()
   const qc = useQueryClient()
   const setTwo = useSetTwoFactor()
   const forget = useForgetBrowsers()
-  const [challenge, setChallenge] = React.useState<TwoFactorChallenge | null>(null)
+  const [challenge, setChallenge] = React.useState<TelegramChallenge | null>(null)
   const [askOff, setAskOff] = React.useState(false)
   const [password, setPassword] = React.useState('')
   const [pwError, setPwError] = React.useState<string>()
@@ -41,7 +41,7 @@ export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }
       { enabled: true },
       {
         onSuccess: (r) => {
-          if (r.two_factor) setChallenge(r.two_factor)
+          if (r.two_factor?.challenge) setChallenge({ challenge: r.two_factor.challenge, expires_in: r.two_factor.expires_in })
         },
         onError: (e) => toast.error(errorMessage(e)),
       },
@@ -59,7 +59,7 @@ export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }
   }
   return (
     <>
-      <SettingRow label={t('twofa.setting')} description={t('twofa.settingDesc')} htmlFor={id}>
+      <SettingRow label={label ?? t('twofa.setting')} description={t('twofa.settingDesc')} htmlFor={id}>
         <div className="flex items-center gap-2">
           {on && (
             <Button variant="ghost" size="sm" loading={forget.isPending} onClick={() => forget.mutate(undefined, { onSuccess: () => toast.success(t('twofa.forgotten')) })}>

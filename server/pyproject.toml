@@ -9,6 +9,8 @@ dependencies = [
   "httpx>=0.27",
   "python-multipart>=0.0.9",
   "watchfiles>=0.21",           # inotify wake-ups of the session streams (sessions/wake.py)
+  "pyotp>=2.9",                 # authenticator-app codes (twofactor_apps.py)
+  "webauthn>=3.0",              # passkeys and security keys (twofactor_apps.py)
 ]
 
 [project.optional-dependencies]

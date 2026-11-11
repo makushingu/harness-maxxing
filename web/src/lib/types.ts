@@ -22,7 +22,14 @@ export type AuthState = {
 export type SetupBody = { token: string; password: string }
 export type LoginBody = { password: string }
 /** A sign-in (or turning two-step sign-in on) waiting for an approval in Telegram. */
-export type TwoFactorChallenge = { challenge: string; expires_in: number }
+export type TelegramChallenge = { challenge: string; expires_in: number }
+/** After the right password: a Telegram request (`challenge`) and/or a `ticket` for an app code, a recovery code or a passkey. */
+export type TwoFactorMethod = 'telegram' | 'totp' | 'passkey' | 'recovery'
+export type TwoFactorChallenge = { challenge?: string; ticket?: string; expires_in: number; methods?: TwoFactorMethod[] }
+export type PasskeyInfo = { id: string; name: string; rp_id: string; created: number | null; last_used: number | null }
+export type TwoFactorMethods = { telegram: boolean; totp: boolean; recovery_left: number; rp_id: string; passkeys: PasskeyInfo[] }
+export type TotpSetup = { setup: string; secret: string; uri: string; expires_in: number }
+export type RecoveryCodes = { recovery_codes: string[] | null }
 export type LoginResult = { ok: boolean; two_factor?: TwoFactorChallenge }
 export type TwoFactorPoll = { ok: boolean; status: 'pending' | 'approved'; expires_in?: number }
 export type ChangePasswordBody = { current: string; new: string }
@@ -449,7 +456,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'two_factor'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'

@@ -173,6 +173,8 @@ def revoke_all() -> None:
     Allow pressed by mistake can no longer be collected afterwards. The `maxxing` command runs in another process than
     the server: the time recorded in secrets.json makes the server drop the requests made before it too."""
     config.set_secret("challenges_not_before", time.time())
+    from . import twofactor_apps
+    twofactor_apps.revoke_all()                    # the authenticator-app / passkey sign-in requests too
     with _lock:
         gone = list(_ch.values())
         _ch.clear()
@@ -237,6 +239,14 @@ def _not_before() -> float:
         return float(config.get_secret("challenges_not_before") or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def cancel(cid: str) -> None:
+    """A sign-in finished another way (authenticator app, passkey): its Telegram request closes."""
+    with _lock:
+        c = _ch.pop(cid or "", None)
+    if c is not None:
+        _close(c, _w("gone"))
 
 
 def purpose(cid: str) -> str | None:

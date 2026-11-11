@@ -39,6 +39,12 @@ New:
   **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
   (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
   (the model picker in its box).
+- **Two-step sign-in with an authenticator app or a passkey**: no need for Telegram any more. In Settings -> Security,
+  set up an app that gives 6-digit codes (Google Authenticator, 1Password, Bitwarden, Aegis...) or add a passkey
+  (fingerprint, face, PIN, or a security key like a YubiKey); after the password, a new browser then asks for it. You
+  get 10 recovery codes to keep: each one signs in once if you lose your phone or key. Every change asks for your
+  password and sends an alert. Telegram approval still works, alone or next to them, and `maxxing 2fa off` on the
+  server is still the way back in. Passkeys need the HTTPS address of the server. [Show me](#show:twofa-apps)
 
 Fixed:
 - **Agents**: an agent's conversation changes that agent only, whatever the order of its options; a run that

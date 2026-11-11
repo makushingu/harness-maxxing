@@ -403,7 +403,29 @@ Agent groups: the owner talks to 2-6 agents of one project in one conversation (
   `TTL` 120 s, `GRACE` 60 s to collect an approval, `NEW_MAX` 5 per client / 15 min, `PENDING_MAX` 10.
 - Trusted browser: cookie `mx_device` = `<issued_at>.<nonce>.<hmac(device_key)>`, path `/api/auth`, 30 days;
   `forget_devices()` = `device_key` -> None (recreated on first use).
-- CLI `maxxing 2fa status|off|forget-browsers` (`cmd_twofactor.py`): the way back in when Telegram does not answer.
+- CLI `maxxing 2fa status|off|forget-browsers` (`cmd_twofactor.py`): the way back in when the second step is lost (off = every method, see below).
+
+## maxxing.twofactor_apps (two-step sign-in with an authenticator app, passkeys, recovery codes)
+- Any app method on (`any_on()`: `totp_secret` or a passkey in secrets.json) = a second step at sign-in, next to
+  Telegram's (`twofactor.enabled()`); `api/auth._second_step` returns the Telegram `challenge` and / or a `ticket`.
+- Tickets in memory (one server process): `new_ticket(ip, telegram=challenge_id)`, 300 s, bound to
+  `security.client_key`, `TICKETS_PER_CLIENT` 3 live per client (a 4th within 100 s = 429; a reload replaces its own
+  oldest), `OPTIONS_MAX` 10 passkey prompts each, spent once by `check_code` (TOTP or recovery code) or `check_passkey`; `CODE_TRIES` 5 per
+  ticket, `BAD_MAX` 20 wrong codes server-wide per hour (`codes_paused`, passkeys still work; `take_pause_alert()` once
+  per window: a loud alert, the password is known). Removing a method (`_forget_others`) or `turn_all_off()` calls
+  `twofactor.forget_devices()`. Killed by
+  `twofactor.revoke_all()` (same process) or `challenges_not_before` (another process). A success closes the
+  Telegram request of the same sign-in (`twofactor.cancel`).
+- TOTP (pyotp): 30 s steps, previous / current / next accepted, `totp_last` = last accepted step (a code is never
+  accepted twice; the setup code counts). The secret only becomes active after a right first code (`Setup`,
+  memory, 300 s).
+- WebAuthn (py_webauthn >= 3): rp_id = host name of the request, origins = forwarded scheme + Host, and the
+  `public_url` when it has the same host (`origin_of`); errors are logged, the client gets a fixed message; a passkey keeps its `rp_id` and is only offered there. Registration: attestation none, resident
+  key preferred, user verification preferred; one answer per options (the challenge is dropped first).
+  `sign_count` / `last_used` updated on each use.
+- Recovery codes: 10 × 10 chars (no 0/o/1/l/i), stored as sha256, made with the first app method
+  (`recovery_codes_made`), dropped with the last one; `regenerate_recovery_codes()` replaces them.
+- `turn_all_off()` = `maxxing 2fa off` (with Telegram's flag): the way back in over SSH.
 
 ## maxxing.bus
 - `invalidate(*topics)` - thread-safe UI invalidation (see API.md Global bus).

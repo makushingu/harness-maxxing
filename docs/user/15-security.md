@@ -128,6 +128,43 @@ Recommended on top: SSH keys instead of passwords (`PasswordAuthentication no` o
 - **Alerts**: with Telegram linked, every sign-in and repeated wrong passwords are reported in the
   *Alerts* thread.
 
+
+## Two-step sign-in
+
+With two-step sign-in, the password alone is not enough: a browser that is not trusted yet asks for a second step
+after the right password. Settings -> Security -> **Two-step sign-in** offers three methods; turn on one or more,
+and the sign-in page offers each of them.
+
+- **Authenticator app**: a 6-digit code that changes every 30 seconds, from an app on your phone (Google
+  Authenticator, Microsoft Authenticator, 1Password, Bitwarden, Aegis...). **Set up** asks for your current password,
+  shows a QR code to scan (or a key to type), then the first code of the app turns it on. A code is accepted once:
+  one read over your shoulder cannot be used again. If codes are refused, check the time of the phone.
+- **Passkeys and security keys**: your fingerprint, face or PIN on this device (Windows Hello, Touch ID, Android),
+  a passkey of your password manager, or a security key (YubiKey...). **Add a passkey** asks for your current
+  password and a name, then your browser asks for the key. A passkey belongs to the address it was added on
+  (`https://ui.example.com`): add one per address you use. Passkeys need HTTPS (or `localhost`): on a plain
+  `http://` address only the app and Telegram work.
+- **Approval in Telegram**: an **Allow** button in Telegram (see [Telegram](telegram#two-step-sign-in)).
+
+**Recovery codes**: when the first app or passkey is turned on, 10 recovery codes are shown once: copy or download
+them and keep them in a password manager or on paper. Each one signs in once without your phone or key (type it
+in the code field) and sends a loud sign-in alert. **New codes** makes 10 new ones and the old ones stop working.
+They go away with the last app or passkey.
+
+**Trust this browser for 30 days** (ticked by default) skips the second step on that browser; **Forget trusted
+browsers** (Telegram row) or a password change makes every browser ask again. Every change of a method asks for the
+current password, so a signed-in browser left open cannot add its own passkey or remove yours; each change sends a
+loud alert to Telegram and the notifications feed. Removing the app or a passkey (a lost phone or key) also makes
+every other trusted browser ask again. 5 wrong codes cancel a sign-in, and after 20 wrong codes in an hour on the
+whole server codes are paused for the hour (a passkey still works) with a loud alert: someone knows the password,
+change it.
+
+**Lost the phone, the key and the codes?** On the server, over SSH:
+
+```bash
+maxxing 2fa off             # password only again: every method off, every trusted browser forgotten
+maxxing 2fa status          # what is on
+```
 ## Telegram
 
 The gateway answers only the chat linked with the one-time code, and only the Telegram account that opened
@@ -140,7 +177,7 @@ protect it (2-step verification).
 | Path | Content | Protection |
 |---|---|---|
 | `/var/lib/claude-maxxing/config.json` | settings (no secrets) | directory mode 700 |
-| `/var/lib/claude-maxxing/secrets.json` | password hash, cookie key, Claude token/API key, Telegram token, GitHub tokens, your Keys | mode 600; never returned by the API except on explicit Reveal |
+| `/var/lib/claude-maxxing/secrets.json` | password hash, cookie key, two-step sign-in (authenticator app secret, passkeys' public keys, recovery codes as hashes), Claude token/API key, Telegram token, GitHub tokens, your Keys | mode 600; never returned by the API except on explicit Reveal |
 | `/var/lib/claude-maxxing/secret-files/` | your Keys that are files (keystores, service-account JSON, certificates) | directory mode 700, files mode 600; never returned by the API, never in the backup |
 | `/var/lib/claude-maxxing/sessions/` | session metadata and logs | mode 700 directory |
 | `/root/maxxing/` | your workspace (memory, projects, tasks, extensions) | backed up (whitelist) |

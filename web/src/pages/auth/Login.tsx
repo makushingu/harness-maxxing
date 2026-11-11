@@ -8,6 +8,7 @@ import { safeNext } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Button, CodeBlock, FormField, SecretInput } from '@/components/ui'
 import { TwoFactorWait } from '@/features/auth/TwoFactorWait'
+import { TwoFactorApps } from '@/features/auth/TwoFactorApps'
 import type { TwoFactorChallenge } from '@/lib/types'
 import { AuthLayout } from './AuthLayout'
 
@@ -56,22 +57,26 @@ export default function LoginPage() {
     )
   }
 
-  if (challenge)
+  const secondStepDone = async (err: string | null) => {
+    if (err === null) {
+      await qc.invalidateQueries({ queryKey: qk.authState })
+      return enter()
+    }
+    setChallenge(null)
+    setError(err || null)
+    requestAnimationFrame(() => input.current?.focus())
+  }
+  const ticket = challenge?.ticket
+  if (challenge && ticket)
+    return (
+      <AuthLayout title={t('twofa.appsTitle')} subtitle={t('twofa.appsSubtitle')}>
+        <TwoFactorApps tf={{ ...challenge, ticket }} onDone={secondStepDone} />
+      </AuthLayout>
+    )
+  if (challenge?.challenge)
     return (
       <AuthLayout title={t('twofa.title')} subtitle={t('twofa.subtitle')}>
-        <TwoFactorWait
-          challenge={challenge}
-          trustOption
-          onDone={async (err) => {
-            if (err === null) {
-              await qc.invalidateQueries({ queryKey: qk.authState })
-              return enter()
-            }
-            setChallenge(null)
-            setError(err || null)
-            requestAnimationFrame(() => input.current?.focus())
-          }}
-        />
+        <TwoFactorWait challenge={{ challenge: challenge.challenge, expires_in: challenge.expires_in }} trustOption onDone={secondStepDone} />
       </AuthLayout>
     )
 

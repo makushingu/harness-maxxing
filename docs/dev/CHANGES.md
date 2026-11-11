@@ -7,6 +7,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.139 - 2026-11-10
 
+- Two-step sign-in without Telegram (`twofactor_apps.py`, deps `pyotp>=2.9`, `webauthn>=3.0`): TOTP, WebAuthn
+  passkeys, recovery codes in secrets.json (`totp_secret`, `totp_last`, `passkeys`, `recovery_codes` as sha256,
+  `recovery_codes_made`, `webauthn_user`). `POST /api/auth/login` returns `two_factor.{ticket, methods}` next to the
+  Telegram `challenge` (a Telegram failure is no longer a 503 when another method is on); new routes
+  `/api/auth/two-factor/code`, `/passkey/options`, `/passkey`, `/methods`, `/totp/setup`, `/totp`, `/totp/off`,
+  `/passkeys/options`, `/passkeys`, `/passkeys/remove`, `/recovery-codes` (changes need the current password, same
+  throttle as `/password`); bus topic `two_factor`. `twofactor.revoke_all()` also kills the tickets;
+  `twofactor.cancel(id)` closes the Telegram request of a sign-in finished another way. Removing a method forgets the
+  other trusted browsers; 3 live tickets per client; the first codes pause sends a loud alert; passkey errors are
+  logged, not returned. `maxxing 2fa off` turns
+  every method off. Web: `lib/webauthn.ts` (no new npm dependency), `TwoFactorApps` (sign-in),
+  `TwoFactorAppsCard` (Settings -> Security), showcase `twofa-apps`. Tests: `tests/test_twofactor_apps.py` with a
+  software authenticator (EC P-256, "none" attestation) through the real verification.
 - Fixes before release: `agent_guard._manages` reads the target with `cmd_agents._configure`'s parser
   (`parse_known_args`; `--name writer other` targets `other`) and `cmd_agents._handler` refuses a manager command of
   `AGENT_OWNER_ONLY` on another agent; `silent` / `loud` joined `AGENT_OWNER_ONLY` (and `AGENT_MANAGER`);

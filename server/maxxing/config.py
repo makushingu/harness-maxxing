@@ -5,7 +5,7 @@ Everything the server persists lives under the *state dir* (MAXXING_STATE, defau
 whose path is stored in config.json.
 
 config.json  - non-secret settings (readable, backed up)
-secrets.json - chmod 600: password hash, cookie key, setup token, Telegram/GitHub/Claude tokens,
+secrets.json - chmod 600: password hash, cookie key, setup token, two-step sign-in (twofactor_apps.py), Telegram/GitHub/Claude tokens,
                user secrets (the "Keys" vault; its files are in secret-files/, see vault_files.py)
 
 All writes are atomic (tmp file + rename) and guarded by a process-wide lock.

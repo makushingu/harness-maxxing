@@ -29,6 +29,7 @@ export const SHOWCASES: Record<string, TourStep[]> = {
   infra: [{ id: 'infra', targets: [], title: 'show.infra.title', body: 'show.infra.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   'infra-servers': [{ id: 'infra-servers', targets: [], title: 'show.infraServers.title', body: 'show.infraServers.body', route: (c) => (c.pathname === '/infra' ? null : '/infra?tab=servers') }],
   twofa: [{ id: 'twofa', targets: [], title: 'show.twofa.title', body: 'show.twofa.body', route: (c) => (c.pathname === '/settings/security' ? null : '/settings/security') }],
+  'twofa-apps': [{ id: 'twofa-apps', targets: ['twofa-apps'], title: 'show.twofaApps.title', body: 'show.twofaApps.body', route: (c) => (c.pathname === '/settings/security' ? null : '/settings/security') }],
   'infra-domains': [{ id: 'infra-domains', targets: [], title: 'show.infraDomains.title', body: 'show.infraDomains.body', route: (c) => (c.pathname === '/infra' ? null : '/infra?tab=domains') }],
   mcp: [{ id: 'mcp', targets: [], title: 'show.mcp.title', body: 'show.mcp.body', route: (c) => (c.pathname === '/settings/mcp' ? null : '/settings/mcp') }],
   'idle-compact': [{ id: 'idle-compact', targets: ['idle-compact'], title: 'show.idleCompact.title', body: 'show.idleCompact.body', route: (c) => (c.pathname === '/settings/claude' ? null : '/settings/claude') }],

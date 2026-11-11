@@ -8,6 +8,7 @@ import { Button, FormField, SecretInput, Switch, toast } from '@/components/ui'
 import { NewPasswordFields, validatePasswords } from '@/pages/auth/PasswordFields'
 import { Callout, SettingRow } from '@/features/common'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
+import { TwoFactorAppsCard } from '@/features/auth/TwoFactorAppsCard'
 import { SettingsCard, SectionStack } from './ui'
 
 export function SecuritySection() {
@@ -59,17 +60,20 @@ export function SecuritySection() {
           </div>
         </form>
       </SettingsCard>
-      <SettingsCard title={t('twofa.setting')}>
-        {tg?.chat ? (
-          <TwoFactorRow on={!!tg.settings.two_factor} id="sec-2fa" />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {t('twofa.needTelegram')}{' '}
-            <Link to="/settings/telegram" className="font-medium text-primary hover:underline">
-              {t('twofa.linkTelegram')}
-            </Link>
-          </p>
-        )}
+      <SettingsCard title={t('twofa.setting')} description={t('twofa.cardDesc')}>
+        <div className="grid gap-4">
+          <TwoFactorAppsCard />
+          {tg?.chat ? (
+            <TwoFactorRow on={!!tg.settings.two_factor} id="sec-2fa" label={t('twofa.telegramRow')} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t('twofa.needTelegram')}{' '}
+              <Link to="/settings/telegram" className="font-medium text-primary hover:underline">
+                {t('twofa.linkTelegram')}
+              </Link>
+            </p>
+          )}
+        </div>
       </SettingsCard>
       {/* the presentation mode masks your data while you share your screen; was in General before 2.0.0a132 */}
       <SettingsCard title={t('security.privacy')} description={t('security.privacyDesc')}>

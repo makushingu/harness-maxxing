@@ -4,13 +4,13 @@ import { pollTwoFactor } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
 import { useT } from '@/i18n'
 import { Button, Checkbox, CodeBlock, FormField, Input, Label, Spinner } from '@/components/ui'
-import type { TwoFactorChallenge } from '@/lib/types'
+import type { TelegramChallenge } from '@/lib/types'
 
 const POLL_MS = 1500
 
 /** Waits for Allow in Telegram (polling) or the code of the message typed by hand.
  *  `onDone(null)` = approved; `onDone(message)` = denied / expired / cancelled (message to show, or ''). */
-export function TwoFactorWait({ challenge, trustOption = false, onDone }: { challenge: TwoFactorChallenge; trustOption?: boolean; onDone: (error: string | null) => void }) {
+export function TwoFactorWait({ challenge, trustOption = false, onDone }: { challenge: TelegramChallenge; trustOption?: boolean; onDone: (error: string | null) => void }) {
   const t = useT()
   const [left, setLeft] = React.useState(challenge.expires_in)
   const [code, setCode] = React.useState('')

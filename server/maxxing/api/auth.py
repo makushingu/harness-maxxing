@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from .. import __version__, bus, config, security, twofactor
+from .. import twofactor_apps as apps
 from . import settings as settings_api
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], dependencies=[Depends(security.csrf_only)])
@@ -36,6 +37,42 @@ class TwoFactorSet(BaseModel):
 class PasswordIn(BaseModel):
     current: str
     new: str
+
+
+class TicketIn(BaseModel):
+    ticket: str
+
+
+class CodeIn(BaseModel):
+    ticket: str
+    code: str
+    trust: bool = True
+
+
+class PasskeyIn(BaseModel):
+    ticket: str
+    credential: dict
+    trust: bool = True
+
+
+class PasswordOnly(BaseModel):
+    password: str
+
+
+class SetupCodeIn(BaseModel):
+    setup: str
+    code: str
+
+
+class PasskeyAddIn(BaseModel):
+    setup: str
+    credential: dict
+    name: str = ""
+
+
+class PasskeyRemoveIn(BaseModel):
+    id: str
+    password: str
 
 
 def _check_strength(pw: str) -> None:
@@ -107,8 +144,8 @@ async def login(body: LoginIn, request: Request, response: Response):
     ok = await _verify(body.password)
     delay = security.end_attempt(key, ok)
     if ok:
-        if twofactor.enabled() and not trusted:
-            return {"ok": False, "two_factor": await _challenge("login", request)}
+        if not trusted and (twofactor.enabled() or apps.any_on()):
+            return {"ok": False, "two_factor": await _second_step(request)}
         security.set_cookie(response, request)
         _alert(request, "Signed in", loud=False)
         return {"ok": True}
@@ -116,6 +153,173 @@ async def login(body: LoginIn, request: Request, response: Response):
         _alert(request, f"{n} wrong passwords", loud=True)
     await asyncio.sleep(delay)
     raise HTTPException(401, detail={"error": "bad_password", "message": "Wrong password"})
+
+
+async def _second_step(request: Request) -> dict:
+    """What the sign-in page offers after the right password: a Telegram request and / or a ticket for an
+    authenticator code, a recovery code or a passkey."""
+    _, rp_id = apps.origin_of(request)
+    found = apps.methods(rp_id)
+    out: dict = {"methods": [], "expires_in": apps.TTL}
+    if twofactor.enabled():
+        try:
+            out.update(await _challenge("login", request))
+            out["methods"].append("telegram")
+        except HTTPException:
+            if not apps.any_on():                       # Telegram is the only way: its error stands
+                raise
+    if apps.any_on():
+        try:
+            t = apps.new_ticket(security.client_key(request), telegram=out.get("challenge"))
+        except apps.Refused as e:
+            raise _refused(e) from None
+        out["ticket"] = t.id
+        out["methods"] += found + ["recovery"]
+    return out
+
+
+def _refused(e: apps.Refused) -> HTTPException:
+    return HTTPException(e.status, detail={"error": e.error, "message": e.message, **e.extra})
+
+
+def _signed_in(request: Request, response: Response, ticket: apps.Ticket, trust: bool, how: str, loud: bool) -> dict:
+    if ticket.telegram:
+        twofactor.cancel(ticket.telegram)
+    security.set_cookie(response, request)
+    if trust:
+        twofactor.set_device_cookie(response, request)
+    _alert(request, f"Signed in ({how})", loud=loud)
+    return {"ok": True, "status": "approved"}
+
+
+@router.post("/two-factor/code")
+async def two_factor_code(body: CodeIn, request: Request, response: Response):
+    """Sign-in, second step: a code of the authenticator app, or a recovery code (one use)."""
+    try:
+        t, how = await asyncio.to_thread(apps.check_code, body.ticket, security.client_key(request), body.code)
+    except apps.Refused as e:
+        if apps.take_pause_alert():                 # someone who knows the password is guessing codes
+            _alert(request, "Two-step sign-in: too many wrong codes, codes paused for an hour - the password is known, "
+                            "change it", loud=True)
+        raise _refused(e) from None
+    if how == "recovery":
+        return _signed_in(request, response, t, body.trust, f"recovery code, {apps.recovery_left()} left", loud=True)
+    return _signed_in(request, response, t, body.trust, "authenticator app", loud=False)
+
+
+@router.post("/two-factor/passkey/options")
+async def two_factor_passkey_options(body: TicketIn, request: Request):
+    _, rp_id = apps.origin_of(request)
+    try:
+        return {"options": await asyncio.to_thread(apps.passkey_options, body.ticket, security.client_key(request), rp_id)}
+    except apps.Refused as e:
+        raise _refused(e) from None
+
+
+@router.post("/two-factor/passkey")
+async def two_factor_passkey(body: PasskeyIn, request: Request, response: Response):
+    origins, rp_id = apps.origin_of(request)
+    try:
+        t, key = await asyncio.to_thread(apps.check_passkey, body.ticket, security.client_key(request),
+                                         body.credential, origins, rp_id)
+    except apps.Refused as e:
+        raise _refused(e) from None
+    return _signed_in(request, response, t, body.trust, f"passkey {key.get('name') or ''}".strip(), loud=False)
+
+
+# ---- Settings -> Security: authenticator app, passkeys, recovery codes (signed in + the current password) ----------
+async def _forget_others(request: Request, response: Response) -> None:
+    """A method was removed (a lost phone or key): every other trusted browser asks again, this one stays trusted."""
+    await asyncio.to_thread(twofactor.forget_devices)
+    if twofactor.enabled() or apps.any_on():
+        twofactor.set_device_cookie(response, request)
+
+
+def _label(request: Request) -> str:
+    return apps.origin_of(request)[1] or "admin"
+
+
+@router.get("/two-factor/methods", dependencies=[Depends(security.require_auth)])
+async def two_factor_methods(request: Request):
+    return {"telegram": twofactor.enabled(), **apps.summary(apps.origin_of(request)[1])}
+
+
+@router.post("/two-factor/totp/setup", dependencies=[Depends(security.require_auth)])
+async def totp_setup(body: PasswordOnly, request: Request):
+    await _check_current(request, body.password)
+    try:
+        return apps.totp_setup(_label(request))
+    except apps.Refused as e:
+        raise _refused(e) from None
+
+
+@router.post("/two-factor/totp", dependencies=[Depends(security.require_auth)])
+async def totp_confirm(body: SetupCodeIn, request: Request, response: Response):
+    try:
+        codes = await asyncio.to_thread(apps.totp_confirm, body.setup, body.code)
+    except apps.Refused as e:
+        raise _refused(e) from None
+    twofactor.set_device_cookie(response, request)               # this browser stays trusted
+    _alert(request, "Two-step sign-in: authenticator app added", loud=True)
+    bus.invalidate("two_factor")
+    return {"ok": True, "recovery_codes": codes}
+
+
+@router.post("/two-factor/totp/off", dependencies=[Depends(security.require_auth)])
+async def totp_off(body: PasswordOnly, request: Request, response: Response):
+    await _check_current(request, body.password)
+    await asyncio.to_thread(apps.totp_off)
+    await _forget_others(request, response)
+    _alert(request, "Two-step sign-in: authenticator app removed", loud=True)
+    bus.invalidate("two_factor")
+    return {"ok": True}
+
+
+@router.post("/two-factor/passkeys/options", dependencies=[Depends(security.require_auth)])
+async def passkey_register_options(body: PasswordOnly, request: Request):
+    await _check_current(request, body.password)
+    origins, rp_id = apps.origin_of(request)
+    try:
+        return await asyncio.to_thread(apps.passkey_register_options, origins, rp_id, _label(request))
+    except apps.Refused as e:
+        raise _refused(e) from None
+
+
+@router.post("/two-factor/passkeys", dependencies=[Depends(security.require_auth)])
+async def passkey_register(body: PasskeyAddIn, request: Request, response: Response):
+    _, rp_id = apps.origin_of(request)
+    try:
+        key, codes = await asyncio.to_thread(apps.passkey_register, body.setup, body.credential, body.name, rp_id)
+    except apps.Refused as e:
+        raise _refused(e) from None
+    twofactor.set_device_cookie(response, request)
+    _alert(request, f"Two-step sign-in: passkey added ({key['name']})", loud=True)
+    bus.invalidate("two_factor")
+    return {"ok": True, "passkey": {k: key[k] for k in ("id", "name", "rp_id", "created", "last_used")},
+            "recovery_codes": codes}
+
+
+@router.post("/two-factor/passkeys/remove", dependencies=[Depends(security.require_auth)])
+async def passkey_remove(body: PasskeyRemoveIn, request: Request, response: Response):
+    await _check_current(request, body.password)
+    if not await asyncio.to_thread(apps.passkey_remove, body.id):
+        raise HTTPException(404, detail={"error": "not_found", "message": "No such passkey"})
+    await _forget_others(request, response)
+    _alert(request, "Two-step sign-in: passkey removed", loud=True)
+    bus.invalidate("two_factor")
+    return {"ok": True}
+
+
+@router.post("/two-factor/recovery-codes", dependencies=[Depends(security.require_auth)])
+async def recovery_codes(body: PasswordOnly, request: Request):
+    await _check_current(request, body.password)
+    try:
+        codes = await asyncio.to_thread(apps.regenerate_recovery_codes)
+    except apps.Refused as e:
+        raise _refused(e) from None
+    _alert(request, "Two-step sign-in: new recovery codes (the old ones no longer work)", loud=True)
+    bus.invalidate("two_factor")
+    return {"recovery_codes": codes}
 
 
 async def _challenge(purpose: str, request: Request) -> dict:
