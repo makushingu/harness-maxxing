@@ -60,6 +60,8 @@ Fixed:
 - **The Extensions page can be opened again**: Settings -> Pages -> **All pages**, or **Extensions** in the search
   (Ctrl K), lists every extension page, pinned or not; the guide said it was in the sidebar, which now shows only the
   pinned ones.
+- **Tasks on a phone**: on a 393-412 px screen the view switch no longer pushes the menu button (⊞) off the screen: it
+  sits under the header below 480 px. **Show more** in the notifications is easier to tap.
 
 ## 2.0.0-alpha.138 - 2026-11-10
 

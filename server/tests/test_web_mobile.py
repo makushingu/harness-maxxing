@@ -41,6 +41,15 @@ def test_only_the_session_composer_and_its_headers_carry_the_typing_markers():
     assert not [p.name for p in others if "data-kbd-" in p.read_text()]  # nothing else steps aside while typing
 
 
+def test_the_tasks_header_leaves_room_for_the_menu_button():
+    # on a 393-412 px phone the view switch in the header pushed the Menu button (the phone's navigation) off screen
+    tasks = (WEB / "pages" / "tasks" / "index.tsx").read_text()
+    out = re.search(r"max-\[(\d+)px\]:hidden\">\{viewSwitch\}", tasks)
+    back = re.search(r"min-\[(\d+)px\]:hidden\">\{viewSwitch\}", tasks)
+    assert out and back and int(out[1]) + 1 == int(back[1])  # in the header or below it, never both nor neither
+    assert int(back[1]) >= 480
+
+
 def test_show_more_is_big_enough_to_tap():
     # "Show more" in the notifications was a 50x16 px target on a phone: a bigger tap area on touch screens only
     feed = (WEB / "features" / "feed" / "FeedItems.tsx").read_text()

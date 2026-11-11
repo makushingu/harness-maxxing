@@ -327,8 +327,8 @@ export default function TasksPage() {
       width="full"
       actions={
         <>
-          {/* below 400 px the switch leaves the header, or the title shrinks to "Tâc…" */}
-          {viewSwitch && !tight && <div className="max-[399px]:hidden">{viewSwitch}</div>}
+          {/* below 480 px (a phone) or in a narrow page the switch leaves the header, or it pushes the Menu button off a 393-412 px phone */}
+          {viewSwitch && !tight && <div className="max-[479px]:hidden">{viewSwitch}</div>}
           {prefs.view === 'board' && scope === 'all' && (
             <Button variant={prefs.lanes ? 'secondary' : 'outline'} size="sm" aria-pressed={prefs.lanes} onClick={() => setPrefs({ lanes: !prefs.lanes })} title={t('tasks.lanesHint')} data-testid="task-lanes">
               <Rows3 />
@@ -358,7 +358,7 @@ export default function TasksPage() {
         </PageList>
       )}
       <div ref={bodyRef} className="mx-auto grid max-w-[1800px] gap-4">
-        {viewSwitch && <div className={tight ? undefined : 'min-[400px]:hidden'}>{viewSwitch}</div>}
+        {viewSwitch && (tight ? <div>{viewSwitch}</div> : <div className="min-[480px]:hidden">{viewSwitch}</div>)}
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4">
           {corrupt && (
             <Callout

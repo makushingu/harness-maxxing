@@ -37,6 +37,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - The `/x` hub (`pages/ext/hub.tsx`) had no link left since the sidebar shows only pinned pages: `CommandPalette`
   gets `nav:x` (keywords extensions, pages, plugins) and Settings -> Pages an **All pages** button (`ext.allPages`, unused
   until now); `docs/user/13-page-extensions.md` says where it is. `tests/test_web_ext_hub.py` checks both links.
+- Tasks: the view switch leaves the header below 480 px (was 400: on 393-412 px phones it pushed the touch Menu
+  button to x 398-442, 14 px of it on screen); feed **Show more** gets a `pointer-coarse:before` hit area (50x16 ->
+  66x28, exactly the gap to the title and the actions above and below: it never takes their taps). `tests/test_web_mobile.py` checks both.
 - `pages/ext/index.tsx`: `t` / `navigate` read through a ref, not effect deps (`useT()` changes with each
   dictionary group: ~10 remounts of an extension page while it opened).
 - **Agent chat** (every agent, no switch: a `chat` key left in an agent.json is dropped by `clean()`):
