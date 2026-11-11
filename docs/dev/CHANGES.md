@@ -7,9 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `office.useDesk` spreads `useAgentMenu` (the menu of the agents list) on the desk and returns its `menu`, rendered
+  by the Space view's `Console`: the right click / long press works on the desks too.
 - `backup.LEAKS` "password": a value that is a whole upper-case name with an underscore (a vault key name such
   as `P30J_CF_PASSWORD`) is not a secret; a value that only starts like one is still caught. Tests in
   `test_backup.py::test_scanner_ignores_names`.
+- `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
+  then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
+  save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
@@ -43,9 +48,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   dict raised `KeyError` and an int `TypeError`); `_clean_avatar` looks a value up in `_OLD_AVATAR` only when it is a
   string (a list was unhashable). `GET /api/agents/<topic>/<agent>` failed with an error for such a file. Tests added
   in `tests/test_agents.py`.
-- `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
-  then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
-  save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
 - Radar fixes merged from `main` (one commit each, with its test): `claude_models` (a non-list `data` is a failed
   read; a preview/variant suffix is not a newer model), `agents.clean` (lone surrogate in a rule -> 400 `bad_rule`, a
   limit too big for a number -> 400), `infra.probe` (`bad_probe` marks only its server), sessions (a change of Plan
