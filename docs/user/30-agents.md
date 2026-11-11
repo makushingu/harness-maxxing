@@ -160,7 +160,14 @@ between days).
 - **Reply** under a run's answer goes on with that run (your message says which one); **Open the run** shows the
   whole session right in the Agents page, live, with its box to go on with it. A link to an agent's session
   (Telegram, a notification, the search) opens it there too. A reply in its Telegram thread to one of its results
-  goes on with that run's session.
+  goes on with that run's session. **Reply** under one of its answers in a group goes into your conversation with it
+  (that answer comes along so it knows what you mean), never into the group.
+- **Run now** (its menu, the Agents page) starts a run of its routine, like a schedule would: it shows as an
+  automation, never as a message of your conversation.
+- **A message while a run holds the day's budget** (a schedule running, or the turn before a **New conversation**)
+  waits and starts by itself right after that run ends: it is never refused. Automations still wait their turn.
+- **Long texts**: your messages and its answers in the conversation are kept whole (up to 50,000 characters). The
+  report of an automation is kept up to 4,000 characters, marked **cut** when longer; **Open the run** has it all.
 - **Its answers** open file links in the preview, show images and videos as thumbnails and audio with a player, and
   have a copy menu. Only the files of the agent's own folders (its folder and its writable folders) get a link or a
   preview: any other path stays plain text, since an answer can repeat text from a mail or a webhook.
@@ -251,7 +258,7 @@ Agents never start on notifications of the source *Agents*.
 An agent that should just work in the background: **right-click** it in the list or on the Office (a long press on a
 phone) and tick **Silent**, or turn on **Silent** at the top of its settings. It runs as usual, but never calls you:
 no Telegram message for its results, its notifications land already read (no Telegram, no badge), and its results do
-not count as unread. A small 🔕 shows next to its name. What waits for your answer still shows (an approval, an e-mail
+not count as unread. It still answers, without a sound, what you ask it on Telegram. A small 🔕 shows next to its name. What waits for your answer still shows (an approval, an e-mail
 to OK). The same menu switches it on / off, runs it now, and **Properties…** opens its settings.
 
 ## Telegram
