@@ -273,7 +273,7 @@ export const Sidebar = React.memo(function Sidebar() {
           data-testid="sidebar"
           data-unfold={pinned ? 'pinned' : 'folded'}
           data-side-expanded={collapsed ? 'false' : 'true'}
-          className="mx-side relative flex min-h-0 w-full flex-col overflow-clip border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]"
+          className="mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]"
           aria-label={t('shell.navigation')}
         >
           <KeepTooltipShape.Provider value>
@@ -323,7 +323,7 @@ export const Sidebar = React.memo(function Sidebar() {
             </div>
 
             {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short). */}
-            <div ref={navScroll} data-tour="nav" data-more={more || undefined} className="mx-nav-scroll min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
+            <div ref={navScroll} data-tour="nav" data-more={more || undefined} className="mx-nav-scroll min-h-[76px] overflow-y-auto overscroll-contain [scrollbar-width:none]">
               <nav aria-label={t('shell.navigation')} className={block()}>
                 {drag.order.map((to, idx) => {
                   const e = entries.find((x) => x.to === to)
