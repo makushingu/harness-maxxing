@@ -6,6 +6,26 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixed:
+- **Bugs reported in #75** (each one proven by a failing test, thanks to its reporter):
+  - **Telegram**: long replies full of emoji are split by the length Telegram counts (an emoji counts 2), so they are
+    no longer refused for being over 4096.
+  - **E-mail**: an HTML-only draft reopens with its text; the size shown for a quoted-printable attachment is no
+    longer one byte too large per wrapped line.
+  - **Infra**: installing PostgreSQL no longer reports success when the service did not start; a relative DNS name
+    that only ends with the zone's text is shown under the zone; nginx regex locations that only serve files are no
+    longer listed as paths of a site (a regex location that proxies still is).
+  - **MCP**: a topic's own MCP server wins over a user server of the same name, as in Claude Code.
+  - **Team**: an address with an IPv6 host keeps its brackets.
+  - **Settings, Git page, Dashboard, uploads**: a files root or repository path with an unknown `~user`, a
+    hand-edited dashboard layout of the wrong shape or an infinite upload limit give a clean answer or the default
+    instead of a server error.
+  - **Shopify card**: the time of the latest orders uses the configured timezone.
+  - **CLI**: `maxxing pdf` on a page that never loads ends with "PDF failed"; `maxxing agents on|off|silent|loud` on
+    a broken agent prints the error (exit code 2); `agents create --role … --mail` also allows the `maxxing mail`
+    tool.
+  - **Import**: `.claude/agents/` and `.claude/commands/` of a zip are never imported (they are Claude Code
+    sub-agents and commands, not notes).
+  - **Agents**: a sandboxed agent can no longer create its topic's `.mcp.json` with Write/Edit.
 - **Office, Space view**: a right click (a long press on a phone) on a desk opens the agent's menu - Silent,
   Switched on, Run now, Properties - as in the list and the Grid view.
 - **Memory backup**: a password noted by the name of its key ("password: SHOP_DB_PASS") no longer stops the

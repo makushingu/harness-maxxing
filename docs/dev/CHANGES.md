@@ -7,6 +7,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- #75 (20 reported bugs, 18 fixed, each with its test): `telegram/format.py` measures the 4096 limit in UTF-16 units
+  (`_u16`, in `render`, `_split_big`, `code`, `plain`); `mail/send._text` (HTML fallback shared by draft, reply,
+  forward); `mail/imap._size` counts a `=\r\n` soft break as 0; `infra/actions.pg_install` raises `start_failed` when
+  `systemctl enable --now` fails; `infra/providers._fqdn` whole labels only; `infra/probe.parse_nginx` skips regex
+  locations without `proxy_pass`; `mcp_auto.candidates` drops a user server hidden by a folder server of the same
+  name; `teampeer.normalize` keeps IPv6 brackets; `api/settings` and `gitview.resolve` turn the `RuntimeError` of an
+  unknown `~user` into 400; `api/dashboard._defs` ignores a layout of the wrong shape; `uploads._num` catches
+  `OverflowError`; `shopify._local_time`; `cmd_video.pdf` catches `TimeoutExpired`; `cmd_agents` on/off/silent/loud
+  catch `AgentError` (exit 2) and a role-only `--mail` sets `allowed_tools` to `Bash(maxxing mail:*)`;
+  `importer._claude_config` no longer exempts `.md` under `.claude/agents|commands` (`EMPTY` message);
+  `agent_guard.topic_edit_denied` always denies the topic's `.mcp.json` (the sandbox mount still skips a missing
+  one). Not taken: autoconfig "plain" -> none (kept "ssl"), project description with a `## ` line.
 - `office.useDesk` spreads `useAgentMenu` (the menu of the agents list) on the desk and returns its `menu`, rendered
   by the Space view's `Console`: the right click / long press works on the desks too.
 - `backup.LEAKS` "password": a value that is a whole upper-case name with an underscore (a vault key name such
