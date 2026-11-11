@@ -305,7 +305,10 @@ def resolve(path: str) -> Path:
     """A repository path given by the UI or a chat block: must be a clone inside the files root."""
     if not path or "\x00" in path:
         raise GitError(400, "bad_path", "repository path required")
-    p = Path(path).expanduser()
+    try:
+        p = Path(path).expanduser()
+    except RuntimeError:                                  # ~user that does not exist
+        raise GitError(400, "bad_path", f"unknown home folder in {path}") from None
     if not p.is_absolute():
         p = _root() / p
     try:

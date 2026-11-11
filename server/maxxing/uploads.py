@@ -55,7 +55,7 @@ formparsers.SpooledTemporaryFile = _spooled          # Starlette's multipart par
 def _num(key: str, default: int) -> int:
     try:
         v = int(config.load_config().get(key, default))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):    # OverflowError: a hand-edited infinity
         return default
     return max(v, 0)
 

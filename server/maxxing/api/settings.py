@@ -338,8 +338,11 @@ def put_settings(body: SettingsIn):
             raise _err("invalid_sidebar_order", "sidebar_order: at most 40 page routes like /sessions or /x/<id>")
         changes["sidebar_order"] = list(dict.fromkeys(order))
     if "files_root" in changes:
-        p = Path(changes["files_root"]).expanduser()
-        if not p.is_absolute() or not p.is_dir():
+        try:
+            p = Path(changes["files_root"]).expanduser()
+        except RuntimeError:                          # ~user that does not exist
+            p = None
+        if p is None or not p.is_absolute() or not p.is_dir():
             raise _err("invalid_files_root", "files_root must be an existing absolute folder")
         changes["files_root"] = str(p.resolve())
     if changes:

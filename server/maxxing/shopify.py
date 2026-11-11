@@ -130,6 +130,14 @@ def _money(v: float, cur: str) -> str:
     return f"{sym}{s}" if sym and cur != "EUR" else f"{s} {sym or cur}".strip()
 
 
+def _local_time(at: str, tz: ZoneInfo) -> str:
+    """'YYYY-MM-DD HH:MM' in the configured timezone, like the day counters (Shopify answers in UTC)."""
+    try:
+        return dt.datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return at[:16].replace("T", " ")
+
+
 def build_card(data: dict[str, Any], today: dt.date, tz: ZoneInfo) -> dict:
     cur = data["currency"]
     by_day: dict[dt.date, float] = {today - dt.timedelta(days=i): 0.0 for i in range(DAYS)}
@@ -149,7 +157,7 @@ def build_card(data: dict[str, Any], today: dt.date, tz: ZoneInfo) -> dict:
     prev7 = sum(v for d, v in by_day.items() if 7 <= (today - d).days < 14)
     delta = f"{(last7 - prev7) / prev7 * 100:+.0f} %" if prev7 else None
     points = [[d.isoformat(), round(by_day[d], 2)] for d in sorted(by_day)]
-    latest = [{"title": o["name"], "subtitle": o["at"][:16].replace("T", " "), "value": _money(o["total"], cur),
+    latest = [{"title": o["name"], "subtitle": _local_time(o["at"], tz), "value": _money(o["total"], cur),
                "status": "ok" if o["fulfilled"] else "warn"} for o in data["orders"][:4]]
     blocks = [
         {"type": "stats", "items": [

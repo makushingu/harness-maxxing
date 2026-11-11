@@ -468,3 +468,9 @@ def test_commit_detail_of_a_huge_commit_skips_rename_detection(repo, monkeypatch
     monkeypatch.setattr(gitview, "RENAMES_MAX_FILES", 2000)
     small = gitview.commit(str(repo), sha)
     assert [f["path"] for f in small["files"]] == ["f1.txt => moved.txt"]
+
+
+def test_unknown_user_home_is_a_git_error(client, org):
+    # Path.expanduser raises RuntimeError for a ~user that does not exist: the usual 400, not a 500
+    r = client.get("/api/git/graph", params={"repo": "~nosuchuser-mx-test/repo"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path"

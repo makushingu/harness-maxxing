@@ -144,3 +144,9 @@ def test_a_broken_saved_sidebar_order_never_breaks_the_settings(client, org):
     got = client.get("/api/settings").json()["sidebar_order"]
     assert got == [f"/p{i}" for i in range(40)]
     assert client.put("/api/settings", json={"sidebar_order": got}).status_code == 200
+
+
+def test_unknown_tilde_user_is_an_invalid_files_root(client, org):
+    # Path.expanduser raises RuntimeError for a ~user that does not exist: a refused value, not a 500
+    r = client.put("/api/settings", json={"files_root": "~nosuchuser-mx-test/files"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_files_root"

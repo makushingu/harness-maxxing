@@ -370,3 +370,18 @@ def test_the_tasks_widget_follows_the_tasks_page(client, org, fakes):
     assert "tasks" not in _by_id(client)
     config.update_config(tasks_page=True)
     assert "tasks" in _by_id(client)
+
+
+def test_hand_edited_dashboard_order_falls_back_to_default(client, org, fakes):
+    from maxxing import widgets
+    default = [w["id"] for w in client.get("/api/dashboard").json()["widgets"]]
+    for bad in ({"order": 5, "hidden": []}, {"order": ["server"], "hidden": 7}, ["server"]):
+        config.save_config({**config.load_config(), "dashboard": bad})       # as edited by hand, not merged
+        r = client.get("/api/dashboard")
+        assert r.status_code == 200
+        ws = r.json()["widgets"]
+        if bad == {"order": ["server"], "hidden": 7}:
+            assert ws[0]["id"] == "server" and not any(w["hidden"] for w in ws)
+        else:
+            assert [w["id"] for w in ws] == default
+            assert {w["id"] for w in ws if w["hidden"]} == widgets.default_hidden() & set(default)

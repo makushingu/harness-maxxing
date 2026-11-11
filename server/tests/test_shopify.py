@@ -147,3 +147,12 @@ def test_an_error_is_cached_for_a_short_while(mx, monkeypatch):
     shopify._cache.update(at=time.time() - shopify.ERROR_CACHE_S - 1)
     shopify.card()
     assert len(calls) == 2
+
+
+def test_latest_order_time_uses_the_configured_timezone():
+    data = {"shop": "My Coffee Shop", "currency": "EUR", "orders": [
+        {"name": "#1050", "at": "2026-10-12T22:30:00Z", "total": 42.0, "fulfilled": True}]}
+    c = shopify.build_card(data, dt.date(2026, 10, 13), ZoneInfo("Europe/Paris"))
+    # 22:30 UTC is 00:30 the next day in Paris, the day the counters count it on
+    assert c["blocks"][0]["items"][1]["value"] == 1
+    assert c["blocks"][2]["items"][0]["subtitle"] == "2026-10-13 00:30"

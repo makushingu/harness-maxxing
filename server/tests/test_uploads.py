@@ -108,3 +108,9 @@ def test_multipart_needs_auth_before_body(mx):
         c.cookies.set(security.COOKIE, security.make_cookie())
         assert _post(c, mx["files"]).status_code == 403                      # no CSRF header
         assert _post(c, mx["files"], headers={"X-Maxxing": "1"}).status_code == 200
+
+
+def test_infinite_upload_max_mb_falls_back_to_the_default(mx):
+    # a hand-edited 1e999 loads as inf: int(inf) raises OverflowError, which broke every upload
+    config.update_config(upload_max_mb=float("inf"), upload_min_free_mb=float("-inf"))
+    assert uploads.limits() == (2048 * uploads.MB, 1024 * uploads.MB)
