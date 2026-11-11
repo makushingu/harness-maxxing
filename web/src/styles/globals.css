@@ -341,6 +341,10 @@ html[data-boot] .mx-dot-in { animation-delay: calc(var(--bd, 0ms) + 200ms + var(
    and slides in over the others; hidden ones keep their layout (visibility: out of the tab order and the
    accessibility tree, no reflow on the way back). The list kept beside the page is the same layer, in the flow. */
 .mx-side { --mx-side-ease: cubic-bezier(0.22, 1, 0.36, 1); }
+/* the pages of the sidebar scroll in a short window (no scrollbar): a fade on the edge where rows are hidden */
+.mx-nav-scroll[data-more=down] { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+.mx-nav-scroll[data-more=up] { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
+.mx-nav-scroll[data-more=both] { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 /* A page's folded list (components/shell/PageList.tsx), shown over the page while the pointer rests on its rail or its
    sidebar entry: fades and slides in (opacity / transform only). */
 .mx-list-peek { opacity: 0; transform: translateX(-6px); visibility: hidden; pointer-events: none;
