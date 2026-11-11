@@ -66,6 +66,12 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
         actions={
           <>
             {extra}
+            {kind === 'pages' && (
+              // the Extensions page (/x) lists every page; the sidebar shows only the pinned ones
+              <Button variant="outline" size="sm" onClick={() => navigate('/x')}>
+                <Blocks /> {t('ext.allPages')}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(topic, t(kind === 'widgets' ? 'ext.newWidgetPrompt' : 'ext.newPagePrompt')))}>
               <Plus /> {t(kind === 'widgets' ? 'ext.newWidget' : 'ext.newPage')}
             </Button>

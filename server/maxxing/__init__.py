@@ -1,2 +1,2 @@
 """Harness Maxxing - self-hosted control room for Claude Code."""
-__version__ = "2.0.0a138"
+__version__ = "2.0.0a139"

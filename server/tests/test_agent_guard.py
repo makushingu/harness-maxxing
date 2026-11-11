@@ -9,14 +9,27 @@ import sys
 from pathlib import Path
 
 from conftest import wait_idle
-from test_agents import A, _calls, _create, _on
+from test_agents import A, _calls, _create as _create_any, _on, _run
+
+
+def _create(client, **extra) -> dict:
+    """An agent in its sandbox (new agents are free unless they read outside text: test_new_agents_are_free...)."""
+    return _create_any(client, **{"sandbox": True, **extra})
 
 
 def _settings(argv: list[str]) -> dict:
     return json.loads(argv[argv.index("--settings") + 1])
 
 
-def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
+def test_new_agents_are_free_unless_they_read_outside_text(client, topic, mx):
+    _on(client)
+    assert _create_any(client, name="free")["sandbox"] is False                 # free like a session
+    feed = [{"kind": "feed", "source": "shop", "prompt": "NOTOOL handle it"}]
+    assert _create_any(client, name="watcher", triggers=feed)["sandbox"] is True   # outside text: protected
+    assert _create_any(client, name="mine", triggers=feed, sandbox=False)["sandbox"] is False
+
+
+def test_sandboxed_agents_never_bypass(client, topic, mx):
     _on(client)
     a = _create(client, permission_mode="bypass", domains=["API.github.com", "https://*.example.com/"],
                 writable=["drafts", "."])
@@ -24,7 +37,7 @@ def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     assert a["writable"] == ["drafts", "."]
     assert client.patch(f"/api/agents/acme/blog/writer", json={"domains": ["bad host!"]}).status_code == 400
     assert client.patch(f"/api/agents/acme/blog/writer", json={"writable": ["../x"]}).status_code == 400
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert "--dangerously-skip-permissions" not in argv
@@ -45,7 +58,7 @@ def test_new_agents_are_sandboxed_and_never_bypass(client, topic, mx):
     assert argv[argv.index("--add-dir") + 1] == f"{root}/projects/acme/topics/blog"     # "." holds drafts
     # switched off: the agent's own mode, no sandbox
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert "--dangerously-skip-permissions" in argv and "sandbox" not in _settings(argv)
@@ -189,7 +202,7 @@ def test_claude_code_agent_file_export_and_import(client, topic, mx):
     a = r.json()
     assert a["path"] == "projects/acme/topics/blog/agents/code-reviewer" and a["display_name"] == "Code Reviewer"
     assert a["allowed_tools"] == ["Read", "Grep"] and a["model"] == "" and a["permission_mode"] == "bypass"
-    assert a["sandbox"] is True and a["ignored"] == ["mcpServers", "memory"]
+    assert a["sandbox"] is False and a["ignored"] == ["mcpServers", "memory"]           # free like any new one
     assert a["description"] == "Reviews code: quality, security\n\nYou are a senior reviewer."
     assert client.post("/api/agents/import", json={"topic_path": "projects/acme/topics/blog",
                                                    "markdown": "no front matter"}).status_code == 400
@@ -263,7 +276,7 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     _create(client)
     root = client.get("/api/workspace/tree").json()["root"]
     (Path(root) / "projects/acme/topics/blog/.mcp.json").write_text("{}")
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     s = _settings(_calls()[-1]["argv"])
     locked = s["sandbox"]["filesystem"]["denyWrite"]
@@ -317,7 +330,7 @@ def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic,
     (t / "site").mkdir()
     (t / "README.md").write_text("hi")
     (t / "memory.md").write_text("")
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     s = _settings(argv)

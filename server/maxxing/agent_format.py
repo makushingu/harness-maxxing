@@ -148,7 +148,7 @@ def parse_md(text: str) -> dict:
 
 
 def import_md(topic_path: str, text: str, name: str | None = None) -> dict:
-    """Create an agent in a topic from a Claude Code agent file (switched on, sandboxed, no trigger)."""
+    """Create an agent in a topic from a Claude Code agent file (switched on, free like any new agent, no trigger)."""
     p = parse_md(text)
     created = agents.create(topic_path, name or p["name"], {**p["fields"], "description": p["description"]})
     return {**created, "ignored": p["ignored"]}

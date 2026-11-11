@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { Command as Cmdk, defaultFilter } from 'cmdk'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
+import { Blocks, Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, useAgentGroups, useAgents, useDocs, useLogout, useSettings, useWorkspace } from '@/lib/queries'
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
@@ -171,6 +171,8 @@ export function CommandPalette() {
         perform: ({ navigate }) => navigate(n.to),
       })),
       { id: 'nav:docs', title: t('nav.docs'), group: nav, icon: BookOpen, perform: ({ navigate }) => navigate('/docs') },
+      // every extension page, pinned or not (the sidebar shows only the pinned ones)
+      { id: 'nav:x', title: t('ext.hubTitle'), group: nav, icon: Blocks, keywords: ['extensions', 'pages', 'plugins'], perform: ({ navigate }) => navigate('/x') },
       {
         id: 'act:theme',
         title: resolveTheme(theme) === 'dark' ? t('palette.lightTheme') : t('palette.darkTheme'),

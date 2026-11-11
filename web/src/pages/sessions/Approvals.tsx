@@ -41,7 +41,8 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
   const [message, setMessage] = React.useState('')
   const [choice, setChoice] = React.useState<'allow' | 'deny' | 'always' | null>(null)
   const Icon = toolIcon(a.tool)
-  const name = a.tool.startsWith('mcp__') ? a.tool.split('__').slice(2).join('__') || a.tool : a.tool
+  const change = a.kind === 'agent_change'          // an agent's own safety settings: one line per change
+  const name = change ? t('approval.agentChange') : a.tool.startsWith('mcp__') ? a.tool.split('__').slice(2).join('__') || a.tool : a.tool
   const diff = React.useMemo(() => toolDiff(a.tool, a.input), [a.tool, a.input])
   const left = useSecondsLeft(a.expires)
   const send = (decision: 'allow' | 'deny', always = false) => {
@@ -64,7 +65,15 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
       </div>
       <div className={cn('grid min-w-0 gap-2', !plain && 'px-2.5 py-2')}>
         <Sensitive block>
-          <ToolInput name={a.tool} input={a.input} diff={diff} display={null} />
+          {change ? (
+            <ul className="grid gap-0.5 font-mono text-[12px]" data-testid="approval-agent-change">
+              {String(a.input.description || '').split('; ').map((x, i) => (
+                <li key={i} className="break-words">{x.replace(' -> ', ' → ')}</li>
+              ))}
+            </ul>
+          ) : (
+            <ToolInput name={a.tool} input={a.input} diff={diff} display={null} />
+          )}
         </Sensitive>
         {a.clipped && <p className="text-xs text-warning">{t('approval.clipped')}</p>}
         <div className="flex min-w-0 flex-wrap items-center gap-2">

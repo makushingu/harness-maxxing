@@ -431,18 +431,29 @@ def mode(requested: str) -> str:
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"
 
 
-def settings(path: str, a: dict, approvals: bool = False) -> dict:
+# What the owner's conversation does without asking in its sandbox (read, search the web, its domains' pages): the
+# approvals it keeps are for what matters (leaving the sandbox, another site, a safety change, a mail to send).
+# The deny rules (secrets, its settings) still win over these.
+MANAGER_SAFE = ("Read", "Glob", "Grep", "WebSearch")
+
+
+def settings(path: str, a: dict, approvals: bool = False, manager: bool = False) -> dict:
     """The `--settings` part of an agent turn: sandbox (when on) and the hook of its rules. approvals: the turn asks
     before risky tools (the agent's setting, or forced for an outside event): Claude Code would let every sandboxed
-    command through without asking (`autoAllowBashIfSandboxed`), and `maxxing` too if pre-allowed, so neither is."""
+    command through without asking (`autoAllowBashIfSandboxed`), and `maxxing` too if pre-allowed, so neither is.
+    manager: the owner's conversation (agents.run_settings): it writes its role (CLAUDE.md), its sandboxed commands,
+    `maxxing` and the edits in its folders do not ask, and a command can leave the sandbox once the owner allows it
+    (Claude Code's `dangerouslyDisableSandbox`: a normal permission prompt, i.e. an approval)."""
     out: dict = {}
     folder = config.workspace() / path
     if a.get("sandbox"):
         write = [str(folder)] + writable_dirs(path, a)
         secrets = secret_paths() + private_paths(path)
         locked = locked_paths(path)
-        out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
-                          "autoAllowBashIfSandboxed": not approvals, "excludedCommands": ["maxxing:*"],
+        if manager:
+            locked = [p for p in locked if p != str(folder / "CLAUDE.md")]
+        out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": manager, "failIfUnavailable": True,
+                          "autoAllowBashIfSandboxed": manager or not approvals, "excludedCommands": ["maxxing:*"],
                           "filesystem": {"denyRead": secrets + [p for p in home_wall() if p not in secrets], "allowRead": read_back(),
                                          "allowWrite": write,
                                          "denyWrite": locked},
@@ -454,12 +465,15 @@ def settings(path: str, a: dict, approvals: bool = False) -> dict:
             deny += [f"Read(/{g})", f"Edit(/{g})"]
         for p in locked:                                # its settings and role: the owner's, never the agent's
             deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
-        deny += [r for r in topic_edit_denied(path) if r not in deny]
+        # the manager's own role: not denied (another agent's folder still is, a new one asks: outside its folders)
+        deny += [r for r in topic_edit_denied(path) if r not in deny
+                 and not (manager and r == f"Edit(/{folder.parent}/*/CLAUDE.md)")]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does; with approvals it is asked
         out["permissions"] = {"deny": deny,
-                              "allow": ([] if approvals else ["Bash(maxxing:*)"])
-                              + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
+                              "allow": ([] if approvals and not manager else ["Bash(maxxing:*)"])
+                              + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]
+                              + ([f"Edit(/{p}/**)" for p in write] + list(MANAGER_SAFE) if manager else [])}
     if a.get("rules"):
         cmd = hook_command(path)
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}
@@ -563,10 +577,13 @@ def agent_turn() -> dict:
         depth = max(0, int(env.get("MAXXING_AGENT_DEPTH") or 0))
     except ValueError:
         depth = 0
+    from . import agents
+    manager = bool(path) and agents.manager_turn(meta if meta is not None else {"env": dict(os.environ)})
     tampered = bool(meta is not None and path and (
         (os.environ.get("MAXXING_AGENT") or "").strip() != path
         or (os.environ.get("MAXXING_AGENT_DEPTH") or "0").strip() != str(env.get("MAXXING_AGENT_DEPTH") or "0")))
-    return {"path": path, "depth": depth, "tampered": tampered}
+    return {"path": path, "depth": depth, "tampered": tampered, "manager": manager,
+            "session": str((meta or {}).get("id") or (os.environ.get("MAXXING_SESSION") if meta is None else "") or "")}
 
 
 def sandboxed_turn() -> str | None:
@@ -593,18 +610,58 @@ def sandboxed_session(sid8: str) -> str | None:
 
 
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
-AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "import", "sandbox-setup", "group"}
+AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "import", "sandbox-setup", "group"}
+# ...but the owner's conversation with an agent (its manager) runs these on that agent itself
+AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "show", "run"}
+
+
+def _manages(turn: dict, words: list[str], argv: list[str]) -> bool:
+    """`maxxing agents <sub> <agent>` run by the manager of that very agent. The target is read by the command's own
+    parser (an option value such as `--name writer` is not the agent)."""
+    if not (turn.get("manager") and len(words) > 2 and words[0] == "agents" and words[1] in AGENT_MANAGER):
+        return False
+    import argparse
+    import contextlib
+    import io
+    from . import cmd_agents
+    p = argparse.ArgumentParser(prog="maxxing agents", add_help=False)
+    cmd_agents._configure(p)
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            ns, _ = p.parse_known_args(argv[argv.index("agents") + 1:])
+        return ns.agents_cmd in AGENT_MANAGER and cmd_agents.resolve(ns.agent) == turn["path"]
+    except (ValueError, SystemExit, AttributeError):
+        return False
+
+
+def in_the_sandbox() -> bool:
+    """This `maxxing` runs inside an agent turn's sandbox: a command line with a pipe, `;`, `&&`... is sandboxed as a
+    whole (only a plain `maxxing …` is excluded), and there the server state is hidden: what it writes would vanish."""
+    if not os.environ.get("MAXXING_AGENT"):
+        return False
+    try:
+        if not UNIT_RE.search(Path("/proc/self/cgroup").read_text()):
+            return False
+    except OSError:
+        return False
+    return not (config.STATE / "config.json").exists()
 
 
 def check_cli(argv: list[str]) -> str | None:
     """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
-    if not words:
+    head = argv[:argv.index("--")] if "--" in argv else argv    # after `--`, a "-h" is a value, not help
+    if not words or "-h" in head or "--help" in head:   # help changes nothing (argparse prints it and exits)
         return None
+    if in_the_sandbox():
+        return ("Run `maxxing` alone on its command line (no pipe, `;`, `&&`, `$(...)` nor redirection): only then "
+                "it runs outside the sandbox and reaches the server. Nothing was done.")
     turn = agent_turn()
     if turn["tampered"]:
         return ("Refused: the MAXXING_AGENT* variables of this agent turn were changed. Run `maxxing` with the "
                 "environment the run was started with.")
+    if _manages(turn, words, argv):
+        return None
     if turn["path"] and words[0] == "agents" and len(words) > 1 and words[1] in AGENT_OWNER_ONLY:
         return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
                 "triggers, settings or role included). Say what should change in your answer; the owner applies it "

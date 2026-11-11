@@ -185,11 +185,13 @@ class Runner:
         self.stop_flag = threading.Event()
         self.lock = threading.RLock()                  # re-entrant: signal handlers run on the main thread
         self.turn_id = ""                              # id of the turn in progress (meta turn_id)
+        self.turn_at = 0.0
         self.current: dict | None = None               # queue item of the turn in progress
         self.voice_wait = False                        # waiting for the transcript of a voice message (_voice)
         self.interrupted = False                       # the current turn was cut short by a steer
         self.proc: _Proc | None = None                 # the claude process (kept across a steer)
         self.steer_pending = False                     # a steer the reading loop has to carry out
+        self.asks: dict | None = None                  # the turn's approvals (_can_use_tool), None = none
         self.keep_proc = False                         # the last turn handed its process over to the next item
 
     # ---- signals -------------------------------------------------------------------------
@@ -368,12 +370,13 @@ class Runner:
         cfg = config.load_config()
         kind = item.get("kind") or "user"
         voices = [v for v in item.get("voice") or [] if isinstance(v, dict) and v.get("path")]
+        self.turn_at = time.time()                     # its message's time: on_turn_end finds this turn by it
         store.append_log(self.sid, {"type": "mx_user", "text": item.get("text") or "",
                                     "attachments": item.get("attachments") or [],
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
                                     **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
-                                    "at": time.time()})
+                                    "at": self.turn_at})
         if voices:
             heard, err = self._voice(item, voices)
             if heard is None:                          # stopped, or nothing to send: no Claude call
@@ -396,7 +399,8 @@ class Runner:
         from maxxing import agents                      # an agent folder: its model and tool lists
         env = meta.get("env") or {}
         agent = agents.run_settings(meta.get("path") or "", env.get("MAXXING_AGENT_OUTSIDE") == "1",
-                                    session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""))
+                                    session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""),
+                                    manager=agents.manager_turn(meta))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session
@@ -416,6 +420,10 @@ class Runner:
             mode = "default"
             approval = approval_args(self.sid, str(meta.get("path") or "") if agent else "",
                                      agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))
+        self.asks = None if not approval else {          # Claude Code's own questions (can_use_tool): asked too
+            "folder": str(approvals_dir()), "session": self.sid,
+            "agent_path": str(meta.get("path") or "") if agent else "",
+            "timeout": _approval_timeout(agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))}
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "") if x)
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
@@ -657,6 +665,10 @@ class Runner:
                 line = raw.strip()
                 if line:
                     ev = _parse(line)
+                    if ev is not None and ev.get("type") == "stream_event":   # partial text: never logged
+                        ev, line = None, ""
+                    if ev is not None and ev.get("type") == "control_request" and pr.stream:
+                        self._can_use_tool(pr, ev)
                     if ev is not None:
                         self._observe(ev, a)
                         pr.track(ev)
@@ -738,6 +750,34 @@ class Runner:
             self.stop_flag.set()
             self._kill_child()
         return False
+
+    def _can_use_tool(self, pr: _Proc, ev: dict) -> None:
+        """Claude Code's own permission question on the control channel (stream-json input), e.g. the sandbox asking
+        to reach a host that is not in the agent's domains (`SandboxNetworkAccess`): asked like any approval when
+        the turn has approvals (Allow / Deny, in a thread: the reading goes on), else denied at once - unanswered,
+        the turn would wait until its timeout."""
+        req = ev.get("request") if isinstance(ev.get("request"), dict) else {}
+        rid = ev.get("request_id")
+        if req.get("subtype") != "can_use_tool" or not isinstance(rid, str):
+            return
+        inp = req.get("input") if isinstance(req.get("input"), dict) else {}
+        ctx = getattr(self, "asks", None)
+
+        def answer() -> None:
+            if ctx:
+                try:
+                    r = approval_mcp.ask({"tool_name": req.get("tool_name"), "input": inp,
+                                          "tool_use_id": req.get("tool_use_id")}, ctx=ctx)
+                except Exception as e:  # noqa: BLE001 - never leaves Claude waiting
+                    r = {"behavior": "deny", "message": f"The request could not be asked: {e}"}
+            else:
+                r = {"behavior": "deny", "message": "Not allowed in this run (the owner was not asked)."}
+            if r.get("behavior") == "allow":
+                r = {"behavior": "allow", "updatedInput": inp}
+            pr.stdin.send(json.dumps({"type": "control_response", "response": {
+                "subtype": "success", "request_id": rid, "response": r}}) + "\n")
+
+        threading.Thread(target=answer, daemon=True).start()
 
     def _write_line(self, line: str) -> None:
         with open(store.log_path(self.sid), "a") as f:
@@ -833,7 +873,7 @@ class Runner:
             m["error"] = err
             m["updated"] = m["finished_at"] = time.time()
             # which item this turn ran: on_turn_end callbacks answer only their own turns (never a summary)
-            m["last_turn"] = {"id": self.turn_id, "kind": item.get("kind") or "user",
+            m["last_turn"] = {"id": self.turn_id, "kind": item.get("kind") or "user", "at": self.turn_at,
                               "source": item.get("source") or "web", "refs": list(item.get("refs") or [])}
             if not m.get("title"):
                 m["title"] = " ".join((item.get("text") or "").split())[:60] or "Untitled"
@@ -1014,6 +1054,13 @@ def approvals_dir() -> Path:
     return config.STATE / "approvals"
 
 
+def _approval_timeout(timeout_s: object) -> int:
+    try:
+        return max(30, int(float(timeout_s)))       # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return int(approval_mcp.DEFAULT_TIMEOUT_S)
+
+
 def approval_args(sid: str, path: str, timeout_s: object) -> list[str]:
     """`--mcp-config <file> --permission-prompt-tool mcp__maxxing-approval__approve`: Claude Code asks our approval
     MCP server (approval_mcp.py) before every tool call that is not pre-allowed. The file is
@@ -1021,10 +1068,7 @@ def approval_args(sid: str, path: str, timeout_s: object) -> list[str]:
     --strict-mcp-config (both are read)."""
     folder = approvals_dir() / "config"
     folder.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
-        timeout = max(30, int(float(timeout_s)))       # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        timeout = int(approval_mcp.DEFAULT_TIMEOUT_S)
+    timeout = _approval_timeout(timeout_s)
     spec = {"type": "stdio", "command": sys.executable, "args": ["-I", str(Path(approval_mcp.__file__).resolve())],
             "env": {"MAXXING_APPROVAL_DIR": str(approvals_dir()), "MAXXING_SESSION": sid,
                     "MAXXING_AGENT_PATH": path, "MAXXING_APPROVAL_TIMEOUT": str(timeout)}}

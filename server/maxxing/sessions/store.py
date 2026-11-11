@@ -325,7 +325,7 @@ def list_ids() -> list[str]:
 
 
 def remove(sid: str) -> None:
-    for ext in (".json", ".log", ".lock", ".run"):
+    for ext in (".json", ".log", ".lock", ".run", ".live"):
         try:
             _path(sid, ext).unlink()
         except (FileNotFoundError, KeyError):
