@@ -7,6 +7,7 @@ import { useLang, useT } from '@/i18n'
 import { agentRoute, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useAgentMenu } from './AgentMenu'
 import { OUTFIT } from './Avatar'
 import { useReorder, type AgentsLayoutApi } from './layout'
 import { statusOf } from './parts'
@@ -41,7 +42,8 @@ export function useRoom(project: string, agents: Agent[], index: number, layout:
  *  Office: the desk opens the agent's page). */
 export const OfficeChat = React.createContext<{ open: (path: string) => void; current: string | null } | null>(null)
 
-/** An agent's desk: its status and the props of the cell that opens it (a link: click, Enter or Space; draggable). */
+/** An agent's desk: its status and the props of the cell that opens it (a link: click, Enter or Space; draggable; a
+ *  right click or a long press opens the agent's menu, like in the list: render `menu` inside the `relative` cell). */
 export function useDesk(a: Agent, index: number, layout: AgentsLayoutApi) {
   const t = useT()
   const lang = useLang()
@@ -50,6 +52,7 @@ export function useDesk(a: Agent, index: number, layout: AgentsLayoutApi) {
   const st = statusOf(a, t, lang)
   const chat = React.useContext(OfficeChat)
   const open = () => (chat ? chat.open(a.path) : navigate(agentRoute(a)))
+  const ctx = useAgentMenu(a)
   const props = {
     role: 'link',
     tabIndex: 0,
@@ -57,11 +60,12 @@ export function useDesk(a: Agent, index: number, layout: AgentsLayoutApi) {
     onClick: open,
     onKeyDown: (e: React.KeyboardEvent) => (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && (e.preventDefault(), open()),
     ...dnd.props,
+    ...ctx.props,
     'data-state': st.id,
     'data-path': a.path,
     'aria-current': chat?.current === a.path ? ('true' as const) : undefined,
   }
-  return { st, dnd, props }
+  return { st, dnd, props, menu: ctx.menu }
 }
 
 /** Corner brackets around the hovered / focused desk, like the selection cursor of a game. */

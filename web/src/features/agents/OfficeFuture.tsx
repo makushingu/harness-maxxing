@@ -256,13 +256,14 @@ function Leds({ s, color, seed }: { s: number; color: string; seed: number }) {
 
 /** One agent at its console; the whole cell opens it. */
 function Console({ agent: a, index, layout, s, color, active }: { agent: Agent; index: number; layout: AgentsLayoutApi; s: number; color: string; active?: boolean }) {
-  const { st, dnd, props } = useDesk(a, index, layout)
+  const { st, dnd, props, menu } = useDesk(a, index, layout)
   const working = st.id === 'running'
   const off = st.id === 'off'
   return (
     <Tooltip content={`${a.display_name} · ${st.text}`}>
       <div {...props} className={cn('group/desk relative grid cursor-pointer justify-items-center outline-none', dnd.dragging && 'opacity-50')} data-testid="office-desk">
         <DropBar side={dnd.side} vertical={false} />
+        {menu}
         <Cursor className={cn('border-[#5ee7ff] drop-shadow-[0_0_4px_#5ee7ff]', active && 'opacity-100')} />
         <div className="relative" style={{ width: W * s, height: H * s }}>
           <PodChair s={s} color={color} off={off} />
