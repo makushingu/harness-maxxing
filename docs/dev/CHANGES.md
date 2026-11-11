@@ -27,6 +27,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
   then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
   save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
+- `trash._item` refuses an id longer than 255 bytes (`400 bad_id`): `Path.exists()` raised `OSError` ENAMETOOLONG
+  (Python 3.12 only swallows ENOENT, ENOTDIR, EBADF, ELOOP), a 500 on restore and delete. Test in
+  `tests/test_trash.py`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

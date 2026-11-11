@@ -32,6 +32,8 @@ Fixed:
   nightly backup as a leaked secret.
 - **Restoring a deleted scheduled job on a full disk no longer leaves it in the crontab.** If the job cannot be saved,
   the crontab goes back to what it was, as it already did when you create, change or delete a job.
+- **Odd requests get a clean answer instead of a server error**: a trash item whose name is longer than a file name
+  can be.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

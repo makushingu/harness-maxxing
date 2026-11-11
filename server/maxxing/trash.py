@@ -237,7 +237,9 @@ def _build(t: Path, root: Path) -> list[dict[str, Any]]:
 
 
 def _item(item_id: str) -> Path:
-    if not item_id or "/" in item_id or item_id.startswith(".") or item_id in SKIP:
+    # longer than a file name: never in the trash (exists() would raise "File name too long", a 500)
+    if (not item_id or "/" in item_id or item_id.startswith(".") or item_id in SKIP
+            or len(item_id.encode(errors="replace")) > 255):
         raise TrashError(400, "bad_id", "Invalid trash item")
     p = trash_dir() / item_id
     if not p.exists() or _is_extra(p):
