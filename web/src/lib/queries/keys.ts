@@ -132,10 +132,10 @@ export const isLiveKey = (key: readonly unknown[]) => LIVE_KEYS.some((p) => p.ev
 
 /** Extra keys when one batch carries both `sessions` and `workspace`: the server pairs them when a session starts
  *  or ends a turn (state/unread change), appears or goes away. A turn may reveal an expired Claude sign-in and
- *  moves the token stats; plain `sessions` events (metadata while a turn streams, queue edits) do not. An agent's page
- *  shows its running sessions and what started them: a run started by another process (a schedule, `maxxing agents
- *  run`) only reaches it this way. */
-export const BUS_TURN_KEYS: readonly (readonly unknown[])[] = [qk.claude, qk.stats.tokens, ['agents', 'one'], ['agents', 'thread']]
+ *  moves the token stats; plain `sessions` events (metadata while a turn streams, queue edits) do not. An agent's
+ *  turns (a run started by a schedule or `maxxing agents run` too) come with `agents:<path>` from the server's
+ *  session watcher: only that agent's page refetches, not every open agent page on every session's turn. */
+export const BUS_TURN_KEYS: readonly (readonly unknown[])[] = [qk.claude, qk.stats.tokens]
 
 /** What the open streams keep fresh by themselves: `bus` = /api/stream is connected (useGlobalBus), `sessions` =
  *  ids whose own stream is connected (useSessionStream: its `state` frames carry the Session at every change). */
