@@ -6,9 +6,10 @@ section: Extending
 A page extension adds a full page to the app, served at `/x/<id>`. It is a plain JavaScript
 module – no build step – plus an optional Python API.
 
-Where it appears: every page is listed under **Extensions** in the sidebar (the `/x` page). Click the
-**pin** at the top right of a page (or on the Extensions page, or turn on **In the sidebar** in
-Settings -> Pages) to give it its own sidebar entry, right below Extensions; click it again to unpin.
+Where it appears: every page is listed on the **Extensions** page (`/x`), reached from Settings -> Pages -> **All
+pages** or from **Extensions** in the search (Ctrl K). Click the **pin** at the top right of a page (or on the Extensions page, or
+turn on **In the sidebar** in Settings -> Pages) to give it its own sidebar entry, with the other pages; click it again
+to unpin.
 
 ```
 /root/maxxing/extensions/notes-board/
@@ -170,7 +171,7 @@ get the same kit. Inputs of the kit are 16 px on phones (no zoom on iPhone).
 - Python side: call `handle()` directly (see the test snippet in
   [Dashboard widgets](dashboard-widgets), with `api.handle(ctx, "GET", "notes", {}, None)`).
 - JavaScript syntax: `node --check page.js` if Node is installed.
-- **Settings -> Pages -> Rescan**, then open the page from the sidebar (Extensions, or its own entry once pinned). Errors appear on the
+- **Settings -> Pages -> Rescan**, then open the page from **All pages** there (or its own sidebar entry once pinned). Errors appear on the
   extension's row.
 
 
