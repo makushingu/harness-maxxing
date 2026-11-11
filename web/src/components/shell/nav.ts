@@ -16,8 +16,9 @@ export const navRow = (collapsed: boolean, active?: boolean) =>
     '[&>svg]:transition-transform [&>svg]:duration-300 [&>svg]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:[&>svg]:transition-none',
     active ? 'bg-accent text-foreground' : '',
     collapsed ? (active ? '[&>svg]:[stroke-width:1.8]' : '[&>svg]:[stroke-width:1.53]') : active ? '[&>svg]:[stroke-width:2]' : '[&>svg]:[stroke-width:1.7]',
-    // folded icon bar: 44 px square targets, slightly bigger icons (18 px scaled to 20 px)
-    collapsed && 'h-11 justify-center px-0 [&>svg]:[transform:scale(1.1112)]',
+    // folded icon bar: 44 px square targets, slightly bigger icons (18 px scaled to 20 px); 36 px in a short window,
+    // so every row still fits above the bottom block instead of being cut off
+    collapsed && 'h-11 justify-center px-0 [&>svg]:[transform:scale(1.1112)] [@media(max-height:820px)]:h-9',
   )
 
 type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page'
@@ -94,6 +95,12 @@ export function usePinnedPages(): PinnedPage[] {
     .filter((e) => e.type === 'page' && e.enabled && !e.error && e.pinned)
     .sort((a, b) => (a.pin_order ?? 1e9) - (b.pin_order ?? 1e9) || a.name.localeCompare(b.name))
     .map((e) => ({ to: `/x/${e.id}`, id: e.id, name: e.name, icon: e.icon }))
+}
+
+/** Page extensions that are on but not pinned: only the Extensions page (/x) leads to them, so the nav shows it then. */
+export function useUnpinnedPages(): number {
+  const { data } = useExtensions()
+  return (data || []).filter((e) => e.type === 'page' && e.enabled && !e.error && !e.pinned).length
 }
 
 /** The pages shown on this install (optional ones only once switched on). */

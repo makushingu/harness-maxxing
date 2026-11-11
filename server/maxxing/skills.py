@@ -35,7 +35,7 @@ def _front(text: str) -> dict[str, str]:
         elif key and line[:1] in (" ", "\t"):
             out[key] = f"{out[key]} {line.strip()}".strip()
     for k, v in out.items():
-        v = v.removeprefix(">-").removeprefix(">").removeprefix("|").strip()
+        v = re.sub(r"^[|>][-+]?", "", v).strip()                  # a block scalar header: | |- |+ > >- >+
         if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
             v = v[1:-1]
         out[k] = " ".join(v.split())

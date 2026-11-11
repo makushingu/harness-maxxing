@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from maxxing import config
+import pytest
+
+from maxxing import config, skills
 
 
 def _skill(root, name, head):
@@ -30,3 +32,9 @@ def test_skills_are_listed_by_origin_read_only(client, mx, monkeypatch):
     assert out["post"]["origin"] == "topic" and out["post"]["topic"] == "blog" and out["post"]["name"] == "post"
     assert out["post"]["path"].endswith("projects/acme/topics/blog/.claude/skills/post/SKILL.md")
     assert {p: p.read_text() for p in (cdir / "skills").rglob("SKILL.md")} == before
+
+
+@pytest.mark.parametrize("header", ["|", "|-", "|+", ">", ">-", ">+"])
+def test_a_block_scalar_description_loses_its_header(header):
+    text = f"---\nname: x\ndescription: {header}\n  Line one\n  line two\ndisable-model-invocation: true\n---\nBody\n"
+    assert skills._front(text)["description"] == "Line one line two"

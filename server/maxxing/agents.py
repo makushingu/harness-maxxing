@@ -310,7 +310,7 @@ def _clean_avatar(a: Any, seed: str = "") -> dict:
     out = {}
     for k, opts in AVATAR.items():
         v = a.get(k) if k in a else old.get(k)
-        v = v if v in opts else _OLD_AVATAR.get(k, {}).get(v)
+        v = v if v in opts else (_OLD_AVATAR.get(k, {}).get(v) if isinstance(v, str) else None)
         if v is None and seed:
             v = opts[int(hashlib.sha1(f"{seed}:{k}".encode()).hexdigest(), 16) % len(opts)]
         out[k] = v or DEFAULT_AVATAR[k]
@@ -491,8 +491,8 @@ def clean(data: Any, strict: bool = False) -> dict:
         if strict and mode:
             raise AgentError(400, "bad_permission_mode", "permission_mode: bypass, acceptEdits, default or empty")
         mode = ""
-    triggers = [x for x in (_clean_trigger(t, strict) for t in (d.get("triggers") or [])[:MAX_TRIGGERS]
-                            if isinstance(d.get("triggers"), list)) if x]
+    given = d.get("triggers") if isinstance(d.get("triggers"), list) else []
+    triggers = [x for x in (_clean_trigger(t, strict) for t in given[:MAX_TRIGGERS]) if x]
     if strict and isinstance(d.get("triggers"), list) and len(d["triggers"]) > MAX_TRIGGERS:
         raise AgentError(400, "too_many_triggers", f"At most {MAX_TRIGGERS} triggers")
     name = " ".join(_utf8(str(d.get("name") or "")).split())[:60]

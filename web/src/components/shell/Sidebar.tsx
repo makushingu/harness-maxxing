@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { MessageCircle, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { Blocks, MessageCircle, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { navRow, navTourId, useNavEntries, type NavEntry, type NavItem } from './nav'
+import { navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
 import { entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -97,6 +97,30 @@ const FOLDED_DOT = 'absolute top-1 right-1 flex size-4 items-center justify-cent
 /** The active page's marker on the bar's left edge (the folded rows sit 10 px from it, the unfolded ones 12 px). */
 const activeMark = (collapsed: boolean) => cn('absolute top-2 bottom-2 w-[3px] rounded-r-full bg-primary', collapsed ? '-left-2.5 top-2.5 bottom-2.5' : '-left-3')
 
+/** 'up' / 'down' / 'both' while rows of the scroller are out of sight on that side, '' when it all fits. */
+function useScrollEdges(ref: React.RefObject<HTMLElement | null>): string {
+  const [edges, setEdges] = React.useState('')
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => {
+      const up = el.scrollTop > 1
+      const down = el.scrollTop + el.clientHeight < el.scrollHeight - 1
+      setEdges(up && down ? 'both' : up ? 'up' : down ? 'down' : '')
+    }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => {
+      el.removeEventListener('scroll', check)
+      ro.disconnect()
+    }
+  }, [ref])
+  return edges
+}
+
 /** Width of the folded icon bar. */
 const FOLDED_W = 64
 
@@ -106,6 +130,7 @@ export const Sidebar = React.memo(function Sidebar() {
   const prefetchLink = usePrefetchLink()
   const t = useT()
   const { entries, end } = useNavEntries()
+  const unpinned = useUnpinnedPages()
   const userCollapsed = useUI((s) => s.sidebarCollapsed)
   const toggle = useUI((s) => s.toggleSidebar)
   const tablet = useIsTablet()
@@ -187,6 +212,7 @@ export const Sidebar = React.memo(function Sidebar() {
         {...prefetchLink(e.to)}
         {...drag}
         data-ext={e.ext.id}
+        aria-label={collapsed ? e.ext.name : undefined}
         style={{ '--i': idx } as React.CSSProperties}
         className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
       >
@@ -195,6 +221,28 @@ export const Sidebar = React.memo(function Sidebar() {
             {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
             <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
             {!collapsed && <span className="flex-1 truncate">{e.ext.name}</span>}
+          </>
+        )}
+      </NavLink>
+    </Tooltip>
+  )
+  /** The Extensions page, after the pages: only while an extension page is not pinned (a direct way to it). */
+  const hubItem = (idx: number) => (
+    <Tooltip key="/x" content={collapsed ? t('ext.hubTitle') : null} side="right">
+      <NavLink
+        to="/x"
+        end
+        {...prefetchLink('/x')}
+        data-tour="nav-extensions"
+        aria-label={collapsed ? t('ext.hubTitle') : undefined}
+        style={{ '--i': idx } as React.CSSProperties}
+        className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
+            <Blocks className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
+            {!collapsed && <span className="flex-1 truncate">{t('ext.hubTitle')}</span>}
           </>
         )}
       </NavLink>
@@ -212,6 +260,9 @@ export const Sidebar = React.memo(function Sidebar() {
     },
     'nav',
   )
+  // rows hidden above or below in a short window: the list fades on that edge, so it shows it scrolls
+  const navScroll = React.useRef<HTMLDivElement>(null)
+  const more = useScrollEdges(navScroll)
   const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
   const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
 
@@ -272,13 +323,14 @@ export const Sidebar = React.memo(function Sidebar() {
             </div>
 
             {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short). */}
-            <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
+            <div ref={navScroll} data-tour="nav" data-more={more || undefined} className="mx-nav-scroll min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
               <nav aria-label={t('shell.navigation')} className={block()}>
                 {drag.order.map((to, idx) => {
                   const e = entries.find((x) => x.to === to)
                   if (!e) return null // switched off or unpinned in another tab during a drag
                   return e.page ? navItem(e.page, idx, drag.props(to)) : extItem(e, idx, drag.props(to))
                 })}
+                {unpinned > 0 && hubItem(entries.length)}
               </nav>
             </div>
 
@@ -286,11 +338,11 @@ export const Sidebar = React.memo(function Sidebar() {
 
             <div className={block('border-t border-sidebar-border')}>
               {/* folded: a 44 px target and a bigger icon, like the rows (UpdateIndicator keeps its own small look) */}
-              <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
+              <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [@media(max-height:820px)]:[&>*]:h-9 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
                 <UpdateIndicator collapsed={collapsed} />
               </div>
               <HelpMenu collapsed={collapsed} />
-              {end.map((item) => navItem(item, entries.length))}
+              {end.map((item) => navItem(item, entries.length + 1))}
               {/* folded: the way to pin the bar (pinned, the button sits beside the logo) */}
               {collapsed && !tablet && (
                 <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
