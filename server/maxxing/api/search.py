@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import contextlib
+import os
 import threading
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -34,7 +35,10 @@ async def _loop() -> None:
 
 
 async def startup() -> None:
+    """The background refresh loop; MAXXING_SEARCH_LOOP=0 turns it off (tests: a query refreshes by itself)."""
     global _task
+    if os.environ.get("MAXXING_SEARCH_LOOP", "1") == "0":
+        return
     _task = asyncio.create_task(_loop())
 
 
