@@ -1173,6 +1173,32 @@ def test_bucket_create_undoes_its_steps_when_one_fails(fake_caddy, monkeypatch):
     assert calls == []
 
 
+def test_bucket_create_undoes_its_steps_when_the_registry_fails(fake_caddy, monkeypatch):
+    """infra.json cannot be written (disk full): the bucket, its key, its site and its vault keys are undone."""
+    calls = []
+
+    def fake_garage(*args, timeout=60):
+        calls.append(args)
+        if args[:2] == ("key", "create"):
+            return 0, "Key ID:              GK123\nSecret key:          s3cr3t\n", ""
+        return 0, "", ""
+
+    declare = registry.declare
+
+    def full(rid, **k):
+        if k.get("kind") == "bucket":
+            raise OSError(28, "No space left on device")
+        return declare(rid, **k)
+    monkeypatch.setattr(actions, "garage_installed", lambda: True)
+    monkeypatch.setattr(actions, "_garage", fake_garage)
+    monkeypatch.setattr(registry, "declare", full)
+    with pytest.raises(OSError):
+        actions.bucket_create("media", public=True)
+    assert ("key", "delete", "--yes", "media-key") in calls and ("bucket", "delete", "--yes", "media") in calls
+    assert vault.get("S3_MEDIA_ACCESS_KEY_ID") is None and vault.get("S3_MEDIA_BUCKET") is None
+    assert not list(fake_caddy.rglob("media.caddy"))
+
+
 def test_pg_databases_keeps_a_name_with_a_space(monkeypatch):
     monkeypatch.setattr(actions, "_psql", lambda q, *a, **k: (0, "my app\nother\n", ""))
     assert actions.pg_databases() == ["my app", "other"]
