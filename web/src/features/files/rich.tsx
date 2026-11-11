@@ -159,7 +159,7 @@ export function HtmlView({ path, version, className }: { path: string; version?:
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)} data-testid="html-view">
       <div className="relative min-h-0 flex-1 bg-white">
-        <Sensitive placeholder={<div className="absolute inset-0 bg-muted/60" aria-label="Hidden (presentation mode)" />}>
+        <Sensitive placeholder={<div className="absolute inset-0 bg-muted/60" aria-label={t('presentation.hidden')} />}>
           {q.data ? (
             <iframe key={`${q.data.url}|${reload}`} src={q.data.url} sandbox={SANDBOX} title={path} className="absolute inset-0 size-full border-0" referrerPolicy="no-referrer" />
           ) : q.isError ? (

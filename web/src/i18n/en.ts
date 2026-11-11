@@ -149,6 +149,7 @@ export const en = {
   'presentation.on': 'Turn on presentation mode',
   'presentation.off': 'Turn off presentation mode',
   'presentation.hint': 'Masks your data while you share your screen.',
+  'presentation.hidden': 'Hidden (presentation mode)',
   'sessions.running': '{count} running',
   'sessions.unread': '{count} unread',
   'sessions.unreadOne': 'Unread answer',

@@ -17,3 +17,9 @@ def test_the_resize_handles_of_session_columns_are_translated():
     src = (WEB / "pages" / "sessions" / "Column.tsx").read_text(encoding="utf-8")
     assert 'aria-label="Resize"' not in src
     assert "aria-label={t('shell.resize')}" in src and "aria-label={t('shell.resizeRows')}" in src
+
+
+def test_the_presentation_mode_masks_are_translated():
+    left = [str(p.relative_to(WEB)) for p in WEB.rglob("*.tsx") if "Hidden (presentation mode)" in p.read_text(encoding="utf-8")]
+    assert not left, left
+    assert "aria-label={t('presentation.hidden')}" in (WEB / "components" / "ui" / "sensitive.tsx").read_text(encoding="utf-8")

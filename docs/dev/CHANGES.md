@@ -31,6 +31,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   every language). `tests/test_web_labels.py`.
 - `pages/sessions/Column.tsx`: the column and row resize handles take `t('shell.resize')` / `t('shell.resizeRows')`
   (new key, "double-click: equal heights", as `resetRowSplit` sets 0.5) as their `aria-label` (was "Resize").
+- `presentation.hidden` (core group): the `aria-label` of the presentation-mode masks (`Sensitive`, the file viewers'
+  placeholders, `MaskedLines` of the sessions), "Hidden (presentation mode)" in English in 8 places before.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

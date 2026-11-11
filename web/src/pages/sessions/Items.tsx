@@ -565,8 +565,9 @@ function GifBadge() {
 const isGif = (p: string) => /\.gif$/i.test(p)
 
 function MaskedLines() {
+  const t = useT()
   return (
-    <div className="grid gap-1.5" aria-label="Hidden (presentation mode)">
+    <div className="grid gap-1.5" aria-label={t('presentation.hidden')}>
       <div className="h-3 w-11/12 rounded bg-muted" />
       <div className="h-3 w-9/12 rounded bg-muted" />
       <div className="h-3 w-10/12 rounded bg-muted" />

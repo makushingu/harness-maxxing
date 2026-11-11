@@ -147,6 +147,7 @@ export const fr: Record<keyof typeof en, string> = {
   'presentation.on': 'Activer le mode présentation',
   'presentation.off': 'Désactiver le mode présentation',
   'presentation.hint': 'Masque vos données pendant un partage d’écran.',
+  'presentation.hidden': 'Masqué (mode présentation)',
   'sessions.running': '{count} en cours',
   'sessions.unread': '{count} non lues',
   'sessions.unreadOne': 'Réponse non lue',
