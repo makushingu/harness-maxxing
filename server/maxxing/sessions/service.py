@@ -1340,6 +1340,8 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
         changed = True
         if (prev[2], prev[3]) != (cur[2], cur[3]):
             ws_changed = True
+            if "/agents/" in (m.get("path") or ""):   # an agent's turn started / ended: its page refetches, not all
+                _agent_turns.add(m["path"])
         # a turn ended, or failed to start (error without a new turn - also when it failed before this watcher
         # ever saw it running: systemd-run refusing within one pass)
         if cur[1] > prev[1] or (prev[2] != "error" and cur[2] == "error" and cur[1] == prev[1]):
@@ -1357,6 +1359,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
 
 
 _firing: set[asyncio.Task] = set()
+_agent_turns: set[str] = set()       # agents whose session started or ended a turn since the last bus message (_scan)
 
 
 async def _fire(session: dict, result: dict | None) -> None:
@@ -1415,7 +1418,9 @@ async def _watch(interval: float) -> None:
                 await asyncio.to_thread(_stamp, t0)
                 stamped, dirty = t0, False
             if changed:
-                bus.invalidate(*(("sessions", "workspace") if ws else ("sessions",)))
+                agent_topics = [f"agents:{p}" for p in sorted(_agent_turns)]
+                _agent_turns.clear()
+                bus.invalidate(*(("sessions", "workspace") if ws else ("sessions",)), *agent_topics)
             for s, r in ends:
                 t = asyncio.get_running_loop().create_task(_fire(s, r))
                 _firing.add(t)                 # keep a reference: an unreferenced task can be collected mid-run

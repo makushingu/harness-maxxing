@@ -377,6 +377,24 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
     const ids = new Set(latest.map((m) => m.id))
     return [...older.filter((m) => !ids.has(m.id)), ...latest]
   }, [older, latest])
+  // The live page is the last THREAD_PAGE messages: new ones push its first ones out. Once older pages are shown,
+  // those go to `older` (else they would vanish between the two, and the next "older" page starts before them).
+  const prevLatest = React.useRef(latest)
+  React.useLayoutEffect(() => {
+    const prev = prevLatest.current
+    prevLatest.current = latest
+    if (!older.length || prev === latest || !prev.length || !latest.length) return
+    const ids = new Set(latest.map((m) => m.id))
+    if (!ids.has(prev[prev.length - 1].id) && !latest.some((m) => m.at <= prev[prev.length - 1].at)) {
+      // more new messages than a page (a long absence): what lies between is not known, start again from the live page
+      setOlder([])
+      setOlderDone(false)
+      return
+    }
+    const first = latest[0].at
+    const out = prev.filter((m) => !ids.has(m.id) && m.at <= first)
+    if (out.length) setOlder((o) => [...o, ...out.filter((m) => !o.some((x) => x.id === m.id))])
+  }, [latest, older.length])
   const more = !olderDone && latest.length >= THREAD_PAGE
   const { data: crons } = useCrons()
   const jobs = crons?.jobs || []
@@ -395,12 +413,25 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [])
   React.useLayoutEffect(follow, [last, running.length, follow])
-  // Loading older messages keeps what is on screen in place (the page grows above it).
+  // What grows after a render (answers' markdown, images, the approval card once its query answers, a live turn)
+  // stays followed while at the bottom: opening an agent shows its newest message.
+  const inner = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    const el = inner.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(follow)
+    ro.observe(el)
+    if (box.current) ro.observe(box.current)        // the view itself (window, the box below growing)
+    return () => ro.disconnect()
+  }, [follow])
+  // Loading older messages keeps what is on screen in place (the page grows above it). The scroller has no
+  // browser scroll anchoring (`overflow-anchor: none`), so this correction is the only one, applied once.
   const keep = React.useRef<number | null>(null)
   React.useLayoutEffect(() => {
     const el = box.current
-    if (el && keep.current !== null) el.scrollTop += el.scrollHeight - keep.current
+    const k = keep.current
     keep.current = null
+    if (el && k !== null) el.scrollTop += el.scrollHeight - k
   }, [older])
   const loadOlder = React.useCallback(() => {
     const first = msgs[0]
@@ -470,14 +501,14 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
         if (el.scrollTop < 200) loadOlder()
       }}
-      className="min-h-0 flex-1 overflow-y-auto"
+      className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
       aria-live="polite"
       data-testid="agent-thread"
       data-thread
     >
       <AnswerContext owner={{ agent: a.path }}>
         <StepBases.Provider value={bases}>
-        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
+        <div ref={inner} className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] content-start gap-3 px-4 py-5 md:px-8">
           {isLoading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className={cn('h-16 rounded-xl', i % 2 && 'ml-10')} />)
           ) : error ? (
