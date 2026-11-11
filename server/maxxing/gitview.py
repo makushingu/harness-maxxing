@@ -15,6 +15,7 @@ subject}], "truncated": bool}; commits come newest first, children before parent
 from __future__ import annotations
 
 import calendar
+import errno
 import hashlib
 import logging
 import os
@@ -173,7 +174,12 @@ def _git(repo: Path, *args: str, timeout: int = GIT_TIMEOUT) -> str:
 
 
 def _is_repo(d: Path) -> bool:
-    return (d / ".git").exists()
+    try:
+        return (d / ".git").exists()
+    except OSError as e:
+        if e.errno != errno.ENAMETOOLONG:                 # e.g. an unreadable .git: an error, not "no repository"
+            raise
+        return False                                      # a name longer than the system allows: not a repository
 
 
 def _walk(root: Path) -> list[Path]:

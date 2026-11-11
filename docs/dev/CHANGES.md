@@ -32,6 +32,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `tests/test_trash.py`.
 - `feed.mark_read` passes `source` through `_utf8` like `post()`: a lone surrogate (valid JSON) raised
   `UnicodeEncodeError` in SQLite, a 500 on `POST /api/feed/read`. Test in `tests/test_feed.py`.
+- `gitview._is_repo` returns False on `OSError` ENAMETOOLONG (any other error still raises): a path component longer
+  than 255 bytes made `exists()` raise it while `resolve()` walked up to the clone, a 500 on every `/api/git/*` route instead of
+  `404 not_a_repo`. Test in `tests/test_gitview.py`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
