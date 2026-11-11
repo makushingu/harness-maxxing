@@ -5,6 +5,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- `agents`: outside provenance follows a result into the next session. `on_turn_end` marks the `result` message
+  `outside: true` when the session was started by outside text (`MAXXING_AGENT_OUTSIDE=1` without
+  `MAXXING_AGENT_OUTSIDE_FROM=context`; in a group, `agent_rooms.turn_outside`). New `_context(path, own) -> (text,
+  outside)` (`context()` unchanged for callers). A new conversation of the owner (`_owner_chat`) gets `own=True`: the
+  marked results are left out of its context, since outside text never enters the owner's conversation (and
+  `MAXXING_AGENT_OUTSIDE` would take the manager away from it). Any other start that gets the context (a script's
+  `agents run`) and finds a marked result in it gets `MAXXING_AGENT_OUTSIDE=1` + `MAXXING_AGENT_OUTSIDE_FROM=context`,
+  so `run_settings` forces approvals unless `trust_outside`; its own result is not marked, so the mark does not renew
+  itself: it lasts while the marked result is among the last `CONTEXT_RESULTS` (3). Accepted limit: what that run
+  repeats of the outside text is unmarked one run later. API.md: `AgentMessage.outside?`. Results written before
+  this change carry no mark. Test:
+  `test_agents.py::test_the_result_of_an_outside_run_keeps_its_provenance_in_the_next_sessions`.
+
 ## 2.0.0-alpha.139 - 2026-11-10
 
 - Fixes before release: `agent_guard._manages` reads the target with `cmd_agents._configure`'s parser

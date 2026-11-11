@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Security:
+- **Agents: an answer to outside text stays out of your conversation.** A run started by a webhook, a
+  notification or another agent asks before any risky action. Its answer was then given as context to the next
+  session of the agent, which asked nothing: what the outside text said could come back there. A new conversation
+  with the agent no longer gets such an answer (it is still in the agent's page), and a run started by a script
+  that gets it asks first too, unless the agent trusts outside events.
+
 ## 2.0.0-alpha.139 - 2026-11-10
 
 New:
