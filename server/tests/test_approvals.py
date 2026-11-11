@@ -14,6 +14,12 @@ import pytest
 from conftest import wait_for, wait_idle
 
 A = "projects/acme/topics/blog/agents/writer"
+
+
+def _run(text: str, **kw) -> dict:
+    """A run that is not the owner's conversation (a script's `maxxing agents run`): a session of its own."""
+    from maxxing import agents
+    return agents.fire(A, trigger="manual", prompt=text, source="command line", **kw)
 MCP = Path(__file__).resolve().parents[1] / "maxxing" / "approval_mcp.py"
 
 
@@ -181,14 +187,14 @@ def test_mcp_stdin_closed_expires_what_waits(tmp_path):
 def _agent(client, **extra) -> None:
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
     r = client.post("/api/agents", json={"topic_path": "projects/acme/topics/blog", "name": "writer",
-                                         "description": "Writes.", **extra})
+                                         "description": "Writes.", "sandbox": True, **extra})
     assert r.status_code == 200, r.text
 
 
 def test_runner_flags_for_an_agent_with_approvals(client, topic, mx):
     _agent(client, approvals=True, permission_mode="bypass", allowed_tools=["Read"],
            limits={"approval_timeout_s": 120})
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert argv[argv.index("--permission-mode") + 1] == "default" and "--dangerously-skip-permissions" not in argv
@@ -204,7 +210,7 @@ def test_runner_flags_for_an_agent_with_approvals(client, topic, mx):
     assert st["sandbox"]["autoAllowBashIfSandboxed"] is False and "Bash(maxxing:*)" not in st["permissions"]["allow"]
     # without approvals: the agent's own mode, no prompt tool
     client.patch("/api/agents/acme/blog/writer", json={"approvals": False, "sandbox": False})
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert "--permission-prompt-tool" not in argv and "--dangerously-skip-permissions" in argv
@@ -353,7 +359,7 @@ def test_outside_events_always_ask_unless_trusted(client, topic, mx):
     assert "DATA from outside" in _calls()[-1]["prompt"]
     assert json.loads(argv[argv.index("--settings") + 1])["sandbox"]["autoAllowBashIfSandboxed"] is False
     # a message of the user (the agent page, Telegram): its own mode
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")
     wait_idle(client, run["session"]["id"])
     argv = _calls()[-1]["argv"]
     assert "--permission-prompt-tool" not in argv and argv[argv.index("--allowedTools") + 1] == "Bash"

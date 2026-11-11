@@ -290,7 +290,7 @@ def resolve(t: dict, lang: str = "en") -> dict:
     """A template with its texts in `lang` (English when missing)."""
     out = {k: v for k, v in t.items() if k not in ("name", "summary", "role", "needs", "cron", "webhook", "mail")}
     out.update(name=_txt(t["name"], lang), summary=_txt(t["summary"], lang), role=_txt(t["role"], lang),
-               needs=_txt(t.get("needs"), lang))
+               needs=_txt(t.get("needs"), lang), brief=brief(t["id"], lang), first=t["id"] in FIRST_IDEAS)
     if t.get("cron"):
         out["cron"] = {"schedule": t["cron"]["schedule"], "prompt": _txt(t["cron"].get("prompt"), lang)}
     if t.get("webhook"):
@@ -325,3 +325,55 @@ def fields(t: dict, keys_present: list[str] | None = None, mail_account: str = "
     if t.get("mail") and mail_account:
         out["mail"] = [{"account": mail_account, **t["mail"]}]
     return out
+
+
+# ---- the brief of each template: the message an idea of a new agent's conversation puts in the box ----
+# Same four lines as the greeting of a new agent (agents.MANAGER_NEW reads them); […] = what the owner fills in.
+BRIEF_LABELS = {"en": ("My job", "When", "Results", "Never without me"),
+                "fr": ("Mon travail", "Quand", "Résultat", "Jamais sans moi")}
+BRIEFS: dict[str, dict[str, tuple[str, str, str, str]]] = {
+    "watch": {"en": ("tell me only what is new on these sites: […]", "every morning at 8", "here", "-"),
+              "fr": ("me dire seulement ce qui est nouveau sur ces sites : […]", "chaque matin à 8h", "ici", "-")},
+    "sales": {"en": ("sum up the day's sales of my shop […] (Stripe / Shopify) in five lines", "every evening at 8 pm", "here",
+                     "changing or refunding anything"),
+              "fr": ("résumer les ventes du jour de ma boutique […] (Stripe / Shopify) en cinq lignes", "chaque soir à 20h", "ici",
+                     "modifier ou rembourser quoi que ce soit")},
+    "writer": {"en": ("write a draft article for my blog […] on […]", "every Monday at 9", "a file in its folder + a summary here",
+                      "publishing"),
+               "fr": ("écrire un brouillon d'article pour mon blog […] sur […]", "chaque lundi à 9h", "un fichier dans son dossier + un résumé ici",
+                      "publier")},
+    "uptime": {"en": ("check that these sites answer: […]", "every hour", "a message only when one is down", "-"),
+               "fr": ("vérifier que ces sites répondent : […]", "chaque heure", "un message seulement si l'un ne répond pas", "-")},
+    "mail-sort": {"en": ("file each new mail of my mailbox […] in the right folder, sum up the day", "on each new mail + every evening at 7 pm",
+                         "here", "deleting or answering a mail"),
+                  "fr": ("ranger chaque nouveau mail de ma boîte […] dans le bon dossier, résumer la journée", "à chaque nouveau mail + chaque soir à 19h",
+                         "ici", "supprimer ou répondre à un mail")},
+    "support": {"en": ("prepare the reply to each customer request of my shop […]", "on each request (webhook)", "here, the reply to send",
+                       "sending, refunding, changing an order"),
+                "fr": ("préparer la réponse à chaque demande client de ma boutique […]", "à chaque demande (webhook)", "ici, la réponse à envoyer",
+                       "envoyer, rembourser, modifier une commande")},
+    "orders": {"en": ("list the orders of my shop […] that wait for me", "every morning at 9, Monday to Saturday", "here", "changing an order"),
+               "fr": ("lister les commandes de ma boutique […] qui m'attendent", "chaque matin à 9h, du lundi au samedi", "ici", "modifier une commande")},
+    "pr-review": {"en": ("review each new pull request of my repository […]", "on each new pull request (GitHub webhook)", "here",
+                         "merging or pushing"),
+                  "fr": ("relire chaque nouvelle PR de mon dépôt […]", "à chaque nouvelle PR (webhook GitHub)", "ici", "fusionner ou pousser")},
+    "feedback": {"en": ("group the feedback of my users on […] and propose improvements", "on each feedback (webhook)", "a plan in its folder + a summary here",
+                        "changing the code"),
+                 "fr": ("regrouper les retours de mes utilisateurs sur […] et proposer des améliorations", "à chaque retour (webhook)",
+                        "un plan dans son dossier + un résumé ici", "modifier le code")},
+    "mail-support": {"en": ("prepare a reply to each customer mail of my mailbox […]", "on each new mail", "a draft in the mailbox", "sending"),
+                     "fr": ("préparer une réponse à chaque mail client de ma boîte […]", "à chaque nouveau mail", "un brouillon dans la boîte", "envoyer")},
+    "mail-invoices": {"en": ("save the invoices received in my mailbox […] in its folder", "on each new mail", "its folder + a line here", "paying anything"),
+                      "fr": ("enregistrer les factures reçues dans ma boîte […] dans son dossier", "à chaque nouveau mail", "son dossier + une ligne ici",
+                             "payer quoi que ce soit")},
+}
+# the ideas shown first in an empty conversation (the others behind "More ideas")
+FIRST_IDEAS = ("watch", "sales", "writer", "uptime", "mail-sort", "support")
+
+
+def brief(tid: str, lang: str = "en") -> str:
+    b = BRIEFS.get(tid)
+    if not b:
+        return ""
+    lg = lang if lang in b else "en"
+    return "\n".join(f"{k} : {v}" if lg == "fr" else f"{k}: {v}" for k, v in zip(BRIEF_LABELS[lg], b[lg]))

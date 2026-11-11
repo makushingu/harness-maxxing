@@ -16,8 +16,9 @@ export const navRow = (collapsed: boolean, active?: boolean) =>
     '[&>svg]:transition-transform [&>svg]:duration-300 [&>svg]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:[&>svg]:transition-none',
     active ? 'bg-accent text-foreground' : '',
     collapsed ? (active ? '[&>svg]:[stroke-width:1.8]' : '[&>svg]:[stroke-width:1.53]') : active ? '[&>svg]:[stroke-width:2]' : '[&>svg]:[stroke-width:1.7]',
-    // folded icon bar: 44 px square targets, slightly bigger icons (18 px scaled to 20 px)
-    collapsed && 'h-11 justify-center px-0 [&>svg]:[transform:scale(1.1112)]',
+    // folded icon bar: 44 px square targets, slightly bigger icons (18 px scaled to 20 px); 36 px in a short window,
+    // so every row still fits above the bottom block instead of being cut off
+    collapsed && 'h-11 justify-center px-0 [&>svg]:[transform:scale(1.1112)] [@media(max-height:820px)]:h-9',
   )
 
 type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page'
