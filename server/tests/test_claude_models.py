@@ -50,3 +50,21 @@ def test_no_credentials_no_call(mx, monkeypatch, tmp_path):
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert claude_models.refresh(force=True)["error"] == "no Claude credentials"
+
+
+class _Answer:
+    status_code = 200
+
+    def __init__(self, body):
+        self.body = body
+
+    def json(self):
+        return self.body
+
+
+def test_an_answer_whose_data_is_not_a_list_is_noted_not_raised(mx, monkeypatch):
+    import httpx
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    for body in ({"data": 5}, {"data": "claude-opus-9"}):
+        monkeypatch.setattr(httpx, "get", lambda *a, **k: _Answer(body))
+        assert claude_models.refresh(force=True)["error"] == "bad answer"

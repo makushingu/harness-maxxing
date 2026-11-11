@@ -114,8 +114,10 @@ def fetch_ids() -> list[str]:
         raise RuntimeError(f"HTTP {r.status_code}")
     try:
         data = r.json().get("data") or []
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, RecursionError):
         raise RuntimeError("bad answer") from None
+    if not isinstance(data, list):
+        raise RuntimeError("bad answer")
     return [m["id"] for m in data if isinstance(m, dict) and isinstance(m.get("id"), str) and _ID.fullmatch(m["id"])]
 
 
