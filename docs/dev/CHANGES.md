@@ -30,6 +30,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `trash._item` refuses an id longer than 255 bytes (`400 bad_id`): `Path.exists()` raised `OSError` ENAMETOOLONG
   (Python 3.12 only swallows ENOENT, ENOTDIR, EBADF, ELOOP), a 500 on restore and delete. Test in
   `tests/test_trash.py`.
+- `feed.mark_read` passes `source` through `_utf8` like `post()`: a lone surrogate (valid JSON) raised
+  `UnicodeEncodeError` in SQLite, a 500 on `POST /api/feed/read`. Test in `tests/test_feed.py`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

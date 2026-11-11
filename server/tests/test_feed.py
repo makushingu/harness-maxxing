@@ -422,3 +422,10 @@ def test_the_number_of_source_rules_is_capped(client):
     rules.pop("src0")
     assert client.put("/api/feed/settings", json={"rules": rules}).status_code == 200
     assert len(feed.settings()["rules"]) == 200
+
+
+def test_feed_read_with_a_lone_surrogate_source_is_not_a_500(client, mx):
+    # "\ud800" is valid JSON but not UTF-8: SQLite raised UnicodeEncodeError (a 500); post() already cleans it
+    client.post("/api/feed", json={"title": "kept", "source": "shop"})
+    r = client.post("/api/feed/read", content=b'{"source": "\\ud800"}', headers={"content-type": "application/json"})
+    assert r.status_code == 200 and r.json()["unread"] == 1, r.text
