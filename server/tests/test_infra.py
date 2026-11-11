@@ -1238,6 +1238,24 @@ def test_a_lone_surrogate_is_refused_by_every_infra_route(client, org):
     assert client.get("/api/infra").status_code == 200
 
 
+def test_a_change_made_during_a_refresh_asks_for_another(org, monkeypatch):
+    """A server removed while the servers are probed: the snapshot was built from the old registry, so it is stale."""
+    monkeypatch.setenv("MAXXING_INFRA_CHECKS", "0")
+    monkeypatch.setattr(providers, "cloudflare", lambda: CF)
+    monkeypatch.setattr(providers, "hostinger", lambda: {"connected": False, "key": None})
+
+    def slow_probe(opts):
+        time.sleep(0.05)                        # past the file clock's tick
+        infra.mark_stale()
+        return _probes(str(org.ws))["local"]
+    monkeypatch.setattr(infra, "probe_local", slow_probe)
+    infra.refresh()
+    assert infra.is_stale(infra.load_snapshot())
+    monkeypatch.setattr(infra, "probe_local", lambda opts: _probes(str(org.ws))["local"])
+    infra.refresh()                             # nothing changed during this one
+    assert not infra.is_stale(infra.load_snapshot())
+
+
 def test_a_note_made_during_a_refresh_stays(org, monkeypatch):
     monkeypatch.setenv("MAXXING_INFRA_CHECKS", "0")
     monkeypatch.setattr(providers, "cloudflare", lambda: CF)
