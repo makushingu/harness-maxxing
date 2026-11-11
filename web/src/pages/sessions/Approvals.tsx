@@ -42,7 +42,8 @@ function changeLine(t: TFn, line: string): string {
   const word = (v: string) => (v === 'on' || v === 'off' ? tDyn(t, `agents.change.${v}`, v) : v === '(none)' ? tDyn(t, 'agents.change.none', v) : v)
   const rest = line.slice(at + 2)
   const vals = /^[+-] /.test(rest) ? rest : rest.split(' -> ').map(word).join(' → ')
-  const field = tDyn(t, `agents.change.${key}`, key)
+  // one line per mailbox: `mail <account>: …`
+  const field = key.startsWith('mail ') ? `${tDyn(t, 'agents.change.mail', 'mail')} ${key.slice(5)}` : tDyn(t, `agents.change.${key}`, key)
   const out = t('agents.change.line', { field, change: vals })
   return out.includes(vals) ? out : `${field}: ${vals}` // '' while the agents texts download
 }

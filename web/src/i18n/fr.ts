@@ -3404,7 +3404,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.export.download': 'Télécharger',
   'agents.export.tip': 'Le télécharger comme fichier d\'agent Claude Code (.claude/agents/<nom>.md)',
   'agents.sandbox.desc': "Ce qu'il protège : ses commandes n'écrivent que dans son propre dossier et les dossiers du topic listés ci-dessous, ne joignent que les sites listés ci-dessous et ne lisent jamais les secrets ni les identifiants du serveur ; l'agent ne peut jamais modifier son propre rôle, ses réglages ni ses déclencheurs. Ses exécutions n'utilisent jamais le mode sans validation (il devient « accepter les modifications »).",
-  'agents.sandbox.autoOn': "Protégé maintenant : il lit du texte extérieur (un webhook, le flux ou une boîte mail). Tu peux le remettre en Libre dans ses réglages.",
+  'agents.sandbox.autoOn': "Protégé maintenant : il lit du texte extérieur (un webhook, le flux ou une boîte mail). Vous pouvez le remettre en Libre dans ses réglages.",
   'agents.sandbox.whenOff': "Ne le désactive que si l'agent doit écrire hors de son topic, utiliser les identifiants du serveur (git, gh, clés ssh…) ou déployer dans des dossiers système.",
   'agents.sandbox.domains': 'Domaines qu\'il peut joindre',
   'agents.sandbox.domainsDesc': 'Les hôtes que ses commandes peuvent joindre, par exemple api.github.com ou *.example.com.',

@@ -393,7 +393,8 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
     }
     const first = latest[0].at
     const out = prev.filter((m) => !ids.has(m.id) && m.at <= first)
-    if (out.length) setOlder((o) => [...o, ...out.filter((m) => !o.some((x) => x.id === m.id))])
+    // a frozen copy never says `waiting`: the message has started by now (or will show again from the live page)
+    if (out.length) setOlder((o) => [...o, ...out.filter((m) => !o.some((x) => x.id === m.id)).map(({ waiting: _, ...m }) => m)])
   }, [latest, older.length])
   const more = !olderDone && latest.length >= THREAD_PAGE
   const { data: crons } = useCrons()
