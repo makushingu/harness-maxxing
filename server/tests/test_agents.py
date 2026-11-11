@@ -861,3 +861,14 @@ def test_a_silent_agent_works_without_calling_the_user(client, topic, monkeypatc
     wait_idle(client, run["session"]["id"])
     wait_for(lambda: sent)
     assert client.get("/api/agents/acme/blog/writer").json()["thread_unread"] >= 1
+
+
+def test_a_rule_with_a_lone_surrogate_is_refused(client, topic):
+    _on(client)
+    _create(client)
+    for rule in ({"tool": "Bash", "match": "x\ud800y"}, {"tool": "Bash", "match": "rm", "reason": "no\udfff"}):
+        r = client.patch("/api/agents/acme/blog/writer", content=json.dumps({"rules": [rule]}),
+                         headers={"Content-Type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "bad_rule", r.text
+    assert client.get("/api/agents").status_code == 200
+    assert agents.clean({"rules": [{"tool": "Bash", "match": "a\ud800"}]})["rules"][0]["match"] == "a?"

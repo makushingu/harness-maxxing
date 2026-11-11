@@ -387,11 +387,15 @@ def _clean_rules(v: Any, strict: bool = False) -> list[dict]:
         if not isinstance(r, dict):
             continue
         tool, match = str(r.get("tool") or "*"), " ".join(str(r.get("match") or "").split())[:200]
+        reason = " ".join(str(r.get("reason") or "").split())[:300]
+        if strict and (_utf8(match) != match or _utf8(reason) != reason):
+            raise AgentError(400, "bad_rule", "A rule cannot hold a lone surrogate character")
+        match, reason = _utf8(match), _utf8(reason)
         if tool not in RULE_TOOLS or not match:
             if strict:
                 raise AgentError(400, "bad_rule", "A rule needs a tool (Bash, Write, Edit, WebFetch or *) and a text")
             continue
-        out.append({"tool": tool, "match": match, "reason": " ".join(str(r.get("reason") or "").split())[:300]})
+        out.append({"tool": tool, "match": match, "reason": reason})
     return out[:MAX_RULES]
 
 
