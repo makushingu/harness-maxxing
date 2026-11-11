@@ -124,12 +124,17 @@ def _cut(body: str | None) -> str:
     return body[:QUOTED_MAX] + f"\n\n[... cut: {len(body) - QUOTED_MAX:,} more characters of the original message]"
 
 
-def _quote(m: dict) -> str:
+def _text(m: dict) -> str | None:
+    """The plain text of a message, or its HTML as text when it has no plain part (an HTML-only mail)."""
     body = m.get("text")
     if body is None and m.get("html"):
         from ..cmd_mail import _html_text
         body = _html_text(m["html"])
-    body = _cut(body)
+    return body
+
+
+def _quote(m: dict) -> str:
+    body = _cut(_text(m))
     who = m["from"]["name"] or m["from"]["email"]
     when = time.strftime("%Y-%m-%d %H:%M", time.localtime(m["date"])) if m.get("date") else ""
     lines = (body or "").strip().splitlines()
@@ -160,17 +165,14 @@ def compose(acc: dict, mode: str, folder: str, uid: int) -> dict:
     m = imap.message(acc, folder, uid, mark_seen=False)
     if mode == "draft":
         return {"to": [_fmt(x) for x in m["to"]], "cc": [_fmt(x) for x in m["cc"]], "bcc": [_fmt(x) for x in m.get("bcc") or []],
-                "subject": m["subject"], "text": (m.get("text") or "").rstrip(), "in_reply_to": m.get("in_reply_to") or "",
+                "subject": m["subject"], "text": (_text(m) or "").rstrip(), "in_reply_to": m.get("in_reply_to") or "",
                 "references": m.get("references") or "", "attachments": m["attachments"]}
     me = (acc.get("address") or "").lower()
     refs = " ".join(x for x in ((m.get("references") or "").split() + [m.get("message_id") or ""]) if x)
     if mode == "forward":
         who = _fmt(m["from"])
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(m["date"])) if m.get("date") else ""
-        body = m.get("text")
-        if body is None and m.get("html"):
-            from ..cmd_mail import _html_text
-            body = _html_text(m["html"])
+        body = _text(m)
         head = ["", "", "---------- Forwarded message ----------", f"From: {who}", f"Date: {when}",
                 f"Subject: {m['subject']}", f"To: {', '.join(_fmt(x) for x in m['to'])}"]
         if m["cc"]:

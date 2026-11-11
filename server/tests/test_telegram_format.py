@@ -204,3 +204,14 @@ def test_heading_with_a_long_run_of_spaces_renders_quickly():
     # The old lazy pattern took minutes here (cubic backtracking).
     assert time.monotonic() - start < 1
     assert out.startswith("<b>a") and out.endswith("b</b>")
+
+
+def test_render_keeps_an_emoji_message_within_the_utf16_limit():
+    # Telegram counts the limit in UTF-16 units: an emoji outside the BMP counts 2.
+    def u16(s):
+        return len(s.encode("utf-16-le", "surrogatepass")) // 2
+    for md in ("🚀" * 3000, "\n\n".join("🚀" * 1500 for _ in range(4)), "- " + "🚀" * 3000,
+               "```\n" + "🚀" * 3000 + "\n```", "| a | b |\n|---|---|\n| x | " + "🚀" * 3000 + " |"):
+        msgs = fmt.render(md)
+        assert msgs and all(u16(m) <= fmt.LIMIT and _balanced(m) for m in msgs)
+        assert sum(fmt.strip_tags(m).count("🚀") for m in msgs) == md.count("🚀")

@@ -1030,7 +1030,7 @@ def _size(p: Any) -> int:
             n = len(raw) - sum(raw.count(c) for c in "\r\n \t")
             return max(0, n * 3 // 4 - raw.rstrip()[-2:].count("="))
         if cte == "quoted-printable":
-            return len(raw) - 2 * raw.count("=")
+            return len(raw) - 2 * raw.count("=") - raw.count("=\r\n")    # "=XX" is 1 byte, a "=\r\n" soft break 0
         return len(raw.encode("utf-8", "surrogateescape"))
     except Exception:  # noqa: BLE001
         return 0

@@ -71,6 +71,15 @@ def test_reply_to_is_shown_never_sent_to_blindly_and_never_a_contact(acc, srv, s
     assert code == 0 and "To:   pay@attacker.example" in out and len(smtp.messages) == 1
     assert store.unknown(acc["id"], ["pay@attacker.example"]) == ["pay@attacker.example"]  # not a known contact
     assert "\\Answered" in srv.folders["INBOX"].messages[uid]["flags"]
+
+
+def test_draft_compose_keeps_html_only_body(acc, srv):
+    m = email.message.EmailMessage()                    # a draft written in another client: HTML only
+    m["From"], m["To"], m["Subject"] = "me@example.com", "bob@x.org", "Plan"
+    m.set_content("<p>Meet at <b>noon</b> on Friday</p>", subtype="html")
+    uid = srv.add("Drafts", m.as_bytes(), flags=("\\Draft",))
+    d = send.compose(acc, "draft", "Drafts", uid)
+    assert "Meet at" in d["text"] and "noon" in d["text"] and "<p>" not in d["text"]
     # the same from the page (send with `reply`), and a plain reply to the sender: that one becomes a contact
     send.send(acc, {"to": ["pay@attacker.example"], "subject": "Re", "text": "x", "reply": {"folder": "INBOX", "uid": uid}})
     assert store.unknown(acc["id"], ["pay@attacker.example"]) == ["pay@attacker.example"]

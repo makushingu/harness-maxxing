@@ -210,3 +210,18 @@ def test_a_huge_address_header_is_cut_before_the_parser(monkeypatch, value):
     assert seen and max(seen) <= 4 * 1024                   # the parser is quadratic: never fed more than this
     if "@" in value:
         assert 100 <= len(got) <= 600 and got[0]["email"] == "a@x.fr"
+
+
+def test_size_of_quoted_printable_part_counts_soft_break_as_zero():
+    data = "café " * 40 + "\n" + "x" * 300            # long lines: the encoder adds `=\r\n` soft breaks
+    import quopri
+    qp = quopri.encodestring(data.encode()).replace(b"\n", b"\r\n")
+    assert qp.count(b"=\r\n") >= 5
+    raw = (b"From: a@x.fr\r\nSubject: s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=B\r\n\r\n"
+           b"--B\r\nContent-Type: text/plain\r\n\r\nsee attached\r\n"
+           b"--B\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Disposition: attachment; filename=n.txt\r\n"
+           b"Content-Transfer-Encoding: quoted-printable\r\n\r\n" + qp + b"\r\n--B--\r\n")
+    msg = imap._parse(raw)
+    part = next(p for p in msg.walk() if p.get_filename() == "n.txt")
+    assert imap._size(part) == len(part.get_payload(decode=True))
+    assert [a["size"] for a in _render(raw)["attachments"]] == [len(part.get_payload(decode=True))]

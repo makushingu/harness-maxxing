@@ -1,4 +1,4 @@
-"""Markdown (Claude output) -> Telegram HTML, split into <= 4096-character messages.
+"""Markdown (Claude output) -> Telegram HTML, split into messages of at most 4096 UTF-16 units.
 
 Telegram's HTML mode supports a small subset: <b> <i> <u> <s> <code> <pre> <a href> <blockquote>.
 Only `<`, `>` and `&` need escaping, which makes it far more robust than MarkdownV2 for arbitrary
@@ -15,6 +15,12 @@ import html
 import re
 
 LIMIT = 4096
+
+
+def _u16(s: str) -> int:
+    """Length as Telegram counts it: UTF-16 units, so an emoji outside the BMP counts 2 (measuring in
+    characters let a message full of emoji go over the limit and be refused)."""
+    return len(s.encode("utf-16-le", "surrogatepass")) // 2
 
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]{0,30})\s*$")
 # The closing "###" is stripped in code: a lazy group before "\s*#*\s*$" backtracks
@@ -263,14 +269,14 @@ def _split_big(b: Block, limit: int) -> list[str]:
         frags: list[str] = []
         cur = ""
         for r in _table_lines(payload):
-            if len(r) > limit - 30:                          # a monster cell: its text, escaped, in pieces
+            if _u16(r) > limit - 30:                          # a monster cell: its text, escaped, in pieces
                 plain_r = strip_tags(r)
                 step = max(1, (limit - 30) // 5)
                 pieces = [escape(plain_r[k:k + step]) for k in range(0, len(plain_r), step)]
             else:
                 pieces = [r]
             for x in pieces:
-                if cur and len(cur) + 1 + len(x) > limit:
+                if cur and _u16(cur) + 1 + _u16(x) > limit:
                     frags.append(cur)
                     cur = x
                 else:
@@ -278,17 +284,17 @@ def _split_big(b: Block, limit: int) -> list[str]:
         return frags + ([cur] if cur else [])
     if kind == "code":
         lang, code = payload
-        overhead = len(_code_block("", lang))
+        overhead = _u16(_code_block("", lang))
         pieces: list[str] = []
         cur = ""
         for ln in code.split("\n"):
             add = (cur + "\n" + ln) if cur else ln
-            if len(escape(add)) + overhead > limit and cur:
+            if _u16(escape(add)) + overhead > limit and cur:
                 pieces.append(cur)
                 cur = ln
             else:
                 cur = add
-            if len(escape(cur)) + overhead > limit:           # one gigantic line: cut it all at once
+            if _u16(escape(cur)) + overhead > limit:           # one gigantic line: cut it all at once
                 cut = max(1, (limit - overhead) // 5)          # worst case: every char -> &amp;
                 chunks = [cur[k:k + cut] for k in range(0, len(cur), cut)]
                 pieces.extend(chunks[:-1])
@@ -302,7 +308,7 @@ def _split_big(b: Block, limit: int) -> list[str]:
     cur_lines: list[str] = []
     for ln in lines:
         r = _line(ln)
-        if len(r) > limit - 30:                                 # split a monster line on chars
+        if _u16(r) > limit - 30:                                 # split a monster line on chars
             if cur_lines:
                 frags.append(wrap("\n".join(cur_lines)))
                 cur_lines = []
@@ -310,7 +316,7 @@ def _split_big(b: Block, limit: int) -> list[str]:
             frags.extend(wrap(escape(ln[k:k + step])) for k in range(0, len(ln), step))
             continue
         trial = "\n".join(cur_lines + [r])
-        if len(wrap(trial)) > limit and cur_lines:
+        if _u16(wrap(trial)) > limit and cur_lines:
             frags.append(wrap("\n".join(cur_lines)))
             cur_lines = [r]
         else:
@@ -321,7 +327,7 @@ def _split_big(b: Block, limit: int) -> list[str]:
 
 
 def render(md: str, limit: int = LIMIT) -> list[str]:
-    """Markdown -> list of Telegram HTML messages, each at most `limit` characters.
+    """Markdown -> list of Telegram HTML messages, each at most `limit` UTF-16 units.
 
     Messages are cut between blocks (paragraphs, lists, code blocks) whenever possible, so
     every message is valid HTML on its own.
@@ -329,7 +335,7 @@ def render(md: str, limit: int = LIMIT) -> list[str]:
     frags: list[tuple[str, str]] = []                  # (html, separator before it)
     for b in blocks(md or ""):
         r = _render_block(b)
-        if len(r) <= limit:
+        if _u16(r) <= limit:
             frags.append((r, "\n\n"))
         elif b[0] in ("text", "table"):                 # lines stand alone: fill the current message first
             frags.extend((x, "\n\n" if k == 0 else "\n")
@@ -343,7 +349,7 @@ def render(md: str, limit: int = LIMIT) -> list[str]:
             continue
         if not cur:
             cur = f
-        elif len(cur) + len(sep) + len(f) <= limit:
+        elif _u16(cur) + len(sep) + _u16(f) <= limit:
             cur += sep + f
         else:
             msgs.append(cur)
@@ -357,7 +363,7 @@ def code(text: str, limit: int = LIMIT) -> list[str]:
     """Verbatim text (command output) as <pre> blocks, split on lines to fit `limit`."""
     b = ("code", ("", text or ""))
     r = _render_block(b)
-    return [r] if len(r) <= limit else _split_big(b, limit)
+    return [r] if _u16(r) <= limit else _split_big(b, limit)
 
 
 def plain(text: str, limit: int = LIMIT) -> list[str]:
@@ -366,10 +372,10 @@ def plain(text: str, limit: int = LIMIT) -> list[str]:
     cur = ""
     step = max(1, limit // 5)                    # worst case: every char becomes "&amp;"
     for ln in (text or "").split("\n"):
-        parts = [ln] if len(escape(ln)) <= limit else [ln[k:k + step] for k in range(0, len(ln), step)]
+        parts = [ln] if _u16(escape(ln)) <= limit else [ln[k:k + step] for k in range(0, len(ln), step)]
         for part in parts:
             e = escape(part)
-            if cur and len(cur) + 1 + len(e) > limit:
+            if cur and _u16(cur) + 1 + _u16(e) > limit:
                 out.append(cur)
                 cur = e
             else:
