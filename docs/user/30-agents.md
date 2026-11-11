@@ -348,8 +348,10 @@ You, and the agent when **you** ask it in its conversation.
   permission mode, approvals off, trusting outside events, more writable folders, fewer rules, tool lists, mailboxes,
   being a subagent, a higher budget, runs per hour or timeout. The agent's request shows up as a card in the
   conversation (and in the Notifications, and on Telegram) with the change written out (`sandbox: on → off`,
-  `domains: + example.com`); **Allow** applies it, **Deny** leaves everything as it was, and the agent hears of your
-  answer with your next message. A request waits up to 7 days. What only makes it **safer** (its sandbox, approvals
+  `domains: + example.com`); **Allow** applies exactly that change to the agent's settings of that moment (what you
+  changed since stays), **Deny** leaves everything as it was, and the agent hears of your answer with your next
+  message. If a value it changes is no longer the one on the card (you changed it since), or the agent was deleted,
+  **Allow** is refused with the reason and nothing is applied: the agent asks again if it still needs it. A request waits up to 7 days. What only makes it **safer** (its sandbox, approvals
   on, fewer keys or sites, a lower budget) is applied at once.
 - **In its sandbox, the conversation does not ask** before reading files, searching the web, opening a page of its
   sites or writing in its folders; its commands stay in the sandbox (its domains, no secrets). When one needs more

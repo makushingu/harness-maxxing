@@ -697,22 +697,106 @@ def _show(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else str(v)
 
 
-def describe_change(cur: dict, new: dict) -> str:
-    """"sandbox: on -> off; domains: + example.com" - what an approval of the change would do, whole."""
-    parts = []
+def change_delta(cur: dict, new: dict) -> dict:
+    """What a change request does, item by item (what the card shows, and all that an Allow applies, over the settings
+    of that moment): {field: {"add": [...], "remove": [...]}} for a list, {"mail": {"accounts": {id: {"from", "to"}}}}
+    (one mailbox each, None = no access), {field: {"from", "to"}} otherwise, {"limits": {k: {"from", "to"}}}.
+    Fields that do not change are left out."""
+    out: dict = {}
     for k in SECURITY_FIELDS:
-        if k in new and new[k] != cur.get(k):
-            old_v, new_v = cur.get(k), new[k]
-            if isinstance(old_v, list) and isinstance(new_v, list) and all(isinstance(x, str) for x in old_v + new_v):
-                add = [x for x in new_v if x not in old_v]
-                rem = [x for x in old_v if x not in new_v]
-                parts.append(f"{k}: " + ", ".join([f"+ {x}" for x in add] + [f"- {x}" for x in rem]))
-            else:
-                parts.append(f"{k}: {_show(old_v)} -> {_show(new_v)}")
-    for k in SECURITY_LIMITS:
-        if k in (new.get("limits") or {}) and new["limits"][k] != cur["limits"].get(k):
-            parts.append(f"limits.{k}: {_show(cur['limits'].get(k))} -> {_show(new['limits'][k])}")
+        if k not in new or new[k] == cur.get(k):
+            continue
+        old_v, new_v = cur.get(k), new[k]
+        if k == "mail":
+            before = {g["account"]: g for g in old_v or []}
+            after = {g["account"]: g for g in new_v or []}
+            accs = {a: {"from": before.get(a), "to": after.get(a)} for a in [*before, *after]
+                    if before.get(a) != after.get(a)}
+            if accs:
+                out[k] = {"accounts": accs}
+        elif isinstance(old_v, list) and isinstance(new_v, list):
+            add, rem = [x for x in new_v if x not in old_v], [x for x in old_v if x not in new_v]
+            if add or rem:
+                out[k] = {"add": add, "remove": rem}
+        else:
+            out[k] = {"from": old_v, "to": new_v}
+    lim = {k: {"from": cur["limits"].get(k), "to": new["limits"][k]} for k in SECURITY_LIMITS
+           if k in (new.get("limits") or {}) and new["limits"][k] != cur["limits"].get(k)}
+    if lim:
+        out["limits"] = lim
+    return out
+
+
+def _item(x: Any) -> str:
+    return x if isinstance(x, str) else json.dumps(x, ensure_ascii=False)
+
+
+def describe_delta(delta: dict) -> str:
+    """"sandbox: on -> off; domains: + example.com" - what an approval of the change would do, whole (one part per
+    field, one per mailbox)."""
+    parts = []
+    for k, d in delta.items():
+        if k == "limits":
+            parts += [f"limits.{n}: {_show(v['from'])} -> {_show(v['to'])}" for n, v in d.items()]
+        elif k == "mail":
+            parts += [f"mail {a}: {_show(v['from'])} -> {_show(v['to'])}" for a, v in d["accounts"].items()]
+        elif "add" in d:
+            parts.append(f"{k}: " + ", ".join([f"+ {_item(x)}" for x in d["add"]] + [f"- {_item(x)}" for x in d["remove"]]))
+        else:
+            parts.append(f"{k}: {_show(d['from'])} -> {_show(d['to'])}")
     return "; ".join(parts)
+
+
+def describe_change(cur: dict, new: dict) -> str:
+    return describe_delta(change_delta(cur, new))
+
+
+def delta_fields(cur: dict, delta: dict) -> dict:
+    """The fields an allowed change request sets, from its delta and the agent's settings NOW: list items added /
+    removed (whatever else changed in the list since stays), a value changed only if it is still the one the card
+    showed. A value changed since -> AgentError 409 stale_change (nothing applied: the owner allowed something else)."""
+    f: dict = {}
+    stale: list[str] = []
+    for k, d in delta.items():
+        if not isinstance(d, dict):
+            continue
+        if k == "limits":
+            for n, v in d.items():
+                now = cur["limits"].get(n)
+                if now == v.get("to"):
+                    continue
+                if now != v.get("from"):
+                    stale.append(f"limits.{n} is {_show(now)}, not {_show(v.get('from'))}")
+                else:
+                    f.setdefault("limits", {})[n] = v.get("to")
+        elif k == "mail":
+            grants = list(cur.get("mail") or [])
+            for acc, v in (d.get("accounts") or {}).items():
+                now = next((g for g in grants if g.get("account") == acc), None)
+                if now == v.get("to"):
+                    continue
+                if now != v.get("from"):
+                    stale.append(f"the access to mailbox {acc} changed")
+                    continue
+                grants = [g for g in grants if g.get("account") != acc] + ([v["to"]] if v.get("to") else [])
+            f["mail"] = grants
+        elif k not in SECURITY_FIELDS:
+            continue
+        elif "add" in d:
+            items = [x for x in cur.get(k) or [] if x not in (d.get("remove") or [])]
+            f[k] = items + [x for x in d.get("add") or [] if x not in items]
+        else:
+            now = cur.get(k)
+            if now == d.get("to"):
+                continue
+            if now != d.get("from"):
+                stale.append(f"{k} is {_show(now)}, not {_show(d.get('from'))}")
+            else:
+                f[k] = d.get("to")
+    if stale:
+        raise AgentError(409, "stale_change", "The agent's settings changed since this was asked (" + "; ".join(stale)
+                         + "): nothing applied. Ask again if it is still needed.")
+    return f
 
 
 _MODE_RANK = {"default": 0, "acceptEdits": 1, "bypass": 2}
@@ -782,20 +866,49 @@ def request_change(path: str, fields: dict, session: str = "") -> dict:
     applied = sorted(direct)
     if direct:
         update(path, direct)
-    if not sec:
+    # what is asked: the change itself (items added / removed, a value from -> to), applied if allowed over the
+    # settings of that moment (delta_fields), never the whole value seen now (it would undo what changed meanwhile)
+    delta = change_delta(cur, {**sec, "limits": {**cur["limits"], **s_lim}})
+    if not delta:
         return {"applied": applied, "asked": [], "request": ""}
     from . import approval_mcp, approvals
     now = time.time()
     rid = _secrets.token_hex(8)
-    text = describe_change(cur, {**sec, "limits": {**cur["limits"], **s_lim}})
+    text = describe_delta(delta)
     req = {"id": rid, "kind": "agent_change", "session": session, "agent_path": path, "tool": CHANGE_TOOL,
-           "input": {"description": text}, "fields": sec, "at": now, "expires": now + CHANGE_TTL_S,
+           "input": {"description": text}, "change": delta, "at": now, "expires": now + CHANGE_TTL_S,
            "status": "pending"}
     approvals.folder().mkdir(parents=True, exist_ok=True, mode=0o700)
     approval_mcp.write_atomic(approvals.folder() / f"{rid}.json", req)
     approvals._invalidate()
-    asked = sorted([k for k in sec if k != "limits"] + [f"limits.{k}" for k in s_lim])
+    asked = sorted([k for k in delta if k != "limits"] + [f"limits.{k}" for k in delta.get("limits") or {}])
     return {"applied": applied, "asked": asked, "request": rid}
+
+
+def change_problem(d: dict) -> str:
+    """Why an agent_change request cannot be applied now ("" = it can): its agent is gone (deleted, or moved in a
+    way remap did not follow), it was made before changes were kept item by item, or a value it changes is no longer
+    the one its card showed. approvals.decide refuses the Allow with it (the owner sees why, nothing is applied)."""
+    path = str(d.get("agent_path") or "")
+    if not exists(path):
+        return f"The agent {path or '?'} no longer exists (deleted or moved): nothing applied."
+    if not isinstance(d.get("change"), dict):
+        return "This request was made by an older version of Harness Maxxing: nothing applied. Ask again."
+    try:
+        a = load(path)
+        _not_broken(path, a)
+        delta_fields(a, d["change"])
+    except AgentError as e:
+        return e.message
+    return ""
+
+
+def apply_change(path: str, delta: dict) -> dict:
+    """An allowed change request, applied over the agent's settings of this moment (read and saved under the lock)."""
+    with _lock:
+        cur = load(path)
+        _not_broken(path, cur)
+        return update(path, delta_fields(cur, delta))
 
 
 def change_decided(d: dict) -> None:
@@ -807,11 +920,13 @@ def change_decided(d: dict) -> None:
     st = d.get("status")
     if st == "allow":
         try:
-            update(path, d.get("fields") if isinstance(d.get("fields"), dict) else {})
+            apply_change(path, d.get("change") if isinstance(d.get("change"), dict) else {})
             note = f"The owner allowed your settings change ({what}): it is applied."
         except AgentError as e:
             note = f"The owner allowed your settings change ({what}), but it could not be applied: {e.message}"
             post(path, "note", f"The change could not be applied: {e.message}", status="error")
+    elif d.get("stale"):
+        note = f"Your settings change ({what}) was not applied: {d.get('message') or 'the settings changed since'}"
     else:
         note = f"The owner did not allow your settings change ({what})" + \
             (f": {d['message']}" if d.get("message") else ".")
@@ -1232,6 +1347,23 @@ def remap(old_prefix: str, new_prefix: str) -> None:
         agent_rooms.remap(old_prefix, new_prefix)
     except Exception:
         log.exception("agent groups not moved (%s -> %s)", old_prefix, new_prefix)
+    try:                                                # change requests waiting for the owner: still its agent
+        _remap_changes(old_prefix, new_prefix)
+    except Exception:
+        log.exception("agent change requests not moved (%s -> %s)", old_prefix, new_prefix)
+
+
+def _remap_changes(old_prefix: str, new_prefix: str) -> None:
+    """Pending agent_change requests of the moved agents follow them (an Allow after the rename applies to the agent,
+    not to its old path; approvals.decide refuses one whose agent is gone)."""
+    from . import approval_mcp, approvals
+    with approvals._lock:
+        for f in sorted(approvals.folder().glob("*.json")) if approvals.folder().is_dir() else []:
+            d = approval_mcp.read(f)
+            p = str((d or {}).get("agent_path") or "")
+            if d and d.get("kind") == "agent_change" and d.get("status") == "pending" and p.startswith(old_prefix + "/"):
+                approval_mcp.write_atomic(f, {**d, "agent_path": new_prefix + p[len(old_prefix):]})
+    approvals._invalidate()
 
 
 # ---- the agent's thread (Activity) ------------------------------------------------------------------
