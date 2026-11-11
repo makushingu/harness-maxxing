@@ -1432,6 +1432,7 @@ export const fr: Record<keyof typeof en, string> = {
   'infra.why.backup_failed': 'dernière sauvegarde ratée',
   'infra.why.deploy_failed': 'dernier déploiement raté',
   'infra.why.list_failed': 'impossible de lister ses bases',
+  'infra.why.bad_probe': 'réponse de la sonde du serveur mal formée',
   'infra.why.file_missing': 'fichier introuvable',
   'infra.why.missing_permission': 'la clé n\'a pas le droit de lecture',
   'infra.why.unavailable': 'indisponible',

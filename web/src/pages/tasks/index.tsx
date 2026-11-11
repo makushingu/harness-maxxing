@@ -258,6 +258,8 @@ export default function TasksPage() {
   const bodyRef = React.useRef<HTMLDivElement>(null)
   const width = useWidth(bodyRef)
   const narrow = width !== null && width < 800
+  // Narrower still (a wide second sidebar on a laptop): the view switch leaves the header too, as below 400 px
+  const tight = width !== null && width < 480
   const label = narrow ? 'sr-only' : 'max-lg:sr-only'
   const body = () => {
     if (prefs.view === 'board' && scope === 'all' && prefs.lanes)
@@ -326,7 +328,7 @@ export default function TasksPage() {
       actions={
         <>
           {/* below 400 px the switch leaves the header, or the title shrinks to "Tâc…" */}
-          {viewSwitch && <div className="max-[399px]:hidden">{viewSwitch}</div>}
+          {viewSwitch && !tight && <div className="max-[399px]:hidden">{viewSwitch}</div>}
           {prefs.view === 'board' && scope === 'all' && (
             <Button variant={prefs.lanes ? 'secondary' : 'outline'} size="sm" aria-pressed={prefs.lanes} onClick={() => setPrefs({ lanes: !prefs.lanes })} title={t('tasks.lanesHint')} data-testid="task-lanes">
               <Rows3 />
@@ -356,7 +358,7 @@ export default function TasksPage() {
         </PageList>
       )}
       <div ref={bodyRef} className="mx-auto grid max-w-[1800px] gap-4">
-        {viewSwitch && <div className="min-[400px]:hidden">{viewSwitch}</div>}
+        {viewSwitch && <div className={tight ? undefined : 'min-[400px]:hidden'}>{viewSwitch}</div>}
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4">
           {corrupt && (
             <Callout

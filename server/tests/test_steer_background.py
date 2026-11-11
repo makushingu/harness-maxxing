@@ -142,3 +142,18 @@ def test_a_message_sent_while_only_background_tasks_run_is_answered_at_once(clie
     assert not any("interrupted your previous turn" in e["text"] for e in evs if e["type"] == "assistant")
     client.post(f"/api/sessions/{sid}/stop")
     assert wait_idle(client, sid, 20)["turns"] == 2
+
+
+def test_a_message_after_a_settings_change_starts_a_new_process(client, topic, mx, monkeypatch):
+    """A message sent while only a background task runs joins that process, unless Plan mode, the model or the
+    permissions changed in between: the old process would run it with the old settings."""
+    from maxxing.sessions import store
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S", "6")
+    sid = client.post("/api/sessions", json={"path": topic, "message": "BGTASK:bg NOTOOL"}).json()["id"]
+    wait_for(lambda: any(e["type"] == "result" for e in _raw(mx, sid)), 10)
+    store.update(sid, plan_mode=True, model="other-model")
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "edit files NOTOOL"})
+    wait_idle(client, sid, 30)
+    c = calls(mx)
+    assert [x.get("continued", False) for x in c] == [False, False]
+    assert "other-model" in c[1]["argv"]

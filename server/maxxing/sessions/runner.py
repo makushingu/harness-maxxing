@@ -193,6 +193,7 @@ class Runner:
         self.steer_pending = False                     # a steer the reading loop has to carry out
         self.asks: dict | None = None                  # the turn's approvals (_can_use_tool), None = none
         self.keep_proc = False                         # the last turn handed its process over to the next item
+        self.proc_launch: tuple | None = None          # what self.proc was started with (args, cwd, env)
 
     # ---- signals -------------------------------------------------------------------------
     def on_sigterm(self, *_: object) -> None:
@@ -450,11 +451,17 @@ class Runner:
 
         csid, fresh = meta.get("csid") or self.sid, bool(meta.get("fresh", True))
         live = self.proc
+        launch = (tuple(base), cwd, tuple(sorted(env.items())))
+        if handed and live is not None and self.proc_launch != launch and not item.get("steer"):
+            handed = False                             # Plan mode, model, permissions or MCP changed: a new process
+            if live.alive():
+                self.note("The settings of this session changed: its background tasks were stopped.", "warn")
         if live is not None and (item.get("steer") or handed) and live.stream and not live.stdin.closed \
                 and live.alive() and not fresh:        # the steered (or next) message joins the running process
             a = self._attempt_in(live, prompt, timeout_s, csid, store.thread_prev_cost(meta, csid))
         else:
             self._end_proc()
+            self.proc_launch = launch
             a = self.attempt(base + (["--session-id", csid] if fresh else ["--resume", csid]),
                              prompt, cwd, env, timeout_s, hold=not fresh, csid=csid,
                              prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid))
