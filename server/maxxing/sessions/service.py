@@ -1023,18 +1023,37 @@ def _ended_turn(evs: list[dict], at: float | None, died: bool) -> tuple[int, int
         start = users[-1] + 1 if users else 0
     elif at:
         start = next((i + 1 for i in reversed(users) if ran(i)), None)
-        if start is None:                     # out of the tail read: nothing of another turn
-            return len(evs), len(evs)
+        if start is None:
+            if any((evs[i].get("at") or 0) < at for i in users):
+                return len(evs), len(evs)     # its message should be in there: nothing of another turn
+            # its message is older than the tail read (a turn that wrote more than the window): the tail starts
+            # inside it, up to the next message (one queued meanwhile)
+            return 0, users[0] if users else len(evs)
     else:                                     # an older runner (no last_turn.at): the turn of the last result
         end = next((i for i in range(len(evs) - 1, -1, -1) if evs[i]["type"] == "result"), len(evs))
         return next((i + 1 for i in reversed(users) if i < end), 0), end
     return start, next((i for i in users if i >= start), len(evs))
 
 
+TURN_READ = (512 * 1024, 4 * 1024 * 1024)    # tail read for a turn that ended, then once more for a big turn
+
+
+def _turn_window(sid: str, at: float | None, died: bool) -> tuple[list[dict], int, int]:
+    """The tail of the log and the [start, end) of the turn that ended in it: read further back (once, bounded)
+    when its message is not in the first read; past that, the part of the turn the tail holds (_ended_turn)."""
+    evs: list[dict] = []
+    for n in TURN_READ:
+        evs = _tail_events(sid, nbytes=n)
+        if died or not at or any(ev["type"] == "user" and abs((ev.get("at") or 0) - at) < 1e-3 for ev in evs) \
+                or store.log_size(sid) <= n:
+            break
+    start, end = _ended_turn(evs, at, died)
+    return evs, start, end
+
+
 def ended_turn_text(sid: str, at: float | None = None, died: bool = False) -> str:
     """What the turn that ended wrote ("" if nothing), never a reply of another turn (see _ended_turn)."""
-    evs = _tail_events(sid)
-    start, end = _ended_turn(evs, at, died)
+    evs, start, end = _turn_window(sid, at, died)
     return next((ev["text"] for ev in reversed(evs[start:end]) if ev["type"] == "assistant"), "")
 
 
@@ -1044,8 +1063,7 @@ STEPS_MAX = 40                                # tools kept per turn in the agent
 def ended_turn_steps(sid: str, at: float | None = None, died: bool = False) -> dict:
     """The tools the last turn that ended used ({name, summary, error?}, the last STEPS_MAX), with its model and
     duration: what the agent page shows under the turn's answer without reading its whole log."""
-    evs = _tail_events(sid)
-    start, end = _ended_turn(evs, at, died)
+    evs, start, end = _turn_window(sid, at, died)
     uses: list[dict] = []
     failed: set[str] = set()
     for ev in evs[start:end]:
