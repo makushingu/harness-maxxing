@@ -97,6 +97,12 @@ export function usePinnedPages(): PinnedPage[] {
     .map((e) => ({ to: `/x/${e.id}`, id: e.id, name: e.name, icon: e.icon }))
 }
 
+/** Page extensions that are on but not pinned: only the Extensions page (/x) leads to them, so the nav shows it then. */
+export function useUnpinnedPages(): number {
+  const { data } = useExtensions()
+  return (data || []).filter((e) => e.type === 'page' && e.enabled && !e.error && !e.pinned).length
+}
+
 /** The pages shown on this install (optional ones only once switched on). */
 function usePages(): { pages: NavItem[]; order: string[] | undefined } {
   const { data: s } = useSettings()

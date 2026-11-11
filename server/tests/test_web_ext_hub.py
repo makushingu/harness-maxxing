@@ -20,3 +20,11 @@ def test_the_docs_say_where_the_extensions_page_is():
     doc = (ROOT / "docs" / "user" / "13-page-extensions.md").read_text()
     assert "listed under **Extensions** in the sidebar" not in doc  # there is no such sidebar entry any more
     assert "**All pages**" in doc
+
+
+def test_the_nav_shows_extensions_while_a_page_is_not_pinned():
+    nav = (WEB / "components" / "shell" / "nav.ts").read_text()
+    assert re.search(r"useUnpinnedPages\(\).*?!e\.pinned", nav, re.S)
+    for f in ("Sidebar.tsx", "TouchNav.tsx"):
+        src = (WEB / "components" / "shell" / f).read_text()
+        assert "unpinned > 0 &&" in src and 'to="/x"' in src, f"{f} has no Extensions entry for unpinned pages"

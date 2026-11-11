@@ -31,6 +31,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   answer, tools or model (no `at`: the old last-result rule). UI: `fetchAgentThreadBefore` (`?before=`, pages of
   200 when the flow is scrolled to its top, view kept in place); the composer's model is the agent's
   (`chat_model` or `model`) unless picked, and is sent only when picked; `NewAgentForm` explains an empty slug.
+- `nav.useUnpinnedPages()` (page extensions on, without error, not pinned): while > 0, `Sidebar` ends the page rows
+  with `hubItem` (`/x`, `data-tour="nav-extensions"`, not draggable, not in `sidebar_order`) and `TouchNav` adds an
+  Extensions tile. `tests/test_web_ext_hub.py` checks both.
 - The `/x` hub (`pages/ext/hub.tsx`) had no link left since the sidebar shows only pinned pages: `CommandPalette`
   gets `nav:x` (keywords extensions, pages, plugins) and Settings -> Pages an **All pages** button (`ext.allPages`, unused
   until now); `docs/user/13-page-extensions.md` says where it is. `tests/test_web_ext_hub.py` checks both links.
@@ -138,6 +141,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `telegram.gateway.forget()` also deletes `new.json` (`_new_path()`, the messages waiting for the "where?" answer).
   It was left behind, so `_new_restore()` revived the pending question after the next link. Test added in
   `tests/test_telegram_reliability.py` (`test_forgetting_the_bot_drops_a_pending_where_question`).
+- `skills._front`: the block scalar header (`|` or `>`, with the chomping sign `-` or `+`) is stripped by one regex;
+  `|-` and `|+` left their sign at the start of the description ("- Line one"). Test added in `tests/test_skills.py`.
 - `agents.clean`: `triggers` is read as a list only when it is one (the slice ran before the `isinstance` check, so a
   dict raised `KeyError` and an int `TypeError`); `_clean_avatar` looks a value up in `_OLD_AVATAR` only when it is a
   string (a list was unhashable). `GET /api/agents/<topic>/<agent>` failed with an error for such a file. Tests added

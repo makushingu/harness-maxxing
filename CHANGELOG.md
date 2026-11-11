@@ -48,6 +48,9 @@ New:
   **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
   (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
   (the model picker in its box).
+- **Extensions in the sidebar while a page is not pinned**: an **Extensions** entry ends the list of pages (a tile of
+  the ⊞ menu on a phone) as long as an extension page is not pinned: one click to the pages that are not in the
+  sidebar. With every page pinned, or no extension, the sidebar stays as it is.
 
 Fixed:
 - **Agents**: an agent's conversation changes that agent only, whatever the order of its options; a run that
@@ -70,6 +73,8 @@ New:
 Fixed:
 - **Forgetting the Telegram bot also forgets a message that was waiting for its topic.** Before, the "Where should
   this session go?" question and your message came back when you linked a bot again.
+- **A skill whose description is written as a `|-` or `|+` block no longer starts with a stray dash or plus sign.**
+  The Skills list now shows the text of these blocks as written.
 - **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
   not a list, or an avatar value that is not text, is ignored like any other invalid value.
 
