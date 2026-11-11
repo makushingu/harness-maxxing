@@ -309,9 +309,10 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    source: str = "web", notify: bool = False, cron: bool = False,
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
-                   client_id: str | None = None, silent_ok: bool = False) -> dict:
+                   client_id: str | None = None, silent_ok: bool = False, ref: str | None = None) -> dict:
     """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
-    `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT)."""
+    `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
+    `ref`: as send_message's, for the first message."""
     try:
         p = workspace.normalize_path(path)
         workspace.topic_dir(p)
@@ -329,7 +330,7 @@ def create_session(path: str, message: str | None = None, title: str | None = No
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
     store.create(meta)
     first = _item((message or "").strip(), files, source, **_client_ids(client_id),
-                  **({"silent_ok": True} if silent_ok else {}))
+                  **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}))
     if audio:
         _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:

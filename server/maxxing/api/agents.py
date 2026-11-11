@@ -386,6 +386,7 @@ async def _loop() -> None:
             if now - last_scan >= agents.FEED_POLL_S:
                 last_scan = now
                 await asyncio.to_thread(agents.scan_feed)
+                await asyncio.to_thread(agents.flush_waiting)
             if agents.debouncer.pending:
                 await asyncio.to_thread(agents.flush_due)
         except asyncio.CancelledError:

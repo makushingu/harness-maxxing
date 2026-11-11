@@ -35,6 +35,7 @@ import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings, readsOutside, type SectionId } from './AgentSettings'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
+import { CutNote, WaitingNote } from './CutNote'
 import { ApprovalLine, ThreadApprovalBody, useThreadApprovals } from './approvals'
 import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { agentDraftKey } from '@/lib/drafts'
@@ -577,6 +578,7 @@ function OwnerMessage({ m, answers }: { m: AgentMessage; answers?: AgentMessage 
         {menu}
         <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
       </div>
+      <CutNote m={m} />
       <div className="flex min-w-0 max-w-full items-center gap-1.5 text-[11px] text-muted-foreground">
         {answers && (
           <span className="inline-flex min-w-0 items-center gap-1 rounded bg-muted px-1" title={t('agents.conv.replyingTo')}>
@@ -587,6 +589,7 @@ function OwnerMessage({ m, answers }: { m: AgentMessage; answers?: AgentMessage 
           </span>
         )}
         {m.trigger === 'telegram' && <span className="shrink-0">{t('agents.from.telegram')}</span>}
+        <WaitingNote m={m} />
         <When at={m.at} />
       </div>
     </div>
@@ -783,6 +786,7 @@ function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: Age
         ) : (
           <span className="text-sm text-muted-foreground italic">{t('agents.thread.noText')}</span>
         )}
+        <CutNote m={m} path={a.path} />
       </div>
       {chat && <ResultLine model={m.model} ms={m.duration_ms} cost={m.cost} />}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
