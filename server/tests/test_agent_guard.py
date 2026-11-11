@@ -374,6 +374,21 @@ def test_writable_topic_never_opens_the_topics_permission_file(client, topic, mx
     assert str(t / ".maxxing.json") in fs["denyWrite"]
 
 
+def test_topic_mcp_json_write_is_denied_even_when_the_file_does_not_exist(client, topic, mx):
+    """With `writable: "."`, Write/Edit (--add-dir) could create the topic's .mcp.json, whose servers every session
+    of the topic would then start. The deny rule holds whether or not the file exists; the sandbox mount still gets
+    no placeholder for a missing one."""
+    from maxxing import agent_guard, agents
+    _on(client)
+    _create(client, writable=["."])
+    t = Path(client.get("/api/workspace/tree").json()["root"]) / "projects/acme/topics/blog"
+    assert not (t / ".mcp.json").exists()
+    assert f"Edit(/{t}/.mcp.json)" in agent_guard.topic_edit_denied(A)
+    s = agent_guard.settings(A, agents.load(A))
+    assert f"Edit(/{t}/.mcp.json)" in s["permissions"]["deny"]
+    assert str(t / ".mcp.json") not in s["sandbox"]["filesystem"]["denyWrite"]   # missing: no placeholder mounted
+
+
 def test_writable_links_never_lead_outside_the_topic(client, topic, mx, tmp_path):
     """A link of the topic (a git clone's `cfg -> /root/.claude`) is not a way out: its target is dropped from the
     sandbox, from --add-dir and from `maxxing mail attachment`; a link to a folder of the topic still works."""

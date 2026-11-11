@@ -401,7 +401,9 @@ def topic_edit_denied(path: str) -> list[str]:
         out += [f"Edit(/{d}/**)" for d in sorted(ag.iterdir()) if d.is_dir() and d.name != folder.name]
     except OSError:
         pass
-    return out + [f"Edit(/{topic / f})" for f in (*TOPIC_LOCKED[1:5], ".maxxing.json")] + \
+    # the topic's .mcp.json even while missing: unlike the sandbox mount (locked_paths), a deny rule needs no
+    # placeholder, and a new one would bring its servers into every session of the topic
+    return out + [f"Edit(/{topic / f})" for f in (*TOPIC_LOCKED[1:6], ".maxxing.json")] + \
         [f"Edit(/{topic / d}/**)" for d in (".claude", "attachments")]
 
 
