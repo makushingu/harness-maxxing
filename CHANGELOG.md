@@ -71,6 +71,8 @@ New:
   Team summaries always use the newest Haiku or Sonnet.
 
 Fixed:
+- **A skill whose description is written as a `|-` or `|+` block no longer starts with a stray dash or plus sign.**
+  The Skills list now shows the text of these blocks as written.
 - **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
   not a list, or an avatar value that is not text, is ignored like any other invalid value.
 
