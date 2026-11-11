@@ -1,4 +1,6 @@
-"""Two-step sign-in with Telegram (Settings -> Telegram, `maxxing 2fa`).
+"""Two-step sign-in: the sign-in challenge, the Telegram approval (Settings -> Telegram, `maxxing 2fa`) and trusted
+browsers. The authenticator app, passkeys and recovery codes are in `mfa.py`; a challenge accepts every method that
+is on (`Challenge.methods`).
 
 - On: config `telegram.two_factor` = true, and only effective while a bot and a chat with its owner are linked
   (`enabled()`); forgetting Telegram turns it off.
@@ -11,6 +13,9 @@
   bridge cannot lock the owner out.
 - Trusted browser: cookie `mx_device` (path /api/auth, 30 days) signed with secrets.device_key. Rotating the key
   (password change, `maxxing 2fa off|forget-browsers`, the Settings button) forgets every trusted browser.
+- With an authenticator app or passkeys on too, the sign-in challenge lasts APP_TTL (time to open the app) and
+  accepts their answer (`check(..., other=mfa.check_code)`, `approve(cid, "passkey")`); without Telegram 2FA no
+  message is sent, and a Telegram that refuses the message no longer blocks the sign-in.
 - Way out without the UI: `maxxing 2fa off` over SSH.
 """
 from __future__ import annotations
@@ -31,6 +36,7 @@ log = logging.getLogger("maxxing.twofactor")
 DEVICE_COOKIE = "mx_device"
 DEVICE_MAX_AGE = 30 * 24 * 3600
 TTL = 120
+APP_TTL = 300                  # a challenge that also accepts an authenticator app code or a passkey
 GRACE = 60                     # an approved challenge stays collectable this long after TTL
 CODE_TRIES = 5
 NEW_MAX = 5
@@ -50,6 +56,7 @@ WORDS = {
            "allow": "✅ Allow", "deny": "❌ Deny",
            "allowed": "✅ Allowed", "allowed_code": "✅ Allowed with the code", "denied": "❌ Denied",
            "gone": "This request expired.",
+           "gone_other": "✅ Signed in with another method.",
            "on": "🔐 Two-step sign-in is on. Without the web UI (Telegram down...): on the server, run maxxing 2fa off",
            "off_cli": "🔓 Two-step sign-in was turned off from the server (maxxing 2fa off).",
            "off_ui": "🔓 Two-step sign-in was turned off from the web UI. Not you? Change the password.",
@@ -61,6 +68,7 @@ WORDS = {
            "allow": "✅ Autoriser", "deny": "❌ Refuser",
            "allowed": "✅ Autorisée", "allowed_code": "✅ Autorisée avec le code", "denied": "❌ Refusée",
            "gone": "Cette demande a expiré.",
+           "gone_other": "✅ Connexion validée par une autre méthode.",
            "on": "🔐 La double authentification est activée. Sans l'interface web (Telegram en panne…) : sur le serveur, lance maxxing 2fa off",
            "off_cli": "🔓 La double authentification a été désactivée depuis le serveur (maxxing 2fa off).",
            "off_ui": "🔓 La double authentification a été désactivée depuis l'interface web. Ce n'est pas toi ? Change le mot de passe.",
@@ -87,6 +95,8 @@ class Challenge:
     text: str = ""
     msg: tuple[int, int] | None = None     # (chat_id, message_id) of the Telegram message
     created: float = 0.0
+    methods: tuple[str, ...] = ("telegram",)   # what this challenge accepts: telegram, totp, passkey, recovery
+    webauthn: bytes | None = None          # the challenge of the last passkey prompt (mfa.authentication_options)
 
 
 class Refused(Exception):
@@ -199,9 +209,12 @@ def _prune(now: float) -> None:
             del _new[k]
 
 
-def start(purpose: str, ip: str, ua: str) -> Challenge:
-    """New challenge + its Telegram message (blocking: call it from a thread). Raises Refused."""
+def start(purpose: str, ip: str, ua: str, methods: tuple[str, ...] = ("telegram",)) -> Challenge:
+    """New challenge + its Telegram message when it accepts "telegram" (blocking: call it from a thread). Raises
+    Refused. A challenge with other methods too lasts APP_TTL and survives a Telegram that refuses the message."""
     now = time.time()
+    methods = tuple(methods) or ("telegram",)
+    ttl = TTL if methods == ("telegram",) else APP_TTL
     with _lock:
         _prune(now)
         if len(_new.get(ip, [])) >= NEW_MAX:
@@ -213,9 +226,9 @@ def start(purpose: str, ip: str, ua: str) -> Challenge:
         drop += rest[:max(0, len(rest) - PENDING_MAX + 1)]              # full: the oldest give way (a few clients
         _new.setdefault(ip, []).append(now)                             # cannot lock the owner out), once the new
         c = Challenge(id=secrets.token_urlsafe(12), code=f"{secrets.randbelow(10 ** 6):06d}", purpose=purpose,
-                      ip=ip, ua=ua[:120], expires=now + TTL, created=now)
+                      ip=ip, ua=ua[:120], expires=now + ttl, created=now, methods=methods)
         _ch[c.id] = c
-    if not _send(c):
+    if "telegram" in methods and not _send(c) and methods == ("telegram",):
         with _lock:
             _ch.pop(c.id, None)
             sent = _new.get(ip, [])
@@ -224,6 +237,8 @@ def start(purpose: str, ip: str, ua: str) -> Challenge:
         raise Refused("two_factor_unavailable",
                       "Telegram did not accept the sign-in request - on the server, `maxxing 2fa off` turns "
                       "two-step sign-in off")
+    if "telegram" in methods and c.msg is None:        # Telegram refused, the other methods remain
+        c.methods = tuple(m for m in methods if m != "telegram")
     with _lock:                                        # one is sent: a failed send keeps the older ones answerable
         for old in drop:
             if _ch.get(old.id) is old and old.status == "pending":
@@ -246,8 +261,10 @@ def purpose(cid: str) -> str | None:
         return c.purpose if c else None
 
 
-def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:
-    """-> (status, challenge): "pending", "approved" (consumed: only once), "denied", "expired", "bad_code"."""
+def check(cid: str, code: str | None = None, other=None) -> tuple[str, Challenge | None]:
+    """-> (status, challenge): "pending", "approved" (consumed: only once), "denied", "expired", "bad_code".
+    `other(code)` -> "totp" | "recovery" | None: a code that is not the Telegram one (mfa.check_code), tried only
+    when the challenge accepts those methods."""
     now = time.time()
     with _lock:
         _prune(now)                                 # an approved request also dies after TTL + GRACE
@@ -269,9 +286,16 @@ def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:
             if len(_bad) >= BAD_MAX:                # code guessing from many addresses: the button still works
                 return "codes_paused", c
             given = code.strip().replace(" ", "")
-            if _CODE_RE.fullmatch(given) and hmac.compare_digest(given.encode(), c.code.encode()):
-                c.status, c.via = "approved", "code"
-                _close(c, _w("allowed_code"))
+            via = None
+            if "telegram" in c.methods and _CODE_RE.fullmatch(given) and hmac.compare_digest(given.encode(), c.code.encode()):
+                via = "code"
+            elif other is not None and set(c.methods) & {"totp", "recovery"}:
+                via = other(code)
+                if via is not None and via not in c.methods:
+                    via = None
+            if via is not None:
+                c.status, c.via = "approved", via
+                _close(c, _w("allowed_code") if via == "code" else _w("gone_other"))
             else:
                 c.tries += 1
                 _bad.append(now)
@@ -284,6 +308,44 @@ def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:
             del _ch[cid]
             return "approved", c
         return "pending", c
+
+
+def pending(cid: str) -> Challenge | None:
+    """A challenge still waiting for an answer (not consumed, not expired, not revoked) - to attach a passkey
+    prompt to it or to check one against it."""
+    now = time.time()
+    with _lock:
+        c = _ch.get(cid or "")
+        if c is None or c.status != "pending" or now > c.expires or c.created <= _not_before():
+            return None
+        return c
+
+
+def approve(cid: str, via: str) -> bool:
+    """Approved by another method than Telegram (a passkey checked by the caller)."""
+    with _lock:
+        c = _ch.get(cid or "")
+        if c is None or c.status != "pending" or time.time() > c.expires:
+            return False
+        c.status, c.via = "approved", via
+    _close(c, _w("gone_other"))
+    return True
+
+
+def failed(cid: str) -> bool:
+    """A wrong answer by another method (a passkey that did not verify): counts like a wrong code. -> False once
+    the challenge died of it."""
+    with _lock:
+        c = _ch.get(cid or "")
+        if c is None:
+            return False
+        c.tries += 1
+        _bad.append(time.time())
+        if c.tries >= CODE_TRIES:
+            del _ch[cid]
+            _close(c, _w("gone"))
+            return False
+        return True
 
 
 def decide(cid: str, allow: bool) -> str:

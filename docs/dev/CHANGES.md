@@ -5,6 +5,34 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- **Two-step sign-in with TOTP and passkeys** (`mfa.py`, `totp.py`; see INTERNALS.md). New dependency
+  `webauthn` (py_webauthn, BSD-3; brings `cryptography`, `cbor2`, `pyasn1`, `pyasn1-modules`, `pyopenssl`).
+  `POST /api/auth/login` answers `two_factor.methods` and asks the second step when any method is on
+  (`mfa.required()`, was `twofactor.enabled()`); `POST /two-factor` takes `passkey` and other codes (TOTP,
+  recovery) through `twofactor.check(..., other=mfa.check_code)`; new routes `POST /two-factor/passkey`,
+  `GET /methods`, `/totp/*`, `/passkeys*`, `/recovery-codes`, `/passkey-login*` (passkey-only sign-in, UV
+  required, on by default with a passkey: config `passkey_login: false` turns it off; `/auth/state` gains
+  `passkey_login`), `/reauth*` (passkey "sudo", 5 min per session, not for a password change) (API.md). Adding a
+  method no longer trusts the browser. Signal API: `unknown_passkey` on a passkey-only sign-in with a removed
+  passkey (page calls `signalUnknownCredential`), `accepted` in its answer and `passkey_user` in `/methods`
+  (`signalAllAcceptedCredentials` on sign-in and in Settings). `PasskeyOffer` (AppShell, after a password sign-in:
+  sessionStorage `mx-offer-passkey`, snoozed 30 days or for good in localStorage `mx-passkey-offer-snooze`). secrets.json gains `totp_secret`,
+  `totp_last_step`, `passkeys`, `passkey_user`, `recovery_codes`. Challenges with other methods last `APP_TTL`
+  (300 s); a Telegram refusal then drops `telegram` instead of answering 503. `maxxing 2fa off [telegram|app|
+  passkeys]`, `status --json` gains `telegram`, `authenticator_app`, `passkeys`, `recovery_codes_left` (old keys
+  kept). Telegram unlink notice says so when other methods remain. Forget-browsers re-trusts the browser
+  whenever a method is on.
+- UI: `TwoFactorWait` follows `challenge.methods` (passkey button, one code field for app / Telegram / recovery,
+  polls only with Telegram); `features/auth/TwoStepMethods.tsx` in Settings -> Security (QR setup, passkeys list,
+  recovery codes dialog shown once); `lib/webauthn.ts` converts the options and answers by hand (password
+  managers replace `navigator.credentials` and lack `toJSON`). Query `qk.authMethods`, refreshed with the bus
+  topic `telegram`. Showcase `twofa-app`.
+- Tests: `tests/test_mfa.py` (RFC 6238 vectors, replay, a software ES256 authenticator for registration and
+  sign-in, wrong origin / rp id / key / old prompt / counter going back, IP and http origins, recovery codes,
+  CLI).
+
 ## 2.0.0-alpha.139 - 2026-11-10
 
 - Fixes before release: `agent_guard._manages` reads the target with `cmd_agents._configure`'s parser

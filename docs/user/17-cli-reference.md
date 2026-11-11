@@ -12,7 +12,7 @@ section: Reference
 | `maxxing serve [--host IP] [--port N]` | run the web server (used by the `claude-maxxing` service) |
 | `maxxing setup-link [--reset]` | print the one-time setup link; `--reset` forgets the password and starts the setup again |
 | `maxxing password` | set a new UI password (interactive) |
-| `maxxing 2fa status\|off\|forget-browsers` | two-step sign-in with Telegram: state, turn it off (the way back in when Telegram does not answer), make every browser ask again |
+| `maxxing 2fa status\|off [telegram\|app\|passkeys]\|forget-browsers` | two-step sign-in (Telegram, authenticator app, passkeys): what is on, turn every method or one off (the way back in when the second step cannot be answered), make every browser ask again |
 | `maxxing status [--json]` | version, URL, service, Claude auth, Telegram, backup, paths |
 | `maxxing doctor [--json] [--live] [--offline] [--deps]` | check the installation; `--live` makes a real Claude call, `--offline` skips the update checks (GitHub, Claude Code release), `--deps` also looks up known vulnerabilities of the installed packages (osv.dev) |
 | `maxxing proxy on [HOST:PORT] [--domain D] [--new-secret]` / `proxy off` / `proxy status [--json]` | a second private listen address (default `172.17.0.1:8790`) for a reverse proxy in Docker, guarded by a secret header; writes the Traefik block to `<state>/reverse-proxy.conf` (`--new-secret`: a new header, copy the block again); `off` also forgets the secret and the block; restart the service after (see [Installation](installation#behind-a-proxy-in-docker)) |

@@ -139,6 +139,8 @@ messages) it deletes.
 
 ## Two-step sign-in
 
+An authenticator app or a passkey can be used instead, or as well: see [Security](security#two-step-sign-in).
+
 Settings -> Telegram (or Settings -> Security) -> **Two-step sign-in**: after the right password, a browser
 that is not trusted yet waits for your approval in Telegram. The *Alerts* thread (the main chat in Simple) gets a message with the IP,
 the browser, a 6-digit code and two buttons:
@@ -163,8 +165,9 @@ would receive the sign-in requests.
 **Telegram does not answer** (bot deleted, Telegram down, phone lost): on the server, over SSH,
 
 ```bash
-maxxing 2fa off             # password only again (every trusted browser is forgotten)
-maxxing 2fa status          # on / off
+maxxing 2fa off telegram    # Telegram approval off (the other methods stay)
+maxxing 2fa off             # password only again: every method off, every trusted browser forgotten
+maxxing 2fa status          # what is on
 ```
 
 ## Troubleshooting

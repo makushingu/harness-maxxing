@@ -149,7 +149,9 @@ async def forget(request: Request, body: ForgetIn | None = None):
         await asyncio.to_thread(twofactor.notify, "unlinked", True)
     await gateway.forget()
     if was_on:
-        feed.system("Telegram unlinked: two-step sign-in turned off",
+        from .. import mfa
+        feed.system("Telegram unlinked: its approval is no longer asked at sign-in" if mfa.app_on()
+                    else "Telegram unlinked: two-step sign-in turned off",
                     f"{security.client_key(request)} · {request.headers.get('user-agent', '?')[:90]}",
                     "warning", "security")
     return {"ok": True}

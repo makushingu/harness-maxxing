@@ -19,9 +19,10 @@ import {
 } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { TwoFactorWait } from './TwoFactorWait'
+import { PasskeyConfirm } from './TwoStepMethods'
 /** Two-step sign-in: turning it on waits for an approval in Telegram (a broken bridge cannot lock anybody out);
  *  turning it off asks for the current password (a signed-in browser alone cannot remove it). */
-export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }) {
+export function TwoFactorRow({ on, id = 'tg-2fa', label }: { on: boolean; id?: string; label?: string }) {
   const t = useT()
   const qc = useQueryClient()
   const setTwo = useSetTwoFactor()
@@ -47,10 +48,10 @@ export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }
       },
     )
   }
-  const turnOff = () => {
-    if (!password) return setPwError(t('security.currentRequired'))
+  const turnOff = (viaPasskey = false) => {
+    if (!password && !viaPasskey) return setPwError(t('security.currentRequired'))
     setTwo.mutate(
-      { enabled: false, password },
+      { enabled: false, password: viaPasskey ? '' : password },
       {
         onSuccess: closeOff,
         onError: (e) => setPwError(isApiError(e, 'bad_password') ? t('security.currentWrong') : errorMessage(e)),
@@ -59,7 +60,7 @@ export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }
   }
   return (
     <>
-      <SettingRow label={t('twofa.setting')} description={t('twofa.settingDesc')} htmlFor={id}>
+      <SettingRow label={label || t('twofa.setting')} description={t('twofa.settingDesc')} htmlFor={id}>
         <div className="flex items-center gap-2">
           {on && (
             <Button variant="ghost" size="sm" loading={forget.isPending} onClick={() => forget.mutate(undefined, { onSuccess: () => toast.success(t('twofa.forgotten')) })}>
@@ -86,13 +87,16 @@ export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }
             <FormField label={t('security.current')} error={pwError}>
               <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus />
             </FormField>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeOff}>
-                {t('common.cancel')}
-              </Button>
-              <Button type="submit" variant="destructive" loading={setTwo.isPending}>
-                {t('twofa.offConfirm')}
-              </Button>
+            <DialogFooter className="gap-2 sm:justify-between">
+              <PasskeyConfirm onDone={() => turnOff(true)} onError={setPwError} />
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={closeOff}>
+                  {t('common.cancel')}
+                </Button>
+                <Button type="submit" variant="destructive" loading={setTwo.isPending}>
+                  {t('twofa.offConfirm')}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -109,6 +113,7 @@ export function TwoFactorRow({ on, id = 'tg-2fa' }: { on: boolean; id?: string }
               onDone={(err) => {
                 setChallenge(null)
                 qc.invalidateQueries({ queryKey: qk.telegram.all })
+                qc.invalidateQueries({ queryKey: qk.authMethods })
                 if (err === null) toast.success(t('twofa.enabled'))
                 else if (err) toast.error(err)
               }}

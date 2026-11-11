@@ -4,6 +4,7 @@ import type { BusTopic } from '../types'
 
 export const qk = {
   authState: ['auth', 'state'] as const,
+  authMethods: ['auth', 'methods'] as const,
   onboarding: ['onboarding'] as const,
   claude: ['claude', 'status'] as const,
   workspace: ['workspace', 'tree'] as const,
@@ -85,7 +86,7 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   tasks: [qk.tasks],
   // an agent's page lists its cron jobs
   crons: [qk.crons.all, ['agents', 'one']],
-  telegram: [qk.telegram.all, qk.onboarding],
+  telegram: [qk.telegram.all, qk.onboarding, qk.authMethods],
   backup: [qk.backup.all, qk.onboarding],
   health: [qk.health, qk.system.services],
   extensions: [qk.extensions, qk.dashboard.all],

@@ -128,6 +128,57 @@ Recommended on top: SSH keys instead of passwords (`PasswordAuthentication no` o
 - **Alerts**: with Telegram linked, every sign-in and repeated wrong passwords are reported in the
   *Alerts* thread.
 
+## Two-step sign-in
+
+Settings -> Security -> **Two-step sign-in**: after the right password, a browser that is not trusted yet needs a
+second step. Turn on one method or several; the sign-in page offers every one that is on.
+
+| Method | What you do at sign-in | Works on |
+|---|---|---|
+| **Passkey** | press *Use a passkey*, then your fingerprint, face, PIN or security key | the address it was made on, in https (or `localhost`) |
+| **Authenticator app** | type the 6-digit code of the app | every address |
+| **Approval in Telegram** | press *Allow* in Telegram, or type the code of the message - see [Telegram](telegram#two-step-sign-in) | every address |
+| **Recovery code** | type one of the codes you saved (each works once) | every address |
+
+- **Authenticator app**: any app that makes time-based codes (TOTP): Authy, Google Authenticator, Microsoft
+  Authenticator, Aegis, 2FAS, Bitwarden, 1Password... **Set up** shows a QR code (and the key, to type by hand);
+  it is only turned on once you typed a code from the app, so a wrong scan cannot lock you out. A code works once,
+  and the one of the step before or after is accepted when the clocks differ a little.
+- **Passkeys**: **Add a passkey** opens your browser or your password manager at once (Bitwarden, 1Password,
+  iCloud Keychain, Google Password Manager, Windows Hello, a YubiKey...); the passkey is named after it (rename it
+  with the pencil). At sign-in the passkey window opens by itself after the password. Add one per device you sign in
+  from, or keep them in a password manager that syncs. Browsers allow passkeys only on an https address with a
+  name: with the domain access they just work; through Tailscale (`http://100.x.y.z:8787`) use the app or a
+  recovery code - a passkey made on your domain is not offered there.
+- **Sign in with a passkey alone** (on as soon as you add a passkey): the sign-in page shows **Sign in with a
+  passkey**, and your password manager offers it in the password field. The passkey then replaces the password
+  and the second step - it checks your fingerprint, face or PIN, so it is two factors by itself. Turn it off in
+  Settings -> Security to keep the password first (turning it back on asks for the current password). Wrong
+  passkeys count as wrong passwords for the throttling.
+- **After a sign-in with the password**, Harness offers to create a passkey - or, on an address where passkeys
+  cannot work (Tailscale IP, plain http), to set up the authenticator app (*Later* asks again in 30 days, *Do not
+  ask again* never in that browser; closing it asks again at the next password sign-in). A passkey removed here stays in your password manager or device: browsers that can (Chrome, Edge,
+  recent Safari) ask it to hide it; elsewhere (Firefox...) Harness shows where to delete it by hand.
+- **Confirm with a passkey**: where the current password is asked (removing a method, new recovery codes, turning
+  Telegram's approval off...), your passkey can confirm instead; it counts for 5 minutes in that browser. Changing
+  the password always asks for the current one.
+- **Recovery codes**: ten one-use codes, shown **once** when you turn on the first app or passkey. Save them in a
+  password manager or print them, away from the server. **New codes** (current password) replaces them all.
+- Turning a method on does not trust this browser: its next sign-in asks for it, so you know it works.
+- Removing a method or making new codes asks for the current password, and every change is reported in the
+  *Alerts* thread and the notifications feed. When no method is left, trusted browsers are forgotten.
+- **Trust this browser for 30 days** (ticked by default) skips the second step on that browser; **Forget trusted
+  browsers** makes every other browser ask again. Wrong codes and passkeys are throttled like the Telegram codes
+  (5 per request, 20 per hour on the server).
+
+**Lost every method** (phone and passkeys gone, no recovery code): on the server, over SSH,
+
+```bash
+maxxing 2fa status          # what is on
+maxxing 2fa off             # password only again (every method off, trusted browsers forgotten)
+maxxing 2fa off app         # one method only: telegram, app or passkeys
+```
+
 ## Telegram
 
 The gateway answers only the chat linked with the one-time code, and only the Telegram account that opened

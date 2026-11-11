@@ -393,7 +393,7 @@ Agent groups: the owner talks to 2-6 agents of one project in one conversation (
   `cap_for(method, path, authed)` is the table lookup. A route whose JSON grows past 1 MB must get a `ROUTES` entry.
 - `uploads.UploadGuard`: multipart bodies (auth + CSRF, `upload_max_mb`, temp-dir room) - see API.md Conventions.
 
-## maxxing.twofactor (two-step sign-in with Telegram)
+## maxxing.twofactor (sign-in challenges, Telegram approval, trusted browsers)
 - On = config `telegram.two_factor`; effective (`enabled()`) only with a token, a chat and its owner
   (`available()`). `gateway.forget()` and a new bot drop the flag. `set_on(False)` also calls `forget_devices()`.
 - Challenges in memory (one server process): `start(purpose, ip, ua)` (blocking: Telegram `sendMessage` to the
@@ -403,7 +403,30 @@ Agent groups: the owner talks to 2-6 agents of one project in one conversation (
   `TTL` 120 s, `GRACE` 60 s to collect an approval, `NEW_MAX` 5 per client / 15 min, `PENDING_MAX` 10.
 - Trusted browser: cookie `mx_device` = `<issued_at>.<nonce>.<hmac(device_key)>`, path `/api/auth`, 30 days;
   `forget_devices()` = `device_key` -> None (recreated on first use).
-- CLI `maxxing 2fa status|off|forget-browsers` (`cmd_twofactor.py`): the way back in when Telegram does not answer.
+- A challenge carries `methods` (`("telegram",)` by default; sign-in: `mfa.login_methods(rp_id)`). Without
+  `"telegram"` no message is sent; with other methods too it lasts `APP_TTL` (300 s) and a Telegram refusal drops
+  `"telegram"` from it instead of `Refused`. `check(id, code, other=mfa.check_code)` tries the Telegram code, then
+  `other` (TOTP / recovery code) when the challenge accepts those. `pending(id)` (a waiting challenge, to attach a
+  passkey prompt: `Challenge.webauthn`), `approve(id, via)` and `failed(id)` (a wrong passkey counts like a wrong
+  code) serve the passkey path of `api/auth.py`. `via`: telegram | code | totp | passkey | recovery.
+- CLI `maxxing 2fa status|off [telegram|app|passkeys]|forget-browsers` (`cmd_twofactor.py`): the way back in when
+  a second step cannot be answered; `off` alone turns every method off.
+
+## maxxing.mfa, maxxing.totp (authenticator app, passkeys, recovery codes)
+- `totp.py`: RFC 6238 / 4226, stdlib only (HMAC-SHA1, 6 digits, 30 s, ±1 step); `verify(secret, code, last_step)`
+  returns the matched step, never one <= `last_step` (replay).
+- `mfa.required()` = Telegram 2FA effective or `app_on()` (a TOTP secret or a passkey): the sign-in asks a second
+  step. State in secrets.json: `totp_secret`, `totp_last_step`, `passkeys` (list of `{id, public_key, sign_count,
+  name, rp_id, transports, created, last_used}`, base64url), `passkey_user` (WebAuthn user handle),
+  `recovery_codes` (SHA-256 of 10 random codes; made by the first app method, dropped with the last one).
+  Read-modify-writes hold `config._lock` (a TOTP step and a recovery code are used once even across processes).
+- TOTP setup: `totp_begin()` keeps the new secret in memory (`SETUP_TTL` 10 min), `totp_confirm(code)` stores it.
+- Passkeys: `py_webauthn` (`webauthn` package) for options and verification. `rp_for(request)` = (host, origin)
+  from `Host` + `X-Forwarded-Proto` (uvicorn only trusts proxy headers from 127.0.0.1; the proxy address adds
+  the scheme itself): https with a host name, or localhost; never an IP. Registration prompts in memory
+  (`_reg`, 5 at most, 5 min) keyed by challenge and bound to their (rp_id, origin); a sign-in prompt lives on its
+  challenge. A passkey is offered at sign-in only for the host it was made on.
+- `off_all()` (CLI) clears the app, the passkeys and the recovery codes.
 
 ## maxxing.bus
 - `invalidate(*topics)` - thread-safe UI invalidation (see API.md Global bus).

@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Two-step sign-in with an authenticator app or a passkey.** Next to the approval in Telegram, the second
+  step can now be a code from Authy, Google Authenticator, Bitwarden or any authenticator app, or a passkey
+  (fingerprint, face, Windows Hello, a security key, your password manager). Ten recovery codes get you in if
+  you lose them; `maxxing 2fa off` on the server is still the way out. With a passkey you can also sign in
+  without the password at all (Settings -> Security turns it off), and confirm sensitive changes with it instead
+  of typing the password. [Show me](#show:twofa-app)
+
 ## 2.0.0-alpha.139 - 2026-11-10
 
 New:

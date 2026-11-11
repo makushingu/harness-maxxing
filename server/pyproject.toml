@@ -9,6 +9,7 @@ dependencies = [
   "httpx>=0.27",
   "python-multipart>=0.0.9",
   "watchfiles>=0.21",           # inotify wake-ups of the session streams (sessions/wake.py)
+  "webauthn>=2.5",
 ]
 
 [project.optional-dependencies]

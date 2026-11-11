@@ -8,6 +8,7 @@ import { Button, FormField, SecretInput, Switch, toast } from '@/components/ui'
 import { NewPasswordFields, validatePasswords } from '@/pages/auth/PasswordFields'
 import { Callout, SettingRow } from '@/features/common'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
+import { TwoStepMethods } from '@/features/auth/TwoStepMethods'
 import { SettingsCard, SectionStack } from './ui'
 
 export function SecuritySection() {
@@ -59,11 +60,12 @@ export function SecuritySection() {
           </div>
         </form>
       </SettingsCard>
-      <SettingsCard title={t('twofa.setting')}>
+      <SettingsCard title={t('twofa.setting')} description={t('twofa.cardDesc')}>
+        <TwoStepMethods />
         {tg?.chat ? (
-          <TwoFactorRow on={!!tg.settings.two_factor} id="sec-2fa" />
+          <TwoFactorRow on={!!tg.settings.two_factor} id="sec-2fa" label={t('twofa.tgRow')} />
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="py-4 text-sm text-muted-foreground last:pb-0">
             {t('twofa.needTelegram')}{' '}
             <Link to="/settings/telegram" className="font-medium text-primary hover:underline">
               {t('twofa.linkTelegram')}

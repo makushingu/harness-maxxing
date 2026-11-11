@@ -56,6 +56,7 @@ function usePrefetch() {
 }
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
+const PasskeyOffer = React.lazy(withGroups(['auth', 'settings'], () => import('@/features/auth/PasskeyOffer').then((m) => ({ default: m.PasskeyOffer }))))
 const FileViewerHost = React.lazy(withGroups(['files'], () => import('@/features/files/Viewer')))
 const TeamLive = React.lazy(() => import('@/features/team/Live').then((m) => ({ default: m.TeamLive })))
 const TeamBubbles = React.lazy(withGroups(['team'], () => import('@/features/team/TeamBubbles').then((m) => ({ default: m.TeamBubbles }))))
@@ -252,6 +253,7 @@ export function AppShell() {
         <InstallDialog />
         <WhatsNew />
         <TourHost />
+        <PasskeyOffer />
       </WhenIdle>
     </div>
   )

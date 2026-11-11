@@ -18,13 +18,34 @@ export type AuthState = {
   language: Language
   /** Look last chosen in a signed-in browser (null: never): the sign-in page shows it. */
   look: Look | null
+  /** A passkey of this address signs in alone (no password); absent on older servers. */
+  passkey_login?: boolean
 }
 export type SetupBody = { token: string; password: string }
 export type LoginBody = { password: string }
 /** A sign-in (or turning two-step sign-in on) waiting for an approval in Telegram. */
-export type TwoFactorChallenge = { challenge: string; expires_in: number }
+/** What a sign-in challenge accepts, in the order the page offers them (no `methods`: an older server, Telegram). */
+export type TwoFactorMethod = 'passkey' | 'totp' | 'telegram' | 'recovery'
+export type TwoFactorChallenge = { challenge: string; expires_in: number; methods?: TwoFactorMethod[] }
 export type LoginResult = { ok: boolean; two_factor?: TwoFactorChallenge }
-export type TwoFactorPoll = { ok: boolean; status: 'pending' | 'approved'; expires_in?: number }
+export type TwoFactorPoll = { ok: boolean; status: 'pending' | 'approved'; expires_in?: number; recovery_left?: number }
+export type Passkey = { id: string; name: string; rp_id: string; created: number; last_used: number | null }
+/** GET /api/auth/methods: the two-step sign-in methods of this server. */
+export type AuthMethods = {
+  required: boolean
+  telegram: { available: boolean; on: boolean }
+  totp: { on: boolean }
+  passkeys: Passkey[]
+  /** Sign-in with a passkey alone (on by default once a passkey exists). */
+  passkey_login: boolean
+  /** WebAuthn user handle of this server (base64url), for the Signal API; null before the first passkey. */
+  passkey_user: string | null
+  recovery_left: number
+  /** Can this page add or use a passkey (https with a host name, or localhost)? */
+  passkey_here: { ok: true; rp_id: string } | { ok: false; reason: 'ip' | 'http' }
+}
+export type TotpSetup = { secret: string; uri: string; expires_in: number }
+export type RecoveryCodes = { ok: boolean; recovery_codes?: string[] }
 export type ChangePasswordBody = { current: string; new: string }
 
 /* ---------------------------------------------------------------- Onboarding */
