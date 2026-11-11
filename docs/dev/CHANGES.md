@@ -43,6 +43,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   dict raised `KeyError` and an int `TypeError`); `_clean_avatar` looks a value up in `_OLD_AVATAR` only when it is a
   string (a list was unhashable). `GET /api/agents/<topic>/<agent>` failed with an error for such a file. Tests added
   in `tests/test_agents.py`.
+- `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
+  then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
+  save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
 - Radar fixes merged from `main` (one commit each, with its test): `claude_models` (a non-list `data` is a failed
   read; a preview/variant suffix is not a newer model), `agents.clean` (lone surrogate in a rule -> 400 `bad_rule`, a
   limit too big for a number -> 400), `infra.probe` (`bad_probe` marks only its server), sessions (a change of Plan

@@ -523,9 +523,9 @@ def restore_job(cid: str, topic_path: str | None = None) -> dict:
             raise CronError(f"no removed job {cid}", "not_found")
         if topic_path is not None:
             job = {**job, "topic_path": topic_path}
+        old = list(jobs)
         jobs.append({**_clean(job), "id": cid, "updated": time.time()})   # checked like a new job
-        sync_crontab(jobs)
-        _save_raw(jobs)
+        _commit(old, jobs)
     return get_job(cid)  # type: ignore[return-value]
 
 

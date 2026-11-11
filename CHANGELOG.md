@@ -35,6 +35,8 @@ Fixed:
   The Skills list now shows the text of these blocks as written.
 - **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
   not a list, or an avatar value that is not text, is ignored like any other invalid value.
+- **Restoring a deleted scheduled job on a full disk no longer leaves it in the crontab.** If the job cannot be saved,
+  the crontab goes back to what it was, as it already did when you create, change or delete a job.
 
 - **Agents, after the 2.0.0-alpha.139 review**: a message you send while the agent works waits for its turn instead
   of being refused; **Run now** starts the agent's routine, not a message of the conversation; a Free agent that
