@@ -182,7 +182,7 @@ it starts folded on screens narrower than 1600 px so the conversation keeps its 
   and only when they apply: whether it asks you first, the keys it gets.
 - **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
 - **Settings**, in four sections (the chips on top jump to them): **Essentials** (on, silent, its look, the model, the
-  daily budget); **Protection** (**Free** or **Protected**, below; **Ask me before risky actions**; the keys it gets);
+  **Model of our conversation** (empty = the same as Model; the agent may set it when you ask), the daily budget); **Protection** (**Free** or **Protected**, below; **Ask me before risky actions**; the keys it gets);
   **E-mail** (shown once it has a mailbox, or with **Give it a mailbox**); **Advanced**, folded (permission mode,
   outside events, callable from the topic's sessions, allowed and forbidden tools, rules, the other limits, export as
   a Claude Code file, grouped under Permissions, Tools and rules, Limits and export). Delete is at the bottom.

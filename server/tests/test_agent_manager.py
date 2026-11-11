@@ -305,3 +305,19 @@ def test_a_turn_that_died_without_a_result_never_shows_the_answer_before(client,
     meta = store.read(sid2)
     agents.on_turn_end({**meta, "id": sid2, "last_turn": meta["last_turn"], "turn_died": True}, None)
     assert _results(client)[-1]["text"] == "runner killed"
+
+
+def test_the_settings_page_changes_and_clears_the_conversation_model(client, topic, mx):
+    """Settings -> Model of our conversation: the page sends chat_model; '' = the agent's Model again."""
+    _on(client)
+    _create(client, model="claude-sonnet-4-5", chat_model="claude-opus-4-1")
+    url = "/api/agents/acme/blog/writer"
+    r = client.patch(url, json={"chat_model": "claude-haiku-4-5", "model": "claude-sonnet-4-5"})
+    assert r.status_code == 200 and r.json()["chat_model"] == "claude-haiku-4-5"
+    r = client.patch(url, json={"chat_model": ""})
+    assert r.status_code == 200 and r.json()["chat_model"] == ""
+    assert agents.run_settings(A, manager=True)["model"] == "claude-sonnet-4-5"   # back to Model
+    r = client.patch(url, json={"model": "claude-haiku-4-5"})                # a field left out keeps its value
+    assert r.json()["chat_model"] == "" and r.json()["model"] == "claude-haiku-4-5"
+    assert client.patch(url, json={"chat_model": "x" * 81}).status_code in (400, 422)   # refused, not cut
+    assert agents.load(A)["chat_model"] == ""
