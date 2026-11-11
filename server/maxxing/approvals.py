@@ -221,16 +221,29 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
                 workspace.add_topic_allowed_tool(topic, rule)
             except workspace.WorkspaceError as e:
                 raise ApprovalError(e.status, e.code, e.message) from None
+    # an agent's settings change that can no longer be applied as its card shows it (agent gone, a value changed
+    # since): the Allow is refused with the reason and the request closed (denied, `stale`), nothing applied
+    problem = ""
+    if decision == "allow":
+        d = get(rid)
+        if d.get("kind") == "agent_change" and d.get("status") == "pending":
+            from . import agents
+            problem = agents.change_problem(d)
     with _lock:                                 # web, Telegram and the feed at once: one answer, the others get 409
         d = get(rid)
         if d.get("status") != "pending":
             raise ApprovalError(409, "not_pending", f"This request is already {d.get('status')}")
         if decision == "allow" and d.get("clipped"):
             raise ApprovalError(409, "clipped", CLIPPED_NOTE)
-        d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),
-                 decided_by=by)
-        approval_mcp.write_atomic(_file(rid), d)
-        _seen[rid] = decision
+        if problem:
+            d.update(status="deny", stale=True, message=problem[:MESSAGE_MAX], decided_at=time.time(), decided_by=by)
+            approval_mcp.write_atomic(_file(rid), d)
+            _seen[rid] = "deny"
+        else:
+            d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),
+                     decided_by=by)
+            approval_mcp.write_atomic(_file(rid), d)
+            _seen[rid] = decision
     if _counts.get(d.get("session") or "", 0) > 0:
         _counts[d["session"]] -= 1
     if d.get("kind") == "agent_change":
@@ -238,6 +251,8 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
         agents.change_decided(d)
     _note(d)
     _invalidate()
+    if problem:
+        raise ApprovalError(409, "stale_change", problem)
     return public(d)
 
 

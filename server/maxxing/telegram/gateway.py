@@ -3770,9 +3770,9 @@ def approval_done(rid: str, status: str) -> None:
         threading.Thread(target=_approval_done_sync, args=(rid, status), daemon=True).start()
 
 
-def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None = None) -> None:
+def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None = None, silent: bool = False) -> None:
     """The result of an agent's turn into the agent's own thread (created on first use). Any process, never blocks
-    an event loop, never raises."""
+    an event loop, never raises. silent: without a sound (a silent agent answering the owner's own message)."""
     try:
         if not token() or not tg_config().get("chat_id"):
             return
@@ -3788,9 +3788,9 @@ def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None =
         except RuntimeError:
             in_loop = False
         if in_loop:
-            threading.Thread(target=_agent_send_sync, args=(path, parts, False, thread_msg), daemon=True).start()
+            threading.Thread(target=_agent_send_sync, args=(path, parts, silent, thread_msg), daemon=True).start()
         else:
-            _agent_send_sync(path, parts, False, thread_msg)
+            _agent_send_sync(path, parts, silent, thread_msg)
     except Exception:
         log.exception("telegram notify_agent failed")
 

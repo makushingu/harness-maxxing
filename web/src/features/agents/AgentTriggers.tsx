@@ -17,7 +17,7 @@ import {
 import { Callout } from '@/features/common'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
-import { FeedTriggerFields, WebhookKindSelect, WebhookMade, agoText, triggerSummary } from './parts'
+import { FeedTriggerFields, WebhookKindSelect, WebhookMade, agoText, triggerSummary, useSandboxAutoNote } from './parts'
 
 /** A dashed "add" row of the panel. */
 /** "When it works": the agent's triggers as sentences (schedules, webhooks with their address and what came in,
@@ -38,8 +38,14 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
   const qc = useQueryClient()
   const refresh = () => qc.invalidateQueries({ queryKey: agentKeys.all })
 
+  const boxedNote = useSandboxAutoNote()
   const saveTriggers = (list: AgentTriggerInput[], onSuccess?: () => void) =>
-    patch.mutate({ path: a.path, triggers: list.map(({ ...x }) => ({ ...x, kind: 'feed' as const })) }, { onSuccess })
+    patch.mutate({ path: a.path, triggers: list.map(({ ...x }) => ({ ...x, kind: 'feed' as const })) }, {
+      onSuccess: (r) => {
+        boxedNote(r)
+        onSuccess?.()
+      },
+    })
   const toInput = (x: AgentTrigger): AgentTriggerInput => ({ id: x.id, enabled: x.enabled, source: x.source, levels: x.levels, match: x.match, prompt: x.prompt, hook_id: x.hook_id })
   const hooks = new Map((a.webhooks || []).map((h) => [h.id, h]))
 
@@ -341,6 +347,7 @@ function FeedTriggerDialog({ value, onClose, onSave, pending }: { value: AgentTr
 function WebhookDialog({ open, onOpenChange, agent: a }: { open: boolean; onOpenChange: (o: boolean) => void; agent: AgentDetail }) {
   const t = useT()
   const add = useAddAgentWebhook()
+  const boxedNote = useSandboxAutoNote()
   const [kind, setKind] = React.useState<AgentWebhookKind>('generic')
   const [prompt, setPrompt] = React.useState('')
   const [made, setMade] = React.useState<AgentWebhookResult['hook'] | null>(null)
@@ -380,7 +387,7 @@ function WebhookDialog({ open, onOpenChange, agent: a }: { open: boolean; onOpen
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 {t('common.cancel')}
               </Button>
-              <Button loading={add.isPending} onClick={() => add.mutate({ path: a.path, kind, prompt: prompt.trim() }, { onSuccess: (r) => setMade(r.hook) })} data-testid="agent-hook-save">
+              <Button loading={add.isPending} onClick={() => add.mutate({ path: a.path, kind, prompt: prompt.trim() }, { onSuccess: (r) => (boxedNote(r.agent), setMade(r.hook)) })} data-testid="agent-hook-save">
                 {t('agents.hook.create')}
               </Button>
             </>

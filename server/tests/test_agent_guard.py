@@ -349,6 +349,31 @@ def test_writable_topic_never_opens_the_agents_or_the_topic_files(client, topic,
     assert agents.clean({"writable": ["agents", "agents/x", "drafts"]})["writable"] == ["drafts"]
 
 
+def test_writable_topic_never_opens_the_topics_permission_file(client, topic, mx):
+    """The topic's .maxxing.json (permission mode and "Always allow" rules of the owner's sessions there) is never
+    writable by a sandboxed agent, even with `writable: "."` or naming it; missing, it gets no placeholder."""
+    from maxxing import agent_guard, agents
+    _on(client)
+    _create(client, writable=["."])
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    t = root / "projects/acme/topics/blog"
+    (t / "README.md").write_text("hi")
+    a = agents.load(A)
+    fs = agent_guard.settings(A, a)["sandbox"]["filesystem"]
+    assert str(t / ".maxxing.json") not in fs["denyWrite"]                 # missing: no placeholder mounted
+    (t / ".maxxing.json").write_text('{"permission_mode": "ask"}')
+    run = _run("NOTOOL hi")
+    wait_idle(client, run["session"]["id"])
+    s = _settings(_calls()[-1]["argv"])
+    fs = s["sandbox"]["filesystem"]
+    assert str(t / ".maxxing.json") not in fs["allowWrite"] and str(t / ".maxxing.json") in fs["denyWrite"]
+    assert f"Edit(/{t}/.maxxing.json)" in s["permissions"]["deny"]          # Write / Edit (--add-dir)
+    assert f"{t}/README.md" in fs["allowWrite"]                             # the rest of the topic stays writable
+    # named on its own: allowWrite may list it, denyWrite wins
+    fs = agent_guard.settings(A, {**a, "writable": [".maxxing.json"]})["sandbox"]["filesystem"]
+    assert str(t / ".maxxing.json") in fs["denyWrite"]
+
+
 def test_writable_links_never_lead_outside_the_topic(client, topic, mx, tmp_path):
     """A link of the topic (a git clone's `cfg -> /root/.claude`) is not a way out: its target is dropped from the
     sandbox, from --add-dir and from `maxxing mail attachment`; a link to a folder of the topic still works."""
