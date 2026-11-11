@@ -39,3 +39,10 @@ def test_only_the_session_composer_and_its_headers_carry_the_typing_markers():
     assert "data-kbd-hide" in column and "data-kbd-short-hide" in column
     others = [p for p in WEB.rglob("*.tsx") if p.name not in ("Composer.tsx", "Column.tsx")]
     assert not [p.name for p in others if "data-kbd-" in p.read_text()]  # nothing else steps aside while typing
+
+
+def test_show_more_is_big_enough_to_tap():
+    # "Show more" in the notifications was a 50x16 px target on a phone: a bigger tap area on touch screens only
+    feed = (WEB / "features" / "feed" / "FeedItems.tsx").read_text()
+    more = re.search(r'<button[^>]*onClick=\{\(\) => setMore\(!more\)\}[^>]*className="([^"]*)"', feed)
+    assert more and "pointer-coarse:before:absolute" in more[1] and "relative" in more[1].split()
