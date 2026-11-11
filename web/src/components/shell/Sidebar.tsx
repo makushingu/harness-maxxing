@@ -97,6 +97,30 @@ const FOLDED_DOT = 'absolute top-1 right-1 flex size-4 items-center justify-cent
 /** The active page's marker on the bar's left edge (the folded rows sit 10 px from it, the unfolded ones 12 px). */
 const activeMark = (collapsed: boolean) => cn('absolute top-2 bottom-2 w-[3px] rounded-r-full bg-primary', collapsed ? '-left-2.5 top-2.5 bottom-2.5' : '-left-3')
 
+/** 'up' / 'down' / 'both' while rows of the scroller are out of sight on that side, '' when it all fits. */
+function useScrollEdges(ref: React.RefObject<HTMLElement | null>): string {
+  const [edges, setEdges] = React.useState('')
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => {
+      const up = el.scrollTop > 1
+      const down = el.scrollTop + el.clientHeight < el.scrollHeight - 1
+      setEdges(up && down ? 'both' : up ? 'up' : down ? 'down' : '')
+    }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => {
+      el.removeEventListener('scroll', check)
+      ro.disconnect()
+    }
+  }, [ref])
+  return edges
+}
+
 /** Width of the folded icon bar. */
 const FOLDED_W = 64
 
@@ -187,6 +211,7 @@ export const Sidebar = React.memo(function Sidebar() {
         {...prefetchLink(e.to)}
         {...drag}
         data-ext={e.ext.id}
+        aria-label={collapsed ? e.ext.name : undefined}
         style={{ '--i': idx } as React.CSSProperties}
         className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
       >
@@ -212,6 +237,9 @@ export const Sidebar = React.memo(function Sidebar() {
     },
     'nav',
   )
+  // rows hidden above or below in a short window: the list fades on that edge, so it shows it scrolls
+  const navScroll = React.useRef<HTMLDivElement>(null)
+  const more = useScrollEdges(navScroll)
   const block = (cls?: string) => cn('grid gap-0.5 px-3 py-2', collapsed && 'px-2.5', cls)
   const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
 
@@ -272,7 +300,7 @@ export const Sidebar = React.memo(function Sidebar() {
             </div>
 
             {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short). */}
-            <div data-tour="nav" className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
+            <div ref={navScroll} data-tour="nav" data-more={more || undefined} className="mx-nav-scroll min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none]">
               <nav aria-label={t('shell.navigation')} className={block()}>
                 {drag.order.map((to, idx) => {
                   const e = entries.find((x) => x.to === to)
@@ -286,7 +314,7 @@ export const Sidebar = React.memo(function Sidebar() {
 
             <div className={block('border-t border-sidebar-border')}>
               {/* folded: a 44 px target and a bigger icon, like the rows (UpdateIndicator keeps its own small look) */}
-              <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
+              <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [@media(max-height:820px)]:[&>*]:h-9 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
                 <UpdateIndicator collapsed={collapsed} />
               </div>
               <HelpMenu collapsed={collapsed} />
