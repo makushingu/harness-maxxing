@@ -11,3 +11,9 @@ def test_the_close_button_of_dialogs_and_sheets_is_translated():
         src = (WEB / "components" / "ui" / name).read_text(encoding="utf-8")
         assert '<span className="sr-only">Close</span>' not in src, name
         assert "<span className=\"sr-only\">{t('common.close')}</span>" in src, name
+
+
+def test_the_resize_handles_of_session_columns_are_translated():
+    src = (WEB / "pages" / "sessions" / "Column.tsx").read_text(encoding="utf-8")
+    assert 'aria-label="Resize"' not in src
+    assert "aria-label={t('shell.resize')}" in src and "aria-label={t('shell.resizeRows')}" in src

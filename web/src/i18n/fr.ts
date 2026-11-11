@@ -65,6 +65,7 @@ export const fr: Record<keyof typeof en, string> = {
   'shell.account': 'Compte',
   'shell.collapse': 'Réduire la barre latérale',
   'shell.resize': "Glisser pour redimensionner (double-clic : largeur normale)",
+  'shell.resizeRows': "Glisser pour redimensionner (double-clic : hauteurs égales)",
   'shell.expand': 'Déplier la barre latérale',
   'shell.pin': 'Garder la barre latérale ouverte',
   'shell.openList': 'Ouvrir la liste',

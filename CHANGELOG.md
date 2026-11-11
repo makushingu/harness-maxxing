@@ -32,8 +32,8 @@ Fixed:
   nightly backup as a leaked secret.
 - **Restoring a deleted scheduled job on a full disk no longer leaves it in the crontab.** If the job cannot be saved,
   the crontab goes back to what it was, as it already did when you create, change or delete a job.
-- **Screen readers in French**: the close button of every window and side panel is read in your language ("Fermer"),
-  no longer always "Close".
+- **Screen readers in French**: the close button of every window and side panel and the handles between session
+  columns are read in your language, no longer always in English.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

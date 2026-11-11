@@ -67,6 +67,7 @@ export const en = {
   'shell.account': 'Account',
   'shell.collapse': 'Collapse sidebar',
   'shell.resize': "Drag to resize (double-click: normal width)",
+  'shell.resizeRows': "Drag to resize (double-click: equal heights)",
   'shell.expand': 'Expand sidebar',
   'shell.pin': 'Keep the sidebar open',
   'shell.openList': 'Open the list',
