@@ -287,8 +287,11 @@ first, and starts anew instead of going on with an earlier one.
 A new agent is **Free**, like a session: its commands reach the whole server, it works without asking. That suits an
 agent that only reads what you give it. An agent that reads **text from outside** - a mailbox, a webhook, the feed,
 web pages - can be told what to do by that text: **Protected** is advised (settings -> **Protection**), and the
-agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a webhook template on the
-command line, starts Protected. Agents made before keep their setting.
+agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a webhook or mail
+template, starts Protected. A Free agent that gets its **first** mailbox, webhook or feed trigger later (from its
+page, its conversation or the command line) turns Protected at the same moment, and says so; asked by its
+conversation, a mailbox and that switch are one request on the card. If you set it back to **Free** yourself, it
+stays Free: more sources or later changes never switch it again. Agents made before keep their setting.
 
 **Protected** runs it in **Claude Code's sandbox**:
 

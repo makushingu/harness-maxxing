@@ -864,13 +864,20 @@ def request_change(path: str, fields: dict, session: str = "") -> dict:
     if s_lim:
         sec["limits"] = s_lim
     applied = sorted(direct)
+    boxed = False
     if direct:
-        update(path, direct)
+        boxed = bool(update(path, direct).get("sandbox_auto"))     # a feed trigger added: its sandbox on (_auto_box)
+        if boxed:
+            applied = sorted({*applied, "sandbox"})
+    # a first mailbox asked for a free agent: its sandbox is part of the same request (shown on the card, applied
+    # with it if allowed, nothing if denied)
+    if "mail" in sec and "sandbox" not in f and not boxed and not cur["sandbox"] and not reads_outside(cur):
+        sec["sandbox"] = True
     # what is asked: the change itself (items added / removed, a value from -> to), applied if allowed over the
     # settings of that moment (delta_fields), never the whole value seen now (it would undo what changed meanwhile)
     delta = change_delta(cur, {**sec, "limits": {**cur["limits"], **s_lim}})
     if not delta:
-        return {"applied": applied, "asked": [], "request": ""}
+        return {"applied": applied, "asked": [], "request": "", **({"sandbox_auto": True} if boxed else {})}
     from . import approval_mcp, approvals
     now = time.time()
     rid = _secrets.token_hex(8)
@@ -882,7 +889,7 @@ def request_change(path: str, fields: dict, session: str = "") -> dict:
     approval_mcp.write_atomic(approvals.folder() / f"{rid}.json", req)
     approvals._invalidate()
     asked = sorted([k for k in delta if k != "limits"] + [f"limits.{k}" for k in delta.get("limits") or {}])
-    return {"applied": applied, "asked": asked, "request": rid}
+    return {"applied": applied, "asked": asked, "request": rid, **({"sandbox_auto": True} if boxed else {})}
 
 
 def change_problem(d: dict) -> str:
@@ -1084,8 +1091,7 @@ def create(topic_path: str, name: str, fields: dict | None = None) -> dict:
     description = _utf8(str(f.pop("description", "") or ""))
     # a new agent is free like a session (Libre); one that reads outside text from the start (a mailbox, the
     # feed) is protected (its sandbox): what it reads may carry orders. The owner's conversation can change it.
-    outside = bool(f.get("mail")) or any(isinstance(t, dict) and t.get("kind") == "feed" for t in f.get("triggers") or [])
-    data = clean({"sandbox": outside, **f, "created": time.time()}, strict=True)
+    data = clean({"sandbox": reads_outside(f), **f, "created": time.time()}, strict=True)
     try:
         folder(path).mkdir(parents=True)
     except FileExistsError:                             # created by a request at the same moment
@@ -1135,6 +1141,30 @@ def _git_exclude(tdir: Path, sub: str = AGENTS_DIR) -> None:
         log.warning("could not exclude the %s folder of %s from its git clone", sub, tdir, exc_info=True)
 
 
+def reads_outside(a: dict) -> bool:
+    """It reads outside text (a mailbox, the feed: webhooks, watched sources): what it reads may carry orders."""
+    return bool(a.get("mail")) or any(isinstance(t, dict) and t.get("kind") == "feed" for t in a.get("triggers") or [])
+
+
+SANDBOX_AUTO_NOTE = ("Its sandbox is now on: it reads outside text (a webhook, the feed or a mailbox) and what it reads "
+                     "may carry orders. The owner can turn it off in its settings (Protection).")
+
+
+def _auto_box(cur: dict, data: dict, fields: dict) -> bool:
+    """A free agent that starts reading outside text (its first mailbox or feed trigger, added after its creation)
+    goes into its sandbox, as create() does: safer, so applied at once. Never when the same change sets `sandbox`
+    (the owner's choice), nor for one that already read outside text (it was left free on purpose): a later save
+    never turns it back on. -> True when turned on (data changed)."""
+    if "sandbox" in fields or cur["sandbox"] or data["sandbox"] or reads_outside(cur) or not reads_outside(data):
+        return False
+    data["sandbox"] = True
+    return True
+
+
+def _say_auto_box(path: str) -> None:
+    post(path, "note", SANDBOX_AUTO_NOTE, status="sandbox")
+
+
 def _not_broken(path: str, a: dict) -> None:
     if a.get("broken"):
         raise AgentError(409, "broken", f"{path}/{AGENT_FILE} cannot be read (not valid JSON): fix or replace the "
@@ -1156,6 +1186,7 @@ def update(path: str, fields: dict) -> dict:
         if "avatar" in f and isinstance(f["avatar"], dict):
             f["avatar"] = {**cur["avatar"], **f["avatar"]}
         data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
+        boxed = _auto_box(cur, data, f)
         _save(path, data)
     if data["sandbox"] and not cur["sandbox"]:
         from . import agent_guard
@@ -1166,8 +1197,10 @@ def update(path: str, fields: dict) -> dict:
         _write_state(path, st)
     if description is not None:
         workspace._write_claude_md(folder(path), "agent", parse(path)[2], _utf8(str(description)))
+    if boxed:
+        _say_auto_box(path)
     _invalidate()
-    return get(path)
+    return {**get(path), **({"sandbox_auto": True} if boxed else {})}
 
 
 def drop_mail(acc_id: str) -> None:
@@ -2390,9 +2423,10 @@ def flush_due() -> int:
 
 # ---- webhooks made for an agent: a feed hook + a feed trigger on its source ----------------------------
 def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list[str] | None = None,
-                match: str = "") -> dict:
+                match: str = "", box: bool = True) -> dict:
     """Create a feed hook named after the agent and a feed trigger on it -> {agent, hook}. A trigger whose webhook
-    was deleted gets the new one (never a second trigger on the same events)."""
+    was deleted gets the new one (never a second trigger on the same events). box: a free agent's first outside
+    source turns its sandbox on (_auto_box); False when the owner just chose Free (`create --no-sandbox`)."""
     from . import feed, feedhooks
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
@@ -2422,12 +2456,18 @@ def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list
         else:
             a["triggers"].append(t)
         try:
-            _save(path, clean(a, strict=True))
+            data = clean(a, strict=True)
+            boxed = _auto_box(load(path), data, {} if box else {"sandbox": False})
+            _save(path, data)
         except Exception:
             feedhooks.remove(hook["id"])
             raise
+    if boxed:
+        from . import agent_guard
+        agent_guard.ensure_profile()
+        _say_auto_box(path)
     _invalidate()
-    return {"agent": get(path), "hook": hook}
+    return {"agent": {**get(path), **({"sandbox_auto": True} if boxed else {})}, "hook": hook}
 
 
 # ---- cron triggers ----------------------------------------------------------------------------------

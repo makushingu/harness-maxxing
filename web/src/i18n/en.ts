@@ -3397,6 +3397,7 @@ export const en = {
   'agents.export.download': 'Download',
   'agents.export.tip': 'Download it as a Claude Code agent file (.claude/agents/<name>.md)',
   'agents.sandbox.desc': "What it protects: its commands write only in its own folder and the topic folders listed below, reach only the sites listed below and never read the server's secrets or logins; the agent can never change its own role, settings or triggers. Its runs never use bypass (bypass becomes accept edits).",
+  'agents.sandbox.autoOn': 'Protected now: it reads outside text (a webhook, the feed or a mailbox). You can set it back to Free in its settings.',
   'agents.sandbox.whenOff': "Switch it off only when the agent must write outside its topic, use the server's own logins (git, gh or ssh credentials...) or deploy to system folders.",
   'agents.sandbox.domains': 'Domains it can reach',
   'agents.sandbox.domainsDesc': 'Hosts its shell commands may connect to, e.g. api.github.com or *.example.com.',

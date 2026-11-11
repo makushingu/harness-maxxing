@@ -113,6 +113,8 @@ export type AgentSandboxStatus = { ok: boolean; missing: string[] }
 export type AgentImportResult = Agent & { ignored: string[] }
 /** An agent = a folder projects/<p>/topics/<t>/agents/<name>/ (CLAUDE.md = its role, memory.md, agent.json). */
 export type Agent = {
+  /** answer of a save only: its first outside source (webhook, feed, mailbox) turned its sandbox on */
+  sandbox_auto?: boolean
   /** projects/<p>/topics/<t>/agents/<name>: also a session path */
   path: string
   project: string
