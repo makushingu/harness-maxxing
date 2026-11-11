@@ -3,6 +3,61 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Security:
+- **Agents: an answer to outside text stays out of your conversation.** A run started by a webhook, a
+  notification or another agent asks before any risky action. Its answer was then given as context to the next
+  session of the agent, which asked nothing: what the outside text said could come back there. A new conversation
+  with the agent no longer gets such an answer (it is still in the agent's page), and a run started by a script
+  that gets it asks first too, unless the agent trusts outside events.
+
+## 2.0.0-alpha.139 - 2026-11-10
+
+New:
+- **Talk to an agent like in a chat**: your messages to an agent (its page, Telegram) now go on in one conversation
+  instead of starting a new session each time. It remembers what you said and what it already did, answers faster
+  and costs less; a message typed while it works waits for its turn. **New conversation** (under the box, or `/new`
+  on Telegram) starts a fresh one, and so do 6 hours without a message (adjustable). Its schedules, webhooks,
+  e-mails and other agents still start sessions of their own. Every agent works this way, existing ones too.
+  Its page is now **one flow**, like a chat: your messages on the right, its answers on the left with its avatar,
+  live while it works, with every command and file it used and what it changed of itself (its memory, its role, its
+  settings) in green. What its schedules, webhooks, e-mails and other agents started shows in the same flow: what
+  started each run, then its answer with its steps folded in one line (**Reply** goes on with that run). Your own
+  messages no longer count in its runs per hour. Ask it to do its routine now and it starts a run of its own instead
+  of doing the work in the conversation. Scroll up to load older messages.
+- **Talk to an agent from the Office**: a click on its desk opens its conversation next to the Office (a sheet on a
+  phone) instead of leaving it; its page is one click away. Office views made by an extension can open it too.
+- **A new agent sets itself up**: **New agent** asks only for a name and a place, then opens its conversation. Tell
+  it its job in one go (a four-line brief: my job, when, results, never without me): it sets itself up in the same
+  answer - role, name, schedule in your time zone, its freedoms decided with simple rules - and asks only what it
+  cannot guess. The ready-made agents show as ideas that put their brief in the box, to fill in and send. Asking for
+  an agent in any session follows the same brief and rules. "Edit with Claude" is gone: ask the agent itself.
+- **New agents are free, like a session**: no sandbox by default, so they just work. One that reads text from
+  outside (a mailbox, a webhook, the feed) is better **Protected**: its settings say so, and it proposes it itself.
+  Existing agents keep their setting. A change that only makes an agent safer no longer waits for your OK.
+- **Simpler agent settings**: four sections - Essentials, Protection (Free or Protected), E-mail (once it has a
+  mailbox) and Advanced, folded and grouped; shorter texts. Its profile is lighter: one **Add a trigger** menu,
+  **Protection and budget** in plain words, a schedule shows its time zone when it is not your browser's.
+- **Fewer requests in an agent's conversation**: in its sandbox, the agent no longer asks before reading files,
+  searching the web or opening a page of its sites. It still asks to leave its sandbox, to open another site and to
+  change a safety setting.
+- **Ask an agent to change itself**: in its conversation, an agent can now rewrite its own role, update its memory,
+  add, change or remove its schedules and triggers, and change its other settings, when you ask. A change to what
+  keeps it safe (sandbox, sites, keys, approvals, budget...) shows up as a card with the change written out:
+  **Allow** applies it. A command that needs more than its sandbox asks you first instead of failing. Its runs
+  (schedules, webhooks, e-mails) still never change it. The conversation can use another model than its runs
+  (the model picker in its box).
+
+Fixed:
+- **Agents**: an agent's conversation changes that agent only, whatever the order of its options; a run that
+  stops without an answer (stopped, server restarted) shows its error in the flow, never the answer before it.
+- **New agent**: a name without a letter from a to z or a digit says why it cannot be used.
+- **Extension pages** no longer reload several times while they open.
+- **The Extensions page can be opened again**: Settings -> Pages -> **All pages**, or **Extensions** in the search
+  (Ctrl K), lists every extension page, pinned or not; the guide said it was in the sidebar, which now shows only the
+  pinned ones.
+
 ## 2.0.0-alpha.138 - 2026-11-10
 
 New:
@@ -15,6 +70,8 @@ New:
 Fixed:
 - **Restoring a deleted scheduled job on a full disk no longer leaves it in the crontab.** If the job cannot be saved,
   the crontab goes back to what it was, as it already did when you create, change or delete a job.
+- **A hand-edited agent file with a wrongly typed value no longer makes the agent fail to load.** A `triggers` that is
+  not a list, or an avatar value that is not text, is ignored like any other invalid value.
 
 ## 2.0.0-alpha.137 - 2026-11-10
 

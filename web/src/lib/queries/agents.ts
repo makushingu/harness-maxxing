@@ -71,6 +71,10 @@ export function useAgentSandbox(enabled = true) {
 export function useAgent(path: string | null) {
   return useQuery({ queryKey: agentKeys.one(path || ''), queryFn: () => api.get<AgentDetail>(agentUrl(path!)), enabled: !!path })
 }
+/** Thread messages older than `before` (the flow loads them when scrolled to its top), oldest first. */
+export function fetchAgentThreadBefore(path: string, before: number, limit = 100) {
+  return api.get<{ messages: AgentMessage[] }>(agentUrl(path, '/thread'), { limit, before })
+}
 export function useAgentThread(path: string | null, limit = 200) {
   return useQuery({
     queryKey: agentKeys.thread(path || ''),
@@ -136,8 +140,8 @@ export function useDeleteAgent() {
 }
 export function useRunAgent() {
   return useMut(
-    ({ path, text, reply_to, attachments }: { path: string; text?: string; reply_to?: string; attachments?: string[] }) =>
-      api.post<AgentRunResult>(agentUrl(path, '/run'), { text: text || undefined, reply_to: reply_to || undefined, attachments: attachments?.length ? attachments : undefined }),
+    ({ path, text, reply_to, attachments, model }: { path: string; text?: string; reply_to?: string; attachments?: string[]; model?: string }) =>
+      api.post<AgentRunResult>(agentUrl(path, '/run'), { text: text || undefined, reply_to: reply_to || undefined, attachments: attachments?.length ? attachments : undefined, model: model || undefined }),
     { invalidate: [agentKeys.all] },
   )
 }
@@ -145,6 +149,12 @@ export function useAgentSeen() {
   return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/seen'), {}), {
     invalidate: [agentKeys.all],
     errorToast: false,
+  })
+}
+/** The owner's next message starts a new conversation. */
+export function useNewAgentChat() {
+  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/chat/new'), {}), {
+    invalidate: [agentKeys.all],
   })
 }
 export function useTestAgentTrigger() {

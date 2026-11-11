@@ -1,0 +1,1 @@
+var e=(e,t)=>`/sessions?new=1&path=${encodeURIComponent(e)}&prompt=${encodeURIComponent(t)}`;export{e as t};
