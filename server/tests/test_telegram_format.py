@@ -215,3 +215,15 @@ def test_render_keeps_an_emoji_message_within_the_utf16_limit():
         msgs = fmt.render(md)
         assert msgs and all(u16(m) <= fmt.LIMIT and _balanced(m) for m in msgs)
         assert sum(fmt.strip_tags(m).count("🚀") for m in msgs) == md.count("🚀")
+
+
+def _u16(s):
+    return len(s.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def test_cron_report_and_feed_message_count_their_header_in_utf16(posted):
+    gateway.notify_cron_report("🔥" * 200, "\n\n".join("a" * 90 for _ in range(200)))
+    assert all(_u16(p) <= fmt.LIMIT for p in posted[-1][1])
+    ev = {"id": 1, "title": "🔥" * 300, "level": "info", "source": "🔥" * 200, "body": "😀" * 700}
+    text, _ = gateway.feed_message(ev)
+    assert _u16(text) <= fmt.LIMIT
