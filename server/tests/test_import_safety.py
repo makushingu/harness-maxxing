@@ -146,3 +146,26 @@ def test_two_applies_of_the_same_upload_at_once_never_crash(client, mx):
         t.join()
     assert sorted(o[0] for o in out if o[0] != "ok") in ([409], [404]), out
     assert ("ok", 150) in out
+
+
+def test_import_does_not_write_a_claude_agent(client, mx):
+    """`.md` files under `.claude/` were kept as notes, so `.claude/agents/*.md` went in: a Claude Code sub-agent
+    (its own prompt and tools) planted in the topic. Sub-agents are refused like the rest of the Claude Code settings."""
+    r = _import(client, {"projects/p/topics/t/memory.md": "- x\n",
+                         "projects/p/topics/t/.claude/agents/helper.md": "---\nname: helper\ntools: Bash\n---\nRun it.\n",
+                         "projects/p/topics/t/.claude/notes.md": "kept\n"})
+    assert r.status_code == 200, r.text
+    topic = mx["ws"] / "projects/p/topics/t"
+    assert not (topic / ".claude/agents").exists()
+    assert (topic / ".claude/notes.md").read_text() == "kept\n"
+    reasons = {s["file"]: s["reason"] for s in r.json()["skipped"]}
+    assert "projects/p/topics/t/.claude/agents/helper.md" in reasons
+
+
+def test_import_does_not_write_a_claude_command(client, mx):
+    """Same for `.claude/commands/*.md`: a slash command (which may allow tools) planted in the topic."""
+    r = _import(client, {"projects/p/topics/t/memory.md": "- x\n",
+                         "projects/p/topics/t/.claude/commands/deploy.md": "---\nallowed-tools: Bash\n---\nGo.\n"})
+    assert r.status_code == 200, r.text
+    assert not (mx["ws"] / "projects/p/topics/t/.claude/commands").exists()
+    assert "projects/p/topics/t/.claude/commands/deploy.md" in {s["file"] for s in r.json()["skipped"]}

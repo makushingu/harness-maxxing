@@ -138,6 +138,7 @@ mails. Mail kept for a busy agent only reaches it if its trigger and rights stil
 Ready-made agents (New agent): **Mail sorter** (files each new mail, sums up the day every evening), **Mail replies**
 (a draft reply to each customer mail, you send it), **Invoices** (saves the invoices received by mail and files the
 mails). From a terminal: `maxxing agents create acme/shop/sorter --template mail-sort --mail contact@example.com`.
+With `--role` instead of a template, `--mail` gives the mailbox with read + drafts and allows the `maxxing mail` tool.
 
 ## Where your addresses come from: Infra -> E-mail
 

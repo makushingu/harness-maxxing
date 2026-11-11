@@ -38,8 +38,9 @@ files kept aside for Claude, and files refused. Press **Import**.
   remaining ones are skipped and listed (they could not be checked).
 - Unsafe archives are refused: paths leaving the folder, links, more than 20,000 files or 500 MB
   once unzipped (a 600 MB upload at most).
-- Settings are never imported: Claude Code settings (`.claude/settings.json`, `.mcp.json`) and Harness folder
-  settings (`.maxxing.json`, which holds a topic's permission mode, and `.order.json`). Set them in the app.
+- Settings are never imported: Claude Code settings (`.claude/settings.json`, `.mcp.json`, sub-agents in
+  `.claude/agents/` and commands in `.claude/commands/`) and Harness folder settings (`.maxxing.json`, which
+  holds a topic's permission mode, and `.order.json`). Set them in the app.
 - A file that cannot be placed (a folder of the same name is already there, a file stands where its folder
   should be, or a link in your workspace would carry it outside) is skipped and listed in the report; the rest
   is imported.

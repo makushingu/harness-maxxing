@@ -319,6 +319,19 @@ def test_video_new_on_a_file_says_so(st, tmp_path):
     assert "Cannot create the project" in str(e.value)
 
 
+def test_pdf_timeout_raises_system_exit(st, monkeypatch, tmp_path):
+    from maxxing import cmd_video
+    monkeypatch.setattr(cmd_video, "browser", lambda: tmp_path / "chrome")
+    monkeypatch.setattr(cmd_video, "_node", lambda: "node")
+
+    def hung(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+    monkeypatch.setattr(cmd_video.subprocess, "run", hung)
+    with pytest.raises(SystemExit) as e:
+        cmd_video.pdf(str(tmp_path / "page.html"), tmp_path / "out.pdf")
+    assert str(e.value).startswith("PDF failed:")
+
+
 def test_session_path_has_the_managed_node(st, monkeypatch, tmp_path):
     from maxxing.sessions import spawn
     (st / "tools/nodejs/current/bin").mkdir(parents=True)

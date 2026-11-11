@@ -299,7 +299,8 @@ def _create(a) -> int:
                            "approve_send": tm.get("approve_send") or "always", "senders": tm.get("senders") or [],
                            "trigger": tm.get("trigger") or {"enabled": True, "folder": "INBOX", "prompt": ""}}]
         if not tpl:
-            fields.setdefault("allowed_tools", [])
+            # a role-only agent: the mailbox comes with the tool to use it (a template lists its own tools)
+            fields["allowed_tools"] = ["Bash(maxxing mail:*)"]
     elif tpl and tpl.get("mail"):
         print("This template is made for a mailbox: add --mail MAILBOX (`maxxing mail accounts`)", file=sys.stderr)
         return 2
@@ -579,12 +580,14 @@ def _handler(a) -> int:
     if turn.get("manager") and turn["path"] and turn["path"] != path and a.agents_cmd in agent_guard.AGENT_OWNER_ONLY:
         print("Refused: the conversation with an agent changes that agent only.", file=sys.stderr)
         return 2
-    if a.agents_cmd in ("on", "off"):
-        agents.update(path, {"enabled": a.agents_cmd == "on"})
-        print(f"{path}: {a.agents_cmd}")
-        return 0
-    if a.agents_cmd in ("silent", "loud"):
-        agents.update(path, {"silent": a.agents_cmd == "silent"})
+    if a.agents_cmd in ("on", "off", "silent", "loud"):
+        change = ({"enabled": a.agents_cmd == "on"} if a.agents_cmd in ("on", "off")
+                  else {"silent": a.agents_cmd == "silent"})
+        try:
+            agents.update(path, change)
+        except agents.AgentError as e:                  # a broken agent.json: a plain error, not a traceback
+            print(e.message, file=sys.stderr)
+            return 2
         print(f"{path}: {a.agents_cmd}")
         return 0
     if a.agents_cmd == "export":

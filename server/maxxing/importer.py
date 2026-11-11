@@ -12,7 +12,9 @@ Flow: `inspect(zip)` -> preview (what will be created / merged / skipped) -> `ap
 Nothing is ever overwritten: an existing memory.md / CLAUDE.md gets an "## Imported" section
 appended, another existing file is written as "<name> (imported).<ext>", an existing skill folder
 as "<name>-imported". Files that contain a secret-shaped string are skipped (reported by kind,
-never by value): keys go to Settings -> Keys. A report is written in imports/<stamp>/IMPORT_REPORT.md.
+never by value): keys go to Settings -> Keys. Claude Code settings are never imported either: under
+`.claude/` only skills and Markdown notes are kept, not hooks, `.mcp.json`, sub-agents (`.claude/agents/`)
+or commands (`.claude/commands/`). A report is written in imports/<stamp>/IMPORT_REPORT.md.
 """
 from __future__ import annotations
 
@@ -127,14 +129,20 @@ def discard(uid: str) -> None:
 
 
 # ---- reading the zip -----------------------------------------------------------------------
+EMPTY = ("Nothing to import: the zip has no projects/, skills/ or memory.md (Claude Code settings, sub-agents "
+         "and commands are never imported)")
+
+
 def _claude_config(p: PurePosixPath) -> bool:
     """Claude Code configuration in the export (`.claude/settings.json` with hooks, hook scripts,
     `.mcp.json`): it would run commands in every session of that folder. Under `.claude/` only skills
-    and Markdown notes are kept."""
+    and Markdown notes are kept - not `agents/` and `commands/`, whose `.md` files are Claude Code
+    sub-agents and slash commands (their own prompt and allowed tools), not notes."""
     parts = p.parts
     if ".mcp.json" in parts:
         return True
-    return any(part == ".claude" and parts[k + 1:k + 2] != ("skills",) and p.suffix.lower() != ".md"
+    return any(part == ".claude" and parts[k + 1:k + 2] != ("skills",)
+               and (p.suffix.lower() != ".md" or parts[k + 1:k + 2] in (("agents",), ("commands",)))
                for k, part in enumerate(parts))
 
 
@@ -314,7 +322,7 @@ def inspect(path: Path) -> dict[str, Any]:
         raise _unreadable() from None
     plan.pop("_items")
     if not plan["files"]:
-        raise ImportFailed(400, "empty", "Nothing to import: the zip has no projects/, skills/ or memory.md")
+        raise ImportFailed(400, "empty", EMPTY)
     return plan
 
 
@@ -385,7 +393,7 @@ def _apply(path: Path) -> dict[str, Any]:
         except _UNREADABLE:
             raise _unreadable() from None
         if not plan["files"]:
-            raise ImportFailed(400, "empty", "Nothing to import: the zip has no projects/, skills/ or memory.md")
+            raise ImportFailed(400, "empty", EMPTY)
         for pr in plan["projects"]:
             if not (root / "projects" / pr["name"]).is_dir():
                 workspace.create_project(pr["name"])

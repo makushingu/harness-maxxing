@@ -167,8 +167,8 @@ trash.
 - **Ask Harness** on a notification opens a session in **plan mode**: Claude reads and explains, it changes nothing
   until you approve a plan - a webhook's text cannot make it act.
 - **Webhooks** refuse unknown links before reading anything, and any request over 1 MB.
-- **Import** never brings Claude Code settings or hooks (`.claude/settings.json`, `.mcp.json`) from
-  the archive; skills and notes are imported.
+- **Import** never brings Claude Code settings, hooks, sub-agents or commands (`.claude/settings.json`,
+  `.mcp.json`, `.claude/agents/`, `.claude/commands/`) from the archive; skills and notes are imported.
 
 ## Anthropic account
 

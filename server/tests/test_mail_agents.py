@@ -544,6 +544,16 @@ def test_mail_templates_need_a_mailbox(client, box, capsys):
     assert [w[0] for w in poll.watchers("me-example")] == ["projects/acme/topics/blog/agents/sorter"]
 
 
+def test_role_only_mail_grant_also_allows_the_mail_tool(client, box):
+    """--mail without a template: the mailbox comes with the tool to use it."""
+    from maxxing import cli
+    assert cli.main(["agents", "create", "acme/blog/clerk", "--role", "Answer the shop's mail.",
+                     "--mail", "me@example.com"]) == 0
+    a = agents.load("projects/acme/topics/blog/agents/clerk")
+    assert a["mail"][0]["account"] == "me-example" and a["mail"][0]["rights"] == ["read", "draft"]
+    assert "Bash(maxxing mail:*)" in a["allowed_tools"]
+
+
 def test_a_sandboxed_agent_may_run_maxxing_mail(monkeypatch):
     from maxxing import agent_guard
     monkeypatch.setattr(agent_guard, "sandboxed_turn", lambda: A)

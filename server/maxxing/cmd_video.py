@@ -88,7 +88,12 @@ def pdf(src: str, out: Path) -> None:
     if node is None:
         raise SystemExit("Node.js is not installed: " + HINT.format(code=config.CODE))
     script = Path(__file__).resolve().parent / "assets" / "print_pdf.mjs"
-    r = subprocess.run([node, str(script), str(b), url, str(out.resolve())], capture_output=True, text=True, timeout=180)
+    try:
+        r = subprocess.run([node, str(script), str(b), url, str(out.resolve())], capture_output=True, text=True,
+                           timeout=180)
+    except subprocess.TimeoutExpired:
+        # a page that never finishes loading: same clean exit as the other failures, not a traceback
+        raise SystemExit("PDF failed: the page did not print within 180 s") from None
     if r.returncode != 0 or not out.exists():
         raise SystemExit("PDF failed: " + (r.stderr or r.stdout).strip()[-400:])
 

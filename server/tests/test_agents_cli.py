@@ -209,3 +209,15 @@ def test_an_export_to_an_unwritable_path_is_a_plain_error(client, topic, tmp_pat
     agents.create("projects/acme/topics/blog", "w", {})
     assert cli.main(["agents", "export", "w", "-o", str(tmp_path / "nodir" / "o.md")]) == 2
     assert "Cannot write" in capsys.readouterr().err
+
+
+def test_agents_off_on_a_broken_agent_returns_2(client, topic, capsys):
+    """A broken agent.json: on / off / silent / loud print the error and exit 2, as cron and webhook do."""
+    client.put("/api/settings", json={"agents_page": True})
+    agents.create("projects/acme/topics/blog", "w", {})
+    path = "projects/acme/topics/blog/agents/w"
+    (agents.folder(path) / agents.AGENT_FILE).write_text("{ not json")
+    for cmd in ("off", "on", "silent", "loud"):
+        assert cli.main(["agents", cmd, "w"]) == 2, cmd
+        err = capsys.readouterr().err
+        assert err.strip() and "Traceback" not in err
