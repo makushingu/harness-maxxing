@@ -32,7 +32,7 @@ FIRST_DELAY_S = 60
 TIMEOUT_S = 15
 FAMILIES = ("opus", "sonnet", "haiku", "fable")
 FALLBACK = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"]
-_ID = re.compile(r"claude-(opus|sonnet|haiku|fable)-[a-z0-9.-]+")
+_ID = re.compile(r"claude-(opus|sonnet|haiku|fable)-\d{1,3}(?:-\d{1,3}){0,2}(?:-\d{8})?")   # no -preview, -fast…
 _lock = threading.Lock()
 _task: asyncio.Task | None = None
 
@@ -57,12 +57,17 @@ def version_key(mid: str) -> tuple:
     return tuple(v + [0] * (3 - len(v)))
 
 
+def _rank(mid: str) -> tuple:
+    """Version first; at the same version the alias (no date) wins over a dated id."""
+    return version_key(mid), not re.search(r"-\d{8}$", mid)
+
+
 def newest(ids: list[str]) -> list[str]:
     """The newest id of each family, in FAMILIES order."""
     best: dict[str, str] = {}
     for mid in ids:
         f = family(mid)
-        if f in FAMILIES and _ID.fullmatch(mid) and (f not in best or version_key(mid) > version_key(best[f])):
+        if f in FAMILIES and _ID.fullmatch(mid) and (f not in best or _rank(mid) > _rank(best[f])):
             best[f] = mid
     return [best[f] for f in FAMILIES if f in best]
 
