@@ -433,3 +433,9 @@ def test_a_remote_date_before_1970_is_clamped(client, monkeypatch):
     ev["message"]["at"] = -1e20
     assert _post(client, key, ev).status_code == 200
     assert team.messages(dm)["messages"][0]["at"] == 0
+
+
+def test_normalize_keeps_the_brackets_of_an_ipv6_literal():
+    assert teampeer.normalize("https://[2001:DB8::1]:8443/x") == "https://[2001:db8::1]:8443"
+    assert teampeer.normalize("http://[::1]") == "http://[::1]"
+    assert teampeer.normalize("https://Ui.Example.com/") == "https://ui.example.com"

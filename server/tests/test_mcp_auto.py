@@ -343,3 +343,15 @@ def test_a_second_identical_plan_compiles_and_reads_nothing(mx, servers, topic, 
     d["mcpServers"]["fresh-one"] = {"command": "x"}
     f.write_text(json.dumps(d))                 # a changed file is read again
     assert "fresh-one" in mcp_auto.known_names(servers)
+
+
+def test_local_scope_server_wins_over_a_user_server_of_the_same_name(mx, servers, topic):
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    f = mx["tmp"] / "claude" / ".claude.json"
+    d = json.loads(f.read_text())
+    d["mcpServers"]["blog-db"] = {"type": "http", "url": "https://mcp.example.com/other-blog"}
+    f.write_text(json.dumps(d))
+    p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, "check the blog-db please")
+    assert json.loads(Path(p.args[-1]).read_text())["mcpServers"]["blog-db"] == {"type": "stdio", "command": "blog-db-mcp"}
+    assert "mcp.example.com" not in p.hint                       # the hidden user server is not offered either

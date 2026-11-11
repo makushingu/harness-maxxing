@@ -342,6 +342,8 @@ def parse_nginx(txt):
         for head, lbody in locs:
             path = head.split()[-1] if len(head.split()) > 1 else "/"
             pp = re.search(r"\bproxy_pass\s+([^;]+);", lbody)
+            if re.match(r"location\s+~", head) and not pp:
+                continue                             # `~ \.jpg$` serves some files of the site, not a path of its own
             lr = re.search(r"\b(?:root|alias)\s+([^;]+);", lbody)
             ret = re.search(r"\breturn\s+30[12]\s+([^;]+);", lbody)
             if pp:

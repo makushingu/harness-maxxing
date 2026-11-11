@@ -213,7 +213,8 @@ def candidates(cwd: str, claude_json: dict) -> tuple[list[Server], list[Server]]
     for n, c in _d(here.get("mcpServers")).items():        # local scope wins over a .mcp.json of the same name
         if isinstance(c, dict) and n != PC_NAME and n not in disabled:
             folder[n] = Server(n, "local", c)
-    return users, list(folder.values())
+    # the folder's server of a name hides the user one, as in Claude Code: never both, never the user one
+    return [s for s in users if s.name not in folder], list(folder.values())
 
 
 def _base(name: str) -> str:

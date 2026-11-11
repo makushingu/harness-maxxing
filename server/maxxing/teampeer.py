@@ -107,7 +107,10 @@ def normalize(address: str) -> str:
         raise PeerError(400, "bad_address", "An address looks like https://ui.example.com") from None
     if u.scheme not in ("https", "http") or not u.hostname or u.username or u.password:
         raise PeerError(400, "bad_address", "An address looks like https://ui.example.com")
-    return f"{u.scheme}://{u.hostname.lower()}{port}"
+    host = u.hostname.lower()
+    if ":" in host:                                  # an IPv6 literal: without its brackets the port cannot be told apart
+        host = f"[{host}]"
+    return f"{u.scheme}://{host}{port}"
 
 
 def readiness() -> dict:

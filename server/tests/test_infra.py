@@ -1286,3 +1286,40 @@ def test_dns_providers_and_hosts_match_whole_labels():
     assert dnsinfo.hosted_by({"cname": ["evilgithub.io"]}) is None
     assert dnsinfo.hosted_by({"cname": ["me.github.io"]}) == "github"
     assert dnsinfo.hosted_by({"cname": ["cname.vercel-dns.com"]}) == "vercel"
+
+
+def test_pg_install_does_not_report_success_when_postgresql_did_not_start(monkeypatch):
+    def fake_run(args, input=None, timeout=60):
+        if args[:2] == ["systemctl", "is-active"]:
+            return 3, "inactive\n", ""
+        if args[:2] == ["systemctl", "enable"]:
+            return 1, "", "Job for postgresql.service failed"
+        return (2, "", "could not connect") if input else (0, "", "")    # psql cannot reach a stopped server
+    monkeypatch.setattr(actions, "_run", fake_run)
+    monkeypatch.setattr(actions, "ensure_backup_job", lambda: None)
+    with pytest.raises(actions.ActionError) as e:
+        actions.pg_install()
+    assert e.value.code == "start_failed" and "failed" in str(e.value)
+
+
+def test_fqdn_suffixes_relative_name_ending_with_zone_string():
+    assert providers._fqdn("myexample.com", "example.com") == "myexample.com.example.com"
+    assert providers._fqdn("www.example.com", "example.com") == "www.example.com"
+    assert providers._fqdn("example.com.", "example.com") == "example.com"
+    assert providers._fqdn("www", "example.com") == "www.example.com"
+    assert providers._fqdn("@", "example.com") == "example.com"
+
+
+def test_parse_nginx_regex_location_is_not_a_site_path():
+    conf = ("server {\n listen 80;\n server_name img.example.org;\n root /srv/img;\n"
+            " location ~* \\.(jpg|png)$ { root /srv/img; expires 30d; }\n location ~ \\.php$ { alias /srv/php; }\n}\n")
+    sites = probe.parse_nginx(conf)
+    assert [(s["host"], s["path"], s["kind"], s["root"]) for s in sites] == [("img.example.org", "", "static", "/srv/img")]
+
+
+def test_parse_nginx_regex_location_that_proxies_stays_listed():
+    conf = ("server {\n listen 80;\n server_name app.example.org;\n location / { root /srv/app; }\n"
+            " location ~ ^/api/ { proxy_pass http://127.0.0.1:4000; }\n location ~* \\.jpg$ { expires 7d; root /srv/app; }\n}\n")
+    sites = {s["path"]: s for s in probe.parse_nginx(conf)}
+    assert set(sites) == {"", "^/api"}
+    assert sites["^/api"]["kind"] == "proxy" and sites["^/api"]["upstreams"] == ["127.0.0.1:4000"]

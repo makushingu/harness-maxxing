@@ -275,7 +275,8 @@ def hostinger_add_ssh_key(vm_id: int | str, public_key: str) -> None:
 
 def _fqdn(name: str | None, domain: str) -> str:
     n = (name or "@").strip(".")
-    return domain if n in ("@", "") else (n if n.endswith(domain) else f"{n}.{domain}")
+    # whole labels only: `myexample.com` in the zone example.com is relative, not the zone itself
+    return domain if n in ("@", "") else (n if n == domain or n.endswith("." + domain) else f"{n}.{domain}")
 
 
 # ---- RDAP -------------------------------------------------------------------------------------------

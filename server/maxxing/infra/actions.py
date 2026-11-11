@@ -87,7 +87,9 @@ def pg_install() -> dict:
         code, out, err = _run(["apt-get", "install", "-y", "-q", "postgresql"], timeout=900)
     if code != 0:
         raise ActionError("apt-get install postgresql failed: " + _err(out, err), "install_failed")
-    _run(["systemctl", "enable", "--now", "postgresql"], timeout=60)
+    code, out, err = _run(["systemctl", "enable", "--now", "postgresql"], timeout=60)
+    if code != 0:                                    # a stopped server answers nothing below: that is no success
+        raise ActionError("PostgreSQL is installed but did not start: " + _err(out, err), "start_failed")
     code, out, _ = _psql("show listen_addresses;")
     listen = out.strip()
     if listen not in ("localhost", "127.0.0.1", "", "localhost,127.0.0.1"):
