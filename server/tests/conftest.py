@@ -19,6 +19,7 @@ os.environ.setdefault("MAXXING_SANDBOX_CHECK", "0")  # agents' sandbox: never de
 os.environ.setdefault("MAXXING_AUTH_CHECK", "0")     # no background `claude -p` check (tests opt in)
 os.environ["MAXXING_CLAUDE_UPDATE"] = "0"          # no background `claude update` (tests call tick())
 os.environ["MAXXING_LICENSE_PING"] = "0"           # no call to the cloud (registration heartbeat) from the test servers
+os.environ["MAXXING_ENTERPRISE_TICK"] = "0"       # no enterprise tick in the test servers
 os.environ["MAXXING_CRON_TICK"] = "0"             # no catch-up / retry loop in the test servers (tests call tick())
 os.environ["MAXXING_SESSION_MAINTENANCE"] = "0"   # no nightly session files upkeep thread (tests call run())
 os.environ["MAXXING_SHORT_TITLES"] = "0"           # no background title call (tests/test_titles.py opts in)

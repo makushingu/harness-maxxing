@@ -2390,6 +2390,7 @@ def _cfg_update(p: argparse.ArgumentParser) -> None:
 # ---- status --------------------------------------------------------------------------------
 # optional pages (Settings -> Features): a session reads them here to offer one that is off before building a substitute
 OPTIONAL_PAGES = (("agents_page", "Agents"), ("tasks_page", "Tasks"), ("team_page", "Team"), ("mail_page", "E-mail"),
+                  ("enterprises_page", "Enterprises"),
                   ("infra_page", "Infra"), ("git_page", "Git"))
 
 

@@ -82,6 +82,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "health_feed": False,              # server health problems also in the Notifications feed (`maxxing init`: on when new)
     "agents_page": False,              # Settings -> Features: the Agents page (lasting roles of a topic, with triggers)
                                        # (`maxxing init`: on for new installs since 2.0.0a132)
+    "enterprises_page": False,         # Settings -> Features: Enterprises (an org chart of agents above projects; needs Agents)
     "team_page": False,                # Settings -> Features: the Team page (chats between people) and its sidebar entry
     "tasks_page": False,               # Settings -> Features: the Tasks page, its sidebar entry and dashboard widget
                                        # (`maxxing init`: on for installs made before Tasks became optional)
