@@ -330,10 +330,11 @@ function AgentCenter({ agent: a }: { agent: AgentDetail }) {
     if (unread > 0) seenMutate({ path: a.path })
   }, [unread, a.path, seenMutate])
   const composer = React.useRef<AgentComposerApi>(null)
+  const flow = React.useRef<FlowApi>(null)
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <Flow agent={a} onReply={setReplyTo} onSuggest={(v) => composer.current?.fill(v)} />
-      <Composer ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+      <Flow ref={flow} agent={a} onReply={setReplyTo} onSuggest={(v) => composer.current?.fill(v)} />
+      <Composer ref={composer} agent={a} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSend={() => flow.current?.toBottom()} />
     </div>
   )
 }
@@ -367,7 +368,9 @@ function Divider({ children, testid }: { children: React.ReactNode; testid?: str
 
 const THREAD_PAGE = 200
 
-function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (m: AgentMessage) => void; onSuggest?: (text: string) => void }) {
+type FlowApi = { toBottom: () => void }
+
+function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onReply: (m: AgentMessage) => void; onSuggest?: (text: string) => void; ref?: React.Ref<FlowApi> }) {
   const t = useT()
   const { data, isLoading, error } = useAgentThread(a.path, THREAD_PAGE)
   const latest = React.useMemo(() => data?.messages || [], [data])
@@ -417,6 +420,14 @@ function Flow({ agent: a, onReply, onSuggest }: { agent: AgentDetail; onReply: (
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [])
   React.useLayoutEffect(follow, [last, running.length, follow])
+  // A message sent from the box below is always shown, even when the user had scrolled up to read (a long answer
+  // read from its start, on a phone): back to the bottom at the send, and the message is followed when it comes.
+  React.useImperativeHandle(ref, () => ({
+    toBottom: () => {
+      stick.current = true
+      follow()
+    },
+  }), [follow])
   // What grows after a render (answers' markdown, images, the approval card once its query answers, a live turn)
   // stays followed while at the bottom: opening an agent shows its newest message.
   const inner = React.useRef<HTMLDivElement>(null)
@@ -967,7 +978,7 @@ function ThreadMessage({
 /** What the conversation hands to the box: a quoted selection (`from`: the agent that wrote it, null = the owner). */
 type AgentComposerApi = { quote: (text: string, from: string | null) => void; fill: (text: string) => void }
 
-function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; ref?: React.Ref<AgentComposerApi> }) {
+function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: AgentDetail; replyTo: AgentMessage | null; onCancelReply: () => void; onSend?: () => void; ref?: React.Ref<AgentComposerApi> }) {
   const t = useT()
   const run = useRunAgent()
   const fresh = useNewAgentChat()
@@ -1041,6 +1052,7 @@ function Composer({ agent: a, replyTo, onCancelReply, ref }: { agent: AgentDetai
     files.dismissNotices()
     setText('')
     files.clear()
+    onSend?.()
     // mutateAsync: its answer arrives even once this box is gone (another agent opened): the message never stays
     // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
     run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths, model: picked || undefined }).then(

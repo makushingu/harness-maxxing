@@ -300,9 +300,9 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
   const writing = team?.typing?.[chatId] || []
   // "Seen" under the user's last message: who read up to it
   const lastMine = [...msgs].reverse().find((m) => m.kind !== 'info')
-  const seenBy = lastMine && lastMine.author === me && !lastMine.deleted ? chat.members.filter((p) => (chat.seen?.[p] || 0) >= lastMine.at) : []
+  const seenBy = lastMine && lastMine.author === me && !lastMine.deleted && !lastMine.sending ? chat.members.filter((p) => (chat.seen?.[p] || 0) >= lastMine.at) : []
   const editLast = () => {
-    const m = [...msgs].reverse().find((x) => x.author === me && x.kind === 'text' && !x.deleted)
+    const m = [...msgs].reverse().find((x) => x.author === me && x.kind === 'text' && !x.deleted && !x.sending)
     if (m) setEditing(m)
   }
   const remove = (m: TeamMessage) => window.confirm(t('team.msg.deleteConfirm')) && del.mutate({ cid: chatId, mid: m.id })
@@ -671,7 +671,7 @@ function MessageRow({
   const card = m.kind !== 'text'
   const right = mine && !card
   // Right click = the message's menu (mouse only: a tap shows its tools on touch screens, a long press selects text).
-  const ctx = useContextMenu({ disabled: selecting || m.deleted, touch: false })
+  const ctx = useContextMenu({ disabled: selecting || m.deleted || m.sending, touch: false })
   return (
     <div
       {...ctx.props}
@@ -757,7 +757,7 @@ function MessageRow({
                 </span>
               </div>
             ) : null}
-            {!selecting && !m.deleted && (
+            {!selecting && !m.deleted && !m.sending && (
               <MessageTools team={team} chat={chat} m={m} mine={right} own={mine} compact={compact} onForward={() => onForward(m)} onReply={onReply} onEdit={onEdit} onDelete={onDelete} />
             )}
             {ctx.open && ctx.menu(<MessageMenuItems chat={chat} m={m} own={mine} onEdit={onEdit} onDelete={onDelete} onReply={onReply} onForward={() => onForward(m)} />, { className: 'w-48' })}
@@ -1147,7 +1147,7 @@ function Composer({
       return
     }
     if ((!v && !ready.length) || uploading) return
-    const files = ready.map((p) => ({ path: p.file!.path }))
+    const files = ready.map((p) => p.file!)
     setText('')
     setPending([])
     lastTyping.current = 0
