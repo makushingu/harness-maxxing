@@ -1,16 +1,15 @@
-// Feature page "Git & GitHub" (/git, Settings -> Features -> git_page). Second-level sidebar: every repository once, by
-// workspace project (a clone and its GitHub side are one entry; GitHub repositories not cloned here in their own group).
-// Overview: what needs attention, a table of the server's clones, a table of the GitHub repositories. A repository: graph
-// of branches and commits, commit details, open pull requests, Server | GitHub switch when it has both sides.
+// Feature page "Git & GitHub" (/git, Settings -> Features -> git_page). Second-level sidebar: the two sources (this server,
+// GitHub) then the repositories of the one picked, most recent first. A source: its repositories as cards. A repository:
+// graph of branches and commits, commit details, open pull requests, Server | GitHub switch when it has both sides.
 // The repository shown is in the URL (?repo=<path or github:owner/name>), so a chat block can link to it.
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ExternalLink, FolderGit2, GitBranch, GitPullRequest, KeyRound, LayoutGrid, Lock, PencilLine, RefreshCw, Server,
+  ArrowDown, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitPullRequest, KeyRound, Lock, PencilLine, RefreshCw, Server, Star,
 } from 'lucide-react'
 import { gitKeys, refreshGitRepos, useGitGraph, useGitPulls, useGitRepos } from '@/lib/queries'
-import type { GitHubRepo, GitLocalRepo, GitOverview, GitPermission } from '@/lib/types'
+import type { GitHubRepo, GitLocalRepo, GitPermission } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -18,7 +17,7 @@ import { useLang, useT } from '@/i18n'
 import { Badge, Button, EmptyState, Segmented, Sheet, SheetBody, SheetContent, SheetTitle, Skeleton } from '@/components/ui'
 import { useCompact, useMediaQuery } from '@/stores/media'
 import { Page } from '@/components/shell/Page'
-import { ListChips, ListEntry, PageList } from '@/components/shell/PageList'
+import { ListEntry, PageList } from '@/components/shell/PageList'
 import { GitGraph } from './GitGraph'
 import { Github } from './GithubMark'
 import { CommitDetail } from './CommitDetail'
@@ -107,155 +106,174 @@ function TokenErrors({ errors }: { errors: { key: string; error: string }[] }) {
   )
 }
 
-// ---- the list (second-level sidebar): every repository once, by workspace project ----------------------------------
-
-type Entry = {
-  /** what ?repo= takes: a clone's path, or github:owner/name for a repository not cloned here */
-  id: string
-  /** github:owner/name of a clone (its GitHub side) */
-  gh: string | null
-  label: string
-  /** shown when two entries have the same name: the folder holding the clone */
-  sub?: string
-  group: string
-  local?: GitLocalRepo
-  remote?: GitHubRepo
-  when: number
+function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: () => void }) {
+  const lang = useLang()
+  const t = useT()
+  const rel = r.path.startsWith(root + '/') ? r.path.slice(root.length + 1) : r.path
+  return (
+    <li>
+      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-accent/40" data-testid="git-local">
+        <FolderGit2 className="mt-0.5 size-5 shrink-0 text-primary" />
+        <div className="grid min-w-0 flex-1 gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{r.name}</span>
+            {/* the repository only: its branches (and the worktree folders of the same clone) are in its graph;
+                the checked-out branch shows only when it is not the usual one (or HEAD is detached) */}
+            {!r.error && !(r.branch && ['main', 'master'].includes(r.branch)) && (
+              <span className="max-w-full rounded bg-primary/15 px-1.5 py-px font-mono text-[11px] break-all text-primary">
+                {r.branch ?? t('git.detached')}
+              </span>
+            )}
+            <Sync ahead={r.ahead} behind={r.behind} changed={r.changed + r.untracked} />
+            {!!r.worktrees && (
+              <span className="text-xs text-muted-foreground" data-testid="git-worktrees">
+                {t('git.worktrees', { count: r.worktrees })}
+              </span>
+            )}
+            {r.github && (
+              <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                <Github className="size-3 shrink-0" />
+                {r.github}
+              </span>
+            )}
+          </div>
+          <span className="truncate font-mono text-xs text-muted-foreground">{rel}</span>
+          {r.error ? (
+            <span className="text-xs text-destructive">{r.error}</span>
+          ) : (
+            r.last_commit && (
+              <span className="truncate text-xs text-muted-foreground">
+                {fmtRelative(r.last_commit, lang)} · {r.last_subject}
+              </span>
+            )
+          )}
+        </div>
+      </button>
+    </li>
+  )
 }
 
-const GROUP_EXT = '~ext'
-const GROUP_OTHER = '~other'
-const GROUP_GITHUB = '~github'
-
-/** The workspace project a clone belongs to (its folder), else Extensions / elsewhere on the server. */
-function groupOf(path: string): string {
-  const m = path.match(/\/projects\/([^/]+)\//)
-  if (m) return m[1]
-  if (/\/extensions\//.test(path)) return GROUP_EXT
-  return GROUP_OTHER
+function GithubRow({ r, onOpen }: { r: GitHubRepo; onOpen: () => void }) {
+  const t = useT()
+  const lang = useLang()
+  return (
+    <li>
+      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-accent/40" data-testid="git-github">
+        <Github className="mt-0.5 size-5 shrink-0 text-primary" />
+        <div className="grid min-w-0 flex-1 gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">
+              <span className="text-muted-foreground">{r.owner}/</span>
+              {r.name}
+            </span>
+            <PermBadge p={r.permission} />
+            {r.private ? (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Lock className="size-3" />
+                {t('git.private')}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">{t('git.public')}</span>
+            )}
+            {r.archived && <Badge variant="muted">{t('git.archived')}</Badge>}
+            {r.fork && <Badge variant="muted">fork</Badge>}
+            {r.keys.length > 0 && (
+              <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground" title={r.keys.join(', ')}>
+                <KeyRound className="size-3" />
+                {r.keys.length === 1 ? r.keys[0] : t('git.keysCount', { count: r.keys.length })}
+              </span>
+            )}
+            {r.local_paths.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs text-success">
+                <Server className="size-3" />
+                {t('git.clonedHere')}
+              </span>
+            )}
+          </div>
+          {r.description && <span className="line-clamp-1 text-xs text-muted-foreground">{r.description}</span>}
+          <span className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+            {r.language && <span>{r.language}</span>}
+            {r.stars > 0 && (
+              <span className="inline-flex items-center gap-0.5">
+                <Star className="size-3" />
+                {r.stars}
+              </span>
+            )}
+            {r.pushed_at && <span>{t('git.pushed', { when: fmtRelative(Date.parse(r.pushed_at) / 1000, lang) })}</span>}
+          </span>
+        </div>
+      </button>
+    </li>
+  )
 }
 
-const todoOf = (r: GitLocalRepo) => !r.error && (r.ahead > 0 || r.behind > 0 || r.changed + r.untracked > 0)
+// ---- the list (second-level sidebar): the two sources, then the repositories of the one picked ---------------------
 
-function entriesOf(data: GitOverview | undefined): Entry[] {
-  if (!data) return []
-  const out: Entry[] = []
-  for (const r of data.local) {
-    out.push({
-      id: r.path,
-      gh: r.github ? `github:${r.github}` : null,
-      // a clone named "repo" or "code" reads better under its GitHub name
-      label: r.github ? r.github.split('/')[1] : r.name,
-      group: groupOf(r.path),
-      local: r,
-      when: r.last_commit || 0,
-    })
-  }
-  if (data.github.connected) {
-    for (const g of data.github.repos) {
-      if (g.local_paths.length) continue
-      out.push({ id: `github:${g.full_name}`, gh: `github:${g.full_name}`, label: g.name, group: GROUP_GITHUB, remote: g, when: g.pushed_at ? Date.parse(g.pushed_at) / 1000 : 0 })
-    }
-  }
-  const seen = new Map<string, number>()
-  for (const e of out) seen.set(e.label.toLowerCase(), (seen.get(e.label.toLowerCase()) || 0) + 1)
-  for (const e of out) {
-    if ((seen.get(e.label.toLowerCase()) || 0) < 2) continue
-    e.sub = e.local ? e.local.path.split('/').slice(-2, -1)[0] : e.remote?.owner
-  }
-  return out
-}
+type Source = 'local' | 'github'
 
-function groupLabel(g: string, t: ReturnType<typeof useT>) {
-  return g === GROUP_EXT ? t('git.group.ext') : g === GROUP_OTHER ? t('git.group.other') : g === GROUP_GITHUB ? t('git.group.github') : g
-}
+const nameOf = (r: GitLocalRepo) => (r.github ? r.github.split('/')[1] : r.name)
 
-const groupRank = (g: string) => (g === GROUP_EXT ? 1 : g === GROUP_OTHER ? 2 : g === GROUP_GITHUB ? 3 : 0)
-
-function GitNav({ repo, query, onOpen }: { repo: string | null; query: string; onOpen: (r: string | null) => void }) {
+function GitNav({ repo, source, query, onSource, onOpen }: { repo: string | null; source: Source; query: string; onSource: (s: Source) => void; onOpen: (r: string) => void }) {
   const t = useT()
   const touch = useCompact()
   const { data, isLoading } = useGitRepos()
-  const [filter, setFilter] = React.useState<'all' | 'todo'>('all')
-  const [folded, setFolded] = React.useState<Set<string>>(() => new Set([GROUP_GITHUB]))
-  const all = React.useMemo(() => entriesOf(data), [data])
-  const todo = all.filter((e) => e.local && todoOf(e.local)).length
   const needle = query.trim().toLowerCase()
-  const shown = all.filter(
-    (e) =>
-      (filter === 'all' || (e.local && todoOf(e.local))) &&
-      (!needle || `${e.label} ${e.id} ${e.gh || ''} ${e.remote?.description || ''}`.toLowerCase().includes(needle)),
-  )
-  const groups = [...new Set(shown.map((e) => e.group))].sort((a, b) => groupRank(a) - groupRank(b) || a.localeCompare(b))
-  const active = (e: Entry) => !!repo && (repo === e.id || (!!e.gh && repo.toLowerCase() === e.gh.toLowerCase()))
+  const gh = data?.github
+  type Row = { id: string; gh: string | null; label: string; sub?: string; local?: GitLocalRepo; remote?: GitHubRepo }
+  const rows: Row[] =
+    source === 'local'
+      ? [...(data?.local || [])]
+          .sort((x, y) => (y.last_commit || 0) - (x.last_commit || 0))
+          .map((r) => ({ id: r.path, gh: r.github ? `github:${r.github}` : null, label: nameOf(r), local: r }))
+      : [...(gh?.connected ? gh.repos : [])]
+          .sort((x, y) => (y.pushed_at ? Date.parse(y.pushed_at) : 0) - (x.pushed_at ? Date.parse(x.pushed_at) : 0))
+          .map((r) => ({ id: `github:${r.full_name}`, gh: `github:${r.full_name}`, label: r.name, remote: r }))
+  // two clones with the same name: the folder holding each tells them apart
+  const seen = new Map<string, number>()
+  for (const e of rows) seen.set(e.label, (seen.get(e.label) || 0) + 1)
+  for (const e of rows) if ((seen.get(e.label) || 0) > 1) e.sub = e.local ? e.local.path.split('/').slice(-2, -1)[0] : e.remote?.owner
+  const shown = rows.filter((e) => !needle || `${e.label} ${e.id} ${e.remote?.description || ''}`.toLowerCase().includes(needle))
+  const active = (e: Row) => !!repo && (repo === e.id || (source === 'local' && !!e.gh && repo.toLowerCase() === e.gh.toLowerCase()))
+  const ghLabel = gh?.accounts.length === 1 ? `GitHub @${gh.accounts[0].login}` : 'GitHub'
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn('grid gap-0.5 p-2 pb-1', touch && 'gap-1')}>
-        <ListEntry active={!repo} onClick={() => onOpen(null)} icon={LayoutGrid} label={t('git.overview')} testid="git-overview" />
-        <ListChips
-          className="mt-1"
-          label={t('git.filter')}
-          value={filter}
-          onChange={setFilter}
-          items={[
-            { key: 'all', label: t('git.chip.all'), count: all.length },
-            { key: 'todo', label: t('git.chip.todo'), count: todo, dot: <span className="size-1.5 rounded-full bg-warning" /> },
-          ]}
-        />
+      <div className="grid gap-0.5 p-2 pb-1">
+        <ListEntry active={!repo && source === 'local'} onClick={() => onSource('local')} icon={Server} label={t('git.tabLocal')} count={data?.local.length} testid="git-src-local" />
+        <ListEntry active={!repo && source === 'github'} onClick={() => onSource('github')} icon={Github} label={ghLabel} count={gh?.connected ? gh.repos.length : undefined} testid="git-src-github" />
       </div>
-      <nav aria-label={t('git.title')} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start overflow-y-auto px-2 pb-3" data-testid="git-nav">
+      <nav aria-label={t('git.title')} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start overflow-y-auto border-t px-2 pt-2 pb-3" data-testid="git-nav">
         {isLoading && [0, 1, 2, 3].map((i) => <Skeleton key={i} className="mx-2.5 my-1.5 h-5" />)}
         {!isLoading && !shown.length && <p className="px-2.5 py-2 text-[13px] text-muted-foreground">{t('git.noMatch')}</p>}
-        {groups.map((g) => {
-          const list = shown.filter((e) => e.group === g).sort((a, b) => b.when - a.when)
-          const closed = !needle && folded.has(g) && !list.some(active)
+        {shown.map((e) => {
+          const on = active(e)
+          const r = e.local
           return (
-            <div key={g} className="mt-2">
-              <button
-                type="button"
-                onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(g)) n.delete(g); else n.add(g); return n })}
-                className="flex h-6 w-full items-center gap-1 rounded px-2.5 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground pointer-coarse:h-9"
-                aria-expanded={!closed}
-              >
-                <ChevronRight className={cn('size-3 shrink-0 transition-transform', !closed && 'rotate-90')} />
-                <span className="min-w-0 flex-1 truncate">{groupLabel(g, t)}</span>
-                <span className="font-normal tabular-nums">{list.length}</span>
-              </button>
-              {!closed &&
-                list.map((e) => {
-                  const on = active(e)
-                  const r = e.local
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => onOpen(e.id)}
-                      aria-current={on ? 'page' : undefined}
-                      title={r ? r.path : e.remote?.full_name}
-                      className={cn(
-                        'flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                        touch ? 'h-11' : 'h-8',
-                        on && 'bg-accent font-medium text-foreground hover:bg-accent',
-                      )}
-                      data-testid="git-entry"
-                    >
-                      {r ? <FolderGit2 className={cn('size-4 shrink-0', on && 'text-primary')} /> : <Github className={cn('size-4 shrink-0', on && 'text-primary')} />}
-                      <span className="min-w-0 flex-1 truncate">
-                        {e.label}
-                        {e.sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{e.sub}</span>}
-                      </span>
-                      {r && !!r.ahead && (
-                        <span className="inline-flex items-center text-[11px] text-warning tabular-nums" title={t('git.aheadTip', { count: r.ahead })}>
-                          <ArrowUp className="size-3" />
-                          {r.ahead}
-                        </span>
-                      )}
-                      {r && r.changed + r.untracked > 0 && <PencilLine className="size-3 shrink-0 text-muted-foreground" aria-label={t('git.uncommitted', { count: r.changed + r.untracked })} />}
-                      {e.remote?.private && <Lock className="size-3 shrink-0 text-muted-foreground" />}
-                    </button>
-                  )
-                })}
-            </div>
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => onOpen(e.id)}
+              aria-current={on ? 'page' : undefined}
+              title={r ? r.path : e.remote?.full_name}
+              className={cn(
+                'flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                touch ? 'h-11' : 'h-8',
+                on && 'bg-accent font-medium text-foreground hover:bg-accent',
+              )}
+              data-testid="git-entry"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {e.label}
+                {e.sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{e.sub}</span>}
+              </span>
+              {r && !!r.ahead && (
+                <span className="inline-flex items-center text-[11px] text-warning tabular-nums" title={t('git.aheadTip', { count: r.ahead })}>
+                  <ArrowUp className="size-3" />
+                  {r.ahead}
+                </span>
+              )}
+              {r && r.changed + r.untracked > 0 && <PencilLine className="size-3 shrink-0 text-muted-foreground" aria-label={t('git.uncommitted', { count: r.changed + r.untracked })} />}
+              {e.remote?.private && <Lock className="size-3 shrink-0 text-muted-foreground" />}
+            </button>
           )
         })}
       </nav>
@@ -263,27 +281,10 @@ function GitNav({ repo, query, onOpen }: { repo: string | null; query: string; o
   )
 }
 
-// ---- the overview: what needs attention, then a table of the server's clones and one of the GitHub repositories ----
+// ---- the page of a source: the simple cards of before, filtered by the list's search -------------------------------
 
-function Section({ title, count, children, actions }: { title: React.ReactNode; count?: number; children: React.ReactNode; actions?: React.ReactNode }) {
-  return (
-    <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {count != null && <span className="text-xs text-muted-foreground tabular-nums">{count}</span>}
-        {actions && <span className="ml-auto flex items-center gap-2">{actions}</span>}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-const TH = 'h-9 px-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap'
-const TD = 'px-3 py-2 align-middle'
-
-function Overview({ onOpen }: { onOpen: (repo: string) => void }) {
+function SourceCards({ source, query, onOpen }: { source: Source; query: string; onOpen: (repo: string) => void }) {
   const t = useT()
-  const lang = useLang()
   const { data, isLoading, error } = useGitRepos()
   const [account, setAccount] = React.useState<string | null>(null)
   if (isLoading)
@@ -296,202 +297,58 @@ function Overview({ onOpen }: { onOpen: (repo: string) => void }) {
     )
   if (error) return <p className="text-sm text-destructive">{errorMessage(error)}</p>
   if (!data) return null
-  const root = data.root
-  const rel = (p: string) => (p.startsWith(root + '/') ? p.slice(root.length + 1) : p)
-  const local = [...data.local].sort((a, b) => (b.last_commit || 0) - (a.last_commit || 0))
-  const todo = local.filter(todoOf)
+  const needle = query.trim().toLowerCase()
+  if (source === 'local') {
+    const local = data.local.filter((r) => !needle || `${r.path} ${r.github || ''} ${r.branch || ''}`.toLowerCase().includes(needle))
+    return local.length ? (
+      <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
+        {local.map((r) => (
+          <LocalRow key={r.path} r={r} root={data.root} onOpen={() => onOpen(r.path)} />
+        ))}
+      </ul>
+    ) : (
+      <EmptyState icon={FolderGit2} title={needle ? t('git.noMatch') : t('git.noLocal')} description={t('git.localHint', { root: data.root })} />
+    )
+  }
   const gh = data.github
   const accounts = gh.accounts
-  const remote = [...gh.repos]
-    .filter((r) => !account || r.accounts.includes(account))
-    .sort((a, b) => (b.pushed_at ? Date.parse(b.pushed_at) : 0) - (a.pushed_at ? Date.parse(a.pushed_at) : 0))
-  const nameOf = (r: GitLocalRepo) => (r.github ? r.github.split('/')[1] : r.name)
-  const project = (r: GitLocalRepo) => groupLabel(groupOf(r.path), t)
+  if (!gh.connected) return <ConnectGithub />
+  if (!accounts.length)
+    return (
+      <div className="grid gap-3">
+        <TokenErrors errors={gh.errors} />
+        <ConnectGithub />
+      </div>
+    )
+  const remote = gh.repos.filter(
+    (r) => (!account || r.accounts.includes(account)) && (!needle || `${r.full_name} ${r.description} ${r.keys.join(' ')}`.toLowerCase().includes(needle)),
+  )
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-8">
-      <Section title={t('git.todo')} count={todo.length || undefined}>
-        {todo.length ? (
-          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid="git-todo">
-            {todo.map((r) => (
-              <li key={r.path}>
-                <button type="button" onClick={() => onOpen(r.path)} className="grid h-full w-full gap-1 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <FolderGit2 className="size-4 shrink-0 text-primary" />
-                    <span className="min-w-0 truncate font-medium">{nameOf(r)}</span>
-                    <span className="ml-auto truncate text-xs text-muted-foreground">{project(r)}</span>
-                  </span>
-                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <Sync ahead={r.ahead} behind={r.behind} changed={r.changed + r.untracked} />
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="flex items-center gap-2 rounded-xl border border-dashed p-4 text-[13px] text-muted-foreground">
-            <CheckCircle2 className="size-4 text-success" /> {t('git.todoNone')}
-          </p>
-        )}
-      </Section>
-
-      <Section title={t('git.tabLocal')} count={local.length}>
-        {local.length ? (
-          <div className="overflow-x-auto rounded-xl border bg-card">
-            <table className="w-full text-[13px]" data-testid="git-table-local">
-              <thead className="border-b">
-                <tr>
-                  <th className={TH}>{t('git.col.repo')}</th>
-                  <th className={cn(TH, 'max-md:hidden')}>{t('git.col.project')}</th>
-                  <th className={cn(TH, 'max-sm:hidden')}>{t('git.col.branch')}</th>
-                  <th className={TH}>{t('git.col.state')}</th>
-                  <th className={cn(TH, 'max-lg:hidden')}>{t('git.col.last')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {local.map((r) => (
-                  <tr key={r.path} onClick={() => onOpen(r.path)} className="cursor-pointer border-b last:border-0 hover:bg-accent/40">
-                    <td className={TD}>
-                      <button type="button" className="grid min-w-0 text-left" onClick={(e) => { e.stopPropagation(); onOpen(r.path) }}>
-                        <span className="flex items-center gap-1.5 font-medium whitespace-nowrap">
-                          {nameOf(r)}
-                          {r.github && <Github className="size-3 shrink-0 text-muted-foreground" />}
-                        </span>
-                        <span className="max-w-[26ch] truncate font-mono text-[11px] text-muted-foreground">{rel(r.path)}</span>
-                      </button>
-                    </td>
-                    <td className={cn(TD, 'whitespace-nowrap text-muted-foreground max-md:hidden')}>{project(r)}</td>
-                    <td className={cn(TD, 'max-sm:hidden')}>
-                      <span className={cn('rounded px-1.5 py-px font-mono text-[11px]', r.branch ? 'bg-muted' : 'bg-warning/15 text-warning')}>{r.branch ?? t('git.detached')}</span>
-                    </td>
-                    <td className={TD}>
-                      {r.error ? (
-                        <span className="text-xs text-destructive">{t('git.error')}</span>
-                      ) : todoOf(r) ? (
-                        <span className="flex items-center gap-x-2 whitespace-nowrap">
-                          <Sync ahead={r.ahead} behind={r.behind} changed={r.changed + r.untracked} />
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">{t('git.clean')}</span>
-                      )}
-                    </td>
-                    <td className={cn(TD, 'max-w-[40ch] max-lg:hidden')}>
-                      {r.last_commit && (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          <span className="text-foreground">{fmtRelative(r.last_commit, lang)}</span> · {r.last_subject}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState icon={FolderGit2} title={t('git.noLocal')} description={t('git.localHint', { root })} />
-        )}
-      </Section>
-
-      <Section
-        title="GitHub"
-        count={gh.connected ? remote.length : undefined}
-        actions={
-          accounts.length > 0 && (
-            <span className="flex flex-wrap items-center gap-1.5" data-testid="git-accounts">
-              {accounts.map((a) => (
-                <button
-                  key={a.login}
-                  type="button"
-                  onClick={() => setAccount((cur) => (cur === a.login ? null : a.login))}
-                  title={`${t('git.viaKeys')} ${a.keys.join(', ')}`}
-                  aria-pressed={account === a.login}
-                  className={cn('inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-2.5 pl-0.5 text-xs transition-colors hover:bg-accent', account === a.login && 'border-primary bg-primary/10')}
-                >
-                  {a.avatar ? <img src={a.avatar} alt="" className="size-5 rounded-full" /> : <Github className="m-0.5 size-4" />}
-                  <span className="font-medium">@{a.login}</span>
-                  <span className="text-muted-foreground">{a.repos}</span>
-                </button>
-              ))}
-              <Link to="/settings/keys" className="text-xs text-primary hover:underline">
-                {t('git.addAccount')}
-              </Link>
-            </span>
-          )
-        }
-      >
-        {!gh.connected ? (
-          <ConnectGithub />
-        ) : !accounts.length ? (
-          <div className="grid gap-3">
-            <TokenErrors errors={gh.errors} />
-            <ConnectGithub />
-          </div>
-        ) : (
-          <>
-            <TokenErrors errors={gh.errors} />
-            <div className="overflow-x-auto rounded-xl border bg-card">
-              <table className="w-full text-[13px]" data-testid="git-table-github">
-                <thead className="border-b">
-                  <tr>
-                    <th className={TH}>{t('git.col.repo')}</th>
-                    <th className={cn(TH, 'max-sm:hidden')}>{t('git.col.visibility')}</th>
-                    <th className={cn(TH, 'max-md:hidden')}>{t('git.col.rights')}</th>
-                    <th className={TH}>{t('git.col.here')}</th>
-                    <th className={cn(TH, 'max-lg:hidden')}>{t('git.col.pushed')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {remote.map((r) => (
-                    <tr key={r.full_name} onClick={() => onOpen(`github:${r.full_name}`)} className="cursor-pointer border-b last:border-0 hover:bg-accent/40">
-                      <td className={TD}>
-                        <button type="button" className="grid min-w-0 text-left" onClick={(e) => { e.stopPropagation(); onOpen(`github:${r.full_name}`) }}>
-                          <span className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-medium">
-                              <span className="font-normal text-muted-foreground">{r.owner}/</span>
-                              {r.name}
-                            </span>
-                            {r.archived && <Badge variant="muted">{t('git.archived')}</Badge>}
-                            {r.fork && <Badge variant="muted">fork</Badge>}
-                          </span>
-                          {r.description && <span className="max-w-[48ch] truncate text-xs text-muted-foreground">{r.description}</span>}
-                        </button>
-                      </td>
-                      <td className={cn(TD, 'text-xs text-muted-foreground max-sm:hidden')}>
-                        {r.private ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Lock className="size-3" />
-                            {t('git.private')}
-                          </span>
-                        ) : (
-                          t('git.public')
-                        )}
-                      </td>
-                      <td className={cn(TD, 'max-md:hidden')}>
-                        <PermBadge p={r.permission} />
-                      </td>
-                      <td className={TD}>
-                        {r.local_paths.length ? (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onOpen(r.local_paths[0]) }}
-                            title={r.local_paths.map(rel).join('\n')}
-                            className="inline-flex items-center gap-1 text-xs text-success hover:underline"
-                          >
-                            <Server className="size-3" />
-                            {r.local_paths.length > 1 ? t('git.clones', { count: r.local_paths.length }) : t('git.clonedHere')}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className={cn(TD, 'text-xs whitespace-nowrap text-muted-foreground max-lg:hidden')}>{r.pushed_at ? fmtRelative(Date.parse(r.pushed_at) / 1000, lang) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </Section>
+    <div className="grid gap-3">
+      {accounts.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2" data-testid="git-accounts">
+          {accounts.map((a) => (
+            <button
+              key={a.login}
+              type="button"
+              onClick={() => setAccount((cur) => (cur === a.login ? null : a.login))}
+              title={`${t('git.viaKeys')} ${a.keys.join(', ')}`}
+              aria-pressed={account === a.login}
+              className={cn('inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-2.5 pl-0.5 text-xs transition-colors hover:bg-accent', account === a.login && 'border-primary bg-primary/10')}
+            >
+              {a.avatar ? <img src={a.avatar} alt="" className="size-5 rounded-full" /> : <Github className="m-0.5 size-4" />}
+              <span className="font-medium">@{a.login}</span>
+              <span className="text-muted-foreground">{a.repos}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <TokenErrors errors={gh.errors} />
+      <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
+        {remote.map((r) => (
+          <GithubRow key={r.full_name} r={r} onOpen={() => onOpen(`github:${r.full_name}`)} />
+        ))}
+      </ul>
     </div>
   )
 }
@@ -650,9 +507,13 @@ export default function GitPage() {
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
   const repo = params.get('repo')
+  // the source shown: ?source=github, else the side of the repository open, else the server
+  const source: Source = params.get('source') === 'github' || (!params.get('source') && repo?.startsWith('github:')) ? 'github' : 'local'
   const [query, setQuery] = React.useState('')
   const [refreshing, setRefreshing] = React.useState(false)
-  const open = (r: string | null) => setParams(r ? { repo: r } : {}, { replace: false })
+  const { data } = useGitRepos()
+  const open = (r: string) => setParams({ repo: r, ...(source === 'github' && !r.startsWith('github:') ? { source: 'github' } : {}) })
+  const pick = (s: Source) => setParams(s === 'github' ? { source: 'github' } : {})
   const doRefresh = async () => {
     setRefreshing(true)
     try {
@@ -667,16 +528,30 @@ export default function GitPage() {
       <RefreshCw />
     </Button>
   )
+  const gh = data?.github
   return (
     <>
       <PageList id="git" label={t('git.title')} search={{ value: query, onChange: setQuery, placeholder: t('git.searchList') }}>
-        <GitNav repo={repo} query={query} onOpen={open} />
+        <GitNav repo={repo} source={source} query={query} onSource={pick} onOpen={open} />
       </PageList>
       {repo ? (
-        <RepoView key={repo} repo={repo} onSwitch={open} refresh={refresh} />
+        <RepoView key={repo} repo={repo} onSwitch={(r) => setParams({ repo: r })} refresh={refresh} />
       ) : (
-        <Page title={t('git.overview')} description={t('git.desc')} actions={refresh} width="wide">
-          <Overview onOpen={open} />
+        <Page
+          title={source === 'github' ? (gh?.accounts.length === 1 ? `GitHub @${gh.accounts[0].login}` : 'GitHub') : t('git.tabLocal')}
+          description={source === 'github' ? t('git.ghHint') : data ? t('git.localHint', { root: data.root }) : undefined}
+          actions={
+            <>
+              {source === 'github' && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/settings/keys">{t('git.addAccount')}</Link>
+                </Button>
+              )}
+              {refresh}
+            </>
+          }
+        >
+          <SourceCards source={source} query={query} onOpen={open} />
         </Page>
       )}
     </>
