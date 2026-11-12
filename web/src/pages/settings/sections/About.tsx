@@ -29,7 +29,7 @@ export function AboutSection() {
         <div className="grid gap-4">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             {v ? <span className="text-sm font-medium tabular-nums">{t('about.version', { version: v.version })}</span> : <Skeleton className="h-5 w-32" />}
-            <Link to="/settings/updates" className="text-sm text-primary hover:underline">{t('about.checkUpdates')}</Link>
+            <Link to="/settings/updates" className="text-sm text-primary hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center">{t('about.checkUpdates')}</Link>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>

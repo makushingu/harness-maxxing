@@ -337,6 +337,14 @@ def test_mcp_files_nested_too_deep_are_not_a_500(env):
     assert mcp._read_cfg(fresh=True) == {}
 
 
+def test_a_project_mcp_file_nested_too_deep_does_not_hide_the_others(env):
+    """servers() reads every .mcp.json: one of 100 000 "[" raised RecursionError -> GET /api/mcp in 500."""
+    from maxxing import mcp
+    (env.ws / "projects/acme/.mcp.json").write_text("[" * 100_000)
+    mcp.add("ads", {"type": "http", "url": "https://ads.example.com/mcp"}, None)
+    assert [s["name"] for s in mcp.servers()] == ["ads"]
+
+
 def test_check_lists_the_folders_a_few_at_a_time(env, monkeypatch):
     """One `claude mcp list` per folder, in series: 30 topics with a .mcp.json = 31 runs one after the other."""
     import threading

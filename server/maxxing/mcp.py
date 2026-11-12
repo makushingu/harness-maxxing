@@ -337,7 +337,7 @@ def servers() -> list[dict]:
     for f in _project_files():
         try:
             servers_ = _dict(_dict(json.loads(_read_mcp_json(f))).get("mcpServers"))
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             continue
         folder = str(f.parent)
         p = _dict(projects.get(folder))
