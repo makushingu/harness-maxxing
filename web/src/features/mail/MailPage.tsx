@@ -10,7 +10,7 @@ import {
   Archive, Flag, FolderPlus, Inbox, Mail, MailOpen, MoreHorizontal, Paperclip, Pencil, Plus, RefreshCw, Reply, Search, Settings2, SquarePen, Trash2, X,
 } from 'lucide-react'
 import {
-  Button, Checkbox, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Segmented,
+  Button, Checkbox, CountBadge, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Segmented,
   Sensitive, Skeleton, Tooltip, useContextMenu, useMask, WithContextMenu,
 } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
@@ -118,7 +118,7 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                   >
                     <Icon className="size-4 shrink-0" />
                     <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
-                    {!!f.unread && f.role !== 'sent' && f.role !== 'trash' && <span className="text-xs font-semibold text-primary tabular-nums">{f.unread}</span>}
+                    {f.role !== 'sent' && f.role !== 'trash' && <CountBadge count={f.unread || 0} />}
                   </button>
                   {!f.role && (
                     <DropdownMenu>
@@ -545,8 +545,10 @@ export default function MailPage() {
 
   const header = (
     <PageHeader
-      title={t('mail.title')}
-      description={all ? t('mail.all.title') : acc ? <Sensitive length={10}>{acc.address}</Sensitive> : t('mail.desc')}
+      // the folder picked is the page's title (the page's name is in the list's head), its mailbox under it
+      title={all ? t('mail.all.title') : current ? (current.role ? folderLabel(current, t) : <Sensitive length={6}>{folderLabel(current, t)}</Sensitive>) : t('mail.title')}
+      sensitiveTitle={t('mail.title')}
+      description={all ? t('mail.desc') : acc ? <Sensitive length={10}>{acc.address}</Sensitive> : t('mail.desc')}
       actions={
         acc && (
           <>
