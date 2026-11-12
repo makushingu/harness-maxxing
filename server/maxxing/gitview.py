@@ -112,7 +112,7 @@ def clear_cache() -> None:
 
 # ---- local repositories ---------------------------------------------------------------------
 def _root() -> Path:
-    return Path(config.load_config().get("files_root") or "/root")
+    return config.files_root()
 
 
 # A repository's own config can name programs git runs on a plain status / log / show (core.fsmonitor, signature
