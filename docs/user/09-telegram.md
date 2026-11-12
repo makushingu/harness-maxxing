@@ -132,7 +132,7 @@ messages) it deletes.
   In Simple, `/stop`, `/close`, `/model` and `/status` act on the session of the message you reply to, else on the
   last session you wrote to (its title is in the answer).
 
-- The **bell** of a session (web UI, next to its title): when a turn that did not come from Telegram ends (you
+- **Notify me on Telegram** (web UI, in the session's **…** window; a small bell shows while it is on): when a turn that did not come from Telegram ends (you
   worked in the web UI, for instance), a short "✅ title - preview" message rings on the phone: in the session's
   thread, else in the main chat, where replying to it continues the session. A session started on the phone and
   continued in the web UI rings too. In *Threads + web conversations* it makes the copied answers ring.

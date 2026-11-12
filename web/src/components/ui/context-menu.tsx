@@ -37,18 +37,22 @@ type Options = {
   links?: boolean
   /** Also open on a long press on touch screens (default); off where the long press already means something (drag). */
   touch?: boolean
+  /** Instead of the menu at the pointer: what opens (a window of options). */
+  onOpen?: () => void
 }
 
 // Each opening gets a new key (a module counter: a close and a reopen batched together still remount it).
 let opened = 0
 
-export function useContextMenu({ disabled = false, links = false, touch = true }: Options = {}) {
+export function useContextMenu({ disabled = false, links = false, touch = true, onOpen }: Options = {}) {
   // `n` remounts the menu on each opening, so a second right click moves it to the new point.
   const [at, setAt] = React.useState<{ x: number; y: number; n: number } | null>(null)
   const last = React.useRef({ x: 0, y: 0 })
   const pressed = React.useRef(0)
   const content = React.useRef<HTMLDivElement | null>(null)
-  const openAt = React.useCallback((x: number, y: number) => setAt({ x, y, n: ++opened }), [])
+  const onOpenRef = React.useRef(onOpen)
+  onOpenRef.current = onOpen
+  const openAt = React.useCallback((x: number, y: number) => (onOpenRef.current ? onOpenRef.current() : setAt({ x, y, n: ++opened })), [])
   const press = useLongPress(() => {
     pressed.current = Date.now()
     openAt(last.current.x, last.current.y)

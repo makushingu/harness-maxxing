@@ -4,25 +4,16 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import {
   Archive,
-  ArchiveRestore,
   Bot,
   Bell,
-  BellOff,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clock,
-  Copy,
   ExternalLink,
-  PictureInPicture2,
   FolderOpen,
   GripVertical,
   Hash,
   ListChecks,
-  Minimize2,
   MoreHorizontal,
-  Sparkles,
-  Trash2,
   Upload,
   X,
   Columns2,
@@ -31,7 +22,7 @@ import {
   Quote,
   Rows2,
 } from 'lucide-react'
-import { cn, copyText } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { TouchSessionsButton } from '@/components/shell/TouchNav'
 import { Logo } from '@/components/shell/Logo'
 import { useQueryClient } from '@tanstack/react-query'
@@ -65,12 +56,6 @@ import type { Effort, Mention, Session } from '@/lib/types'
 import {
   Button,
   confirm,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
   Checkbox,
   Input,
   Label,
@@ -97,7 +82,7 @@ import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
 import { EASE_OUT, reducedMotion } from '@/lib/presence'
-import { canShift, focusComposer, groupAt, MAX_STACK, outboxMove, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
+import { focusComposer, groupAt, MAX_STACK, outboxMove, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
 import { Thread, type ThreadHandle } from './Thread'
 import { Composer, type ComposerHandle } from './Composer'
 import { QuotePill } from './Quote'
@@ -105,6 +90,7 @@ import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
 import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
 import { useSlashCommands } from './slashCommands'
+import { SessionOptions, type OptionAction } from './SessionOptions'
 import { absTopicDir, fileQuote, findAgent, fmtCost, placeOptions, topicLabel, topicPathOf } from './util'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
@@ -640,96 +626,51 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     onRename: actions.rename,
   })
 
-  // The column's menu: its "..." and a right click (a long press) on its header.
-  const menuCtx = useContextMenu({ disabled: !session })
-  const menuItems = (
-    <>
-    {(variant === 'mobile' || slim) && (
-      <>
-        {/* Touch layout and short stacked session: the header keeps room for the title - Telegram lives
-            here (on a phone plan mode is next to the title). */}
-        {slim && (
-          <DropdownMenuCheckboxItem checked={!!session?.plan_mode} disabled={!session} onSelect={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}>
-            {t('plan.toggle')}
-          </DropdownMenuCheckboxItem>
-        )}
-        <DropdownMenuCheckboxItem checked={!!session?.notify} disabled={!session || !tgLinked} onSelect={actions.notify}>
-          {t('sessions.notify.label')}
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuSeparator />
-      </>
-    )}
-    <DropdownMenuItem disabled={running || !session?.turns} onSelect={actions.compact}>
-      <Minimize2 /> {t('sessions.menu.compact')}
-    </DropdownMenuItem>
-    <DropdownMenuItem disabled={running || !session?.turns} onSelect={actions.handoff}>
-      <Sparkles /> {t('sessions.menu.handoff')}
-    </DropdownMenuItem>
-    {!agentRun && (
-      <DropdownMenuItem onSelect={actions.archive}>
-        {session?.archived ? <ArchiveRestore /> : <Archive />} {session?.archived ? t('sessions.menu.unarchive') : t('sessions.menu.archive')}
-      </DropdownMenuItem>
-    )}
-    <DropdownMenuSeparator />
-    <DropdownMenuItem disabled={!dir} onSelect={() => dir && navigate(`/files?path=${encodeURIComponent(dir)}`)}>
-      <FolderOpen /> {t('sessions.menu.openFolder')}
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => copyText(sid).then((ok) => ok && toast.success(t('sessions.menu.idCopied')))}>
-      <Copy /> {t('sessions.menu.copyId')}
-    </DropdownMenuItem>
-    {hudOn && variant !== 'mobile' && (
-      <DropdownMenuItem onSelect={hud}>
-        <PictureInPicture2 /> {t('hud.open')}
-      </DropdownMenuItem>
-    )}
-    {variant === 'column' && (
-      <>
-        <DropdownMenuItem onSelect={detach}>
-          <ExternalLink /> {t('sessions.menu.detach')}
-        </DropdownMenuItem>
-        {index > 0 && (
-          col.below ? (
-            <DropdownMenuItem onSelect={() => useSessionsUI.getState().unstack(col.key)}>
-              <Columns2 /> {t('sessions.grid.unstack')}
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem
-              disabled={!canStackUnderPrevious(col.key)}
-              onSelect={() => {
+  // The session's options: its "..." and a right click (a long press) on its header open the same window.
+  const [options, setOptions] = React.useState(false)
+  const menuCtx = useContextMenu({ disabled: !session, onOpen: () => setOptions(true) })
+  const columnActions: OptionAction[] = []
+  if (variant === 'column') {
+    columnActions.push({ key: 'detach', icon: ExternalLink, label: t('sessions.options.detach'), run: detach })
+    if (index > 0)
+      columnActions.push(
+        col.below
+          ? { key: 'unstack', icon: Columns2, label: t('sessions.options.unstack'), run: () => useSessionsUI.getState().unstack(col.key) }
+          : {
+              key: 'stack',
+              icon: Rows2,
+              label: t('sessions.options.stack'),
+              disabled: !canStackUnderPrevious(col.key),
+              run: () => {
                 const cols = useSessionsUI.getState().cols
                 const i = cols.findIndex((c) => c.key === col.key)
                 // under the last session of the strip column on the left
                 if (i > 0) useSessionsUI.getState().stack(col.key, cols[i - 1].key)
-              }}
-            >
-              <Rows2 /> {t('sessions.grid.stack')}
-            </DropdownMenuItem>
-          )
-        )}
-        {count > 1 && (
-          <>
-            <DropdownMenuItem onSelect={() => useSessionsUI.getState().setLayoutPicker(col.key)}>
-              <LayoutGrid /> {t('sessions.layout.menu')}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={!canShift(useSessionsUI.getState().cols, col.key, -1)} onSelect={() => useSessionsUI.getState().shift(col.key, -1)}>
-              <ChevronLeft /> {t('sessions.menu.moveLeft')}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={!canShift(useSessionsUI.getState().cols, col.key, 1)} onSelect={() => useSessionsUI.getState().shift(col.key, 1)}>
-              <ChevronRight /> {t('sessions.menu.moveRight')}
-            </DropdownMenuItem>
-          </>
-        )}
-      </>
-    )}
-    {!agentRun && (
-      <>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem destructive onSelect={actions.del}>
-          <Trash2 /> {t('sessions.menu.delete')}
-        </DropdownMenuItem>
-      </>
-    )}
-    </>
+              },
+            },
+      )
+    if (count > 1) columnActions.push({ key: 'layout', icon: LayoutGrid, label: t('sessions.options.layout'), run: () => useSessionsUI.getState().setLayoutPicker(col.key) })
+  }
+  const optionsWindow = session && (
+    <SessionOptions
+      open={options}
+      onOpenChange={setOptions}
+      session={session}
+      tgLinked={tgLinked}
+      running={running}
+      agentRun={agentRun}
+      onPlan={() => patch.mutate({ id: sid, plan_mode: !session.plan_mode })}
+      onNotify={actions.notify}
+      onCompact={actions.compact}
+      onHandoff={actions.handoff}
+      onFolder={dir ? () => navigate(`/files?path=${encodeURIComponent(dir)}`) : undefined}
+      onHud={hudOn && variant !== 'mobile' ? hud : undefined}
+      onArchive={actions.archive}
+      onDelete={actions.del}
+      column={columnActions}
+      // "Layouts…": the focus goes to the picker, not back to the "..." (that would close the picker)
+      keepFocus={() => useSessionsUI.getState().layoutPicker === col.key}
+    />
   )
 
   // (a picture dragged from a thread carries a file too: that is a content drag)
@@ -764,34 +705,18 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           rootLabel={t('sessions.root')}
           onClose={() => close(col.key)}
           fixedPlace={agentRun}
-          tgLinked={tgLinked}
           headRef={head}
           headProps={menuCtx.props}
           slim={slim}
           menu={
-            <DropdownMenu>
-              <Tooltip content={t('common.more')}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label={t('common.more')} disabled={!session}>
-                    <MoreHorizontal />
-                  </Button>
-                </DropdownMenuTrigger>
-              </Tooltip>
-              <DropdownMenuContent
-                align="end"
-                className="w-60"
-                // "Layouts…": the focus goes to the picker, not back to this button (that would close the picker)
-                onCloseAutoFocus={(e) => useSessionsUI.getState().layoutPicker === col.key && e.preventDefault()}
-              >
-                {menuItems}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Tooltip content={t('common.more')}>
+              <Button variant="ghost" size="icon-sm" aria-label={t('common.more')} aria-haspopup="dialog" disabled={!session} onClick={() => setOptions(true)}>
+                <MoreHorizontal />
+              </Button>
+            </Tooltip>
           }
-          contextMenu={menuCtx.menu(menuItems, { className: 'w-60' })}
+          contextMenu={optionsWindow}
           onRename={actions.rename}
-          onHud={hudOn ? hud : undefined}
-          onPlan={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}
-          onNotify={actions.notify}
         />
         {session?.archived && !agentRun && (
           <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
@@ -931,10 +856,6 @@ function ColumnHeader({
   onClose,
   menu,
   onRename,
-  onNotify,
-  onHud,
-  onPlan,
-  tgLinked,
   headRef,
   headProps,
   contextMenu,
@@ -948,24 +869,18 @@ function ColumnHeader({
   onClose: () => void
   menu: React.ReactNode
   onRename: (title: string) => void
-  onNotify: () => void
-  onHud?: () => void
-  onPlan?: () => void
-  tgLinked: boolean
   /** The place is shown, not a picker (a run of an agent stays in the agent's folder). */
   fixedPlace?: boolean
   headRef?: React.Ref<HTMLElement>
-  /** Right click / long press on the header: `contextMenu` (the same items as `menu`) opens at the pointer. */
+  /** The session's options window, opened by `menu` and by a right click / long press on the header. */
   headProps?: ContextMenuHandlers
   contextMenu?: React.ReactNode
-  /** Short stacked session: one line (title, state, context, menu, close); plan mode and Telegram show only
-   *  while on and are in the menu, the picture-in-picture is in the menu, topic and cost go. */
+  /** Short stacked session: one line (title, state, plan / Telegram marks, context, menu, close); topic and cost go. */
   slim?: boolean
 }) {
   const t = useT()
   const billed = useCostIsBilled()
   const showCost = !useResultLine().hidden.includes('cost')
-  const notifyTip = !tgLinked ? t('sessions.notify.unavailable') : session?.notify ? t('sessions.notify.on') : t('sessions.notify.off')
   const maxxing = useMaxxingEnabled()
   if (variant === 'mobile')
     // phone / tablet: app bar (☰ logo ⋯ ⊞), then the session's title, then its topic and what it used
@@ -985,25 +900,13 @@ function ColumnHeader({
         <div className="flex min-h-8 min-w-0 items-center gap-2">
           {session ? <InlineTitle value={session.title} onSave={onRename} className="text-[17px] font-semibold" /> : <Skeleton className="h-5 w-48" />}
           {session && <StateBadge session={session} />}
-          {onPlan && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('plan.toggle')}
-              aria-pressed={!!session?.plan_mode}
-              disabled={!session}
-              onClick={onPlan}
-              className={cn('-mr-1 ml-auto shrink-0 pointer-coarse:size-10', session?.plan_mode && 'bg-primary/12 text-primary hover:bg-primary/20 hover:text-primary')}
-            >
-              <ListChecks />
-            </Button>
-          )}
         </div>
         <div data-kbd-hide="" className="mt-0.5 flex h-6 min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
           {session ? (
             <>
               <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace} />
               {session.source === 'cron' && <Clock className="size-3.5 shrink-0" aria-label={t('sessions.source.cron')} />}
+              <SessionMarks session={session} className="size-3.5" />
               <span className="ml-auto flex shrink-0 items-center gap-3 tabular-nums">
                 {session.cost_usd > 0 && showCost && (
                   <Tooltip content={<span className="block max-w-72 whitespace-normal">{costTip(t, billed, session.turns)}</span>}>
@@ -1030,48 +933,10 @@ function ColumnHeader({
         {session && <StateBadge session={session} />}
         <div className="ml-auto flex shrink-0 items-center">
           {slim && session && (
-            <span className="mr-1 flex">
+            <span className="mr-1 flex items-center gap-1.5">
+              <SessionMarks session={session} className="size-3.5" />
               <ContextGauge ring tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
             </span>
-          )}
-          {onHud && !slim && (
-            <Tooltip content={t('hud.open')}>
-              <Button variant="ghost" size="icon-sm" aria-label={t('hud.open')} onClick={onHud}>
-                <PictureInPicture2 />
-              </Button>
-            </Tooltip>
-          )}
-          {onPlan && (!slim || session?.plan_mode) && (
-            <Tooltip content={session?.plan_mode ? t('plan.toggleOff') : t('plan.toggleOn')}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('plan.toggle')}
-                aria-pressed={!!session?.plan_mode}
-                disabled={!session}
-                onClick={onPlan}
-                className={cn(session?.plan_mode && 'bg-primary/12 text-primary hover:bg-primary/20 hover:text-primary')}
-              >
-                <ListChecks />
-              </Button>
-            </Tooltip>
-          )}
-          {(!slim || session?.notify) && (
-          <Tooltip content={notifyTip}>
-            <span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={notifyTip}
-                aria-pressed={!!session?.notify}
-                disabled={!session || !tgLinked}
-                onClick={onNotify}
-                className={cn(session?.notify && 'text-primary')}
-              >
-                {session?.notify ? <Bell /> : <BellOff />}
-              </Button>
-            </span>
-          </Tooltip>
           )}
           {menu}
           {variant === 'column' && (
@@ -1092,6 +957,7 @@ function ColumnHeader({
                 <span className="inline-flex shrink-0 items-center"><Clock className="size-3" /></span>
               </Tooltip>
             )}
+            <SessionMarks session={session} className="size-3" />
             <span className="ml-auto flex shrink-0 items-center gap-2.5 tabular-nums">
               {session.cost_usd > 0 && showCost && (
                 <Tooltip content={<span className="block max-w-72 whitespace-normal">{costTip(t, billed, session.turns)}</span>}>
@@ -1109,6 +975,25 @@ function ColumnHeader({
       </div>
       {contextMenu}
     </header>
+  )
+}
+
+/** What is on for this session, shown and not clickable (they are switched in its options window). */
+function SessionMarks({ session, className }: { session: Session; className?: string }) {
+  const t = useT()
+  return (
+    <>
+      {session.plan_mode && (
+        <Tooltip content={t('plan.toggle')}>
+          <span className="inline-flex shrink-0 items-center text-primary" aria-label={t('plan.toggle')}><ListChecks className={className} /></span>
+        </Tooltip>
+      )}
+      {session.notify && (
+        <Tooltip content={t('sessions.notify.on')}>
+          <span className="inline-flex shrink-0 items-center" aria-label={t('sessions.notify.on')}><Bell className={className} /></span>
+        </Tooltip>
+      )}
+    </>
   )
 }
 

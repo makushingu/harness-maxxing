@@ -14,14 +14,14 @@ stopped.
 - **Main area**: one or more **columns**, one session each. Open several sessions side by side,
   resize and reorder the columns, or detach one into its own window.
 - **Grid**: with two sessions or more, the grid button at the top right stacks them two per column (four sessions
-  = 2x2). You can also drop a column on the lower part of another (it goes under it) or on its upper part (it goes above it), or pick **Put under the column on the left** in
-  its **…** menu; a column holds up to three sessions (three stacked share the height evenly). Two stacked sessions
+  = 2x2). You can also drop a column on the lower part of another (it goes under it) or on its upper part (it goes above it), or pick **Stack** in
+  its **…** window; a column holds up to three sessions (three stacked share the height evenly). Two stacked sessions
   both keep their message box; in a stack of three, only the session you clicked shows its full message box and the
   others show a slim **Write…** bar - click it to write there. Drag the line
   between two stacked sessions to share the height (double-click: half and half). The same button, or **Give it its
   own column**, puts them back side by side. A stacked session shorter than about 560 px keeps a one-line header
-  (title, context, **…**, close): plan mode and Telegram notifications move into its **…** menu (their icon stays
-  while they are on), the project / topic line and the cost are hidden.
+  (title, context, **…**, close): the plan and bell marks stay while they are on, the project / topic line and the
+  cost are hidden.
 - **Widening a session to read**: drag the right edge of a column, up to 2000 px (never wider than the screen leaves
   room for, the other columns keep their minimum width). A widened column's conversation and message box use its
   whole width; otherwise the text stays at a comfortable 860 px. Double-click the edge to undo.
@@ -30,7 +30,7 @@ stopped.
 - **Ready-made layouts**: hold the mouse button down on a session's grip (the dots left of its title): small
   layouts appear, click the zone where it should go (the others fill the rest). Or drag the session by its grip: a
   layouts bar slides down at the top of the sessions, drop it on a zone. Rest the pointer on the grid button to
-  arrange every open session at once. With the keyboard: **…** menu > **Layouts…**. From four sessions, the
+  arrange every open session at once. With the keyboard: **…** > **Layout**. From four sessions, the
   **Half left / Half right** layouts give one session half the screen and put the others beside it, two or three
   per column: when they do not all fit, the strip scrolls as usual (the half moves with it, nothing slides under
   it). While a half is shown the widths are fixed (no resize handle).
@@ -59,8 +59,8 @@ stopped.
 - On a phone or a tablet (the *touch layout*), one session fills the screen and the app opens on the last one.
   **☰** at the top left opens all your sessions: the **All / Running / Unread** chips with **New session** on
   their right (in the topic of the session on screen), then your projects and topics. **Press and hold** a session, a
-  topic or a project for its menu (rename, favorite, archive, delete...). The **plan button** (checklist icon)
-  sits right of the session's name; the session's **…** menu also holds *Telegram notifications*. **⊞** at the
+  topic or a project for its menu (rename, favorite, archive, delete...). Plan mode and *Notify me on
+  Telegram* are in the session's **…** window. **⊞** at the
   top right opens the rest of the app (see [Settings](11-settings-and-keys.md#on-a-phone-or-a-tablet)).
   While you type in the message box, it takes at most a third of the screen (its text scrolls inside) so the answer
   stays in sight, and the project line steps aside until the keyboard closes; held sideways, the session header
@@ -246,7 +246,7 @@ With plan mode on, Claude **changes nothing before you agree**. It reads and exp
 answers with a plan: goal, steps, files concerned, risks and open questions. It cannot write files or run
 commands that modify anything in this mode.
 
-- Turn it on with the **plan button** (checklist icon) in the session header, or tick **Plan mode** when
+- Turn it on in the session's **…** window, with `/plan` in the message box, or tick **Plan mode** when
   you start a new session. The composer shows a *Plan mode* chip (click it to leave).
 - Once the turn is over, a slim *Plan ready* line appears on top of the composer (waiting messages take
   its place while there are some):
@@ -287,8 +287,7 @@ the switch, the bar and the shortcut below only appear then (turning it off ther
 ## HUD mode
 
 A small floating bar to drive one session while you work in other apps. Turn it on in
-**Settings → Features → HUD mode**, then click the HUD button in a session header (or **Open the HUD**
-in its menu).
+**Settings → Features → HUD mode**, then pick **Open the HUD** in a session's **…** window.
 
 - While Claude works, it shows your prompt and Claude's **last three steps** (tools, thinking).
   When it is done, it shows **the answer** with its images - one at a time, ‹ › to go through them;
@@ -376,7 +375,12 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 
 ## Notify, archive, delete
 
-- **Notify** (bell): when a turn that did not come from Telegram ends, a short message rings on Telegram - in the
+The **…** of a session (or a right-click on its header, a long press on a phone) opens its window: the
+*Plan mode* and *Notify me on Telegram* switches (they apply at once), then **Compact context**,
+**Summarise & restart**, **Open topic folder in Files**, the HUD, then on a computer the column actions (**Detach**, **Stack**,
+**Layout**), and **Archive** / **Delete** at the bottom.
+
+- **Notify me on Telegram** (in the session's **…** window; a small bell next to the topic while it is on): when a turn that did not come from Telegram ends, a short message rings on Telegram - in the
   session's thread, else in the main chat (reply to it to continue the session). See [Telegram](telegram).
 - **In the browser**: Settings -> **Notifications** -> *Notify me when a session finishes* shows a
   system notification when the tab is in the background (a small banner with **Open** otherwise),
