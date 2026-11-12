@@ -68,6 +68,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `dragleave` / `drop`; a cancelled drag fires neither. It is now `dropStack` in the sessions store (`setDropStack`),
   cleared with `dropBeside` by `setDragging(null)` (grip `dragend`, document `dragend` / `drop`), and one session at
   most shows it.
+- CLI errors instead of tracebacks: `cmd_deps._unknown` (verify/update check names through `deps.get`, exit 1);
+  `cmd_deps` update also refuses a name that is in the manifest but not in `deps.UPDATE_ORDER` (caddy);
+  `crons.spawn_run` wraps `OSError` of Popen and `systemd-run` in `CronError("spawn_failed")` so `cmd_cron` falls back
+  to running the job inline, and a `systemd-run` timeout in `CronError("spawn_timeout")` (the unit may still start:
+  exit 1, no inline run, the tick's catch-up recovers the slot; `api/crons._bad` maps both to 502); `cmd_cron._stamp` shows `????-??-?? ??:??` for a bad run time
+  (list: last run, retry, and the removed-jobs list now also tolerates a missing `at`) and `run --if-due` answers exit 2 on a `CronError` of the schedule; `cmd_video.pdf` ends
+  in `SystemExit("PDF failed: ...")` when the output folder cannot be created; `cmd_voice` prints errors to stderr
+  and catches a failed `download_model`. Tests: `test_deps.py::test_verify_and_update_refuse_an_unknown_component`,
+  `test_pdf_into_an_uncreatable_folder_raises_system_exit`, `test_cli_voice_download_prints_failures_to_stderr`;
+  `test_crons.py::test_cron_run_detach_runs_here_when_systemd_run_cannot_be_executed`,
+  `test_cron_run_detach_does_not_run_twice_when_systemd_run_times_out`,
+  `test_cron_run_if_due_with_a_broken_schedule_is_an_error`, `test_cron_list_survives_a_bad_time_in_the_run_history`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

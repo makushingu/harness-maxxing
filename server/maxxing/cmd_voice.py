@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from . import cli
@@ -43,13 +44,19 @@ def _handler(a) -> int:
         if a.v_cmd == "download":
             name = a.model or voice.settings()["model"]
             print(f"Downloading {name} (~{voice.MODEL_SIZE_MB.get(name, '?')} MB)…", flush=True)
-            print(voice.download_model(name))
+            try:
+                print(voice.download_model(name))
+            except Exception as e:  # noqa: BLE001 - network, disk or pin errors end as a message, not a traceback
+                if isinstance(e, voice.VoiceError):
+                    raise
+                print(f"error: model {name} could not be downloaded: {e}", file=sys.stderr)
+                return 1
             return 0
         out = voice.transcribe_file(Path(a.file))
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
     except voice.VoiceError as e:
-        print(f"error: {e.message}")
+        print(f"error: {e.message}", file=sys.stderr)
         return 1
 
 

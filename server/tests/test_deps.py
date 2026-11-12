@@ -292,6 +292,8 @@ def test_verify_and_update_refuse_an_unknown_component(st, capsys):
     for action in ("verify", "update"):
         assert cli.main(["deps", action, "typo"]) == 1
         assert "unknown component" in capsys.readouterr().err
+    assert cli.main(["deps", "update", "caddy"]) == 1
+    assert "caddy is not updated" in capsys.readouterr().err
 
 
 def test_python_m_maxxing_returns_the_exit_code(tmp_path):
@@ -542,3 +544,30 @@ def test_failed_voice_model_update_keeps_the_old_model(st, monkeypatch, tmp_path
     monkeypatch.setattr(voice, "download_model", ok)
     assert deps._up_whisper(c)[0] == "installed"
     assert (models / "base" / "model.bin").read_text() == "new" and not (models / "base.old").exists()
+
+
+# kept here: test_videos.py and test_voice.py are skipped as a whole without ffmpeg, this test needs none
+def test_pdf_into_an_uncreatable_folder_raises_system_exit(st, monkeypatch, tmp_path):
+    from maxxing import cmd_video
+    monkeypatch.setattr(cmd_video, "browser", lambda: tmp_path / "chrome")
+    (tmp_path / "file").write_text("x")
+    with pytest.raises(SystemExit) as e:
+        cmd_video.pdf(str(tmp_path / "page.html"), tmp_path / "file" / "o.pdf")
+    assert str(e.value).startswith("PDF failed:")
+
+
+def test_cli_voice_download_prints_failures_to_stderr(st, monkeypatch, capsys):
+    from maxxing import voice
+
+    def offline(name):
+        raise OSError("network is unreachable")
+    monkeypatch.setattr(voice, "download_model", offline)
+    assert cli.main(["voice", "download", "tiny"]) == 1
+    assert "network is unreachable" in capsys.readouterr().err
+
+    def refused(name):
+        raise voice.VoiceError(503, "not_installed", "local transcription is not installed")
+    monkeypatch.setattr(voice, "download_model", refused)
+    assert cli.main(["voice", "download", "tiny"]) == 1
+    cap = capsys.readouterr()
+    assert "not installed" in cap.err and "error:" not in cap.out

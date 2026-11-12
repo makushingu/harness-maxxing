@@ -63,6 +63,10 @@ Fixed:
   happen), the dashed frame stayed over the conversation until the next drag.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
+- **CLI errors instead of tracebacks**: `maxxing deps verify|update` with an unknown name (`update` said nothing),
+  `cron run --if-due` on a job with a broken schedule, `cron list` with a damaged run history, `pdf` into a folder that
+  cannot be created and a failed `voice download` now print an error (on stderr) instead of a traceback;
+  `cron run --detach` runs the job here when systemd refuses to start it.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
