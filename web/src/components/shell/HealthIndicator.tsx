@@ -5,9 +5,9 @@ import { useFeedSettings, useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import type { Health } from '@/lib/types'
+import type { Health, HealthIssue } from '@/lib/types'
 import { resolveTheme, useUI, type Theme } from '@/stores/ui'
-import { ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
@@ -184,7 +184,8 @@ const alertHover = {
  *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The health line (folded:
- *  the dot) leads to the whole Notifications feed (or Settings -> System when health problems stay out of the feed),
+ *  the dot) leads to the whole Notifications feed (or Settings -> System when health problems stay out of the feed); while
+ *  a problem is open it opens the problems window (`IssuesDialog`) instead,
  *  the meters to Settings -> System, the Claude entry to Settings -> Stats. Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
 export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, at the start of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
@@ -195,6 +196,8 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   // the health line leads to the whole Notifications feed (a failed job sits under Crons, not Health), else Settings -> System
   const { data: feedSettings } = useFeedSettings()
   const issuesTo = feedSettings?.health ? '/feed' : '/settings/system'
+  // a problem open: the health line (folded: the dot) opens the problems window instead of leaving the page
+  const [open, setOpen] = React.useState(false)
   const lang = useLang()
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const metersLabel = [t('health.details'), ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
@@ -211,6 +214,7 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   const link = 'outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring'
   return (
     <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-2 border-t border-sidebar-border px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
+      <IssuesDialog open={open} onOpenChange={setOpen} />
       <div data-tour="health" data-testid="status-line" className={cn('grid h-[76px] w-full min-w-0 content-center gap-2', collapsed && 'w-11 justify-items-center')}>
         {!rows ? (
           <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
@@ -227,9 +231,9 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
             <span className="flex size-3 items-center justify-center">
               {alert && (
                 <Tooltip content={s.health} side="right">
-                  <Link to={issuesTo} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
+                  <button type="button" onClick={() => setOpen(true)} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
                     <LiveDot tone={s.tone} />
-                  </Link>
+                  </button>
                 </Tooltip>
               )}
             </span>
@@ -252,7 +256,11 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
                   <ChevronRight className="size-3.5 shrink-0 opacity-70" />
                 </>
               )
-              return (
+              return alert ? (
+                <button type="button" onClick={() => setOpen(true)} data-testid="status-issues" className={cls}>
+                  {inner}
+                </button>
+              ) : (
                 <Link to={issuesTo} data-testid="status-issues" className={cls}>
                   {inner}
                 </Link>
@@ -413,5 +421,98 @@ function HealthIssues() {
       </p>
       {h.issues.length > 0 && <IssueList issues={h.issues} />}
     </div>
+  )
+}
+
+/** Where each kind of problem is fixed (the window's "Open" button). */
+const ISSUE_TO: Record<string, string> = {
+  disk_full: '/settings/system',
+  low_memory: '/settings/system',
+  service_down: '/settings/system',
+  cron_failed: '/settings/crons',
+  login_failures: '/settings/security',
+  claude_auth: '/settings/claude',
+  backup_never: '/settings/backup',
+  backup_old: '/settings/backup',
+  backup_failed: '/settings/backup',
+}
+
+const issueLook = {
+  error: { icon: CircleAlert, ring: 'bg-destructive/12 text-destructive', card: 'border-destructive/30 bg-destructive/[0.04]' },
+  warn: { icon: AlertTriangle, ring: 'bg-warning/15 text-warning', card: 'border-warning/30 bg-warning/[0.04]' },
+  info: { icon: Info, ring: 'bg-muted text-muted-foreground', card: '' },
+}
+
+/** The problems window, opened from the health line while something is wrong: one card per open problem (its level,
+ *  its text, Open -> where it is fixed, Seen), the problems already seen below and quieter, then the feed and the
+ *  system details. */
+function IssuesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useT()
+  const { data: h } = useHealth()
+  const mark = useMarkHealthSeen()
+  const issues = h?.issues || []
+  const openOnes = issues.filter((i) => !i.seen)
+  const seen = issues.filter((i) => i.seen)
+  const worst = openOnes.some((i) => i.level === 'error') ? 'error' : 'warn'
+  const card = (i: HealthIssue) => {
+    const look = i.seen ? { icon: Check, ring: 'bg-muted text-muted-foreground', card: '' } : issueLook[i.level] || issueLook.info
+    const Icon = look.icon
+    const to = ISSUE_TO[i.code]
+    return (
+      <li key={i.id || i.code} data-testid="issue-card" className={cn('flex items-start gap-3 rounded-lg border p-3', look.card, i.seen && 'opacity-70')}>
+        <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-full', look.ring)}>
+          <Icon className="size-4" />
+        </span>
+        <div className="grid min-w-0 flex-1 gap-2">
+          <p className="pt-1.5 text-sm leading-snug [overflow-wrap:anywhere]">{i.text}</p>
+          <div className="flex flex-wrap gap-2">
+            {to && !i.seen && (
+              <Button asChild size="sm" variant="outline" onClick={() => onOpenChange(false)}>
+                <Link to={to}>
+                  {t('health.open')} <ChevronRight className="size-3.5" />
+                </Link>
+              </Button>
+            )}
+            {i.id && (
+              <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => mark.mutate({ id: i.id!, seen: !i.seen })}>
+                {i.seen ? <><Undo2 className="size-3.5" /> {t('health.unsee')}</> : <><Check className="size-3.5" /> {t('health.markSeen')}</>}
+              </Button>
+            )}
+          </div>
+        </div>
+      </li>
+    )
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="status-panel" className="md:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {openOnes.length ? (
+              <AlertTriangle className={cn('size-5 shrink-0', worst === 'error' ? 'text-destructive' : 'text-warning')} />
+            ) : (
+              <CheckCircle2 className="size-5 shrink-0 text-success" />
+            )}
+            {openOnes.length ? t('health.issues', { count: openOnes.length }) : t('health.allGood')}
+          </DialogTitle>
+          <DialogDescription>{t('health.windowHint')}</DialogDescription>
+        </DialogHeader>
+        {openOnes.length > 0 && <ul className="grid gap-2">{openOnes.map(card)}</ul>}
+        {seen.length > 0 && (
+          <div className="grid gap-2">
+            <p className="text-xs font-medium text-muted-foreground">{t('health.seenTitle')}</p>
+            <ul className="grid gap-2">{seen.map(card)}</ul>
+          </div>
+        )}
+        <DialogFooter>
+          <Button asChild variant="ghost" onClick={() => onOpenChange(false)}>
+            <Link to="/settings/system">{t('health.details')}</Link>
+          </Button>
+          <Button asChild variant="secondary" onClick={() => onOpenChange(false)}>
+            <Link to="/feed">{t('health.allNotifications')}</Link>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
