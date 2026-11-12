@@ -340,6 +340,23 @@ Agent groups: the owner talks to 2-6 agents of one project in one conversation (
   rules, shared folder path), then the messages since its last turn framed as data (`GROUP-<hex>` markers,
   `DELTA_MAX`), then "@x handed over to you" for a hand-over, then the owner's last message in clear.
 
+## maxxing.enterprises  (owner: organisation)
+Enterprises: an org chart of agents above projects (API.md#enterprises). Needs `agents_page` and `enterprises_page`.
+- **Files** workspace `<workspace>/enterprises/<slug>/{CLAUDE.md, enterprise.json, profile.json, files/}`
+  (`enterprise.json` and `profile.json` are in `backup.ALWAYS`); state `<state>/enterprises/<slug>/` (`decisions.jsonl`,
+  `inbox/<pos>.jsonl`, other runtime files). `clean(data)` fills every field of enterprise.json and keeps unknown
+  keys; an unreadable file loads as `{broken: True}`: treated as off for routing and never written over.
+- **Writes** every change is read-modify-write under `_lock` (ProcessLock "enterprises": the server and the CLI are
+  separate processes) and bumps `rev`; a structural change (move, seat, vacate) must carry the `rev` it was based on.
+  Lock order: enterprises lock, then agents lock, never the reverse; `agents.fire` is never called while holding it.
+- **Lookups** (`seat_of`, `enterprise_of_project`, `position`, `lead_of`, `reports_of`, `subtree`, `ancestors`,
+  `setting`, `department_of`) are cached on the file stats of the enterprise folders and never raise.
+- **Hooks** `agents.delete` -> `agent_gone(path)` (the position is vacated, the box stays); `agents.remap` ->
+  `remap(old, new)` (agent paths and, for a renamed project, the `projects` list); `workspace._delete` ->
+  `deleted_with(prefix, dest)` (agents vacated, a deleted project unlinked, what was linked kept in the trashed
+  folder); `trash.restore` -> `restored(dest, old_prefix, new_prefix)` (the enterprise state, or the links of a
+  project / topic, come back). `agent_guard.private_paths` hides the folders of the enterprises an agent has no seat in.
+
 ## maxxing.backup  (owner: connectivity)
 - `run() -> dict`, `restore(ref=None) -> dict`, `restore_from(repo, token, ref=None)`, `status()`,
   `history(limit)`, `last_success_age_h() -> float | None` (health check).

@@ -163,7 +163,7 @@ previous night — open streams then receive `reset`. **Event** (normalised):
 ```
 
 ## Global bus
-`GET /api/stream` — **SSE**, `event: invalidate`, `data: {"topics": ["sessions"|"workspace"|"tasks"|"crons"|"telegram"|"backup"|"health"|"extensions"|"trash"|"feed"]}`. The UI refetches the matching queries. Heartbeat every 15 s. Both SSE streams (this one and `/api/sessions/{id}/stream`) re-check their cookie before each frame (one stat of secrets.json while unchanged, a full check at least every 15 s): signed out, password changed, `sessions_not_before` or expired -> the stream ends without sending anything more (the browser's reconnect then gets `401`). Concurrent SSE streams are capped (both kinds together): 24 per sign-in, 96 in total (`streamcap`); beyond that `429 {"error":"too_many_streams"}` with `Retry-After: 5`. A session that appears, goes away or changes state/unread (turn started or ended) sends `sessions` and `workspace` together; the UI relies on that pair to refresh the workspace tree, the Claude status and the token stats.
+`GET /api/stream` — **SSE**, `event: invalidate`, `data: {"topics": ["sessions"|"workspace"|"tasks"|"crons"|"telegram"|"backup"|"health"|"extensions"|"trash"|"feed"|"enterprises"|"enterprises:<slug>"]}`. The UI refetches the matching queries. Heartbeat every 15 s. Both SSE streams (this one and `/api/sessions/{id}/stream`) re-check their cookie before each frame (one stat of secrets.json while unchanged, a full check at least every 15 s): signed out, password changed, `sessions_not_before` or expired -> the stream ends without sending anything more (the browser's reconnect then gets `401`). Concurrent SSE streams are capped (both kinds together): 24 per sign-in, 96 in total (`streamcap`); beyond that `429 {"error":"too_many_streams"}` with `Retry-After: 5`. A session that appears, goes away or changes state/unread (turn started or ended) sends `sessions` and `workspace` together; the UI relies on that pair to refresh the workspace tree, the Claude status and the token stats.
 
 ## Files
 Every `path` is absolute and inside `files_root` (else `400 bad_path` / `403 forbidden`); a path with a NUL byte or a symlink loop is `400 bad_path`.
@@ -525,6 +525,44 @@ members it names are queued as the next wave. The member's thread gets `run` / `
 (no Telegram message for group turns). Bus topics `agent-groups` and `agent-groups:<path>`. CLI:
 `maxxing agents group list | show <p>/<g> | create <p>/<g> --member A[=role]... | update <p>/<g> ... | say <p>/<g> <text>` (`group` is in
 `agent_guard.AGENT_OWNER_ONLY`: refused in every agent turn).
+
+## Enterprises
+
+An organization of agents above projects (Settings -> Features: `enterprises_page`, available only while `agents_page` is
+on: every route answers `404 {"error":"feature_off"}` while either is off). An enterprise = a folder
+`<workspace>/enterprises/<slug>/` (`CLAUDE.md`, `enterprise.json`, `files/`) with linked projects and an org chart of
+positions; a position is held by at most one agent of a linked project (`enterprises.py`, see
+INTERNALS.md#maxxingenterprises). Slugs (enterprise and position ids): `[a-z0-9][a-z0-9-]{0,47}`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/enterprises` | - | `{enterprises: [{id, name, emoji, projects, positions (count), vacant (count), top, broken}]}` sorted by id |
+| POST | `/api/enterprises` | `{id, name, emoji?, projects?, template?}` | `Enterprise` · `400 invalid_name` / `too_many` (20) / `bad_project` · `409 exists` / `project_linked` |
+| GET | `/api/enterprises/templates` | - | `{templates: [{id, name, description, positions: [{id, title, reports_to, department}]}]}` |
+| GET | `/api/enterprises/{e}` | - | `Enterprise` (every position's state in one pass) · `404 not_found` |
+| PATCH | `/api/enterprises/{e}` | `{name?, emoji?, top?, settings?, envelope?, departments?, objectives?, grants?}` (`settings` and `envelope` are merged into the current ones; `departments`, `objectives`, `grants` replace them) | `Enterprise` · `400 invalid` / `bad_position` (`top`) · `409 broken` (enterprise.json unreadable: never overwritten) |
+| DELETE | `/api/enterprises/{e}` | - | `{ok}`: the folder goes to the Trash with its state; projects, agents and sessions are untouched |
+| PUT | `/api/enterprises/{e}/projects` | `{projects: [slug], vacate?: bool}` | `Enterprise` · `400 bad_project` · `409 project_linked` (in another enterprise) / `occupied` (a project whose agents hold positions is unlinked, unless `vacate`: they are vacated) |
+| POST | `/api/enterprises/{e}/positions` | `{id, title, reports_to?, department?, agent?, job?}` | `Enterprise` · `400 invalid_name` / `bad_position` (`reports_to` unknown) / `cycle` / `too_deep` / `too_many_reports` / `bad_agent` (not an agent of a linked project) / `too_many` (200) · `409 exists` / `agent_seated` |
+| PATCH | `/api/enterprises/{e}/positions/{pos}` | `{rev?, title?, reports_to?, department?, agent? (null = vacate), job?, worker_template?, desk?}` | `Enterprise` · the add errors · `409 stale` (a move, a seat or a vacate without the current `rev`; the body is the current chart) |
+| DELETE | `/api/enterprises/{e}/positions/{pos}?reparent_to=` | - | `Enterprise` · `409 has_reports` (reports, unless `reparent_to` names where they go; `owner` = the top) · `400 bad_position` |
+| POST | `/api/enterprises/{e}/positions/{pos}/hire` | `{topic: "projects/<p>/topics/<t>", name?}` | `{agent: AgentPath, enterprise: Enterprise}`: creates the agent (role = title + job) in a topic of a linked project and seats it · `400 bad_project` / `409 agent_seated` / the agent errors |
+| GET | `/api/enterprises/{e}/positions/{pos}/inbox` | - | `{items: [{id, kind, from, text, task, at, outside}]}` oldest first (empty when nothing waits) |
+| GET | `/api/enterprises/{e}/decisions?before=&limit=` | - | `{items: [{at, kind, by, position, text, task, session}], next}` newest first, `next` = the `before` for the next page or `null` (limit 1-200, default 50) |
+
+```
+Enterprise = {id, name, emoji, rev, projects: [slug], top: "owner"|<position id>, settings, envelope, departments,
+              objectives, grants, broken: bool,
+              positions: [{id, title, reports_to (id|null), department, agent (path|null), job, desk, worker_template?,
+                           state: working|waiting|unread|failed|off|vacant|blocked|idle,
+                           occupant: {path, display_name, avatar, enabled, sandbox}|null, cost_today, inbox (waiting
+                           deliveries), open_tasks (tasks with enterprise.id = e, enterprise.owner = pos, not done),
+                           blocked_reason}],
+              cost_today, ceiling_hit}
+```
+`rev` counts the writes of enterprise.json. A move, a seat or a vacate must send the `rev` of the chart it was drawn from
+(`409 stale` otherwise); field edits (title, job, department...) need none. Every structure change is one line of the
+decision log. Bus topics `enterprises` and `enterprises:<slug>`.
 
 ## Approvals
 
