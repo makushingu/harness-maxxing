@@ -29,7 +29,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useUI } from '@/stores/ui'
 import { openHud } from './Hud'
 import { costTip, useCostIsBilled, useResultLine } from './resultLine'
-import { useT } from '@/i18n'
+import { useT, withGroups } from '@/i18n'
 import {
   useClaudeStatus,
   useClearQueue,
@@ -92,6 +92,9 @@ import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
 import { useSlashCommands } from './slashCommands'
 import { SessionOptions, type OptionAction } from './SessionOptions'
 import { QUOTE_EVENT } from '@/features/code/api'
+import { isAgentPath } from '@/features/terminal/api'
+import { useTermUI } from '@/features/terminal/store'
+import type { TermPlace } from '@/features/terminal/TermDrawer'
 import { absTopicDir, fileQuote, findAgent, fmtCost, placeOptions, topicLabel, topicPathOf } from './util'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
@@ -371,6 +374,8 @@ function useSlimHeader(head: React.RefObject<HTMLElement | null>, stacked: boole
   return slim
 }
 
+const TermDrawer = React.lazy(withGroups(['term'], () => import('@/features/terminal/TermDrawer')))
+
 /** `agentRun`: a run of an agent shown on the Agents page - it stays where it is (no move, archive or delete: the
  *  agent manages its runs, archiving them by itself), and the archived banner is not shown. */
 export function SessionColumn({ col, sid, variant, index, count, place, agentRun }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean }) {
@@ -563,6 +568,15 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
 
   const qc = useQueryClient()
   const hudOn = useUI((s) => s.hud)
+  // The terminal drawer (Settings -> Features -> Terminal; never for agents): Ctrl+J, /terminal, the session's options.
+  const termOn = !!settings?.terminal_feature && !agentRun && !isAgentPath(path)
+  const termOpen = useTermUI((x) => !!x.bySid[sid]?.open) && termOn
+  const toggleTerm = React.useCallback((open?: boolean) => useTermUI.getState().toggle(sid, open), [sid])
+  const termPlaces = React.useMemo<TermPlace[]>(() => {
+    const out = (session?.code_repos ?? []).map((r) => ({ path: r, label: r.split('/').pop() || r }))
+    if (dir && !out.some((x) => x.path === dir)) out.push({ path: dir, label: t('term.topicFolder') })
+    return out
+  }, [session?.code_repos, dir, t])
   const hud = () => {
     const go = (path: string) => {
       navigate(path)
@@ -636,6 +650,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     onHandoff: () => idleWithTurns() && void actions.handoff(),
     onNew: path ? () => navigate(`/sessions?path=${encodeURIComponent(path)}&new=1`, { state: { mxPushed: true } }) : undefined,
     onRename: actions.rename,
+    onTerminal: termOn ? () => toggleTerm(true) : undefined,
   })
 
   // The session's options: its "..." and a right click (a long press) on its header open the same window.
@@ -677,6 +692,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
       onHandoff={actions.handoff}
       onFolder={dir ? () => navigate(`/files?path=${encodeURIComponent(dir)}`) : undefined}
       onHud={hudOn && variant !== 'mobile' ? hud : undefined}
+      onTerminal={termOn ? () => toggleTerm(true) : undefined}
       onArchive={actions.archive}
       onDelete={actions.del}
       column={columnActions}
@@ -692,6 +708,12 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
       <div
         ref={body}
         className="relative flex min-h-0 flex-1 flex-col"
+        onKeyDown={(e) => {
+          if (termOn && e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'j') {
+            e.preventDefault()
+            toggleTerm()
+          }
+        }}
         onDragEnter={(e) => isFileDrag(e) && setDragFiles(true)}
         onDragOver={(e) => {
           if (contentDragOver(e, col.key, sid)) return
@@ -779,6 +801,22 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
         {!notFound && aside.aside && <AsidePanel aside={aside.aside} onClose={aside.close} />}
         {!notFound && <ApprovalCards session={session} />}
         {!notFound && <TaskBar sid={sid} running={running} />}
+        {!notFound && termOpen && (
+          <React.Suspense fallback={null}>
+            <TermDrawer
+              sid={sid}
+              places={termPlaces}
+              onHide={() => {
+                toggleTerm(false)
+                composer.current?.focus()
+              }}
+              onQuote={(text) => {
+                composer.current?.quote(text)
+                composer.current?.focus()
+              }}
+            />
+          </React.Suspense>
+        )}
         {!notFound && (
           <StackedComposer colKey={col.key} stacked={!!place && place.n >= 3}>
           <Composer

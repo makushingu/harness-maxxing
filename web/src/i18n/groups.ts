@@ -37,6 +37,8 @@ export const GROUPS = {
   composer: ['slash', 'mention', 'effort'],
   // the Changes view of a session (features/code): loaded when it opens
   code: ['code'],
+  // the terminal drawer and its setting (features/terminal)
+  term: ['term'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

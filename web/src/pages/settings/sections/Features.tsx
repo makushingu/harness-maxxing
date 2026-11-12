@@ -9,6 +9,7 @@ import { Skeleton, Switch } from '@/components/ui'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Callout, SettingRow } from '@/features/common'
 import { BrowserBadge, FeaturePages } from '@/features/settings/FeaturePages'
+import { TerminalSetting } from '@/features/terminal/TerminalSetting'
 import { useSessionsUI } from '@/pages/sessions/store'
 import { useTeamUI } from '@/features/team/store'
 import { RESULT_FIELDS, useResultLine } from '@/pages/sessions/resultLine'
@@ -40,6 +41,7 @@ export function FeaturesSection() {
           <Callout tone="info">{t('hud.fallback')}</Callout>
         </div>
       )}
+      <TerminalSetting on={!!s.terminal_feature} />
       {/* was in General -> Appearance before 2.0.0a132; saved on the server */}
       <div className="grid gap-3 py-4 last:pb-0">
         <div className="grid gap-0.5">

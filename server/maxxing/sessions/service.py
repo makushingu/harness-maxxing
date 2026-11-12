@@ -166,7 +166,8 @@ def public(meta: dict) -> dict:
             "unread": bool(finished) and finished > seen and m.get("state") != "running",
             "last_text": m.get("last_text") or "", "error": m.get("error") or None,
             "plan_mode": bool(m.get("plan_mode")), "plan_ready": bool(m.get("plan_ready")),
-            "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"])}
+            "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"]),
+            "code_repos": [r for r in (m.get("code_repos") or []) if isinstance(r, str)]}
 
 
 def _approvals_waiting(sid: str) -> int:

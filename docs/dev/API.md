@@ -104,7 +104,8 @@ Session = {
   plan_mode: bool,                    // turns run read-only (`--permission-mode plan`) and end with a plan
   permission_mode: string,            // set by its cron ("" = the topic's, else the global mode)
   plan_ready: bool,                   // a plan-mode turn finished OK: its plan waits for POST /plan/approve
-  approvals: int                      // tool calls waiting for the user's Allow / Deny (agent with `approvals`)
+  approvals: int,                     // tool calls waiting for the user's Allow / Deny (agent with `approvals`)
+  code_repos: [str]                   // git repositories its turns changed (Changes view, terminal tabs), at most 8
 }
 ```
 | GET | `/api/sessions?path=&archived=0\|1` | – | `[Session]` sorted by `updated` desc (no path = all) |
