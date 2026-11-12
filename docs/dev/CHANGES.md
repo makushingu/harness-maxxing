@@ -27,6 +27,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
   then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
   save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
+- `web/src/pwa/index.ts`: a worker that reaches `installed` while a page is open is asked its `VERSION`; when every
+  hashed file of the page's `index.html` (entry script, styles, read at `initPWA`) is in its `mx-assets-<version>`
+  precache, the page is that build already (navigations are network-first): `SKIP_WAITING` with `silentSwap`, no
+  reload. Before, only a worker already waiting at `load` was swapped silently; one still installing (precache on a
+  slow link) went through `announceUpdate` and reloaded the freshly loaded page. No answer in 3 s or a file missing:
+  the usual `announceUpdate` (a tab left open on an older build reloads as before).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

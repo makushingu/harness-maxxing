@@ -32,6 +32,10 @@ Fixed:
   nightly backup as a leaked secret.
 - **Restoring a deleted scheduled job on a full disk no longer leaves it in the crontab.** If the job cannot be saved,
   the crontab goes back to what it was, as it already did when you create, change or delete a job.
+- **Slow connection: the interface no longer loads twice after an update.** Opening or reloading Harness Maxxing
+  after an update loaded the new version, then reloaded the page by itself a few seconds later (up to 20 s on a
+  phone network), once its offline copy was ready. The page you just loaded is kept; a tab left open over an update
+  still switches to the new version by itself.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
