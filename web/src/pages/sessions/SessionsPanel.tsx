@@ -20,6 +20,8 @@ export default function SessionsPanel() {
   const focusedId = focusedCol?.kind === 'session' ? focusedCol.id : null
   const { data: session } = useSessionSeeded(focusedId)
   const activePath = focusedCol?.kind === 'new' ? focusedCol.path : (session?.path ?? null)
+  // The drawer's 🔍 filters the tree by title or folder, as on the desktop list.
+  const [query, setQuery] = React.useState('')
   const openIds = React.useMemo(() => new Set(focusedId ? [focusedId] : []), [focusedId])
   // Switching sessions replaces the history entry: Back leaves the app's sessions instead of walking through them.
   const go = (search: string) => {
@@ -32,7 +34,8 @@ export default function SessionsPanel() {
     <>
       <SessionTree
         touch
-        head={(actions) => <ListHead label={t('nav.sessions')}>{actions}</ListHead>}
+        query={query}
+        head={(actions) => <ListHead label={t('nav.sessions')} search={{ value: query, onChange: setQuery, placeholder: t('sessions.tree.search') }}>{actions}</ListHead>}
         className="min-h-0 flex-1"
         onOpenSession={onOpen}
         onNewSession={onNew}
