@@ -12,6 +12,7 @@ import {
   Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Skeleton, toast, WithContextMenu,
 } from '@/components/ui'
+import { confirm } from '@/components/ui/alert-dialog'
 import { Callout } from '@/features/common'
 import { Avatar } from '@/features/profile/Avatar'
 import { friendsOf, PersonAvatar, usePresence } from './people'
@@ -172,7 +173,7 @@ function FriendMenuItems({ contact, name }: { contact: TeamContact; name: string
       <DropdownMenuSeparator />
       <DropdownMenuItem
         destructive
-        onSelect={() => window.confirm(t('team.cx.removeConfirm', { name: name || t('team.friends.someone') })) && remove.mutate(contact.address)}
+        onSelect={async () => (await confirm({ title: t('team.cx.remove'), description: t('team.cx.removeConfirm', { name: name || t('team.friends.someone') }), confirmText: t('common.remove') })) && remove.mutate(contact.address)}
       >
         <Trash2 className="size-4" /> {contact.status === 'waiting' ? t('team.friends.cancel') : t('team.cx.remove')}
       </DropdownMenuItem>
