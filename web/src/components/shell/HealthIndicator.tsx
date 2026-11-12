@@ -7,9 +7,8 @@ import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { resolveTheme, useUI, type Theme } from '@/stores/ui'
-import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
+import { ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
-import { CloseOnNav } from './CloseOnNav'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
@@ -185,34 +184,17 @@ const alertHover = {
  *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The health line (folded:
- *  the dot) leads to the problems (Notifications, health source, or Settings -> System when they stay out of the feed),
- *  the meters to Settings -> System, the Claude entry to Settings -> Stats. While a problem is open, the health line
- *  (or the dot) opens a small panel with the problems instead (some, like a failed job, sit under another source). Under it, the theme and
+ *  the dot) leads to the whole Notifications feed (or Settings -> System when health problems stay out of the feed),
+ *  the meters to Settings -> System, the Claude entry to Settings -> Stats. Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
 export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, at the start of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
   const t = useT()
   const s = useStatusLine()
   const rows = useHealthRows()
   const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
-  // the health line leads to the problems: the Notifications feed (health source) when they go there, else Settings -> System
+  // the health line leads to the whole Notifications feed (a failed job sits under Crons, not Health), else Settings -> System
   const { data: feedSettings } = useFeedSettings()
-  const issuesTo = feedSettings?.health ? '/feed?source=health' : '/settings/system'
-  // a problem open: the health line (folded: the dot) opens a small panel with the problems instead of leaving the page
-  const [open, setOpen] = React.useState(false)
-  const close = React.useCallback(() => setOpen(false), [])
-  const issuesPanel = (
-    <PopoverContent side="right" align="end" className="w-80 p-3" data-testid="status-panel">
-      <HealthIssues />
-      <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2 text-xs">
-        <Link to="/feed" className="rounded px-1 py-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          {t('feed.title')} →
-        </Link>
-        <Link to="/settings/system" className="rounded px-1 py-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          {t('health.details')} →
-        </Link>
-      </div>
-    </PopoverContent>
-  )
+  const issuesTo = feedSettings?.health ? '/feed' : '/settings/system'
   const lang = useLang()
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const metersLabel = [t('health.details'), ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
@@ -229,7 +211,6 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   const link = 'outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring'
   return (
     <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-2 border-t border-sidebar-border px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
-      {open && <CloseOnNav onNav={close} />}
       <div data-tour="health" data-testid="status-line" className={cn('grid h-[76px] w-full min-w-0 content-center gap-2', collapsed && 'w-11 justify-items-center')}>
         {!rows ? (
           <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
@@ -245,14 +226,11 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
             </Tooltip>
             <span className="flex size-3 items-center justify-center">
               {alert && (
-                <Popover open={open} onOpenChange={setOpen}>
-                  <Tooltip content={s.health} side="right">
-                    <PopoverTrigger aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
-                      <LiveDot tone={s.tone} />
-                    </PopoverTrigger>
-                  </Tooltip>
-                  {issuesPanel}
-                </Popover>
+                <Tooltip content={s.health} side="right">
+                  <Link to={issuesTo} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
+                    <LiveDot tone={s.tone} />
+                  </Link>
+                </Tooltip>
               )}
             </span>
           </>
@@ -274,14 +252,7 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
                   <ChevronRight className="size-3.5 shrink-0 opacity-70" />
                 </>
               )
-              return alert ? (
-                <Popover open={open} onOpenChange={setOpen}>
-                  <PopoverTrigger data-testid="status-issues" className={cls}>
-                    {inner}
-                  </PopoverTrigger>
-                  {issuesPanel}
-                </Popover>
-              ) : (
+              return (
                 <Link to={issuesTo} data-testid="status-issues" className={cls}>
                   {inner}
                 </Link>
