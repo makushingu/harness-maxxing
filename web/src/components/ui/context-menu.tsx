@@ -119,6 +119,9 @@ export function useContextMenu({ disabled = false, links = false, touch = true }
           onPointerDown={stop}
           onMouseDown={stop}
           onTouchStart={stop}
+          onTouchMove={stop}
+          onTouchEnd={stop}
+          onTouchCancel={stop}
           onContextMenu={(e) => {
             e.preventDefault()
             e.stopPropagation()

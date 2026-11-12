@@ -55,3 +55,11 @@ def test_show_more_is_big_enough_to_tap():
     feed = (WEB / "features" / "feed" / "FeedItems.tsx").read_text()
     more = re.search(r'<button[^>]*onClick=\{\(\) => setMore\(!more\)\}[^>]*className="([^"]*)"', feed)
     assert more and "pointer-coarse:before:absolute" in more[1] and "relative" in more[1].split()
+
+
+def test_a_tap_in_a_context_menu_opened_by_a_long_press_reaches_its_item():
+    # the menu is portaled but React touch events still bubble to the row: the row's long press saw the touchend of
+    # the tap on an item and called preventDefault, so no click and the item never ran
+    menu = (WEB / "components" / "ui" / "context-menu.tsx").read_text()
+    for ev in ("onTouchStart", "onTouchMove", "onTouchEnd", "onTouchCancel"):
+        assert f"{ev}={{stop}}" in menu, ev
