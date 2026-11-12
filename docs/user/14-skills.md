@@ -35,6 +35,7 @@ The page only reads the skills: changes go through Claude (or your editor), neve
 | `maxxing-tasks` | you talk about your tasks or the board |
 | `maxxing-feed` | you say "notify me when…", or want sales, orders, deployments, e-mails or a script's results reported (webhooks, `maxxing feed post`) |
 | `maxxing-mail` | you talk about your inbox, mail to answer or sort, drafts, or want an agent to handle a mailbox |
+| `maxxing-enterprises` | you want a company of agents (an org chart with leads, delegation, escalation and approvals), or an agent that holds a position must delegate, hand in work or ask for a decision (see [Enterprises](enterprises)) |
 | `maxxing-mcp` | you want Claude to use a service through MCP ("connect the Google Ads MCP"), an MCP tool is missing or needs a sign-in |
 | `maxxing-extension` | you want a dashboard widget (Card, or HTML: a game, a canvas) or a custom page |
 | `maxxing-customize` | you want to change the product itself, or an update reports that your customizations need adapting |

@@ -236,9 +236,11 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing enterprise escalate TEXT [--task T]` / `answer ID TEXT` | from a position: ask one level up / answer an escalation of a report |
 | `maxxing enterprise request CATEGORY TEXT [--amount N]` / `decide ID allow\|deny [REASON]` | from a position: ask for something / decide a request of the team |
 | `maxxing enterprise objective set ID VALUE` | from a position: the value of an objective it owns |
+| `maxxing enterprise route DEPARTMENT TEXT` | from the front desk position: pass a request on to a department (a task marked as coming from outside) |
+| `maxxing enterprise worker start TEXT [--for TASK]` / `list` / `stop ID` | from a position: start a temporary worker (needs workers set to visible) / list them / stop one (`stop`: the owner) |
 | `maxxing enterprise profile [--section S] [--json]` | the company profile (S: products, hours, terms, contact, faq) |
 
-`maxxing enterprise` commands from the last six rows act as the position of the calling agent; the owner adds `--as POSITION`
+`maxxing enterprise` commands from `assign` down to `worker` act as the position of the calling agent; the owner adds `--as POSITION`
 (and `--enterprise SLUG` when there are several). The structure commands (create, link, position, settings, grant, ...) are
 refused in agent turns.
 

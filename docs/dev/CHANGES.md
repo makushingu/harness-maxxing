@@ -59,6 +59,26 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   run now comes first.
 - Upgrade note: agents whose cron jobs have a timeout above `limits.timeout_s` (now capped by `run_timeout`).
 
+- Enterprises (an org chart of agents above projects; off by default, config `enterprises_page`, needs
+  `agents_page`, no migration). Modules: `enterprises.py` (files, lookups, structure, `rev`, lock `enterprises`),
+  `enterprise_flow.py` (inboxes, deliveries, delegated tasks, escalations, the tick loop), `enterprise_policy.py`
+  (requests, grants, envelopes, communication, trust chain), `enterprise_reports.py` (digest, weekly, monthly,
+  Overview, owner notifications), `enterprise_knowledge.py` (knowledge cascade, profile), `enterprise_workers.py`,
+  `enterprise_desk.py` (front desk, insights), `enterprise_io.py` (export / import zip), `enterprise_templates.py`,
+  `cmd_enterprise.py` (`maxxing enterprise`, module docstring = command list), routes in `api/enterprises.py`,
+  `api/enterprise_flow.py`, `api/enterprise_policy.py`, `api/enterprise_profile.py`, `api/enterprise_reports.py`,
+  `api/enterprise_workers.py`, `api/enterprise_desk.py` (see API.md#enterprises). Files:
+  `<workspace>/enterprises/<slug>/{CLAUDE.md, enterprise.json, profile.json, files/}`, state
+  `<state>/enterprises/<slug>/`. Config: `enterprises_page` (Settings -> Features), `telegram.enterprise_threads`
+  (`{slug: {tid, name}}`). Bus topics `enterprises` and `enterprises:<slug>`; feed source `enterprises` (owner
+  cards, refs `enterprise:<slug>:<id>`). `agents.gate` has the reason `envelope` (and `busy`) from the department /
+  enterprise ceilings; `agents.run_settings` appends the cascade to the system note and lowers the per-run budget;
+  `agent_guard` allows the turn commands of `maxxing enterprise` as the caller's position, refuses the structure
+  ones, and hides the folders of enterprises an agent holds no seat in; `bodylimit` lists `/api/public/` (the desk
+  link, no session). Delegated tasks are entries of `tasks.json` with an `enterprise` sub-object (`{id, owner,
+  requester, parent, deliverable, stage, hops, outside}`). Agents carry `enterprise`, `position`, `reports_to` in
+  the data given to Office extension views. Skill `maxxing-enterprises`, user docs page
+  `docs/user/33-enterprises.md`.
 - #75 (20 reported bugs, 18 fixed, each with its test): `telegram/format.py` measures the 4096 limit in UTF-16 units
   (`_u16`, in `render`, `_split_big`, `code`, `plain`); `mail/send._text` (HTML fallback shared by draft, reply,
   forward); `mail/imap._size` counts a `=\r\n` soft break as 0; `infra/actions.pg_install` raises `start_failed` when

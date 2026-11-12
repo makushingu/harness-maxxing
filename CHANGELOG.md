@@ -51,6 +51,14 @@ Fixed:
 ## 2.0.0-alpha.141 - 2026-11-12
 
 New:
+- **Enterprises**: an org chart for your agents. Link several projects, draw positions with leads, hire or seat an
+  agent in each, and let work go down (delegation) and blockers go up (escalation) while you get one daily digest
+  instead of one message per agent. A shared daily budget, three autonomy profiles that decide what a lead may approve
+  alone, and a Telegram thread per enterprise. Off by default: Settings -> Features -> Enterprises (needs Agents).
+  [Show me](#show:enterprises)
+  - **Front desk**: a labelled AI assistant on a public chat link answers customers and passes requests to the right
+    team.
+  - **Reports**: daily digest, weekly and monthly reports, and an Overview of cost, late work and what waits for you.
 - **Right click everywhere**: a right click (a long press on a phone) on a row or a card opens its menu where you
   clicked - settings lists, crons, notifications, mail, tasks, Team, an agent's triggers, a session's header. The
   browser's menu stays on selected text, fields and links.
