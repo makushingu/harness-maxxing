@@ -19,6 +19,8 @@ New:
   you type finds sessions by their title first, at once, before pages, settings and commands.
 - **Phone: a simpler sessions drawer.** All / Running / Unread sit on one line, full width; the view options and
   the New session button moved up beside the title.
+- **Phone: Team opens on the chats.** The page is the list of chats itself (no more "Choose a chat" screen with a
+  button that slid the list in); a chat has a back arrow to the list, and the phone's back gesture returns to it too.
 
 Fixed:
 - **Phone: closing a tab no longer sweeps the tabs sideways.** In tabs view, closing or changing a tab restarted

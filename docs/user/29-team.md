@@ -17,8 +17,8 @@ opening a chat, brings them back. To do without bubbles, turn off **Settings -> 
 Team (per browser): Team then opens its own page.
 
 On the Team page, on a computer, the chats sit in the second bar next to the sidebar (see
-[Sessions](04-sessions.md#layout)); on a phone, **☰** at the top left opens them and the page shows the first chat
-(with nothing to show, **Open the list**). The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
+[Sessions](04-sessions.md#layout)); on a phone, the page is the list of chats: tap one to open it, **←** (or the back gesture)
+returns to the chats, and **☰** at the top left shows them over the chat open. The list has two tabs: **Chats** and **Friends** (your contacts, who is online, pending requests, **Add a friend**).
 
 ## Connecting with someone
 

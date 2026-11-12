@@ -172,14 +172,16 @@ export function SecondBar({ left }: { left: number }) {
   )
 }
 
-/** The page's list in the second-level sidebar, with its head (the page's name and the open / close button). Desktop
- *  only: the touch layout has its own drawers. */
-export function PageList({ id, entry, label, icon: Icon, children }: {
+/** The page's list in the second-level sidebar, with its head (the page's name and the open / close button). Touch
+ *  layout: in the left drawer, or in the page itself while `inline` (nothing is picked yet: the list is the page). */
+export function PageList({ id, entry, label, icon: Icon, inline, children }: {
   id: string
   /** the main sidebar entry that shows the list on hover when closed, when it is not the page's own (`id`) */
   entry?: string
   label: string
   icon?: React.ComponentType<{ className?: string }>
+  /** touch layout: shown in the page, in place (no drawer to open, no ☰) */
+  inline?: boolean
   children: React.ReactNode
 }) {
   const t = useT()
@@ -187,7 +189,9 @@ export function PageList({ id, entry, label, icon: Icon, children }: {
   const open = useUI((s) => s.secondBarOpen)
   const setOpen = useUI((s) => s.setSecondBarOpen)
   const touch = useCompact()
+  const here = touch && !!inline
   React.useLayoutEffect(() => {
+    if (here) return
     useLists.setState({ list: id, entry: entry ?? id })
     const a = armed
     armed = null
@@ -196,7 +200,8 @@ export function PageList({ id, entry, label, icon: Icon, children }: {
       useLists.setState({ peek: true })
     }
     return () => useLists.setState((s) => (s.list === id ? { list: null, entry: null, peek: false } : s))
-  }, [id, entry])
+  }, [id, entry, here])
+  if (here) return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="page-list-inline">{children}</div>
   if (!slot) return null
   const toggle = open ? t('shell.listHide') : t('shell.listKeep')
   return createPortal(
