@@ -530,7 +530,7 @@ def _handler(a) -> int:
         if a.action == "list":
             if g:
                 guard.need(g, "read")
-            res = imap.messages(acc, a.folder, a.page, a.limit, a.search, a.unread, a.flagged,
+            res = imap.messages(acc, a.folder, max(0, a.page), a.limit, a.search, a.unread, a.flagged,
                                 senders=g["senders"] if g else None)
             if out:
                 out(res)

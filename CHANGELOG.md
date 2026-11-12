@@ -63,6 +63,9 @@ Fixed:
   happen), the dashed frame stayed over the conversation until the next drag.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
+- **CLI output**: `maxxing proxy status` shows the port in its hint when the address is on no interface;
+  `maxxing deps check --json` and `maxxing import --json` print JSON, not a text line, when osv.dev is
+  unreachable or the zip is missing or refused; a negative `--page` of `maxxing mail list` lists the first page.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

@@ -68,6 +68,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `dragleave` / `drop`; a cancelled drag fires neither. It is now `dropStack` in the sessions store (`setDropStack`),
   cleared with `dropBeside` by `setDragging(null)` (grip `dragend`, document `dragend` / `drop`), and one session at
   most shows it.
+- CLI output: `cmd_proxy` status hint f-string; `cmd_deps` (`deps check --json`) prints `{checked: 0, vulnerable: [], skipped}` when
+  OSV is down; `cmd_import._fail` prints `{"error": code, "message"}` in --json; `cmd_mail list` clamps `--page` with `max(0, ...)`.
+  Tests: `test_status_names_the_port_when_the_address_is_on_no_interface`, `test_check_json_stays_json_when_osv_is_unreachable`,
+  `test_cli_json_errors_stay_json`, `test_cli_list_never_passes_a_negative_page`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
