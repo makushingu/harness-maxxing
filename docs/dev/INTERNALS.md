@@ -357,6 +357,95 @@ Enterprises: an org chart of agents above projects (API.md#enterprises). Needs `
   folder); `trash.restore` -> `restored(dest, old_prefix, new_prefix)` (the enterprise state, or the links of a
   project / topic, come back). `agent_guard.private_paths` hides the folders of the enterprises an agent has no seat in.
 
+## maxxing.enterprise_flow  (owner: organisation)
+Inboxes, deliveries, delegated tasks and escalations of the enterprises (API.md#enterprises); `api/enterprise_flow.py`
+holds the routes and the one background loop (`MAXXING_ENTERPRISE_TICK=0` switches it off, `tick_all()` is what it runs).
+- `deliver(slug, pos, kind, text, *, sender, task, outside, session)` appends to `inbox/<pos>.jsonl`; one run of the
+  occupant (`agents.fire`, trigger `enterprise:<slug>:<sender|owner>`) takes everything waiting once the agent's
+  `debounce_s` has passed since the oldest item, started by a timer (server only) or by `tick`. A run that cannot start
+  (vacant, `gate`, ceiling) leaves the items; `flow.json` keeps since when, and after `escalation_timeout_h` they
+  climb as an escalation. Taken items move to `inbox/<pos>.seen.jsonl` (last 50). With `trusted_delivery` the orders
+  from a lead (assign, answer, decision) go in clear in the prompt, everything else stays framed outside data.
+- Tasks: `assign|done|block` write tasks.json through `api/tasks.py` (`add_task`, `update_task`, `get_task`); the
+  `enterprise` object is `{id, owner, requester ("" = owner), parent, deliverable, stage: ""|review|blocked, hops,
+  outside, chain, summary?, reason?}`. A contributor's `done` sets stage `review` and tells the requester, the
+  requester's `done` sets status done; `assign --task T` sends it back (stage cleared, one more hop).
+- Escalations live in `escalations.json`; `tick` climbs the expired ones (and those whose holder became vacant,
+  switched off or out of budget) one level; at the top the owner is notified (`enterprise_reports.notify_owner`, ref
+  `enterprise:esc:<slug>:<id>`). While the feature is off, `tick` stores the moment (`<state>/enterprises/.flow.json`)
+  and shifts every clock by the pause when it is back on.
+
+## maxxing.enterprise_reports  (owner: organisation)
+The owner's reports, the Overview numbers and the owner notifications (API.md#enterprises); `api/enterprise_reports.py`.
+- **Digest** `build(slug, "daily")`: the server collects without Claude, per position since the cursor of the last
+  digest (`reports/index.json`): results posted in the agent's thread (first line), runs failed / skipped, tasks done /
+  opened / late (tasks.json), escalations open and requests waiting (`enterprise_flow.escalations`,
+  `enterprise_policy.requests`, else the state files), cost of the day. Nothing new = no call, no report, no message.
+  Else ONE tool-less `claude -p` call (`_ask`: the call Team's Summarize makes, model `sonnet`, `--tools ""`, run from
+  `claude-titles`, `MAXXING_CLAUDE_BIN` in tests) writes done / next / blocked per department. Its `total_cost_usd` is
+  stored in the index (`cost[day]`, and on the report) and counts against the enterprise's `usd_per_day` together with
+  the occupants' cost: ceiling reached (or the call failed) = the raw list is the report (`raw: true`), no call.
+  Setting `digest.per_lead`: one more call per lead whose team has news (at most 10), appended to the report, not
+  delivered to the leads (a delivery would start a paid run of each). `digest.titles_only`: no result excerpts.
+- **Rituals** `tick(now)` (blocking: Claude calls; the loop runs it in a thread) builds, once per period, the daily
+  digest (setting `digest.enabled`, from `digest.hour`), the weekly review (Monday, from 08:00) and the monthly report
+  (the 1st, from 08:00, covers the previous month); the periods done are in the index, so a restart repeats nothing.
+  Reports are `<state>/enterprises/<slug>/reports/<date>-<kind>.md` (last 120 kept).
+- **Overview** `overview(slug)`: one pass over the sessions' metas (`agents._agent_metas`) and tasks.json; no call.
+- **notify_owner** posts a feed event (source `enterprises`, `notify=False`) and sends it to the enterprise's
+  Telegram thread (`gateway.notify_enterprise`: config `telegram.enterprise_threads`, label `🏢 <name>`; simple mode:
+  the main chat with the enterprise's emoji in front). Every message is bound `{"enterprise": slug, "ref": ref}`
+  (`gateway.bound`): a reply to it, or any text in the thread, goes to `telegram_answer` ->
+  `enterprise_flow.answer_from_telegram(slug, ref or replied text, text)` when it exists, else
+  `enterprise_flow.answer` for a ref `enterprise:esc:<slug>:<id>`, else a note.
+
+## maxxing.enterprise_policy  (owner: organisation)
+Who decides, who may spend, who may write to whom. Nothing here grants a right: an allowed request only says yes.
+- **Requests** `<state>/enterprises/<slug>/requests.json`. `CATEGORIES` = the rows of the matrix (spec 7.1):
+  `decider(slug, pos, category, amount=, outside=)` -> `free | lead | owner` from the autonomy profile (department
+  override through `enterprises.setting`), the spending threshold (setting `spending_threshold`, else the department
+  envelope's usd, else the enterprise's: above it the row is `spending_high`) and grants. Invariants applied in code:
+  outside-started -> owner; nobody decides their own request; a lead decides only inside its subtree and only what
+  waits for it (`403 self_decision | not_in_subtree | not_decider`); the "owner" rows are never delegable; a grant
+  (owner-made, `until` within 30 days, only rows a lead decides in autonomous, `ceiling` for amounts, grantee above
+  the requester) makes the grantee the decider. `request()` -> free: allowed and logged; lead: `enterprise_flow.deliver(
+  ..., "request")` to the lead (a vacant or switched-off lead is skipped) with a deadline of `escalation_timeout_h`;
+  owner: `enterprise_reports.notify_owner` card with Allow / Deny / Open, `ref` `enterprise:<slug>:<id>` (feed
+  `HANDLERS["enterprise"]` -> `feed_action`, which hands the refs it does not own, `enterprise:esc:...`, to
+  `enterprise_flow.feed_action`; the source `enterprises` is in `feed.PRODUCT_SOURCES`; these cards are loud like
+  approvals). `decide(by=None|position)` delivers the decision to the requester's inbox, logs it and resolves the
+  card. `tick(now)` (called by the enterprise loop) climbs requests past their deadline and drops ended grants.
+- **Envelopes** `usd_per_day` of the enterprise and of the department: `agents.gate` answers `envelope` (spent) or
+  `busy` (all held) through `over_ceiling(path)` / `ceiling_held(path)`; `agents.run_settings` lowers the per-run
+  budget with `cap(path, left, session=)` (also for an agent with no budget of its own); one owner notification per
+  envelope per day. `keys` / `domains` envelopes: `agents.update` (so `apply_change` too) calls
+  `check_envelope(path, fields)` -> `400 exceeds_envelope` for what is added beyond the lists; `over_envelope(slug)`
+  lists the occupants already over (flagged in the chart, never edited).
+- **Communication** `can_send(from, to)`, called by `maxxing agents send` (and `run`) between two agents of one
+  enterprise: strict = own lead and reports; leads = plus lead to lead; open = plus the `allow` pairs. The refusal says
+  who to go through. `trusted_delivery(slug, outside)` = the `trust_chain` setting and no outside run in the chain.
+
+## maxxing.enterprise_workers, maxxing.enterprise_desk  (owner: organisation)
+- **Workers** (`enterprise_workers`, `<state>/enterprises/<slug>/workers.json` `{seq, items, pending}`): `start(slug, pos, text,
+  task=, session=, outside=)` needs `settings.workers = visible`, an occupant and a `worker_template`, files a policy request
+  `worker`; allowed at once -> `spawn` (agents.create in the occupant's topic: sandbox, no keys, domains or triggers, the
+  occupant's writable list, template model and budget (1 USD when 0), name `<pos>-w<n>`; then `agents.fire` with the task),
+  else kept in `pending` and made by `tick` once the request is allowed (dropped when denied). At most `limits.workers_live`
+  live; `tick(now)` retires a worker (agents.delete, its result handed to the position's inbox) when its run ended and its
+  linked task is done, or after 24 h; `stop(slug, id)` is the owner's. `workers: off` adds `Agent` and `Task` to the
+  occupant's `--disallowedTools` (`agents._enterprise_no_workers`); `discreet` / `visible` add a sentence to the note.
+- **Desk** (`enterprise_desk`): `check_live` (called by `enterprises.update` when `desk.enabled` turns on) -> `400
+  unprotected_occupants`. Public link: `public_info/public_post(token, client, message, conv)` (api/enterprise_desk.py,
+  `/api/public/desk/<token>`, listed public in bodylimit): token compared in constant time, `rate_per_hour` per client key
+  (in memory), `max_chars`, 40 visitor messages a conversation, one unanswered message at a time, the desk agent's own gate
+  (budget / rate) answers a generic 503. A conversation is `desk/<conv>.jsonl` lines `visitor | run | assistant | error`;
+  the answer is read from the occupant's thread (`kind result`, session of the run) on the next poll and labelled "AI
+  assistant of <name>" (`label()`, the AI mention cannot be removed). `route(slug, pos, department, text)` (desk position
+  only, 30 an hour) -> `enterprise_flow.assign(slug, "", lead_of_department, ..., outside=True)`. `tick`: `prune` by
+  `retention_days`, then once per ISO week `run_insights` (one tool-less call, `_ask`) -> `insights.json`, `suggestions.json`
+  (FAQ entries; `decide_suggestion` accept adds to the profile), one outside task per lead named by the table, an owner note.
+  Nothing without a conversation. Conversations are never exported nor in the memory backup.
+
 ## maxxing.backup  (owner: connectivity)
 - `run() -> dict`, `restore(ref=None) -> dict`, `restore_from(repo, token, ref=None)`, `status()`,
   `history(limit)`, `last_success_age_h() -> float | None` (health check).
