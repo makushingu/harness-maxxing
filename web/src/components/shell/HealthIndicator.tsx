@@ -7,8 +7,9 @@ import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { resolveTheme, useUI, type Theme } from '@/stores/ui'
-import { ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
+import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
+import { CloseOnNav } from './CloseOnNav'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
@@ -185,7 +186,8 @@ const alertHover = {
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The health line (folded:
  *  the dot) leads to the problems (Notifications, health source, or Settings -> System when they stay out of the feed),
- *  the meters to Settings -> System, the Claude entry to Settings -> Stats; no panel (the touch menu keeps StatusPanel). Under it, the theme and
+ *  the meters to Settings -> System, the Claude entry to Settings -> Stats. While a problem is open, the health line
+ *  (or the dot) opens a small panel with the problems instead (some, like a failed job, sit under another source). Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
 export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, at the start of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
   const t = useT()
@@ -195,6 +197,22 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   // the health line leads to the problems: the Notifications feed (health source) when they go there, else Settings -> System
   const { data: feedSettings } = useFeedSettings()
   const issuesTo = feedSettings?.health ? '/feed?source=health' : '/settings/system'
+  // a problem open: the health line (folded: the dot) opens a small panel with the problems instead of leaving the page
+  const [open, setOpen] = React.useState(false)
+  const close = React.useCallback(() => setOpen(false), [])
+  const issuesPanel = (
+    <PopoverContent side="right" align="end" className="w-80 p-3" data-testid="status-panel">
+      <HealthIssues />
+      <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2 text-xs">
+        <Link to="/feed" className="rounded px-1 py-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          {t('feed.title')} →
+        </Link>
+        <Link to="/settings/system" className="rounded px-1 py-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          {t('health.details')} →
+        </Link>
+      </div>
+    </PopoverContent>
+  )
   const lang = useLang()
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const metersLabel = [t('health.details'), ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
@@ -210,8 +228,9 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   )
   const link = 'outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring'
   return (
-    <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
-      <div data-tour="health" data-testid="status-line" className={cn('grid h-[66px] w-full min-w-0 content-center gap-1.5', collapsed && 'w-11 justify-items-center')}>
+    <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-2 border-t border-sidebar-border px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
+      {open && <CloseOnNav onNav={close} />}
+      <div data-tour="health" data-testid="status-line" className={cn('grid h-[76px] w-full min-w-0 content-center gap-2', collapsed && 'w-11 justify-items-center')}>
         {!rows ? (
           <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
         ) : collapsed ? (
@@ -226,34 +245,50 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
             </Tooltip>
             <span className="flex size-3 items-center justify-center">
               {alert && (
-                <Tooltip content={s.health} side="right">
-                  <Link to={issuesTo} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
-                    <LiveDot tone={s.tone} />
-                  </Link>
-                </Tooltip>
+                <Popover open={open} onOpenChange={setOpen}>
+                  <Tooltip content={s.health} side="right">
+                    <PopoverTrigger aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
+                      <LiveDot tone={s.tone} />
+                    </PopoverTrigger>
+                  </Tooltip>
+                  {issuesPanel}
+                </Popover>
               )}
             </span>
           </>
         ) : (
           <>
             {/* the health line -> the problems; its alert colour while something needs attention (stronger on hover) */}
-            <Link
-              to={issuesTo}
-              data-testid="status-issues"
-              className={cn(
+            {(() => {
+              const cls = cn(
                 link,
-                'mx-side-reveal flex h-6 min-w-0 items-center gap-2 rounded px-1.5 text-xs font-medium transition-colors duration-500',
+                'mx-side-reveal flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-xs font-medium transition-colors duration-500',
                 alert ? cn(alertBg[alert], alertHover[alert]) : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-              )}
-            >
-              <span className="flex size-4 shrink-0 items-center justify-center">
-                <LiveDot tone={s.tone} />
-              </span>
-              <span className="min-w-0 flex-1 truncate">{s.health}</span>
-              <ChevronRight className="size-3.5 shrink-0 opacity-70" />
-            </Link>
+              )
+              const inner = (
+                <>
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <LiveDot tone={s.tone} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{s.health}</span>
+                  <ChevronRight className="size-3.5 shrink-0 opacity-70" />
+                </>
+              )
+              return alert ? (
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger data-testid="status-issues" className={cls}>
+                    {inner}
+                  </PopoverTrigger>
+                  {issuesPanel}
+                </Popover>
+              ) : (
+                <Link to={issuesTo} data-testid="status-issues" className={cls}>
+                  {inner}
+                </Link>
+              )
+            })()}
             {/* CPU / RAM / disk -> Settings -> System */}
-            <Link to="/settings/system" aria-label={metersLabel} data-testid="status-system" className={cn(link, 'mx-side-reveal -mx-1.5 grid grid-cols-3 items-center gap-x-3 rounded-md px-1.5 py-1 hover:bg-accent')}>
+            <Link to="/settings/system" aria-label={metersLabel} data-testid="status-system" className={cn(link, 'mx-side-reveal -mx-1.5 grid grid-cols-3 items-center gap-x-3 rounded-md px-1.5 py-1.5 hover:bg-accent')}>
               {rows.map((r) => (
                 <span key={r.key} className="grid min-w-0 gap-1">
                   <span className="flex min-w-0 items-center gap-1.5 text-xs">
@@ -317,7 +352,7 @@ function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: Re
       </div>
     )
   return (
-    <div className="mx-side-reveal flex h-9 min-w-0 items-center gap-0.5" data-testid="sidebar-look">
+    <div className="mx-side-reveal mt-0.5 flex h-10 min-w-0 items-center gap-1" data-testid="sidebar-look">
       <span className="flex min-w-0 flex-1">{lead}</span>
       {buttons}
       {tail}

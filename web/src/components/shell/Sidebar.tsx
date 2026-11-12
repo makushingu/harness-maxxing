@@ -366,7 +366,7 @@ export const Sidebar = React.memo(function Sidebar() {
                     data-tour={navTourId(item)}
                     className={({ isActive }) =>
                       cn(
-                        'flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:[stroke-width:1.7]',
+                        'flex h-9 min-w-0 items-center gap-2.5 rounded-md px-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:[stroke-width:1.7]',
                         isActive && 'bg-accent text-foreground [&_svg]:text-primary [&_svg]:[stroke-width:2]',
                       )
                     }
