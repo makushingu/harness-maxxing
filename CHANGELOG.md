@@ -3,6 +3,19 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.145 - 2026-11-12
+
+New:
+- **An Extensions folder in the sidebar.** The extension pages you pin no longer sit among the pages: they are in an
+  **Extensions** folder at the end of them. Click it to unfold or fold it (it stays as you left it), drag a page in it
+  to reorder. Folded sidebar: its icon opens the same list beside it; on a phone it is in the menu of the drawer.
+  Which pages go in: Settings -> Pages (**In the sidebar**) or the pin of a page. The Extensions page is gone: every
+  page, pinned or not, is in Settings -> Pages and in the search (Ctrl/⌘+K). A page you had placed between two pages
+  moves into the folder.
+- **Team: Open in a bubble.** A chat in the Team page has **Open in a bubble** at its top: it goes into a bubble at
+  the bottom right and you are back where you were. The chat icon hidden in the sidebar's Team entry is gone; this
+  button also brings the bubbles back after their × hid them.
+
 ## 2.0.0-alpha.144 - 2026-11-12
 
 New:

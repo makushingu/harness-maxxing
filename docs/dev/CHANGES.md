@@ -5,6 +5,18 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.145 - 2026-11-12
+
+- Sidebar: the pinned extension pages leave the page list for `ExtFolder` (`Sidebar.tsx`), after the pages; unfolded
+  state `ui.extFolderOpen` (persisted, default true); its rows have their own drag order (`useDragOrder(..., 'ext')` ->
+  `PUT /api/extensions/pins`); folded bar: a `DropdownMenu` beside the icon. `nav.ts`: `orderEntries` / `NavEntry` /
+  `useUnpinnedPages` removed, `orderPages(items, order)`, `useNavEntries()` -> `{ pages, pins, end }`; the pages'
+  drag saves `sidebar_order` without `/x/...` (old entries are ignored). `/x` (`pages/ext/hub.tsx`) removed: the route
+  redirects to `/settings/pages`, Ctrl K's Extensions entry too; Settings -> Pages loses its All pages button.
+- Team: `TeamNavExtra` keeps only the unread count (the hover button that opened the bubble list is gone). The Team
+  page's chat header gets **Open in a bubble** (`team.toBubble`, bubbles on, desktop): `useTeamUI.openChat(id)`
+  (also clears `hidden`) then back one step in the history (or `/`). `team.bubblesHiddenDesc` updated.
+
 ## 2.0.0-alpha.144 - 2026-11-12
 
 - Sessions: the column menu (`DropdownMenu` of `Column.tsx`) is replaced by `pages/sessions/SessionOptions.tsx`
