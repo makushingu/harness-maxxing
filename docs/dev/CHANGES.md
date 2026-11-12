@@ -21,7 +21,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `maxxing-*` last; with nothing typed a skills group over 6 rows shows 5 + a "+ N more" row (`SlashItem.expand`,
   Composer `expanded`); typing: names starting with it, then names containing it, descriptions only when no name
   matches.
-- Composer `@` mentions: `pages/sessions/mentions.tsx` (`mentionAt(text, caret)`, `mentionRows`, `usedMentions`), the
+- Composer `@` mentions: `pages/sessions/mentions.tsx` (`mentionAt(text, caret)`, `mentionRows` - grouped `@session` /
+  `@agent` / `@team` with a title, folded like the `/` groups -, `usedMentions`), the
   same list component as `/` (`SlashMenu` now takes `MenuRow[]`, `label`, `keys`, rows with an `icon`); Composer prop
   `mentionsFor` (session id), `onSend(..., mentions)`. `GET /api/sessions/{id}/mentions` = `mentions.candidates()`
   (sessions not archived and not an agent's, running first, 60 max; agents if `agents_page`; `team.recipients()` if

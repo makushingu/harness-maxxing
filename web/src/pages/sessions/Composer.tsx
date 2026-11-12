@@ -15,7 +15,7 @@ import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
 import { pastedFile, pastedName } from './pasteAsFile'
 import { VoiceButton } from '@/features/voice/VoiceButton'
-import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand, type SlashGroup } from './SlashMenu'
+import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand } from './SlashMenu'
 import { mentionAt, mentionRows, usedMentions } from './mentions'
 
 const NO_ITEMS: QueueItem[] = []
@@ -427,20 +427,20 @@ export const Composer = React.forwardRef<ComposerHandle, {
   // The "/" menu: open while the text is "/name" (or "/name value" for a command with values), closed by Esc
   // until the text changes.
   const [slashOff, setSlashOff] = React.useState<string | null>(null)
-  const [expanded, setExpanded] = React.useState<SlashGroup[]>([])
+  const [expanded, setExpanded] = React.useState<string[]>([])
   const menu = props.commands && slashOff !== text ? slashItems(text, props.commands, expanded) : null
-  React.useEffect(() => {
-    if (!menu && expanded.length) setExpanded([]) // folded again the next time the menu opens
-  }, [!!menu]) // eslint-disable-line react-hooks/exhaustive-deps
   // The "@" menu (when no "/" menu): open while an "@name" is typed just before the caret.
   const [caret, setCaret] = React.useState(0)
   const [picked, setPicked] = React.useState<MentionTarget[]>([])
   const at = !menu && props.mentionsFor && slashOff !== text ? mentionAt(text, caret) : null
   const { data: targets } = useMentionTargets(props.mentionsFor || '', !!props.mentionsFor && text.includes('@'))
-  const atRows = at && targets ? mentionRows(at.q, targets, t) : []
+  const atRows = at && targets ? mentionRows(at.q, targets, t, expanded) : []
   const rows: MenuRow[] = menu ? menu.items : atRows
   const [slashAt, setSlashAt] = React.useState(0)
   const menuKey = menu ? `${menu.stage}:${menu.items.map((i) => i.key).join('|')}` : atRows.length ? `@${atRows.map((i) => i.key).join('|')}` : ''
+  React.useEffect(() => {
+    if (!menu && !at && expanded.length) setExpanded([]) // folded again the next time a menu opens
+  }, [!!menu, !!at]) // eslint-disable-line react-hooks/exhaustive-deps
   const keepAt = React.useRef<number | null>(null)
   React.useEffect(() => {
     setSlashAt(keepAt.current ?? 0)
@@ -450,12 +450,20 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const pickMention = (i: number) => {
     const row = atRows[i]
     if (!row || !at) return
-    const name = `@${row.target.label} `
+    if (row.expand) {
+      const g = row.expand
+      keepAt.current = i
+      setExpanded((cur) => [...cur, g])
+      return
+    }
+    const target = row.target
+    if (!target) return
+    const name = `@${target.label} `
     const next = text.slice(0, at.start) + name + text.slice(caret).replace(/^\S*\s?/, '')
     const pos = at.start + name.length
     setText(next)
     setCaret(pos)
-    setPicked((cur) => [...cur.filter((x) => x.kind !== row.target.kind || x.ref !== row.target.ref), row.target])
+    setPicked((cur) => [...cur.filter((x) => x.kind !== target.kind || x.ref !== target.ref), target])
     requestAnimationFrame(() => {
       ta.current?.focus({ preventScroll: true })
       ta.current?.setSelectionRange(pos, pos)

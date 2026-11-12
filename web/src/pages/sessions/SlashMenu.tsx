@@ -10,7 +10,7 @@ import { useT } from '@/i18n'
 export type SlashGroup = 'session' | 'here' | 'other'
 const GROUPS: SlashGroup[] = ['session', 'here', 'other']
 /** A group of skills longer than this is folded when nothing is typed: its first rows, then "+ N more". */
-const FOLD = 6
+export const FOLD = 6
 
 export type SlashArg = { value: string; label: string; hint?: string; current?: boolean }
 export type SlashCommand = {
@@ -26,13 +26,13 @@ export type SlashCommand = {
 }
 
 /** A row of the composer's menus ("/" commands, "@" mentions). */
-export type MenuRow = { key: string; label: string; hint: string; badge?: string; current?: boolean; icon?: React.ReactNode; /** Title shown above the first row of its group. */ group?: SlashGroup; /** "+ N more": unfolds the group. */ more?: number }
+export type MenuRow = { key: string; label: string; hint: string; badge?: string; current?: boolean; icon?: React.ReactNode; /** Title shown above the first row of its group ("@session"...: the @ menu's). */ group?: string; /** "+ N more": unfolds the group. */ more?: number }
 export type SlashItem = MenuRow & { cmd: SlashCommand; arg?: string; /** The "+ N more" row of this group. */ expand?: SlashGroup }
 
 export const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 /** What the menu shows for the text typed so far (null: no menu). */
-export function slashItems(text: string, commands: SlashCommand[], expanded: SlashGroup[] = []): { stage: 'name' | 'arg'; items: SlashItem[] } | null {
+export function slashItems(text: string, commands: SlashCommand[], expanded: string[] = []): { stage: 'name' | 'arg'; items: SlashItem[] } | null {
   if (!text.startsWith('/') || text.includes('\n')) return null
   const named = /^\/(\S*)$/.exec(text)
   if (named) {
@@ -72,6 +72,18 @@ export function slashAction(text: string, commands: SlashCommand[]): { cmd: Slas
   return cmd?.run ? { cmd, arg: (m[2] || '').trim() } : null
 }
 
+function groupTitle(g: string, t: ReturnType<typeof useT>): string {
+  const titles: Record<string, string> = {
+    session: t('sessions.slash.group.session'),
+    here: t('sessions.slash.group.here'),
+    other: t('sessions.slash.group.other'),
+    '@session': t('sessions.mention.group.session'),
+    '@agent': t('sessions.mention.group.agent'),
+    '@team': t('sessions.mention.group.team'),
+  }
+  return titles[g] || g
+}
+
 export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }: { items: MenuRow[]; active: number; onPick: (i: number) => void; onHover: (i: number) => void; stage: 'name' | 'arg'; label?: string; keys?: string }) {
   const t = useT()
   const list = React.useRef<HTMLDivElement>(null)
@@ -90,7 +102,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
           <React.Fragment key={it.key}>
           {it.group && it.group !== items[i - 1]?.group && (
             <div className={cn('px-2.5 pt-1.5 pb-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase', i > 0 && 'mt-1 border-t pt-2')}>
-              {t(`sessions.slash.group.${it.group}`)}
+              {groupTitle(it.group, t)}
             </div>
           )}
           <div
@@ -106,6 +118,8 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
           >
             {it.icon}
             {it.more ? (
+              // "+ N more"
+
               <span className="text-xs text-muted-foreground">{t('sessions.slash.more', { count: it.more })}</span>
             ) : (
               <span className={cn('shrink-0', stage === 'name' && 'font-mono text-[13px]', it.current && 'font-semibold')}>

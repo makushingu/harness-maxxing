@@ -5,11 +5,11 @@
 import { Bot, MessageSquare, User, Users } from 'lucide-react'
 import type { useT } from '@/i18n'
 import type { Mention, MentionTarget } from '@/lib/types'
-import { fold, type MenuRow } from './SlashMenu'
+import { FOLD, fold, type MenuRow } from './SlashMenu'
 
-export type MentionRow = MenuRow & { target: MentionTarget }
+export type MentionRow = MenuRow & { target?: MentionTarget; /** The "+ N more" row of this group. */ expand?: string }
 
-const MAX_ROWS = 40
+const KINDS = ['session', 'agent', 'team'] as const
 
 /** The "@" being typed just before the caret: `start` = index of the "@", `q` = what follows it. */
 export function mentionAt(text: string, caret: number): { start: number; q: string } | null {
@@ -29,20 +29,33 @@ function icon(x: MentionTarget) {
   )
 }
 
-/** The rows for `q`: names that start with it (or one of their words does) first, then names or places containing it. */
-export function mentionRows(q: string, targets: MentionTarget[], t: ReturnType<typeof useT>): MentionRow[] {
+/** The rows for `q`, under a title per kind (sessions, agents, Team): names that start with it (or one of their words
+ * does) first, then names or places containing it. With nothing typed, a kind over FOLD rows shows its first ones and
+ * "+ N more" (unless `expanded` has it). */
+export function mentionRows(q: string, targets: MentionTarget[], t: ReturnType<typeof useT>, expanded: string[] = []): MentionRow[] {
   const f = fold(q)
   const starts = (x: MentionTarget) => fold(x.label).startsWith(f) || fold(x.label).split(/\s+/).some((w) => w.startsWith(f))
   const first = targets.filter(starts)
   const then = f ? targets.filter((x) => !starts(x) && (fold(x.label).includes(f) || fold(x.hint).includes(f))) : []
-  return [...first, ...then].slice(0, MAX_ROWS).map((x) => ({
-    key: `${x.kind}:${x.ref}`,
-    label: `@${x.label}`,
-    hint: x.hint,
-    badge: t(`sessions.mention.kind.${x.kind === 'team' && x.group ? 'group' : x.kind}`),
-    icon: <span className="flex size-4 items-center justify-center">{icon(x)}</span>,
-    target: x,
-  }))
+  const found = [...first, ...then]
+  const out: MentionRow[] = []
+  for (const k of KINDS) {
+    const g = `@${k}`
+    const rows = found.filter((x) => x.kind === k)
+    const folded = !f && rows.length > FOLD && !expanded.includes(g)
+    for (const x of folded ? rows.slice(0, FOLD - 1) : rows)
+      out.push({
+        key: `${x.kind}:${x.ref}`,
+        label: `@${x.label}`,
+        hint: x.hint,
+        badge: x.kind === 'team' && x.group ? t('sessions.mention.kind.group') : undefined,
+        icon: <span className="flex size-4 items-center justify-center">{icon(x)}</span>,
+        group: g,
+        target: x,
+      })
+    if (folded) out.push({ key: `more:${g}`, label: '', hint: '', group: g, more: rows.length - FOLD + 1, expand: g })
+  }
+  return out
 }
 
 /** The mentions still written in the text when it is sent (a name deleted by hand is no longer one). */
