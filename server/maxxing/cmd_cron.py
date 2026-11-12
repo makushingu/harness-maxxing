@@ -38,6 +38,13 @@ def _configure(p) -> None:
     r.add_argument("id")
 
 
+def _stamp(ts, zone) -> str:
+    try:
+        return dt.datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d %H:%M")
+    except (OverflowError, OSError, ValueError, TypeError):
+        return "????-??-?? ??:??"
+
+
 def _handler(a) -> int:
     from . import crons
     if a.cron_cmd == "run":
@@ -45,8 +52,14 @@ def _handler(a) -> int:
         if job is None:
             print(f"unknown job {a.id}", file=sys.stderr)
             return 2
-        if a.if_due and not crons.job_is_due(job):
-            return 0
+        if a.if_due:
+            try:
+                due = crons.job_is_due(job)
+            except crons.CronError as e:
+                print(f"job {a.id}: {e}", file=sys.stderr)
+                return 2
+            if not due:
+                return 0
         detach = getattr(a, "detach", False) or os.environ.pop(crons.DETACH_ENV, "") == "1"   # read once: never inherited
         trigger = getattr(a, "trigger", None) or ("schedule" if detach or a.if_due else "manual")
         attempt = getattr(a, "attempt", 1) or 1
@@ -63,6 +76,8 @@ def _handler(a) -> int:
                 print(f"job {a.id}: {e}", file=sys.stderr)
                 if e.code == "already_running":
                     return 3
+                if e.code == "spawn_timeout":
+                    return 1                       # the unit may still start; the tick's catch-up recovers the slot
                 # no unit (systemd busy, D-Bus error...): run it here rather than skip it without a trace
             else:
                 return 0
@@ -93,10 +108,7 @@ def _handler(a) -> int:
             print("no removed jobs")
         for d in rows:
             j = d["job"]
-            try:
-                when = dt.datetime.fromtimestamp(d["at"], zone).strftime("%Y-%m-%d %H:%M")
-            except (OverflowError, OSError, ValueError):
-                when = "????-??-?? ??:??"
+            when = _stamp(d.get("at"), zone)
             print(f"{j['id']}  {when}  {j.get('name', '')}  - {d.get('reason', '')}")
         return 0
     if a.cron_cmd == "restore":
@@ -114,7 +126,7 @@ def _handler(a) -> int:
         last = j["last_run"]
         last_txt = "never run" if not last else (
             ("ok" if last["ok"] else f"failed ({last['code']})") + " "
-            + dt.datetime.fromtimestamp(last["at"], zone).strftime("%Y-%m-%d %H:%M"))
+            + _stamp(last["at"], zone))
         state = "on " if j["enabled"] else "off"
         when = j["schedule"]
         if crons.is_once(j):
@@ -123,7 +135,7 @@ def _handler(a) -> int:
             last_txt += " (missed)" if j.get("missed") else ""
             last_txt += ", removed after it runs" if j.get("delete_after") else ""
         if j.get("retry_at"):
-            last_txt += ", retry at " + dt.datetime.fromtimestamp(j["retry_at"], zone).strftime("%Y-%m-%d %H:%M")
+            last_txt += ", retry at " + _stamp(j["retry_at"], zone)
         print(f"{j['id']}  {state:<3}  {when:<15} {j['name']}  [{j['kind']}]  {j['human']}  - {last_txt}")
     ext = crons.external_jobs()
     if ext:

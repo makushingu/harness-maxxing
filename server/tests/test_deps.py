@@ -288,6 +288,14 @@ def test_cli_list_json_and_exit_code(st, capsys):
     assert cli.main(["deps", "list"]) == 1                          # nothing installed in this state: missing
 
 
+def test_verify_and_update_refuse_an_unknown_component(st, capsys):
+    for action in ("verify", "update"):
+        assert cli.main(["deps", action, "typo"]) == 1
+        assert "unknown component" in capsys.readouterr().err
+    assert cli.main(["deps", "update", "caddy"]) == 1
+    assert "caddy is not updated" in capsys.readouterr().err
+
+
 def test_python_m_maxxing_returns_the_exit_code(tmp_path):
     r = subprocess.run([os.sys.executable, "-m", "maxxing", "deps", "nope"], capture_output=True, text=True,
                        timeout=60, env={**os.environ, "MAXXING_STATE": str(tmp_path)})
@@ -545,3 +553,30 @@ def test_check_json_stays_json_when_osv_is_unreachable(mx, monkeypatch, capsys):
     assert cli.main(["deps", "check", "--json"]) == 0
     r = json.loads(capsys.readouterr().out)
     assert r["checked"] == 0 and r["vulnerable"] == [] and "no route" in r["skipped"]
+
+
+# kept here: test_videos.py and test_voice.py are skipped as a whole without ffmpeg, this test needs none
+def test_pdf_into_an_uncreatable_folder_raises_system_exit(st, monkeypatch, tmp_path):
+    from maxxing import cmd_video
+    monkeypatch.setattr(cmd_video, "browser", lambda: tmp_path / "chrome")
+    (tmp_path / "file").write_text("x")
+    with pytest.raises(SystemExit) as e:
+        cmd_video.pdf(str(tmp_path / "page.html"), tmp_path / "file" / "o.pdf")
+    assert str(e.value).startswith("PDF failed:")
+
+
+def test_cli_voice_download_prints_failures_to_stderr(st, monkeypatch, capsys):
+    from maxxing import voice
+
+    def offline(name):
+        raise OSError("network is unreachable")
+    monkeypatch.setattr(voice, "download_model", offline)
+    assert cli.main(["voice", "download", "tiny"]) == 1
+    assert "network is unreachable" in capsys.readouterr().err
+
+    def refused(name):
+        raise voice.VoiceError(503, "not_installed", "local transcription is not installed")
+    monkeypatch.setattr(voice, "download_model", refused)
+    assert cli.main(["voice", "download", "tiny"]) == 1
+    cap = capsys.readouterr()
+    assert "not installed" in cap.err and "error:" not in cap.out

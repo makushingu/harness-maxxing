@@ -82,7 +82,10 @@ def pdf(src: str, out: Path) -> None:
     b = browser()
     if b is None:
         raise SystemExit("No headless browser on this server: " + HINT.format(code=config.CODE))
-    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise SystemExit(f"PDF failed: cannot create {out.parent}: {e.strerror or e}") from None
     url = src if src.startswith(("http://", "https://")) else Path(src).expanduser().resolve().as_uri()
     node = _node()
     if node is None:

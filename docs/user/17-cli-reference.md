@@ -149,7 +149,7 @@ Remotion, the Whisper models, Garage). As root.
 | Command | Purpose |
 |---|---|
 | `maxxing cron list` | jobs, schedules, last results |
-| `maxxing cron run <id>` | run a job now in your terminal and wait for it; `--detach` starts it in its own systemd unit with the memory limits and returns (what the crontab calls); `--if-due` runs it only if its schedule matches now in your zone (server clock kept) |
+| `maxxing cron run <id>` | run a job now in your terminal and wait for it; `--detach` starts it in its own systemd unit with the memory limits and returns (it runs it here if systemd refuses) (what the crontab calls); `--if-due` runs it only if its schedule matches now in your zone (server clock kept) |
 | `maxxing cron sync` | rewrite the managed crontab block from the job list |
 
 ## Notifications feed
