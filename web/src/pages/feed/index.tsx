@@ -4,17 +4,20 @@
 import * as React from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Bell, Bot, CheckCheck, Clock, Hand, HeartPulse, type LucideIcon, Rss, Server, Settings2, ShieldCheck, Webhook } from 'lucide-react'
-import { useFeedPages, useMarkFeedRead } from '@/lib/queries'
+import { useFeedPages, useFeedSettings, useMarkFeedRead } from '@/lib/queries'
 import type { FeedEvent } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { Button, Card, CountBadge, EmptyState, Segmented } from '@/components/ui'
+import { Button, Card, CountBadge, EmptyState } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
-import { PageList } from '@/components/shell/PageList'
+import { ListChips, PageList } from '@/components/shell/PageList'
 import { FeedItem, FeedSkeleton } from '@/features/feed/FeedItems'
 
 /** The icon of a source in the list (the built-in ones; a webhook or a script gets the generic one). */
 const SOURCE_ICON: Record<string, LucideIcon> = { crons: Clock, system: Server, agents: Bot, health: HeartPulse, security: ShieldCheck, stripe: Webhook, shopify: Webhook, github: Webhook }
+
+/** A source's name as people read it: its label in the settings, else the id with spaces and a capital. */
+const pretty = (id: string) => (id.charAt(0).toUpperCase() + id.slice(1)).replace(/[-_]+/g, ' ')
 
 export default function FeedPage() {
   const t = useT()
@@ -43,29 +46,25 @@ export default function FeedPage() {
   const unread = summary?.unread ?? 0
   const pending = summary?.pending ?? 0
   const days = React.useMemo(() => byDay(events), [events])
+  const { data: settings } = useFeedSettings()
+  const nameOf = (id: string) => {
+    const label = settings?.sources.find((x) => x.source === id)?.label
+    return label && label !== id ? label : pretty(id)
+  }
   const shownUnread = pendingOnly ? 0 : source ? sources.find((s) => s.source === source)?.unread ?? 0 : unread
 
   const row = (active: boolean) =>
     cn(
-      'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] transition-colors pointer-coarse:h-11',
+      'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-sm transition-colors pointer-coarse:h-11',
       active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
     )
   return (
     <Page
-      title={pendingOnly ? t('feed.pending') : source || t('feed.title')}
+      title={pendingOnly ? t('feed.pending') : source ? nameOf(source) : t('feed.everySource')}
+      sensitiveTitle={t('feed.title')}
       description={t('feed.pageDesc')}
       actions={
         <>
-          <Segmented<'all' | 'unread'>
-            size="sm"
-            value={unreadOnly ? 'unread' : 'all'}
-            onChange={(v) => pick({ unread: v === 'unread' })}
-            aria-label={t('feed.unreadOnly')}
-            options={[
-              { value: 'all', label: t('feed.allSources') },
-              { value: 'unread', label: t('feed.unreadShort') },
-            ]}
-          />
           <Button variant="outline" size="sm" disabled={!shownUnread} onClick={() => read.mutate(source && !pendingOnly ? { source } : { all: true })}>
             <CheckCheck /> <span className="max-lg:sr-only">{t('feed.markAllRead')}</span>
           </Button>
@@ -77,10 +76,21 @@ export default function FeedPage() {
     >
       {/* the list: reached from Home (its count) on a computer when the second bar is closed */}
       <PageList id="feed" entry="" label={t('feed.title')}>
+        <div className="shrink-0 px-2 pt-2">
+          <ListChips
+            label={t('feed.unreadOnly')}
+            value={unreadOnly ? 'unread' : 'all'}
+            onChange={(v) => pick({ unread: v === 'unread' })}
+            items={[
+              { key: 'all', label: t('feed.allSources') },
+              { key: 'unread', label: t('feed.unreadShort'), count: unread },
+            ]}
+          />
+        </div>
         <nav className="min-h-0 flex-1 overflow-y-auto p-2" aria-label={t('feed.sources')} data-testid="feed-nav">
           <button type="button" className={row(!source && !pendingOnly)} onClick={() => pick({ source: null, pending: false })}>
-            <Bell className="size-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{t('feed.allSources')}</span>
+            <Bell className={cn('size-4 shrink-0', !source && !pendingOnly && 'text-primary')} />
+            <span className="min-w-0 flex-1 truncate">{t('feed.everySource')}</span>
             <CountBadge count={unread} />
           </button>
           {(pending > 0 || pendingOnly) && (
@@ -96,8 +106,8 @@ export default function FeedPage() {
             const on = source === s.source && !pendingOnly
             return (
               <button key={s.source} type="button" className={cn(row(on), 'mt-0.5')} onClick={() => pick({ source: s.source, pending: false })} title={s.source} data-testid="feed-chip">
-                <Icon className="size-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{s.source}</span>
+                <Icon className={cn('size-4 shrink-0', on && 'text-primary')} />
+                <span className="min-w-0 flex-1 truncate">{nameOf(s.source)}</span>
                 {s.unread > 0 ? <CountBadge count={s.unread} /> : <span className="text-xs text-muted-foreground/70 tabular-nums">{s.total}</span>}
               </button>
             )
@@ -115,11 +125,11 @@ export default function FeedPage() {
           days.map((d) => (
             <section key={d.key} className="grid gap-2" data-testid="feed-day">
               <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{dayLabel(d.at, lang, t)}</h2>
-              <Card className="gap-0 divide-y overflow-hidden p-0">
+              <div className="divide-y border-y">
                 {d.events.map((ev) => (
                   <FeedItem key={ev.id} ev={ev} roomy />
                 ))}
-              </Card>
+              </div>
             </section>
           ))
         )}

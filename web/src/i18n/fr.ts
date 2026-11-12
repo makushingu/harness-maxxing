@@ -448,6 +448,7 @@ export const fr: Record<keyof typeof en, string> = {
   "feed.seeAll": "Tout voir",
   "feed.showPanel": "Afficher les notifications",
   "feed.hidePanel": "Masquer les notifications",
+  "feed.everySource": "Toutes les sources",
   "feed.allSources": "Toutes",
   "feed.sources": "Sources",
   "feed.unreadOnly": "Non lues seulement",

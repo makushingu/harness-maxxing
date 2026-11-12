@@ -450,6 +450,7 @@ export const en = {
   "feed.seeAll": "See all",
   "feed.showPanel": "Show notifications",
   "feed.hidePanel": "Hide notifications",
+  "feed.everySource": "All sources",
   "feed.allSources": "All",
   "feed.sources": "Sources",
   "feed.unreadOnly": "Unread only",
