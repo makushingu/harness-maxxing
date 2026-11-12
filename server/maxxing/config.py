@@ -100,6 +100,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "threads": {},                     # "#crons" / "#alerts" -> thread id
         "session_threads": {},             # session id -> {tid, name}: one thread per open session
         "agent_threads": {},               # agent path -> {tid, name}: the thread of an agent with the telegram option
+        "enterprise_threads": {},          # enterprise slug -> {tid, name}: the thread of an enterprise
         "thread_days": 30,                 # open sessions idle longer than this lose their thread
         "notify_crons": True, "login_alerts": True, "reply_mode": "progress",
         "notify_system": True,             # update / rollback / vulnerability problems into the "Alerts" thread

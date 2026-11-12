@@ -319,6 +319,8 @@ def _forget_thread(tid: int) -> None:
         tg["session_threads"] = {k: v for k, v in st.items() if not (isinstance(v, dict) and v.get("tid") == tid)}
         at = tg.get("agent_threads") or {}
         tg["agent_threads"] = {k: v for k, v in at.items() if not (isinstance(v, dict) and v.get("tid") == tid)}
+        et = tg.get("enterprise_threads") or {}
+        tg["enterprise_threads"] = {k: v for k, v in et.items() if not (isinstance(v, dict) and v.get("tid") == tid)}
     mutate_tg(fn)
     gw = _gw
     if gw is not None and gw.running:
@@ -557,7 +559,7 @@ def bound(chat: Any, mid: Any) -> dict | None:
     except (OSError, sqlite3.Error, ValueError):
         log.warning("telegram message map not read", exc_info=True)
         return None
-    return v if isinstance(v, dict) and (v.get("sid") or v.get("agent")) else None
+    return v if isinstance(v, dict) and (v.get("sid") or v.get("agent") or v.get("enterprise")) else None
 
 
 def _replied_id(msg: dict) -> int | None:
@@ -1346,13 +1348,21 @@ class Gateway:
             if not msg.get("forum_topic_created"):
                 self._agent_lane(msg, agent, cmd, text)
             return
-        # a reply to a message of a session or of an agent goes there (any mode, any thread that is not a session's)
+        enterprise = enterprise_of_thread(tid)
+        if enterprise:
+            if not msg.get("forum_topic_created"):
+                await self._enterprise_answer(msg, enterprise, cmd, text)
+            return
+        # a reply to a message of a session, of an agent or of an enterprise goes there (any mode, any thread that is not a session's)
         sid = sid_of_thread(tid) if uses_threads() else None
         if not sid and cmd is None and _replied_id(msg) is None and await self._split_rest(msg, text):
             return
         to = await asyncio.to_thread(bound, msg["chat"]["id"], _replied_id(msg)) if not sid and _replied_id(msg) else None
         if to and to.get("agent"):
             self._agent_lane(msg, to["agent"], cmd, text)
+            return
+        if to and to.get("enterprise"):
+            await self._enterprise_answer(msg, to["enterprise"], cmd, text, to)
             return
         session = None
         if to and to.get("sid"):
@@ -1453,6 +1463,25 @@ class Gateway:
             for m in g["marks"]:
                 self._inflight_drop(m)
         self._lane(key, run, "agent")
+
+    async def _enterprise_answer(self, msg: dict, slug: str, cmd: str | None, text: str, to: dict | None = None) -> None:
+        """A message in an enterprise's thread, or a reply to one of its messages: the owner's answer to the
+        escalation that message carried (the enterprise decides what it does of a text that answers nothing)."""
+        if cmd:
+            await self._reply(msg, _w("ent_command"), silent=True)
+            return
+        if not (text or "").strip():
+            return
+        rid = _replied_id(msg)
+        if to is None and rid:
+            to = await asyncio.to_thread(bound, msg["chat"]["id"], rid)
+        replied = str((msg.get("reply_to_message") or {}).get("text") or "")[:500] if rid else ""
+        from .. import enterprise_reports
+        status, detail = await asyncio.to_thread(enterprise_reports.telegram_answer, slug,
+                                                 str((to or {}).get("ref") or ""), replied, text)
+        note = (detail or _w("ent_answered")) if status == "answered" else (
+            _w("ent_failed", reason=detail) if status == "error" else _w("ent_none"))
+        await self._reply(msg, note, silent=True)
 
     async def _agent_command(self, msg: dict, path: str, cmd: str = "") -> None:
         name = await asyncio.to_thread(_agent_display, path)
@@ -1980,6 +2009,7 @@ class Gateway:
                 tg["threads"] = {}
                 tg["session_threads"] = {}
                 tg["agent_threads"] = {}
+                tg["enterprise_threads"] = {}
             tg["chat_id"] = chat["id"]
             tg["chat_title"] = title
             tg["user_ids"] = [frm["id"]]
@@ -3313,7 +3343,8 @@ async def set_token(tok: str) -> dict:
     await stop()
     if old.get("id") != bot["id"]:
         def fn(tg: dict) -> None:
-            tg.update(chat_id=None, chat_title="", user_ids=[], threads={}, session_threads={}, agent_threads={})
+            tg.update(chat_id=None, chat_title="", user_ids=[], threads={}, session_threads={}, agent_threads={},
+                      enterprise_threads={})
             tg.pop("two_factor", None)
         mutate_tg(fn)
         config.write_json(_offset_path(), {"offset": 0})
@@ -3353,7 +3384,7 @@ async def forget() -> None:
 
     def fn(tg: dict) -> None:
         tg.update(chat_id=None, chat_title="", user_ids=[], bot_username="", threads={}, session_threads={},
-                  agent_threads={})
+                  agent_threads={}, enterprise_threads={})
         tg.pop("two_factor", None)                     # no bridge, no second step
     mutate_tg(fn)
     for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path(), _msgs_path(),
@@ -3795,6 +3826,151 @@ def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None =
         log.exception("telegram notify_agent failed")
 
 
+# ---- enterprises: one thread per enterprise (config.telegram.enterprise_threads = {slug: {tid, name}}) --------------
+# The digest and what reaches the owner (escalations, requests) go to "🏢 <name>", created on first use, renamed when
+# the name changes. Simple mode / threads refused: the main chat with the enterprise's emoji in front. Every message
+# is bound ({"enterprise": slug, "ref": ...}): a reply to it, or a message in the thread, answers the escalation.
+ENTERPRISE_ICON = "🏢"
+_enterprise_lock = threading.Lock()
+
+
+def enterprise_threads() -> dict[str, dict]:
+    et = tg_config().get("enterprise_threads") or {}
+    return {k: v for k, v in et.items() if isinstance(v, dict) and v.get("tid") is not None}
+
+
+def enterprise_of_thread(tid: int | None) -> str | None:
+    if tid is None:
+        return None
+    return next((s for s, v in enterprise_threads().items() if v.get("tid") == tid), None)
+
+
+def _enterprise_names(slug: str) -> tuple[str, str]:
+    """(display name, emoji) of an enterprise; never raises (a broken file: the slug)."""
+    try:
+        from .. import enterprises
+        d = enterprises.load(slug)
+        return d.get("name") or slug, d.get("emoji") or ENTERPRISE_ICON
+    except Exception:  # noqa: BLE001
+        return slug, ENTERPRISE_ICON
+
+
+def enterprise_label(slug: str) -> str:
+    """Thread name of an enterprise: "🏢 Acme Group"."""
+    return f"{ENTERPRISE_ICON} {_enterprise_names(slug)[0]}"[:128]
+
+
+def _set_enterprise_thread(slug: str, tid: int, name: str) -> None:
+    mutate_tg(lambda tg: tg.setdefault("enterprise_threads", {}).__setitem__(slug, {"tid": tid, "name": name}))
+
+
+def drop_enterprise_thread(slug: str, delete: bool = False) -> None:
+    """Forget the thread of an enterprise (deleted one); delete=True also deletes it in Telegram (best effort)."""
+    info = enterprise_threads().get(slug)
+
+    def fn(tg: dict) -> None:
+        (tg.get("enterprise_threads") or {}).pop(slug, None)
+    mutate_tg(fn)
+    tok, chat = token(), tg_config().get("chat_id")
+    if delete and info and tok and chat:
+        try:
+            call_sync(tok, "deleteForumTopic", chat_id=chat, message_thread_id=info["tid"])
+        except Exception as e:  # noqa: BLE001
+            log.info("deleteForumTopic of enterprise %s failed: %s", slug, e)
+    bus.invalidate("telegram")
+
+
+def _enterprise_thread_sync(tok: str, chat: int, slug: str) -> int | None:
+    """The enterprise's thread (created, or renamed when its name changed). None: main chat (threads off, refused)."""
+    if not threaded():
+        return None
+    name = enterprise_label(slug)
+    with _enterprise_lock:
+        info = enterprise_threads().get(slug)
+        if info:
+            if info.get("name") != name:
+                try:
+                    call_sync(tok, "editForumTopic", chat_id=chat, message_thread_id=info["tid"], name=name)
+                    _set_enterprise_thread(slug, info["tid"], name)
+                except TelegramError as e:
+                    if "not_modified" in e.description.lower() or "not modified" in e.description.lower():
+                        _set_enterprise_thread(slug, info["tid"], name)
+                    elif _thread_gone(e):
+                        drop_enterprise_thread(slug)
+                        info = None
+                    else:
+                        log.info("editForumTopic of enterprise %s failed: %s", slug, e.description)
+                except Exception as e:  # noqa: BLE001
+                    log.info("editForumTopic of enterprise %s failed: %s", slug, e)
+            if info:
+                return info["tid"]
+        try:
+            r = call_sync(tok, "createForumTopic", chat_id=chat, name=name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("createForumTopic for enterprise %s failed: %s", slug, e)
+            return None
+        tid = (r or {}).get("message_thread_id")
+        if tid is None:
+            return None
+        _set_enterprise_thread(slug, tid, name)
+    bus.invalidate("telegram")
+    try:
+        call_sync(tok, "sendMessage", chat_id=chat, message_thread_id=tid, parse_mode="HTML",
+                  text=_w("ent_intro", name=fmt.escape(_enterprise_names(slug)[0])), disable_notification=True)
+    except Exception:  # noqa: BLE001
+        pass
+    return tid
+
+
+def _enterprise_send_sync(slug: str, ev: dict, loud: bool) -> None:
+    tok, chat = token(), tg_config().get("chat_id")
+    if not tok or not chat:
+        return
+    tid = _enterprise_thread_sync(tok, chat, slug)
+    name, emoji = _enterprise_names(slug)
+    alert = ev.get("id") is not None and bool(ev.get("actions") or ev.get("ref"))
+    if alert:                                          # buttons and edits on resolution, like any feed alert
+        parts = [_alert_html(ev)]
+    else:
+        head = f"<b>{fmt.escape(str(ev.get('title') or '')[:300])}</b>"
+        body = str(ev.get("body") or "").strip()
+        parts = fmt.render(fmt.head(body, REPORT_MAX), max(fmt.LIMIT - _u16(head) - 2, 1000)) if body else []
+        if parts and _u16(head) + 2 + _u16(parts[0]) <= fmt.LIMIT:
+            parts[0] = f"{head}\n\n{parts[0]}"
+        else:
+            parts.insert(0, head)
+    if tid is None:                                    # main chat: the enterprise in front
+        prefix = f"{fmt.escape(emoji)} <b>{fmt.escape(name)}</b>"
+        if _u16(prefix) + 1 + _u16(parts[0]) <= fmt.LIMIT:
+            parts[0] = f"{prefix}\n{parts[0]}"
+        else:
+            parts.insert(0, prefix)
+    sent: list = []
+    _send_sync("", parts, not loud, _alert_markup(ev) if alert else None, target=(chat, tid), sent=sent,
+               bind={"enterprise": slug, "ref": str(ev.get("ref") or "")})
+    if alert and sent:
+        _note_set(f"al:{ev['id']}", [chat, sent[-1], ""])
+
+
+def notify_enterprise(slug: str, ev: dict, loud: bool = False) -> None:
+    """An event for the owner (feed event or {title, body, level}) into the enterprise's thread (created on first
+    use). Any process, never blocks an event loop, never raises."""
+    try:
+        if not token() or not tg_config().get("chat_id") or not isinstance(ev, dict):
+            return
+        try:
+            asyncio.get_running_loop()
+            in_loop = True
+        except RuntimeError:
+            in_loop = False
+        if in_loop:
+            threading.Thread(target=_enterprise_send_sync, args=(slug, ev, loud), daemon=True).start()
+        else:
+            _enterprise_send_sync(slug, ev, loud)
+    except Exception:
+        log.exception("telegram notify_enterprise failed")
+
+
 # ---- alerts: events of the Notifications feed with buttons (feed.py calls post_alert / update_alert) -------------
 # ev = {id: int, source, level: info|success|warning|error, title, body, url (UI path), count, read,
 #       actions: [{id, label, style: primary|danger|default|link}] ([] once resolved), ref ("approval:<rid>",
@@ -3899,7 +4075,7 @@ def _alert_send_sync(ev: dict) -> None:
     tok, chat = token(), tg_config().get("chat_id")
     if not tok or not chat or ev.get("id") is None:
         return
-    asks = str(ev.get("ref") or "").startswith("approval:")
+    asks = str(ev.get("ref") or "").startswith(("approval:", "enterprise:"))
     rule = ev.get("telegram") or "silent"
     if rule == "off" and not asks:
         return

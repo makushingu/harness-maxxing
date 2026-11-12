@@ -194,6 +194,22 @@ WORDS["fr"].update({
     "open_btn": "Ouvrir",
 })
 
+# The thread of an enterprise: the digest, the escalations and requests for the owner; a text there answers.
+WORDS["en"].update({
+    "ent_intro": "🏢 <b>{name}</b>: the digest and what needs you arrive here. Reply to an escalation to answer it.",
+    "ent_answered": "✅ Answer sent.",
+    "ent_failed": "Not sent: {reason}",
+    "ent_none": "Reply to the message of an escalation to answer it.",
+    "ent_command": "Commands work in session threads. Here, reply to an escalation to answer it.",
+})
+WORDS["fr"].update({
+    "ent_intro": "🏢 <b>{name}</b> : le résumé du jour et ce qui a besoin de vous arrivent ici. Répondez à une escalade pour y répondre.",
+    "ent_answered": "✅ Réponse envoyée.",
+    "ent_failed": "Non envoyé : {reason}",
+    "ent_none": "Répondez au message d'une escalade pour y répondre.",
+    "ent_command": "Les commandes marchent dans les fils de session. Ici, répondez à une escalade pour y répondre.",
+})
+
 # The thread of an agent (agent.json `telegram`): its results, and a message there starts the agent.
 WORDS["en"].update({
     "agent_intro": "🤖 <b>{name}</b> posts its results here. Write here to give it a task.",
