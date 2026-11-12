@@ -131,6 +131,7 @@ export const fr: Record<keyof typeof en, string> = {
   'shell.claudeQuota': "Quota Claude",
   'shell.replayTour': "Revoir la visite",
   'sessions.filter.label': "Afficher",
+  'sessions.tree.search': 'Chercher une session',
   'sessions.filter.all': "Toutes",
   'sessions.filter.running': "En cours",
   'sessions.filter.unread': "Non lues",

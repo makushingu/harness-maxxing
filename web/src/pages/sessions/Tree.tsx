@@ -129,10 +129,12 @@ type Props = {
   /** Touch layout drawer: its title row, given New session and the view menu to show on its right - the filter
    *  below keeps the whole width (All / Running / Unread on one line, on the narrowest phone too). */
   head?: (actions: React.ReactNode) => React.ReactNode
+  /** the list's search (PageList) */
+  query?: string
   className?: string
 }
 
-export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, focusedId, touch, head, className }: Props) {
+export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, focusedId, touch, head, query, className }: Props) {
   const t = useT()
   const ws = useWorkspace()
   const reorderProjects = useReorderProjects()
@@ -141,7 +143,8 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   const [dialog, setDialog] = React.useState<DialogState>(null)
 
   // The archived sessions (most of them on a server used for a while) load only when an archived fold is open; the
-  // folds show their count from the tree (topic.archived_count) meanwhile. No filter field: Ctrl K finds sessions.
+  // folds show their count from the tree (topic.archived_count) meanwhile. The list's search narrows by title / folder;
+  // Ctrl K finds sessions by their content too.
   const archOpen = useSessionsUI((s) => Object.entries(s.expanded).some(([k, v]) => v && k.startsWith('a:')))
   const archived = useSessions(undefined, true, archOpen)
   const byPath = React.useMemo(() => group(live.data), [live.data])
@@ -149,11 +152,17 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   // A badge was clicked (running / finished): only those sessions, unfolded.
   const show = useSessionsUI((s) => s.show)
   const setShow = useSessionsUI((s) => s.setShow)
-  const shows = React.useCallback((s: Session) => (show === 'running' ? s.state === 'running' : !!s.unread), [show])
-  const narrowed = !!show
+  // The list's search (the 🔍 of its head): sessions whose title or folder has the words, unfolded like a filter.
+  const q = (query || '').trim().toLowerCase()
+  const shows = React.useCallback(
+    (s: Session) => (!show || (show === 'running' ? s.state === 'running' : !!s.unread)) && (!q || s.title.toLowerCase().includes(q) || s.path.toLowerCase().includes(q)),
+    [show, q],
+  )
+  const narrowing = !!show || !!q
+  const narrowed = narrowing
   // A new filter unfolds everything again.
   const setNarrowFolded = useSessionsUI((s) => s.setNarrowFolded)
-  React.useEffect(() => setNarrowFolded({}), [show, setNarrowFolded])
+  React.useEffect(() => setNarrowFolded({}), [show, q, setNarrowFolded])
 
   // The rows rise in on the first visit only (coming back to the page shows them at once).
   const [intro, setIntro] = React.useState(!introPlayed)
@@ -187,8 +196,8 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     }
     setExpanded(nodes)
   }
-  const rootSessions = (byPath.get('') || []).filter((s) => !show || shows(s))
-  const shown = React.useMemo(() => (show ? (live.data || []).filter(shows).sort((a, b) => b.updated - a.updated) : []), [show, shows, live.data])
+  const rootSessions = (byPath.get('') || []).filter((s) => !narrowing || shows(s))
+  const shown = React.useMemo(() => (narrowing ? (live.data || []).filter(shows).sort((a, b) => b.updated - a.updated) : []), [show, shows, live.data])
   /** "acme › blog", with the project's emoji in front when it has one (Favorites, Recent, flat layout). */
   const emojiOf = React.useMemo(() => new Map(projects.map((p) => [p.name, p.emoji || ''])), [projects])
   const rootLabel = t('sessions.root')
@@ -205,7 +214,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   )
 
   const filtered = React.useMemo(() => {
-    if (show) {
+    if (narrowing) {
       const out: { p: Project; topics: { tp: Topic; sessions: Session[] }[] }[] = []
       for (const p of projects) {
         const topics = p.topics.map((tp) => ({ tp, sessions: (byPath.get(tp.path) || []).filter(shows) })).filter((x) => x.sessions.length)
@@ -214,7 +223,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
       return out
     }
     return projects.map((p) => ({ p, topics: p.topics.map((tp) => ({ tp, sessions: byPath.get(tp.path) || [] })) }))
-  }, [projects, byPath, show, shows])
+  }, [projects, byPath, narrowing, shows])
 
   const header = (
     <ListHeader
@@ -227,7 +236,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
       menu={
         projects.length > 0 && (
           <ViewMenu
-            fold={!show && listBy === 'project' && mode === 'tree' ? { anyFolded, onFold: () => foldAll(anyFolded) } : null}
+            fold={!narrowing && listBy === 'project' && mode === 'tree' ? { anyFolded, onFold: () => foldAll(anyFolded) } : null}
             onNewProject={() => setDialog({ kind: 'project' })}
           />
         )
@@ -238,7 +247,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   return (
     <nav aria-label={t('sessions.tree.label')} data-tour="tree" className={cn('flex min-h-0 flex-col', className)}>
       {header}
-      {show && !touch && shown.length > 1 && (
+      {narrowing && !touch && shown.length > 1 && (
         <div className="mx-2 mb-1 flex shrink-0 items-center gap-1.5 px-1 text-xs text-muted-foreground animate-in" role="status">
           <span className="tabular-nums">{t('sessions.tree.shownCount', { count: shown.length })}</span>
           <Button
@@ -274,8 +283,8 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
           />
         ) : (
           <>
-            {!show && <TopBlocks sessions={live.data || []} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} labelOf={labelOf} />}
-            {listBy === 'session' && !show ? (
+            {!narrowing && <TopBlocks sessions={live.data || []} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} labelOf={labelOf} />}
+            {listBy === 'session' && !narrowing ? (
               <FlatView
                 sessions={live.data || []}
                 openIds={openIds}
@@ -283,7 +292,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
                 onOpen={onOpenSession}
                 labelOf={labelOf}
               />
-            ) : mode === 'drill' && !show ? (
+            ) : mode === 'drill' && !narrowing ? (
               <DrillView
                 projects={projects}
                 byPath={byPath}

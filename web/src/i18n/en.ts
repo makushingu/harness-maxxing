@@ -133,6 +133,7 @@ export const en = {
   'shell.claudeQuota': "Claude quota",
   'shell.replayTour': "Replay the tour",
   'sessions.filter.label': "Show",
+  'sessions.tree.search': 'Find a session',
   'sessions.filter.all': "All",
   'sessions.filter.running': "Running",
   'sessions.filter.unread': "Unread",

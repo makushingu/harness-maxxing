@@ -75,6 +75,7 @@ function Workspace() {
   const { data: ws } = useWorkspace()
   const { data: sessions, isError: sessionsFailed, refetch: refetchSessions } = useSessions(undefined, false)
   const [helpOpen, setHelpOpen] = React.useState(false)
+  const [listQuery, setListQuery] = React.useState('')
 
   // the open sessions are the same on the user's other devices
   useOpenSync(mobile)
@@ -662,10 +663,10 @@ function Workspace() {
           </div>
         )}
         {!mobile && (
-          <PageList id="sessions" label={t('nav.sessions')}>
+          <PageList id="sessions" label={t('nav.sessions')} search={{ value: listQuery, onChange: setListQuery, placeholder: t('sessions.tree.search') }}>
             {/* the agents listed under their topic show their Office card on hover */}
             <AgentHover className="min-h-0 flex-1">
-              <SessionTree className="min-h-0 flex-1" onOpenSession={openSession} onNewSession={newSession} activePath={currentTopic ?? null} openIds={openIds} focusedId={focusedId} />
+              <SessionTree className="min-h-0 flex-1" query={listQuery} onOpenSession={openSession} onNewSession={newSession} activePath={currentTopic ?? null} openIds={openIds} focusedId={focusedId} />
             </AgentHover>
           </PageList>
         )}
