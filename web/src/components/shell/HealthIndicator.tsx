@@ -188,7 +188,7 @@ const alertHover = {
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
  *  status panel (issues, CPU / RAM / disk); the Claude entry leads to Settings -> Stats. Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
-export function StatusBlock({ collapsed, tail }: { collapsed?: boolean; /** unfolded: Help and Settings, at the end of the last line */ tail?: React.ReactNode }) {
+export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, at the start of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
   const s = useStatusLine()
   const rows = useHealthRows()
   const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
@@ -273,16 +273,17 @@ export function StatusBlock({ collapsed, tail }: { collapsed?: boolean; /** unfo
         </PopoverContent>
       </Popover>
       <ClaudeStatus collapsed={collapsed} />
-      <SidebarLook collapsed={collapsed} tail={tail} />
+      <SidebarLook collapsed={collapsed} lead={lead} tail={tail} />
     </div>
   )
 }
 
-/** The very bottom of the sidebar, under the Claude quota, icons only (names in tooltips): a sun / moon that switches
- *  between light and dark (it shows the theme on screen; "System" stays in Settings -> Appearance), the eye of
- *  presentation mode (crossed out and tinted while on), then Help and Settings (`tail`). Unfolded: one line. Folded:
- *  the sun / moon and the eye one under the other (Help and Settings keep their rows above). */
-function SidebarLook({ collapsed, tail }: { collapsed?: boolean; tail?: React.ReactNode }) {
+/** The very bottom of the sidebar, under the Claude quota. Unfolded, one line: Settings with its name on the left
+ *  (`lead`, a page), then on the right the quick actions as icons (names in tooltips): a sun / moon that switches between
+ *  light and dark (it shows the theme on screen; "System" stays in Settings -> Appearance), the eye of presentation
+ *  mode (crossed out and tinted while on) and Help (`tail`). Folded: the sun / moon and the eye one under the other
+ *  (Help and Settings keep their rows above). */
+function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: React.ReactNode; tail?: React.ReactNode }) {
   const t = useT()
   const theme = useUI((s) => s.theme)
   const setTheme = useUI((s) => s.setTheme)
@@ -320,8 +321,8 @@ function SidebarLook({ collapsed, tail }: { collapsed?: boolean; tail?: React.Re
     )
   return (
     <div className="mx-side-reveal flex h-9 min-w-0 items-center gap-0.5" data-testid="sidebar-look">
+      <span className="flex min-w-0 flex-1">{lead}</span>
       {buttons}
-      <span className="flex-1" />
       {tail}
     </div>
   )

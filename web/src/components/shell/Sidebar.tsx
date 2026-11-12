@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { iconBtn, navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
+import { navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -356,20 +356,27 @@ export const Sidebar = React.memo(function Sidebar() {
 
             <StatusBlock
               collapsed={collapsed}
-              tail={
-                !collapsed && (
-                  <>
-                    <HelpMenu collapsed={false} compact />
-                    {end.map((item) => (
-                      <Tooltip key={item.to} content={t(item.label)} side="top">
-                        <NavLink to={item.to} end={item.end} data-tour={navTourId(item)} aria-label={t(item.label)} className={({ isActive }) => iconBtn(isActive)}>
-                          <item.icon />
-                        </NavLink>
-                      </Tooltip>
-                    ))}
-                  </>
-                )
+              lead={
+                !collapsed &&
+                end.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    data-tour={navTourId(item)}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:[stroke-width:1.7]',
+                        isActive && 'bg-accent text-foreground [&_svg]:text-primary [&_svg]:[stroke-width:2]',
+                      )
+                    }
+                  >
+                    <item.icon />
+                    <span className="truncate">{t(item.label)}</span>
+                  </NavLink>
+                ))
               }
+              tail={!collapsed && <HelpMenu collapsed={false} compact />}
             />
           </KeepTooltipShape.Provider>
         </aside>
