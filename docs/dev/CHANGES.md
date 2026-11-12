@@ -5,6 +5,26 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Sessions: `ViewSwitch` (computer: one button left of New session, after the layouts button which comes and goes with the
+  mode; its icon = four square bars whose shape follows `data-kind`, moved by the transitions of `.mx-view-glyph` in
+  globals.css, so nothing plays at page load; `currentColor`, the colour of the ghost icon buttons beside it) and `TabsToggle` (phone) in `pages/sessions/Tabs.tsx`; the store's `tabs` defaults to true and `merge` sets
+  it false for a stored `mx-sessions` key without the field (a browser from before keeps its columns). The Sessions
+  page has no `PageHeader` on a computer (`useDocumentTitle` called directly): one `sessions-bar` holds the tabs and
+  the actions, measured by a ResizeObserver (`tight` = New session and Waiting without their label). Removed:
+  `SubtitleWithBadges`, `WhereBadge`'s `generic`, keys `sessions.description`, `where.howTo`, `where.topicHelpAny`,
+  `tabs.toggle/on/off`.
+- Feedback: `POST /api/settings/feedback/check` (`feedback.check`: one read-only `claude -p`, tools Read/Grep/Glob,
+  cwd `system/help` when it exists, default model, 90 s, one at a time; verdict `send | answer | self` with `answer`,
+  `prompt`, `topic`; fail-open: anything unclear is `send`); `forced` on `POST /api/settings/feedback` appends
+  `FORCED_NOTE` to the message (the cloud is unchanged); `FeedbackDialog` answer view, session created with
+  `prompt` in `topic`; mock routes for feedback; `tests/fake_claude.py` knows `--allowedTools` / `--add-dir`.
+- Import: `importer.py` `HINTS` / `PROMPT` rewritten for Hermes and OpenClaw, `_entries` strips every single folder
+  above the export, `_plan` finds the skill folder by its `SKILL.md` (`skill_root`) and takes `memories/MEMORY.md` /
+  `USER.md` as root memory, `_apply` keeps the generated heading over an imported CLAUDE.md without one;
+  `cmd_import.py` prints `finish_prompt`.
+
 ## 2.0.0-alpha.146 - 2026-11-13
 
 - Code changes (`maxxing/codediff.py`, `maxxing/gitsafe.py`, `api/code.py`, docs/dev/API.md#code): the runner photographs

@@ -3,6 +3,28 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Sessions: Tabs or Zones.** Two modes, one switch at the top right (Alt+T): **Tabs** shows one session at a
+  time with the open ones as tabs above, **Zones** puts them side by side. The switch is one icon left of
+  **New session**, no text, in the colour of the other icons of the bar: it draws the mode in use, and its bars move from one picture to the other when
+  you change (tab heads drop into columns, columns go back up into tabs). A new browser starts in Tabs; a browser
+  that already had its sessions keeps its mode.
+- **Sessions: no more page title.** On a computer the title and its description are gone: one bar holds the tabs,
+  the switch and the actions (the buttons keep only their icon when the tabs need the room).
+- **Feedback: your own Harness reads the message first.** A question, a setting or something that already exists
+  is answered in the window; a change specific to your installation (another model, a custom endpoint, another
+  account, a tool of yours) gets a ready request and **Open a session**; only real bugs and general ideas go to the
+  team. **Send it to the team anyway** is always there, and the check never holds a message back.
+- **Import from Hermes or OpenClaw.** The prompt given to the old agent names the places these agents really use
+  (Hermes: `SOUL.md`, `memories/`, its scheduled jobs, profiles; OpenClaw: the workspace files, its own skills, its
+  job store), asks for your language, leaves out the stock skills and says how to zip without `zip`. A zip made one
+  folder too high is read instead of being set aside whole, skills sorted in categories are imported one by one,
+  `memories/MEMORY.md` and `USER.md` go to the root memory, and a new project or topic keeps its description.
+  `maxxing import ZIP` prints the last step (the message that lets a session create the tasks, propose the scheduled
+  jobs and list the keys).
+
 ## 2.0.0-alpha.146 - 2026-11-13
 
 New:
