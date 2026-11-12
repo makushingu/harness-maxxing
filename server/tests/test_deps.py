@@ -288,6 +288,12 @@ def test_cli_list_json_and_exit_code(st, capsys):
     assert cli.main(["deps", "list"]) == 1                          # nothing installed in this state: missing
 
 
+def test_verify_and_update_refuse_an_unknown_component(st, capsys):
+    for action in ("verify", "update"):
+        assert cli.main(["deps", action, "typo"]) == 1
+        assert "unknown component" in capsys.readouterr().err
+
+
 def test_python_m_maxxing_returns_the_exit_code(tmp_path):
     r = subprocess.run([os.sys.executable, "-m", "maxxing", "deps", "nope"], capture_output=True, text=True,
                        timeout=60, env={**os.environ, "MAXXING_STATE": str(tmp_path)})

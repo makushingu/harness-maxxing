@@ -24,8 +24,22 @@ def _root_only() -> bool:
     return True
 
 
+def _unknown(names, update: bool = False) -> bool:
+    try:
+        for n in names or []:
+            deps.get(n)
+            if update and n not in deps.UPDATE_ORDER:
+                raise deps.DepError(f"{n} is not updated by maxxing deps update")
+    except deps.DepError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return True
+    return False
+
+
 def cmd_deps(a) -> int:
     what = a.action
+    if what in ("verify", "update") and _unknown(a.names, what == "update"):
+        return 1
     if what == "list":
         rows = deps.status()
         if a.json:
