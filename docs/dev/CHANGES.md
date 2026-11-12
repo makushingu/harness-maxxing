@@ -126,6 +126,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `feed` and `settings/:section` declare the `team` group (their `team.*` keys were '' while it downloaded). Known
   undeclared pairs, exempted in the test: `sessions/*` with `tasks` (first-load dictionary budget) and with `agents`
   (agents feature, out of scope). Tests: `test_web_i18n_groups.py`.
+- `cmd_core.do_init` checks `--timezone` (`ZoneInfo`) and `--public-url` (`config.PUBLIC_URL_RE`, now shared with
+  `api/settings.py`) before any write, as `PUT /api/settings` does: the URL is stripped once and that value is stored
+  (whitespace-only clears), `SystemExit` with a message, `config.json` untouched. A host without tz database now fails
+  early on `init --timezone UTC` (`install.sh` installs tzdata). Tests: `test_cmd_core.py::test_init_refuses_an_unknown_zone_or_a_malformed_url`,
+  `test_init_normalises_the_public_url_it_stores`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

@@ -19,6 +19,7 @@ import logging
 import os
 import pickle
 import pwd
+import re
 import shutil
 import tempfile
 import threading
@@ -32,6 +33,8 @@ WEB_DIST = Path(os.environ.get("MAXXING_WEB_DIST") or CODE / "web" / "dist")   #
 DOCS_DIR = CODE / "docs" / "user"
 SKILLS_DIR = CODE / "skills"
 TEMPLATES_DIR = CODE / "templates"
+
+PUBLIC_URL_RE = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")   # shared by PUT /api/settings and init
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "workspace": "/root/maxxing",

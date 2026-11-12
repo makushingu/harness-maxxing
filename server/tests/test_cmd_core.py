@@ -138,6 +138,25 @@ def test_init_is_idempotent_and_never_clobbers(env):
     assert config.load_config()["public_url"] == ""
 
 
+@pytest.mark.parametrize("flag,bad,word", [("--timezone", "Europe/Pari", "time zone"), ("--public-url", "notaurl", "--public-url")])
+def test_init_refuses_an_unknown_zone_or_a_malformed_url(env, flag, bad, word):
+    assert run_cli("init", "--workspace", str(env["ws"]), "--timezone", "UTC", "--public-url", "https://ui.example.com", "--quiet") == 0
+    before = config.config_path().read_text()
+    with pytest.raises(SystemExit) as e:
+        run_cli("init", flag, bad, "--quiet")
+    assert e.value.code not in (0, None) and word in str(e.value.code) and bad in str(e.value.code)
+    assert config.config_path().read_text() == before
+
+
+def test_init_normalises_the_public_url_it_stores(env):
+    assert run_cli("init", "--workspace", str(env["ws"]), "--public-url", " https://ui.example.com/ ", "--quiet") == 0
+    assert config.load_config()["public_url"] == "https://ui.example.com"
+    assert run_cli("init", "--public-url", "http://100.64.0.1:8787", "--quiet") == 0
+    assert config.load_config()["public_url"] == "http://100.64.0.1:8787"
+    assert run_cli("init", "--public-url", "  ", "--quiet") == 0
+    assert config.load_config()["public_url"] == ""
+
+
 @pytest.mark.parametrize("bind", ["0.0.0.0", "::", "8.8.8.8"])
 def test_init_refuses_public_bind(env, bind):
     with pytest.raises(SystemExit):

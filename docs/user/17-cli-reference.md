@@ -32,8 +32,8 @@ once each (Memory compaction, Check for updates, Morning tasks and Renewal remin
 | `--files-root PATH` | root of the Files page (default: home folder) |
 | `--port N` | HTTP port (default 8787) |
 | `--bind IP` | `127.0.0.1` or the Tailscale IP; public addresses are refused |
-| `--public-url URL` | e.g. `https://ui.example.com`; `""` clears it |
-| `--timezone TZ` | IANA name (default: the system zone). Keep it equal to the system zone (`timedatectl`), which cron uses - unless the server clock is kept |
+| `--public-url URL` | e.g. `https://ui.example.com`; `""` clears it; a malformed URL is refused |
+| `--timezone TZ` | IANA name (default: the system zone). Keep it equal to the system zone (`timedatectl`), which cron uses - unless the server clock is kept. An unknown zone is refused |
 | `--system-clock follow\|keep` | `follow`: changing the time zone in the UI also switches the system zone; `keep`: never touch it (shared server), jobs check their schedule in your zone |
 | `--claude-dir PATH` | Claude Code folder for Harness Maxxing (default `~/.claude`; `""` = back to it). Another folder keeps it apart from a Claude Code already used on the server (passed to sessions as `CLAUDE_CONFIG_DIR`) |
 | `--language en\|fr` | interface language |
