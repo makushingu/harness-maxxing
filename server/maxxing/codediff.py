@@ -6,7 +6,7 @@ untracked files, `.gitignore` respected) is written into a throwaway index, then
 Every view is then a tree-to-tree diff: one turn (pre..post), the whole session (first pre..now), what is not
 committed (HEAD..now) or the whole branch (merge-base..now). The same photos give "revert to before this message".
 
-Reads run with the same neutralised config as the Git page (`gitview.SAFE_GIT`: no hooks, no fsmonitor, no
+Reads run with the same neutralised config as the Git page (`gitsafe.SAFE_GIT`: no hooks, no fsmonitor, no
 filters). Writes the user asks for (commit, push) keep the repository's own hooks and filters: they are the
 user's repository and the user clicked, exactly as if they had typed the command.
 """
@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 from . import config
-from .gitview import SAFE_GIT, EMPTY_TREE, GitError, _filter_overrides
+from .gitsafe import SAFE_GIT, EMPTY_TREE, GitError, _filter_overrides
 
 GIT_TIMEOUT = 20
 WRITE_TIMEOUT = 120

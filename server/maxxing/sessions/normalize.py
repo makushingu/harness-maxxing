@@ -111,6 +111,10 @@ def normalize(ev: dict) -> list[dict]:
         if not isinstance(ref, (int, float)):
             return []
         return [{"type": "hide", "ref": ref, "hidden": ev.get("hidden") is not False, "at": at}]
+    if t == "mx_changes":                 # what the turn changed in git repositories (Changes view)
+        repos = [{k: r.get(k) for k in ("root", "name", "branch", "approx", "add", "del", "files", "more")}
+                 for r in ev.get("repos") or [] if isinstance(r, dict) and r.get("root")]
+        return [{"type": "changes", "n": ev.get("n"), "repos": repos, "at": at}] if repos else []
     if t == "mx_note":
         return [{"type": "note", "text": ev.get("text") or "", "level": ev.get("level") or "info", "at": at}]
     if t == "mx_done":

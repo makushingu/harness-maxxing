@@ -159,3 +159,32 @@ def test_checked_repo_refuses_a_subfolder_or_outside(repo, tmp_path):
     with pytest.raises(GitError):
         codediff.checked_repo("/etc")
     assert codediff.checked_repo(str(repo)) == repo
+
+
+# ---- a real turn ----------------------------------------------------------------------------------------------
+
+from conftest import all_events, wait_idle  # noqa: E402
+
+
+def test_a_turn_in_a_repository_reports_its_changes(client, topic, mx):
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"])})   # the workspace is under it
+    folder = Path(mx["ws"]) / topic
+    _git(folder, "init", "-q", "-b", "main")
+    _git(folder, "add", ".")
+    _git(folder, "-c", "user.name=A", "-c", "user.email=a@x", "commit", "-qm", "start")
+    s = client.post("/api/sessions", json={"path": topic, "message": "edit WRITEFILE:src/app.txt NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    [ch] = [e for e in all_events(client, s["id"]) if e["type"] == "changes"]
+    [r] = ch["repos"]
+    assert r["root"] == str(folder) and r["branch"] == "main"
+    assert [(f["path"], f["status"]) for f in r["files"]] == [("src/app.txt", "A")]
+    # a second turn without changes adds no "changes" event
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "nothing NOTOOL"})
+    wait_idle(client, s["id"])
+    assert len([e for e in all_events(client, s["id"]) if e["type"] == "changes"]) == 1
+
+
+def test_a_turn_outside_any_repository_reports_nothing(client, topic):
+    s = client.post("/api/sessions", json={"path": topic, "message": "edit WRITEFILE:x.txt NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    assert not [e for e in all_events(client, s["id"]) if e["type"] == "changes"]

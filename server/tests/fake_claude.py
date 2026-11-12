@@ -27,6 +27,7 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   WAITMSG       (stream-json input) waits up to $FAKE_CLAUDE_WAITMSG_S s (default 10) for a user message written
                 to stdin during the turn and folds it into the SAME turn ("Read mid-turn: <text>"), like Claude
                 Code reading a message queued while it works at its next step; a message after it is a new turn
+  WRITEFILE:<p> writes "changed by the fake\n" to <p> (relative to the turn's folder) with a Write tool call
   BGTASK:<name> starts a background command (task_started / background_tasks_changed) that ends after
                 $FAKE_CLAUDE_BG_S s (default 3): writes $FAKE_CLAUDE_DIR/bg-<name>.done, task_notification, then a
                 turn by itself ("Background task <name> finished.") - like Claude Code
@@ -570,6 +571,17 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
                     timeout=60)
         with open(STORE / "mcp-load.txt", "a") as f:
             f.write(f"{r.returncode} {r.stdout.strip()} {r.stderr.strip()}\n")
+    for rel in _re.findall(r"WRITEFILE:(\S+)", prompt):
+        target = os.path.abspath(rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w") as f:
+            f.write("changed by the fake\n")
+        uid = "toolu_" + uuid.uuid4().hex[:20]
+        emit(msg(sid, model, [{"type": "tool_use", "id": uid, "name": "Write",
+                               "input": {"file_path": target, "content": "changed by the fake\n"}}]))
+        emit({"type": "user", "message": {"role": "user", "content": [
+            {"tool_use_id": uid, "type": "tool_result", "content": "File written"}]}, "parent_tool_use_id": None,
+            "session_id": sid, "uuid": str(uuid.uuid4())})
     if "NOTOOL" not in prompt:
         tid = "toolu_" + uuid.uuid4().hex[:20]
         emit(msg(sid, model, [{"type": "text", "text": "Let me look at the folder."}]))

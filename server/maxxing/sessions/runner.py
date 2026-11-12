@@ -57,7 +57,7 @@ from typing import Callable, Iterator
 if __package__ in (None, ""):                       # path invocation
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from maxxing import approval_mcp, claude_auth, config, mcp_auto   # noqa: E402  (stdlib-only modules)
+from maxxing import approval_mcp, claude_auth, codediff, config, mcp_auto   # noqa: E402  (stdlib-only modules)
 from maxxing.sessions import clip, resume, spawn, store      # noqa: E402
 
 RESUME_LOST = re.compile(r"no conversation found|session .{0,80}not found|no such session|"
@@ -81,6 +81,10 @@ SANDBOX_ERROR = ("The agent's sandbox cannot run on this server: run `maxxing ag
                  "sandbox off in the agent settings (missing: ")
 BUDGET_ERROR = "Daily budget of the agent reached: turn stopped (Agent settings -> Limits)."
 LATENCY_KEPT = 20                                     # per session: seconds to the first event / answer
+
+
+WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+MAX_CODE_REPOS = 8                                     # repositories a session keeps photographing (most recent)
 
 
 @dataclass
@@ -110,6 +114,7 @@ class Attempt:
     mcp_used: set[str] = field(default_factory=set)    # MCP servers (tool form) whose tools were called
     connectors: list[str] | None = None                # claude.ai connectors listed by the init event
     handover: bool = False                             # ended by a steer: the process lives on for the next item
+    touched: set[str] = field(default_factory=set)     # files written by Edit / Write / NotebookEdit (Changes view)
 
 
 class _Stdin:
@@ -418,6 +423,7 @@ class Runner:
             mode = "plan"
         if meta.get("plan_ready"):
             store.update(self.sid, plan_ready=False)
+        code = None if plan or kind in ("compact", "handoff") else self._code_start(meta, cwd)
         from maxxing import agents                      # an agent folder: its model and tool lists
         env = meta.get("env") or {}
         agent = agents.run_settings(meta.get("path") or "", env.get("MAXXING_AGENT_OUTSIDE") == "1",
@@ -513,6 +519,8 @@ class Runner:
         elif a.stopped:
             self.note("Stopped." if not a.timed_out else f"Turn stopped after {timeout_s} s (timeout).",
                       "warn")
+        if code is not None:
+            self._code_end(code, a.touched, cwd)
         store.append_log(self.sid, {"type": "mx_done", "code": a.rc, "stderr": a.stderr[-STDERR_TAIL:],
                                     "stopped": a.stopped and not a.timed_out,
                                     "timed_out": a.timed_out, "at": time.time()})
@@ -526,6 +534,40 @@ class Runner:
         if not plan:
             self._auto_compact(item, a, err, cfg)
         return err
+
+    # ---- Changes view: photos of the session's repositories before / after the turn ---------------------------
+    def _code_start(self, meta: dict, cwd: str) -> tuple[int, dict[str, str]] | None:
+        """Photograph the repositories this session works in (its folder's, and the ones it changed before).
+        Never fails the turn: a repository git cannot read is skipped."""
+        try:
+            repos = list(meta.get("code_repos") or [])
+            here = codediff.repo_of(cwd)
+            if here is not None:
+                repos.insert(0, str(here))
+            n = int(meta.get("code_turn") or 0) + 1
+            store.update(self.sid, code_turn=n)
+            return n, codediff.turn_start(self.sid, n, [r for r in repos if os.path.isdir(r)])
+        except Exception as e:                         # noqa: BLE001 - the Changes view is never worth a failed turn
+            self.note(f"Changes view: no photo before this turn ({e})"[:300], "warn")
+            return None
+
+    def _code_end(self, code: tuple[int, dict[str, str]], touched: set[str], cwd: str) -> None:
+        n, pre = code
+        try:
+            entry = codediff.turn_end(self.sid, n, pre, touched, cwd)
+        except Exception as e:                         # noqa: BLE001
+            self.note(f"Changes view: no photo after this turn ({e})"[:300], "warn")
+            return
+        if not entry:
+            return
+        store.append_log(self.sid, {"type": "mx_changes", **entry, "at": time.time()})
+        with store.edit(self.sid) as m:
+            roots = [r["root"] for r in entry["repos"]] + list(m.get("code_repos") or [])
+            m["code_repos"] = list(dict.fromkeys(roots))[:MAX_CODE_REPOS]
+            base = dict(m.get("code_base") or {})
+            for r in entry["repos"]:
+                base.setdefault(r["root"], r["pre"])   # the session's first photo of each repository
+            m["code_base"] = base
 
     def _mcp_after(self, item: dict, a: Attempt, err: str | None, cfg: dict, meta: dict,
                    mcp_plan: mcp_auto.Plan, plan: bool) -> None:
@@ -872,6 +914,11 @@ class Runner:
                     srv = mcp_auto.tool_server(b.get("name"))
                     if srv:
                         a.mcp_used.add(srv)
+                    if b.get("name") in WRITE_TOOLS:
+                        inp = b.get("input") or {}
+                        target = inp.get("file_path") or inp.get("notebook_path")
+                        if isinstance(target, str) and target and len(a.touched) < 500:
+                            a.touched.add(target)
         if t == "system" and ev.get("subtype") == "init":
             a.saw_init = True
             a.connectors = mcp_auto.connectors_of_init(ev)
