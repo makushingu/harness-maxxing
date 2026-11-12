@@ -57,3 +57,15 @@ def test_odd_paths_are_client_errors(client, mx):
     (mx["files"] / "plain.txt").write_text("x")
     r = client.post("/api/files/mkdir", json={"path": str(mx["files"] / "plain.txt" / "sub")})
     assert r.status_code == 409, r.text
+
+
+def test_a_nul_byte_in_the_new_last_name_is_a_client_error(client, mx):
+    """resolve(new=True) never resolves the last part: a NUL in it reached mkdir / shutil.move as a 500."""
+    (mx["files"] / "src.txt").write_text("x")
+    bad = str(mx["files"] / "a\x00b")
+    r = client.post("/api/files/mkdir", json={"path": bad})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path", r.text
+    r = client.post("/api/files/move", json={"from": str(mx["files"] / "src.txt"), "to": bad})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path", r.text
+    r = client.post("/api/files/delete", json={"path": bad})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path", r.text

@@ -105,6 +105,8 @@ Fixed:
 - **An invalid character no longer breaks saving.** A dashboard layout, a project emoji, the backup patterns or the
   public address holding an invalid character (such as half of an emoji) now gets a clear error, or is ignored in a
   dashboard layout, instead of a server error.
+- **A new file name with a null byte no longer causes a server error.** Creating or moving a file or folder to such a
+  name is refused with a clear message.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

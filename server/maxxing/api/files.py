@@ -87,6 +87,9 @@ def resolve(path: str | None, *, follow: bool = True, new: bool = False) -> Path
         raise _err(400, "bad_path", "Invalid path") from None
     if too_long:
         raise _err(400, "bad_path", "A name is longer than 255 bytes")
+    # follow=False / new=True never resolve the last part: refuse a NUL here
+    if "\x00" in raw.name:
+        raise _err(400, "bad_path", "Invalid path")
     try:
         p = raw.resolve() if follow else raw.parent.resolve() / raw.name
         if raw.name in ("", ".", ".."):
