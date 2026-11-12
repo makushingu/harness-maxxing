@@ -24,6 +24,9 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   REPLY_AS x: t answers t when the turn runs in a folder named x (agent groups; the last such line wins)
   MCPINIT       the init event lists the user server Facebook-ads and the connector "claude.ai Google Drive"
   NORESULT      exits right after the init line (no result), stdin still open
+  WAITMSG       (stream-json input) waits up to $FAKE_CLAUDE_WAITMSG_S s (default 10) for a user message written
+                to stdin during the turn and folds it into the SAME turn ("Read mid-turn: <text>"), like Claude
+                Code reading a message queued while it works at its next step; a message after it is a new turn
   BGTASK:<name> starts a background command (task_started / background_tasks_changed) that ends after
                 $FAKE_CLAUDE_BG_S s (default 3): writes $FAKE_CLAUDE_DIR/bg-<name>.done, task_notification, then a
                 turn by itself ("Background task <name> finished.") - like Claude Code
@@ -117,6 +120,8 @@ CONTROL: queue.Queue = queue.Queue()                   # the host's control_resp
 EVENTS: queue.Queue = queue.Queue()                    # ("user", text, images) / ("bgdone", name) / ("eof",)
 BG: dict[str, str] = {}                                # background tasks running: task id -> description
 BG_LOCK = threading.Lock()
+MIDTURN = threading.Event()                            # a WAITMSG turn takes the next user message itself
+MID: queue.Queue = queue.Queue()
 
 
 def emit(ev: dict) -> None:
@@ -155,7 +160,10 @@ def _stdin_reader() -> None:
             emit({"type": "control_response", "response": {"subtype": "success", "request_id": ev.get("request_id")}})
             continue
         got = _user_text(line)
-        if got:
+        if got and MIDTURN.is_set():
+            MIDTURN.clear()
+            MID.put(got)
+        elif got:
             EVENTS.put(("user", *got))
     EVENTS.put(("eof",))
 
@@ -512,6 +520,16 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
             "parent_tool_use_id": None, "session_id": sid, "uuid": str(uuid.uuid4())})
     if "APPROVE" in prompt:
         _approve(sid, model)
+    if "WAITMSG" in prompt and o["input"] == "stream-json":
+        MIDTURN.set()
+        emit(msg(sid, model, [{"type": "text", "text": "Waiting for a message."}]))
+        try:
+            mid = MID.get(timeout=float(os.environ.get("FAKE_CLAUDE_WAITMSG_S", "10")))
+            record(o, mid[0], mid[1], continued=True)
+            emit(msg(sid, model, [{"type": "text", "text": "Read mid-turn: " + mid[0]}]))
+        except queue.Empty:
+            pass
+        MIDTURN.clear()
     if "ASKNET" in prompt:
         rid = "req-" + uuid.uuid4().hex[:8]
         emit({"type": "control_request", "request_id": rid, "request": {

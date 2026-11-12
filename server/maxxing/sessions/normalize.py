@@ -97,6 +97,8 @@ def normalize(ev: dict) -> list[dict]:
             out["voice"] = [str(v) for v in ev["voice"] if v]
         if isinstance(ev.get("client_ids"), list):  # the web page's ids for this message (a reload checks them)
             out["client_ids"] = [str(c) for c in ev["client_ids"]]
+        if ev.get("injected"):                # added to a running turn (POST /inject): not the start of a turn
+            out["injected"] = True
         return [out]
     if t == "mx_voice":
         return [{"type": "voice_text", "text": ev.get("text") or "", "error": ev.get("error") or None,

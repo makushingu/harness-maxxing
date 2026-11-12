@@ -70,6 +70,7 @@ export const ItemRow = React.memo(function ItemRow({
           heard={item.heard}
           at={at}
           source={item.ev.source}
+          injected={item.ev.injected}
           onFork={onFork && (() => onFork(seed()))}
           onEdit={onHide && onEdit && (() => onEdit(item.key, at, seed()))}
           onDelete={onHide && (() => onHide(item.key, at))}
@@ -249,6 +250,7 @@ export function UserMessage({
   attachments,
   at,
   source,
+  injected,
   pending,
   queued,
   voice,
@@ -261,6 +263,8 @@ export function UserMessage({
   attachments: string[]
   at?: number
   source?: string
+  /** Added to a running turn (Add now). */
+  injected?: boolean
   pending?: boolean
   queued?: boolean
   /** Voice message sent directly: its audio (paths; `true` for an optimistic one still uploading) and transcript. */
@@ -305,6 +309,7 @@ export function UserMessage({
           <>
             {(text || heard?.text) && <MessageGrip text={[text, heard?.text].filter(Boolean).join('\n\n')} />}
             {source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>}
+            {injected && <span className="rounded bg-muted px-1">{t('sessions.msg.injected')}</span>}
             {at ? <time className="opacity-0 transition-opacity group-hover/msg:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100">{fmtDate(at, lang, tz, { dateStyle: undefined, timeStyle: 'short' })}</time> : null}
             {onEdit && (
               <Tooltip content={t('sessions.msg.edit')}>

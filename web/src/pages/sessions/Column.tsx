@@ -52,6 +52,7 @@ import {
   useSessionSeeded,
   useSettings,
   useSteerSession,
+  useInjectSession,
   useTakeQueue,
   useStopSession,
   useTelegram,
@@ -406,6 +407,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   const clearQueue = useClearQueue()
   const queuedPending = React.useMemo(() => pending.filter((p) => p.queued), [pending])
   const steer = useSteerSession()
+  const inject = useInjectSession()
   // Steer accepted: "steering…" until the queued messages start (queue empty) or 20 s at most.
   const [steerPending, setSteerPending] = React.useState(false)
   React.useEffect(() => {
@@ -841,6 +843,16 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
               })
             }
             steerPending={steerPending}
+            onInject={() =>
+              inject.mutate(sid, {
+                onSuccess: (r) => {
+                  if (r.injected) return
+                  if (r.reason === 'idle') toast.info(t('sessions.queue.steerNothing'), t('sessions.queue.steerNothingDesc'))
+                  else toast.info(t('sessions.queue.injectNo'), t(`sessions.queue.injectNo.${r.reason === 'voice' || r.reason === 'plan' || r.reason === 'summary' ? r.reason : 'unsupported'}`))
+                },
+              })
+            }
+            injecting={inject.isPending}
             onTakeQueue={async () => {
               const r = await takeQueue.mutateAsync(sid)
               usePending.getState().clearQueued(sid)

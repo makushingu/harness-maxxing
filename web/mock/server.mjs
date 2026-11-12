@@ -1307,6 +1307,12 @@ R('POST', '/api/sessions/:id/steer', ({ params }) => {
   if (steered) { s.queue = 1; bus('sessions') }
   return { steered, interrupted: steered, session: s }
 })
+R('POST', '/api/sessions/:id/inject', ({ params }) => {
+  const s = S.sessions.find((x) => x.id === params.id) || fail(404, 'not_found', 'Session not found')
+  const injected = s.state === 'running' && s.queue > 0
+  if (injected) { s.queue = 0; s.queue_items = []; bus('sessions') }
+  return { injected, reason: injected ? null : 'idle', session: s }
+})
 R('GET', '/api/search', ({ q }) => {
   const term = (q.get('q') || '').trim().toLowerCase()
   if (term.length < 2) return { results: [], took_ms: 0 }

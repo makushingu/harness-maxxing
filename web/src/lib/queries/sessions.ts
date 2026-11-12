@@ -162,6 +162,15 @@ export function useSteerSession() {
     invalidate: invSessions,
   })
 }
+/** Add now: the queued messages go into the running turn without interrupting it (Claude reads them at its next
+ *  step). `reason` when nothing was done: idle | unsupported | summary | voice | plan. */
+export function useInjectSession() {
+  const set = useSetSessionCache()
+  return useMut((id: string) => api.post<{ injected: boolean; reason: string | null; session: Session }>(`/api/sessions/${seg(id)}/inject`), {
+    onSuccess: (r) => set(r.session),
+    invalidate: invSessions,
+  })
+}
 /** Plan mode: the user validates the plan - plan mode goes off and Claude implements it (`text` is shown). */
 export function useApprovePlan() {
   const set = useSetSessionCache()

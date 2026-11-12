@@ -525,6 +525,56 @@ def take_queue(sid: str) -> dict:
     return {"messages": out, "session": get_session(sid)}
 
 
+def _merged(mine: list[dict], **extra: Any) -> dict:
+    """The queued user messages `mine` as ONE queue item (texts, files, voice, ids and refs kept)."""
+    return _item("\n\n".join(x["text"] for x in mine if x.get("text")),
+                 [a for x in mine for a in x.get("attachments") or []],
+                 mine[-1].get("source") or "web", **extra,
+                 **({"voice": [v for x in mine for v in x.get("voice") or []]}
+                    if any(x.get("voice") for x in mine) else {}),
+                 **({"hud": True} if all(x.get("hud") for x in mine) else {}),
+                 **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
+                 **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
+                 **({"refs": refs} if (refs := [r for x in mine for r in x.get("refs") or []]) else {}))
+
+
+def inject(sid: str) -> dict:
+    """Add now, without interrupting: the messages waiting in the queue become ONE message written into the turn
+    that runs (SIGUSR2: the runner writes it to Claude's stream-json stdin). Claude Code reads it at its next step,
+    between two tool calls - nothing is cut short, unlike a steer; if the turn was already ending, it answers it
+    right after, in the same process. When the runner cannot write it (no stream-json input, the turn just ended),
+    the message simply stays queued and runs after the turn, as before - never lost, never sent twice.
+    `reason` when nothing was done: idle (no turn running / nothing queued), unsupported (a runner from before this
+    feature), summary (a compact / hand-off summary runs), voice / plan (voice messages and plan approvals run as
+    their own turn: steer or wait). -> {injected: bool, reason, session}"""
+    _require(sid)
+    with store.edit(sid) as m:
+        idx, q = _user_items(m)
+        mine = [q[i] for i in idx]
+        turn = m.get("turn_id")
+        if m.get("state") != "running" or not m.get("pid") or not idx:
+            reason = "idle"
+        elif "inject" not in (m.get("runner_caps") or []) or not turn:
+            reason = "unsupported"
+        elif m.get("turn_kind") in ("compact", "handoff"):
+            reason = "summary"
+        elif any(x.get("voice") for x in mine):
+            reason = "voice"
+        elif any(x.get("plan_approved") for x in mine):
+            reason = "plan"
+        else:
+            reason = ""
+            m["queue"] = [_merged(mine, inject=turn)] + [x for i, x in enumerate(q) if i not in set(idx)]
+            m["updated"] = time.time()
+        pid = int(m.get("pid") or 0)
+    if reason:
+        return {"injected": False, "reason": reason, "session": get_session(sid)}
+    if pid and store.runner_alive(sid, store.read(sid) or {}):
+        _signal(pid, signal.SIGUSR2)
+    bus.invalidate("sessions")
+    return {"injected": True, "reason": None, "session": get_session(sid)}
+
+
 def steer(sid: str) -> dict:
     """Steer: the messages waiting in the queue become ONE message that runs right now. The running turn
     is cut short (SIGUSR1: the runner ends it and continues with the head of the queue in the same Claude
@@ -538,16 +588,7 @@ def steer(sid: str) -> dict:
         # Only while a turn is really in progress (the runner popped its item and set its pid).
         if m.get("state") != "running" or not m.get("pid") or not idx:
             return {"steered": False, "interrupted": False, "session": get_session(sid)}
-        mine = [q[i] for i in idx]
-        merged = _item("\n\n".join(x["text"] for x in mine if x.get("text")),
-                       [a for x in mine for a in x.get("attachments") or []],
-                       mine[-1].get("source") or "web", steer=True,
-                       **({"voice": [v for x in mine for v in x.get("voice") or []]}
-                          if any(x.get("voice") for x in mine) else {}),
-                       **({"hud": True} if all(x.get("hud") for x in mine) else {}),
-                       **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
-                       **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
-                       **({"refs": refs} if (refs := [r for x in mine for r in x.get("refs") or []]) else {}))
+        merged = _merged([q[i] for i in idx], steer=True)
         m["queue"] = [merged] + [x for i, x in enumerate(q) if i not in set(idx)]
         m["updated"] = time.time()
         pid, caps, turn = int(m.get("pid") or 0), m.get("runner_caps") or [], m.get("turn_id")
@@ -992,7 +1033,7 @@ def last_assistant_text(sid: str, turn_only: bool = False) -> str:
     for ev in reversed(_tail_events(sid)):
         if ev["type"] == "assistant":
             return ev["text"]
-        if turn_only and ev["type"] == "user":
+        if turn_only and ev["type"] == "user" and not ev.get("injected"):
             return ""
     return ""
 
@@ -1015,7 +1056,8 @@ def _ended_turn(evs: list[dict], at: float | None, died: bool) -> tuple[int, int
     """[start, end) of the turn that ended in `evs`. `at`: the time of its message (meta last_turn.at), so a message
     queued meanwhile that already runs is never taken for it; `died`: it ended without being recorded (killed,
     server restarted) - the last message's turn."""
-    users = [i for i, ev in enumerate(evs) if ev["type"] == "user"]
+    # a message added to the running turn (inject) is part of that turn, not the start of another one
+    users = [i for i, ev in enumerate(evs) if ev["type"] == "user" and not ev.get("injected")]
     def ran(i: int) -> bool:                  # the message of the turn at `at`
         return bool(at) and abs((evs[i].get("at") or 0) - at) < 1e-3
     if died:                                  # its message (none if it never started: the last one is recorded)
@@ -1083,7 +1125,7 @@ def last_result(sid: str) -> dict | None:
     for ev in reversed(_tail_events(sid)):
         if ev["type"] == "result":
             return ev
-        if ev["type"] == "user":
+        if ev["type"] == "user" and not ev.get("injected"):
             return None
     return None
 

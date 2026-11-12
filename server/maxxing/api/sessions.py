@@ -186,6 +186,11 @@ async def hide_message(sid: str, body: HideIn):
     return {"ok": True}
 
 
+@router.post("/sessions/{sid}/inject")
+async def inject(sid: str):
+    return await _call(service.inject, sid)
+
+
 @router.post("/sessions/{sid}/steer")
 async def steer(sid: str):
     return await _call(service.steer, sid)

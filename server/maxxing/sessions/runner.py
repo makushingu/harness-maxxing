@@ -28,6 +28,13 @@ kill anything: an `interrupt` control request stops the current step, and the st
 written to the SAME process, so background commands and sub-agents keep running. Otherwise (stdin
 already closed, no answer to the interrupt) the process group is killed as before. `timeout_s` (meta)
 caps a turn.
+
+SIGUSR2 (inject, POST /inject) ends nothing: the message at the head of the queue (`inject`: the id of the turn it
+targets) is written to the stdin of the claude process running that turn, and Claude Code reads it at its next step
+(between tool calls) - or, if the turn was already ending, answers it right after in the same process. It leaves
+the queue only once written, under the session lock, from the reading loop that also closes stdin: never lost,
+never sent twice. When it cannot be written (no stream-json input, the turn over), it stays queued and runs after
+the turn as before.
 """
 from __future__ import annotations
 
@@ -191,6 +198,8 @@ class Runner:
         self.interrupted = False                       # the current turn was cut short by a steer
         self.proc: _Proc | None = None                 # the claude process (kept across a steer)
         self.steer_pending = False                     # a steer the reading loop has to carry out
+        self.inject_pending = False                    # an inject (SIGUSR2) the reading loop has to carry out
+        self.injected_refs: list = []                  # refs (Telegram) of the messages injected into this turn
         self.asks: dict | None = None                  # the turn's approvals (_can_use_tool), None = none
         self.keep_proc = False                         # the last turn handed its process over to the next item
         self.proc_launch: tuple | None = None          # what self.proc was started with (args, cwd, env)
@@ -219,6 +228,11 @@ class Runner:
             return                                     # process (its background tasks) keeps running
         self.stop_flag.set()
         self._kill_child()
+
+    def on_inject(self, *_: object) -> None:
+        """SIGUSR2 (POST /inject): the reading loop writes the head of the queue into the running turn. Only a
+        flag here: the checks and the write happen in the reading loop (_inject_step)."""
+        self.inject_pending = True
 
     def _kill_child(self) -> None:
         with self.lock:
@@ -253,6 +267,7 @@ class Runner:
         signal.signal(signal.SIGTERM, self.on_sigterm)
         signal.signal(signal.SIGINT, self.on_sigterm)
         signal.signal(signal.SIGUSR1, self.on_steer)
+        signal.signal(signal.SIGUSR2, self.on_inject)
         failed: str | None = None
         try:
             while True:
@@ -319,6 +334,7 @@ class Runner:
         smart = resume.candidate(m, q[0], cfg, now)
         item = q.pop(0)
         item.pop("held", None)
+        item.pop("inject", None)                       # an inject that missed its turn: a normal message
         if smart:                                      # a summary written for this message (smart resume)
             idle = (resume.away_text(smart[0]), smart[1] // 1000)
             prompt = resume.summary_prompt(item.get("text") or "")
@@ -330,13 +346,15 @@ class Runner:
             item = {"text": prompt, "attachments": [], "source": "system", "kind": "compact",
                     "auto": True, "idle": True, "at": time.time()}
         m["queue"], m["state"], m["pid"] = q, "running", os.getpid()
-        m["runner_caps"] = ["steer"]                   # the server may send SIGUSR1 (steer) to this runner
+        m["runner_caps"] = ["steer", "inject"]         # the server may send SIGUSR1 (steer) / SIGUSR2 (inject)
         # Before releasing the lock: a steer can only target this turn once its id is known.
         self.turn_id = m["turn_id"] = uuid.uuid4().hex[:12]
         # Still under the lock: a Stop / steer for THIS turn can only be sent once the item is popped, so it is
         # never wiped here (one that targeted the previous turn arrived before and is dropped).
         self.stop_flag.clear()
         self.interrupted = False
+        self.inject_pending = False                    # one meant for the previous turn: its item runs now anyway
+        self.injected_refs = []
         m["turn_kind"] = item.get("kind") or "user"
         m["turn_refs"] = list(item.get("refs") or [])  # the caller's ids of this message (Telegram)
         self.current = item
@@ -703,6 +721,8 @@ class Runner:
                     a.handover, a.rc = True, 0
                     a.stopped = pr.interrupt_at is not None    # a step was cut short (else: only background tasks ran)
                     return a                       # (stderr: reported once, when the process ends)
+                if self.inject_pending and (a.saw_init or not hold):   # (a resume that may still fail: wait)
+                    self._inject_step(pr)
                 if pr.stream and pr.turn_done and not pr.tasks and not pr.stdin.closed:
                     pr.stdin.close()                   # the turn is over: Claude exits (as with a text prompt)
                 elif pr.stream and pr.turn_done and pr.tasks and not pr.stdin.closed and pr.alive() \
@@ -735,6 +755,42 @@ class Runner:
     def _queued(self) -> bool:
         q = (store.read(self.sid) or {}).get("queue") or []
         return bool(q) and isinstance(q[0], dict) and not q[0].get("held")
+
+    def _inject_step(self, pr: _Proc) -> None:
+        """One pending inject: the head of the queue, when it is an `inject` item for this turn, is written to the
+        running claude process and leaves the queue (with its `mx_user` line) - atomically, under the session lock,
+        and in the thread that closes stdin: written before the close or not at all. Otherwise the item loses its
+        `inject` mark and stays queued: it runs after the turn, like any queued message."""
+        self.inject_pending = False
+        with store.edit(self.sid) as m:
+            q = m.get("queue") or []
+            head = q[0] if q and isinstance(q[0], dict) else None
+            if head is None or not head.get("inject"):
+                return
+            ok = (head.get("inject") == self.turn_id and pr.stream and not pr.stdin.closed and pr.alive()
+                  and not pr.turn_done and not self.steer_pending and not self.stop_flag.is_set()
+                  and (self.current or {}).get("kind") not in ("compact", "handoff"))
+            if ok:
+                root = Path(config.load_config().get("workspace") or "/").resolve()
+                ok = pr.stdin.send(user_message(build_prompt(head), head, root))
+            if not ok:
+                head.pop("inject", None)               # runs after the turn instead
+                m["queue"] = q
+                if not pr.turn_done:                   # (turn over: it runs right away anyway)
+                    self.note("Your message could not be added to the running turn: it will be sent when the turn "
+                              "ends.")
+                return
+            q.pop(0)
+            m["queue"], m["updated"] = q, time.time()
+            refs = list(head.get("refs") or [])
+            if refs:                                   # Telegram: answered by this turn
+                self.injected_refs += refs
+                m["turn_refs"] = list(m.get("turn_refs") or []) + refs
+            store.append_log(self.sid, {"type": "mx_user", "text": head.get("text") or "",
+                                        "attachments": head.get("attachments") or [],
+                                        "source": head.get("source") or "web", "kind": "user", "injected": True,
+                                        **({"client_ids": head["client_ids"]} if head.get("client_ids") else {}),
+                                        "at": time.time()})
 
     def _steer_step(self, pr: _Proc) -> bool:
         """One pass of a pending steer: True when the process can take the steered message now (the step it was
@@ -881,7 +937,8 @@ class Runner:
             m["updated"] = m["finished_at"] = time.time()
             # which item this turn ran: on_turn_end callbacks answer only their own turns (never a summary)
             m["last_turn"] = {"id": self.turn_id, "kind": item.get("kind") or "user", "at": self.turn_at,
-                              "source": item.get("source") or "web", "refs": list(item.get("refs") or [])}
+                              "source": item.get("source") or "web",
+                              "refs": list(item.get("refs") or []) + list(self.injected_refs)}
             if not m.get("title"):
                 m["title"] = " ".join((item.get("text") or "").split())[:60] or "Untitled"
             if m.get("cron") and m.get("source") != "agent" and err is None and not m.get("queue"):

@@ -1,7 +1,7 @@
 // Message composer: autosize textarea, drafts, attachments (button / drop / paste), queue stack, quotes,
 // send / stop. Enter sends, Shift+Enter = newline, Ctrl/⌘+Enter sends, Esc blurs.
 import * as React from 'react'
-import { ArrowUp, Clock, CornerDownRight, FileText, MessageCircleQuestion, Paperclip, Pencil, Quote, Square, X } from 'lucide-react'
+import { ArrowUp, Clock, CornerDownRight, FileText, ListPlus, MessageCircleQuestion, Paperclip, Pencil, Quote, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadGroups, useT } from '@/i18n'
 import { Button, Sensitive, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
@@ -41,6 +41,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
   steering?: boolean
   /** A steer was accepted: the current turn is ending, the queued messages start right after. */
   steerPending?: boolean
+  /** Add now: the queued messages go into the running turn without interrupting it (read at Claude's next step). */
+  onInject?: () => void
+  injecting?: boolean
   /** Edit: takes the queued messages back (server queue emptied) - they are put in the composer. */
   onTakeQueue?: () => Promise<{ text: string; attachments: string[] }[]>
   /** Side question: the waiting messages become a question Claude answers apart, without interrupting the turn. */
@@ -63,7 +66,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
   /** Lines the text grows to before it scrolls (fewer in a small grid pane, so the conversation stays visible). */
   maxRows?: number
 }>(function Composer(props, ref) {
-  const { colKey, draftKey, topicPath, running, disabledReason, queueCount = 0, queued = [], queueItems = NO_ITEMS, onClearQueue, clearingQueue, onSteer, steering, steerPending, onTakeQueue, onAsk, asking, onSend, onStop, stopping, toolbar, notice, placeholder, autoFocus, maxRows = 12 } = props
+  const { colKey, draftKey, topicPath, running, disabledReason, queueCount = 0, queued = [], queueItems = NO_ITEMS, onClearQueue, clearingQueue, onSteer, steering, steerPending, onInject, injecting, onTakeQueue, onAsk, asking, onSend, onStop, stopping, toolbar, notice, placeholder, autoFocus, maxRows = 12 } = props
   const t = useT()
   const [text, setText] = React.useState(() => loadDraft(draftKey))
   const [quotes, setQuotes] = React.useState<string[]>(() => loadQuotes(draftKey))
@@ -579,6 +582,13 @@ export const Composer = React.forwardRef<ComposerHandle, {
                   <Tooltip content={t('aside.askTip')}>
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={onAsk} loading={asking} disabled={steerPending}>
                       <MessageCircleQuestion className="size-3.5" /> <span className="max-sm:sr-only">{t('aside.ask')}</span>
+                    </Button>
+                  </Tooltip>
+                )}
+                {onInject && running && (
+                  <Tooltip content={t('sessions.queue.injectTip')}>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={onInject} loading={injecting} disabled={steerPending}>
+                      <ListPlus className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.inject')}</span>
                     </Button>
                   </Tooltip>
                 )}
