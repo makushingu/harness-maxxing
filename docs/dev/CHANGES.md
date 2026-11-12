@@ -64,6 +64,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   reload. Before, only a worker already waiting at `load` was swapped silently; one still installing (precache on a
   slow link) went through `announceUpdate` and reloaded the freshly loaded page. No answer in 3 s or a file missing:
   the usual `announceUpdate` (a tab left open on an older build reloads as before).
+- Sessions: the stack drop zone of a column (dashed third) was a local state of `ColumnShell`, cleared only by its own
+  `dragleave` / `drop`; a cancelled drag fires neither. It is now `dropStack` in the sessions store (`setDropStack`),
+  cleared with `dropBeside` by `setDragging(null)` (grip `dragend`, document `dragend` / `drop`), and one session at
+  most shows it.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

@@ -140,7 +140,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
   const focus = useSessionsUI((s) => s.focus)
   const strip = React.useContext(StripContext)
   const ref = React.useRef<HTMLElement>(null)
-  const [dropSide, setDropSide] = React.useState<'above' | 'below' | null>(null)
+  const dropSide = useSessionsUI((s) => (s.dropStack?.key === col.key ? s.dropStack.side : null))
   const isCol = variant === 'column'
   const rank = place?.i ?? 0
   const size = place?.n ?? 1
@@ -169,13 +169,13 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         // column holds fewer than MAX_STACK
         const room = size < MAX_STACK
         const v = room && rank === size - 1 && e.clientY > r.top + r.height * 0.66 ? 'below' : room && rank === 0 && e.clientY < r.top + r.height * 0.34 ? 'above' : null
-        setDropSide(v)
+        ui.setDropStack(v ? { key: col.key, side: v } : null)
         ui.setDropBeside(v ? null : { top: groupKey, side: e.clientX < r.left + r.width / 2 ? 'left' : 'right' })
       }}
       onDragLeave={(e) => {
         if (ref.current?.contains(e.relatedTarget as Node)) return
-        setDropSide(null)
         const ui = useSessionsUI.getState()
+        if (ui.dropStack?.key === col.key) ui.setDropStack(null)
         if (ui.dropBeside?.top === groupKey) ui.setDropBeside(null)
       }}
       onDrop={(e) => {
@@ -184,7 +184,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         const key = e.dataTransfer.getData('application/x-mx-col')
         const ui = useSessionsUI.getState()
         const side = dropSide ?? (ui.dropBeside?.top === groupKey ? ui.dropBeside.side : null)
-        setDropSide(null)
+        ui.setDropStack(null)
         ui.setDropBeside(null)
         if (!key || key === col.key) return
         if (side === 'below') return ui.stack(key, col.key)

@@ -58,6 +58,9 @@ Fixed:
   after an update loaded the new version, then reloaded the page by itself a few seconds later (up to 20 s on a
   phone network), once its offline copy was ready. The page you just loaded is kept; a tab left open over an update
   still switches to the new version by itself.
+- **Sessions: the dashed drop zone no longer stays on a session.** Dragging a session over the top or the bottom
+  of another one shows where it would be stacked; when the drag was cancelled there (Escape, or a drop that did not
+  happen), the dashed frame stayed over the conversation until the next drag.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
 

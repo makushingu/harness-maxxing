@@ -127,6 +127,10 @@ type State = {
   /** Drop beside a strip column: the line shows along every session of it (top key and side); not persisted. */
   dropBeside: { top: string; side: 'left' | 'right' } | null
   setDropBeside: (v: { top: string; side: 'left' | 'right' } | null) => void
+  /** Session a dragged one would be stacked above / under (the dashed zone). In the store, not in the column: a drag
+   *  that ends without a drop there (Escape, released elsewhere) must take the zone away too. */
+  dropStack: { key: string; side: 'above' | 'below' } | null
+  setDropStack: (v: { key: string; side: 'above' | 'below' } | null) => void
   openSession: (id: string, opts?: { focus?: boolean; after?: string | null }) => string
   openNew: (path: string) => string
   close: (key: string) => void
@@ -384,11 +388,16 @@ export const useSessionsUI = create<State>()(
       layoutPicker: null,
       setLayoutPicker: (layoutPicker) => set({ layoutPicker }),
       dragging: null,
-      setDragging: (dragging) => set(dragging ? { dragging } : { dragging, dropBeside: null }),
+      setDragging: (dragging) => set(dragging ? { dragging } : { dragging, dropBeside: null, dropStack: null }),
       dropBeside: null,
       setDropBeside: (dropBeside) => {
         const cur = get().dropBeside
         if (cur?.top !== dropBeside?.top || cur?.side !== dropBeside?.side) set({ dropBeside })
+      },
+      dropStack: null,
+      setDropStack: (dropStack) => {
+        const cur = get().dropStack
+        if (cur?.key !== dropStack?.key || cur?.side !== dropStack?.side) set({ dropStack })
       },
     }),
     {
