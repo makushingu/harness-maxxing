@@ -67,7 +67,7 @@ _loop: asyncio.AbstractEventLoop | None = None
 
 
 def enabled() -> bool:
-    return bool(config.load_config().get("terminal_feature", False))
+    return bool(config.load_config().get("code_mode", False))
 
 
 def _inside_root(p: Path) -> bool:

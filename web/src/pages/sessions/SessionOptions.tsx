@@ -44,7 +44,7 @@ export function SessionOptions({
   onHandoff: () => void
   onFolder?: () => void
   onHud?: () => void
-  /** Open the terminal drawer (Settings -> Features -> Terminal on, not an agent). */
+  /** Open the terminal drawer (Settings -> Features -> Sessions -> Code mode on, not an agent). */
   onTerminal?: () => void
   onArchive: () => void
   onDelete: () => void

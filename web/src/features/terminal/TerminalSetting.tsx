@@ -1,4 +1,4 @@
-// Settings -> Features, under Sessions: the terminal switch. Turning it on asks for the password again (a terminal runs
+// Settings -> Features, under Sessions: "Code mode" (the terminal). Turning it on asks for the password again (a terminal runs
 // any command on the server); off closes every terminal.
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'

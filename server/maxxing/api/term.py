@@ -44,14 +44,14 @@ class EnableIn(BaseModel):
 @router.post("/enable", dependencies=AUTH)
 async def enable(body: EnableIn, request: Request):
     await auth_api._check_current(request, body.password)
-    await asyncio.to_thread(lambda: config.update_config(terminal_feature=True))
+    await asyncio.to_thread(lambda: config.update_config(code_mode=True))
     log.info("terminal turned on")
     return {"enabled": True}
 
 
 @router.post("/disable", dependencies=AUTH)
 async def disable():
-    await asyncio.to_thread(lambda: config.update_config(terminal_feature=False))
+    await asyncio.to_thread(lambda: config.update_config(code_mode=False))
     closed = terminal.close_all()
     return {"enabled": False, "closed": closed}
 

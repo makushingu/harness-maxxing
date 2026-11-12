@@ -568,8 +568,8 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
 
   const qc = useQueryClient()
   const hudOn = useUI((s) => s.hud)
-  // The terminal drawer (Settings -> Features -> Terminal; never for agents): Ctrl+J, /terminal, the session's options.
-  const termOn = !!settings?.terminal_feature && !agentRun && !isAgentPath(path)
+  // The terminal drawer (Settings -> Features -> Sessions -> Code mode; never for agents): Ctrl+J, /terminal, the session's options.
+  const termOn = !!settings?.code_mode && !agentRun && !isAgentPath(path)
   const termOpen = useTermUI((x) => !!x.bySid[sid]?.open) && termOn
   const toggleTerm = React.useCallback((open?: boolean) => useTermUI.getState().toggle(sid, open), [sid])
   const termPlaces = React.useMemo<TermPlace[]>(() => {

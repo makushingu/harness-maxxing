@@ -17,7 +17,7 @@ export type SlashActions = {
   onHandoff?: () => void
   onNew?: () => void
   onRename?: (title: string) => void
-  /** The terminal drawer (Settings -> Features -> Terminal on, not an agent). */
+  /** The terminal drawer (Settings -> Features -> Sessions -> Code mode on, not an agent). */
   onTerminal?: () => void
 }
 

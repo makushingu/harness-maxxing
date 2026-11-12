@@ -41,7 +41,7 @@ export function FeaturesSection() {
           <Callout tone="info">{t('hud.fallback')}</Callout>
         </div>
       )}
-      <TerminalSetting on={!!s.terminal_feature} />
+      <TerminalSetting on={!!s.code_mode} />
       {/* was in General -> Appearance before 2.0.0a132; saved on the server */}
       <div className="grid gap-3 py-4 last:pb-0">
         <div className="grid gap-0.5">

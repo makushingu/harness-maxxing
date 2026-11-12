@@ -86,7 +86,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "tasks_page": False,               # Settings -> Features: the Tasks page, its sidebar entry and dashboard widget
                                        # (`maxxing init`: on for installs made before Tasks became optional)
     "git_page": False,                 # Settings -> Features: the Git & GitHub page and its sidebar entry
-    "terminal_feature": False,         # Settings -> Features: the terminal drawer of sessions (POST /api/term/enable: password)
+    "code_mode": False,                # Settings -> Features -> Sessions -> Code mode: the terminal drawer (POST /api/term/enable: password)
     "infra_page": False,               # Settings -> Features: the Infra page (sites, databases, buckets, domains, servers)
     "infra_refresh_min": 15,
     "result_line_hidden": [],          # Sessions: parts of the line under each answer that are hidden (cost, tokens...)           # Infra: background refresh period (minutes) while the page is on

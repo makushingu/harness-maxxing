@@ -601,7 +601,7 @@ not_github|no_base`, `403 no_write`, `409 running`.
 
 ## Terminal
 
-`maxxing/terminal.py` + `maxxing/api/term.py`. Config `terminal_feature` (default false; shown read-only by
+`maxxing/terminal.py` + `maxxing/api/term.py`. Config `code_mode` (default false; shown read-only by
 `/api/settings`). A terminal = a login shell (`setsid -c $SHELL -l`) on a pseudo-terminal, child of the server: it
 ends when closed, after 30 min without input or output, or when the service stops. 4 at most; the folder must be
 inside the files root. Its output since the start (last 256 KB) is replayed to every new connection. Never for agents

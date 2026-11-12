@@ -35,13 +35,13 @@ def _read_until(ws, needle: bytes, limit: int = 200) -> bytes:
 
 def test_off_by_default_and_the_password_turns_it_on(client, term_env):
     assert client.get("/api/term").json()["enabled"] is False
-    assert client.get("/api/settings").json()["terminal_feature"] is False
+    assert client.get("/api/settings").json()["code_mode"] is False
     r = client.post("/api/term", json={"cwd": str(term_env["files"])})
     assert r.status_code == 403 and r.json()["error"] == "term_off"
     assert client.post("/api/term/enable", json={"password": "wrong"}).status_code == 401
     assert client.get("/api/term").json()["enabled"] is False
     assert client.post("/api/term/enable", json={"password": "correct horse battery"}).status_code == 200
-    assert client.get("/api/settings").json()["terminal_feature"] is True
+    assert client.get("/api/settings").json()["code_mode"] is True
 
 
 def test_a_terminal_runs_commands_in_its_folder(on, term_env):

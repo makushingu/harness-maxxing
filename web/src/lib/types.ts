@@ -788,8 +788,8 @@ export type Settings = {
   tasks_page?: boolean
   /** Settings -> Features: the Git & GitHub page (/git) and its sidebar entry */
   git_page: boolean
-  /** Settings -> Features -> Terminal (read-only here: POST /api/term/enable with the password, /disable). */
-  terminal_feature?: boolean
+  /** Settings -> Features -> Sessions -> Code mode: the terminal (read-only here: POST /api/term/enable with the password, /disable). */
+  code_mode?: boolean
   /** Settings -> Features: the Infra page (/infra) and its sidebar entry */
   infra_page: boolean
   /** Settings -> Features: the Team page (/team, chats between people) and its sidebar entry */

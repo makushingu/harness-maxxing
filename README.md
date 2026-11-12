@@ -36,7 +36,7 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
   per-source rules, "Ask Harness" about an event.
 - **Code in a session** - when Claude changes a git repository, a button under its answer opens the diff (this turn,
   the whole session, not committed, the whole branch); undo a file, revert to before a message, commit with a
-  proposed message, push, open a pull request with its checks; an optional terminal under the conversation.
+  proposed message, push, open a pull request with its checks; a terminal under the conversation (optional code mode).
 - **Infra** (optional) - every site, database, bucket, domain and server: this server, your other servers (SSH,
   a Hostinger VPS connects in one click),
   Cloudflare, Hostinger; statuses, certificate and domain expiry, links domain -> server -> site -> app -> repository;

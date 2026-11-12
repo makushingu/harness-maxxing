@@ -441,7 +441,7 @@ A Telegram session can be continued from the web UI and the other way round.
 | G then D / S / F / T / C | go to Dashboard / Sessions / Files / Tasks / Crons |
 | Alt+T | tabs view on / off (Sessions page) |
 | Alt+M | Maxxing mode on / off (Sessions page, once enabled in Settings -> Features) |
-| Ctrl+J | terminal under the session on / off (once enabled in Settings -> Features, see [Code in a session](35-code.md#terminal)) |
+| Ctrl+J | terminal under the session on / off (once Code mode is on in Settings -> Features -> Sessions, see [Code in a session](35-code.md#terminal)) |
 
 ## Good to know
 

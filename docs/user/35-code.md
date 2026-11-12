@@ -60,7 +60,7 @@ Claude never commits or pushes through these buttons: they only run when you cli
 
 ## Terminal
 
-**Settings → Features → Terminal** (off by default; your password is asked to turn it on, because a terminal runs any
+**Settings → Features → Sessions → Code mode** (off by default; your password is asked to turn it on, because a terminal runs any
 command on the server). Then:
 
 - **Ctrl+J** in a session, **/terminal** in the composer or **Open a terminal** in the session's options opens a
