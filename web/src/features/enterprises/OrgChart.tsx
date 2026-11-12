@@ -14,7 +14,7 @@ import { fmtCost } from '@/pages/sessions/util'
 import { useCompact } from '@/stores/media'
 import { AddPositionDialog } from './dialogs'
 import { PositionSheet } from './PositionSheet'
-import { STATE_TONE, chartRoots, subtreeIds, useSavePosition } from './parts'
+import { STATE_TONE, stateText, chartRoots, subtreeIds, useSavePosition } from './parts'
 
 type Kids = Map<string | null, Position[]>
 
@@ -52,7 +52,7 @@ function PositionCard({
       data-testid="position-card"
       onClick={onOpen}
       onPointerDown={onDown}
-      aria-label={`${p.title} · ${t(st.label)}`}
+      aria-label={`${p.title} · ${stateText(t, p)}`}
       className={cn(
         'grid w-48 cursor-pointer gap-2 rounded-xl border bg-card p-3 text-left transition-colors outline-none select-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
         !p.occupant && 'border-dashed bg-transparent',
@@ -71,7 +71,7 @@ function PositionCard({
       <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <StatusDot tone={st.tone} pulse={st.pulse} />
-          <span className="truncate">{t(st.label)}</span>
+          <span className="truncate" title={stateText(t, p)}>{stateText(t, p)}</span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-2 tabular-nums">
           {p.inbox > 0 && (
@@ -172,7 +172,7 @@ function ListNode({ p, ctx, depth, closed, toggle }: { p: Position; ctx: Ctx; de
           <span className="grid shrink-0 justify-items-end gap-0.5 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <StatusDot tone={st.tone} pulse={st.pulse} />
-              {t(st.label)}
+              {stateText(t, p)}
             </span>
             <span className="tabular-nums">
               <Sensitive length={4}>{fmtCost(p.cost_today)}</Sensitive>

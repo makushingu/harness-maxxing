@@ -48,6 +48,20 @@ export const STATE_TONE: Record<PositionState, { tone: DotTone; pulse?: boolean;
   idle: { tone: 'ok', label: 'ent.state.idle' },
 }
 
+const BLOCKED_REASONS: Record<string, TKey> = {
+  budget: 'ent.blocked.budget',
+  envelope: 'ent.blocked.envelope',
+  disabled: 'ent.blocked.disabled',
+  'agent missing': 'ent.blocked.agentMissing',
+}
+
+/** What a position's state reads: a blocked one says why (known reasons translated, anything else as sent). */
+export function stateText(t: (k: TKey) => string, p: Position): string {
+  if (p.state !== 'blocked' || !p.blocked_reason) return t(STATE_TONE[p.state].label)
+  const k = BLOCKED_REASONS[p.blocked_reason]
+  return `${t('ent.state.blocked')}: ${k ? t(k) : p.blocked_reason}`
+}
+
 /** position id -> the positions that report to it, in chart order. A lead that is not in the chart (broken file)
  *  counts as no lead, so no box is ever lost. */
 export function childrenMap(positions: Position[]): Map<string | null, Position[]> {

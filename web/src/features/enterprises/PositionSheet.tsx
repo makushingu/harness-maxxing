@@ -12,7 +12,7 @@ import { Badge, Button, confirm, toast, FormField, Input, Select, Sensitive, She
 import { AgentChatPanel } from '@/features/agents/AgentPage'
 import { HireDialog, NONE, leadOptions } from './dialogs'
 import { EscalationCard, RequestCard } from './Overview'
-import { STATE_TONE, inProjects, subtreeIds, useSavePosition } from './parts'
+import { STATE_TONE, stateText, inProjects, subtreeIds, useSavePosition } from './parts'
 import { DeskSwitch, PositionWorkers, WorkerTemplateEditor } from './Workers'
 
 export function PositionSheet({ enterprise: e, positionId, onClose }: { enterprise: Enterprise; positionId: string | null; onClose: () => void }) {
@@ -47,7 +47,7 @@ function PanelBody({ enterprise: e, position: p, onClose }: { enterprise: Enterp
         </TabsList>
         <span className="inline-flex min-w-0 flex-1 items-center justify-end gap-1.5 text-xs text-muted-foreground">
           <StatusDot tone={st.tone} pulse={st.pulse} />
-          <span className="truncate">{t(st.label)}</span>
+          <span className="truncate" title={stateText(t, p)}>{stateText(t, p)}</span>
         </span>
         {(tab !== 'conversation' || !p.occupant) && close}
       </div>

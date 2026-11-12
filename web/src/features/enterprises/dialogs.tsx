@@ -17,6 +17,15 @@ function freeSlug(base: string, taken: string[]): string {
   for (let i = 2; ; i++) if (!taken.includes(`${b}-${i}`)) return `${b}-${i}`
 }
 
+const RESERVED_POSITION_IDS = ['owner', 'server', 'policy', 'visitor', 'free', 'esc', 'none']
+
+/** The id suggested for a title: never a reserved word (`owner` becomes `owner-role`), never taken. */
+function positionId(title: string, taken: string[]): string {
+  let base = slugify(title) || 'position'
+  if (RESERVED_POSITION_IDS.includes(base)) base = `${base}-role`
+  return freeSlug(base, taken)
+}
+
 /** New enterprise: a name (its folder is made from it), an emoji, the projects it links, optionally a ready-made chart. */
 export function NewEnterpriseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const t = useT()
@@ -133,8 +142,10 @@ export function AddPositionDialog({ enterprise: e, open, onOpenChange, reportsTo
   const [lead, setLead] = React.useState(NONE)
   const [department, setDepartment] = React.useState('')
   const [job, setJob] = React.useState('')
+  const [idEdit, setIdEdit] = React.useState<string | null>(null)
   React.useEffect(() => {
     if (open) {
+      setIdEdit(null)
       setTitle('')
       setLead(reportsTo || NONE)
       setDepartment('')
@@ -143,11 +154,11 @@ export function AddPositionDialog({ enterprise: e, open, onOpenChange, reportsTo
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
-  const id = freeSlug(slugify(title) || 'position', e.positions.map((p) => p.id))
+  const id = idEdit ?? positionId(title, e.positions.map((p) => p.id))
   const err = add.error ? errorMessage(add.error) : undefined
   const submit = (ev: React.FormEvent) => {
     ev.preventDefault()
-    if (!title.trim()) return
+    if (!title.trim() || !SLUG_RE.test(id)) return
     add.mutate(
       { enterprise: e.id, id, title: title.trim(), reports_to: lead === NONE ? null : lead, department: department.trim(), job: job.trim() },
       { onSuccess: () => onOpenChange(false) },
@@ -163,6 +174,9 @@ export function AddPositionDialog({ enterprise: e, open, onOpenChange, reportsTo
           </DialogHeader>
           <FormField label={t('ent.position.title')}>
             <Input value={title} onChange={(ev) => setTitle(ev.target.value)} placeholder={t('ent.position.titlePh')} maxLength={80} autoFocus autoComplete="off" />
+          </FormField>
+          <FormField label={t('ent.position.id')} hint={t('ent.position.idHint')}>
+            <Input value={id} onChange={(ev) => setIdEdit(ev.target.value.toLowerCase())} maxLength={48} autoComplete="off" spellCheck={false} className="font-mono" />
           </FormField>
           <FormField label={t('ent.position.lead')}>
             <Select value={lead} onValueChange={setLead} options={leadOptions(t('ent.position.leadTop'), e.positions)} />
@@ -187,7 +201,7 @@ export function AddPositionDialog({ enterprise: e, open, onOpenChange, reportsTo
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" loading={add.isPending} disabled={!title.trim()}>
+            <Button type="submit" loading={add.isPending} disabled={!title.trim() || !SLUG_RE.test(id)}>
               {t('ent.position.addAction')}
             </Button>
           </DialogFooter>

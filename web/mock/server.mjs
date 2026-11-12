@@ -2174,8 +2174,8 @@ R('GET', '/api/enterprises/:e/desk', ({ params }) => {
   const d = entDesk(e)
   const s = e.settings.desk
   const unprotected = e.positions.filter((p) => entAgent(p.agent) && !entAgent(p.agent).sandbox).map((p) => p.id)
-  return { enabled: s.enabled, label: s.label || `AI assistant of ${e.name}`, retention_days: s.retention_days, full_for: s.full_for, position: e.positions.find((p) => p.desk && p.agent)?.id || null,
-    public: { ...s.public, path: s.public.token ? `/api/public/desk/${s.public.token}` : '' }, unprotected,
+  return { enabled: s.enabled, label: s.label || `AI assistant of ${e.name}`, retention_days: s.retention_days, position: e.positions.find((p) => p.desk && p.agent)?.id || null,
+    public: { ...s.public, path: s.public.token ? `/desk/${s.public.token}` : '' }, unprotected, unfit: {},
     conversations: d.conversations.map(({ messages, ...c }) => ({ ...c, messages: messages.filter((m) => m.role === 'visitor').length })).sort((a, b) => b.last - a.last) }
 })
 R('POST', '/api/enterprises/:e/desk/link', ({ params, body }) => {
@@ -2183,7 +2183,7 @@ R('POST', '/api/enterprises/:e/desk/link', ({ params, body }) => {
   const pub = e.settings.desk.public
   if (!pub.token || body.regenerate) pub.token = crypto.randomBytes(18).toString('base64url')
   entTouch(e, params.e)
-  return { token: pub.token, path: `/api/public/desk/${pub.token}` }
+  return { token: pub.token, path: `/desk/${pub.token}` }
 })
 R('GET', '/api/enterprises/:e/desk/:conv', ({ params }) => {
   const c = entDeskAsk(params.e).conversations.find((x) => x.id === params.conv) || fail(404, 'not_found', 'Conversation not found')
