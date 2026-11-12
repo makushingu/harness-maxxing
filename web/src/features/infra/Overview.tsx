@@ -29,7 +29,8 @@ export function useHowItWorks() {
   return { hidden, hide: () => set(true), show: () => set(false) }
 }
 
-export function HowItWorks({ onHide }: { onHide: () => void }) {
+/** How the page works. In the page's help window (`extra`: the note of the tab open); `onHide`: a closable card. */
+export function HowItWorks({ onHide, extra }: { onHide?: () => void; extra?: React.ReactNode }) {
   const t = useT()
   const steps = [
     { icon: Eye, title: t('infra.how.readTitle'), body: t('infra.how.read') },
@@ -37,18 +38,23 @@ export function HowItWorks({ onHide }: { onHide: () => void }) {
     { icon: MessageSquarePlus, title: t('infra.how.createTitle'), body: t('infra.how.create') },
   ]
   return (
-    <section className="relative grid gap-3 rounded-xl border border-primary/25 bg-primary/5 p-4" data-testid="infra-how">
-      <div className="flex items-start gap-2 pr-8">
-        <h2 className="text-sm font-semibold">{t('infra.how.title')}</h2>
-      </div>
-      <Button variant="ghost" size="icon" className="absolute top-2 right-2 size-7 pointer-coarse:size-10" onClick={onHide} aria-label={t('infra.how.hide')} title={t('infra.how.hide')}>
-        <X />
-      </Button>
+    <section className={cn('relative grid gap-3', onHide && 'rounded-xl border bg-card p-4')} data-testid="infra-how">
+      {onHide && (
+        <>
+          <div className="flex items-start gap-2 pr-8">
+            <h2 className="text-sm font-semibold">{t('infra.how.title')}</h2>
+          </div>
+          <Button variant="ghost" size="icon" className="absolute top-2 right-2 size-7 pointer-coarse:size-10" onClick={onHide} aria-label={t('infra.how.hide')} title={t('infra.how.hide')}>
+            <X />
+          </Button>
+        </>
+      )}
+      {extra && <p className="text-[13px] text-muted-foreground">{extra}</p>}
       <ol className="grid gap-3 md:grid-cols-3">
         {steps.map((s, i) => (
-          <li key={i} className="grid content-start gap-1.5 rounded-lg bg-card/60 p-3">
+          <li key={i} className="grid content-start gap-1.5 rounded-lg border p-3">
             <span className="flex items-center gap-2 text-[13px] font-medium">
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
                 <s.icon className="size-3.5" />
               </span>
               {s.title}

@@ -4,7 +4,7 @@
 // (?tab=sites&id=<resource id>), so a notification or a chat block can point to one.
 import * as React from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { AlertTriangle, ArrowUpRight, Cloud, Eye, EyeOff, FolderGit2, HelpCircle, LayoutGrid, Mail, MessageSquarePlus, Network, RefreshCw, Search, Server, ServerCog, Settings2 } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, Cloud, Eye, EyeOff, FolderGit2, HelpCircle, LayoutGrid, Mail, MessageSquarePlus, Network, RefreshCw, Server, ServerCog, Settings2 } from 'lucide-react'
 import { useCreateSession, useInfra, useInfraAnnotate, useInfraRefresh, useSettings, useWorkspace } from '@/lib/queries'
 import type { InfraKind, InfraResource, InfraView } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
@@ -12,16 +12,16 @@ import { fmtBytes, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { tDyn, useLang, useT, type TFn } from '@/i18n'
 import {
-  Badge, Button, EmptyState, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle,
+  Badge, Button, Dialog, DialogContent, DialogTitle, EmptyState, Input, Select, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle,
   Sensitive, Skeleton, StatusDot, Switch, Textarea, useMask, usePresentation,
 } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
-import { PageList } from '@/components/shell/PageList'
+import { PageList, type ListSearch } from '@/components/shell/PageList'
 import { KIND_ICON, STATUS_TONE, locationLabel, providerName, rememberServers, statusText, subtitle } from './shared'
-import { MixBar, PlaceIcon, PlaceName, PlaceTag, ResourceRow, TypeView, placeCounts } from './TypeView'
+import { PlaceIcon, PlaceName, PlaceTag, ResourceRow, TypeView, placeCounts } from './TypeView'
 import { placeInfo, placeOf } from './places'
 import { AddDomain, AddServer, ConnectVps, RemoveDomain, ServerSettings } from './ServerConnect'
-import { HowItWorks, ServerCard, SourcesPanel, useHowItWorks } from './Overview'
+import { HowItWorks, ServerCard, SourcesPanel } from './Overview'
 import { MailInfra } from './MailInfra'
 
 type Tab = 'overview' | 'problems' | 'sites' | 'databases' | 'buckets' | 'domains' | 'servers' | 'mail'
@@ -48,26 +48,26 @@ const isProblem = (r: InfraResource) => r.status === 'down' || r.status === 'war
 
 /** The page's list (the second-level sidebar; touch: the left drawer): the overview, what to look at,
  *  each type, then the places. */
-function InfraNav({ tab, onTab, v, items, byId }: { tab: Tab; onTab: (t: Tab) => void; v: InfraView; items: InfraResource[]; byId: Map<string, InfraResource> }) {
+function InfraNav({ tab, onTab, items, search }: { tab: Tab; onTab: (t: Tab) => void; items: InfraResource[]; search: ListSearch }) {
   const t = useT()
   const problems = items.filter(isProblem)
   const down = problems.filter((r) => r.status === 'down').length
   const servers = items.filter((r) => r.kind === 'server')
-  const entries: { id: Tab; icon: React.ComponentType<{ className?: string }>; label: string; n?: number; bad?: number; warn?: number; mix?: InfraResource[]; section?: string }[] = [
+  const entries: { id: Tab; icon: React.ComponentType<{ className?: string }>; label: string; n?: number; bad?: number; warn?: number; section?: string }[] = [
     { id: 'overview', icon: LayoutGrid, label: t('infra.tab.overview') },
     { id: 'problems', icon: AlertTriangle, label: t('infra.problems'), bad: down, warn: problems.length - down },
     ...TYPES.map((x) => {
       const list = items.filter((r) => TAB_KINDS[x].includes(r.kind))
       const down = list.filter((r) => r.status === 'down').length
       const warn = list.filter((r) => r.status === 'warn').length
-      return { id: x as Tab, icon: TYPE_ICON[x], label: t(`infra.tab.${x}`), n: list.length, bad: down, warn, mix: list, section: x === 'sites' ? t('infra.nav.what') : undefined }
+      return { id: x as Tab, icon: TYPE_ICON[x], label: t(`infra.tab.${x}`), n: list.length, bad: down, warn, section: x === 'sites' ? t('infra.nav.what') : undefined }
     }),
     { id: 'mail', icon: Mail, label: t('infra.mail.tab') },
     { id: 'servers', icon: ServerCog, label: t('infra.nav.places'), n: servers.length, bad: servers.filter((r) => r.status === 'down').length, section: t('infra.nav.where') },
   ]
   const pill = (n: number, cls: string) => <span className={cn('rounded-full px-1.5 text-[11px] leading-4 font-semibold tabular-nums', cls)}>{n}</span>
   return (
-    <PageList id="infra" label={t('infra.title')}>
+    <PageList id="infra" label={t('infra.title')} search={search}>
       <nav aria-label={t('infra.title')} className="min-h-0 flex-1 overflow-y-auto p-2" data-testid="infra-nav">
         <ul className="grid gap-0.5">
           {entries.map((e) => (
@@ -79,8 +79,7 @@ function InfraNav({ tab, onTab, v, items, byId }: { tab: Tab; onTab: (t: Tab) =>
                   onClick={() => onTab(e.id)}
                   aria-current={tab === e.id ? 'page' : undefined}
                   className={cn(
-                    'relative flex w-full flex-col justify-center rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground',
-                    e.mix ? 'h-11' : 'h-9',
+                    'relative flex h-9 w-full flex-col justify-center rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground pointer-coarse:h-11',
                     tab === e.id && 'bg-accent font-medium text-foreground hover:bg-accent',
                   )}
                   data-testid={`infra-tab-${e.id}`}
@@ -88,13 +87,10 @@ function InfraNav({ tab, onTab, v, items, byId }: { tab: Tab; onTab: (t: Tab) =>
                   <span className="flex w-full items-center gap-2.5">
                     <e.icon className={cn('size-4 shrink-0', tab === e.id && 'text-primary')} />
                     <span className="flex-1 truncate text-left">{e.label}</span>
-                    {!!e.bad && pill(e.bad, 'bg-destructive/15 text-destructive')}
-                    {!!e.warn && pill(e.warn, 'bg-warning/15 text-warning')}
+                    {/* one pill: the problems, red when one is down */}
+                    {!!((e.bad || 0) + (e.warn || 0)) && pill((e.bad || 0) + (e.warn || 0), e.bad ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning')}
                     {e.n != null && <span className="min-w-5 text-right text-xs tabular-nums text-muted-foreground">{e.n}</span>}
                   </span>
-                  {e.mix && e.mix.length > 0 && (
-                    <MixBar parts={placeCounts(e.mix, byId).map(([k, n]) => ({ p: placeInfo(k, v, t), n }))} className="mt-1.5 ml-[26px] h-[3px] w-[calc(100%-26px)]" />
-                  )}
                 </button>
               </li>
             </React.Fragment>
@@ -111,7 +107,7 @@ function Problems({ v, items, byId, onOpen, limit }: { v: InfraView; items: Infr
   if (!list.length) return <p className="rounded-xl border border-dashed px-4 py-3 text-[13px] text-muted-foreground">{t('infra.noProblem')}</p>
   const shown = limit ? list.slice(0, limit) : list
   return (
-    <ul className="divide-y overflow-hidden rounded-xl border border-destructive/25 bg-destructive/[0.03]">
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card">
       {shown.map((r) => (
         <li key={r.id} className="flex items-center gap-3 pr-3">
           <div className="min-w-0 flex-1">
@@ -127,7 +123,7 @@ function Problems({ v, items, byId, onOpen, limit }: { v: InfraView; items: Infr
 }
 
 /** Overview: what to look at, then a table of each type by place (your servers, then hosted elsewhere). */
-function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: InfraView; items: InfraResource[]; all: InfraResource[]; byId: Map<string, InfraResource>; onOpen: (id: string) => void; onPlace: (tab: Tab, at: string) => void; onTab: (t: Tab) => void; how: ReturnType<typeof useHowItWorks> }) {
+function Overview({ v, items, all, byId, onOpen, onPlace, onTab }: { v: InfraView; items: InfraResource[]; all: InfraResource[]; byId: Map<string, InfraResource>; onOpen: (id: string) => void; onPlace: (tab: Tab, at: string) => void; onTab: (t: Tab) => void }) {
   const t = useT()
   const counts = Object.fromEntries(TYPES.map((x) => [x, new Map(placeCounts(items.filter((r) => TAB_KINDS[x].includes(r.kind)), byId))])) as Record<(typeof TYPES)[number], Map<string, number>>
   const keys = [...new Set(TYPES.flatMap((x) => [...counts[x].keys()]))]
@@ -152,7 +148,6 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
   }
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
-      {!how.hidden && <HowItWorks onHide={how.hide} />}
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">{t('infra.problems')}</h2>
@@ -171,7 +166,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
             <div className="grid text-[11px] font-semibold tracking-wider uppercase" style={grid}>
               <span />
               {own.length > 0 && (
-                <span className="flex items-center justify-center gap-1.5 bg-primary/8 py-2 text-primary" style={{ gridColumn: `span ${own.length}` }}>
+                <span className="flex items-center justify-center gap-1.5 py-2 text-muted-foreground" style={{ gridColumn: `span ${own.length}` }}>
                   <Server className="size-3" /> {t('infra.place.own')}
                 </span>
               )}
@@ -185,7 +180,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
             <div className="grid" style={grid}>
               <span />
               {cols.map((p, i) => (
-                <div key={p.key} className={cn('flex flex-col items-center gap-1 px-1.5 pt-2.5 pb-2 text-center', p.tier === 'own' && 'bg-primary/4', p.tier !== 'own' && i === own.length && 'border-l border-dashed')}>
+                <div key={p.key} className={cn('flex flex-col items-center gap-1 px-1.5 pt-2.5 pb-2 text-center', p.tier !== 'own' && i === own.length && 'border-l border-dashed')}>
                   <PlaceIcon p={p} />
                   <span className="max-w-full truncate text-xs font-semibold">
                     <PlaceName p={p} />
@@ -206,13 +201,12 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
                   {cols.map((p, i) => {
                     const n = counts[x].get(p.key)
                     return (
-                      <span key={p.key} className={cn('flex min-h-12 items-center justify-center', p.tier === 'own' && 'bg-primary/4', p.tier !== 'own' && i === own.length && 'border-l border-dashed')}>
+                      <span key={p.key} className={cn('flex min-h-12 items-center justify-center', p.tier !== 'own' && i === own.length && 'border-l border-dashed')}>
                         {n ? (
                           <button
                             type="button"
                             onClick={() => onPlace(x, p.key)}
-                            className="min-w-11 rounded-lg px-2.5 py-1 text-base font-semibold tabular-nums transition-colors"
-                            style={{ color: `color-mix(in oklch, ${p.color} 80%, var(--foreground))`, background: `color-mix(in oklch, ${p.color} 13%, transparent)` }}
+                            className="min-w-11 rounded-lg px-2.5 py-1 text-base font-semibold tabular-nums transition-colors hover:bg-accent"
                             title={`${t(`infra.tab.${x}`)} · ${p.sensitive ? mask(p.label) : p.label}`}
                           >
                             {n}
@@ -231,7 +225,6 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab, how }: { v: Inf
             })}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">{t('infra.place.matrixHint')}</p>
       </section>
       <SourcesPanel v={v} all={all} onServers={() => onTab('servers')} />
     </div>
@@ -529,7 +522,7 @@ export default function InfraPage() {
   }, [on, v, refresh])
 
   rememberServers(v?.servers)
-  const how = useHowItWorks()
+  const [help, setHelp] = React.useState(false)
   const all = v?.resources || []
   const byId = React.useMemo(() => new Map(all.map((r) => [r.id, r])), [all])
   const projects = [...new Set([...(ws?.projects || []).map((p) => p.name), ...all.map((r) => r.project).filter(Boolean)])].sort() as string[]
@@ -571,10 +564,27 @@ export default function InfraPage() {
       width="wide"
       actions={
         <>
-          <Button variant="outline" size="sm" loading={refresh.isPending || !!v?.refreshing} onClick={() => refresh.mutate()} data-testid="infra-refresh">
-            <RefreshCw /> <span className="max-[429px]:sr-only">{v?.refreshing ? t('infra.refreshing') : t('infra.refresh')}</span>
+          {tab !== 'mail' && (
+            <>
+              <Select
+                value={project}
+                onValueChange={setProject}
+                options={[{ value: '_all', label: t('infra.allProjects') }, ...projects.map((p) => ({ value: p, label: mask(p) }))]}
+                className="h-8 w-auto min-w-32 max-sm:hidden"
+                aria-label={t('infra.project')}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={() => setShowHidden((x) => !x)} aria-pressed={showHidden} aria-label={t('infra.showHidden')} title={t('infra.showHidden')}>
+                {showHidden ? <Eye /> : <EyeOff />}
+              </Button>
+            </>
+          )}
+          <Button variant="ghost" size="icon-sm" onClick={() => setHelp(true)} aria-label={t('infra.how.title')} title={t('infra.how.title')} data-testid="infra-help">
+            <HelpCircle />
           </Button>
-          <AddServer />
+          <Button variant="ghost" size="icon-sm" loading={refresh.isPending || !!v?.refreshing} onClick={() => refresh.mutate()} aria-label={v?.refreshing ? t('infra.refreshing') : t('infra.refresh')} title={v?.refreshing ? t('infra.refreshing') : t('infra.refresh')} data-testid="infra-refresh">
+            <RefreshCw />
+          </Button>
+          {tab === 'domains' ? <AddDomain /> : <AddServer />}
         </>
       }
     >
@@ -590,39 +600,15 @@ export default function InfraPage() {
         <EmptyState icon={Network} title={t('infra.firstRun')} description={t('infra.firstRunDesc')} />
       ) : v ? (
         <div className="flex min-w-0 flex-col gap-3">
-          <InfraNav tab={tab} onTab={(x) => set({ tab: x, id: null, at: null })} v={v} items={visible} byId={byId} />
+          <InfraNav tab={tab} onTab={(x) => set({ tab: x, id: null, at: null })} items={visible} search={{ value: q, onChange: setQ, placeholder: t('infra.search') }} />
           <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-4">
             {v.error && (
               <p className="flex items-center gap-2 text-[13px] text-destructive">
                 <AlertTriangle className="size-4" /> <Sensitive length={20}>{v.error}</Sensitive>
               </p>
             )}
-            {tab !== 'mail' && (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-0 flex-1 sm:max-w-72">
-                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('infra.search')} className="pl-8" />
-                </div>
-                <Select
-                  value={project}
-                  onValueChange={setProject}
-                  options={[{ value: '_all', label: t('infra.allProjects') }, ...projects.map((p) => ({ value: p, label: mask(p) }))]}
-                  className="h-9 w-auto min-w-36"
-                  aria-label={t('infra.project')}
-                />
-                <Button variant="ghost" size="icon" onClick={() => setShowHidden((x) => !x)} aria-pressed={showHidden} aria-label={t('infra.showHidden')} title={t('infra.showHidden')}>
-                  {showHidden ? <Eye /> : <EyeOff />}
-                </Button>
-                {tab === 'domains' && <AddDomain />}
-                {how.hidden && tab === 'overview' && (
-                  <button type="button" onClick={how.show} className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                    <HelpCircle className="size-3.5" /> {t('infra.how.title')}
-                  </button>
-                )}
-              </div>
-            )}
             {tab === 'overview' ? (
-              <Overview v={v} items={visible} all={all} byId={byId} onOpen={(id) => set({ id })} onPlace={(x, at) => set({ tab: x, at })} onTab={(x) => set({ tab: x, at: null })} how={how} />
+              <Overview v={v} items={visible} all={all} byId={byId} onOpen={(id) => set({ id })} onPlace={(x, at) => set({ tab: x, at })} onTab={(x) => set({ tab: x, at: null })} />
             ) : tab === 'mail' ? (
               <MailInfra />
             ) : tab === 'problems' ? (
@@ -637,7 +623,6 @@ export default function InfraPage() {
               />
             ) : tab === 'servers' ? (
               <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
-                <p className="text-[13px] text-muted-foreground">{t('infra.srv.tabHint')}</p>
                 <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
                   {tabItems
                     .slice()
@@ -656,12 +641,18 @@ export default function InfraPage() {
                 at={params.get('at')}
                 onAt={(at) => set({ at })}
                 onOpen={(id) => set({ id })}
-                intro={tab === 'domains' ? <p className="text-[13px] text-muted-foreground">{t('infra.dom.tabHint')}</p> : undefined}
               />
             )}
           </div>
         </div>
       ) : null}
+      {/* the help of the page, on demand only (it no longer shows by itself): how Infra works + the note of the tab open */}
+      <Dialog open={help} onOpenChange={setHelp}>
+        <DialogContent className="md:max-w-3xl">
+          <DialogTitle>{t('infra.how.title')}</DialogTitle>
+          <HowItWorks extra={tab === 'servers' ? t('infra.srv.tabHint') : tab === 'domains' ? t('infra.dom.tabHint') : tab === 'overview' ? t('infra.place.matrixHint') : undefined} />
+        </DialogContent>
+      </Dialog>
       <Sheet open={!!open} onOpenChange={(o) => !o && set({ id: null })}>
         <SheetContent className="w-full sm:max-w-lg">{open && <Detail r={open} v={v!} byId={byId} onOpen={(id) => set({ id, tab: tabOf(byId.get(id)!.kind) })} projects={projects} />}</SheetContent>
       </Sheet>
