@@ -1,5 +1,6 @@
 // Microphone recorder: MediaRecorder (opus/webm, mp4 on Safari) + live level meter + timer.
 import * as React from 'react'
+import { openMic } from './mic'
 
 export type RecorderState = 'idle' | 'starting' | 'recording'
 export type MicProblem = 'insecure' | 'unsupported' | 'denied' | 'no_device' | 'failed'
@@ -18,6 +19,12 @@ export function micUnavailable(): MicProblem | null {
   if (!window.isSecureContext) return 'insecure'
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return 'unsupported'
   return null
+}
+
+/** What a refused `getUserMedia` means for the user. */
+export function toMicError(e: unknown): MicError {
+  const name = (e as Error)?.name
+  return new MicError(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : name === 'NotFoundError' ? 'no_device' : 'failed', (e as Error)?.message)
 }
 
 function pickMime(): string {
@@ -87,17 +94,10 @@ export function useRecorder({ maxSeconds = 900, onLimit }: { maxSeconds?: number
     cancelled.current = false
     let s: MediaStream
     try {
-      s = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
+      s = await openMic()
     } catch (e) {
       setState('idle')
-      const name = (e as Error)?.name
-      throw new MicError(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : name === 'NotFoundError' ? 'no_device' : 'failed', (e as Error)?.message)
+      throw toMicError(e)
     }
     if (cancelled.current) {
       s.getTracks().forEach((tr) => tr.stop())

@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Voice: choose the microphone.** Settings -> Voice has a **Microphone** line: pick the microphone that records
+  on this device (headset, USB microphone, the built-in one) instead of the one the browser picks. The choice stays
+  in this browser; if that microphone is unplugged, the default one records and the choice comes back with it.
+
 ## 2.0.0-alpha.142 - 2026-11-12
 
 Fixed:

@@ -5,6 +5,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Voice: `web/src/features/voice/mic.ts` holds the microphone of the device (`localStorage` `mx-voice-mic`, never
+  sent to the server). `openMic()` (used by `useRecorder`, so by the mic button and the record test) asks for
+  `deviceId: {exact}` and, on `OverconstrainedError` / `NotFoundError`, for the default microphone, keeping the
+  choice. `useMics()` lists the `audioinput` devices (without Chrome's `default` / `communications` aliases),
+  reloads on `devicechange` and on a change of the `microphone` permission; browsers give no names before the
+  microphone is allowed: `named` is false and the row shows a button that asks for it (`MicRow` in `VoiceSetup.tsx`).
+
 ## 2.0.0-alpha.142 - 2026-11-12
 
 - `agent_cost.saved_by_claude(done)`: `thread_cost.estimated` is set only when the lost turn ended with Claude

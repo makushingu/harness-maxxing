@@ -54,6 +54,9 @@ Language) if you always speak the same one, or for very short or noisy notes.
   an SSH tunnel to `localhost`.
 - Works on iPhone (Safari) and Android (Chrome). Allow the microphone when the browser asks; if you
   refused once, re-allow it in the site settings (the lock icon in the address bar).
+- Several microphones (a headset, a USB microphone)? **Settings -> Voice -> Microphone** chooses the one that
+  records on this device; browsers show their names once the microphone is allowed (**Show the microphones**).
+  The choice stays in this browser, and the default microphone records while the chosen one is unplugged.
 - Recordings are limited to 15 minutes.
 - **Record a test** in Settings -> Voice shows the transcript, the detected language and the time it
   took.
