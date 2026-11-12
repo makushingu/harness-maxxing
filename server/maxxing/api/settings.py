@@ -339,12 +339,14 @@ def put_settings(body: SettingsIn):
         changes["sidebar_order"] = list(dict.fromkeys(order))
     if "files_root" in changes:
         try:
-            p = Path(changes["files_root"]).expanduser()
-        except RuntimeError:                          # ~user that does not exist
-            p = None
-        if p is None or not p.is_absolute() or not p.is_dir():
+            p = Path(changes["files_root"]).expanduser() if len(changes["files_root"]) <= 4096 else None
+            ok = p is not None and p.is_absolute() and p.is_dir()
+            if ok:
+                changes["files_root"] = str(p.resolve())
+        except (RuntimeError, OSError):               # ~user that does not exist, a name too long (ENAMETOOLONG)
+            ok = False
+        if not ok:
             raise _err("invalid_files_root", "files_root must be an existing absolute folder")
-        changes["files_root"] = str(p.resolve())
     if changes:
         config.update_config(**changes)
         if "timezone" in changes:

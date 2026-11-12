@@ -1,3 +1,5 @@
+import pytest
+
 from _org_helpers import client, org  # noqa: F401
 from maxxing import config
 
@@ -149,4 +151,11 @@ def test_a_broken_saved_sidebar_order_never_breaks_the_settings(client, org):
 def test_unknown_tilde_user_is_an_invalid_files_root(client, org):
     # Path.expanduser raises RuntimeError for a ~user that does not exist: a refused value, not a 500
     r = client.put("/api/settings", json={"files_root": "~nosuchuser-mx-test/files"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_files_root"
+
+
+@pytest.mark.parametrize("root", ["/tmp/" + "a" * 300, "/" + "a" * 5000], ids=["long-name", "long-path"])
+def test_a_files_root_too_long_is_invalid_not_a_500(client, org, root):
+    # is_dir() lets ENAMETOOLONG through on Python 3.12
+    r = client.put("/api/settings", json={"files_root": root})
     assert r.status_code == 400 and r.json()["error"] == "invalid_files_root"
