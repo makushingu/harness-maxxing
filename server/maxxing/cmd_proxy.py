@@ -50,7 +50,7 @@ def _handler(a) -> int:
             print(f"{info['address']}: listening")
         elif not proxylisten.address_present(addr[0]):
             print(f"{info['address']}: no interface of this server has {addr[0]} (is Docker running? its bridge address:"
-                  " ip -4 addr show docker0; then maxxing proxy on <that address>:{addr[1]})")
+                  f" ip -4 addr show docker0; then maxxing proxy on <that address>:{addr[1]})")
         else:
             print(f"{info['address']}: NOT listening (systemctl restart claude-maxxing)")
         if info["ufw_blocks"]:
