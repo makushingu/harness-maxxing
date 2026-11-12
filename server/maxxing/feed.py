@@ -551,6 +551,7 @@ def watch_id() -> int:
 
 
 def mark_read(ids: list[int] | None = None, source: str | None = None, everything: bool = False) -> int:
+    source = _utf8(source)                           # a lone surrogate: SQLite cannot take it (UnicodeEncodeError)
     with _conn() as c:
         # open alerts read now: their Telegram message loses its Seen button (update_alert)
         alerts = "SELECT id FROM events WHERE read=0 AND ref IS NOT NULL AND resolved IS NULL"

@@ -474,3 +474,10 @@ def test_unknown_user_home_is_a_git_error(client, org):
     # Path.expanduser raises RuntimeError for a ~user that does not exist: the usual 400, not a 500
     r = client.get("/api/git/graph", params={"repo": "~nosuchuser-mx-test/repo"})
     assert r.status_code == 400 and r.json()["error"] == "bad_path"
+
+
+def test_git_routes_with_a_path_longer_than_a_file_name_are_a_404(client, org):
+    # exists() raised "File name too long" while looking for the clone: a 500 instead of the usual not_a_repo
+    for route, extra in (("graph", {}), ("commit", {"sha": "0" * 40})):
+        r = client.get(f"/api/git/{route}", params={"repo": "a" * 300, **extra})
+        assert r.status_code == 404 and r.json()["error"] == "not_a_repo", r.text

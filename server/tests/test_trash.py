@@ -403,3 +403,10 @@ def test_an_agent_comes_back_with_its_crons_and_thread_even_through_a_linked_wor
     assert crons.get_job(job["id"]) is not None
     assert "hello thread" in [m["text"] for m in agents.thread(A)]
     assert not [p.name for p in config.state_dir("trash").iterdir() if p.name.endswith(".agents")]
+
+
+def test_trash_item_id_longer_than_a_file_name_is_a_400(client, mx):
+    # a name longer than 255 bytes cannot be in the trash: exists() raised "File name too long" (a 500)
+    long_id = "a" * 300
+    for r in (client.post(f"/api/trash/{long_id}/restore"), client.delete(f"/api/trash/{long_id}")):
+        assert r.status_code == 400 and r.json()["error"] == "bad_id", r.text

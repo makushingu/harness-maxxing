@@ -35,6 +35,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `tests/conftest.py` sets it. The loop started with every test server and could clean the index up before
   `test_search.py::test_data_files_leave_the_index_and_the_base_shrinks` did (its "compacted" log was then
   missing).
+- `trash._item` refuses an id longer than 255 bytes (`400 bad_id`): `Path.exists()` raised `OSError` ENAMETOOLONG
+  (Python 3.12 only swallows ENOENT, ENOTDIR, EBADF, ELOOP), a 500 on restore and delete. Test in
+  `tests/test_trash.py`.
+- `feed.mark_read` passes `source` through `_utf8` like `post()`: a lone surrogate (valid JSON) raised
+  `UnicodeEncodeError` in SQLite, a 500 on `POST /api/feed/read`. Test in `tests/test_feed.py`.
+- `gitview._is_repo` returns False on `OSError` ENAMETOOLONG (any other error still raises): a path component longer
+  than 255 bytes made `exists()` raise it while `resolve()` walked up to the clone, a 500 on every `/api/git/*` route instead of
+  `404 not_a_repo`. Test in `tests/test_gitview.py`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
