@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useClaudeStatus } from '@/lib/queries'
 import { Badge, confirm, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, StatusDot, Tooltip } from '@/components/ui'
-import type { Session } from '@/lib/types'
+import { EFFORTS, type Effort, type Session } from '@/lib/types'
 import { contextWindow, fmtTokens, modelLabel } from './util'
 
 /** Family aliases follow resolved versions; pinned model ids still compare exactly. */
@@ -16,6 +16,38 @@ function matchesModel(real: string, chosen: string): boolean {
  * reads the whole conversation uncached on the next message. */
 const SWITCH_WARN_TOKENS = 50_000
 
+/** Intelligence of the next turns inside the model menu: Auto (Claude Code's default) then the 5 levels. */
+function EffortRow({ effort, onEffort }: { effort: Effort | ''; onEffort: (effort: Effort | '') => void }) {
+  const t = useT()
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="flex items-center justify-between text-xs font-normal text-muted-foreground">
+        <span>{t('sessions.effort.label')}</span>
+        <span>{t(`sessions.effort.long.${effort || 'auto'}`)}</span>
+      </DropdownMenuLabel>
+      <div role="radiogroup" aria-label={t('sessions.effort.label')} className="mx-1 mb-1 grid grid-cols-6 gap-0.5 rounded-md bg-muted p-0.5">
+        {(['', ...EFFORTS] as const).map((e) => (
+          <Tooltip key={e || 'auto'} content={t(`sessions.effort.hint.${e || 'auto'}`)}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={effort === e}
+              onClick={() => onEffort(e)}
+              className={cn(
+                'h-7 rounded px-0.5 text-[11px] font-medium text-muted-foreground transition hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-9',
+                effort === e && 'bg-background text-foreground shadow-sm',
+              )}
+            >
+              {t(`sessions.effort.${e || 'auto'}`)}
+            </button>
+          </Tooltip>
+        ))}
+      </div>
+    </>
+  )
+}
+
 export function ModelPicker({
   chosen,
   real,
@@ -23,6 +55,8 @@ export function ModelPicker({
   onChange,
   disabled,
   compact,
+  effort,
+  onEffort,
 }: {
   /** Model chosen for the next turns ("" = default). */
   chosen: string
@@ -33,6 +67,9 @@ export function ModelPicker({
   onChange: (model: string) => void
   disabled?: boolean
   compact?: boolean
+  /** Intelligence (`claude --effort`) of the next turns, "" = Claude Code's default; shown with `onEffort` only. */
+  effort?: Effort | ''
+  onEffort?: (effort: Effort | '') => void
 }) {
   const t = useT()
   const { data } = useClaudeStatus()
@@ -76,6 +113,7 @@ export function ModelPicker({
             <Cpu className="size-3.5 shrink-0" />
             {/* narrow composer + a pending switch: only "-> next model" (the tooltip says which one answered) */}
             <span className={cn('truncate', differs && '@max-sm:hidden')}>{label}</span>
+            {onEffort && effort && <span className="shrink-0 text-[10px] text-muted-foreground/80">· {t(`sessions.effort.${effort}`)}</span>}
             {differs && (
               <span className="shrink-0 rounded bg-warning/15 px-1 text-[10px] whitespace-nowrap text-warning">
                 → {modelLabel(next, models)}
@@ -102,6 +140,7 @@ export function ModelPicker({
             {real === m.id && <span className="text-[10px] text-muted-foreground">{t('sessions.model.lastUsed')}</span>}
           </DropdownMenuItem>
         ))}
+        {onEffort && <EffortRow effort={effort || ''} onEffort={onEffort} />}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -32,6 +32,10 @@ def test_skills_are_listed_by_origin_read_only(client, mx, monkeypatch):
     assert out["post"]["origin"] == "topic" and out["post"]["topic"] == "blog" and out["post"]["name"] == "post"
     assert out["post"]["path"].endswith("projects/acme/topics/blog/.claude/skills/post/SKILL.md")
     assert {p: p.read_text() for p in (cdir / "skills").rglob("SKILL.md")} == before
+    _skill(ws / "projects/acme/topics/news/.claude/skills", "other", "---\nname: other\n---")
+    _skill(ws / "projects/zeta/.claude/skills", "z", "---\nname: z\n---")
+    seen = {s["folder"] for s in client.get("/api/skills", params={"path": "projects/acme/topics/blog"}).json()["skills"]}
+    assert seen == {"memory", "mine", "ws-skill", "shop", "post"}                  # not acme/news nor zeta
 
 
 @pytest.mark.parametrize("header", ["|", "|-", "|+", ">", ">-", ">+"])

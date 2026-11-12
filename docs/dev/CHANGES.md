@@ -7,6 +7,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Sessions: meta `effort` (`spawn.EFFORTS` = low|medium|high|xhigh|max, `""` = Claude Code's default) -> runner adds
+  `--effort <level>`; `POST /api/sessions` and `PATCH /api/sessions/{id}` take `effort` (`400 bad_effort`), Session
+  carries `effort`; a hand-off copies it. Agents and crons unchanged (no effort). `tests/fake_claude.py` knows
+  `--effort`. Web: `ModelPicker` `effort`/`onEffort` (the `EffortRow` under the models, a 6-way segmented control),
+  `PatchSessionBody.effort` is an instant field.
+- Composer `/` menu: `pages/sessions/SlashMenu.tsx` (`slashItems`, `slashAction`, `SlashMenu`) + `slashCommands.ts`
+  (`useSlashCommands(path, actions)`: session commands `model|effort|plan|compact|handoff|new|rename`, then the
+  topic's skills from `GET /api/skills?path=` = `skills.for_topic()`). Composer prop `commands`: a session command
+  typed in full runs instead of being sent (only without attachments or quotes); a skill is sent as typed (Claude Code
+  expands `/name args` in `-p` mode, checked with 2.1.285). New-session form: `model|effort|plan` only.
+
 - Agents: `agent_templates.fields()` sets `sandbox: True` for every template that reads outside text: a webhook, a
   mailbox (as before) or a web tool pre-allowed in `allowed_tools` (`reads_web()`: `Bash(curl…)`, `WebFetch`,
   `WebSearch`), i.e. `sales`, `orders`, `watch`, `writer`, `uptime` too. Without it `Bash(curl:*)` ran unsandboxed

@@ -103,7 +103,7 @@ export function useCreateSession() {
   return useMut((b: CreateSessionBody) => api.post<Session>('/api/sessions', b), { onSuccess: (s) => placeSession(qc, s), invalidate: inv })
 }
 /** Fields a PATCH changes as they are: shown at once (optimistic), the server's answer then replaces them. */
-const INSTANT_FIELDS = ['title', 'model', 'archived', 'notify', 'plan_mode', 'favorite'] as const
+const INSTANT_FIELDS = ['title', 'model', 'effort', 'archived', 'notify', 'plan_mode', 'favorite'] as const
 
 export function usePatchSession() {
   const qc = useQueryClient()

@@ -61,7 +61,7 @@ import {
   sessionsQuery,
 } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
-import type { Session } from '@/lib/types'
+import type { Effort, Session } from '@/lib/types'
 import {
   Button,
   confirm,
@@ -104,6 +104,7 @@ import { QuotePill } from './Quote'
 import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
 import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
+import { useSlashCommands } from './slashCommands'
 import { absTopicDir, fileQuote, findAgent, fmtCost, placeOptions, topicLabel, topicPathOf } from './util'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
@@ -586,6 +587,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   const actions = {
     rename: (title: string) => patch.mutate({ id: sid, title }),
     model: (model: string) => patch.mutate({ id: sid, model }),
+    effort: (effort: Effort | '') => patch.mutate({ id: sid, effort }),
     notify: () => session && patch.mutate({ id: sid, notify: !session.notify }),
     archive: () =>
       session &&
@@ -619,6 +621,24 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
       })
     },
   }
+
+  // The composer's "/" menu: the commands of this session, then the skills of its topic.
+  const idleWithTurns = () => {
+    if (running || !session?.turns) toast.info(t(running ? 'sessions.slash.busy' : 'sessions.slash.empty'))
+    return !running && !!session?.turns
+  }
+  const commands = useSlashCommands(path, {
+    model: session?.model || '',
+    onModel: actions.model,
+    effort: session?.effort || '',
+    onEffort: actions.effort,
+    plan: !!session?.plan_mode,
+    onPlan: session ? () => patch.mutate({ id: sid, plan_mode: !session.plan_mode }) : undefined,
+    onCompact: () => idleWithTurns() && actions.compact(),
+    onHandoff: () => idleWithTurns() && void actions.handoff(),
+    onNew: path ? () => navigate(`/sessions?path=${encodeURIComponent(path)}&new=1`, { state: { mxPushed: true } }) : undefined,
+    onRename: actions.rename,
+  })
 
   // The column's menu: its "..." and a right click (a long press) on its header.
   const menuCtx = useContextMenu({ disabled: !session })
@@ -829,6 +849,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             colKey={col.key}
             maxRows={place && place.row !== 'full' ? 4 : 12}
             draftKey={sid}
+            commands={commands}
             placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : undefined}
             notice={session?.plan_ready && !running ? <PlanNotice session={session} onAdjust={() => composer.current?.focus()} /> : null}
             topicPath={path}
@@ -878,7 +899,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             toolbar={
               session ? (
                 <>
-                  <ModelPicker chosen={session.model} real={session.real_model} contextTokens={session.context_tokens} onChange={actions.model} />
+                  <ModelPicker chosen={session.model} real={session.real_model} contextTokens={session.context_tokens} onChange={actions.model} effort={session.effort || ''} onEffort={actions.effort} />
                   {session.plan_mode && <PlanChip session={session} />}
                 </>
               ) : (
@@ -1264,7 +1285,9 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const send = useSendMessage()
   const [title, setTitle] = React.useState('')
   const [model, setModel] = React.useState('')
+  const [effort, setEffort] = React.useState<Effort | ''>('')
   const [planMode, setPlanMode] = React.useState(false)
+  const newCommands = useSlashCommands(col.path, { model, onModel: setModel, effort, onEffort: setEffort, plan: planMode, onPlan: () => setPlanMode((p) => !p) })
   const composer = React.useRef<ComposerHandle>(null)
   const [dragFiles, setDragFiles] = React.useState(false)
   const mask = useMask()
@@ -1294,7 +1317,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const onSend = async (text: string, attachments: string[], clientId?: string) => {
     if (made.current) return toMade(made.current, text, attachments, { client_id: clientId })
     try {
-      const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, attachments, plan_mode: planMode || undefined })
+      const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, attachments, plan_mode: planMode || undefined })
       made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text, attachments, queued: false })
@@ -1312,7 +1335,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
     try {
       const up = await uploadAttachment(col.path, file)
       if (made.current) return toMade(made.current, '', [], { voice: up.path })
-      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, plan_mode: planMode || undefined, voice: up.path })
+      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, voice: up.path })
       made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text: '', attachments: [], queued: false, voice: true })
@@ -1411,7 +1434,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
             <div className="grid gap-1.5">
               <span className="text-sm font-medium">{t('sessions.model.label')}</span>
               <div>
-                <ModelPicker chosen={model} onChange={setModel} />
+                <ModelPicker chosen={model} onChange={setModel} effort={effort} onEffort={setEffort} />
               </div>
             </div>
             <label htmlFor={`plan-${col.key}`} className="flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/[0.06]">
@@ -1431,6 +1454,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
           colKey={col.key}
           draftKey={`new:${col.path}`}
           topicPath={col.path}
+          commands={newCommands}
           disabledReason={!valid ? t('sessions.new.pickTopic') : claude && !claude.auth.ok ? t(claude.auth.method ? 'sessions.composer.authExpired' : 'sessions.composer.noAuth') : null}
           onSend={onSend}
           checkSent={checkSent}

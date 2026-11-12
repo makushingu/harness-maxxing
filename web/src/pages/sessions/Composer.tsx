@@ -15,6 +15,7 @@ import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
 import { pastedFile, pastedName } from './pasteAsFile'
 import { VoiceButton } from '@/features/voice/VoiceButton'
+import { SlashMenu, slashAction, slashItems, type SlashCommand } from './SlashMenu'
 
 const NO_ITEMS: QueueItem[] = []
 
@@ -65,6 +66,8 @@ export const Composer = React.forwardRef<ComposerHandle, {
   autoFocus?: boolean
   /** Lines the text grows to before it scrolls (fewer in a small grid pane, so the conversation stays visible). */
   maxRows?: number
+  /** The "/" menu: the session's commands and the topic's skills (none: "/" is plain text). */
+  commands?: SlashCommand[]
 }>(function Composer(props, ref) {
   const { colKey, draftKey, topicPath, running, disabledReason, queueCount = 0, queued = [], queueItems = NO_ITEMS, onClearQueue, clearingQueue, onSteer, steering, steerPending, onInject, injecting, onTakeQueue, onAsk, asking, onSend, onStop, stopping, toolbar, notice, placeholder, autoFocus, maxRows = 12 } = props
   const t = useT()
@@ -319,6 +322,15 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const chain = React.useRef<Promise<unknown>>(Promise.resolve())
   const inflight = React.useRef(0)
   const send = (voiceText?: string) => {
+    const act = !voiceText && props.commands ? slashAction(text, props.commands) : null
+    if (act && !(atts.length || quotes.length)) {
+      if ((act.cmd.args?.length || act.cmd.freeArg) && !act.arg) setText(`/${act.cmd.name} `) // asks for its value
+      else {
+        setText('')
+        act.cmd.run!(act.arg)
+      }
+      return
+    }
     const typed = text.trim()
     const body = voiceText ? (typed ? `${typed}\n\n${voiceText}` : voiceText) : typed
     if (blocked || (!body && ready.length === 0 && quotes.length === 0)) return
@@ -405,8 +417,56 @@ export const Composer = React.forwardRef<ComposerHandle, {
 
   // Ctrl+Shift+V / ⌘⇧V just before the paste: keep it as text whatever it is.
   const plainPaste = React.useRef(0)
+  // The "/" menu: open while the text is "/name" (or "/name value" for a command with values), closed by Esc
+  // until the text changes.
+  const [slashOff, setSlashOff] = React.useState<string | null>(null)
+  const menu = props.commands && slashOff !== text ? slashItems(text, props.commands) : null
+  const [slashAt, setSlashAt] = React.useState(0)
+  const menuKey = menu ? `${menu.stage}:${menu.items.map((i) => i.key).join('|')}` : ''
+  React.useEffect(() => setSlashAt(0), [menuKey])
+  const active = menu ? Math.min(slashAt, menu.items.length - 1) : 0
+  const pickSlash = (i: number, complete = false) => {
+    const it = menu?.items[i]
+    if (!it) return
+    const c = it.cmd
+    if (menu!.stage === 'arg') {
+      setText('')
+      c.run?.(it.arg ?? '')
+    } else if (!complete && c.kind === 'action' && c.run && !c.args?.length && !c.freeArg) {
+      setText('')
+      c.run('')
+    } else setText(`/${c.name} `)
+    requestAnimationFrame(() => focusAtEnd(ta.current))
+  }
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
+    if (menu) {
+      const n = menu.items.length
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashAt((active + (e.key === 'ArrowDown' ? 1 : n - 1)) % n)
+        return
+      }
+      if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault()
+        pickSlash(active, true)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        // the name typed in full with nothing to choose: Enter sends it as usual ("/skill" goes to Claude)
+        const exact = menu.stage === 'name' && menu.items[active].label === text.trim() && menu.items[active].cmd.kind === 'skill'
+        if (!exact) {
+          e.preventDefault()
+          pickSlash(active)
+          return
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashOff(text)
+        return
+      }
+    }
     if ((e.key === 'v' || e.key === 'V') && e.shiftKey && (e.metaKey || e.ctrlKey)) plainPaste.current = Date.now()
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
       // On touch keyboards Enter inserts a newline (no Shift key); the send button sends.
@@ -670,6 +730,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
             disabledReason && 'opacity-80',
           )}
         >
+          {menu && <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pickSlash(i)} onHover={setSlashAt} />}
           {atts.length > 0 && (
             // Many files: a small scrolling strip (two rows) instead of a composer that eats the conversation.
             <div ref={attBox} data-testid="composer-attachments" className="flex max-h-[6.75rem] flex-wrap gap-1.5 overflow-y-auto overscroll-contain px-2.5 pt-2.5 [scrollbar-width:thin]">

@@ -26,6 +26,7 @@ TUNING_ENV = ("CLAUDE_CODE_EFFORT_LEVEL", "MAX_THINKING_TOKENS", "CLAUDE_CODE_PR
               "ENABLE_PROMPT_CACHING_1H", "DISABLE_PROMPT_CACHING", "ENABLE_TOOL_SEARCH",
               "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", "BASH_MAX_OUTPUT_LENGTH",
               "CLAUDE_CODE_AUTO_COMPACT_WINDOW", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")  # never secrets: shown in `ps`
+EFFORTS = ("low", "medium", "high", "xhigh", "max")   # `claude --effort` of a session ("" = Claude Code's default)
 # Characters of a Bash command's output Claude keeps (Claude Code's own default is 30 000): every byte stays in the
 # conversation and is re-sent on each later call; the end of a longer output is cut, Claude sees it was cut.
 BASH_OUTPUT_MAX = 15000

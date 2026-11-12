@@ -454,6 +454,8 @@ class Runner:
             from maxxing import agent_format
             base += agent_format.subagents_args(meta.get("path") or "")
         base += ["--model", model] if model else []
+        effort = str(meta.get("effort") or "").strip()
+        base += ["--effort", effort] if effort in spawn.EFFORTS else []
         base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
         base += pcbridge.mcp_config_args() + mcp_plan.args + approval

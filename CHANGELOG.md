@@ -6,6 +6,11 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Commands with `/` in the composer**, as in Claude Code: type `/` and a menu lists the session's commands
+  (`/model`, `/effort`, `/plan`, `/compact`, `/handoff`, `/new`, `/rename`) and the skills of the topic, with their
+  description. Arrows to choose, Tab to complete, Enter to run.
+- **Intelligence of a session.** The model menu of a session now also sets how much Claude thinks: Auto, Low,
+  Medium, High, Extra high or Max (Claude Code's effort level). It is kept on the session and shown next to the model.
 - **Voice: choose the microphone.** Settings -> Voice has a **Microphone** line: pick the microphone that records
   on this device (headset, USB microphone, the built-in one) instead of the one the browser picks. The choice stays
   in this browser; if that microphone is unplugged, the default one records and the choice comes back with it.

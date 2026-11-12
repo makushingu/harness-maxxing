@@ -35,6 +35,13 @@ _MODEL_RE = re.compile(rb'"model"\s*:\s*"(claude-[a-z0-9.-]+)"')
 _MODEL_ID = re.compile(r"[A-Za-z0-9._:@/\[\]][A-Za-z0-9._:@/\[\]-]{0,99}")
 
 
+def _check_effort(effort: str | None) -> str:
+    effort = (effort or "").strip().lower()
+    if effort and effort not in spawn.EFFORTS:
+        raise SessionError(400, "bad_effort", f"Effort is one of: {', '.join(spawn.EFFORTS)}")
+    return effort
+
+
 def _check_model(model: str | None) -> str:
     model = (model or "").strip()
     if model and not _MODEL_ID.fullmatch(model):
@@ -152,7 +159,7 @@ def public(meta: dict) -> dict:
             "state": m.get("state") or "idle", "queue": _waiting(m), "queue_items": _queue_preview(m), "sent_items": _sent_preview(m),
             "created": m.get("created"), "updated": m.get("updated") or m.get("created"),
             "turns": int(_num(m.get("turns"))), "cost_usd": round(_num(m.get("cost_usd")), 4),
-            "model": m.get("model") or "", "real_model": m.get("real_model") or None,
+            "model": m.get("model") or "", "effort": m.get("effort") or "", "real_model": m.get("real_model") or None,
             "context_tokens": m.get("context_tokens"), "context_window": _context_window(m),
             "archived": bool(m.get("archived")), "favorite": bool(m.get("favorite")),
             "notify": bool(m.get("notify")), "source": m.get("source") or "web", "cron": bool(m.get("cron")),
@@ -309,7 +316,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    source: str = "web", notify: bool = False, cron: bool = False,
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
-                   client_id: str | None = None, silent_ok: bool = False, ref: str | None = None) -> dict:
+                   client_id: str | None = None, silent_ok: bool = False, ref: str | None = None,
+                   effort: str | None = None) -> dict:
     """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
     `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
     `ref`: as send_message's, for the first message."""
@@ -322,10 +330,13 @@ def create_session(path: str, message: str | None = None, title: str | None = No
     audio = _check_voice(voice_path)
     given = (title or "").strip()[:120]
     model = _check_model(model)
+    effort = _check_effort(effort)
     meta = store.new_meta(p, given or _default_title(p, message), model=model or "",
                           source=source, notify=notify, cron=cron, env=env, timeout_s=timeout_s, plan_mode=plan_mode,
                           permission_mode=permission_mode)
     automatic, has_text = auto_title or not given, bool((message or "").strip())
+    if effort:
+        meta["effort"] = effort
     if automatic and not has_text:
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
     store.create(meta)
@@ -624,10 +635,12 @@ def _signal(pid: int, sig: int) -> None:
 def update_session(sid: str, title: str | None = None, model: str | None = None,
                    archived: bool | None = None, notify: bool | None = None,
                    plan_mode: bool | None = None, favorite: bool | None = None,
-                   path: str | None = None) -> dict:
+                   path: str | None = None, effort: str | None = None) -> dict:
     cur = _require(sid)
     if model is not None:
         model = _check_model(model)
+    if effort is not None:
+        effort = _check_effort(effort)
     if path is not None:
         move_session(sid, path, cur)
     with store.edit(sid) as m:
@@ -635,6 +648,8 @@ def update_session(sid: str, title: str | None = None, model: str | None = None,
             m["title"] = title.strip()[:120]
         if model is not None:
             m["model"] = model
+        if effort is not None:
+            m["effort"] = effort
         if archived is not None:
             m["archived"] = bool(archived)
         if notify is not None:
@@ -704,6 +719,8 @@ def handoff(sid: str) -> dict:
                          env=meta.get("env"), timeout_s=meta.get("timeout_s"))
     if meta.get("favorite"):                 # the continuation stays in the user's favorites
         new["favorite"] = True
+    if meta.get("effort"):
+        new["effort"] = meta["effort"]
     new["handoff_pending"] = time.time()     # messages sent to it wait for the summary seed (runner._handoff)
     store.create(new)
     store.append_log(new["id"], {"type": "mx_note", "level": "info", "at": time.time(),

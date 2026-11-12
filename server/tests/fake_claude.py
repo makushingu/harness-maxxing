@@ -70,7 +70,7 @@ def parse(argv: list[str]) -> dict:
                   "--input-format": "input", "--settings": "settings", "--tools": "tools",
                   "--system-prompt": "system_prompt", "--append-system-prompt": "append_system_prompt",
                   "--mcp-config": "mcp_config", "--permission-prompt-tool": "permission_prompt_tool",
-                  "--max-budget-usd": "max_budget"}
+                  "--max-budget-usd": "max_budget", "--effort": "effort"}
     for a in it:
         if a in ("-p", "--print"):
             o["print"] = True

@@ -895,6 +895,22 @@ def test_a_model_id_is_checked_before_it_reaches_the_command_line(client, topic,
         assert r.status_code == 200 and r.json()["model"] == good.strip()
 
 
+def test_the_effort_of_a_session_reaches_claude(client, topic, mx):
+    s = client.post("/api/sessions", json={"path": topic, "message": "Hi NOTOOL", "effort": "high"}).json()
+    assert s["effort"] == "high"
+    wait_idle(client, s["id"])
+    argv = calls(mx)[-1]["argv"]
+    assert argv[argv.index("--effort") + 1] == "high"
+    for bad in ("turbo", "--model", "high max"):
+        assert client.patch(f"/api/sessions/{s['id']}", json={"effort": bad}).json()["error"] == "bad_effort"
+    assert client.patch(f"/api/sessions/{s['id']}", json={"effort": " MAX "}).json()["effort"] == "max"
+    assert client.patch(f"/api/sessions/{s['id']}", json={"effort": ""}).json()["effort"] == ""
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "Again NOTOOL"})
+    wait_for(lambda: len(calls(mx)) >= 2)
+    wait_idle(client, s["id"])
+    assert "--effort" not in calls(mx)[-1]["argv"]                        # back to Claude Code's default
+
+
 def test_the_web_page_finds_its_message_ids_in_the_queue_and_the_log(client, topic):
     """A page reloaded mid-send looks for its own ids (`client_ids`), not for the same text at about the same time:
     two identical messages stay two, and the browser's clock does not matter."""

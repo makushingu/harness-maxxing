@@ -131,6 +131,12 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
 ## The composer
 
 - **Enter** sends, **Shift+Enter** adds a new line.
+- **Commands (`/`)**: type `/` at the start of a message, as in Claude Code: a menu lists the session's commands
+  and the skills of the topic (↑/↓ to choose, **Tab** completes, **Enter** runs, **Esc** closes).
+  `/model` and `/effort` show their values next (or type them: `/model opus`, `/effort high`), `/plan` turns plan
+  mode on or off, `/compact` and `/handoff` as in the session menu, `/new` opens a new session in the topic,
+  `/rename New title` renames the session. These never reach Claude. A skill (`/post`, `/seo-audit https://…`) is
+  sent as typed: Claude starts that skill with what follows its name.
 - **Attachments**: drag and drop files, paste an image, or use the paperclip. Files are saved in
   `<topic>/attachments/YYYY-MM/` and their paths are given to Claude. With many files, they sit in a small
   strip of two rows that scrolls (the newest in view), so the conversation keeps its room.
@@ -300,6 +306,12 @@ Settings -> Claude. The label always shows the model that really answered the la
 differs from your choice, a marker tells you. Each model has its own prompt cache: on a session past 50k tokens of
 context, switching asks first, because the new model reads the whole conversation once without cache (Compact first
 to make the switch cheap).
+
+**Intelligence**: under the models, the same menu sets how much Claude thinks before answering - **Auto** (Claude
+Code's own default for the model), **Low**, **Medium**, **High**, **Extra high**, **Max**. More thinking gives better
+answers on hard work but is slower and uses more of your Claude plan; Low suits quick, simple tasks. The level stays
+on the session (a hand-off keeps it) and shows next to the model name; `/effort` in the composer does the same.
+A new session starts on Auto; the level can be chosen in the new-session form too.
 
 ## Compact vs hand off
 

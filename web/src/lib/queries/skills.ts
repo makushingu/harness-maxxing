@@ -21,3 +21,13 @@ export interface Skill {
 export function useSkills() {
   return useQuery({ queryKey: qk.skills, queryFn: () => api.get<{ skills: Skill[] }>('/api/skills') })
 }
+
+/** The skills a session of the topic `path` can start with /name (the composer's slash menu). */
+export function useTopicSkills(path: string, enabled = true) {
+  return useQuery({
+    queryKey: [...qk.skills, path],
+    queryFn: () => api.get<{ skills: Skill[] }>(`/api/skills?path=${encodeURIComponent(path)}`),
+    enabled: enabled && !!path,
+    staleTime: 60_000,
+  })
+}
