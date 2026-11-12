@@ -1,6 +1,6 @@
 """Enterprise front desk and insights loop. See docs/dev/INTERNALS.md#maxxingenterprise_desk and API.md#enterprises.
 
-The desk is a position with `desk: true`. Visitors of the public chat link (`/api/public/desk/<token>`, no session)
+The desk is a position with `desk: true`. Visitors of the public chat page (`/desk/<token>`, API `/api/public/desk/<token>`, no session)
 write to it; each conversation is a file `<state>/enterprises/<slug>/desk/<conv>.jsonl` (kept `retention_days`, deleted
 by the owner on request, never exported). The occupant runs on the visitor's text as outside data
 (`agents.fire(text=...)`), its answer is read from its thread on the next poll and always carries the label
@@ -32,7 +32,9 @@ PENDING_S = 600                                     # a visitor message with no 
 MAX_VISITOR_MSGS = 40                               # per conversation
 CONTEXT_MSGS = 12                                   # messages of the conversation handed to the run
 ANSWER_MAX = 3000
-ROUTES_PER_HOUR = 30                                # `route` calls per enterprise (one desk run cannot flood the leads)
+GLOBAL_PER_HOUR = 300                               # visitor messages per enterprise and hour, all visitors together
+GET_PER_HOUR = 1500                                 # reads of the public link per visitor and hour (the answer is polled)
+ROUTES_PER_HOUR = 30                              # `route` calls per enterprise (one desk run cannot flood the leads)
 ROUTE_TEXT_MAX = 2000
 LIST_MAX = 200
 WEEK_S = 7 * 86400
@@ -85,18 +87,46 @@ def unprotected(d: dict) -> list[str]:
     return out
 
 
+def desk_issues(path: str) -> list[str]:
+    """What makes an agent unfit to answer strangers: a key, a domain, a writable folder, trust in outside events, or no
+    daily budget / hourly run limit (empty list = fit)."""
+    a = agents.load(path)
+    lim = a.get("limits") or {}
+    out = [why for field, why in (("keys", "holds keys"), ("domains", "has domains"),
+                                  ("writable", "has writable folders")) if a.get(field)]
+    if a.get("trust_outside"):
+        out.append("trusts outside events")
+    if not (lim.get("usd_per_day") or 0) > 0:
+        out.append("has no daily budget")
+    if not (lim.get("runs_per_hour") or 0) > 0:
+        out.append("has no hourly run limit")
+    return out
+
+
+def desk_unfit(d: dict) -> dict[str, list[str]]:
+    """{position id: issues} of the desk occupants that cannot answer the public."""
+    out = {}
+    for p in d["positions"]:
+        if p.get("desk") and p.get("agent") and agents.exists(p["agent"]):
+            bad = desk_issues(p["agent"])
+            if bad:
+                out[p["id"]] = bad
+    return out
+
+
 def check_live(slug: str, d: dict) -> None:
-    """Putting the desk live needs every occupant Protected (400 unprotected_occupants + the list)."""
+    """Putting the desk live needs every occupant Protected and the desk occupant restricted (400 + the list)."""
     bad = unprotected(d)
     if bad:
         raise EnterpriseError(400, "unprotected_occupants",
                               "The front desk can only go live when every occupant of the enterprise is Protected "
                               "(sandbox): " + ", ".join(bad), positions=bad)
-
-
-def access(slug: str, pos: str) -> str:
-    """What a position may read of the conversations: `full` (customer care) or `summary` (themes only)."""
-    return "full" if pos in (settings(slug).get("full_for") or []) else "summary"
+    unfit = desk_unfit(d)
+    if unfit:
+        raise EnterpriseError(400, "desk_not_restricted",
+                              "The front desk occupant must have no key, no domain, no writable folder, no trust in "
+                              "outside events, and a daily budget and hourly run limit: "
+                              + "; ".join(f"{k} {', '.join(v)}" for k, v in unfit.items()), positions=list(unfit))
 
 
 # ---- the public link -----------------------------------------------------------------------------------
@@ -107,24 +137,27 @@ def link(slug: str, regenerate: bool = False) -> dict:
         cur = secrets.token_urlsafe(24)
         enterprises.update(slug, {"settings": {"desk": {"public": {"token": cur}}}})
         enterprises.log(slug, "desk", "Public chat link " + ("replaced" if regenerate else "created"))
-    return {"token": cur, "path": f"/api/public/desk/{cur}"}
+    return {"token": cur, "path": f"/desk/{cur}"}
 
 
 def by_token(token: str) -> str | None:
     """The enterprise whose live public link this is (constant-time compare), else None."""
     if not enterprises.feature_on() or not isinstance(token, str) or not token:
         return None
-    found = None
+    found: list[str] = []
     for slug in enterprises.names():
         try:
             d = enterprises.load(slug)
             want = d["settings"]["desk"]["public"].get("token") or ""
             if want and hmac.compare_digest(want.encode(), token.encode("utf-8", "replace")) \
                     and d["settings"]["desk"]["enabled"] and d["settings"]["desk"]["public"]["enabled"]:
-                found = slug
+                found.append(slug)
         except Exception:  # noqa: BLE001 - a broken enterprise has no link
             continue
-    return found
+    if len(found) > 1:                                  # a token held twice belongs to nobody
+        log.warning("a public desk token is held by %d enterprises: link closed", len(found))
+        return None
+    return found[0] if found else None
 
 
 def limited(slug: str, key: str, per_hour: int, now: float | None = None) -> bool:
@@ -240,8 +273,11 @@ def _live(token: str) -> tuple[str, dict]:
     return slug, settings(slug)
 
 
-def public_info(token: str, conv: str = "") -> dict:
-    """GET of the public link: the label, the limits and, with `conv`, the conversation (answers read now)."""
+def public_info(token: str, conv: str = "", client: str = "") -> dict:
+    """GET of the public link: the label, the limits and, with `conv`, the conversation (answers read now).
+    `client` throttles the reads of one visitor (each one scans the enterprises)."""
+    if client and limited("-", "get:" + client, GET_PER_HOUR):
+        raise EnterpriseError(429, "rate_limited", "Too many requests: try again later")
     slug, s = _live(token)
     out: dict[str, Any] = {"label": label(slug), "max_chars": s["public"]["max_chars"]}
     if conv:
@@ -261,12 +297,13 @@ def public_post(token: str, client: str, message: Any, conv: Any = "", now: floa
         raise EnterpriseError(400, "empty", "Write a message")
     if len(text) > pub["max_chars"]:
         raise EnterpriseError(400, "too_long", f"At most {pub['max_chars']} characters", max_chars=pub["max_chars"])
-    if limited(slug, client, int(pub["rate_per_hour"]), now):
-        raise EnterpriseError(429, "rate_limited", "Too many messages: try again later")
     seat = desk_position(slug)
-    if not seat or unprotected(enterprises.load(slug)):
-        log.warning("front desk of %s is not ready (no desk occupant, or an occupant is not Protected)", slug)
+    d0 = enterprises.load(slug)
+    if not seat or unprotected(d0) or desk_unfit(d0):
+        log.warning("front desk of %s is not ready (no occupant, not Protected, or not restricted)", slug)
         raise EnterpriseError(503, "unavailable", UNAVAILABLE["message"])
+    if limited(slug, client, int(pub["rate_per_hour"]), now) or limited(slug, "*", GLOBAL_PER_HOUR, now):
+        raise EnterpriseError(429, "rate_limited", "Too many messages: try again later")
     pos, path = seat
     new = not (isinstance(conv, str) and conv)
     if new:
@@ -300,7 +337,7 @@ def public_post(token: str, client: str, message: Any, conv: Any = "", now: floa
         s_ = r.get("session")
         sid = str(s_.get("id") or "") if isinstance(s_, dict) else str(s_ or "")
     with _lock:
-        _append(f, {"at": _now(now), "role": "run", "for": n, "session": sid} if sid
+        _append(f, {"at": _now(now), "role": "run", "for": n, "session": sid, "agent": path} if sid
                 else {"at": _now(now), "role": "error", "for": n})
     if new:
         enterprises.log(slug, "desk", "A visitor started a conversation", by="visitor", position=pos)
@@ -356,12 +393,56 @@ def conversation(slug: str, conv: str) -> dict:
     return {"id": conv, "messages": _view(slug, _resolve(slug, conv))}
 
 
+def _erase_session(path: str, sid: str) -> None:
+    """The visitor's text leaves the desk agent's sessions (deleted for good, not trashed) and thread."""
+    try:
+        from . import trash
+        from .sessions import service, store
+        m = store.read(sid)
+        if m:
+            if m.get("state") == "running":
+                service.stop(sid)
+            dest = trash.trash_session(sid)
+            trash._remove(dest)                         # noqa: SLF001 - a hard delete: nothing keeps the words
+            trash.invalidate_sizes()
+    except Exception:  # noqa: BLE001 - the conversation file goes either way
+        log.exception("desk session %s not deleted", sid)
+    try:
+        f = agents._state_file(path, "jsonl")           # noqa: SLF001
+        with agents._lock:                              # noqa: SLF001
+            keep = []
+            for ln in f.read_text(errors="replace").splitlines():
+                try:
+                    if json.loads(ln).get("session") == sid:
+                        continue
+                except (ValueError, AttributeError):
+                    pass
+                keep.append(ln)
+            tmp = f.with_suffix(".tmp")
+            tmp.write_text("".join(x + "\n" for x in keep))
+            tmp.replace(f)
+        agents._invalidate_thread(path)                 # noqa: SLF001
+    except OSError:
+        pass
+
+
+def _forget(slug: str, lines: list[dict]) -> None:
+    """Delete the sessions and thread messages of every run recorded in a conversation."""
+    seat = desk_position(slug)
+    for m in lines:
+        if m.get("role") == "run" and m.get("session"):
+            path = m.get("agent") or (seat[1] if seat else "")
+            if path:
+                _erase_session(path, str(m["session"]))
+
+
 def delete_conversation(slug: str, conv: str) -> None:
-    """The owner deletes a conversation on request (the file is removed, not archived)."""
+    """The owner deletes a conversation on request (the file is removed, not archived; so are its sessions)."""
     enterprises.load(slug)
     f = _file(slug, conv)
     if not f.exists():
         raise EnterpriseError(404, "not_found", "Conversation not found")
+    _forget(slug, _read_lines(f))
     f.unlink(missing_ok=True)
     enterprises.log(slug, "desk", f"Conversation {conv} deleted")
 
@@ -371,11 +452,11 @@ def status(slug: str) -> dict:
     s = d["settings"]["desk"]
     seat = desk_position(slug)
     return {"enabled": s["enabled"], "label": label(slug), "retention_days": s["retention_days"],
-            "full_for": s["full_for"], "position": seat[0] if seat else None,
+            "position": seat[0] if seat else None,
             "public": {"enabled": s["public"]["enabled"], "token": s["public"]["token"],
                        "rate_per_hour": s["public"]["rate_per_hour"], "max_chars": s["public"]["max_chars"],
-                       "path": f"/api/public/desk/{s['public']['token']}" if s["public"]["token"] else ""},
-            "unprotected": unprotected(d), "conversations": conversations(slug)}
+                       "path": f"/desk/{s['public']['token']}" if s["public"]["token"] else ""},
+            "unprotected": unprotected(d), "unfit": desk_unfit(d), "conversations": conversations(slug)}
 
 
 # ---- route ---------------------------------------------------------------------------------------------
@@ -660,6 +741,7 @@ def prune(slug: str, now: float | None = None) -> int:
         lines = _read_lines(f)
         last = max([m.get("at") or 0 for m in lines] or [0])
         if last < t - days * 86400:
+            _forget(slug, lines)
             f.unlink(missing_ok=True)
             n += 1
     return n

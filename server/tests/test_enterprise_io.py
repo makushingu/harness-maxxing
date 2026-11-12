@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import json
+import time
 import zipfile
 
 import pytest
@@ -87,7 +88,7 @@ def test_export_content_has_no_secret(cl, topic, mx):
     assert cl.put("/api/secrets/VAULT_KEY_X", json={"value": "s3cret-vault-value"}).status_code == 200
     enterprises.update("acme-group", {"envelope": {"usd_per_day": 5, "keys": ["VAULT_KEY_X"]},
                                       "grants": [{"id": "g1", "position": "lead", "category": "spending",
-                                                  "ceiling": 10, "until": "2099-01-01"}]})
+                                                  "ceiling": 10, "until": time.strftime("%Y-%m-%d", time.localtime(time.time() + 10 * 86400))}]})
     enterprises.log("acme-group", "decision", "private decision")
     (enterprises.folder("acme-group") / "files" / "brand.md").write_text("Our voice is calm.", encoding="utf-8")
     (enterprises.folder("acme-group") / "files" / "leak.txt").write_text("key sk-ant-api03-" + "a" * 90, encoding="utf-8")
@@ -207,3 +208,60 @@ def test_cli_export_import(cl, tmp_path, capsys):
     bad = tmp_path / "bad.zip"
     bad.write_bytes(_zip({"enterprise.json": _chart(), "x.txt": "1"}))
     assert cli.main(["enterprise", "import", str(bad)]) == 2
+
+
+# ---- the public desk and trust never travel -------------------------------------------------------------------
+TOKEN = "t" * 40
+
+
+def _risky_chart() -> str:
+    return json.dumps({"id": "risk", "name": "Risk", "positions": [
+        {"id": "boss", "title": "Boss", "worker_template": {"role": "Helper", "usd_per_day": 1}},
+        {"id": "front", "title": "Front", "reports_to": "boss", "desk": True}],
+        "settings": {"trust_chain": True, "desk": {"enabled": True, "public": {"enabled": True, "token": TOKEN}}}})
+
+
+def test_export_never_carries_the_desk_link_trust_or_worker_templates(cl):
+    assert cl.post(E, json={"id": "acme-group", "name": "Acme", "projects": ["acme"]}).status_code == 200
+    assert cl.post(f"{E}/acme-group/positions", json={"id": "lead", "title": "Lead"}).status_code == 200
+    assert cl.patch(f"{E}/acme-group/positions/lead",
+                    json={"worker_template": {"role": "Helper", "usd_per_day": 1}}).status_code == 200
+    assert cl.patch(f"{E}/acme-group", json={"settings": {"trust_chain": True, "desk": {
+        "enabled": True, "public": {"token": TOKEN, "enabled": True}}}}).status_code == 200
+    raw = cl.get(f"{E}/acme-group/export").content
+    chart = json.loads(zipfile.ZipFile(io.BytesIO(raw)).read("enterprise.json"))
+    assert TOKEN.encode() not in raw
+    assert chart["settings"]["trust_chain"] is False and chart["settings"]["desk"]["enabled"] is False
+    assert chart["settings"]["desk"]["public"]["enabled"] is False and chart["settings"]["desk"]["public"]["token"] == ""
+    assert all("worker_template" not in p for p in chart["positions"])
+    assert enterprises.load("acme-group")["settings"]["trust_chain"] is True        # the source is untouched
+
+
+def test_import_forces_the_same_and_lists_the_worker_templates(cl):
+    r = cl.post(f"{E}/import", content=_zip({"enterprise.json": _risky_chart()}))
+    assert r.status_code == 200, r.text
+    assert [s["file"] for s in r.json()["skipped"]] == ["position boss"]
+    d = enterprises.load("risk")
+    assert d["settings"]["trust_chain"] is False and d["settings"]["desk"]["enabled"] is False
+    assert d["settings"]["desk"]["public"]["enabled"] is False and d["settings"]["desk"]["public"]["token"] == ""
+    assert all("worker_template" not in p for p in d["positions"])
+
+
+def test_a_copy_never_shares_the_token_with_its_source(cl):
+    assert cl.post(E, json={"id": "acme-group", "name": "Acme"}).status_code == 200
+    assert cl.patch(f"{E}/acme-group", json={"settings": {"desk": {"public": {"token": TOKEN}}}}).status_code == 200
+    copy = cl.post(f"{E}/import", content=cl.get(f"{E}/acme-group/export").content).json()
+    assert enterprises.load(copy["id"])["settings"]["desk"]["public"]["token"] == ""
+
+
+def test_a_zip_over_1_mb_goes_through_the_app(cl):
+    import os
+    from maxxing import bodylimit
+    assert bodylimit.IMPORT_MAX == enterprise_io.MAX_ZIP
+    z = _zip({"enterprise.json": _chart(), "files/logo.bin": os.urandom(1_500_000)})
+    assert len(z) > 1024 * 1024
+    r = cl.post(f"{E}/import", content=z)
+    assert r.status_code == 200, r.text
+    assert (enterprises.folder("shop") / "files" / "logo.bin").stat().st_size == 1_500_000
+    too_big = cl.post(f"{E}/import", content=b"\0" * (bodylimit.IMPORT_MAX + 1))
+    assert too_big.status_code == 413

@@ -9,9 +9,10 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from .. import agents, enterprise_desk, enterprises, security
+from .. import agents, desk_page, enterprise_desk, enterprises, security
 from ..security import require_auth
 
 router = APIRouter(tags=["enterprises"])
@@ -46,10 +47,20 @@ class SuggestionIn(BaseModel):
 
 
 # ---- public ----------------------------------------------------------------------------------------------
-@router.get("/api/public/desk/{token}")
-def visit_get(token: str, conv: str = ""):
+@router.get("/desk/{token}", include_in_schema=False)
+def visit_page(token: str, request: Request):
+    """The visitor's chat page (static, strict CSP, no cookie); 404 unless the link is live."""
     try:
-        return enterprise_desk.public_info(token, conv)
+        enterprise_desk.public_info(token, client=security.client_key(request))
+    except enterprises.EnterpriseError as x:
+        raise _bad(x) from None
+    return HTMLResponse(desk_page.HTML, headers=desk_page.HEADERS)
+
+
+@router.get("/api/public/desk/{token}")
+def visit_get(token: str, request: Request, conv: str = ""):
+    try:
+        return enterprise_desk.public_info(token, conv, client=security.client_key(request))
     except enterprises.EnterpriseError as x:
         raise _bad(x) from None
 

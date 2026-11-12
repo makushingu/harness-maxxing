@@ -63,14 +63,14 @@ def _answered(anon, token, conv):
 
 # ---- going live ----------------------------------------------------------------------------------------------
 def test_going_live_needs_protected_occupants(ent):
-    _agent(ent, "free", sandbox=False)
-    assert ent.post(f"{E}/positions", json={"id": "free", "title": "Free", "reports_to": "boss",
-                                            "agent": f"{T}/agents/free"}).status_code == 200
+    _agent(ent, "loose", sandbox=False)
+    assert ent.post(f"{E}/positions", json={"id": "loose", "title": "Loose", "reports_to": "boss",
+                                            "agent": f"{T}/agents/loose"}).status_code == 200
     r = ent.patch(E, json={"settings": {"desk": {"enabled": True}}})
-    assert r.status_code == 400 and r.json()["error"] == "unprotected_occupants" and r.json()["positions"] == ["free"]
+    assert r.status_code == 400 and r.json()["error"] == "unprotected_occupants" and r.json()["positions"] == ["loose"]
     assert desk.settings(SLUG)["enabled"] is False
-    assert ent.get(f"{E}/desk").json()["unprotected"] == ["free"]
-    assert ent.patch(f"{E}/positions/free", json={"agent": None, "rev": ent.get(E).json()["rev"]}).status_code == 200
+    assert ent.get(f"{E}/desk").json()["unprotected"] == ["loose"]
+    assert ent.patch(f"{E}/positions/loose", json={"agent": None, "rev": ent.get(E).json()["rev"]}).status_code == 200
     assert ent.patch(E, json={"settings": {"desk": {"enabled": True}}}).status_code == 200
 
 
@@ -190,7 +190,7 @@ def test_owner_lists_reads_and_deletes_conversations(live):
     conv = _say(anon, token, "NOTOOL where is my parcel").json()["conv"]
     _answered(anon, token, conv)
     d = ent.get(f"{E}/desk").json()
-    assert d["enabled"] and d["position"] == "front" and d["public"]["path"] == _url(token)
+    assert d["enabled"] and d["position"] == "front" and d["public"]["path"] == f"/desk/{token}"
     [c] = d["conversations"]
     assert c["id"] == conv and c["summary"].endswith("where is my parcel") and c["messages"] == 1
     full = ent.get(f"{E}/desk/{conv}").json()
@@ -213,11 +213,8 @@ def test_retention_prunes_old_conversations(live):
     assert desk.conversations(SLUG) == []
 
 
-def test_internal_access_is_summary_unless_full_for(live):
-    ent, _, _ = live
-    assert desk.access(SLUG, "care") == "summary"
-    ent.patch(E, json={"settings": {"desk": {"full_for": ["care"]}}})
-    assert desk.access(SLUG, "care") == "full" and desk.access(SLUG, "boss") == "summary"
+def test_no_position_reads_desk_conversations(live):
+    assert not hasattr(desk, "access") and "full_for" not in desk.status(SLUG)
 
 
 # ---- route ---------------------------------------------------------------------------------------------------
@@ -329,6 +326,143 @@ def test_insights_now_route_and_bad_output(live, monkeypatch):
     assert r["built"] is True and r["insights"]["questions"] == []
 
 
+# ---- the desk occupant is restricted at both ends ------------------------------------------------------------
+UNFIT = {"keys": ["SOME_KEY"], "domains": ["example.com"], "writable": ["projects/acme/topics/blog"],
+         "trust_outside": True, "limits": {"usd_per_day": 0, "runs_per_hour": 120},
+         "limits_runs": {"usd_per_day": 50, "runs_per_hour": 0}}
+PROPS = ["keys", "domains", "writable", "trust_outside", "limits", "limits_runs"]
+
+
+def _set(path, **f):
+    a = agents.load(path)
+    if "limits" in f:
+        f["limits"] = {**a["limits"], **f["limits"]}
+    agents._save(path, {**a, **f})
+
+
+def _unfit(prop):
+    return {"limits": UNFIT[prop]} if prop.startswith("limits") else {prop: UNFIT[prop]}
+
+
+@pytest.mark.parametrize("prop", PROPS)
+def test_going_live_refuses_an_unrestricted_desk_occupant(ent, prop):
+    _set(FRONT, **_unfit(prop))
+    r = ent.patch(E, json={"settings": {"desk": {"enabled": True}}})
+    assert r.status_code == 400 and r.json()["error"] == "desk_not_restricted" and r.json()["positions"] == ["front"]
+    assert desk.settings(SLUG)["enabled"] is False
+
+
+@pytest.mark.parametrize("prop", PROPS)
+def test_a_live_desk_closes_when_its_occupant_stops_being_restricted(live, prop):
+    ent, token, anon = live
+    _set(FRONT, **_unfit(prop))
+    r = _say(anon, token)
+    assert r.status_code == 503 and r.json()["error"] == "unavailable"
+    assert desk.conversations(SLUG) == []
+
+
+def test_global_hourly_cap_next_to_the_visitors(live, monkeypatch):
+    ent, token, anon = live
+    monkeypatch.setattr(desk, "GLOBAL_PER_HOUR", 2)
+    for i in range(2):
+        _answered(anon, token, desk.public_post(token, f"visitor-{i}", "NOTOOL hi")["conv"])
+    with pytest.raises(enterprises.EnterpriseError) as e:
+        desk.public_post(token, "visitor-9", "NOTOOL hi")
+    assert e.value.status == 429
+
+
+def test_public_reads_are_throttled(live, monkeypatch):
+    ent, token, anon = live
+    monkeypatch.setattr(desk, "GET_PER_HOUR", 3)
+    codes = [anon.get(_url(token)).status_code for _ in range(5)]
+    assert codes == [200, 200, 200, 429, 429]
+
+
+def test_a_token_held_by_two_enterprises_is_nobodys(live):
+    ent, token, anon = live
+    assert anon.get(_url(token)).status_code == 200
+    assert ent.post("/api/enterprises", json={"id": "copy-co", "name": "Copy"}).status_code == 200
+    d = enterprises.load("copy-co")
+    d["settings"]["desk"].update(enabled=True, public={**d["settings"]["desk"]["public"], "enabled": True, "token": token})
+    from maxxing import config
+    config.write_json(enterprises.folder("copy-co") / enterprises.FILE, d)
+    enterprises.invalidate("copy-co")
+    assert desk.by_token(token) is None and anon.get(_url(token)).status_code == 404
+
+
+def test_desk_run_has_no_key_no_folder_and_two_commands_only(live):
+    ent, token, anon = live
+    _set(FRONT, allowed_tools=["Edit", "Bash(rm:*)"], disallowed_tools=["WebFetch"], approvals=True)
+    conv = _say(anon, token).json()["conv"]
+    _answered(anon, token, conv)
+    sid = next(m["session"] for m in desk._read_lines(desk._file(SLUG, conv)) if m.get("role") == "run")
+    rs = agents.run_settings(FRONT, True, session=sid)
+    assert rs["keys"] == [] and rs["approvals"] is False and rs["sandbox"] is True
+    args = rs["args"]
+    assert args[args.index("--tools") + 1] == "Bash"
+    allowed = args[args.index("--allowedTools") + 1]
+    assert allowed == agents.DESK_TOOLS and "Edit" not in allowed and "rm" not in allowed
+    assert "--disallowedTools" not in args
+    assert rs["settings"]["sandbox"]["network"]["allowedDomains"] == []
+    assert "Bash(maxxing:*)" not in rs["settings"]["permissions"]["allow"]
+    assert "--tools" not in agents.run_settings(FRONT, True, session=None)["args"]     # any other run is unchanged
+
+
+# ---- deleting a conversation deletes what it left in the agent -----------------------------------------------
+def _left(sid, path):
+    from maxxing.sessions import store
+    return store.read(sid) is not None, any(m.get("session") == sid for m in agents.thread(path, 200))
+
+
+def test_delete_and_retention_remove_sessions_and_thread_messages(live):
+    ent, token, anon = live
+    a = _say(anon, token, "NOTOOL secret visitor words").json()["conv"]
+    _answered(anon, token, a)
+    b = _say(anon, token, "NOTOOL older words").json()["conv"]
+    _answered(anon, token, b)
+    sids = {c: next(m["session"] for m in desk._read_lines(desk._file(SLUG, c)) if m.get("role") == "run") for c in (a, b)}
+    assert _left(sids[a], FRONT) == (True, True)
+    assert ent.delete(f"{E}/desk/{a}").status_code == 200
+    assert _left(sids[a], FRONT) == (False, False) and _left(sids[b], FRONT) == (True, True)
+    assert not any("secret visitor words" in m.get("text", "") for m in agents.thread(FRONT, 200))
+    assert ent.patch(E, json={"settings": {"desk": {"retention_days": 3}}}).status_code == 200
+    desk.tick(time.time() + 4 * 86400)
+    assert _left(sids[b], FRONT) == (False, False)
+
+
+# ---- the public page -------------------------------------------------------------------------------------------
+def test_public_page_is_static_strict_and_only_for_a_live_link(ent):
+    anon = TestClient(ent.app)
+    token = ent.post(f"{E}/desk/link", json={}).json()["token"]
+    assert anon.get(f"/desk/{token}").status_code == 404                    # not live yet
+    assert ent.patch(E, json={"settings": {"desk": {"enabled": True}}}).status_code == 200
+    assert ent.patch(E, json={"settings": {"desk": {"public": {"enabled": True}}}}).status_code == 200
+    r = anon.get(f"/desk/{token}")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    csp = r.headers["content-security-policy"]
+    assert csp.startswith("default-src 'none'") and "connect-src 'self'" in csp and "frame-ancestors 'none'" in csp
+    assert "unsafe-inline" not in csp and "unsafe-eval" not in csp and "script-src 'sha256-" in csp
+    assert r.headers["referrer-policy"] == "no-referrer" and "no-store" in r.headers["cache-control"]
+    assert "set-cookie" not in r.headers and token not in r.text
+    from maxxing import desk_page
+    assert "innerHTML" not in r.text and "eval(" not in r.text and "<script src" not in r.text
+    assert desk_page.CSP == csp and anon.get(f"/desk/{'x' * 32}").status_code == 404
+
+
+def test_public_page_hashes_match_its_inline_code():
+    import base64
+    import hashlib
+    from maxxing import desk_page
+    for body in (desk_page.SCRIPT, desk_page.STYLE):
+        h = base64.b64encode(hashlib.sha256(body.encode()).digest()).decode()
+        assert f"'sha256-{h}'" in desk_page.CSP and body in desk_page.HTML
+
+
 @pytest.fixture(autouse=True)
 def _fresh_limits():
     desk._hits.clear()
+
+
+def test_only_the_desk_prefix_is_open_to_anonymous_bodies():
+    from maxxing import bodylimit
+    assert bodylimit._public("/api/public/desk/abc") and not bodylimit._public("/api/public/other")

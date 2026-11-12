@@ -20,10 +20,10 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import agents, backup, config, enterprises, importer
+from . import agents, backup, bodylimit, config, enterprises, importer
 from .enterprises import EnterpriseError
 
-MAX_ZIP = 50 * 1024 * 1024              # bytes of the zip itself, on import
+MAX_ZIP = bodylimit.IMPORT_MAX          # bytes of the zip itself, on import (the request cap is the same number)
 MAX_UNZIPPED = 100 * 1024 * 1024
 MAX_ENTRIES = 2000
 MAX_TEXT = 1024 * 1024                  # enterprise.json, CLAUDE.md, an agent file
@@ -40,6 +40,15 @@ def _bad(code: str, msg: str, status: int = 400) -> EnterpriseError:
 
 
 # ---- export ----------------------------------------------------------------------------------------------
+def _safe_settings(d: dict) -> None:
+    """Owner decisions that never travel: the public desk (switches and token) and trust along the chain."""
+    s = d.setdefault("settings", {})
+    s["trust_chain"] = False
+    desk = s.setdefault("desk", {})
+    desk["enabled"] = False
+    desk["public"] = {**(desk.get("public") if isinstance(desk.get("public"), dict) else {}), "enabled": False, "token": ""}
+
+
 def _portable(d: dict, slug: str) -> dict:
     """The chart without anything local or sensitive: grants, agent paths, envelope key / domain lists."""
     out = copy.deepcopy(d)
@@ -47,8 +56,10 @@ def _portable(d: dict, slug: str) -> dict:
         out.pop(k, None)
     out["id"] = slug
     out["grants"] = []
+    _safe_settings(out)
     for p in out["positions"]:
         p["agent"] = None
+        p.pop("worker_template", None)
     envs = [out.get("envelope")] + [x.get("envelope") for x in out.get("departments", {}).values()]
     for env in envs:
         if isinstance(env, dict):
@@ -228,10 +239,13 @@ def import_zip(data: bytes) -> dict:
         d = enterprises.clean(src)
         d.pop("id", None)
         d.update(rev=1, projects=[], grants=[])
+        _safe_settings(d)
+        skipped: list[dict] = []
         for p in d["positions"]:
             p["agent"] = None
+            if p.pop("worker_template", None):
+                skipped.append({"file": f"position {p['id']}", "reason": "worker template: approve it again"})
         enterprises._check_tree(d)
-        skipped: list[dict] = []
         blobs: list[tuple[str, bytes]] = []
         for name, info in entries.items():
             if name == "enterprise.json":

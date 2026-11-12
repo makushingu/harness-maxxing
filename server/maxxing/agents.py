@@ -660,6 +660,18 @@ def _enterprise_no_workers(path: str) -> list[str]:
         return []
 
 
+DESK_TOOLS = "Bash(maxxing enterprise profile:*),Bash(maxxing enterprise route:*)"   # a front desk run: these two only
+
+
+def _desk_turn(session: str | None) -> bool:
+    """The session was started by a visitor of the enterprise front desk (its trigger, set by `fire`)."""
+    if not session:
+        return False
+    from .sessions import store
+    env = (store.read(session) or {}).get("env") or {}
+    return str(env.get("MAXXING_AGENT_TRIGGER") or "").startswith("enterprise-desk:")
+
+
 def run_settings(path: str, outside: bool = False, session: str | None = None, group: str = "",
                  manager: bool = False) -> dict:
     """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys, system_note} of a turn in an agent folder ({} elsewhere).
@@ -673,6 +685,10 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
     if not exists(path):
         return {}
     a = load(path)
+    desk = _desk_turn(session)
+    if desk:                                            # a visitor's text drives it: no key, domain, folder or tool beyond two
+        a = {**a, "keys": [], "domains": [], "writable": [], "trust_outside": False, "allowed_tools": [],
+             "disallowed_tools": [], "sandbox": True}
     if group:
         from . import agent_rooms
         if agent_rooms.is_member(group, path):
@@ -683,8 +699,9 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
     # pre-allowed tools never ask: in a turn started by outside text they would skip the approvals it gets
     if a["allowed_tools"] and not forced:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
-    if a["disallowed_tools"] or _enterprise_no_workers(path):
-        args += ["--disallowedTools", ",".join(dict.fromkeys([*a["disallowed_tools"], *_enterprise_no_workers(path)]))]
+    no_workers = _enterprise_no_workers(path)
+    if a["disallowed_tools"] or no_workers:
+        args += ["--disallowedTools", ",".join(dict.fromkeys([*a["disallowed_tools"], *no_workers]))]
     from . import enterprise_policy
     if a["limits"]["usd_per_day"] or enterprise_policy.has_ceiling(path):   # Claude Code stops the turn itself once the budget is spent
         with _lock:
@@ -694,9 +711,15 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
             left = enterprise_policy.cap(path, left, session=session)      # the department / enterprise envelope
             if session and left != float("inf"):
                 _hold(path, st, session, left)
-        args += ["--max-budget-usd", f"{left:.2f}"]
+        if left != float("inf"):
+            args += ["--max-budget-usd", f"{left:.2f}"]
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
+    if desk:                                            # approvals off: what is not allowed below is denied, never asked
+        return {"model": a["model"], "permission_mode": "default", "args": args + ["--tools", "Bash", "--allowedTools", DESK_TOOLS],
+                "sandbox": True, "settings": agent_guard.settings(path, a, approvals=True), "approvals": False,
+                "approvals_forced": False, "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": [],
+                "system_note": _enterprise_note(path)}
     if manager and not outside and not group:
         # the manager: its runs' sandbox for its commands, an escape the owner allows, approvals on (they carry the
         # escapes and the safety changes), its folder and `maxxing` without asking
@@ -1264,8 +1287,11 @@ def delete(path: str) -> None:
     _drop_triggers([path])
     for ext in ("json", "jsonl"):
         _state_file(path, ext).unlink(missing_ok=True)
-    from . import enterprises
-    enterprises.agent_gone(path)
+    try:
+        from . import enterprises
+        enterprises.agent_gone(path)
+    except Exception:  # noqa: BLE001 - a delete never depends on the org chart hook
+        log.exception("enterprises not told of the deletion of %s", path)
     _invalidate()
 
 
@@ -2293,6 +2319,12 @@ def _hold_left(path: str, a: dict, sid: str) -> None:
     if a["limits"]["usd_per_day"]:
         st = _read_state(path)
         _hold(path, st, sid, max(a["limits"]["usd_per_day"] - day_cost(path) - _held(st, but=sid), 0.01))
+    else:                                               # no budget of its own under a ceiling: a bounded share, so siblings run
+        from . import enterprise_policy
+        if enterprise_policy.has_ceiling(path):
+            share = enterprise_policy.cap(path, float("inf"), session=sid)
+            if share != float("inf"):
+                _hold(path, _read_state(path), sid, share)
 
 
 # ---- alerts: what needs the user lands in the Notifications feed (source `agents`, see feed.act) ---------------

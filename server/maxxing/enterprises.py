@@ -746,6 +746,12 @@ def delete(slug: str) -> None:
     """The folder goes to the Trash with the enterprise's state (put back by `restored`); agents, topics and
     sessions are untouched."""
     from . import workspace
+    if _slug_ok(slug) and (folder(slug) / FILE).exists():
+        try:                                         # live workers do not outlive their enterprise (outside the lock)
+            from . import enterprise_workers
+            enterprise_workers.retire_all(slug)
+        except Exception:  # noqa: BLE001 - the delete goes on; a worker left behind is an ordinary agent
+            logger.exception("workers of %s not retired", slug)
     with _lock:
         if not _slug_ok(slug) or not (folder(slug) / FILE).exists():
             raise EnterpriseError(404, "not_found", f"Enterprise {slug!r} not found")

@@ -9,6 +9,7 @@ after 24 h. State: `<state>/enterprises/<slug>/workers.json` `{seq, items, pendi
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -66,6 +67,66 @@ def workers(slug: str, pos: str | None = None) -> list[dict]:
 def _sid(r: dict) -> str:
     s = r.get("session")
     return str(s.get("id") or "") if isinstance(s, dict) else str(s or "")
+
+
+_WORKER_PATH = re.compile(r"/agents/[a-z0-9-]+-w\d+\Z")
+
+
+def _today(t: float | None) -> bool:
+    return bool(t) and time.strftime("%Y-%m-%d", time.localtime(t)) == time.strftime("%Y-%m-%d")
+
+
+def seat_of_worker(path: str) -> tuple[str, str] | None:
+    """(enterprise, position) of a worker agent: live, or ended today (its spending still counts today), else None."""
+    if not isinstance(path, str) or not _WORKER_PATH.search(path):
+        return None
+    for slug in enterprises.names():
+        for i in _read(slug)["items"]:
+            if i.get("agent") == path and (i.get("status") in ("live", "starting") or _today(i.get("ended"))):
+                return slug, str(i.get("position") or "")
+    return None
+
+
+def cost_today(slug: str, pos: str | None = None) -> float:
+    """USD spent today by the workers of the enterprise (of one position): live ones read now, ended ones as recorded."""
+    total = 0.0
+    for i in _read(slug)["items"]:
+        if pos is not None and i.get("position") != pos:
+            continue
+        if i.get("status") in ("live", "starting"):
+            try:
+                total += agents.day_cost(i["agent"]) if agents.exists(i["agent"]) else 0.0
+            except Exception:  # noqa: BLE001 - a cost that cannot be read counts as nothing
+                pass
+        elif _today(i.get("ended")):
+            total += float(i.get("cost") or 0)
+    return total
+
+
+def remap(old_prefix: str, new_prefix: str) -> None:
+    """A project or topic was renamed: the workers' agent paths follow."""
+    for slug in enterprises.names():
+        with enterprises._lock:
+            d = _read(slug)
+            hit = False
+            for i in d["items"]:
+                a = i.get("agent")
+                if isinstance(a, str) and (a == old_prefix or a.startswith(old_prefix + "/")):
+                    i["agent"] = new_prefix + a[len(old_prefix):]
+                    hit = True
+            if hit:
+                _write(slug, d)
+
+
+def retire_all(slug: str, why: str = "stopped") -> int:
+    """Retire every live worker of the enterprise (enterprise deleted, feature switched off) -> how many went."""
+    n = 0
+    for item in _live(_read(slug)):
+        try:
+            n += bool(_retire(slug, item, why))
+        except Exception:  # noqa: BLE001 - the others go anyway
+            log.exception("worker %s not retired", item.get("id"))
+    return n
 
 
 def _limit(slug: str, pos: str) -> int:
@@ -138,11 +199,15 @@ def spawn(slug: str, position: str, text: str, task: str = "", session: str = ""
         data["items"].append(item)
         _write(slug, data)
     role = (tpl.get("role") or p["title"]).strip()
+    o = agents.load(occ)
     try:
         agents.create(topic, name, {
             "description": f"{role}\n\nA temporary worker of {p['title']} ({position}). Its result is handed to that position.",
             "name": f"{p['title']} worker {n}", "enabled": True, "sandbox": True, "keys": [], "domains": [],
-            "writable": list(agents.load(occ)["writable"]), "triggers": [], "silent": True,
+            "writable": list(o["writable"]), "triggers": [], "silent": True,
+            # never wider than its creator: its rules, forbidden tools, approvals and mode follow; no mail
+            "rules": list(o["rules"]), "disallowed_tools": list(o["disallowed_tools"]), "approvals": o["approvals"],
+            "permission_mode": o["permission_mode"],
             "model": tpl.get("model") or "", "limits": {"usd_per_day": float(tpl.get("usd_per_day") or 0) or DEFAULT_USD}})
     except agents.AgentError as e:
         _drop(slug, name)
@@ -178,8 +243,10 @@ def _fire(slug: str, item: dict) -> bool:
     """Hand the task to the worker (never under the lock) -> True when its run started."""
     head = (f"You are a temporary worker of the position {item['position']!r}. Do the task below and answer with its "
             "result only: your answer is handed to that position.")
+    from . import enterprise_policy
+    outside = bool(item.get("outside")) or not enterprise_policy.trusted_delivery(slug, bool(item.get("outside")))
     try:
-        if item.get("outside"):               # the task came from a run started by outside text: data, never orders
+        if outside:                           # an outside task, or no trust along the chain: data, never orders
             r = agents.fire(item["agent"], trigger=f"enterprise-worker:{slug}:{item['position']}", prompt=head,
                             text=item["text"], source=f"worker of {item['position']}", depth=0)
         else:
@@ -227,6 +294,10 @@ def _retire(slug: str, item: dict, why: str) -> bool:
     """The worker goes to the Trash (its running session stopped first) -> False when it could not go yet."""
     path = item["agent"]
     res = _result(path, item.get("session", ""))
+    try:
+        spent = agents.day_cost(path) if agents.exists(path) else float(item.get("cost") or 0)
+    except Exception:  # noqa: BLE001
+        spent = float(item.get("cost") or 0)
     if agents.exists(path):
         try:
             from .sessions import service
@@ -246,7 +317,7 @@ def _retire(slug: str, item: dict, why: str) -> bool:
         data = _read(slug)
         for i in data["items"]:
             if i["id"] == item["id"]:
-                i.update(status=why, ended=time.time(), result=text)
+                i.update(status=why, ended=time.time(), result=text, cost=round(spent, 4))
         _write(slug, data)
     enterprises.log(slug, "worker", f"Worker {item['id']} {why}", by="server", position=item["position"])
     if why != "stopped" and enterprises.position(slug, item["position"]):
@@ -278,12 +349,15 @@ def stop(slug: str, wid: str) -> dict:
 # ---- tick ----------------------------------------------------------------------------------------------------
 def tick(now: float | None = None) -> None:
     now = time.time() if now is None else float(now)
-    if not enterprises.feature_on():
-        return
+    on = enterprises.feature_on()
     for slug in enterprises.names():
         try:
-            if _file(slug).exists():
+            if not _file(slug).exists():
+                continue
+            if on:
                 _tick_one(slug, now)
+            else:                                           # switched off: only the retirement goes on
+                retire_all(slug)
         except Exception:  # noqa: BLE001 - one enterprise never stops the others
             log.exception("workers of %s", slug)
 

@@ -161,3 +161,65 @@ def test_objectives_end_to_end(ent, monkeypatch, capsys):
     assert cli.main(["enterprise", "objective", "set", "traffic", "10"]) == 0
     assert ent.get(E).json()["objectives"][0]["value"] == 10
     assert ent.get(f"{E}/overview").json()["objectives"][0]["progress"] == 50
+
+
+# ---- a worker is never wider than its occupant ----------------------------------------------------------------
+def test_worker_keeps_the_guards_of_its_occupant(ent, monkeypatch):
+    _allow(monkeypatch)
+    a = agents.load(WRITER)
+    rule = {"tool": "Bash", "match": "git push", "reason": "never push"}
+    agents._save(WRITER, {**a, "rules": [rule], "disallowed_tools": ["WebFetch"], "approvals": True,
+                          "permission_mode": "acceptEdits", "mail": []})
+    w = ew.start(SLUG, "writer", "NOTOOL run git push")["worker"]
+    got = agents.load(w["agent"])
+    assert got["rules"] == [rule] and got["disallowed_tools"] == ["WebFetch"] and got["approvals"] is True
+    assert got["permission_mode"] == "acceptEdits" and got["mail"] == [] and got["writable"] == a["writable"]
+
+
+def test_worker_task_is_outside_text_unless_the_chain_is_trusted(ent, monkeypatch):
+    _allow(monkeypatch)
+    calls = []
+    monkeypatch.setattr(agents, "fire", lambda *a, **k: calls.append(k) or {"started": True, "session": "s1"})
+    ew.start(SLUG, "writer", "do the thing")                       # trust along the chain is off by default
+    assert calls[-1].get("text") == "do the thing" and "Task:" not in calls[-1]["prompt"]
+    assert ent.patch(E, json={"settings": {"trust_chain": True}}).status_code == 200
+    ew.start(SLUG, "writer", "do it clean")
+    assert not calls[-1].get("text") and "Task: do it clean" in calls[-1]["prompt"]
+    ew.start(SLUG, "writer", "do it outside", outside=True)         # one outside hop keeps everything after it outside
+    assert calls[-1].get("text") == "do it outside"
+
+
+# ---- the envelopes find the workers --------------------------------------------------------------------------
+def test_seat_of_worker_and_cost_today(ent, monkeypatch):
+    _allow(monkeypatch)
+    w = ew.start(SLUG, "writer", "NOTOOL x")["worker"]
+    assert ew.seat_of_worker(w["agent"]) == (SLUG, "writer") and ew.seat_of_worker(WRITER) is None
+    assert ew.seat_of_worker(f"{T}/agents/nobody-w9") is None
+    monkeypatch.setattr(agents, "day_cost", lambda path, *a, **k: 0.3)
+    assert ew.cost_today(SLUG) == pytest.approx(0.3) and ew.cost_today(SLUG, "writer") == pytest.approx(0.3)
+    assert ew.cost_today(SLUG, "boss") == 0
+    ent.delete(f"{E}/workers/{w['id']}")                           # ended today: still its seat, its cost as recorded
+    assert ew.seat_of_worker(w["agent"]) == (SLUG, "writer") and ew.cost_today(SLUG, "writer") == pytest.approx(0.3)
+
+
+def test_remap_follows_a_renamed_topic(ent, monkeypatch):
+    _allow(monkeypatch)
+    w = ew.start(SLUG, "writer", "NOTOOL x")["worker"]
+    ew.remap(T, "projects/acme/topics/renamed")
+    assert ew._read(SLUG)["items"][0]["agent"] == f"projects/acme/topics/renamed/agents/{w['id']}"
+
+
+def test_switching_the_feature_off_retires_live_workers(ent, monkeypatch):
+    _allow(monkeypatch)
+    w = ew.start(SLUG, "writer", "NOTOOL x")["worker"]
+    assert ent.put("/api/settings", json={"enterprises_page": False}).status_code == 200
+    ew.tick()
+    assert not agents.exists(w["agent"]) and ew._read(SLUG)["items"][0]["status"] == "stopped"
+
+
+def test_retire_all_for_a_deleted_enterprise(ent, monkeypatch):
+    _allow(monkeypatch)
+    a = ew.start(SLUG, "writer", "NOTOOL one")["worker"]
+    b = ew.start(SLUG, "writer", "NOTOOL two")["worker"]
+    assert ew.retire_all(SLUG) == 2
+    assert not agents.exists(a["agent"]) and not agents.exists(b["agent"])
