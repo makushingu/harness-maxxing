@@ -70,9 +70,12 @@ export function Page({
   width = 'default',
   className,
   bodyClassName,
+  sensitiveTitle,
   children,
 }: {
   title: React.ReactNode
+  /** document.title string (when `title` is a node) */
+  sensitiveTitle?: string
   description?: React.ReactNode
   actions?: React.ReactNode
   leading?: React.ReactNode
@@ -83,7 +86,7 @@ export function Page({
 }) {
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
-      <PageHeader title={title} description={description} actions={actions} leading={leading} />
+      <PageHeader title={title} description={description} actions={actions} leading={leading} sensitiveTitle={sensitiveTitle} />
       <PageBody width={width} className={bodyClassName}>
         {children}
       </PageBody>

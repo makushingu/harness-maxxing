@@ -322,7 +322,9 @@ export default function TasksPage() {
 
   return (
     <Page
-      title={t('nav.tasks')}
+      // the entry picked in the list is the page's title (the page's name is in the list's head)
+      title={scope === 'overview' ? t('tasks.nav.overview') : scope === 'all' ? t('tasks.nav.all') : scope === 'none' ? t('tasks.noProject') : project ? <Sensitive length={6}>{project.name}</Sensitive> : t('nav.tasks')}
+      sensitiveTitle={t('nav.tasks')}
       description={t('tasks.description')}
       width="full"
       actions={
@@ -341,7 +343,7 @@ export default function TasksPage() {
               <PopoverTrigger asChild>
                 <Button size="sm" data-testid="task-new">
                   <Plus />
-                  <span className={narrow ? 'sr-only' : 'max-sm:sr-only'}>{t('tasks.cmd.new')}</span>
+                  <span className="max-sm:sr-only">{t('tasks.cmd.new')}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[min(30rem,calc(100vw-2rem))] p-3">

@@ -2105,6 +2105,8 @@ export const fr: Record<keyof typeof en, string> = {
   'tasks.nav.overview': 'Vue d’ensemble',
   'tasks.nav.all': 'Toutes les tâches',
   'tasks.nav.noProjects': 'Créer un projet',
+  'tasks.nav.empty': '+ {count} sans tâche ouverte',
+  'tasks.nav.hideEmpty': 'Masquer les projets sans tâche ouverte',
   'tasks.nav.hideHidden': 'Masquer les projets cachés',
   'tasks.nav.showHidden': '{count} projets masqués',
   'tasks.nav.showHidden#one': '{count} projet masqué',

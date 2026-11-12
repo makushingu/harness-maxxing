@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { usePatchTaskProject } from '@/lib/queries'
 import type { TaskProject } from '@/lib/types'
 import { statsOf, type ProjectStats } from './model'
+import { ListEntry } from '@/components/shell/PageList'
 import { ProjectDot } from './parts'
 
 /** What the page shows: the overview, every task, the tasks without a project, or one task project (its id). */
@@ -25,23 +26,21 @@ type Props = {
 export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }: Props) {
   const t = useT()
   const [showHidden, setShowHidden] = React.useState(false)
+  // projects without an open task fold under "+ N without open tasks" (the one open stays)
+  const [showEmpty, setShowEmpty] = React.useState(false)
   const all = React.useMemo(() => [...stats.values()].reduce((n, s) => n + s.open, 0), [stats])
   const none = statsOf(stats, '')
   const hiddenCount = projects.filter((p) => p.hidden).length
-  const shown = projects.filter((p) => !p.hidden || showHidden || p.id === scope)
+  const visible = projects.filter((p) => !p.hidden || showHidden || p.id === scope)
+  const empty = visible.filter((p) => statsOf(stats, p.id).open === 0 && p.id !== scope)
+  const shown = showEmpty || empty.length < 3 ? visible : visible.filter((p) => !empty.includes(p))
 
   return (
       <nav aria-label={t('tasks.nav.label')} className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto p-2" data-testid="task-nav" data-tour="tasks-projects">
-        <Entry active={scope === 'overview'} onClick={() => onScope('overview')} icon={<LayoutGrid className="size-4" />}>
-          {t('tasks.nav.overview')}
-        </Entry>
-        <Entry active={scope === 'all'} onClick={() => onScope('all')} icon={<ListChecks className="size-4" />} count={all}>
-          {t('tasks.nav.all')}
-        </Entry>
+        <ListEntry active={scope === 'overview'} onClick={() => onScope('overview')} icon={LayoutGrid} label={t('tasks.nav.overview')} />
+        <ListEntry active={scope === 'all'} onClick={() => onScope('all')} icon={ListChecks} count={all} label={t('tasks.nav.all')} />
         {(none.total > 0 || scope === 'none') && (
-          <Entry active={scope === 'none'} onClick={() => onScope('none')} icon={<Inbox className="size-4" />} count={none.open}>
-            {t('tasks.noProject')}
-          </Entry>
+          <ListEntry active={scope === 'none'} onClick={() => onScope('none')} icon={Inbox} count={none.open} label={t('tasks.noProject')} />
         )}
         <div className="mt-3 mb-1 flex h-6 items-center justify-between px-2.5">
           <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('tasks.projects')}</span>
@@ -64,6 +63,16 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
         {shown.map((p) => (
           <ProjectEntry key={p.id} project={p} emoji={p.workspace ? emojis.get(p.workspace) : undefined} stats={statsOf(stats, p.id)} active={scope === p.id} onClick={() => onScope(p.id)} />
         ))}
+        {empty.length >= 3 && (
+          <button
+            type="button"
+            onClick={() => setShowEmpty((v) => !v)}
+            className="mt-1 flex h-8 items-center gap-2 rounded-md px-2.5 text-left text-xs pointer-coarse:h-10 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            data-testid="task-nav-empty"
+          >
+            {showEmpty ? t('tasks.nav.hideEmpty') : t('tasks.nav.empty', { count: empty.length })}
+          </button>
+        )}
         {hiddenCount > 0 && (
           <button
             type="button"
@@ -75,24 +84,6 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
           </button>
         )}
       </nav>
-  )
-}
-
-function Entry({ active, onClick, icon, count, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; count?: number; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 pointer-coarse:h-10 text-left text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-        active ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-      )}
-    >
-      <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-      {count != null && count > 0 && <span className="text-xs text-muted-foreground tabular-nums">{count}</span>}
-    </button>
   )
 }
 
@@ -115,12 +106,12 @@ function ProjectEntry({ project, emoji, stats, active, onClick }: { project: Tas
         onClick={onClick}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md pr-8 pl-2.5 pointer-coarse:h-10 pointer-coarse:pr-11 text-left text-[13px] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          'flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-md pr-8 pl-2.5 pointer-coarse:h-11 pointer-coarse:pr-11 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
           active ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
         )}
       >
         <span className="flex size-4 shrink-0 items-center justify-center">
-          {emoji ? <span className="text-[13px] leading-none">{emoji}</span> : <ProjectDot color={project.color} className="size-2.5" />}
+          {emoji ? <span className="text-sm leading-none">{emoji}</span> : <ProjectDot color={project.color} className="size-2.5" />}
         </span>
         <span className="min-w-0 flex-1 truncate">
           <Sensitive length={6}>{project.name}</Sensitive>
