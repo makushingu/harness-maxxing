@@ -7,6 +7,48 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Enterprises (an org chart of agents above projects; off by default, config `enterprises_page`, needs
+  `agents_page`, no migration). Modules: `enterprises.py` (files, lookups, structure, `rev`, lock `enterprises`),
+  `enterprise_flow.py` (inboxes, deliveries, delegated tasks, escalations, the tick loop), `enterprise_policy.py`
+  (requests, grants, envelopes, communication, trust chain), `enterprise_reports.py` (digest, weekly, monthly,
+  Overview, owner notifications), `enterprise_knowledge.py` (knowledge cascade, profile), `enterprise_workers.py`,
+  `enterprise_desk.py` (front desk, insights), `enterprise_io.py` (export / import zip), `enterprise_templates.py`,
+  `cmd_enterprise.py` (`maxxing enterprise`, module docstring = command list), routes in `api/enterprises.py`,
+  `api/enterprise_flow.py`, `api/enterprise_policy.py`, `api/enterprise_profile.py`, `api/enterprise_reports.py`,
+  `api/enterprise_workers.py`, `api/enterprise_desk.py` (see API.md#enterprises). Files:
+  `<workspace>/enterprises/<slug>/{CLAUDE.md, enterprise.json, profile.json, files/}`, state
+  `<state>/enterprises/<slug>/`. Config: `enterprises_page` (Settings -> Features), `telegram.enterprise_threads`
+  (`{slug: {tid, name}}`). Bus topics `enterprises` and `enterprises:<slug>`; feed source `enterprises` (owner
+  cards, refs `enterprise:<slug>:<id>`). `agents.gate` has the reason `envelope` (and `busy`) from the department /
+  enterprise ceilings; `agents.run_settings` appends the cascade to the system note and lowers the per-run budget;
+  `agent_guard` allows the turn commands of `maxxing enterprise` as the caller's position, refuses the structure
+  ones, and hides the folders of enterprises an agent holds no seat in; `bodylimit` lists `/api/public/` (the desk
+  link, no session). Delegated tasks are entries of `tasks.json` with an `enterprise` sub-object (`{id, owner,
+  requester, parent, deliverable, stage, hops, outside}`). Agents carry `enterprise`, `position`, `reports_to` in
+  the data given to Office extension views. Skill `maxxing-enterprises`, user docs page
+  `docs/user/33-enterprises.md`. Front desk: `desk_page.py` serves `GET /desk/<token>` (static, strict CSP,
+  `frame-ancestors 'none'`); `GET .../desk` returns `unfit` and `public.path`; going live answers `400
+  desk_not_restricted` after `unprotected_occupants`; hourly caps (300 messages per enterprise, 1500 reads per
+  visitor). Export drops the desk link, `trust_chain` and `worker_template`; import lists `skipped`. Reserved position
+  ids, a department overrides `DEPT_SETTINGS` only, PATCH `grants` is validated, `blocked` position state. `request`
+  carries `--position/--job/--agent` (`edit_job`, `reseat`). The slow tickers run in a thread, `SERVER` gates the
+  delivery timers, `seat_of_worker` / `cost_today` count the workers' spending.
+  Hardening of the front desk and fixes: a desk turn runs in the `default` permission mode (the session is created with
+  it) and a deny-by-default `PreToolUse` hook (`agent_guard desk-hook`, `desk_decision`: one plain `maxxing enterprise
+  profile|route` command, no chaining, expansion or redirection; fails closed) refuses every other call, whatever
+  `--allowedTools` or the user's settings allow. Deleting a conversation (and retention) erases the visitor's text from
+  the desk agent's sessions (hard delete), its thread and the Claude Code transcript of each run; what stays is the
+  routed request (task text, lead's inbox); the `decisions.jsonl` line of a route carries no visitor text. `route` is
+  attributed to the desk position (`assign(..., sender=pos)`) while the desk position is the requester. `route` refuses the desk itself and a position that is not the head of its department; desk turns run with `--strict-mcp-config` and an empty server list (`no_mcp` in `run_settings`); the desk hook command fails closed (any boot error denies and exits 2) and has a 10 s timeout; an accept records `accepted_in` so an assign in the same run keeps the parent and hops; delivery runs start at the largest `hops` of their tasks (capped at `agents.MAX_DEPTH`); an import lists reserved position ids in `skipped`. Hand-ins make the
+  delivered tasks the default parent. The desk has its own global hourly cap (not evicted with the client keys).
+  Workers are retired when the feature is off (`tick_all` still runs the worker tick) and their cost is in the overview,
+  the chart and the dashboard card (`cost_today`, `ceiling_hit`). A budget-less agent under a ceiling gets at most
+  `UNBUDGETED_RUN_USD` (0.50) per run, passed as `--max-budget-usd`, so the run is cut there. Import resets
+  `autonomy`, `workers`, `communication` (with `allow`) and the `digest` / `weekly` / `monthly` switches to the
+  defaults and lists what was not default in `skipped`. Templates and card labels are English only. The public page
+  (`desk_page.py`) is built in `en` and `fr` (one hashed document each) and follows the server language. Web: the New
+  position dialog never derives a reserved id (`owner-role`) and has an editable id field; a Blocked position shows its
+  `blocked_reason` (card, list row, panel header).
 - Agents: `agent_templates.fields()` sets `sandbox: True` for every template that reads outside text: a webhook, a
   mailbox (as before) or a web tool pre-allowed in `allowed_tools` (`reads_web()`: `Bash(curl…)`, `WebFetch`,
   `WebSearch`), i.e. `sales`, `orders`, `watch`, `writer`, `uptime` too. Without it `Bash(curl:*)` ran unsandboxed
@@ -59,48 +101,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   run now comes first.
 - Upgrade note: agents whose cron jobs have a timeout above `limits.timeout_s` (now capped by `run_timeout`).
 
-- Enterprises (an org chart of agents above projects; off by default, config `enterprises_page`, needs
-  `agents_page`, no migration). Modules: `enterprises.py` (files, lookups, structure, `rev`, lock `enterprises`),
-  `enterprise_flow.py` (inboxes, deliveries, delegated tasks, escalations, the tick loop), `enterprise_policy.py`
-  (requests, grants, envelopes, communication, trust chain), `enterprise_reports.py` (digest, weekly, monthly,
-  Overview, owner notifications), `enterprise_knowledge.py` (knowledge cascade, profile), `enterprise_workers.py`,
-  `enterprise_desk.py` (front desk, insights), `enterprise_io.py` (export / import zip), `enterprise_templates.py`,
-  `cmd_enterprise.py` (`maxxing enterprise`, module docstring = command list), routes in `api/enterprises.py`,
-  `api/enterprise_flow.py`, `api/enterprise_policy.py`, `api/enterprise_profile.py`, `api/enterprise_reports.py`,
-  `api/enterprise_workers.py`, `api/enterprise_desk.py` (see API.md#enterprises). Files:
-  `<workspace>/enterprises/<slug>/{CLAUDE.md, enterprise.json, profile.json, files/}`, state
-  `<state>/enterprises/<slug>/`. Config: `enterprises_page` (Settings -> Features), `telegram.enterprise_threads`
-  (`{slug: {tid, name}}`). Bus topics `enterprises` and `enterprises:<slug>`; feed source `enterprises` (owner
-  cards, refs `enterprise:<slug>:<id>`). `agents.gate` has the reason `envelope` (and `busy`) from the department /
-  enterprise ceilings; `agents.run_settings` appends the cascade to the system note and lowers the per-run budget;
-  `agent_guard` allows the turn commands of `maxxing enterprise` as the caller's position, refuses the structure
-  ones, and hides the folders of enterprises an agent holds no seat in; `bodylimit` lists `/api/public/` (the desk
-  link, no session). Delegated tasks are entries of `tasks.json` with an `enterprise` sub-object (`{id, owner,
-  requester, parent, deliverable, stage, hops, outside}`). Agents carry `enterprise`, `position`, `reports_to` in
-  the data given to Office extension views. Skill `maxxing-enterprises`, user docs page
-  `docs/user/33-enterprises.md`. Front desk: `desk_page.py` serves `GET /desk/<token>` (static, strict CSP,
-  `frame-ancestors 'none'`); `GET .../desk` returns `unfit` and `public.path`; going live answers `400
-  desk_not_restricted` after `unprotected_occupants`; hourly caps (300 messages per enterprise, 1500 reads per
-  visitor). Export drops the desk link, `trust_chain` and `worker_template`; import lists `skipped`. Reserved position
-  ids, a department overrides `DEPT_SETTINGS` only, PATCH `grants` is validated, `blocked` position state. `request`
-  carries `--position/--job/--agent` (`edit_job`, `reseat`). The slow tickers run in a thread, `SERVER` gates the
-  delivery timers, `seat_of_worker` / `cost_today` count the workers' spending.
-  Hardening of the front desk and fixes: a desk turn runs in the `default` permission mode (the session is created with
-  it) and a deny-by-default `PreToolUse` hook (`agent_guard desk-hook`, `desk_decision`: one plain `maxxing enterprise
-  profile|route` command, no chaining, expansion or redirection; fails closed) refuses every other call, whatever
-  `--allowedTools` or the user's settings allow. Deleting a conversation (and retention) erases the visitor's text from
-  the desk agent's sessions (hard delete), its thread and the Claude Code transcript of each run; what stays is the
-  routed request (task text, lead's inbox); the `decisions.jsonl` line of a route carries no visitor text. `route` is
-  attributed to the desk position (`assign(..., sender=pos)`) while the desk position is the requester. `route` refuses the desk itself and a position that is not the head of its department; desk turns run with `--strict-mcp-config` and an empty server list (`no_mcp` in `run_settings`); the desk hook command fails closed (any boot error denies and exits 2) and has a 10 s timeout; an accept records `accepted_in` so an assign in the same run keeps the parent and hops; delivery runs start at the largest `hops` of their tasks (capped at `agents.MAX_DEPTH`); an import lists reserved position ids in `skipped`. Hand-ins make the
-  delivered tasks the default parent. The desk has its own global hourly cap (not evicted with the client keys).
-  Workers are retired when the feature is off (`tick_all` still runs the worker tick) and their cost is in the overview,
-  the chart and the dashboard card (`cost_today`, `ceiling_hit`). A budget-less agent under a ceiling gets at most
-  `UNBUDGETED_RUN_USD` (0.50) per run, passed as `--max-budget-usd`, so the run is cut there. Import resets
-  `autonomy`, `workers`, `communication` (with `allow`) and the `digest` / `weekly` / `monthly` switches to the
-  defaults and lists what was not default in `skipped`. Templates and card labels are English only. The public page
-  (`desk_page.py`) is built in `en` and `fr` (one hashed document each) and follows the server language. Web: the New
-  position dialog never derives a reserved id (`owner-role`) and has an editable id field; a Blocked position shows its
-  `blocked_reason` (card, list row, panel header).
 - #75 (20 reported bugs, 18 fixed, each with its test): `telegram/format.py` measures the 4096 limit in UTF-16 units
   (`_u16`, in `render`, `_split_big`, `code`, `plain`); `mail/send._text` (HTML fallback shared by draft, reply,
   forward); `mail/imap._size` counts a `=\r\n` soft break as 0; `infra/actions.pg_install` raises `start_failed` when
