@@ -46,8 +46,9 @@ function useBadgeMotion(count: number) {
   return { ref, shown, leaving }
 }
 
-/** Round counter (unread answers, running turns). Pulses when Settings -> Notifications -> "Pulsing badge" is on. */
-export function CountBadge({ count, tone = 'unread', className, title }: { count: number; tone?: 'unread' | 'running'; className?: string; title?: string }) {
+/** Round counter (unread answers, running turns). Pulses when Settings -> Notifications -> "Pulsing badge" is on.
+ *  Shows "99+" above 99 unless `exact` (lists with room for the real number, e.g. mail folders). */
+export function CountBadge({ count, tone = 'unread', className, title, exact }: { count: number; tone?: 'unread' | 'running'; className?: string; title?: string; exact?: boolean }) {
   const pulse = useUI((s) => s.badgePulse) && tone === 'unread'
   const { ref, shown, leaving } = useBadgeMotion(count)
   if (shown <= 0) return null
@@ -65,7 +66,7 @@ export function CountBadge({ count, tone = 'unread', className, title }: { count
         className,
       )}
     >
-      {shown > 99 ? '99+' : shown}
+      {shown > 99 && !exact ? '99+' : shown}
     </span>
   )
 }

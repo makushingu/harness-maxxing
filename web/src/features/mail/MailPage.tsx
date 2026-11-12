@@ -118,7 +118,7 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                   >
                     <Icon className="size-4 shrink-0" />
                     <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
-                    {f.role !== 'sent' && f.role !== 'trash' && <CountBadge count={f.unread || 0} />}
+                    {f.role !== 'sent' && f.role !== 'trash' && <CountBadge exact count={f.unread || 0} />}
                   </button>
                   {!f.role && (
                     <DropdownMenu>
