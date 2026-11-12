@@ -126,7 +126,7 @@ const FOLDED_W = 64
 
 /** Memoized: the shell re-renders on every URL change (a session switched in the Sessions page's tabs too), and the
  *  bar has nothing to redo then (its links follow the URL by themselves). */
-export const Sidebar = React.memo(function Sidebar() {
+export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layout: the menu level of the left drawer (TouchNav.tsx) - always unfolded, no pin, resize, drag or second bar */ drawer?: boolean }) {
   const prefetchLink = usePrefetchLink()
   const t = useT()
   const { entries, end } = useNavEntries()
@@ -135,7 +135,7 @@ export const Sidebar = React.memo(function Sidebar() {
   const toggle = useUI((s) => s.toggleSidebar)
   const tablet = useIsTablet()
   // Folded (the default): an icon bar. Pinned: the labelled sidebar. Only the pin changes it.
-  const pinned = !tablet && !userCollapsed
+  const pinned = drawer || (!tablet && !userCollapsed)
   const collapsed = !pinned
   const badge = useSessionBadge()
   const showSessions = useShowSessions()
@@ -148,10 +148,11 @@ export const Sidebar = React.memo(function Sidebar() {
 
   // the page open has a list and the second-level sidebar is closed: resting on its entry shows the list over the page
   const closedList = useClosedList()
+  const noPeek = drawer ? null : closedList
   const navItem = (item: NavItem, idx: number, drag?: object) => {
     const label = t(item.label)
     const list = item.to.slice(1)
-    const peek = closedList === list
+    const peek = noPeek === list
     // Unfolded: the counters stay mounted so they can animate out when they reach 0.
     const showBadge = item.to === '/sessions' && (!collapsed || badge.unread > 0 || badge.running > 0)
     return (
@@ -160,7 +161,7 @@ export const Sidebar = React.memo(function Sidebar() {
         <NavLink
           to={item.to}
           {...prefetchLink(item.to)}
-          {...drag}
+          {...(drawer ? {} : drag)}
           end={item.end}
           data-tour={navTourId(item)}
           {...(peek ? entryPeek : { onClick: (e: React.MouseEvent) => armEntryPeek(list, e) })}
@@ -210,7 +211,7 @@ export const Sidebar = React.memo(function Sidebar() {
       <NavLink
         to={e.to}
         {...prefetchLink(e.to)}
-        {...drag}
+        {...(drawer ? {} : drag)}
         data-ext={e.ext.id}
         aria-label={collapsed ? e.ext.name : undefined}
         style={{ '--i': idx } as React.CSSProperties}
@@ -267,13 +268,13 @@ export const Sidebar = React.memo(function Sidebar() {
   const pinLabel = pinned ? t('shell.collapse') : t('shell.pin')
 
   return (
-    <div className="mx-boot-side relative z-30 flex shrink-0">
-      <div ref={slot} className="relative flex shrink-0" style={{ width: barW }}>
+    <div className={drawer ? 'flex min-h-0 min-w-0 flex-1' : 'mx-boot-side relative z-30 flex shrink-0'}>
+      <div ref={slot} className={drawer ? 'flex min-h-0 min-w-0 flex-1' : 'relative flex shrink-0'} style={drawer ? undefined : { width: barW }}>
         <aside
           data-testid="sidebar"
           data-unfold={pinned ? 'pinned' : 'folded'}
           data-side-expanded={collapsed ? 'false' : 'true'}
-          className="mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]"
+          className={cn('mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]', drawer && 'border-r-0 pt-0 pl-0')}
           aria-label={t('shell.navigation')}
         >
           <KeepTooltipShape.Provider value>
@@ -290,7 +291,7 @@ export const Sidebar = React.memo(function Sidebar() {
               >
                 <Logo collapsed={collapsed} boot />
               </NavLink>
-              {!collapsed && (
+              {!collapsed && !drawer && (
                 <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
                   <Button variant="ghost" size="icon-sm" data-testid="sidebar-pin" aria-pressed={pinned} className="size-8 shrink-0 text-muted-foreground" onClick={toggle} aria-label={pinLabel}>
                     <PanelLeftClose strokeWidth={1.7} />
@@ -317,7 +318,7 @@ export const Sidebar = React.memo(function Sidebar() {
                 >
                   <Search className="size-4 shrink-0" strokeWidth={1.7} />
                   <span className="flex-1 truncate text-left">{t('palette.search')}</span>
-                  <Kbd>{MOD} K</Kbd>
+                  {!drawer && <Kbd>{MOD} K</Kbd>}
                 </button>
               )}
             </div>
@@ -380,10 +381,10 @@ export const Sidebar = React.memo(function Sidebar() {
             />
           </KeepTooltipShape.Provider>
         </aside>
-        {pinned && <ResizeEdge side={slot} min={SIDEBAR_W.min} max={SIDEBAR_W.max} onWidth={setWidth} />}
+        {pinned && !drawer && <ResizeEdge side={slot} min={SIDEBAR_W.min} max={SIDEBAR_W.max} onWidth={setWidth} />}
       </div>
       {/* the second-level sidebar: the list of the page open (components/shell/PageList.tsx) */}
-      <SecondBar left={barW} />
+      {!drawer && <SecondBar left={barW} />}
     </div>
   )
 })

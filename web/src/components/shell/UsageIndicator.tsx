@@ -200,7 +200,7 @@ function ClaudeMark({ className, style }: { className?: string; style?: CSSPrope
 export function ClaudeStatus({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
   const lang = useLang()
-  const c = useClaudeRing()
+  const c = useClaudeRing(true) // mounted only where it shows (the sidebar, the touch drawer's menu)
   if (!c) return null
   const pctText = (n: number) => (lang === 'en' ? `${n}%` : `${n} %`)
   const heading = c.plan ? `${t('shell.claudeQuota')} · ${c.plan}` : t('shell.claudeQuota')
