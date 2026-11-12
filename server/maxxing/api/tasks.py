@@ -564,6 +564,56 @@ def _guard(copy_: bool = True):
         raise _err(409, "corrupt_file", str(e)) from None
 
 
+# ---- public helpers for other modules (enterprise delegation) --------------------------------
+def get_task(tid: str) -> dict | None:
+    """A copy of the task, or None (a missing, empty or damaged file reads as no task)."""
+    try:
+        with _lock:
+            return next((copy.deepcopy(t) for t in load(copy_=False)["tasks"] if t["id"] == tid), None)
+    except CorruptFile:
+        return None
+
+
+@_retry_on_change
+def add_task(fields: dict) -> dict:
+    """Create a task from plain fields (title required, unknown keys kept, e.g. `enterprise`) -> the task."""
+    title = str(fields.get("title") or "").strip()
+    if not title or len(title) > 500:
+        raise _err(400, "invalid_title", "title is required (max 500 characters)")
+    with _lock:
+        data = _guard()
+        now = time.time()
+        task = _norm_task({**fields, "id": _new_id("t_", 6), "title": title, "created": now, "updated": now})
+        if task["status"] == "done":
+            task["done_at"] = now
+        if "order" not in fields:
+            same = [t["order"] for t in data["tasks"] if t["status"] == task["status"]]
+            task["order"] = (max(same) + 1.0) if same else 1.0
+        while any(t["id"] == task["id"] for t in data["tasks"]):
+            task["id"] = _new_id("t_", 6)
+        data["tasks"].append(task)
+        save(data)
+    return task
+
+
+@_retry_on_change
+def update_task(tid: str, fields: dict) -> dict:
+    """Set plain fields on a task (a nested value such as `enterprise` is replaced whole) -> the task; 404 if gone."""
+    with _lock:
+        data = _guard()
+        task = next((t for t in data["tasks"] if t["id"] == tid), None)
+        if task is None:
+            raise _err(404, "not_found", f"no task {tid}")
+        was = task["status"]
+        task.update({k: v for k, v in fields.items() if k not in ("id", "created")})
+        task.update(_norm_task(task))
+        if task["status"] != was:
+            task["done_at"] = time.time() if task["status"] == "done" else None
+        task["updated"] = time.time()
+        save(data)
+    return task
+
+
 # ---- tasks ----------------------------------------------------------------------------------
 @router.get("")
 def list_tasks():
