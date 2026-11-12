@@ -17,6 +17,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   topic's skills from `GET /api/skills?path=` = `skills.for_topic()`). Composer prop `commands`: a session command
   typed in full runs instead of being sent (only without attachments or quotes); a skill is sent as typed (Claude Code
   expands `/name args` in `-p` mode, checked with 2.1.285). New-session form: `model|effort|plan` only.
+- Team: `maxxing team send TO TEXT... [--file P] [--json]` / `team list` (`cmd_team.py`). `team.recipients()`
+  (contacts -> dm, groups not left), `team.find_recipient(to)` (folded name `_fold`: NFKD without accents +
+  casefold, exact name / person id / chat id / address / netloc / hostname, else a unique prefix; 404 lists the
+  names, 409 the ambiguous ones), `team.send_to(to, text, files)` (409 `team_off` when `team_page` is off; dm created
+  by `create_chat`; files copied into `files_dir()` by `_attach`, removed if the send fails, then plain `send()`).
+  Not in `agent_guard.CLI_ALLOWED`: refused in a sandboxed turn. Nothing reads chats (design rule of team.py kept).
+  The command writes team.json / peers.json from its own process: `team._lock` and `teampeer._lock` are now
+  `config.ProcessLock("team")` / `ProcessLock("team-peer")` (were thread RLocks; order team -> team-peer unchanged),
+  the server's outbox worker delivers the queued event within 5 s (`_wake` is per process) and calls
+  `team.notice_outside_writes()` each pass: team.json changed by another process (signature != `_written`, set by
+  `_save`) -> `bus.invalidate("team")`. Workspace template `CLAUDE.md`: a `maxxing team` row in the CLI table
+  (**the version's upgrade note must add it to existing workspaces**). Tests: `test_team.py::test_cli_send_*`,
+  `test_a_write_from_another_process_refreshes_the_pages`.
 
 - Agents: `agent_templates.fields()` sets `sandbox: True` for every template that reads outside text: a webhook, a
   mailbox (as before) or a web tool pre-allowed in `allowed_tools` (`reads_web()`: `Bash(curl…)`, `WebFetch`,

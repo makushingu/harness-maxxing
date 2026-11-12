@@ -526,7 +526,7 @@ listing (`clear_cache()` in tests). Web: `features/git/` (GitGraph = lane layout
 `components/ui/markdown.tsx`, lazy; GitPage = route `/git`, shown in the nav by `useNav()` when settings `git_page`).
 
 ## maxxing.team  (owner: organisation)
-Chats between people, `<state>/team/team.json` (format in the docstring), one lock (`_lock`), atomic writes, bus
+Chats between people, `<state>/team/team.json` (format in the docstring), one lock (`_lock`, a `config.ProcessLock` shared with `maxxing team`), atomic writes, bus
 topic `team`. `state()`, `messages(cid)`, `create_chat`, `send`, `react`, `create_poll`, `vote`, `mark_read`,
 `mark_sent` (a "to a session" click), `edit_message` / `delete_message`, `update_group` / `leave_group` / `set_muted`,
 `typing` and the read receipt (signals through `teampeer.signal_all`, never queued), `summarize(cid, ids, since)` (one `claude -p` without tools, Sonnet,
@@ -537,6 +537,9 @@ through `apply_remote(frm, contact, event)` which checks membership and authorsh
 the user is `ME`. Numbers from peers go through `_finite`; a group roster is stored only if we are in it.
 Web: `features/team/` (page `/team`, right panel `TeamPanel`, `Live.tsx` presence + notifications, `SendTo.tsx` from
 the session message menu).
+`recipients()` / `find_recipient(to)` / `send_to(to, text, files)` back `maxxing team send|list` (`cmd_team.py`,
+another process: hence the `ProcessLock`s of team and teampeer, and `notice_outside_writes()` called by the outbox
+worker so the pages refetch).
 
 ## maxxing.teampeer  (owner: organisation)
 Server-to-server transport, stdlib + httpx, protocol in the docstring. `<state>/team/peers.json` (600): peers,

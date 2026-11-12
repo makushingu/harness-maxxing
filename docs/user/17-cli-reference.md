@@ -162,6 +162,13 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing packs list [--json]` | starter projects and whether they are installed |
 | `maxxing packs add ID [ID...] [--json]` | add starter projects (never overwrites: only missing files are added; jobs created disabled) |
 
+## Team
+
+| Command | Purpose |
+|---|---|
+| `maxxing team send NAME MESSAGE... [--file PATH] [--json]` | send a message to a contact or a group, in your name (name: case and accents ignored, a unique beginning is enough, or a contact's address; `-` reads the message from stdin; `--file` repeatable). Team must be on |
+| `maxxing team list [--json]` | the contacts and groups you can write to |
+
 ## Keys
 
 | Command | Purpose |

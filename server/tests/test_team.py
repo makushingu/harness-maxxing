@@ -529,3 +529,44 @@ def test_sending_a_message_reads_and_writes_team_json_once(client, sent, monkeyp
     assert len(reads) == 1 and len(writes) == 1 and sent[-1][1]["message"]["kind"] == "poll"
     stored = client.get(f"/api/team/chats/{dm}").json()["messages"]
     assert stored[1]["pending"] == [lea] and stored[1]["reply_to"] == first["id"]
+
+
+def test_cli_send_by_name_list_and_files(client, sent, capsys, tmp_path):
+    from maxxing import cli
+    lea = teampeer.pid(LEA)
+    assert cli.main(["team", "list"]) == 0 and "Lea" in capsys.readouterr().out
+    assert cli.main(["team", "send", "léa", "hello", "from", "a", "session"]) == 0    # accents and case ignored
+    assert capsys.readouterr().out.strip() == "sent to Lea"
+    dm = team.dm_id(ME, LEA)
+    assert sent[-1] == ([LEA], {"type": "message", "chat": dm, "message": sent[-1][1]["message"]})
+    assert sent[-1][1]["message"]["text"] == "hello from a session"
+    assert client.post("/api/team/chats", json={"kind": "dm", "members": [lea]}).json()["id"] == dm   # the same chat
+    f = tmp_path / "report.pdf"
+    f.write_bytes(b"%PDF")
+    assert cli.main(["team", "send", "127.0.0.1:8802", "see", "--file", str(f)]) == 0     # by its address too
+    m = team.messages(dm)["messages"][-1]
+    assert m["text"] == "see" and m["files"][0]["name"] == "report.pdf" and m["files"][0]["path"] != str(f)
+    g = client.post("/api/team/chats", json={"kind": "group", "members": [lea, teampeer.pid(TOM)], "name": "Side project"}).json()
+    assert cli.main(["team", "send", "side", "hi all"]) == 0 and "(group)" in capsys.readouterr().out
+    assert team.messages(g["id"])["messages"][-1]["text"] == "hi all"
+    assert cli.main(["team", "send", "nobody", "x"]) == 2 and "Lea" in capsys.readouterr().err
+    assert cli.main(["team", "send", "lea"]) == 2                                          # empty
+    assert cli.main(["team", "send", "lea", "x", "--file", str(tmp_path / "nope")]) == 2
+    config.update_config(team_page=False)
+    assert cli.main(["team", "send", "lea", "x"]) == 2 and "Features" in capsys.readouterr().err
+
+
+def test_a_write_from_another_process_refreshes_the_pages(sent, monkeypatch):
+    from maxxing import bus
+    seen = []
+    monkeypatch.setattr(bus, "invalidate", lambda *t: seen.append(t))
+    team.notice_outside_writes()
+    team.create_chat("dm", [teampeer.pid(LEA)])         # a write of this process: no second refetch
+    seen.clear()
+    team.notice_outside_writes()
+    assert seen == []
+    doc = team._load()
+    doc["chats"][0]["name"] = "x"
+    config.write_json(team._path(), doc)                # what `maxxing team send` does in its own process
+    team.notice_outside_writes()
+    assert seen == [("team",)]

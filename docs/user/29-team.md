@@ -80,3 +80,25 @@ ever sent to a session without that click.
 Right click (a long press on a phone) on any message of a session, yours or Claude's: **Send to** lists your friends
 and groups. The text is shown first and you can edit it; a private chat is created if you had none. Only the text
 goes, not the message's attachments.
+
+## From a session, by asking Claude
+
+In any session, ask Claude: "send FEU the summary above on Team", "tell the Side project group the site is online",
+"send Léa the PDF". Claude runs the command:
+
+```
+maxxing team send Lea "The site is online: https://shop.example.com"
+maxxing team send "Side project" "Here is the report" --file /root/maxxing/projects/acme/topics/blog/report.pdf
+maxxing team list
+```
+
+- **Who**: the name of a contact or a group, as shown in Team. Case and accents do not matter and a unique beginning
+  is enough (`lea`, `side`); a contact's address works too. A private chat is created if you had none. If two names
+  match, the command lists them and sends nothing.
+- **What**: the message goes out in your name, exactly like one you typed in Team (Claude is not shown as the author).
+  `--file` attaches a file of the server (repeat it for several, 10 at most); `-` as the message reads it from the
+  standard input (a long text from a script).
+- `maxxing team list` shows the contacts and groups you can write to.
+- It only sends: no command reads your chats, so what people write still never reaches Claude unless you send it to a
+  session yourself. Agents in the sandbox cannot use it; a free agent can, like a session.
+

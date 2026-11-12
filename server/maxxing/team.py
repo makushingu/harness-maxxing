@@ -26,6 +26,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlsplit
 
 import hashlib
 
@@ -44,7 +45,7 @@ COLORS = ("clay", "blue", "violet", "green", "amber", "rose", "teal", "zinc")
 _ID = re.compile(r"^[a-z]_[0-9a-f]{8,32}\Z")         # message and poll option ids (the same on every server)
 REACTIONS = ("👍", "❤️", "😂", "🎉", "🤔", "👀")
 
-_lock = threading.RLock()
+_lock = config.ProcessLock("team")          # team.json: also written by `maxxing team send` in other processes
 _slots = threading.BoundedSemaphore(4)          # files of the others: 4 downloads at a time
 _queued = [0]                                   # downloads started or waiting (at most QUEUE_MAX, the others fail)
 QUEUE_MAX = 100
@@ -88,11 +89,7 @@ _peeked: tuple[tuple | None, dict] | None = None
 def _peek() -> dict:
     """team.json for reading only (never change what it returns): parsed again only when the file changed."""
     global _peeked
-    try:
-        st = _path().stat()
-        sig = (st.st_ino, st.st_mtime_ns, st.st_size)
-    except OSError:
-        sig = None
+    sig = _sig()
     cached = _peeked
     if sig is None or cached is None or cached[0] != sig:
         cached = (sig, _load())
@@ -100,11 +97,35 @@ def _peek() -> dict:
     return cached[1]
 
 
+def _sig() -> tuple | None:
+    try:
+        st = _path().stat()
+        return (st.st_ino, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+
+
+_UNSEEN = ("unseen",)
+_written: list[tuple | None] = [_UNSEEN]        # team.json as this process last wrote or noticed it
+
+
 def _save(doc: dict) -> None:
     global _peeked
     config.write_json(_path(), doc)
     _peeked = None
+    _written[0] = _sig()
     bus.invalidate("team")
+
+
+def notice_outside_writes() -> None:
+    """Server side (the outbox worker, every few seconds): team.json written by another process (`maxxing team send`)
+    -> the open pages refetch."""
+    sig = _sig()
+    if sig != _written[0]:
+        first = _written[0] is _UNSEEN
+        _written[0] = sig
+        if not first:
+            bus.invalidate("team")
 
 
 def _finite(x: object, default: float) -> float:
@@ -671,6 +692,87 @@ def summarize(cid: str, ids: list[str] | None = None, since: float | None = None
                  summary={"from": part[0]["at"], "to": part[-1]["at"], "count": len(part),
                           "cost_usd": round(float(data.get("total_cost_usd") or 0), 4),
                           "duration_ms": int(data.get("duration_ms") or (time.time() - t0) * 1000)})
+
+
+# ---- from a command (`maxxing team`, see cmd_team.py) ---------------------------------------------------------
+def _fold(name: str) -> str:
+    """"Léa " and "lea" are the same name for a recipient."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", str(name or "")) if not unicodedata.combining(c)).casefold().strip()
+
+
+def recipients() -> list[dict]:
+    """Who a command can write to: the contacts (a private chat, created on the first message) and the groups the
+    user is still in. [{kind: dm|group, name, id: person id or chat id, chat?, address?, status?, members?}]"""
+    doc = _peek()
+    people = teampeer.people()
+    dms = {c["members"][0]: c["id"] for c in doc["chats"] if c["kind"] == "dm" and c.get("members")}
+    out = [{"kind": "dm", "name": p["name"], "id": k, "chat": dms.get(k), "address": p["address"], "status": p["status"]}
+           for k, p in people.items() if p.get("contact")]
+    for c in doc["chats"]:
+        if c["kind"] == "group" and not c.get("left"):
+            names = [(people.get(m) or {}).get("name") or m for m in c["members"]]
+            out.append({"kind": "group", "name": c.get("name") or ", ".join(names), "id": c["id"], "chat": c["id"],
+                        "members": names})
+    return sorted(out, key=lambda r: (r["kind"] != "dm", _fold(r["name"])))
+
+
+def find_recipient(to: str) -> dict:
+    """A contact or a group by its name (case and accents ignored, a unique beginning is enough), a contact by its
+    address or server name, a chat by its id."""
+    want = _fold(to)
+    if not want:
+        raise TeamError(400, "no_recipient", "Say who the message is for")
+    rows = recipients()
+    exact = [r for r in rows if want in (_fold(r["name"]), r["id"], _fold(r.get("chat") or ""))
+             or (r.get("address") and want in (_fold(r["address"]), _fold(urlsplit(r["address"]).netloc),
+                                               _fold(urlsplit(r["address"]).hostname or "")))]
+    found = exact or [r for r in rows if _fold(r["name"]).startswith(want)]
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        known = ", ".join(r["name"] for r in rows) or "none yet (Team -> Connections)"
+        raise TeamError(404, "unknown_recipient", f"No contact or group called {to!r}. Contacts and groups: {known}")
+    raise TeamError(409, "ambiguous", f"{to!r} is ambiguous: " + "; ".join(
+        f"{r['name']} ({'group ' + r['id'] if r['kind'] == 'group' else r['address']})" for r in found))
+
+
+def _attach(paths: list[str]) -> list[dict]:
+    """Files of the server, copied into the team folder (only files there are sent)."""
+    import shutil
+    out = []
+    for raw in (paths or [])[:FILES_MAX]:
+        src = Path(raw).expanduser()
+        if not src.is_file():
+            raise TeamError(400, "bad_file", f"No such file: {raw}")
+        dest = files_dir() / _safe_name(src.name)
+        n = 1
+        while dest.exists():
+            dest = dest.with_name(f"{Path(_safe_name(src.name)).stem}-{n}{src.suffix}")
+            n += 1
+        shutil.copyfile(src, dest)
+        out.append({"path": str(dest)})
+    return out
+
+
+def send_to(to: str, text: str, files: list[str] | None = None) -> dict:
+    """`maxxing team send`: the message goes out as the user's, exactly like one typed on the Team page."""
+    if not config.load_config().get("team_page"):
+        raise TeamError(409, "team_off", "Team is off: Settings -> Features -> Team")
+    if len(files or []) > FILES_MAX:
+        raise TeamError(400, "too_many_files", f"At most {FILES_MAX} files per message")
+    r = find_recipient(to)
+    if not (text or "").strip() and not files:
+        raise TeamError(400, "empty", "Empty message")
+    cid = r.get("chat") or create_chat("dm", [r["id"]])["id"]
+    attached = _attach(files or [])
+    try:
+        msg = send(cid, text, files=attached)
+    except BaseException:
+        for f in attached:
+            Path(f["path"]).unlink(missing_ok=True)
+        raise
+    return {"to": r["name"], "kind": r["kind"], "chat": cid, "message": msg}
 
 
 # ---- events from the other servers ---------------------------------------------------------------------------

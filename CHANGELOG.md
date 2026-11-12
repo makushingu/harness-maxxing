@@ -11,6 +11,9 @@ New:
   description. Arrows to choose, Tab to complete, Enter to run.
 - **Intelligence of a session.** The model menu of a session now also sets how much Claude thinks: Auto, Low,
   Medium, High, Extra high or Max (Claude Code's effort level). It is kept on the session and shown next to the model.
+- **Team from a session.** Ask Claude "send Léa the summary above on Team" or "tell the Side project group the
+  site is online": it runs `maxxing team send <name> "<message>"` (with `--file` for a file), and the message goes
+  out in your name as if typed in Team. `maxxing team list` shows who you can write to. Nothing reads your chats.
 - **Voice: choose the microphone.** Settings -> Voice has a **Microphone** line: pick the microphone that records
   on this device (headset, USB microphone, the built-in one) instead of the one the browser picks. The choice stays
   in this browser; if that microphone is unplugged, the default one records and the choice comes back with it.

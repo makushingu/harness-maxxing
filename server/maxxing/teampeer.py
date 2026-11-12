@@ -51,7 +51,7 @@ OUTBOX_DAYS = 7
 HELLO_FAILS = 5                                            # wrong invitations per IP and hour, then refused
 INBOX_PER_MIN = 240                                        # requests per sender IP and minute
 
-_lock = threading.RLock()
+_lock = config.ProcessLock("team-peer")       # also written by `maxxing team send` (outbox, shared files)
 _STARTED = time.time()                                     # nonces live in memory: nothing signed before this is taken
 _nonces: dict[str, float] = {}
 _fails: dict[str, list[float]] = {}
@@ -860,6 +860,8 @@ def _run_outbox() -> None:
         _wake.wait(5)
         _wake.clear()
         try:
+            from . import team
+            team.notice_outside_writes()
             if readiness()["ok"]:
                 _outbox_round()
         except Exception:                      # never let the worker die
