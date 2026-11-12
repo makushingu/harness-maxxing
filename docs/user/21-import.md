@@ -4,7 +4,7 @@ section: Getting started
 # Import from another agent
 
 Coming from Hermes, Claude Code, OpenClaw or any other agent? Bring what it knows about you -
-projects, topics, memory, skills, to-dos, scheduled jobs - in a few minutes. Onboarding step 3, or
+projects, topics, memory, skills, to-dos, scheduled jobs - in a few minutes. Onboarding step 4, or
 **Settings -> Import** at any time.
 
 ## 1. Ask your old agent for a zip
@@ -21,7 +21,9 @@ harness-maxxing-export/
   tasks.md, crons.md, SECRETS.md                 to-dos, recurring jobs, names of the keys you use
 ```
 
-The prompt tells it never to write a key or a password - only their names in `SECRETS.md`.
+The prompt tells it where to look (Hermes: `~/.hermes/` with its memories, skills and cron jobs; OpenClaw:
+its workspace, its skills and its scheduled jobs), to write in your language, to leave out the skills that
+came with it, and never to write a key or a password - only their names in `SECRETS.md`.
 
 ## 2. Drop the zip
 
@@ -33,6 +35,8 @@ files kept aside for Claude, and files refused. Press **Import**.
   saved next to it as `<name> (imported).<ext>`; an existing skill is kept and the imported one is
   saved as `<name>-imported`.
 - Folder names are turned into valid names (`Coffee Shop` -> `coffee-shop`); two folders (projects, topics or skills) that would get the same name are kept apart (`my-blog`, `my-blog-2`, skipping a `my-blog-2` that already exists), and a name with no Latin letter becomes `imported`, `imported-2`...
+- A zip made one folder too high (`out/harness-maxxing-export/...`) is read the same way, and skills sorted
+  in categories (`skills/<category>/<skill>/SKILL.md`, as Hermes does) are imported one by one.
 - **Files containing a key or a token are refused** (reported by type, never by value). Add your
   keys in Settings -> Keys. Files up to 5 MB are checked, 50 MB of them per archive at most: past that, the
   remaining ones are skipped and listed (they could not be checked).
@@ -60,6 +64,10 @@ maxxing import --prompt openclaw          # the prompt for your old agent
 maxxing import export.zip --dry-run       # what would be imported
 maxxing import export.zip                 # import (same rules as the UI)
 ```
+
+The old agent runs on this server? No download needed: give its zip by path
+(`maxxing import /root/harness-maxxing-export.zip`). After the import the command prints the last step: a
+message to send in a session of `general/inbox`, the same one **Let Harness finish the import** sends.
 
 ## Other imports
 

@@ -105,7 +105,7 @@ See [License](license).
 |---|---|
 | `maxxing import --prompt [hermes\|claude-code\|openclaw\|other]` | print the prompt to give your old agent |
 | `maxxing import ZIP --dry-run [--json]` | show what would be imported |
-| `maxxing import ZIP [--json]` | import it (nothing overwritten; see [Import](import)) |
+| `maxxing import ZIP [--json]` | import it (nothing overwritten; see [Import](import)), then print the message that lets a session finish (tasks, scheduled jobs, keys) |
 
 ## maxxing custom
 

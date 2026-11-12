@@ -5,7 +5,7 @@ The user copies PROMPT (or `prompt(agent)`) into their old agent, which builds t
     memory.md                                   who the user is, preferences, global facts
     projects/<project>/CLAUDE.md, memory.md     what the project is / its facts and decisions
     projects/<project>/topics/<topic>/CLAUDE.md, memory.md, any useful files
-    skills/<name>/SKILL.md (+ files)            reusable procedures
+    skills/<name>/SKILL.md (+ files)            reusable procedures (also read in skills/<category>/<name>/)
     tasks.md, crons.md, SECRETS.md, anything else   kept aside in imports/<stamp>/ for Claude
 
 Flow: `inspect(zip)` -> preview (what will be created / merged / skipped) -> `apply(zip)`.
@@ -46,13 +46,17 @@ UPLOAD_TTL = 24 * 3600
 
 AGENTS = ("hermes", "claude-code", "openclaw", "other")
 HINTS = {
-    "hermes": "You are Hermes Agent: your memory lives in ~/.hermes/ (MEMORY.md, USER.md, memories/, "
-              "skills/, sessions, cron jobs). Read all of it.",
+    "hermes": "You are Hermes Agent: everything is in ~/.hermes/ (or ~/.hermes/profiles/<name>/ when I use a "
+              "profile). Read SOUL.md, memories/MEMORY.md and memories/USER.md, the skills written for me in "
+              "skills/, my scheduled jobs (`hermes cron list`, cron/jobs.json) and what our past sessions "
+              "(state.db, sessions/) say about my projects. Never copy .env or auth.json.",
     "claude-code": "You are Claude Code: read every CLAUDE.md and memory file you use (~/.claude/CLAUDE.md, "
                    "the project folders, ~/.claude/projects/*/memory/), your skills (~/.claude/skills/, "
                    ".claude/skills/) and anything the user keeps notes in.",
     "openclaw": "You are OpenClaw: read your workspace (by default ~/.openclaw/workspace/: AGENTS.md, SOUL.md, "
-                "USER.md, MEMORY.md, memory/*.md, skills/) and your scheduled jobs.",
+                "USER.md, IDENTITY.md, TOOLS.md, HEARTBEAT.md, MEMORY.md, memory/*.md, skills/), the skills I "
+                "added in ~/.openclaw/skills/ and my scheduled jobs (they are not in the workspace: list them "
+                "with your cron tool or `openclaw cron list`). Never copy openclaw.json or credentials/.",
     "other": "Read every place where you keep memory, notes, instructions, skills and scheduled jobs.",
 }
 
@@ -78,11 +82,15 @@ Rules:
   subject inside it (blog, seo, orders, design...). Folder names: lowercase, digits and dashes only.
 - Put each fact in the most specific place (topic > project > root). Concise, factual, dated when useful
   ("2026-05-02: switched to Stripe"). Keep what is still true; drop chit-chat and obsolete details.
+- Write in the language I use with you. Only the file and folder names above stay as they are.
+- Skills: only the procedures written for me or for my work, one folder per skill directly under `skills/` -
+  not the stock skills that came with you.
 - NEVER write a secret value (API key, token, password, cookie, private key) anywhere - only their names
   in SECRETS.md. Files containing secrets will be refused by the import.
 - Leave out huge data, caches, media and generated files (keep the zip under 50 MB).
-- Then zip it: `cd <parent> && zip -r harness-maxxing-export.zip harness-maxxing-export` and give me the
-  file (or tell me its path). Finish with a short summary: how many projects, topics and skills.
+- Then zip it: `cd <parent> && zip -r harness-maxxing-export.zip harness-maxxing-export` (no `zip` command:
+  `python3 -m zipfile -c harness-maxxing-export.zip harness-maxxing-export`) and give me the file, or its
+  full path. Finish with a short summary: how many projects, topics and skills.
 """
 
 
@@ -175,9 +183,12 @@ def _entries(zf: zipfile.ZipFile) -> tuple[list[tuple[zipfile.ZipInfo, PurePosix
             skipped.append({"file": i.filename, "reason": "larger than 100 MB"})
             continue
         ok.append((i, p))
-    # an export folder at the top ("harness-maxxing-export/...") is stripped
-    tops = {p.parts[0] for _, p in ok if len(p.parts) > 1} | {"" for _, p in ok if len(p.parts) == 1}
-    if len(tops) == 1 and "" not in tops and next(iter(tops)) not in ("projects", "skills"):
+    # the export folder at the top ("harness-maxxing-export/...") is stripped, and the folders above it when
+    # the zip was made from higher up ("out/harness-maxxing-export/...")
+    while ok:
+        tops = {p.parts[0] for _, p in ok if len(p.parts) > 1} | {"" for _, p in ok if len(p.parts) == 1}
+        if len(tops) != 1 or "" in tops or next(iter(tops)) in ("projects", "skills"):
+            break
         ok = [(i, PurePosixPath(*p.parts[1:])) for i, p in ok]
     return ok, skipped
 
@@ -196,13 +207,14 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     secrets_found: list[dict] = []
     renamed: list[dict] = []
 
-    def unique(raw: str, taken: dict[str, dict], on_disk: Path) -> str:
+    def unique(raw: str, taken: dict[str, dict], on_disk: Path, source: str = "") -> str:
         """Each source folder gets its own name: "Блог" and "Продажи" (or "My Blog" and "my-blog") both slug
         to one name, and the second CLAUDE.md would overwrite the first. Only the plain name merges into a folder
-        already in `on_disk`: a "-2" picked here never lands in an unrelated existing one."""
+        already in `on_disk`: a "-2" picked here never lands in an unrelated existing one. `source` tells two
+        folders of the same name apart (skills in two categories)."""
         base = name = slug(raw)
         n = 2
-        while ((name in taken and taken[name]["source"] != raw)
+        while ((name in taken and taken[name]["source"] != (source or raw))
                or (name != base and name not in taken and (on_disk / name).exists())):
             name = f"{base[:44].rstrip('-')}-{n}"
             n += 1
@@ -215,6 +227,18 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
             if name != raw:
                 renamed.append({"from": raw, "to": name})
         return projects[name]
+
+    # a skill is the folder that holds SKILL.md: Hermes sorts its skills in categories (skills/<category>/<name>/)
+    skill_roots = {p.parts[1:-1] for _, p in entries
+                   if p.parts[0] == "skills" and len(p.parts) >= 3 and p.name == "SKILL.md"}
+
+    def skill_root(parts: tuple[str, ...]) -> tuple[str, ...] | None:
+        """The skill folder of this file (path under skills/), None when it is in a category but in no skill."""
+        inside = parts[1:-1]
+        for n in range(1, len(inside) + 1):
+            if inside[:n] in skill_roots:
+                return inside[:n]
+        return None if any(r[0] == parts[1] for r in skill_roots) else inside[:1]
 
     for info, p in entries:
         parts = p.parts
@@ -238,12 +262,13 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
             else:
                 dest = PurePosixPath("projects", pr["name"], *parts[2:])
                 data_kind = "project"
-        elif parts[0] == "skills" and len(parts) >= 3:
-            sname = unique(parts[1], skills, root / ".claude" / "skills")
-            skills.setdefault(sname, {"source": parts[1]})
-            dest = PurePosixPath(".claude", "skills", sname, *parts[2:])
+        elif parts[0] == "skills" and len(parts) >= 3 and (sroot := skill_root(parts)):
+            sname = unique(sroot[-1], skills, root / ".claude" / "skills", "/".join(sroot))
+            skills.setdefault(sname, {"source": "/".join(sroot)})
+            dest = PurePosixPath(".claude", "skills", sname, *parts[1 + len(sroot):])
             data_kind = "skill"
-        elif len(parts) == 1 and parts[0] in MEMORY_NAMES:
+        elif parts[-1] in MEMORY_NAMES and (len(parts) == 1 or parts[:-1] == ("memories",)):
+            # at the root, or in memories/ (where Hermes keeps MEMORY.md and USER.md)
             dest = PurePosixPath("memory.md")
             data_kind = "root_memory"
         else:
@@ -438,6 +463,11 @@ def _apply(path: Path) -> dict[str, Any]:
                 if dest.name == "CLAUDE.md":
                     body = text if "@memory.md" in text else text.rstrip() + "\n\n@memory.md\n"
                     if fresh:
+                        # the text under the first "# " heading is the description shown in the app: without a
+                        # heading in the imported file, the generated one ("# Topic blog") stays above it
+                        head = dest.read_text(errors="replace").splitlines()[:1]
+                        if head and head[0].startswith("# ") and not re.search(r"^# ", text, re.M):
+                            body = head[0] + "\n\n" + body.lstrip()
                         dest.write_text(body)
                     else:
                         dest.write_text(dest.read_text(errors="replace").rstrip() + _section("Imported instructions", text.replace("@memory.md", "")))
