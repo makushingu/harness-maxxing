@@ -45,7 +45,7 @@ export function PageHeader({
       {/* a narrow phone with several actions: no room left for the title - it goes, rather than showing "Tâ…" */}
       <div className="@container flex min-w-0 flex-1 flex-col justify-center py-2">
         <h1 className="truncate text-[15px] leading-tight font-semibold tracking-tight md:text-base @max-[3.25rem]:invisible">{title}</h1>
-        {description && <p className="truncate text-[13px] text-muted-foreground max-md:hidden">{description}</p>}
+        {description && <div className="truncate text-[13px] text-muted-foreground max-md:hidden">{description}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {actions}

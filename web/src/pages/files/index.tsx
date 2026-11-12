@@ -3,10 +3,10 @@
 import * as React from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ChevronRight, FileQuestion, Eye, EyeOff, File as FileIcon, FilePlus, Folder, FolderPlus, FolderX, Home, LayoutGrid, MousePointerClick, Plus, Search, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronRight, FileQuestion, Eye, EyeOff, FilePlus, Folder, FolderPlus, FolderX, Home, LayoutGrid, MousePointerClick, Plus, Upload } from 'lucide-react'
 import type { FileEntry, FileList } from '@/lib/types'
 import { api, errorMessage, isApiError } from '@/lib/api'
-import { seedFileKind, useFileKind, useFileList, useFileSearch } from '@/lib/queries/files'
+import { seedFileKind, useFileKind, useFileList } from '@/lib/queries/files'
 import { qk } from '@/lib/queries/keys'
 import { cn, copyText } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -25,20 +25,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
-  Input,
-  Kbd,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
   Sensitive,
   Skeleton,
-  Spinner,
   toast,
   useMask,
 } from '@/components/ui'
-import { basename, crumbs, dirname, iconFor, isInside, kindOf, resolvePath } from '@/features/files/kinds'
+import { basename, crumbs, dirname, iconFor, isInside, resolvePath } from '@/features/files/kinds'
 import { useRemoveEntries } from '@/features/files/selection'
-import { Listing, canDropInto, droppedPaths, fileDrag, hasPathDrag, type EntryActions } from './Listing'
+import { Listing, ListTools, canDropInto, droppedPaths, fileDrag, hasPathDrag, type EntryActions } from './Listing'
 import { FileView, type FileViewActions } from './FileView'
 import { NameDialog, type NameDialogState } from './dialogs'
 import { sortEntries, useFilePrefs, useTopicFor, useUploads } from './state'
@@ -314,10 +308,13 @@ export default function FilesPage() {
   const segs = cwd && root ? crumbs(file || cwd, root) : []
   const upTarget = mobile ? (file ? dirname(file) : cwd && root && cwd !== root ? dirname(cwd) : null) : null
 
+  // the file or folder open is the page's title, its path (clickable, a drop target) under it on a computer
   let title: React.ReactNode
   if (!root) title = <Skeleton className="h-4 w-48" />
-  else if (mobile) title = <Sensitive length={10}>{segs.length > 1 ? segs[segs.length - 1].name : basename(root) || '/'}</Sensitive>
-  else title = <Breadcrumb segs={segs} onGo={(p) => go(p, 'dir')} onDropPath={(from, dir) => void moveTo(from, dir)} />
+  else title = segs.length > 1 ? <Sensitive length={10}>{segs[segs.length - 1].name}</Sensitive> : <RootLabel name={basename(root) || '/'} />
+  const trail = root && !mobile && segs.length > 1 ? <Breadcrumb trail segs={segs.slice(0, -1)} onGo={(p) => go(p, 'dir')} onDropPath={(from, dir) => void moveTo(from, dir)} /> : undefined
+  const [filter, setFilter] = React.useState('')
+  React.useEffect(() => setFilter(''), [cwd])
 
   const kindError = kindQ.isError ? kindQ.error : null
   // the folder's list in the second-level sidebar (PageList; touch: the left drawer), the file in the page
@@ -336,6 +333,7 @@ export default function FilesPage() {
       onClearUploads={uploads.clear}
       onCancelUploads={uploads.cancelAll}
       onUp={cwd && root && cwd !== root ? () => go(dirname(cwd), 'dir') : undefined}
+      filter={filter}
     />
   )
 
@@ -343,6 +341,7 @@ export default function FilesPage() {
     <div className="flex min-h-0 flex-1 flex-col" data-testid="files-page">
       <PageHeader
         title={title}
+        description={trail}
         sensitiveTitle={t('nav.files')}
         leading={
           upTarget ? (
@@ -353,7 +352,6 @@ export default function FilesPage() {
         }
         actions={
           <>
-            {!mobile && <HeaderSearch onOpen={go} root={root} />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size={mobile ? 'icon' : 'sm'} variant={mobile ? 'ghost' : 'default'} disabled={!cwd} aria-label={t('files.new')}>
@@ -404,7 +402,7 @@ export default function FilesPage() {
         />
       ) : (
         <div className="flex min-h-0 flex-1">
-          <PageList id="files" label={t('nav.files')}>
+          <PageList id="files" label={t('nav.files')} search={{ value: filter, onChange: setFilter, placeholder: t('files.filter') }} actions={<ListTools />}>
             {listing}
           </PageList>
           <section className="flex min-w-0 flex-1 flex-col" aria-label={t('files.viewer')}>
@@ -442,10 +440,6 @@ export default function FilesPage() {
                       <Upload />
                       {t('files.upload')}
                     </Button>
-                    <Button variant="ghost" onClick={newFile}>
-                      <FilePlus />
-                      {t('files.newFile')}
-                    </Button>
                   </>
                 }
               />
@@ -461,7 +455,7 @@ export default function FilesPage() {
 }
 
 /* ------------------------------------------------------------------ breadcrumb */
-function Breadcrumb({ segs, onGo, onDropPath }: { segs: { name: string; path: string }[]; onGo: (p: string) => void; onDropPath: (from: string[], dir: string) => void }) {
+function Breadcrumb({ segs, onGo, onDropPath, trail }: { segs: { name: string; path: string }[]; onGo: (p: string) => void; onDropPath: (from: string[], dir: string) => void; /** under the title: small, every folder a link */ trail?: boolean }) {
   const t = useT()
   const [over, setOver] = React.useState<string | null>(null)
   const drop = (dir: string) => ({
@@ -486,9 +480,9 @@ function Breadcrumb({ segs, onGo, onDropPath }: { segs: { name: string; path: st
   const hidden = segs.length > 5 ? segs.slice(1, -3) : []
   return (
     <nav aria-label={t('files.breadcrumb')} className="min-w-0">
-      <ol className="flex min-w-0 items-center gap-0.5 text-[15px] md:text-base">
+      <ol className={cn('flex min-w-0 items-center gap-0.5', trail ? '-ml-1.5 text-[13px]' : 'text-[15px] md:text-base')}>
         {collapsed.map((s, i) => {
-          const last = i === collapsed.length - 1
+          const last = !trail && i === collapsed.length - 1
           return (
             <li key={s ? s.path : 'more'} className={cn('flex min-w-0 items-center gap-0.5', last ? 'shrink' : 'shrink-0')}>
               {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />}
@@ -518,7 +512,7 @@ function Breadcrumb({ segs, onGo, onDropPath }: { segs: { name: string; path: st
                   onClick={() => onGo(s.path)}
                   {...drop(s.path)}
                   className={cn(
-                    'max-w-48 truncate rounded-md px-1.5 py-0.5 font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                    'max-w-48 truncate rounded-md px-1.5 py-0 font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                     over === s.path && 'bg-primary/15 text-foreground ring-2 ring-primary',
                   )}
                 >
@@ -541,108 +535,3 @@ function RootLabel({ name }: { name: string }) {
     </span>
   )
 }
-
-/* ------------------------------------------------------------------ quick search (header) */
-function HeaderSearch({ onOpen, root }: { onOpen: (p: string, kind: 'file' | 'dir') => void; root: string | null }) {
-  const t = useT()
-  const [q, setQ] = React.useState('')
-  const [open, setOpen] = React.useState(false)
-  const [dq, setDq] = React.useState('')
-  const [active, setActive] = React.useState(0)
-  const input = React.useRef<HTMLInputElement>(null)
-  React.useEffect(() => {
-    const id = setTimeout(() => setDq(q.trim()), 180)
-    return () => clearTimeout(id)
-  }, [q])
-  const res = useFileSearch(dq)
-  // /api/files/search scans the workspace: drop hits the browser could not open (outside files_root).
-  const hits = dq.length >= 2 ? (res.data || []).filter((h) => !root || isInside(h.path, root)) : []
-  React.useEffect(() => setActive(0), [dq])
-  useHotkey('/', () => input.current?.focus())
-  const pick = (i: number) => {
-    const h = hits[i]
-    if (!h) return
-    setOpen(false)
-    setQ('')
-    input.current?.blur()
-    onOpen(h.path, h.type)
-  }
-  return (
-    <Popover open={open && dq.length >= 2} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <div className="relative w-56 lg:w-72">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={input}
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value)
-              setOpen(true)
-            }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                setActive((a) => Math.min(hits.length - 1, a + 1))
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                setActive((a) => Math.max(0, a - 1))
-              } else if (e.key === 'Enter') {
-                e.preventDefault()
-                pick(active)
-              } else if (e.key === 'Escape') {
-                setOpen(false)
-              }
-            }}
-            placeholder={t('files.searchPlaceholder')}
-            aria-label={t('files.searchPlaceholder')}
-            className="h-8 pr-8 pl-8"
-            role="combobox"
-            aria-expanded={open && dq.length >= 2}
-            aria-controls="files-search-results"
-            aria-autocomplete="list"
-          />
-          <Kbd className="absolute top-1/2 right-2 -translate-y-1/2">/</Kbd>
-        </div>
-      </PopoverAnchor>
-      <PopoverContent align="end" className="w-[min(28rem,calc(100vw-16px))] p-1.5" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.target === input.current && e.preventDefault()}>
-        <div id="files-search-results" role="listbox" aria-label={t('files.searchResults')} className="max-h-80 overflow-y-auto">
-          {res.isFetching && !hits.length ? (
-            <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-muted-foreground">
-              <Spinner className="size-3.5" />
-              {t('palette.searching')}
-            </div>
-          ) : !hits.length ? (
-            <p className="px-2.5 py-2 text-sm text-muted-foreground">{t('common.noResults')}</p>
-          ) : (
-            hits.map((h, i) => {
-              const Icon = h.type === 'dir' ? Folder : kindOf(h.name) === 'binary' ? FileIcon : iconFor('file', h.name)
-              return (
-                <button
-                  key={h.path}
-                  type="button"
-                  role="option"
-                  aria-selected={i === active}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => pick(i)}
-                  className={cn('flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none', i === active && 'bg-accent')}
-                >
-                  <Icon className={cn('size-4 shrink-0', h.type === 'dir' ? 'text-primary' : 'text-muted-foreground')} />
-                  <span className="grid min-w-0 flex-1">
-                    <span className="truncate text-sm">
-                      <Sensitive length={8}>{h.name}</Sensitive>
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      <Sensitive length={14}>{dirname(h.path)}</Sensitive>
-                    </span>
-                  </span>
-                </button>
-              )
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-}
-

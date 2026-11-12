@@ -179,7 +179,7 @@ export function SecondBar({ left }: { left: number }) {
  *  of the touch head opens the search of the app instead, Ctrl K on a desktop). */
 export type ListSearch = { value: string; onChange: (v: string) => void; placeholder?: string }
 
-export function PageList({ id, entry, label, icon: Icon, inline, search, children }: {
+export function PageList({ id, entry, label, icon: Icon, inline, search, actions, children }: {
   id: string
   /** the main sidebar entry that shows the list on hover when closed, when it is not the page's own (`id`) */
   entry?: string
@@ -188,6 +188,8 @@ export function PageList({ id, entry, label, icon: Icon, inline, search, childre
   /** touch layout: shown in the page, in place (no drawer to open, no ☰) */
   inline?: boolean
   search?: ListSearch
+  /** small buttons of the list itself (its view, its sort), in its head */
+  actions?: React.ReactNode
   children: React.ReactNode
 }) {
   const t = useT()
@@ -213,6 +215,7 @@ export function PageList({ id, entry, label, icon: Icon, inline, search, childre
   return createPortal(
     <>
       <ListHead label={label} icon={Icon} search={search}>
+        {actions}
         {!touch && <Tooltip content={toggle}>
           <Button
             variant="ghost"

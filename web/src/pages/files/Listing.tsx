@@ -40,7 +40,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
-  Input,
   ProgressBar,
   Sensitive,
   Skeleton,
@@ -125,6 +124,7 @@ export function Listing({
   onClearUploads,
   onCancelUploads,
   onUp,
+  filter,
   className,
 }: {
   list: FileList | undefined
@@ -139,11 +139,12 @@ export function Listing({
   onClearUploads: () => void
   onCancelUploads: () => void
   onUp?: () => void
+  /** the filter of the folder (the 🔍 of the list's head, files/index.tsx) */
+  filter: string
   className?: string
 }) {
   const t = useT()
   const prefs = useFilePrefs()
-  const [filter, setFilter] = React.useState('')
   const [drag, setDrag] = React.useState(false)
   const [dropDir, setDropDir] = React.useState<string | null>(null)
   const dragDepth = React.useRef(0)
@@ -153,7 +154,6 @@ export function Listing({
   // Reset the filter and scroll when the folder changes.
   const dirPath = list?.path
   React.useEffect(() => {
-    setFilter('')
     scroller.current?.scrollTo({ top: 0 })
   }, [dirPath])
 
@@ -224,7 +224,6 @@ export function Listing({
     }
   }
 
-  const sortLabel: Record<SortKey, string> = { name: t('files.sortName'), mtime: t('files.sortDate'), size: t('files.sortSize') }
 
   return (
     <div
@@ -281,59 +280,6 @@ export function Listing({
       }}
       data-testid="files-listing"
     >
-      {/* toolbar */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setFilter('')
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                scroller.current?.querySelector<HTMLElement>('[data-row]')?.focus()
-              }
-            }}
-            placeholder={t('files.filter')}
-            aria-label={t('files.filter')}
-            className="h-8 pl-8 max-md:h-10"
-            type="search"
-          />
-        </div>
-        <Tooltip content={prefs.view === 'list' ? t('files.gridView') : t('files.listView')}>
-          <Button variant="ghost" size="icon-sm" onClick={() => prefs.set({ view: prefs.view === 'list' ? 'grid' : 'list' })} aria-label={prefs.view === 'list' ? t('files.gridView') : t('files.listView')}>
-            {prefs.view === 'list' ? <LayoutGrid /> : <List />}
-          </Button>
-        </Tooltip>
-        <DropdownMenu>
-          <Tooltip content={t('files.sortAndView')}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t('files.sortAndView')}>
-                <ArrowUpDown />
-              </Button>
-            </DropdownMenuTrigger>
-          </Tooltip>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>{t('files.sortBy')}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={prefs.sort} onValueChange={(v) => prefs.set({ sort: v as SortKey })}>
-              {(['name', 'mtime', 'size'] as const).map((k) => (
-                <DropdownMenuRadioItem key={k} value={k} onSelect={(e) => e.preventDefault()}>
-                  {sortLabel[k]}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem checked={prefs.desc} onCheckedChange={(v) => prefs.set({ desc: !!v })} onSelect={(e) => e.preventDefault()}>
-              {t('files.descending')}
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem checked={prefs.hidden} onCheckedChange={(v) => prefs.set({ hidden: !!v })} onSelect={(e) => e.preventDefault()}>
-              {t('files.showHidden')}
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       <SelectionBar entries={picked} actions={selActions} total={entries.length} onSelectAll={sel.selectAll} onClear={sel.clear} />
 
       {/* body */}
@@ -635,5 +581,47 @@ function UploadPanel({ items, onClear, onCancel }: { items: UploadItem[]; onClea
         ))}
       </ul>
     </div>
+  )
+}
+
+/** The view (list / grid) and the sort of the folder's list: in the head of the list (PageList actions). */
+export function ListTools() {
+  const t = useT()
+  const prefs = useFilePrefs()
+  const sortLabel = { name: t('files.sortName'), mtime: t('files.sortDate'), size: t('files.sortSize') }
+  return (
+    <>
+        <Tooltip content={prefs.view === 'list' ? t('files.gridView') : t('files.listView')}>
+        <Button variant="ghost" size="icon-sm" onClick={() => prefs.set({ view: prefs.view === 'list' ? 'grid' : 'list' })} aria-label={prefs.view === 'list' ? t('files.gridView') : t('files.listView')}>
+          {prefs.view === 'list' ? <LayoutGrid /> : <List />}
+        </Button>
+      </Tooltip>
+      <DropdownMenu>
+        <Tooltip content={t('files.sortAndView')}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={t('files.sortAndView')}>
+              <ArrowUpDown />
+            </Button>
+          </DropdownMenuTrigger>
+        </Tooltip>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuLabel>{t('files.sortBy')}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={prefs.sort} onValueChange={(v) => prefs.set({ sort: v as SortKey })}>
+            {(['name', 'mtime', 'size'] as const).map((k) => (
+              <DropdownMenuRadioItem key={k} value={k} onSelect={(e) => e.preventDefault()}>
+                {sortLabel[k]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem checked={prefs.desc} onCheckedChange={(v) => prefs.set({ desc: !!v })} onSelect={(e) => e.preventDefault()}>
+            {t('files.descending')}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem checked={prefs.hidden} onCheckedChange={(v) => prefs.set({ hidden: !!v })} onSelect={(e) => e.preventDefault()}>
+            {t('files.showHidden')}
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   )
 }
