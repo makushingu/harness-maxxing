@@ -81,6 +81,8 @@ import {
   TooltipRoot,
   TooltipTrigger,
   useMask,
+  type ContextMenuHandlers,
+  useContextMenu,
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { TaskBar } from './Tasks'
@@ -609,6 +611,98 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     },
   }
 
+  // The column's menu: its "..." and a right click (a long press) on its header.
+  const menuCtx = useContextMenu({ disabled: !session })
+  const menuItems = (
+    <>
+    {(variant === 'mobile' || slim) && (
+      <>
+        {/* Touch layout and short stacked session: the header keeps room for the title - Telegram lives
+            here (on a phone plan mode is next to the title). */}
+        {slim && (
+          <DropdownMenuCheckboxItem checked={!!session?.plan_mode} disabled={!session} onSelect={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}>
+            {t('plan.toggle')}
+          </DropdownMenuCheckboxItem>
+        )}
+        <DropdownMenuCheckboxItem checked={!!session?.notify} disabled={!session || !tgLinked} onSelect={actions.notify}>
+          {t('sessions.notify.label')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+      </>
+    )}
+    <DropdownMenuItem disabled={running || !session?.turns} onSelect={actions.compact}>
+      <Minimize2 /> {t('sessions.menu.compact')}
+    </DropdownMenuItem>
+    <DropdownMenuItem disabled={running || !session?.turns} onSelect={actions.handoff}>
+      <Sparkles /> {t('sessions.menu.handoff')}
+    </DropdownMenuItem>
+    {!agentRun && (
+      <DropdownMenuItem onSelect={actions.archive}>
+        {session?.archived ? <ArchiveRestore /> : <Archive />} {session?.archived ? t('sessions.menu.unarchive') : t('sessions.menu.archive')}
+      </DropdownMenuItem>
+    )}
+    <DropdownMenuSeparator />
+    <DropdownMenuItem disabled={!dir} onSelect={() => dir && navigate(`/files?path=${encodeURIComponent(dir)}`)}>
+      <FolderOpen /> {t('sessions.menu.openFolder')}
+    </DropdownMenuItem>
+    <DropdownMenuItem onSelect={() => copyText(sid).then((ok) => ok && toast.success(t('sessions.menu.idCopied')))}>
+      <Copy /> {t('sessions.menu.copyId')}
+    </DropdownMenuItem>
+    {hudOn && variant !== 'mobile' && (
+      <DropdownMenuItem onSelect={hud}>
+        <PictureInPicture2 /> {t('hud.open')}
+      </DropdownMenuItem>
+    )}
+    {variant === 'column' && (
+      <>
+        <DropdownMenuItem onSelect={detach}>
+          <ExternalLink /> {t('sessions.menu.detach')}
+        </DropdownMenuItem>
+        {index > 0 && (
+          col.below ? (
+            <DropdownMenuItem onSelect={() => useSessionsUI.getState().unstack(col.key)}>
+              <Columns2 /> {t('sessions.grid.unstack')}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={!canStackUnderPrevious(col.key)}
+              onSelect={() => {
+                const cols = useSessionsUI.getState().cols
+                const i = cols.findIndex((c) => c.key === col.key)
+                // under the last session of the strip column on the left
+                if (i > 0) useSessionsUI.getState().stack(col.key, cols[i - 1].key)
+              }}
+            >
+              <Rows2 /> {t('sessions.grid.stack')}
+            </DropdownMenuItem>
+          )
+        )}
+        {count > 1 && (
+          <>
+            <DropdownMenuItem onSelect={() => useSessionsUI.getState().setLayoutPicker(col.key)}>
+              <LayoutGrid /> {t('sessions.layout.menu')}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!canShift(useSessionsUI.getState().cols, col.key, -1)} onSelect={() => useSessionsUI.getState().shift(col.key, -1)}>
+              <ChevronLeft /> {t('sessions.menu.moveLeft')}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!canShift(useSessionsUI.getState().cols, col.key, 1)} onSelect={() => useSessionsUI.getState().shift(col.key, 1)}>
+              <ChevronRight /> {t('sessions.menu.moveRight')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </>
+    )}
+    {!agentRun && (
+      <>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem destructive onSelect={actions.del}>
+          <Trash2 /> {t('sessions.menu.delete')}
+        </DropdownMenuItem>
+      </>
+    )}
+    </>
+  )
+
   // (a picture dragged from a thread carries a file too: that is a content drag)
   const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
   return (
@@ -643,6 +737,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           fixedPlace={agentRun}
           tgLinked={tgLinked}
           headRef={head}
+          headProps={menuCtx.props}
           slim={slim}
           menu={
             <DropdownMenu>
@@ -659,94 +754,11 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
                 // "Layouts…": the focus goes to the picker, not back to this button (that would close the picker)
                 onCloseAutoFocus={(e) => useSessionsUI.getState().layoutPicker === col.key && e.preventDefault()}
               >
-                {(variant === 'mobile' || slim) && (
-                  <>
-                    {/* Touch layout and short stacked session: the header keeps room for the title - Telegram lives
-                        here (on a phone plan mode is next to the title). */}
-                    {slim && (
-                      <DropdownMenuCheckboxItem checked={!!session?.plan_mode} disabled={!session} onSelect={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}>
-                        {t('plan.toggle')}
-                      </DropdownMenuCheckboxItem>
-                    )}
-                    <DropdownMenuCheckboxItem checked={!!session?.notify} disabled={!session || !tgLinked} onSelect={actions.notify}>
-                      {t('sessions.notify.label')}
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem disabled={running || !session?.turns} onSelect={actions.compact}>
-                  <Minimize2 /> {t('sessions.menu.compact')}
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={running || !session?.turns} onSelect={actions.handoff}>
-                  <Sparkles /> {t('sessions.menu.handoff')}
-                </DropdownMenuItem>
-                {!agentRun && (
-                  <DropdownMenuItem onSelect={actions.archive}>
-                    {session?.archived ? <ArchiveRestore /> : <Archive />} {session?.archived ? t('sessions.menu.unarchive') : t('sessions.menu.archive')}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={!dir} onSelect={() => dir && navigate(`/files?path=${encodeURIComponent(dir)}`)}>
-                  <FolderOpen /> {t('sessions.menu.openFolder')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => copyText(sid).then((ok) => ok && toast.success(t('sessions.menu.idCopied')))}>
-                  <Copy /> {t('sessions.menu.copyId')}
-                </DropdownMenuItem>
-                {hudOn && variant !== 'mobile' && (
-                  <DropdownMenuItem onSelect={hud}>
-                    <PictureInPicture2 /> {t('hud.open')}
-                  </DropdownMenuItem>
-                )}
-                {variant === 'column' && (
-                  <>
-                    <DropdownMenuItem onSelect={detach}>
-                      <ExternalLink /> {t('sessions.menu.detach')}
-                    </DropdownMenuItem>
-                    {index > 0 && (
-                      col.below ? (
-                        <DropdownMenuItem onSelect={() => useSessionsUI.getState().unstack(col.key)}>
-                          <Columns2 /> {t('sessions.grid.unstack')}
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem
-                          disabled={!canStackUnderPrevious(col.key)}
-                          onSelect={() => {
-                            const cols = useSessionsUI.getState().cols
-                            const i = cols.findIndex((c) => c.key === col.key)
-                            // under the last session of the strip column on the left
-                            if (i > 0) useSessionsUI.getState().stack(col.key, cols[i - 1].key)
-                          }}
-                        >
-                          <Rows2 /> {t('sessions.grid.stack')}
-                        </DropdownMenuItem>
-                      )
-                    )}
-                    {count > 1 && (
-                      <>
-                        <DropdownMenuItem onSelect={() => useSessionsUI.getState().setLayoutPicker(col.key)}>
-                          <LayoutGrid /> {t('sessions.layout.menu')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem disabled={!canShift(useSessionsUI.getState().cols, col.key, -1)} onSelect={() => useSessionsUI.getState().shift(col.key, -1)}>
-                          <ChevronLeft /> {t('sessions.menu.moveLeft')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem disabled={!canShift(useSessionsUI.getState().cols, col.key, 1)} onSelect={() => useSessionsUI.getState().shift(col.key, 1)}>
-                          <ChevronRight /> {t('sessions.menu.moveRight')}
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </>
-                )}
-                {!agentRun && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem destructive onSelect={actions.del}>
-                      <Trash2 /> {t('sessions.menu.delete')}
-                    </DropdownMenuItem>
-                  </>
-                )}
+                {menuItems}
               </DropdownMenuContent>
             </DropdownMenu>
           }
+          contextMenu={menuCtx.menu(menuItems, { className: 'w-60' })}
           onRename={actions.rename}
           onHud={hudOn ? hud : undefined}
           onPlan={() => session && patch.mutate({ id: sid, plan_mode: !session.plan_mode })}
@@ -883,6 +895,8 @@ function ColumnHeader({
   onPlan,
   tgLinked,
   headRef,
+  headProps,
+  contextMenu,
   slim,
   fixedPlace,
 }: {
@@ -900,6 +914,9 @@ function ColumnHeader({
   /** The place is shown, not a picker (a run of an agent stays in the agent's folder). */
   fixedPlace?: boolean
   headRef?: React.Ref<HTMLElement>
+  /** Right click / long press on the header: `contextMenu` (the same items as `menu`) opens at the pointer. */
+  headProps?: ContextMenuHandlers
+  contextMenu?: React.ReactNode
   /** Short stacked session: one line (title, state, context, menu, close); plan mode and Telegram show only
    *  while on and are in the menu, the picture-in-picture is in the menu, topic and cost go. */
   slim?: boolean
@@ -912,7 +929,7 @@ function ColumnHeader({
   if (variant === 'mobile')
     // phone / tablet: app bar (☰ logo ⋯ ⊞), then the session's title, then its topic and what it used
     return (
-      <header data-kbd-short-hide="" className="relative shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
+      <header {...headProps} data-kbd-short-hide="" className="relative shrink-0 border-b bg-background px-3 pb-2 pt-[calc(0.25rem+var(--safe-top))]">
         {maxxing && <MaxxingMeter strip />}
         <div className="flex h-11 min-w-0 items-center gap-1">
           <TouchSessionsButton className="-ml-2" />
@@ -962,10 +979,11 @@ function ColumnHeader({
             <Skeleton className="h-3.5 w-32" />
           )}
         </div>
+        {contextMenu}
       </header>
     )
   return (
-    <header ref={headRef} data-col-head data-kbd-short-hide="" className={cn('shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
+    <header {...headProps} ref={headRef} data-col-head data-kbd-short-hide="" className={cn('shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
       <div className="flex h-9 min-w-0 items-center gap-1 pointer-coarse:h-10">
         {variant === 'column' && <DragGrip colKey={col.key} />}
         {session ? <InlineTitle value={session.title} onSave={onRename} /> : <Skeleton className="h-4 w-40" />}
@@ -1049,6 +1067,7 @@ function ColumnHeader({
           <Skeleton className="h-3 w-28" />
         )}
       </div>
+      {contextMenu}
     </header>
   )
 }

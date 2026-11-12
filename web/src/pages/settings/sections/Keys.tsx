@@ -30,6 +30,7 @@ import {
   Tooltip,
   confirm,
   toast,
+  useContextMenu,
 } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
@@ -152,8 +153,28 @@ function SecretRow({ s, onEdit }: { s: Secret; onEdit: () => void }) {
       toast.error(errorMessage(e))
     }
   }
+  const ctx = useContextMenu()
+  const items = (
+    <>
+      <DropdownMenuItem onSelect={onEdit}>
+        <Pencil /> {t('common.edit')}
+      </DropdownMenuItem>
+      <DropdownMenuItem className="md:hidden" onSelect={() => put.mutate({ name: s.name, expose: !s.expose })}>
+        <KeyRound /> {s.expose ? t('keys.unexpose') : t('keys.exposeShort')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        destructive
+        onSelect={async () => {
+          if (await confirm({ title: t('keys.deleteTitle', { name: s.name }), description: t('keys.deleteDesc'), destructive: true })) del.mutate(s.name)
+        }}
+      >
+        <Trash2 /> {t('common.delete')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto]">
+    <li {...ctx.props} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto]">
       <div className="grid min-w-0 gap-0.5">
         <span className="font-mono text-[13px] font-medium [overflow-wrap:anywhere]">{s.name}</span>
         <span className="flex min-w-0 text-xs text-muted-foreground">
@@ -187,24 +208,9 @@ function SecretRow({ s, onEdit }: { s: Secret; onEdit: () => void }) {
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil /> {t('common.edit')}
-          </DropdownMenuItem>
-          <DropdownMenuItem className="md:hidden" onSelect={() => put.mutate({ name: s.name, expose: !s.expose })}>
-            <KeyRound /> {s.expose ? t('keys.unexpose') : t('keys.exposeShort')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            destructive
-            onSelect={async () => {
-              if (await confirm({ title: t('keys.deleteTitle', { name: s.name }), description: t('keys.deleteDesc'), destructive: true })) del.mutate(s.name)
-            }}
-          >
-            <Trash2 /> {t('common.delete')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <DropdownMenuContent align="end">{items}</DropdownMenuContent>
       </DropdownMenu>
+      {ctx.menu(items)}
     </li>
   )
 }

@@ -1432,6 +1432,8 @@ function DrillRow({
 }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
+  // iPhone Safari fires no contextmenu: a long press opens the menu too (its "..." is hidden on phones)
+  const press = useLongPress(() => setOpen(true))
   const row = (
     <div
       className={cn('group/row flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-accent/60 max-md:h-12', !below && 'mx-rise')}
@@ -1440,6 +1442,7 @@ function DrillRow({
         e.preventDefault()
         setOpen(true)
       }}
+      {...press}
     >
       <button type="button" onClick={onOpen} className={cn('flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md pl-2 text-left text-[13px] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', bold && 'font-semibold')} data-drill-row={name}>
         {icon}

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
   Input,
   Sensitive,
+  useContextMenu,
 } from '@/components/ui'
 import type { Task, TaskProject, TaskStatus } from '@/lib/types'
 import { STATUSES, STATUS_KEY, byOrder } from './model'
@@ -423,6 +424,9 @@ function TaskCard({ task, project, today, hidden, lifted, ref, selected, selecti
   const t = useT()
   const done = task.status === 'done'
   const overdue = !done && !!task.due && task.due < today
+  // Right click = the "..." menu (mouse only: on touch screens a long press picks the card up).
+  const ctx = useContextMenu({ disabled: lifted || !onMoveTo, touch: false })
+  const items = <TaskMenuItems task={task} onMoveTo={(st) => onMoveTo?.(st)} onDelete={() => onDelete?.()} />
   return (
     <div
       ref={ref}
@@ -440,6 +444,7 @@ function TaskCard({ task, project, today, hidden, lifted, ref, selected, selecti
       }}
       onContextMenu={(e) => {
         if ((e.nativeEvent as PointerEvent).pointerType === 'touch') e.preventDefault()
+        else ctx.props.onContextMenu?.(e)
       }}
       className={cn(
         'group relative grid cursor-pointer gap-2 rounded-lg border bg-card p-3 text-left shadow-xs transition-[border-color,box-shadow] outline-none select-none [-webkit-touch-callout:none]',
@@ -496,25 +501,34 @@ function TaskCard({ task, project, today, hidden, lifted, ref, selected, selecti
                 <MoreHorizontal className="size-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuLabel>{t('tasks.moveTo')}</DropdownMenuLabel>
-              {STATUSES.filter((s) => s !== task.status).map((s) => (
-                <DropdownMenuItem key={s} onSelect={() => onMoveTo(s)}>
-                  <ArrowRight />
-                  {t(STATUS_KEY[s])}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem destructive onSelect={() => onDelete?.()}>
-                <Trash2 />
-                {t('common.delete')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>{items}</DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
       <CardMeta task={task} project={project} today={today} />
+      {ctx.menu(items)}
     </div>
+  )
+}
+
+/** A task's menu: Move to (the other statuses) and Delete - its card's "..." and the right click on a card or a row. */
+export function TaskMenuItems({ task, onMoveTo, onDelete }: { task: Task; onMoveTo: (s: TaskStatus) => void; onDelete: () => void }) {
+  const t = useT()
+  return (
+    <>
+      <DropdownMenuLabel>{t('tasks.moveTo')}</DropdownMenuLabel>
+      {STATUSES.filter((s) => s !== task.status).map((s) => (
+        <DropdownMenuItem key={s} onSelect={() => onMoveTo(s)}>
+          <ArrowRight />
+          {t(STATUS_KEY[s])}
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem destructive onSelect={onDelete}>
+        <Trash2 />
+        {t('common.delete')}
+      </DropdownMenuItem>
+    </>
   )
 }
 

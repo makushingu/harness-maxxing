@@ -4,7 +4,7 @@ import * as React from 'react'
 import { Eye, EyeOff, FolderKanban, Inbox, LayoutGrid, ListChecks, MoreHorizontal, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Sensitive } from '@/components/ui'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Sensitive , useContextMenu } from '@/components/ui'
 import { usePatchTaskProject } from '@/lib/queries'
 import type { TaskProject } from '@/lib/types'
 import { statsOf, type ProjectStats } from './model'
@@ -99,8 +99,17 @@ function Entry({ active, onClick, icon, count, children }: { active: boolean; on
 function ProjectEntry({ project, emoji, stats, active, onClick }: { project: TaskProject; emoji?: string; stats: ProjectStats; active: boolean; onClick: () => void }) {
   const t = useT()
   const patch = usePatchTaskProject()
+  const ctx = useContextMenu()
+  const items = (
+    <>
+      <DropdownMenuItem onSelect={() => patch.mutate({ id: project.id, hidden: !project.hidden })}>
+        {project.hidden ? <Eye /> : <EyeOff />}
+        {project.hidden ? t('tasks.projects.show') : t('tasks.projects.hide')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <div className={cn('group/entry relative flex items-center rounded-md', active ? 'bg-accent' : 'hover:bg-accent/60', project.hidden && 'opacity-60')}>
+    <div {...ctx.props} className={cn('group/entry relative flex items-center rounded-md', active ? 'bg-accent' : 'hover:bg-accent/60', project.hidden && 'opacity-60')}>
       <button
         type="button"
         onClick={onClick}
@@ -129,13 +138,9 @@ function ProjectEntry({ project, emoji, stats, active, onClick }: { project: Tas
             <MoreHorizontal className="size-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onSelect={() => patch.mutate({ id: project.id, hidden: !project.hidden })}>
-            {project.hidden ? <Eye /> : <EyeOff />}
-            {project.hidden ? t('tasks.projects.show') : t('tasks.projects.hide')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <DropdownMenuContent align="start">{items}</DropdownMenuContent>
       </DropdownMenu>
+      {ctx.menu(items)}
     </div>
   )
 }

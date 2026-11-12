@@ -301,7 +301,7 @@ export default function TasksPage() {
           onAdd={(due, text) => addParsed(parseQuickAdd(text, projects, today), { due })}
         />
       )
-    return <TaskList tasks={visible} projects={projects} today={today} groupBy={groupBy} sort={prefs.sort} hideProject={oneProject} onOpen={openTask} onToggleDone={toggleDone} />
+    return <TaskList tasks={visible} projects={projects} today={today} groupBy={groupBy} sort={prefs.sort} hideProject={oneProject} onOpen={openTask} onToggleDone={toggleDone} onMoveStatus={moveStatus} onDelete={remove} />
   }
 
   const viewSwitch =

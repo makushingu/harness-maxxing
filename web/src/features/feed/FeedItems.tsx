@@ -20,6 +20,7 @@ import {
   Sensitive,
   Skeleton,
   Tooltip,
+  useContextMenu,
 } from '@/components/ui'
 
 const LEVEL: Record<FeedLevel, { icon: React.ComponentType<{ className?: string }>; cls: string }> = {
@@ -93,8 +94,21 @@ export function FeedItem({ ev, compact, roomy }: { ev: FeedEvent; compact?: bool
     if (ev.url.startsWith('/')) navigate(ev.url)
     else window.open(ev.url, '_blank', 'noopener,noreferrer')
   }
+  const ctx = useContextMenu()
+  const items = (
+    <>
+      {!ev.read && (
+        <DropdownMenuItem onSelect={() => read.mutate({ ids: [ev.id] })}>
+          <CheckCheck /> {t('feed.markRead')}
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem destructive onSelect={() => del.mutate(ev.id)}>
+        <Trash2 /> {t('common.delete')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <div
+    <div {...ctx.props}
       className={cn('group/ev relative flex hover:bg-accent/50', roomy ? 'gap-3 px-4 py-3' : 'gap-2.5 rounded-lg px-2.5 py-2', !ev.read && 'bg-primary/[0.04]')}
       data-testid="feed-item"
       data-level={ev.level}
@@ -141,17 +155,9 @@ export function FeedItem({ ev, compact, roomy }: { ev: FeedEvent; compact?: bool
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          {!ev.read && (
-            <DropdownMenuItem onSelect={() => read.mutate({ ids: [ev.id] })}>
-              <CheckCheck /> {t('feed.markRead')}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem destructive onSelect={() => del.mutate(ev.id)}>
-            <Trash2 /> {t('common.delete')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <DropdownMenuContent align="end" className="w-44">{items}</DropdownMenuContent>
       </DropdownMenu>
+      {ctx.menu(items)}
     </div>
   )
 }

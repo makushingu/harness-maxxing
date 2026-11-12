@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import {
   Button, Checkbox, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Segmented,
-  Sensitive, Skeleton, Tooltip, useMask,
+  Sensitive, Skeleton, Tooltip, useContextMenu, useMask, WithContextMenu,
 } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
 import { PageList } from '@/components/shell/PageList'
@@ -92,44 +92,49 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                 </li>
               )
             }
+            const folderItems = !f.role && (
+              <>
+                <DropdownMenuItem onSelect={() => setRenaming({ from: f.name, to: leaf(f.name, f.delim) })}>
+                  <Pencil /> {t('mail.folder.rename')}
+                </DropdownMenuItem>
+                <DropdownMenuItem destructive onSelect={() => window.confirm(t('mail.folder.deleteConfirm', { name: leaf(f.name, f.delim) })) && del.mutate(f.name, { onSuccess: () => active && onPick('INBOX') })}>
+                  <Trash2 /> {t('mail.folder.delete')}
+                </DropdownMenuItem>
+              </>
+            )
             return (
-              <li key={f.name} className="group relative">
-                <button
-                  type="button"
-                  onClick={() => onPick(f.name)}
-                  className={cn(
-                    'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
-                    active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              <WithContextMenu key={f.name} items={folderItems}>
+                <li className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onPick(f.name)}
+                    className={cn(
+                      'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
+                      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    )}
+                    style={{ paddingLeft: 8 + depth(f) * 12 }}
+                    title={f.role ? f.name : mask(f.name)}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
+                    {!!f.unread && f.role !== 'sent' && f.role !== 'trash' && <span className="text-xs font-semibold text-primary tabular-nums">{f.unread}</span>}
+                  </button>
+                  {!f.role && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 hidden size-6 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-background data-[state=open]:flex"
+                          aria-label={t('mail.folder.menu')}
+                        >
+                          <MoreHorizontal className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">{folderItems}</DropdownMenuContent>
+                    </DropdownMenu>
                   )}
-                  style={{ paddingLeft: 8 + depth(f) * 12 }}
-                  title={f.role ? f.name : mask(f.name)}
-                >
-                  <Icon className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{f.role ? folderLabel(f, t) : <Sensitive length={6}>{folderLabel(f, t)}</Sensitive>}</span>
-                  {!!f.unread && f.role !== 'sent' && f.role !== 'trash' && <span className="text-xs font-semibold text-primary tabular-nums">{f.unread}</span>}
-                </button>
-                {!f.role && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="absolute top-1 right-1 hidden size-6 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-background data-[state=open]:flex"
-                        aria-label={t('mail.folder.menu')}
-                      >
-                        <MoreHorizontal className="size-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => setRenaming({ from: f.name, to: leaf(f.name, f.delim) })}>
-                        <Pencil /> {t('mail.folder.rename')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem destructive onSelect={() => window.confirm(t('mail.folder.deleteConfirm', { name: leaf(f.name, f.delim) })) && del.mutate(f.name, { onSuccess: () => active && onPick('INBOX') })}>
-                        <Trash2 /> {t('mail.folder.delete')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </li>
+                </li>
+              </WithContextMenu>
             )
           })}
           {newName !== null && (
@@ -184,37 +189,42 @@ function MailboxNav({ acc, all, accounts, folders, loading, error, current, onPi
         )}
         {accounts.map((a) => {
           const open = !all && a.id === acc.id
+          const accItems = open && (
+            <>
+              <DropdownMenuItem onSelect={onEditAccount}>
+                <Settings2 /> {t('mail.acc.edit')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setNewName('')}>
+                <FolderPlus /> {t('mail.folder.new')}
+              </DropdownMenuItem>
+            </>
+          )
           return (
             <div key={a.id} className="mt-0.5">
-              <div className="group relative">
-                <button type="button" className={cn(row(open), 'pr-9')} onClick={() => onAccount(a.id)} aria-current={open || undefined} title={mask(a.address, 8)} data-testid="mail-box">
-                  <Mail className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">
-                    <Sensitive length={8}>{a.label || a.address}</Sensitive>
-                  </span>
-                </button>
-                {open && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
-                        aria-label={t('mail.accountMenu')}
-                      >
-                        <MoreHorizontal className="size-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={onEditAccount}>
-                        <Settings2 /> {t('mail.acc.edit')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setNewName('')}>
-                        <FolderPlus /> {t('mail.folder.new')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
+              <WithContextMenu items={accItems}>
+                <div className="group relative">
+                  <button type="button" className={cn(row(open), 'pr-9')} onClick={() => onAccount(a.id)} aria-current={open || undefined} title={mask(a.address, 8)} data-testid="mail-box">
+                    <Mail className="size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      <Sensitive length={8}>{a.label || a.address}</Sensitive>
+                    </span>
+                  </button>
+                  {open && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+                          aria-label={t('mail.accountMenu')}
+                        >
+                          <MoreHorizontal className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">{accItems}</DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              </WithContextMenu>
               {open && (
                 <FolderList
                   className="mt-0.5 mb-2 ml-3.5 border-l pl-1.5"
@@ -242,11 +252,13 @@ function MailboxNav({ acc, all, accounts, folders, loading, error, current, onPi
   )
 }
 
-function Row({ m, selected, checked, onOpen, onCheck }: { m: MailSummary; selected: boolean; checked: boolean; onOpen: () => void; onCheck: (v: boolean) => void }) {
+function Row({ m, selected, checked, onOpen, onCheck, menu }: { m: MailSummary; selected: boolean; checked: boolean; onOpen: () => void; onCheck: (v: boolean) => void; menu: () => React.ReactNode }) {
   const lang = useLang()
   const t = useT()
+  const ctx = useContextMenu()
   return (
     <li
+      {...ctx.props}
       className={cn(
         'group relative flex cursor-pointer items-start gap-2.5 border-b px-3 py-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         selected ? 'bg-accent' : checked ? 'bg-primary/5' : 'hover:bg-accent/40',
@@ -283,6 +295,7 @@ function Row({ m, selected, checked, onOpen, onCheck }: { m: MailSummary; select
           <Sensitive length={10}>{m.subject ? <bdi>{clean(m.subject)}</bdi> : t('mail.noSubject')}</Sensitive>
         </span>
       </div>
+      {ctx.open && ctx.menu(menu())}
     </li>
   )
 }
@@ -608,6 +621,45 @@ export default function MailPage() {
     />
   )
   const sel = [...checked]
+  // The "..." of a selection and the right click on a message (its own actions, or the selection's when it is checked).
+  const moreItems = (uids: number[]) => (
+    <>
+      <DropdownMenuItem onSelect={() => run(uids, 'unseen')}>{t('mail.act.unread')}</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => run(uids, 'flag')}>{t('mail.act.flag')}</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => run(uids, 'unflag')}>{t('mail.act.unflag')}</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => run(uids, current?.role === 'junk' ? 'inbox' : 'junk')}>{current?.role === 'junk' ? t('mail.act.inbox') : t('mail.act.junk')}</DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {(folders.data || []).filter((f) => f.name !== folder).map((f) => {
+        const Icon = folderIcon(f)
+        return (
+          <DropdownMenuItem key={f.name} onSelect={() => run(uids, 'move', f.name)}>
+            <Icon /> {t('mail.moveTo', { folder: f.role ? folderLabel(f, t) : mask(folderLabel(f, t)) })}
+          </DropdownMenuItem>
+        )
+      })}
+    </>
+  )
+  const rowItems = (m: MailSummary) => {
+    const uids = checked.has(m.uid) ? sel : [m.uid]
+    const del = current?.role === 'trash' || current?.role === 'junk'
+    return (
+      <>
+        {current?.role !== 'archive' && (
+          <DropdownMenuItem onSelect={() => run(uids, 'archive')}>
+            <Archive /> {t('mail.act.archive')}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem destructive={del} onSelect={() => run(uids, del ? 'delete' : 'trash')}>
+          <Trash2 /> {del ? t('mail.act.deleteForever') : t('mail.act.trash')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run(uids, 'seen')}>
+          <MailOpen /> {t('mail.act.read')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {moreItems(uids)}
+      </>
+    )
+  }
   const listPane = (
     <div className="flex min-h-0 flex-1 flex-col">
       <OutboxBanner acc={acc.id} onEdit={(d) => void openCompose('draft', d.folder, d.uid)} />
@@ -653,21 +705,7 @@ export default function MailPage() {
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="max-h-96 overflow-y-auto">
-                <DropdownMenuItem onSelect={() => run(sel, 'unseen')}>{t('mail.act.unread')}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => run(sel, 'flag')}>{t('mail.act.flag')}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => run(sel, 'unflag')}>{t('mail.act.unflag')}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => run(sel, current?.role === 'junk' ? 'inbox' : 'junk')}>{current?.role === 'junk' ? t('mail.act.inbox') : t('mail.act.junk')}</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {(folders.data || []).filter((f) => f.name !== folder).map((f) => {
-                  const Icon = folderIcon(f)
-                  return (
-                    <DropdownMenuItem key={f.name} onSelect={() => run(sel, 'move', f.name)}>
-                      <Icon /> {t('mail.moveTo', { folder: f.role ? folderLabel(f, t) : mask(folderLabel(f, t)) })}
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuContent>
+              <DropdownMenuContent align="end" className="max-h-96 overflow-y-auto">{moreItems(sel)}</DropdownMenuContent>
             </DropdownMenu>
           </div>
         ) : (
@@ -704,6 +742,7 @@ export default function MailPage() {
                 selected={m.uid === uid}
                 checked={checked.has(m.uid)}
                 onOpen={() => openMsg(m)}
+                menu={() => rowItems(m)}
                 onCheck={(v) =>
                   setChecked((s) => {
                     const n = new Set(s)

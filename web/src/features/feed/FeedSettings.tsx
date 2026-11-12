@@ -28,6 +28,7 @@ import {
   Skeleton,
   Switch,
   toast,
+  useContextMenu,
 } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
@@ -91,8 +92,37 @@ function SourceRow({ s, hook, ruleOptions, onRule }: { s: FeedSource; hook?: Fee
   const patch = usePatchHook()
   const del = useDeleteHook()
   const [secret, setSecret] = React.useState(false)
+  const ctx = useContextMenu({ disabled: !hook })
+  const items = hook && (
+    <>
+      <DropdownMenuItem onSelect={() => test.mutate(hook.id, { onSuccess: () => toast.success(t('feed.testSent')) })}>
+        <FlaskConical /> {t('feed.test')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setSecret(true)}>
+        <KeyRound /> {hook.has_secret ? t('feed.changeSecret') : t('feed.setSecret')}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onSelect={async () => {
+          if (await confirm({ title: t('feed.regenerate'), description: t('feed.regenerateDesc'), confirmText: t('feed.regenerate') }))
+            patch.mutate({ id: hook.id, regenerate: true })
+        }}
+      >
+        <RefreshCw /> {t('feed.regenerate')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        destructive
+        onSelect={async () => {
+          if (await confirm({ title: t('feed.deleteHook', { name: hook.name }), description: t('feed.deleteHookDesc'), destructive: true, confirmText: t('common.delete') }))
+            del.mutate(hook.id)
+        }}
+      >
+        <Trash2 /> {t('common.delete')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5" data-testid="feed-source" data-source={s.source}>
+    <div {...ctx.props} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5" data-testid="feed-source" data-source={s.source}>
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
           {hook && <Webhook className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -118,34 +148,10 @@ function SourceRow({ s, hook, ruleOptions, onRule }: { s: FeedSource; hook?: Fee
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onSelect={() => test.mutate(hook.id, { onSuccess: () => toast.success(t('feed.testSent')) })}>
-              <FlaskConical /> {t('feed.test')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSecret(true)}>
-              <KeyRound /> {hook.has_secret ? t('feed.changeSecret') : t('feed.setSecret')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={async () => {
-                if (await confirm({ title: t('feed.regenerate'), description: t('feed.regenerateDesc'), confirmText: t('feed.regenerate') }))
-                  patch.mutate({ id: hook.id, regenerate: true })
-              }}
-            >
-              <RefreshCw /> {t('feed.regenerate')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              destructive
-              onSelect={async () => {
-                if (await confirm({ title: t('feed.deleteHook', { name: hook.name }), description: t('feed.deleteHookDesc'), destructive: true, confirmText: t('common.delete') }))
-                  del.mutate(hook.id)
-              }}
-            >
-              <Trash2 /> {t('common.delete')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
+          <DropdownMenuContent align="end" className="w-56">{items}</DropdownMenuContent>
         </DropdownMenu>
       )}
+      {ctx.menu(items)}
       {secret && hook && <SecretDialog hook={hook} onClose={() => setSecret(false)} />}
     </div>
   )

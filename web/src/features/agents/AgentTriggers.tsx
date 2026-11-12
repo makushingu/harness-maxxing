@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import {
   Button, confirm, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, FormField, Input, Sensitive, Switch, Textarea, toast,
+  useContextMenu,
+  WithContextMenu,
 } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
@@ -57,88 +59,93 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
       {a.triggers.map((x) => {
         const h = x.hook_id ? hooks.get(x.hook_id) : undefined
         const st = a.trigger_stats?.[x.id]
+        const triggerItems = (
+          <>
+            <DropdownMenuItem onSelect={() => setFeedEdit(toInput(x))}>
+              <Pencil /> {t('common.edit')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              destructive
+              onSelect={async () => {
+                if (!(await confirm({ title: t('agents.trigger.removeTitle'), description: x.hook_id ? t('agents.trigger.removeHookDesc') : undefined, destructive: true, confirmText: t('common.remove') }))) return
+                saveTriggers(a.triggers.filter((y) => y.id !== x.id).map(toInput))
+              }}
+            >
+              <Trash2 /> {t('common.remove')}
+            </DropdownMenuItem>
+          </>
+        )
         return (
-          <div key={x.id} className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-trigger">
-            <div className="flex items-center gap-2">
-              {x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
-              <span className="min-w-0 flex-1 text-sm">
-                <Sensitive length={10}>
-                  {x.hook_id
-                    ? !h || h.kind === 'generic'
-                      ? t('agents.when.webhookAny')
-                      : t('agents.when.webhook', { service: t(`agents.hook.${h.kind}` as 'agents.hook.generic') })
-                    : t('agents.when.feed', { source: triggerSummary(t, x) })}
-                </Sensitive>
-              </span>
-              <Switch
-                checked={x.enabled !== false}
-                onCheckedChange={(v) => saveTriggers(a.triggers.map((y) => (y.id === x.id ? { ...toInput(y), enabled: v } : toInput(y))))}
-                aria-label={t('agents.trigger.enabled')}
-              />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label={t('common.more')}>
-                    <MoreHorizontal />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setFeedEdit(toInput(x))}>
-                    <Pencil /> {t('common.edit')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    destructive
-                    onSelect={async () => {
-                      if (!(await confirm({ title: t('agents.trigger.removeTitle'), description: x.hook_id ? t('agents.trigger.removeHookDesc') : undefined, destructive: true, confirmText: t('common.remove') }))) return
-                      saveTriggers(a.triggers.filter((y) => y.id !== x.id).map(toInput))
-                    }}
-                  >
-                    <Trash2 /> {t('common.remove')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            {h && (
-              <div className="flex items-center gap-1 rounded-lg bg-muted/60 py-0.5 pr-0.5 pl-2">
-                <code className="min-w-0 flex-1 truncate font-mono text-[11px]" data-testid="agent-trigger-url">
-                  <Sensitive>{h.url}</Sensitive>
-                </code>
-                <CopyButton text={h.url} />
+          <WithContextMenu key={x.id} items={triggerItems}>
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-trigger">
+              <div className="flex items-center gap-2">
+                {x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
+                <span className="min-w-0 flex-1 text-sm">
+                  <Sensitive length={10}>
+                    {x.hook_id
+                      ? !h || h.kind === 'generic'
+                        ? t('agents.when.webhookAny')
+                        : t('agents.when.webhook', { service: t(`agents.hook.${h.kind}` as 'agents.hook.generic') })
+                      : t('agents.when.feed', { source: triggerSummary(t, x) })}
+                  </Sensitive>
+                </span>
+                <Switch
+                  checked={x.enabled !== false}
+                  onCheckedChange={(v) => saveTriggers(a.triggers.map((y) => (y.id === x.id ? { ...toInput(y), enabled: v } : toInput(y))))}
+                  aria-label={t('agents.trigger.enabled')}
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" aria-label={t('common.more')}>
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">{triggerItems}</DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            )}
-            {h && h.kind !== 'generic' && !h.has_secret && <p className="text-xs text-warning">{t('agents.when.noSecret')}</p>}
-            {x.prompt && (
-              <p className="truncate text-xs text-muted-foreground">
-                <Sensitive length={12}>{x.prompt}</Sensitive>
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span className={cn('size-1.5 rounded-full', st?.events ? 'bg-success' : 'bg-muted-foreground/40')} aria-hidden />
-              <span className="min-w-0 flex-1">
-                {st?.events && st.last_event_at
-                  ? t('agents.when.received', { count: st.events, when: agoText(st.last_event_at, lang, t) })
-                  : t('agents.when.noneReceived')}
-              </span>
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-xs"
-                loading={test.isPending && test.variables?.tid === x.id}
-                disabled={!a.enabled || x.enabled === false}
-                onClick={() => test.mutate({ path: a.path, tid: x.id }, { onSuccess: () => toast.success(t('agents.when.testSent')) })}
-                data-testid="agent-trigger-test"
-              >
-                {t('agents.when.test')}
-              </Button>
+              {h && (
+                <div className="flex items-center gap-1 rounded-lg bg-muted/60 py-0.5 pr-0.5 pl-2">
+                  <code className="min-w-0 flex-1 truncate font-mono text-[11px]" data-testid="agent-trigger-url">
+                    <Sensitive>{h.url}</Sensitive>
+                  </code>
+                  <CopyButton text={h.url} />
+                </div>
+              )}
+              {h && h.kind !== 'generic' && !h.has_secret && <p className="text-xs text-warning">{t('agents.when.noSecret')}</p>}
+              {x.prompt && (
+                <p className="truncate text-xs text-muted-foreground">
+                  <Sensitive length={12}>{x.prompt}</Sensitive>
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className={cn('size-1.5 rounded-full', st?.events ? 'bg-success' : 'bg-muted-foreground/40')} aria-hidden />
+                <span className="min-w-0 flex-1">
+                  {st?.events && st.last_event_at
+                    ? t('agents.when.received', { count: st.events, when: agoText(st.last_event_at, lang, t) })
+                    : t('agents.when.noneReceived')}
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  loading={test.isPending && test.variables?.tid === x.id}
+                  disabled={!a.enabled || x.enabled === false}
+                  onClick={() => test.mutate({ path: a.path, tid: x.id }, { onSuccess: () => toast.success(t('agents.when.testSent')) })}
+                  data-testid="agent-trigger-test"
+                >
+                  {t('agents.when.test')}
+                </Button>
+              </div>
+              {h?.kind === 'generic' && (
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground">{t('agents.when.howTo')}</summary>
+                  <p className="mt-1">{t('agents.when.howToGeneric')}</p>
+                  <code className="mt-1 block rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px] break-all">{'{"title": "…", "body": "…", "level": "info", "id": "unique-id"}'}</code>
+                </details>
+              )}
             </div>
-            {h?.kind === 'generic' && (
-              <details className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer hover:text-foreground">{t('agents.when.howTo')}</summary>
-                <p className="mt-1">{t('agents.when.howToGeneric')}</p>
-                <code className="mt-1 block rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px] break-all">{'{"title": "…", "body": "…", "level": "info", "id": "unique-id"}'}</code>
-              </details>
-            )}
-          </div>
+          </WithContextMenu>
         )
       })}
       {mailOn &&
@@ -227,8 +234,29 @@ function CronRow({ job: j, onEdit, onChanged }: { job: Cron; onEdit: () => void;
   const { data: settings } = useSettings()
   const tz = settings?.timezone
   const zone = tz && tz !== Intl.DateTimeFormat().resolvedOptions().timeZone ? tz.split('/').pop()!.replace(/_/g, ' ') : ''
+  const ctx = useContextMenu()
+  const items = (
+    <>
+      <DropdownMenuItem onSelect={() => run.mutate(j.id, { onSuccess: onChanged })}>
+        <Play /> {t('agents.trigger.runNow')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={onEdit}>
+        <Pencil /> {t('common.edit')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        destructive
+        onSelect={async () => {
+          if (!(await confirm({ title: t('agents.trigger.deleteCron', { name: j.name }), destructive: true, confirmText: t('common.delete') }))) return
+          del.mutate(j.id, { onSuccess: onChanged })
+        }}
+      >
+        <Trash2 /> {t('common.delete')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-cron">
+    <div {...ctx.props} className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-cron">
       <Clock className="size-4 shrink-0 text-primary" />
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className="text-sm">
@@ -247,25 +275,9 @@ function CronRow({ job: j, onEdit, onChanged }: { job: Cron; onEdit: () => void;
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => run.mutate(j.id, { onSuccess: onChanged })}>
-            <Play /> {t('agents.trigger.runNow')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil /> {t('common.edit')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            destructive
-            onSelect={async () => {
-              if (!(await confirm({ title: t('agents.trigger.deleteCron', { name: j.name }), destructive: true, confirmText: t('common.delete') }))) return
-              del.mutate(j.id, { onSuccess: onChanged })
-            }}
-          >
-            <Trash2 /> {t('common.delete')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <DropdownMenuContent align="end">{items}</DropdownMenuContent>
       </DropdownMenu>
+      {ctx.menu(items)}
     </div>
   )
 }

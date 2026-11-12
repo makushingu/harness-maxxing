@@ -3,7 +3,7 @@ import { useTrash, useTrashDelete, useTrashEmpty, useTrashRestore } from '@/lib/
 import { useLang, useT } from '@/i18n'
 import type { TrashItem, TrashKind } from '@/lib/types'
 import { fmtBytes, fmtRelative } from '@/lib/format'
-import { Badge, Button, EmptyState, Sensitive, Skeleton, Tooltip, confirm, toast, useMask } from '@/components/ui'
+import { Badge, Button, DropdownMenuItem, EmptyState, Sensitive, Skeleton, Tooltip, confirm, toast, useContextMenu, useMask } from '@/components/ui'
 import { SettingsCard, SectionStack } from './ui'
 
 const ICON: Record<TrashKind, typeof File> = {
@@ -17,8 +17,21 @@ function Row({ it }: { it: TrashItem }) {
   const restore = useTrashRestore()
   const del = useTrashDelete()
   const Icon = ICON[it.kind] || File
+  const restoreIt = async () => {
+    try {
+      const r = await restore.mutateAsync(it.id)
+      // The row is removed by invalidation; this notification must survive its unmount.
+      toast.success(t('trash.restored', { path: mask(r.restored_to || t('trash.root'), 10) }))
+    } catch { /* useMut already reports the error. */ }
+  }
+  const deleteIt = async () => {
+    if (await confirm({ title: t('trash.deleteConfirm', { name: mask(it.name, 8) }), description: t('trash.deleteDesc'), destructive: true, confirmText: t('trash.deleteForever') }))
+      del.mutate(it.id)
+  }
+  // Right click (long press): the row's two buttons as a menu.
+  const ctx = useContextMenu()
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li {...ctx.props} className="flex items-center gap-3 px-4 py-3">
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
@@ -43,13 +56,7 @@ function Row({ it }: { it: TrashItem }) {
           variant="outline"
           size="sm"
           loading={restore.isPending}
-          onClick={async () => {
-            try {
-              const r = await restore.mutateAsync(it.id)
-              // The row is removed by invalidation; this notification must survive its unmount.
-              toast.success(t('trash.restored', { path: mask(r.restored_to || t('trash.root'), 10) }))
-            } catch { /* useMut already reports the error. */ }
-          }}
+          onClick={restoreIt}
         >
           <RotateCcw /> {t('trash.restore')}
         </Button>
@@ -60,14 +67,23 @@ function Row({ it }: { it: TrashItem }) {
           size="icon-sm"
           aria-label={t('trash.deleteForever')}
           loading={del.isPending}
-          onClick={async () => {
-            if (await confirm({ title: t('trash.deleteConfirm', { name: mask(it.name, 8) }), description: t('trash.deleteDesc'), destructive: true, confirmText: t('trash.deleteForever') }))
-              del.mutate(it.id)
-          }}
+          onClick={deleteIt}
         >
           <Trash2 />
         </Button>
       </Tooltip>
+      {ctx.menu(
+        <>
+          {it.restorable && (
+            <DropdownMenuItem onSelect={restoreIt}>
+              <RotateCcw /> {t('trash.restore')}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem destructive onSelect={deleteIt}>
+            <Trash2 /> {t('trash.deleteForever')}
+          </DropdownMenuItem>
+        </>,
+      )}
     </li>
   )
 }

@@ -3,11 +3,11 @@ import * as React from 'react'
 import { Check, MessagesSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, type TKey } from '@/i18n'
-import { Checkbox, Sensitive } from '@/components/ui'
-import type { Task, TaskProject } from '@/lib/types'
+import { Checkbox, Sensitive, useContextMenu } from '@/components/ui'
+import type { Task, TaskProject, TaskStatus } from '@/lib/types'
 import { dueState, sorter, type SortKey } from './model'
 import { DueBadge, LabelChip, PriorityIcon, ProjectChip, ProjectDot } from './parts'
-import { StatusPip } from './Board'
+import { StatusPip, TaskMenuItems } from './Board'
 import { isSelectClick, useTaskSelection } from './selection'
 
 export type GroupBy = 'due' | 'project' | 'topic'
@@ -49,6 +49,8 @@ export function TaskList({
   hideProject,
   onOpen,
   onToggleDone,
+  onMoveStatus,
+  onDelete,
 }: {
   tasks: Task[]
   projects: TaskProject[]
@@ -58,6 +60,9 @@ export function TaskList({
   hideProject?: boolean
   onOpen: (id: string) => void
   onToggleDone: (task: Task, done: boolean) => void
+  /** Right click on a row: the menu of a board card (Move to, Delete). */
+  onMoveStatus?: (task: Task, status: TaskStatus) => void
+  onDelete?: (task: Task) => void
 }) {
   const t = useT()
   const projById = React.useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
@@ -188,6 +193,7 @@ export function TaskList({
                 showTopic={groupBy !== 'topic'}
                 onOpen={(e) => (isSelectClick(e) ? useTaskSelection.getState().toggle(task.id) : onOpen(task.id))}
                 onToggle={(d) => onToggleDone(task, d)}
+                menu={onMoveStatus && onDelete && (() => <TaskMenuItems task={task} onMoveTo={(st) => onMoveStatus(task, st)} onDelete={() => onDelete(task)} />)}
               />
             ))}
           </ul>
@@ -235,6 +241,7 @@ function TaskRow({
   showTopic,
   onOpen,
   onToggle,
+  menu,
 }: {
   task: Task
   project?: TaskProject
@@ -244,11 +251,13 @@ function TaskRow({
   selecting: boolean
   onOpen: (e: React.MouseEvent) => void
   onToggle: (done: boolean) => void
+  menu?: () => React.ReactNode
 }) {
   const t = useT()
   const done = task.status === 'done'
+  const ctx = useContextMenu({ disabled: !menu })
   return (
-    <li className={cn('group flex min-h-[var(--row-h,40px)] items-start gap-3 px-3 py-2.5 transition-colors hover:bg-accent/40 max-md:py-3', selected && 'bg-primary/5')}>
+    <li {...ctx.props} className={cn('group flex min-h-[var(--row-h,40px)] items-start gap-3 px-3 py-2.5 transition-colors hover:bg-accent/40 max-md:py-3', selected && 'bg-primary/5')}>
       {/* on touch, 10 px more so its hit area stops where the done box's begins */}
       <span className="flex h-5 items-center pointer-coarse:mr-2.5">
         <SelectDot checked={selected} visible={selecting} label={task.title} onToggle={() => useTaskSelection.getState().toggle(task.id)} />
@@ -280,6 +289,7 @@ function TaskRow({
           {task.priority > 0 && <PriorityIcon p={task.priority} className="size-3.5" />}
         </span>
       </button>
+      {ctx.open && menu && ctx.menu(menu())}
     </li>
   )
 }

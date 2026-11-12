@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router'
 import { Eye, MoreHorizontal, Plus, Search, Share2, Sparkles, WandSparkles } from 'lucide-react'
 import { useSkills, type Skill } from '@/lib/queries'
 import { useT } from '@/i18n'
-import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Input, Skeleton } from '@/components/ui'
+import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Input, Skeleton , useContextMenu } from '@/components/ui'
 import { openFileViewer } from '@/features/files/viewerStore'
 import { draftUrl } from '@/features/agents/EditWithClaude'
 import { CommunityLink } from './Extensions'
@@ -30,8 +30,19 @@ function SkillRow({ s }: { s: Skill }) {
   const navigate = useNavigate()
   const harness = useHarnessTopic()
   const mine = s.origin !== 'product'
+  const ctx = useContextMenu({ disabled: !mine })
+  const items = (
+    <>
+      <DropdownMenuItem onSelect={() => navigate(draftUrl(topicOf(s, harness), t('skills.editPrompt', { name: s.name, path: s.path })))}>
+        <WandSparkles /> {t('skills.edit')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => navigate(draftUrl(harness, t('skills.publishPrompt', { name: s.name, path: s.path })))}>
+        <Share2 /> {t('skills.publish')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <li className="flex items-start gap-3 px-4 py-3" data-testid="skill-row">
+    <li {...ctx.props} className="flex items-start gap-3 px-4 py-3" data-testid="skill-row">
       <div className="grid min-w-0 flex-1 gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-[13px] font-medium [overflow-wrap:anywhere]">{s.name}</span>
@@ -51,17 +62,11 @@ function SkillRow({ s }: { s: Skill }) {
                 <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => navigate(draftUrl(topicOf(s, harness), t('skills.editPrompt', { name: s.name, path: s.path })))}>
-                <WandSparkles /> {t('skills.edit')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate(draftUrl(harness, t('skills.publishPrompt', { name: s.name, path: s.path })))}>
-                <Share2 /> {t('skills.publish')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+            <DropdownMenuContent align="end">{items}</DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
+      {ctx.menu(items)}
     </li>
   )
 }

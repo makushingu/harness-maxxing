@@ -30,6 +30,7 @@ import {
   Tooltip,
   confirm,
   toast,
+  useContextMenu,
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { Callout, SettingRow } from '@/features/common'
@@ -217,8 +218,27 @@ function Row({ s, onConnect }: { s: McpServer; onConnect: () => void }) {
   const st = STATE[s.state] || STATE.unknown
   const target = s.url || [s.command, ...(s.args || [])].filter(Boolean).join(' ')
   const canLogin = s.type === 'http' || s.type === 'sse'
+  const ctx = useContextMenu()
+  const items = (
+    <>
+      {canLogin && (
+        <DropdownMenuItem onSelect={onConnect}>
+          <LogIn /> {s.state === 'connected' ? t('mcp.reconnect') : t('mcp.connect')}
+        </DropdownMenuItem>
+      )}
+      {canLogin && <DropdownMenuSeparator />}
+      <DropdownMenuItem
+        destructive
+        onSelect={async () => {
+          if (await confirm({ title: t('mcp.removeTitle', { name: s.name }), description: t('mcp.removeDesc'), destructive: true })) remove.mutate(s.id)
+        }}
+      >
+        <Trash2 /> {t('mcp.remove')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
-    <li className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto_auto]">
+    <li {...ctx.props} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto_auto]">
       <div className="grid min-w-0 gap-0.5">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-mono text-[13px] font-medium">{s.name}</span>
@@ -253,23 +273,9 @@ function Row({ s, onConnect }: { s: McpServer; onConnect: () => void }) {
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {canLogin && (
-              <DropdownMenuItem onSelect={onConnect}>
-                <LogIn /> {s.state === 'connected' ? t('mcp.reconnect') : t('mcp.connect')}
-              </DropdownMenuItem>
-            )}
-            {canLogin && <DropdownMenuSeparator />}
-            <DropdownMenuItem
-              destructive
-              onSelect={async () => {
-                if (await confirm({ title: t('mcp.removeTitle', { name: s.name }), description: t('mcp.removeDesc'), destructive: true })) remove.mutate(s.id)
-              }}
-            >
-              <Trash2 /> {t('mcp.remove')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
+          <DropdownMenuContent align="end">{items}</DropdownMenuContent>
         </DropdownMenu>
+        {ctx.menu(items)}
       </div>
     </li>
   )

@@ -15,7 +15,7 @@ import { fmtDate } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
 import {
   Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner,
-  Textarea, Tooltip, toast,
+  Textarea, Tooltip, toast, useContextMenu, WithContextMenu,
 } from '@/components/ui'
 import { openFileViewer } from '@/features/files/viewerStore'
 import { fmtBytes } from '@/lib/format'
@@ -63,11 +63,13 @@ export function ChatList({
   const [q, setQ] = React.useState('')
   const [newOpen, setNewOpen] = React.useState(false)
   const [addOpen, setAddOpen] = React.useState(false)
+  const [managing, setManaging] = React.useState<string | null>(null)
   const { data: cx } = useTeamConnections()
   const dm = useOpenDm(onOpen)
   const requests = cx?.contacts.filter((x) => x.status === 'request').length || 0
   const friends = friendsOf(team)
   const chats = (team?.chats || []).filter((c) => !q || chatTitle(team, c).toLowerCase().includes(q.toLowerCase()))
+  const managed = managing ? team?.chats.find((c) => c.id === managing) : undefined
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn('flex items-center gap-2', compact ? 'p-2' : 'p-3')}>
@@ -120,60 +122,61 @@ export function ChatList({
           const author = last ? (last.author === team?.me ? t('team.you') : personOf(team, last.author).name.split(' ')[0]) : ''
           const writing = team?.typing?.[c.id] || []
           return (
-            <button
-              key={c.id}
-              type="button"
-              data-chat-row={c.id}
-              onClick={() => onOpen(c.id)}
-              className={cn(
-                'flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60',
-                active === c.id && 'bg-accent',
-              )}
-            >
-              <ChatAvatar team={team} chat={c} />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-baseline gap-2">
-                  <span className={cn('truncate text-[14px]', c.unread && !c.muted ? 'font-semibold' : 'font-medium')}>{chatTitle(team, c)}</span>
-                  {c.muted && <BellOff className="size-3 shrink-0 text-muted-foreground" />}
-                  {last && <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">{when(last.at, lang)}</span>}
+            <WithContextMenu key={c.id} className="w-56" items={<ChatMenuItems team={team} chat={c} onManage={() => setManaging(c.id)} />}>
+              <button
+                  type="button"
+                data-chat-row={c.id}
+                onClick={() => onOpen(c.id)}
+                className={cn(
+                  'flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60',
+                  active === c.id && 'bg-accent',
+                )}
+              >
+                <ChatAvatar team={team} chat={c} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span className={cn('truncate text-[14px]', c.unread && !c.muted ? 'font-semibold' : 'font-medium')}>{chatTitle(team, c)}</span>
+                    {c.muted && <BellOff className="size-3 shrink-0 text-muted-foreground" />}
+                    {last && <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">{when(last.at, lang)}</span>}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {writing.length ? (
+                      <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-primary">
+                        <TypingDots className="shrink-0" />
+                        <span className="truncate">{c.kind === 'dm' ? t('team.typing.short') : typingLabel(team, writing)}</span>
+                      </span>
+                    ) : (
+                      <span className={cn('truncate text-[12.5px]', c.unread && !c.muted ? 'text-foreground' : 'text-muted-foreground')}>
+                        {last ? (
+                          <>
+                            {(c.kind === 'group' || last.author === team?.me) && <span className="text-muted-foreground">{author} : </span>}
+                            {last.deleted
+                              ? t('team.msg.deleted')
+                              : last.kind === 'poll'
+                                ? `📊 ${last.text}`
+                                : last.kind === 'summary'
+                                  ? `✨ ${t('team.summaryShort')}`
+                                  : `${last.files ? '📎 ' : ''}${last.text}`}
+                          </>
+                        ) : (
+                          t('team.noMessage')
+                        )}
+                      </span>
+                    )}
+                    {c.unread > 0 && (
+                      <span
+                        className={cn(
+                          'ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[10.5px] font-semibold',
+                          c.muted ? 'bg-muted-foreground/25 text-foreground' : 'bg-primary text-primary-foreground',
+                        )}
+                      >
+                        {c.unread}
+                      </span>
+                    )}
+                  </span>
                 </span>
-                <span className="flex items-center gap-2">
-                  {writing.length ? (
-                    <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-primary">
-                      <TypingDots className="shrink-0" />
-                      <span className="truncate">{c.kind === 'dm' ? t('team.typing.short') : typingLabel(team, writing)}</span>
-                    </span>
-                  ) : (
-                    <span className={cn('truncate text-[12.5px]', c.unread && !c.muted ? 'text-foreground' : 'text-muted-foreground')}>
-                      {last ? (
-                        <>
-                          {(c.kind === 'group' || last.author === team?.me) && <span className="text-muted-foreground">{author} : </span>}
-                          {last.deleted
-                            ? t('team.msg.deleted')
-                            : last.kind === 'poll'
-                              ? `📊 ${last.text}`
-                              : last.kind === 'summary'
-                                ? `✨ ${t('team.summaryShort')}`
-                                : `${last.files ? '📎 ' : ''}${last.text}`}
-                        </>
-                      ) : (
-                        t('team.noMessage')
-                      )}
-                    </span>
-                  )}
-                  {c.unread > 0 && (
-                    <span
-                      className={cn(
-                        'ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[10.5px] font-semibold',
-                        c.muted ? 'bg-muted-foreground/25 text-foreground' : 'bg-primary text-primary-foreground',
-                      )}
-                    >
-                      {c.unread}
-                    </span>
-                  )}
-                </span>
-              </span>
-            </button>
+              </button>
+            </WithContextMenu>
           )
         })}
         {team && !chats.length && q && <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">{t('team.noMatch')}</p>}
@@ -188,6 +191,7 @@ export function ChatList({
       </div>
       <NewChatDialog open={newOpen} onOpenChange={setNewOpen} team={team} onCreated={onOpen} onAddFriend={() => setAddOpen(true)} />
       <AddFriendDialog open={addOpen} onOpenChange={setAddOpen} />
+      {managed && <GroupDialog open onOpenChange={(o) => !o && setManaging(null)} team={team} chat={managed} />}
     </div>
   )
 }
@@ -487,8 +491,6 @@ function ChatHeader({ team, chat, title, compact, writing }: { team: TeamState |
 /** The chat's menu: mute; for a group, manage it (its creator) or leave it. */
 function ChatMenu({ team, chat }: { team: TeamState | undefined; chat: TeamChat }) {
   const t = useT()
-  const mute = useTeamMute()
-  const leave = useTeamLeave()
   const [manage, setManage] = React.useState(false)
   const admin = chat.kind === 'group' && chat.admin === team?.me && !chat.left
   return (
@@ -500,25 +502,38 @@ function ChatMenu({ team, chat }: { team: TeamState | undefined; chat: TeamChat 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onSelect={() => mute.mutate({ cid: chat.id, muted: !chat.muted })}>
-            {chat.muted ? <Bell className="size-4" /> : <BellOff className="size-4" />} {chat.muted ? t('team.mute.off') : t('team.mute.on')}
-          </DropdownMenuItem>
-          {admin && (
-            <DropdownMenuItem onSelect={() => setManage(true)}>
-              <Settings2 className="size-4" /> {t('team.group.manage')}
-            </DropdownMenuItem>
-          )}
-          {chat.kind === 'group' && !chat.left && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem destructive onSelect={() => window.confirm(t('team.group.leaveConfirm')) && leave.mutate(chat.id)}>
-                <LogOut className="size-4" /> {t('team.group.leave')}
-              </DropdownMenuItem>
-            </>
-          )}
+          <ChatMenuItems team={team} chat={chat} onManage={() => setManage(true)} />
         </DropdownMenuContent>
       </DropdownMenu>
       {admin && <GroupDialog open={manage} onOpenChange={setManage} team={team} chat={chat} />}
+    </>
+  )
+}
+
+/** The items of a chat's menu: its header's "..." and the right click on it in the list. */
+function ChatMenuItems({ team, chat, onManage }: { team: TeamState | undefined; chat: TeamChat; onManage: () => void }) {
+  const t = useT()
+  const mute = useTeamMute()
+  const leave = useTeamLeave()
+  const admin = chat.kind === 'group' && chat.admin === team?.me && !chat.left
+  return (
+    <>
+      <DropdownMenuItem onSelect={() => mute.mutate({ cid: chat.id, muted: !chat.muted })}>
+        {chat.muted ? <Bell className="size-4" /> : <BellOff className="size-4" />} {chat.muted ? t('team.mute.off') : t('team.mute.on')}
+      </DropdownMenuItem>
+      {admin && (
+        <DropdownMenuItem onSelect={onManage}>
+          <Settings2 className="size-4" /> {t('team.group.manage')}
+        </DropdownMenuItem>
+      )}
+      {chat.kind === 'group' && !chat.left && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem destructive onSelect={() => window.confirm(t('team.group.leaveConfirm')) && leave.mutate(chat.id)}>
+            <LogOut className="size-4" /> {t('team.group.leave')}
+          </DropdownMenuItem>
+        </>
+      )}
     </>
   )
 }
@@ -655,8 +670,11 @@ function MessageRow({
   const quotedName = quoted ? (quoted.author === (team?.me || 'me') ? t('team.you') : personOf(team, quoted.author).name) : ''
   const card = m.kind !== 'text'
   const right = mine && !card
+  // Right click = the message's menu (mouse only: a tap shows its tools on touch screens, a long press selects text).
+  const ctx = useContextMenu({ disabled: selecting || m.deleted, touch: false })
   return (
     <div
+      {...ctx.props}
       id={`tm-${m.id}`}
       className={cn(
         'group/msg relative flex gap-2 rounded-xl outline-none',
@@ -742,6 +760,7 @@ function MessageRow({
             {!selecting && !m.deleted && (
               <MessageTools team={team} chat={chat} m={m} mine={right} own={mine} compact={compact} onForward={() => onForward(m)} onReply={onReply} onEdit={onEdit} onDelete={onDelete} />
             )}
+            {ctx.open && ctx.menu(<MessageMenuItems chat={chat} m={m} own={mine} onEdit={onEdit} onDelete={onDelete} onReply={onReply} onForward={() => onForward(m)} />, { className: 'w-48' })}
           </div>
           {!!m.reactions && Object.keys(m.reactions).length > 0 && <Reactions team={team} chat={chat} m={m} />}
           {!!m.sent?.length && (
@@ -849,9 +868,6 @@ function MessageTools({
   const [open, setOpen] = React.useState(false)
   const [menu, setMenu] = React.useState(false)
   const tool = 'inline-flex size-7 shrink-0 pointer-coarse:size-10 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
-  const copy = () => {
-    void navigator.clipboard?.writeText(m.text).then(() => toast.success(t('team.copied')))
-  }
   return (
     <div
       className={cn(
@@ -902,27 +918,61 @@ function MessageTools({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align={mine ? 'end' : 'start'} className="w-48">
-          {!!m.text && (
-            <DropdownMenuItem onSelect={copy}>
-              <Copy className="size-4" /> {t('team.copy')}
-            </DropdownMenuItem>
-          )}
-          {own && m.kind === 'text' && !chat.left && (
-            <DropdownMenuItem onSelect={onEdit}>
-              <Pencil className="size-4" /> {t('team.msg.edit')}
-            </DropdownMenuItem>
-          )}
-          {own && !chat.left && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem destructive onSelect={onDelete}>
-                <Trash2 className="size-4" /> {t('team.msg.delete')}
-              </DropdownMenuItem>
-            </>
-          )}
+          <MessageMenuItems chat={chat} m={m} own={own} onEdit={onEdit} onDelete={onDelete} />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  )
+}
+
+/** A message's menu: its "..." (copy, edit, delete) and, on a right click, Reply and Forward first. */
+function MessageMenuItems({
+  chat, m, own, onEdit, onDelete, onReply, onForward,
+}: {
+  chat: TeamChat
+  m: TeamMessage
+  own: boolean
+  onEdit: () => void
+  onDelete: () => void
+  onReply?: () => void
+  onForward?: () => void
+}) {
+  const t = useT()
+  const copy = () => {
+    void navigator.clipboard?.writeText(m.text).then(() => toast.success(t('team.copied')))
+  }
+  return (
+    <>
+      {onReply && !chat.left && (
+        <DropdownMenuItem onSelect={onReply}>
+          <Reply className="size-4" /> {t('team.msg.reply')}
+        </DropdownMenuItem>
+      )}
+      {onForward && (
+        <DropdownMenuItem onSelect={onForward}>
+          <MessageSquareShare className="size-4" /> {t('team.forward')}
+        </DropdownMenuItem>
+      )}
+      {(onReply || onForward) && <DropdownMenuSeparator />}
+      {!!m.text && (
+        <DropdownMenuItem onSelect={copy}>
+          <Copy className="size-4" /> {t('team.copy')}
+        </DropdownMenuItem>
+      )}
+      {own && m.kind === 'text' && !chat.left && (
+        <DropdownMenuItem onSelect={onEdit}>
+          <Pencil className="size-4" /> {t('team.msg.edit')}
+        </DropdownMenuItem>
+      )}
+      {own && !chat.left && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem destructive onSelect={onDelete}>
+            <Trash2 className="size-4" /> {t('team.msg.delete')}
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
   )
 }
 
