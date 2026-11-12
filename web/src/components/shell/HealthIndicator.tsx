@@ -281,7 +281,7 @@ const THEMES: Theme[] = ['light', 'dark', 'system']
 const themeIcon = { light: Sun, dark: Moon, system: Monitor } as const
 
 /** The very bottom of the sidebar, under the Claude quota: the theme and presentation mode, icons only (names in
- *  tooltips). Unfolded: one line, the three theme icons and the eye. Folded: one button per row (the theme's icon,
+ *  tooltips). Unfolded: one pill, the three theme icons and the eye. Folded: one button per row (the theme's icon,
  *  a click goes to the next theme; the eye). The eye is crossed out and tinted while presentation mode is on. */
 function SidebarLook({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
@@ -320,33 +320,37 @@ function SidebarLook({ collapsed }: { collapsed?: boolean }) {
         </Tooltip>
       </div>
     )
+  // one pill: the three theme icons, a thin bar, the eye
   return (
-    <div className="mx-side-reveal flex h-9 min-w-0 items-center justify-between gap-2 px-0.5" data-testid="sidebar-look">
-      <Segmented<Theme>
-        size="sm"
-        value={theme}
-        onChange={setTheme}
-        aria-label={t('shell.theme')}
-        className="flex-nowrap p-0.5 [&_button]:h-7 [&_button]:px-2"
-        options={THEMES.map((v) => {
-          const I = themeIcon[v]
-          return { value: v, label: <Tooltip content={t(`theme.${v}`)}><span className="flex"><I /><span className="sr-only">{t(`theme.${v}`)}</span></span></Tooltip> }
-        })}
-      />
-      <Tooltip content={presLabel}>
-        <button
-          type="button"
-          className={cn(
-            'flex h-8 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4',
-            presentation && 'bg-primary/15 text-primary hover:text-primary',
-          )}
-          aria-label={presLabel}
-          aria-pressed={presentation}
-          onClick={() => setPresentation(!presentation)}
-        >
-          <PresIcon />
-        </button>
-      </Tooltip>
+    <div className="mx-side-reveal flex h-9 min-w-0 items-center px-0.5" data-testid="sidebar-look">
+      <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+        <Segmented<Theme>
+          size="sm"
+          value={theme}
+          onChange={setTheme}
+          aria-label={t('shell.theme')}
+          className="flex-nowrap bg-transparent p-0 [&_button]:h-7 [&_button]:px-2"
+          options={THEMES.map((v) => {
+            const I = themeIcon[v]
+            return { value: v, label: <Tooltip content={t(`theme.${v}`)}><span className="flex"><I /><span className="sr-only">{t(`theme.${v}`)}</span></span></Tooltip> }
+          })}
+        />
+        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+        <Tooltip content={presLabel}>
+          <button
+            type="button"
+            className={cn(
+              'flex h-7 items-center justify-center rounded-md px-2 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4',
+              presentation && 'bg-background text-primary shadow-xs hover:text-primary dark:bg-secondary',
+            )}
+            aria-label={presLabel}
+            aria-pressed={presentation}
+            onClick={() => setPresentation(!presentation)}
+          >
+            <PresIcon />
+          </button>
+        </Tooltip>
+      </div>
     </div>
   )
 }
