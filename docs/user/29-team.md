@@ -11,9 +11,10 @@ Turn it on in **Settings -> Features -> Team**. The **Team** entry appears in th
 chats; a chat opens in a small window docked at the bottom of the page (up to three side by side), like Messenger.
 **–** minimizes it into a round head above the bubble (with its unread count; hover it for the name, **×** to close
 it), and a new message brings its chat's head up. **Open in Team** (⤢, next to **–**) opens that chat in the Team
-page and closes its window; the same icon in the list of chats opens the Team page.
-The **×** of the Team bubble (on hover) hides all the bubbles; the chat icon next to **Team** in the sidebar, or
-opening a chat, brings them back. To do without bubbles, turn off **Settings -> Features -> Team bubbles**, under
+page and closes its window; the same icon in the list of chats opens the Team page. The other way round, **Open in a
+bubble** at the top of a chat in the Team page puts that chat in a bubble and takes you back where you were.
+The **×** of the Team bubble (on hover) hides all the bubbles; **Open in a bubble** in the Team page, or a chat opened
+from a notification, brings them back. To do without bubbles, turn off **Settings -> Features -> Team bubbles**, under
 Team (per browser): Team then opens its own page.
 
 On the Team page, on a computer, the chats sit in the second bar next to the sidebar (see

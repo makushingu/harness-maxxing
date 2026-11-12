@@ -41,6 +41,8 @@ type UIState = {
   /** The second-level sidebar (the list of Sessions, Agents, Team; desktop, components/shell/PageList.tsx) is open, for
    *  every page; closed, the page's entry in the sidebar shows it on hover. */
   secondBarOpen: boolean
+  /** The Extensions folder of the sidebar (the pinned extension pages) is unfolded. */
+  extFolderOpen: boolean
   /** Its width dragged by the user; null = the default (SECOND_W). */
   secondBarWidth: number | null
   layout: Layout
@@ -80,6 +82,7 @@ type UIState = {
   toggleSidebar: () => void
   setSidebarWidth: (w: number | null) => void
   setSecondBarOpen: (v: boolean) => void
+  setExtFolderOpen: (v: boolean) => void
   setSecondBarWidth: (w: number | null) => void
   setLayout: (l: Layout) => void
   setTouchHome: (h: TouchHome) => void
@@ -110,6 +113,7 @@ export const useUI = create<UIState>()(
       sidebarCollapsed: false,
       sidebarWidth: null,
       secondBarOpen: true,
+      extFolderOpen: true,
       secondBarWidth: null,
       layout: 'auto',
       touchHome: 'session',
@@ -135,6 +139,7 @@ export const useUI = create<UIState>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarWidth: (w) => set({ sidebarWidth: w == null ? null : clampSidebar(w) }),
       setSecondBarOpen: (secondBarOpen) => set({ secondBarOpen }),
+      setExtFolderOpen: (extFolderOpen) => set({ extFolderOpen }),
       setSecondBarWidth: (w) => set({ secondBarWidth: w == null ? null : clampSecond(w) }),
       setLayout: (layout) => set({ layout }),
       setTouchHome: (touchHome) => set({ touchHome }),
@@ -166,6 +171,7 @@ export const useUI = create<UIState>()(
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
         out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
         out.secondBarOpen = out.secondBarOpen !== false
+        out.extFolderOpen = out.extFolderOpen !== false
         out.secondBarWidth = typeof out.secondBarWidth === 'number' && Number.isFinite(out.secondBarWidth) ? clampSecond(out.secondBarWidth) : null
         if (out.touchHome !== 'dashboard') out.touchHome = 'session'
         if (out.presentationShot) {

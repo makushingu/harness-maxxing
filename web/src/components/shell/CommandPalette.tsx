@@ -193,8 +193,8 @@ export function CommandPalette() {
         perform: ({ navigate }) => navigate(n.to),
       })),
       { id: 'nav:docs', title: t('nav.docs'), group: nav, icon: BookOpen, perform: ({ navigate }) => navigate('/docs') },
-      // every extension page, pinned or not (the sidebar shows only the pinned ones)
-      { id: 'nav:x', title: t('ext.hubTitle'), group: nav, icon: Blocks, keywords: ['extensions', 'pages', 'plugins'], perform: ({ navigate }) => navigate('/x') },
+      // Settings -> Pages: every extension page, pinned or not (the sidebar's Extensions folder shows the pinned ones)
+      { id: 'nav:x', title: t('ext.hubTitle'), group: nav, icon: Blocks, keywords: ['extensions', 'pages', 'plugins'], perform: ({ navigate }) => navigate('/settings/pages') },
       {
         id: 'act:theme',
         title: resolveTheme(theme) === 'dark' ? t('palette.lightTheme') : t('palette.darkTheme'),

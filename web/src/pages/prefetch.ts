@@ -11,7 +11,6 @@ const PAGE_LOADERS: Record<string, () => Promise<unknown>> = {
   settings: withGroups(['settings', 'auth', 'show', 'tasks'], () => import('./settings')),
   feed: () => import('./feed'),
   docs: () => import('./docs'),
-  x: () => import('./ext/hub'),
   // optional pages (Settings -> Features): warmed only when switched on (see lib/prefetchIdle.ts)
   agents: withGroups(['agents', 'tasks', 'files'], () => import('../features/agents/AgentsLayout')),
   team: withGroups(['team'], () => import('../features/team/TeamPage')),
@@ -20,7 +19,7 @@ const PAGE_LOADERS: Record<string, () => Promise<unknown>> = {
   git: withGroups(['git'], () => import('../features/git/GitPage')),
 }
 /** The pages every install has, warmed when no list is given. */
-const ALWAYS = ['sessions', '', 'files', 'tasks', 'settings', 'feed', 'docs', 'x']
+const ALWAYS = ['sessions', '', 'files', 'tasks', 'settings', 'feed', 'docs']
 
 /** `tops`: the pages to warm, by their first path segment ('' = dashboard, 'x/' = an extension page), in order. */
 export function prefetchPages(tops: string[] = ALWAYS) {

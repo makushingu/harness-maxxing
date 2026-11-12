@@ -1,15 +1,14 @@
 import * as React from 'react'
-import { NavLink, useLocation } from 'react-router'
-import { Blocks, MessageCircle, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { NavLink, useLocation, useNavigate } from 'react-router'
+import { Blocks, ChevronRight, PanelLeftClose, PanelLeftOpen, Search, Settings2 } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
-import { useTeamUI } from '@/features/team/store'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
+import { Button, CountBadge, CountDot, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
+import { navRow, navTourId, useNavEntries, type NavItem, type PinnedPage } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -34,37 +33,12 @@ function useSessionBadge() {
   return { unread, running }
 }
 
-/** Team entry: its unread count, and (on hover) the button that opens the chat list in the Team bubble. */
+/** Team entry: its unread count (a chat goes into a bubble from the Team page: "Open in a bubble"). */
 function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
-  const t = useT()
   const { data } = useTeam()
-  const open = useTeamUI((s) => s.list)
-  const setOpen = useTeamUI((s) => s.setList)
-  const onTeam = useLocation().pathname.startsWith('/team')
-  const bubbles = useUI((s) => s.teamBubbles)
   const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
   if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
-  return (
-    <span className="flex items-center gap-1">
-      {!onTeam && bubbles && <span
-        role="button"
-        tabIndex={-1}
-        title={open ? t('nav.teamPanelClose') : t('nav.teamPanel')}
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setOpen(!open)
-        }}
-        className={cn(
-          'inline-flex size-6 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground',
-          open ? 'text-primary' : 'opacity-0 group-hover:opacity-100',
-        )}
-      >
-        <MessageCircle className="size-3.5" />
-      </span>}
-      <CountBadge count={unread} />
-    </span>
-  )
+  return <CountBadge count={unread} />
 }
 
 /** Agents entry: new results + approvals waiting, summed over the agents. */
@@ -124,13 +98,98 @@ function useScrollEdges(ref: React.RefObject<HTMLElement | null>): string {
 /** Width of the folded icon bar. */
 const FOLDED_W = 64
 
+/** The Extensions folder, after the pages: its row folds / unfolds the extension pages pinned in Settings -> Pages
+ *  (kept per browser), dragged into the order you like; folded bar: a menu beside it. Its own component, so the
+ *  memoized sidebar does not re-render on every URL change for its active mark. */
+function ExtFolder({ pins, collapsed, drawer, idx }: { pins: PinnedPage[]; collapsed: boolean; drawer?: boolean; idx: number }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const prefetchLink = usePrefetchLink()
+  const open = useUI((s) => s.extFolderOpen)
+  const setOpen = useUI((s) => s.setExtFolderOpen)
+  const onExt = useLocation().pathname.startsWith('/x/')
+  const orderPins = useOrderPins()
+  const drag = useDragOrder(pins.map((p) => p.id), (ids) => orderPins.mutate(ids), 'ext')
+  const label = t('ext.hubTitle')
+  if (collapsed)
+    return (
+      <DropdownMenu>
+        <Tooltip content={label} side="right">
+          <DropdownMenuTrigger asChild>
+            <button type="button" data-tour="nav-extensions" aria-label={label} style={{ '--i': idx } as React.CSSProperties} className={cn('mx-boot-item', navRow(true, onExt))}>
+              {onExt && <ActiveMark className={activeMark(true)} collapsed />}
+              <Blocks className={cn('size-[18px] shrink-0', onExt && 'text-primary')} />
+            </button>
+          </DropdownMenuTrigger>
+        </Tooltip>
+        <DropdownMenuContent side="right" align="start" className="min-w-52">
+          {pins.map((p) => (
+            <DropdownMenuItem key={p.id} onSelect={() => navigate(p.to)}>
+              <NamedIcon name={p.icon} /> {p.name}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => navigate('/settings/pages')}>
+            <Settings2 /> {t('ext.manage')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  return (
+    <>
+      <button
+        type="button"
+        data-tour="nav-extensions"
+        data-testid="ext-folder"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        style={{ '--i': idx } as React.CSSProperties}
+        className={cn('mx-boot-item', navRow(false, !open && onExt))}
+      >
+        {!open && onExt && <ActiveMark className={activeMark(false)} collapsed={false} />}
+        <Blocks className={cn('size-[18px] shrink-0', !open && onExt && 'text-primary')} />
+        <span className="flex-1 truncate text-left">{label}</span>
+        <ChevronRight className={cn('size-4 shrink-0 transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && (
+        <div className="grid gap-0.5" data-testid="ext-folder-list">
+          {drag.order.map((id) => {
+            const p = pins.find((x) => x.id === id)
+            if (!p) return null
+            return (
+              <NavLink
+                key={p.id}
+                to={p.to}
+                {...prefetchLink(p.to)}
+                {...(drawer ? {} : drag.props(p.id))}
+                data-ext={p.id}
+                className={({ isActive }) => cn(navRow(false, isActive), 'pl-7')}
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && <ActiveMark className={activeMark(false)} collapsed={false} />}
+                    <NamedIcon name={p.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} />
+                    <span className="flex-1 truncate">{p.name}</span>
+                  </>
+                )}
+              </NavLink>
+            )
+          })}
+          <NavLink to="/settings/pages" className="flex h-8 items-center rounded-md pl-7 pr-2.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+            {t('ext.manage')}
+          </NavLink>
+        </div>
+      )}
+    </>
+  )
+}
+
 /** Memoized: the shell re-renders on every URL change (a session switched in the Sessions page's tabs too), and the
  *  bar has nothing to redo then (its links follow the URL by themselves). */
 export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layout: the menu level of the left drawer (TouchNav.tsx) - always unfolded, no pin, resize, drag or second bar */ drawer?: boolean }) {
   const prefetchLink = usePrefetchLink()
   const t = useT()
-  const { entries, end } = useNavEntries()
-  const unpinned = useUnpinnedPages()
+  const { pages, pins, end } = useNavEntries()
   const userCollapsed = useUI((s) => s.sidebarCollapsed)
   const toggle = useUI((s) => s.toggleSidebar)
   const tablet = useIsTablet()
@@ -144,7 +203,6 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
   const barW = pinned ? width : FOLDED_W
   const slot = React.useRef<HTMLDivElement>(null)
   const saveSettings = useSaveSettings()
-  const orderPins = useOrderPins()
 
   // the page open has a list and the second-level sidebar is closed: resting on its entry shows the list over the page
   const closedList = useClosedList()
@@ -205,60 +263,10 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
       </Tooltip>
     )
   }
-  /** A pinned extension page: a row like the pages. */
-  const extItem = (e: Extract<NavEntry, { ext: object }>, idx: number, drag: object) => (
-    <Tooltip key={e.to} content={collapsed ? e.ext.name : null} side="right">
-      <NavLink
-        to={e.to}
-        {...prefetchLink(e.to)}
-        {...(drawer ? {} : drag)}
-        data-ext={e.ext.id}
-        aria-label={collapsed ? e.ext.name : undefined}
-        style={{ '--i': idx } as React.CSSProperties}
-        className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
-      >
-        {({ isActive }) => (
-          <>
-            {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
-            <NamedIcon name={e.ext.icon} className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
-            {!collapsed && <span className="flex-1 truncate">{e.ext.name}</span>}
-          </>
-        )}
-      </NavLink>
-    </Tooltip>
-  )
-  /** The Extensions page, after the pages: only while an extension page is not pinned (a direct way to it). */
-  const hubItem = (idx: number) => (
-    <Tooltip key="/x" content={collapsed ? t('ext.hubTitle') : null} side="right">
-      <NavLink
-        to="/x"
-        end
-        {...prefetchLink('/x')}
-        data-tour="nav-extensions"
-        aria-label={collapsed ? t('ext.hubTitle') : undefined}
-        style={{ '--i': idx } as React.CSSProperties}
-        className={({ isActive }) => cn('mx-boot-item', navRow(collapsed, isActive))}
-      >
-        {({ isActive }) => (
-          <>
-            {isActive && <ActiveMark className={activeMark(collapsed)} collapsed={collapsed} />}
-            <Blocks className={cn('size-[18px] shrink-0', isActive && 'text-primary')} strokeWidth={isActive ? 2 : 1.7} />
-            {!collapsed && <span className="flex-1 truncate">{t('ext.hubTitle')}</span>}
-          </>
-        )}
-      </NavLink>
-    </Tooltip>
-  )
-  // Dragging saves the whole order (pages and pinned pages) in `sidebar_order`; the pin order follows, so the
-  // other lists of pinned pages (Extensions) show them in the same order.
+  // Dragging saves the order of the pages in `sidebar_order` (the extension pages keep theirs, in their folder).
   const drag = useDragOrder(
-    entries.map((e) => e.to),
-    (order) => {
-      saveSettings.mutate({ sidebar_order: order })
-      const pins = order.filter((to) => to.startsWith('/x/')).map((to) => to.slice(3))
-      const before = entries.flatMap((e) => (e.ext ? [e.ext.id] : []))
-      if (pins.join('\n') !== before.join('\n')) orderPins.mutate(pins)
-    },
+    pages.map((p) => p.to),
+    (order) => saveSettings.mutate({ sidebar_order: order }),
     'nav',
   )
   // rows hidden above or below in a short window: the list fades on that edge, so it shows it scrolls
@@ -323,15 +331,15 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               )}
             </div>
 
-            {/* The pages and the pinned extension pages (drag to reorder; one scroll when the window is short). */}
+            {/* The pages, then the Extensions folder (drag to reorder; one scroll when the window is short). */}
             <div ref={navScroll} data-tour="nav" data-more={more || undefined} className="mx-nav-scroll min-h-[76px] overflow-y-auto overscroll-contain [scrollbar-width:none]">
               <nav aria-label={t('shell.navigation')} className={block()}>
                 {drag.order.map((to, idx) => {
-                  const e = entries.find((x) => x.to === to)
-                  if (!e) return null // switched off or unpinned in another tab during a drag
-                  return e.page ? navItem(e.page, idx, drag.props(to)) : extItem(e, idx, drag.props(to))
+                  const page = pages.find((x) => x.to === to)
+                  if (!page) return null // switched off in another tab during a drag
+                  return navItem(page, idx, drag.props(to))
                 })}
-                {unpinned > 0 && hubItem(entries.length)}
+                {pins.length > 0 && <ExtFolder pins={pins} collapsed={collapsed} drawer={drawer} idx={pages.length} />}
               </nav>
             </div>
 
@@ -344,7 +352,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               </div>
               {/* unfolded, Help and Settings sit at the end of the last line (StatusBlock `tail`) */}
               {collapsed && <HelpMenu collapsed />}
-              {collapsed && end.map((item) => navItem(item, entries.length + 1))}
+              {collapsed && end.map((item) => navItem(item, pages.length + 1))}
               {/* folded: the way to pin the bar (pinned, the button sits beside the logo) */}
               {collapsed && !tablet && (
                 <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">

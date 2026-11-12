@@ -43,7 +43,7 @@ export type NavItem = {
   setting?: FeatureSetting
   /** shown while the settings load (the page is on by default) */
   defaultOn?: boolean
-  /** sidebar block: the pages (the user may reorder them by dragging, with the pinned extension pages), or Settings, always last */
+  /** sidebar block: the pages (the user may reorder them by dragging), or Settings, always last */
   group: NavGroup
 }
 
@@ -54,7 +54,7 @@ export const navTourId = (n: NavItem) => `nav-${n.to === '/' ? 'dashboard' : n.t
 
 /** Every page in its sidebar order (the palette, the shortcuts and the touch menu follow it). Optional pages are
  *  listed only when switched on (Settings -> Features). The user reorders the pages by dragging them in the sidebar
- *  (settings `sidebar_order`, see orderEntries); Settings always stays last. */
+ *  (settings `sidebar_order`, see orderPages); Settings always stays last. */
 export const NAV: NavItem[] = [
   { to: '/', label: 'nav.home', icon: LayoutDashboard, key: 'd', end: true, group: 'main' },
   { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's', group: 'main' },
@@ -68,31 +68,27 @@ export const NAV: NavItem[] = [
   { to: '/settings', label: 'nav.settings', icon: Settings, key: ',', group: 'end' },
 ]
 
-/** A pinned extension page: a row among the pages (sidebar, touch menu, palette); `extensions.pinned` says which. */
+/** A pinned extension page: a row of the sidebar's Extensions folder (and of the palette); `extensions.pinned` says which. */
 export type PinnedPage = { to: string; id: string; name: string; icon: string }
 
-/** One row of the page list: an app page or a pinned extension page. */
-export type NavEntry = { to: string; page: NavItem; ext?: undefined } | { to: string; ext: PinnedPage; page?: undefined }
-
-/** The pages and the pinned extension pages in the user's order (settings `sidebar_order`, routes and `/x/<id>`):
- *  the saved routes first; a page it does not mention (switched on later, new in an update) right after the page it
- *  follows in NAV; a pinned page it does not mention at the end, in its pin order. Settings is not part of it. */
-export function orderEntries(items: NavItem[], pins: PinnedPage[], order: string[] | undefined): NavEntry[] {
-  const pages: NavEntry[] = items.filter((n) => n.group === 'main').map((page) => ({ to: page.to, page }))
-  const known = new Map<string, NavEntry>([...pages, ...pins.map((ext) => ({ to: ext.to, ext }))].map((e) => [e.to, e]))
-  const out = [...new Set(order || [])].map((to) => known.get(to)).filter((e): e is NavEntry => !!e)
-  pages.forEach((e, i) => {
-    if (out.includes(e)) return
-    const before = pages.slice(0, i).reverse().find((p) => out.includes(p))
-    out.splice(before ? out.indexOf(before) + 1 : 0, 0, e)
+/** The pages in the user's order (settings `sidebar_order`, routes): the saved routes first; a page it does not
+ *  mention (switched on later, new in an update) right after the page it follows in NAV. Settings is not part of it.
+ *  Extension pages are not here: they sit in the Extensions folder, in their pin order. */
+export function orderPages(items: NavItem[], order: string[] | undefined): NavItem[] {
+  const pages = items.filter((n) => n.group === 'main')
+  const known = new Map(pages.map((p) => [p.to, p]))
+  const out = [...new Set(order || [])].map((to) => known.get(to)).filter((p): p is NavItem => !!p)
+  pages.forEach((p, i) => {
+    if (out.includes(p)) return
+    const before = pages.slice(0, i).reverse().find((x) => out.includes(x))
+    out.splice(before ? out.indexOf(before) + 1 : 0, 0, p)
   })
-  for (const e of known.values()) if (e.ext && !out.includes(e)) out.push(e)
   return out
 }
 
 /** `items` in the user's order (settings `sidebar_order`), Settings last: the list of Settings -> Features. */
 export function orderNav(items: NavItem[], order: string[] | undefined): NavItem[] {
-  return [...orderEntries(items, [], order).map((e) => e.page!), ...items.filter((n) => n.group !== 'main')]
+  return [...orderPages(items, order), ...items.filter((n) => n.group !== 'main')]
 }
 
 /** The page extensions pinned to the sidebar, in their pin order. */
@@ -102,12 +98,6 @@ export function usePinnedPages(): PinnedPage[] {
     .filter((e) => e.type === 'page' && e.enabled && !e.error && e.pinned)
     .sort((a, b) => (a.pin_order ?? 1e9) - (b.pin_order ?? 1e9) || a.name.localeCompare(b.name))
     .map((e) => ({ to: `/x/${e.id}`, id: e.id, name: e.name, icon: e.icon }))
-}
-
-/** Page extensions that are on but not pinned: only the Extensions page (/x) leads to them, so the nav shows it then. */
-export function useUnpinnedPages(): number {
-  const { data } = useExtensions()
-  return (data || []).filter((e) => e.type === 'page' && e.enabled && !e.error && !e.pinned).length
 }
 
 /** The pages shown on this install (optional ones only once switched on). */
@@ -122,9 +112,10 @@ export function useNav(): NavItem[] {
   return orderNav(pages, order)
 }
 
-/** The sidebar's list: pages and pinned extension pages mixed in the user's order, then the `end` items (Settings). */
-export function useNavEntries(): { entries: NavEntry[]; end: NavItem[] } {
+/** The sidebar: the pages in the user's order, the pinned extension pages (its Extensions folder), then the `end`
+ *  items (Settings). */
+export function useNavEntries(): { pages: NavItem[]; pins: PinnedPage[]; end: NavItem[] } {
   const { pages, order } = usePages()
   const pins = usePinnedPages()
-  return { entries: orderEntries(pages, pins, order), end: pages.filter((n) => n.group !== 'main') }
+  return { pages: orderPages(pages, order), pins, end: pages.filter((n) => n.group !== 'main') }
 }

@@ -61,7 +61,8 @@ export const routes: RouteObject[] = [
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },
           // Extension pages: /x/<id> loads /ext/<id>/page.js
-          { path: 'x', lazy: page(() => import('./pages/ext/hub')) },
+          // the old Extensions page: the pinned ones are in the sidebar's Extensions folder, the rest in Settings -> Pages
+          { path: 'x', element: <Navigate to="/settings/pages" replace /> },
           { path: 'x/:id/*', lazy: page(() => import('./pages/ext')) },
           { path: '*', Component: NotFound },
         ],

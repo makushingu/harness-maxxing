@@ -5,16 +5,18 @@
 // second-level sidebar (PageList; touch: the left drawer, like every page with a list). An open chat's header is the
 // page's header (its name, presence, Summarize, ⋯, then New chat).
 import * as React from 'react'
-import { useSearchParams } from 'react-router'
-import { MessageCircleMore, RefreshCw, SquarePen } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router'
+import { MessageCircleMore, PictureInPicture2, RefreshCw, SquarePen } from 'lucide-react'
 import { useTeam } from '@/lib/queries'
 import { useT } from '@/i18n'
-import { Button, EmptyState } from '@/components/ui'
+import { Button, EmptyState, Tooltip } from '@/components/ui'
 import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { openPageList, TouchListButton } from '@/components/shell/TouchNav'
 import { MessagesSquare } from 'lucide-react'
 import { PageList } from '@/components/shell/PageList'
 import { useCompact } from '@/stores/media'
+import { useUI } from '@/stores/ui'
+import { useTeamUI } from './store'
 import { ChatView } from './Chat'
 import { TeamSide } from './Side'
 import { NewChatDialog } from './Dialogs'
@@ -42,6 +44,26 @@ export default function TeamPage() {
       <SquarePen /> <span className="max-[429px]:sr-only">{t('team.new')}</span>
     </Button>
   )
+  // Bubbles on (desktop): the chat open leaves the page for a bubble, and you go back where you were.
+  const bubbles = useUI((u) => u.teamBubbles) && !compact
+  const navigate = useNavigate()
+  const toBubble = (id: string) => {
+    useTeamUI.getState().openChat(id)
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1)
+    else navigate('/')
+  }
+  const chatActions = (id: string) => (
+    <>
+      {bubbles && (
+        <Tooltip content={t('team.toBubbleHint')}>
+          <Button size="sm" variant="outline" onClick={() => toBubble(id)} data-testid="team-to-bubble">
+            <PictureInPicture2 /> <span className="max-lg:sr-only">{t('team.toBubble')}</span>
+          </Button>
+        </Tooltip>
+      )}
+      {newChat}
+    </>
+  )
   return (
     <div className="flex h-full min-h-0 flex-col">
       {(!chatId || (isError && !team)) && <PageHeader title={t('team.title')} description={unread ? t('team.unread', { count: unread }) : t('team.desc')} actions={newChat} />}
@@ -65,7 +87,7 @@ export default function TeamPage() {
             <TeamSide team={team} active={chatId} onOpen={open} query={query} />
           </PageList>
           {chatId ? (
-            <ChatView key={chatId} team={team} chatId={chatId} leading={compact ? <TouchListButton /> : undefined} headerExtra={newChat} />
+            <ChatView key={chatId} team={team} chatId={chatId} leading={compact ? <TouchListButton /> : undefined} headerExtra={chatActions(chatId)} />
           ) : (
             <div className="flex min-w-0 flex-1 items-center justify-center p-6">
               <EmptyState
