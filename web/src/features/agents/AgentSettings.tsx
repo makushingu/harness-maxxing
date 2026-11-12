@@ -10,15 +10,15 @@ import { useNavigate } from 'react-router'
 import { AlertTriangle, ChevronRight, Download, Lock, Mail, Pencil, Plus, Trash2, Unlock, X } from 'lucide-react'
 import { useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { agentExportUrl, useDeleteAgent, usePatchAgent } from '@/lib/queries'
+import { agentExportUrl, usePatchAgent } from '@/lib/queries'
 import type { AgentDetail, AgentLimits, AgentRule, AgentRuleTool, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Button, confirm, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
+import { Button, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 import { AgentMail } from './AgentMail'
 import { AppearanceDialog } from './Appearance'
-import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect } from './parts'
+import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect, useDeleteAgentAsk } from './parts'
 
 const toolsText = (l: string[]) => l.join('\n')
 const toolsList = (s: string) =>
@@ -122,7 +122,7 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
   const patch = usePatchAgent()
   // the Save button: a refused rule shows under the rules
   const saver = usePatchAgent({ errorToast: false })
-  const del = useDeleteAgent()
+  const del = useDeleteAgentAsk()
   const [d, setD] = React.useState<Draft>(() => draftOf(a))
   const [dirty, setDirty] = React.useState(false)
   const [look, setLook] = React.useState(false)
@@ -314,17 +314,8 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
           <SettingRow label={t('agents.settings.delete')} description={t('agents.settings.deleteDesc')}>
             <Button
               variant="destructive"
-              loading={del.isPending}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: t('agents.settings.deleteTitle', { name: a.display_name }),
-                  description: t('agents.settings.deleteDesc'),
-                  destructive: true,
-                  confirmText: t('common.delete'),
-                  typeToConfirm: a.name,
-                })
-                if (ok) del.mutate(a.path, { onSuccess: () => (toast.success(t('agents.settings.deleted')), navigate('/agents')) })
-              }}
+              loading={del.pending}
+              onClick={() => del.ask(a, () => navigate('/agents'))}
               data-testid="agent-delete"
             >
               <Trash2 /> {t('common.delete')}

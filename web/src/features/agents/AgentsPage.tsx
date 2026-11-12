@@ -142,6 +142,10 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
       }),
     [setSearch],
   )
+  // an agent deleted (its menu) while its conversation is open: the panel closes
+  React.useEffect(() => {
+    if (chat && data && !data.agents.some((a) => a.path === chat)) setChat(null)
+  }, [chat, data, setChat])
   const office = React.useMemo(() => ({ open: (path: string) => setChat(path === chat ? null : path), current: chat }), [chat, setChat])
   const docked = useMediaQuery('(min-width: 1024px)')
 

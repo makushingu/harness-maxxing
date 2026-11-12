@@ -4,13 +4,13 @@ import * as React from 'react'
 import { Pencil } from 'lucide-react'
 import { useT } from '@/i18n'
 import { usePatchAgent } from '@/lib/queries'
-import type { AgentAvatar, AgentDetail } from '@/lib/types'
+import type { Agent, AgentAvatar, AgentDetail } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, Sensitive, toast } from '@/components/ui'
 import { AgentAvatarIcon } from './Avatar'
 import { AvatarEditor } from './AvatarEditor'
 
-export function AppearanceDialog({ agent: a, open, onOpenChange }: { agent: AgentDetail; open: boolean; onOpenChange: (o: boolean) => void }) {
+export function AppearanceDialog({ agent: a, open, onOpenChange }: { agent: Agent; open: boolean; onOpenChange: (o: boolean) => void }) {
   const t = useT()
   const patch = usePatchAgent()
   const [name, setName] = React.useState(a.display_name)

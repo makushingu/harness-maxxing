@@ -1,12 +1,12 @@
 // Building blocks shared by the Agents page, the creation sheet and an agent's page.
 import * as React from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { Bot, Clock, MessagesSquare, Rss, Send, Settings2, Webhook } from 'lucide-react'
 import { useT, type TFn, type TKey } from '@/i18n'
-import { useClaudeStatus, useContinueRun, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
+import { agentRoute, useClaudeStatus, useContinueRun, useDeleteAgent, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
 import type { Agent, AgentLimits, AgentWebhookResult, AgentTrigger, AgentTriggerInput, AgentWebhookKind, Cron, FeedLevel, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Checkbox, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask, type DotTone } from '@/components/ui'
+import { Badge, Button, Checkbox, confirm, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask, type DotTone } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { Page } from '@/components/shell/Page'
 import { fmtRelative } from '@/lib/format'
@@ -318,6 +318,32 @@ export function useRunNow() {
     [run, t, navigate],
   )
   return { go, pending: run.isPending, vars: run.variables }
+}
+
+/** Delete an agent after a confirmation (its folder name typed): a toast once done, then `onDone`; without one, the
+ *  agent's own page (or one of its runs) that was open goes back to the Agents page. Settings and the agent's menu. */
+export function useDeleteAgentAsk() {
+  const t = useT()
+  const del = useDeleteAgent()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const ask = React.useCallback(
+    async (a: Pick<Agent, 'path' | 'name' | 'display_name' | 'project' | 'topic'>, onDone?: () => void) => {
+      const ok = await confirm({
+        title: t('agents.settings.deleteTitle', { name: a.display_name }),
+        description: t('agents.settings.deleteDesc'),
+        destructive: true,
+        confirmText: t('common.delete'),
+        typeToConfirm: a.name,
+      })
+      if (!ok) return
+      const to = agentRoute(a)
+      const here = location.pathname === to || location.pathname.startsWith(`${to}/`)
+      del.mutate(a.path, { onSuccess: () => (toast.success(t('agents.settings.deleted')), onDone ? onDone() : here && navigate('/agents')) })
+    },
+    [del, t, navigate, location.pathname],
+  )
+  return { ask, pending: del.isPending }
 }
 
 /** Why a trigger did not start a turn (server reasons: disabled, budget, busy, rate, missing...). */
