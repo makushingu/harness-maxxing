@@ -147,6 +147,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `test_crons.py::test_cron_run_detach_runs_here_when_systemd_run_cannot_be_executed`,
   `test_cron_run_detach_does_not_run_twice_when_systemd_run_times_out`,
   `test_cron_run_if_due_with_a_broken_schedule_is_an_error`, `test_cron_list_survives_a_bad_time_in_the_run_history`.
+- DESIGN.md §8/§11: the 9 `window.confirm` of Mail (`Compose`, `MailPage`) and Team (`Chat`, `Friends`) use
+  `confirm()` of `ui/alert-dialog` (Compose's `useBlocker` effect proceeds/resets from the promise; `run`, `tryClose`,
+  `remove` are async); `pages/sessions/Tabs` arrows lose `backdrop-blur`. Test: `tests/test_web_design_rules.py`
+  (browser dialogs and backdrop blur in `web/src`; only `features/agents/OfficeFuture.tsx` is exempt from the blur).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

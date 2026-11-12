@@ -100,6 +100,8 @@ Fixed:
   `cron run --if-due` on a job with a broken schedule, `cron list` with a damaged run history, `pdf` into a folder that
   cannot be created and a failed `voice download` now print an error (on stderr) instead of a traceback;
   `cron run --detach` runs the job here when systemd refuses to start it.
+- **Confirmations in Mail and Team use the app's own dialog**, in the app's theme, instead of the browser's. The
+  session tab arrows no longer blur what is behind them.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

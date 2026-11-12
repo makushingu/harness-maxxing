@@ -6,6 +6,7 @@ import { useBlocker } from 'react-router'
 import { FileText, Paperclip, Send, Trash2, X } from 'lucide-react'
 import { Button, Dialog, DialogContent, DialogDescription, DialogTitle, Input, Select, Textarea } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
+import { confirm } from '@/components/ui/alert-dialog'
 import { errorMessage, isApiError } from '@/lib/api'
 import { fmtBytes } from '@/lib/format'
 import type { MailAccount, MailAttachment, MailComposeMode, MailDraft } from '@/lib/types'
@@ -182,11 +183,22 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
       [dirty],
     ),
   )
+  const tRef = React.useRef(t)
+  tRef.current = t
   React.useEffect(() => {
     if (blocker.state !== 'blocked') return
-    if (window.confirm(t('mail.compose.leaveConfirm'))) blocker.proceed()
-    else blocker.reset()
-  }, [blocker, t])
+    let live = true
+    void confirm({
+      title: tRef.current('mail.compose.leaveTitle'),
+      description: tRef.current('mail.compose.leaveConfirm'),
+      confirmText: tRef.current('mail.compose.leaveAction'),
+    }).then((ok) => {
+      if (live) ok ? blocker.proceed() : blocker.reset()
+    })
+    return () => {
+      live = false
+    }
+  }, [blocker])
 
   /** The dialog is done with this message (sent, saved and closed, or thrown away): no copy stays in the browser. */
   const finish = () => {
@@ -240,8 +252,10 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
     if (!recipients) return setError(t('mail.compose.noRecipient'))
     if (recipients > MAX_RECIPIENTS) return setError(t('mail.compose.tooMany', { max: MAX_RECIPIENTS }))
     if (total > MAX_TOTAL) return setError(t('mail.compose.tooLarge'))
-    if (unsure && !window.confirm(t('mail.compose.resendConfirm'))) return
-    if (!subject.trim() && !window.confirm(t('mail.compose.noSubjectConfirm'))) return
+    const sendText = t('mail.compose.send')
+    if (unsure && !(await confirm({ title: sendText, description: t('mail.compose.resendConfirm'), confirmText: sendText }))) return
+    if (!subject.trim() && !(await confirm({ title: t('mail.compose.noSubjectConfirm'), confirmText: sendText }))) return
+    if (inFlight.current) return
     inFlight.current = true
     hold()
     const sent = draft
@@ -351,9 +365,9 @@ export function Compose({ init, accounts, onClose }: { init: ComposeInit; accoun
       else toast.success(t('mail.compose.saved'))
     }
   }
-  const tryClose = () => {
+  const tryClose = async () => {
     if (busy || inFlight.current) return
-    if (dirty && !window.confirm(t('mail.compose.discardConfirm'))) return
+    if (dirty && !(await confirm({ title: t('mail.compose.discard'), description: t('mail.compose.discardConfirm'), confirmText: t('common.close') }))) return
     finish()
   }
   const touch = <T,>(set: (v: T) => void) => (v: T) => {

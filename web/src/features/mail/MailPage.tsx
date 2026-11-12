@@ -19,6 +19,7 @@ import { ResizeEdge } from '@/components/shell/ResizeEdge'
 import { keepPageListOpen } from '@/components/shell/TouchNav'
 import { errorMessage } from '@/lib/api'
 import { toast } from '@/components/ui/toast'
+import { confirm } from '@/components/ui/alert-dialog'
 import type { MailAccount, MailAction, MailComposeMode, MailFolder, MailMessage, MailSummary } from '@/lib/types'
 import {
   fetchMailCompose, mailKeys, useMailAccounts, useMailAction, useMailCreateFolder, useMailDeleteFolder, useMailFolders, useMailList, useMailRefresh, useMailRenameFolder,
@@ -97,7 +98,7 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                 <DropdownMenuItem onSelect={() => setRenaming({ from: f.name, to: leaf(f.name, f.delim) })}>
                   <Pencil /> {t('mail.folder.rename')}
                 </DropdownMenuItem>
-                <DropdownMenuItem destructive onSelect={() => window.confirm(t('mail.folder.deleteConfirm', { name: leaf(f.name, f.delim) })) && del.mutate(f.name, { onSuccess: () => active && onPick('INBOX') })}>
+                <DropdownMenuItem destructive onSelect={async () => (await confirm({ title: t('mail.folder.deleteConfirm', { name: leaf(f.name, f.delim) }), destructive: true })) && del.mutate(f.name, { onSuccess: () => active && onPick('INBOX') })}>
                   <Trash2 /> {t('mail.folder.delete')}
                 </DropdownMenuItem>
               </>
@@ -401,9 +402,9 @@ export default function MailPage() {
   const total = msgs.data?.total || 0
   const pages = Math.max(1, Math.ceil(total / (msgs.data?.size || 50)))
 
-  const run = (uids: number[], a: MailAction, target?: string) => {
+  const run = async (uids: number[], a: MailAction, target?: string) => {
     if (!acc || !uids.length) return
-    if (a === 'delete' && !window.confirm(t('mail.act.deleteConfirm', { count: uids.length }))) return
+    if (a === 'delete' && !(await confirm({ title: t('mail.act.deleteConfirm', { count: uids.length }), destructive: true }))) return
     // the open message leaves the list: open the next one (or none)
     const leaves = a === 'move' || a === 'archive' || a === 'trash' || a === 'junk' || a === 'inbox' || a === 'delete'
     if (leaves && uid && uids.includes(uid)) {

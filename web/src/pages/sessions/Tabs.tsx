@@ -140,7 +140,7 @@ export function TabsArrows({ onPick }: { onPick: (c: Col) => void }) {
     if (c) onPick(c)
   }
   const cls =
-    'absolute top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border bg-background/80 text-muted-foreground opacity-40 shadow-sm backdrop-blur transition-opacity hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'absolute top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border bg-background/95 text-muted-foreground opacity-40 shadow-sm transition-opacity hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
   return (
     <>
       <Tooltip content={`${t('sessions.shortcuts.prev')} (Alt+←)`} side="right">

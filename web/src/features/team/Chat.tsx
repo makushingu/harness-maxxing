@@ -20,6 +20,7 @@ import {
 import { openFileViewer } from '@/features/files/viewerStore'
 import { fmtBytes } from '@/lib/format'
 import { Markdown } from '@/components/ui/markdown'
+import { confirm } from '@/components/ui/alert-dialog'
 import { Avatar } from '@/features/profile/Avatar'
 import { projectColor } from '@/features/tasks/model'
 import { ForwardDialog, GroupDialog, NewChatDialog, PollDialog } from './Dialogs'
@@ -305,7 +306,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
     const m = [...msgs].reverse().find((x) => x.author === me && x.kind === 'text' && !x.deleted)
     if (m) setEditing(m)
   }
-  const remove = (m: TeamMessage) => window.confirm(t('team.msg.deleteConfirm')) && del.mutate({ cid: chatId, mid: m.id })
+  const remove = async (m: TeamMessage) => (await confirm({ title: t('team.msg.deleteConfirm'), destructive: true })) && del.mutate({ cid: chatId, mid: m.id })
 
   return (
     <div
@@ -529,7 +530,7 @@ function ChatMenuItems({ team, chat, onManage }: { team: TeamState | undefined; 
       {chat.kind === 'group' && !chat.left && (
         <>
           <DropdownMenuSeparator />
-          <DropdownMenuItem destructive onSelect={() => window.confirm(t('team.group.leaveConfirm')) && leave.mutate(chat.id)}>
+          <DropdownMenuItem destructive onSelect={async () => (await confirm({ title: t('team.group.leave'), description: t('team.group.leaveConfirm'), confirmText: t('team.group.leave') })) && leave.mutate(chat.id)}>
             <LogOut className="size-4" /> {t('team.group.leave')}
           </DropdownMenuItem>
         </>
