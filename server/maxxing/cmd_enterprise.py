@@ -24,6 +24,8 @@ From an agent turn, as the position of the caller (the owner passes --as POSITIO
   maxxing enterprise request CATEGORY TEXT [--amount N]    an organizational request, routed by category
   maxxing enterprise decide ID allow|deny [REASON]         decide a request
   maxxing enterprise objective set ID VALUE                the value of an objective (its owner position only)
+  maxxing enterprise route DEPARTMENT TEXT                 the front desk passes a request on (a task marked outside)
+  maxxing enterprise worker start TEXT [--for TASK] | list | stop ID   temporary workers (stop: the owner)
 
 Works without the server: the commands call the enterprise modules and write the files directly.
 Exit codes: 0 done, 1 valid but nothing done, 2 error or refusal (message on stderr).
@@ -37,7 +39,8 @@ import time
 
 from . import cli
 
-TURN_CMDS = ("assign", "done", "block", "escalate", "answer", "request", "decide", "objective", "profile")
+TURN_CMDS = ("assign", "done", "block", "escalate", "answer", "request", "decide", "objective", "profile", "route",
+             "worker")
 STRUCTURE_CMDS = ("list", "create", "link", "unlink", "position", "settings", "grant", "report", "decisions", "export",
                   "import")
 GRANT_DAYS = 30
@@ -166,6 +169,20 @@ def _configure(p) -> None:
     s = sub.add_parser("profile", help="the company profile")
     s.add_argument("--section", default="")
     who(s)
+    s = sub.add_parser("route", help="the front desk passes a request to a department's lead")
+    s.add_argument("department")
+    s.add_argument("text", nargs="+")
+    who(s)
+    w = sub.add_parser("worker", help="temporary workers of a position").add_subparsers(dest="worker_cmd", required=True)
+    o = w.add_parser("start", help="start a worker for a task")
+    o.add_argument("text", nargs="+")
+    o.add_argument("--for", dest="for_task", default="", metavar="TASK", help="the task the worker helps with")
+    who(o)
+    o = w.add_parser("list", help="the workers")
+    who(o)
+    o = w.add_parser("stop", help="stop a worker (the owner)")
+    o.add_argument("id")
+    who(o)
 
 
 # ---- helpers ---------------------------------------------------------------------------------------------
@@ -575,11 +592,38 @@ def _turn_cmd(a) -> int:
         r = _module("enterprise_policy", "request")(slug, _need_pos(pos, "`request`"), a.category, _text(a),
                                                     amount=a.amount, session=sess, outside=outside)
         return _say(a, r, f"request {r.get('id', '')} ({r.get('status', 'sent')})".replace("  ", " "))
+    if c == "route":
+        r = _module("enterprise_desk", "route")(slug, _need_pos(pos, "`route`"), a.department, _text(a), session=sess)
+        return _say(a, r, f"routed: task {r.get('id', '')}".strip())
+    if c == "worker":
+        return _worker(a, slug, pos, turn)
     if c == "decide":
         r = _module("enterprise_policy", "decide")(slug, a.id, a.decision, reason=" ".join(a.reason).strip(),
                                                    by=pos or None)
         return _say(a, r, f"{a.id}: {a.decision}")
     return _objective(a, slug, pos)
+
+
+def _worker(a, slug: str, pos: str, turn: dict) -> int:
+    c = a.worker_cmd
+    if c == "stop":
+        if turn["path"]:
+            raise _Refused("`maxxing enterprise worker stop` is the owner's: not allowed in an agent turn.")
+        w = _module("enterprise_workers", "stop")(slug, a.id)
+        return _say(a, w, f"worker {a.id} stopped")
+    if c == "list":
+        rows = _module("enterprise_workers", "workers")(slug, pos or None)
+        if getattr(a, "json", False):
+            _out(rows)
+        else:
+            for w in rows:
+                print(f"{w['id']}  {w['status']:<8} {w['position']}  {w['text'][:80]}")
+        return 0 if rows else 1
+    r = _module("enterprise_workers", "start")(slug, _need_pos(pos, "`worker start`"), " ".join(a.text),
+                                               task=a.for_task, session=turn["session"], outside=turn["outside"])
+    if r["status"] == "started":
+        return _say(a, r, f"worker {r['worker']['id']} started")
+    return _say(a, r, f"request {r['request']['id']} is waiting for a decision: the worker starts once it is allowed")
 
 
 def _objective(a, slug: str, pos: str) -> int:

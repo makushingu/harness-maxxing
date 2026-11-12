@@ -650,6 +650,16 @@ def _enterprise_note(path: str) -> str:
         return ""
 
 
+def _enterprise_no_workers(path: str) -> list[str]:
+    """The sub-agent tool (`Agent`, named `Task` before Claude Code 2.1.63) of an occupant whose enterprise has workers off."""
+    try:
+        from . import enterprises
+        seat = enterprises.seat_of(path) if enterprises.feature_on() else None
+        return ["Agent", "Task"] if seat and enterprises.setting(seat[0], "workers", seat[1]) == "off" else []
+    except Exception:  # noqa: BLE001 - a turn never fails for it
+        return []
+
+
 def run_settings(path: str, outside: bool = False, session: str | None = None, group: str = "",
                  manager: bool = False) -> dict:
     """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys, system_note} of a turn in an agent folder ({} elsewhere).
@@ -673,8 +683,8 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
     # pre-allowed tools never ask: in a turn started by outside text they would skip the approvals it gets
     if a["allowed_tools"] and not forced:
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
-    if a["disallowed_tools"]:
-        args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
+    if a["disallowed_tools"] or _enterprise_no_workers(path):
+        args += ["--disallowedTools", ",".join(dict.fromkeys([*a["disallowed_tools"], *_enterprise_no_workers(path)]))]
     from . import enterprise_policy
     if a["limits"]["usd_per_day"] or enterprise_policy.has_ceiling(path):   # Claude Code stops the turn itself once the budget is spent
         with _lock:

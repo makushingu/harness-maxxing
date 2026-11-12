@@ -286,7 +286,7 @@ def test_structure_commands_are_refused_in_agent_turns(chart, monkeypatch):
 def test_sandboxed_turns_allow_the_work_commands():
     allowed = agent_guard.CLI_ALLOWED["enterprise"]
     assert allowed == {"assign", "done", "block", "escalate", "answer", "decide", "request", "objective", "show",
-                       "profile"}
+                       "profile", "route", "worker"}
     assert not allowed & agent_guard.ENTERPRISE_OWNER_ONLY
 
 

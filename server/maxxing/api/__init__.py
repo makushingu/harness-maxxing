@@ -41,7 +41,7 @@ ROUTERS = [
     "team",
     "teampeer",
     "agents",
-    "agent_groups", "enterprises", "enterprise_profile", "enterprise_flow", "enterprise_policy", "enterprise_reports",
+    "agent_groups", "enterprises", "enterprise_profile", "enterprise_flow", "enterprise_policy", "enterprise_reports", "enterprise_desk", "enterprise_workers",
     "approvals",
     "mail",
 ]

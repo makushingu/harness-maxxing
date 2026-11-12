@@ -56,7 +56,8 @@ CLI_ALLOWED = {                        # show/list/feed list are narrowed furthe
     "mail": {"accounts", "folders", "list", "read", "attachment", "write", "move", "mkdir", "refresh", "outbox",
              "archive", "trash", "junk", "inbox", "seen", "unseen", "flag", "unflag"},
     "enterprise": {"assign", "done", "block", "escalate", "answer", "decide", "request", "objective", "show",
-                   "profile"},        # as the caller's own position (cmd_enterprise); `show` narrowed there
+                   "profile", "route", "worker"},   # as the caller's own position (cmd_enterprise): `show` narrowed
+    #                                                 there, `worker` = start | list only (stop is the owner's)
     "status": None,                   # None = any
 }
 
