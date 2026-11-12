@@ -1,13 +1,13 @@
 import * as React from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
-import { Blocks, ChevronRight, PanelLeftClose, PanelLeftOpen, Search, Settings2 } from 'lucide-react'
+import { Blocks, ChevronRight, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
-import { Button, CountBadge, CountDot, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
+import { Button, CountBadge, CountDot, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
 import { navRow, navTourId, useNavEntries, type NavItem, type PinnedPage } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
@@ -99,7 +99,7 @@ function useScrollEdges(ref: React.RefObject<HTMLElement | null>): string {
 const FOLDED_W = 64
 
 /** The Extensions folder, after the pages: its row folds / unfolds the extension pages pinned in Settings -> Pages
- *  (kept per browser), dragged into the order you like; folded bar: a menu beside it. Its own component, so the
+ *  (kept per browser), dragged into the order you like; folded bar: a menu beside it. Which pages: Settings -> Pages. Its own component, so the
  *  memoized sidebar does not re-render on every URL change for its active mark. */
 function ExtFolder({ pins, collapsed, drawer, idx }: { pins: PinnedPage[]; collapsed: boolean; drawer?: boolean; idx: number }) {
   const t = useT()
@@ -128,10 +128,6 @@ function ExtFolder({ pins, collapsed, drawer, idx }: { pins: PinnedPage[]; colla
               <NamedIcon name={p.icon} /> {p.name}
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => navigate('/settings/pages')}>
-            <Settings2 /> {t('ext.manage')}
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     )
@@ -175,9 +171,6 @@ function ExtFolder({ pins, collapsed, drawer, idx }: { pins: PinnedPage[]; colla
               </NavLink>
             )
           })}
-          <NavLink to="/settings/pages" className="flex h-8 items-center rounded-md pl-7 pr-2.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-            {t('ext.manage')}
-          </NavLink>
         </div>
       )}
     </>

@@ -7,8 +7,7 @@ A page extension adds a full page to the app, served at `/x/<id>`. It is a plain
 module – no build step – plus an optional Python API.
 
 Where it appears: the pages you pin sit in the **Extensions** folder at the end of the sidebar's pages: click
-**Extensions** to unfold or fold it (it stays as you left it), drag a page in it to reorder, **Manage extensions** at
-its bottom opens Settings -> Pages. Folded sidebar: the Extensions icon opens the same list beside it; on a phone, the
+**Extensions** to unfold or fold it (it stays as you left it), drag a page in it to reorder. Folded sidebar: the Extensions icon opens the same list beside it; on a phone, the
 folder is in the menu of the left drawer. Every page, pinned or not, is listed in Settings -> Pages (**Open page**) and
 found by the search (Ctrl K). Click the **pin** at the top right of a page (or turn on **In the sidebar** in Settings ->
 Pages) to put it in the folder; click it again to take it out. No page pinned: no folder.
