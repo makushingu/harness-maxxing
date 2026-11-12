@@ -43,6 +43,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `gitview._is_repo` returns False on `OSError` ENAMETOOLONG (any other error still raises): a path component longer
   than 255 bytes made `exists()` raise it while `resolve()` walked up to the clone, a 500 on every `/api/git/*` route instead of
   `404 not_a_repo`. Test in `tests/test_gitview.py`.
+- `docs/dev/API.md`: rows for `PUT /api/system/auto-update`, `PUT /api/extensions/pins`, `GET /api/files/preview` and
+  `GET /api/files/archive`, which the code served without a row.
+- `tests/test_api_contract.py`: every route of the app and of each router of `maxxing.api.ROUTERS` (this FastAPI
+  does not flatten included routers into `app.routes`; websockets and routes outside the OpenAPI schema count too)
+  must have its `| METHOD | /api/... |` row in API.md. It reads the notations of the table (`ANY`, `[/{id}]`, `<x>`,
+  `a\|b` and `{a\|b}` listing the values of the last parameter, a parameter inside a word such as `install.{kind}`);
+  a whole-word parameter otherwise needs a `{...}` in its row. `/api/stream` (Global bus section) and the JSON 404
+  are not rows; `KNOWN_MISSING` holds the agents' `chat/new` (being reworked). The `/api/ext/{id}` row now says its
+  `{path}` is optional (`forward_root`).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
