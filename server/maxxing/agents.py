@@ -641,6 +641,15 @@ def manager_turn(meta: dict | None) -> bool:
         and not env.get("MAXXING_AGENT_GROUP")
 
 
+def _enterprise_note(path: str) -> str:
+    """The enterprise cascade of the agent's position ("" when none, the feature is off or anything fails)."""
+    try:
+        from . import enterprise_knowledge, enterprises
+        return enterprise_knowledge.note(path) if enterprises.feature_on() else ""
+    except Exception:  # noqa: BLE001 - a turn never fails for its note
+        return ""
+
+
 def run_settings(path: str, outside: bool = False, session: str | None = None, group: str = "",
                  manager: bool = False) -> dict:
     """{model, permission_mode, args, sandbox, settings, approvals, approval_timeout_s, keys, system_note} of a turn in an agent folder ({} elsewhere).
@@ -666,12 +675,14 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
         args += ["--allowedTools", ",".join(a["allowed_tools"])]
     if a["disallowed_tools"]:
         args += ["--disallowedTools", ",".join(a["disallowed_tools"])]
-    if a["limits"]["usd_per_day"]:                  # Claude Code stops the turn itself once the day's budget is spent
+    from . import enterprise_policy
+    if a["limits"]["usd_per_day"] or enterprise_policy.has_ceiling(path):   # Claude Code stops the turn itself once the budget is spent
         with _lock:
             st = _read_state(path)
-            left = max(a["limits"]["usd_per_day"] - day_cost(path, cold=bool(session)) - _held(st, but=session),
-                       0.01)
-            if session:
+            left = (max(a["limits"]["usd_per_day"] - day_cost(path, cold=bool(session)) - _held(st, but=session), 0.01)
+                    if a["limits"]["usd_per_day"] else float("inf"))
+            left = enterprise_policy.cap(path, left, session=session)      # the department / enterprise envelope
+            if session and left != float("inf"):
                 _hold(path, st, session, left)
         args += ["--max-budget-usd", f"{left:.2f}"]
     from . import agent_guard
@@ -689,11 +700,12 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
                 "system_note": "\n\n".join(x for x in (MANAGER_NOTE.format(box=MANAGER_BOX if box else "", path=path),
                                                         schedule_zone_note(),
                                                         MANAGER_NEW if not _has_role(path) else "",
-                                                        _take_chat_notes(path)) if x)}
+                                                        _take_chat_notes(path), _enterprise_note(path)) if x)}
     return {"model": a["model"], "permission_mode": a["permission_mode"], "args": args,
             "sandbox": a["sandbox"], "settings": agent_guard.settings(path, a, approvals=a["approvals"] or forced),
             "approvals": a["approvals"] or forced, "approvals_forced": forced and not a["approvals"],
-            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"], "system_note": OWNER_NOTE}
+            "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"],
+            "system_note": "\n\n".join(x for x in (OWNER_NOTE, _enterprise_note(path)) if x)}
 
 
 # ---- the manager's change requests: a safety setting waits for the owner (an approval of kind agent_change) ----
@@ -1193,6 +1205,8 @@ def update(path: str, fields: dict) -> dict:
     with _lock:                                         # two PUT at once: both changes are kept
         cur = load(path)
         _not_broken(path, cur)
+        from . import enterprise_policy
+        enterprise_policy.check_envelope(path, f)       # never wider than the enterprise's keys / domains (400)
         if "limits" in f and isinstance(f["limits"], dict):
             f["limits"] = {**cur["limits"], **f["limits"]}
         if "avatar" in f and isinstance(f["avatar"], dict):
@@ -1823,6 +1837,11 @@ def gate(path: str, owner: bool = False) -> str | None:
         held = _held(_read_state(path))
         if held and spent + held >= lim["usd_per_day"] - 0.01:
             return "busy"
+    from . import enterprise_policy
+    if enterprise_policy.over_ceiling(path):        # the department's / enterprise's daily envelope is spent
+        return "envelope"
+    if enterprise_policy.ceiling_held(path):
+        return "busy"
     if lim["runs_per_hour"] and not owner and _runs_last_hour(path) >= lim["runs_per_hour"]:
         return "rate"
     return None
@@ -1877,7 +1896,8 @@ def hand_over(path: str, sid: str) -> None:
 SKIP_TEXT = {"disabled": "The agent is switched off", "budget": "Daily budget reached",
              "busy": "The rest of today's budget is held by the run in progress",
              "rate": "Too many runs in the last hour", "missing": "The agent no longer exists",
-             "depth": "Too many hops between agents"}
+             "depth": "Too many hops between agents",
+             "envelope": "The daily budget of its department or enterprise is reached"}
 
 
 # ---- fire ----------------------------------------------------------------------------------------------

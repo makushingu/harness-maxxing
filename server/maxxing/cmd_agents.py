@@ -685,6 +685,11 @@ def _handler(a) -> int:
         print("Nothing to send.", file=sys.stderr)
         return 2
     if agents.is_agent_path(sender):
+        from . import enterprise_policy
+        refusal = enterprise_policy.can_send(sender, path)      # two agents of one enterprise: its communication rule
+        if refusal:
+            print(refusal, file=sys.stderr)
+            return 2
         try:
             label = agents.load(sender)["name"] or agents.parse(sender)[2]
         except Exception:  # noqa: BLE001

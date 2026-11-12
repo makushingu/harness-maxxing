@@ -39,7 +39,7 @@ BUILTIN = {"crons": "Cron jobs", "system": "Harness Maxxing", "security": "Sign-
            "agents": "Agents", "sessions": "Sessions"}
 # sources the product posts to by itself besides BUILTIN: mail (mail/outbox.py, the e-mails waiting for the owner's
 # OK) and infra (sites down, certificates): a webhook or an agent posting there could pass for them
-PRODUCT_SOURCES = {"mail", "infra"}
+PRODUCT_SOURCES = {"mail", "infra", "enterprises"}
 OWN_THREAD = {"crons", "system", "security"}
 MAX_RULES = 200  # per-source Telegram rules kept in config.json (read everywhere)
 
@@ -48,7 +48,8 @@ MAX_RULES = 200  # per-source Telegram rules kept in config.json (read everywher
 # ref kind (HANDLERS) and is idempotent: a second click on a decided request gets the same event back.
 _ALERT_COLS = (("actions", "TEXT"), ("ref", "TEXT"), ("agent", "TEXT"), ("resolved", "REAL"), ("resolution", "TEXT"),
                ("hops", "INTEGER"))     # hops: posted from an agent run (its depth + 1), carried to the runs it starts
-HANDLERS = {"approval": "approvals", "health": "health", "mailsend": "mail.outbox"}   # ref kind -> module with feed_action(value, action, by)
+HANDLERS = {"approval": "approvals", "health": "health", "mailsend": "mail.outbox",
+            "enterprise": "enterprise_policy"}   # ref kind -> module with feed_action(value, action, by)
 ACTION_STYLES = ("primary", "danger", "default", "link")
 _lock = threading.Lock()
 _aside_lock = config.ProcessLock("feed-aside")   # setting an unreadable feed.db aside
@@ -387,7 +388,7 @@ def _alert_out(ev: dict, new: bool) -> bool:
 
 def _alert_rule(ev: dict) -> str:
     """How Telegram should post an alert: an agent waiting for an answer is always loud, the rest follows the rules."""
-    if (ev.get("ref") or "").startswith("approval:"):
+    if (ev.get("ref") or "").startswith(("approval:", "enterprise:")):
         return "loud"
     s = settings()
     return rule_for(ev["source"], ev["level"], s) if s["telegram"] else "off"
