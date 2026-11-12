@@ -70,6 +70,21 @@ your email, your message, its type, the Harness Maxxing version, the interface l
 Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
 time: the one of Settings → Profile → Stay in touch, if any).
 
+**Your Harness reads the message first.** When you press **Send**, the Claude of this server (your own Claude
+account, a few seconds, read-only: it looks things up in the installed documentation and can change or run nothing)
+checks what the message is:
+
+- a real bug, or an idea that would serve every user: it is sent to the team as before;
+- a question, a setting, something that already exists: the answer is shown in the window and **nothing is sent**;
+- a change that concerns your installation only (another model, a local model or a custom endpoint, another API or
+  account, a tool of yours to connect, a personal layout): Harness Maxxing is yours to change, so your Harness can do
+  it here. The window says so, shows the request it prepared, and **Open a session** starts a session with it.
+
+**Open a session** is also there after an answer, to go further. If the answer misses the point, **That is not it:
+send it to the team anyway** sends your message as written (the team sees that your Harness had answered it), and
+**Edit my message** goes back to the form. The check never blocks a message: when Claude is not signed in, is busy
+or gives no clear verdict, the message is sent. The screenshot is never part of the check.
+
 **Capture a zone** adds a screenshot: drag over the part of the screen to show (**Whole screen** or Enter = all of it, **Cancel** or Esc =
 cancel). With **Hide my data (presentation mode)** checked (the default), presentation mode is on just while the
 picture is taken, so names, numbers and messages come out as dots. The picture is taken in your browser and shown in

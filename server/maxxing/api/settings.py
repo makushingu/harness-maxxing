@@ -247,6 +247,12 @@ class FeedbackIn(BaseModel):
     type: Literal["bug", "idea", "other"] = "other"
     message: str
     image: Optional[FeedbackImageIn] = None   # the zone of the screen the user selected
+    forced: bool = False                      # sent although this server's Claude had answered it (feedback.check)
+
+
+class FeedbackCheckIn(BaseModel):
+    type: Literal["bug", "idea", "other"] = "other"
+    message: str
 
 
 @router.get("/feedback")
@@ -262,7 +268,18 @@ async def post_feedback(body: FeedbackIn):
     from .. import feedback
     try:
         shot = feedback.image(body.image.mime, body.image.data, body.image.width, body.image.height) if body.image else None
-        return await asyncio.to_thread(feedback.send, body.email, body.type, body.message, shot)
+        return await asyncio.to_thread(feedback.send, body.email, body.type, body.message, shot, body.forced)
+    except feedback.FeedbackError as e:
+        raise HTTPException(e.status, detail={"error": e.code, "message": str(e)}) from None
+
+
+@router.post("/feedback/check")
+async def post_feedback_check(body: FeedbackCheckIn):
+    """This server's Claude reads the message before it is sent: verdict `send` (a bug, a general idea: it goes),
+    `answer` or `self` (answered here, with the request for a new session). Never blocks: `send` when in doubt."""
+    from .. import feedback
+    try:
+        return await asyncio.to_thread(feedback.check, body.type, body.message)
     except feedback.FeedbackError as e:
         raise HTTPException(e.status, detail={"error": e.code, "message": str(e)}) from None
 

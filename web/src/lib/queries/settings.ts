@@ -81,10 +81,16 @@ export function useFeedbackDefaults(enabled: boolean) {
   return useQuery({ queryKey: qk.feedback, queryFn: () => api.get<{ email: string; version: string }>('/api/settings/feedback'), enabled })
 }
 export function useSendFeedback() {
-  return useMut((b: { email: string; type: FeedbackType; message: string; image?: { mime: string; data: string; width: number; height: number } }) => api.post<{ ok: boolean }>('/api/settings/feedback', b), {
+  return useMut((b: { email: string; type: FeedbackType; message: string; image?: { mime: string; data: string; width: number; height: number }; /** Sent although this server's Claude had answered it. */ forced?: boolean }) => api.post<{ ok: boolean }>('/api/settings/feedback', b), {
     invalidate: [qk.feedback],
     errorToast: false,
   })
+}
+/** What this server's Claude makes of a message before it is sent: `send` (a bug, a general idea: it goes), `answer`
+ *  (answered here) or `self` (this installation can do it itself); `prompt` = the request for a new session in `topic`. */
+export type FeedbackCheck = { verdict: 'send' | 'answer' | 'self'; answer: string; prompt: string; topic: string; checked: boolean }
+export function useCheckFeedback() {
+  return useMut((b: { type: FeedbackType; message: string }) => api.post<FeedbackCheck>('/api/settings/feedback/check', b), { errorToast: false })
 }
 export function useRegister() {
   return useQuery({ queryKey: qk.register, queryFn: () => api.get<RegisterState>('/api/settings/register') })

@@ -1829,6 +1829,27 @@ R('PUT', '/api/settings', ({ body }) => {
   for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings
 })
+/* ---- feedback: checked first (a word decides here: "bug" or "idea" is sent, "model" or "API" is for this
+   installation, the rest is answered), then sent nowhere */
+R('GET', '/api/settings/feedback', () => ({ email: 'you@example.com', version: 'mock' }))
+R('POST', '/api/settings/feedback/check', async ({ body }) => {
+  const msg = String(body.message || '').trim()
+  if (!msg) fail(422, 'message_required', 'Write a message')
+  await sleep(900)
+  const out = (verdict, answer = '', prompt = '', topic = '') => ({ verdict, answer, prompt, topic, checked: true })
+  if (/bug|crash|id[ée]e|idea/i.test(msg)) return out('send')
+  const topic = `projects/${WORKSPACE[0].name}/topics/${WORKSPACE[0].topics[0][0]}`
+  if (/mod[èe]le?|api|endpoint/i.test(msg))
+    return out('self', 'This is specific to **your installation**, so your Harness can set it up here: nothing has to change in the product.\n\n1. Open a session with the request below.\n2. It edits the configuration of this server and tells you what it changed.', `Set this up on this installation, then tell me what you changed: ${msg}`, topic)
+  return out('answer', 'It is already there: **Settings -> Voice -> Microphone** picks the microphone.\n\nIf the list is empty, allow the microphone in the browser first (`https` is needed).', msg, topic)
+})
+R('POST', '/api/settings/feedback', async ({ body }) => {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email || ''))) fail(422, 'invalid_email', 'Enter a valid email address')
+  if (!String(body.message || '').trim()) fail(422, 'message_required', 'Write a message')
+  await sleep(300)
+  return { ok: true }
+})
+
 const secretOut = (s) => ({ name: s.name, note: s.note, expose: s.expose, updated: s.updated, preview: s.value.slice(0, 4) + '…' })
 R('GET', '/api/secrets', () => S.secrets.map(secretOut))
 R('PUT', '/api/secrets/:name', ({ params, body }) => {
