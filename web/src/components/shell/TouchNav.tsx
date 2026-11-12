@@ -30,7 +30,7 @@ const topButton =
 
 const onSessions = (path: string) => path === '/sessions' || path.startsWith('/sessions/')
 /** Pages whose list opens in the drawer (their PageList). */
-const LISTS = ['/agents', '/team', '/infra', '/mail', '/files', '/tasks', '/feed']
+const LISTS = ['/agents', '/team', '/infra', '/mail', '/files', '/tasks', '/feed', '/git']
 const hasList = (path: string) => LISTS.some((p) => path === p || path.startsWith(p + '/'))
 
 /** The level the ☰ opens: the list of the page open when it has one, else the menu. */
