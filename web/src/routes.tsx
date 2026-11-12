@@ -47,7 +47,7 @@ export const routes: RouteObject[] = [
           { path: 'tasks/*', lazy: page(() => import('./pages/tasks'), ['tasks']) },
           // Crons moved into Settings (links in old notifications, Telegram reports and bookmarks keep working)
           { path: 'crons/*', Component: CronsMoved },
-          { path: 'feed', lazy: page(() => import('./pages/feed')) },
+          { path: 'feed', lazy: page(() => import('./pages/feed'), ['team']) },
           // Optional feature pages (Settings -> Features)
           { path: 'git', lazy: page(() => import('./features/git/GitPage'), ['git']) },
           // the list of agents + the selected agent / one of its runs (the session column needs the files texts)
@@ -57,7 +57,7 @@ export const routes: RouteObject[] = [
           { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
-          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks']) },
+          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team']) },
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },
           // Extension pages: /x/<id> loads /ext/<id>/page.js

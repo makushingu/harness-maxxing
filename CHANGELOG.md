@@ -90,6 +90,8 @@ Fixed:
   happen), the dashed frame stayed over the conversation until the next drag.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
+- **Translations**: the "network error" message is now in your language, and the "Today" / "Yesterday" headings of
+  the feed and two Settings rows (Team bubbles, Team messages) no longer show blank for a moment while their texts load.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

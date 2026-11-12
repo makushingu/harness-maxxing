@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { api, ApiError, isApiError, withQuery } from '../api'
+import { api, ApiError, isApiError, networkError, withQuery } from '../api'
 import type { FileContent, FileList, FileSearchHit, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
@@ -233,7 +233,7 @@ export function uploadFileWithProgress(dir: string, file: File, onProgress: (loa
         reject(new ApiError(xhr.status, d.error || `http_${xhr.status}`, d.message || xhr.statusText))
       }
     }
-    xhr.onerror = () => reject(new ApiError(0, 'network', 'Network error — the server could not be reached.'))
+    xhr.onerror = () => reject(networkError())
     xhr.onabort = () => reject(new DOMException('Aborted', 'AbortError'))
     signal?.addEventListener('abort', () => xhr.abort())
     const fd = new FormData()

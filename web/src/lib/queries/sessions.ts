@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { api, seg } from '../api'
+import { api, networkError, seg } from '../api'
 import { forgetDraft } from '../drafts'
 import type {
   CreateSessionBody,
@@ -290,7 +290,7 @@ export function uploadAttachment(
       if (xhr.status >= 200 && xhr.status < 300 && data.files?.[0]) resolve(data.files[0])
       else reject(new Error(data.message || data.error || `HTTP ${xhr.status}`))
     }
-    xhr.onerror = () => reject(new Error('Network error'))
+    xhr.onerror = () => reject(networkError())
     xhr.onabort = () => reject(new DOMException('Aborted', 'AbortError'))
     signal?.addEventListener('abort', () => xhr.abort())
     const fd = new FormData()

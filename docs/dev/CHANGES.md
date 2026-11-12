@@ -120,6 +120,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `dragleave` / `drop`; a cancelled drag fires neither. It is now `dropStack` in the sessions store (`setDropStack`),
   cleared with `dropBeside` by `setDragging(null)` (grip `dragend`, document `dragend` / `drop`), and one session at
   most shows it.
+- Web i18n: `networkError()` (lib/api.ts) builds the `ApiError(0, 'network')` with the `common.networkError` text (core,
+  en + fr, English fallback while the core chunk is pending); `request`, `uploadFileWithProgress` (files.ts) and
+  `uploadAttachment` (sessions.ts) throw it, so `errorMessage()` and every direct `.message` read are translated. Route
+  `feed` and `settings/:section` declare the `team` group (their `team.*` keys were '' while it downloaded). Known
+  undeclared pairs, exempted in the test: `sessions/*` with `tasks` (first-load dictionary budget) and with `agents`
+  (agents feature, out of scope). Tests: `test_web_i18n_groups.py`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
