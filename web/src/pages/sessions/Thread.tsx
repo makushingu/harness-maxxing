@@ -236,7 +236,14 @@ export const Thread = React.forwardRef<ThreadHandle, {
   // Sent but not in the log yet (held behind a summary, or starting), from another tab or before a reload: this
   // tab has no bubble of its own for it, the server's copy is shown instead.
   const sentItems = session?.sent_items
-  const serverSent = optimistic.length || !running ? NO_SENT : sentItems || NO_SENT
+  // One whose message is already in the log (a Session older than the log, e.g. a late answer) is not shown twice.
+  const sentLeft = React.useMemo(() => {
+    if (!sentItems?.length) return NO_SENT
+    const logged = new Set(log.items.flatMap((it) => (it.kind === 'user' ? it.ev.client_ids || [] : [])))
+    const left = sentItems.filter((p) => !p.client_ids?.some((c) => logged.has(c)))
+    return left.length === sentItems.length ? sentItems : left
+  }, [sentItems, log.items])
+  const serverSent = optimistic.length || !running ? NO_SENT : sentLeft
 
   // Deleting an unanswered message: its rows slide out, then the thread drops them; "Undo" in the toast.
   const sid = session?.id

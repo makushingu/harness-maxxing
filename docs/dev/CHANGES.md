@@ -13,6 +13,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   choice. `useMics()` lists the `audioinput` devices (without Chrome's `default` / `communications` aliases),
   reloads on `devicechange` and on a change of the `microphone` permission; browsers give no names before the
   microphone is allowed: `named` is false and the row shows a button that asks for it (`MicRow` in `VoiceSetup.tsx`).
+- Sessions: the answer to `POST /api/sessions/{id}/messages` carries the Session read right after the message was
+  queued (`sent_items` lists it: state running, no pid yet). When it reached the page after the stream's `state`
+  frame of the runner taking the message, it replaced the fresher Session, and no other frame came until the turn
+  ended (the meta file is not written in between): the thread showed the message a second time as "Sending…".
+  `useSendMessage` keeps the cached Session when its `updated` is later than the answer's, and the thread drops a
+  `sent_items` entry whose `client_ids` are already on a user event of the log (`sentLeft` in `Thread.tsx`). The
+  mock puts `client_ids` on the user event of a send, as the server does.
 
 ## 2.0.0-alpha.142 - 2026-11-12
 

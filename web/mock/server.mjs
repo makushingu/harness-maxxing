@@ -715,14 +715,14 @@ function later(s, ms, fn) {
 }
 function clearTimers(s) { for (const h of S.timers[s.id] || []) clearTimeout(h); S.timers[s.id] = [] }
 
-function startTurn(s, text, attachments = []) {
+function startTurn(s, text, attachments = [], cid = '') {
   const cwd = `${ROOT}/${s.path}`
   const model = s.model || S.claude.default_model
   s.state = 'running'; s.error = null; s.updated = now()
   if (s.plan_ready) s.plan_ready = false
   // Maxxing scenario: turns of 8 to 35 s, so several sessions finish while the user types
   const k = S.scenario === 'maxxing' ? (8000 + Math.random() * 27000) / 3400 : 1
-  addEvents(s, { type: 'user', text, attachments, at: now(), source: 'web' }, { type: 'init', model, cwd, at: now() })
+  addEvents(s, { type: 'user', text, attachments, at: now(), source: 'web', ...(cid ? { client_ids: [cid] } : {}) }, { type: 'init', model, cwd, at: now() })
   bus('sessions', 'workspace')
   const tu = `toolu_${crypto.randomBytes(6).toString('hex')}`
   later(s, 700 * k, () => addEvents(s, { type: 'thinking', text: `Let me look at the files in this topic before answering: "${text.slice(0, 80)}"`, at: now() }))
@@ -1387,7 +1387,7 @@ R('POST', '/api/sessions/:id/messages', ({ params, body }) => {
     pushEvents(s.id, [])
     return { queued: true, session: s }
   }
-  startTurn(s, text, body.attachments || [])
+  startTurn(s, text, body.attachments || [], body.client_id)
   return { queued: false, session: s }
 })
 R('POST', '/api/sessions/:id/plan/approve', ({ params, body }) => {

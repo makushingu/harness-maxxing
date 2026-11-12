@@ -10,6 +10,10 @@ New:
   on this device (headset, USB microphone, the built-in one) instead of the one the browser picks. The choice stays
   in this browser; if that microphone is unplugged, the default one records and the choice comes back with it.
 
+Fixed:
+- **Sessions: a message no longer shows twice.** On a slow connection, the message you just sent could appear a
+  second time under Claude's first steps, greyed with "Sending…", until the turn ended. It was sent only once.
+
 ## 2.0.0-alpha.142 - 2026-11-12
 
 Fixed:

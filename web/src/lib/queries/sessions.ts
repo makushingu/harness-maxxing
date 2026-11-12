@@ -133,8 +133,15 @@ export function useDeleteSession() {
 }
 export function useSendMessage() {
   const set = useSetSessionCache()
+  const qc = useQueryClient()
   return useMut(({ id, ...b }: SendMessageBody & { id: string }) => api.post<SendMessageResult>(`/api/sessions/${seg(id)}/messages`, b), {
-    onSuccess: (r) => set(r.session),
+    // The answer is the Session as it was right after the message was queued. On a slow connection the stream may
+    // already have given a later one (the runner took the message): the older one would list it as "sent, not in
+    // the log yet" again, a second bubble that stays for the whole turn (no other state frame comes).
+    onSuccess: (r) => {
+      const cur = qc.getQueryData<Session>(qk.sessions.one(r.session.id))
+      if (!cur || !(cur.updated > r.session.updated)) set(r.session)
+    },
   })
 }
 export function useClearQueue() {
