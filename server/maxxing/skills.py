@@ -61,9 +61,18 @@ def _read(folder: Path, origin: str, **where: str) -> dict | None:
     }
 
 
+def _utf8(p: Path) -> bool:
+    """A folder name that is not UTF-8 (surrogates) cannot be sent as JSON: it is left out."""
+    try:
+        p.name.encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
 def _scan(root: Path, origin: str, skip: set[str] | None = None, **where: str) -> list[dict]:
     try:
-        folders = sorted(p for p in root.iterdir() if p.is_dir() and (p / "SKILL.md").is_file())
+        folders = sorted(p for p in root.iterdir() if _utf8(p) and p.is_dir() and (p / "SKILL.md").is_file())
     except OSError:
         return []
     out = []
@@ -86,13 +95,13 @@ def list_skills() -> list[dict]:
     out += _scan(ws / ".claude" / "skills", "workspace")
     projects = ws / "projects"
     try:
-        pdirs = sorted(p for p in projects.iterdir() if p.is_dir() and not p.name.startswith("."))
+        pdirs = sorted(p for p in projects.iterdir() if _utf8(p) and p.is_dir() and not p.name.startswith("."))
     except OSError:
         pdirs = []
     for p in pdirs:
         out += _scan(p / ".claude" / "skills", "project", project=p.name)
         try:
-            tdirs = sorted(t for t in (p / "topics").iterdir() if t.is_dir() and not t.name.startswith("."))
+            tdirs = sorted(t for t in (p / "topics").iterdir() if _utf8(t) and t.is_dir() and not t.name.startswith("."))
         except OSError:
             tdirs = []
         for t in tdirs:

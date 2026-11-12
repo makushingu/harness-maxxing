@@ -38,3 +38,15 @@ def test_skills_are_listed_by_origin_read_only(client, mx, monkeypatch):
 def test_a_block_scalar_description_loses_its_header(header):
     text = f"---\nname: x\ndescription: {header}\n  Line one\n  line two\ndisable-model-invocation: true\n---\nBody\n"
     assert skills._front(text)["description"] == "Line one line two"
+
+
+def test_folders_with_a_name_that_is_not_utf8_are_left_out(client, mx):
+    import os
+    ws = mx["ws"]
+    _skill(ws / ".claude/skills", "fine", "---\nname: fine\n---")
+    _skill(ws / ".claude/skills", os.fsdecode(b"s\xff"), "---\nname: bad\n---")
+    _skill(ws / "projects" / os.fsdecode(b"p\xff") / ".claude/skills", "s", "---\nname: s\n---")
+    _skill(ws / "projects/acme/topics" / os.fsdecode(b"t\xff") / ".claude/skills", "t", "---\nname: t\n---")
+    r = client.get("/api/skills")
+    assert r.status_code == 200
+    assert {s["folder"] for s in r.json()["skills"] if s["origin"] != "product"} == {"fine"}
