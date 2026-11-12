@@ -2127,6 +2127,8 @@ export const en = {
   'tasks.nav.noProjects': 'Create a project',
   'tasks.nav.empty': '+ {count} without open tasks',
   'tasks.nav.hideEmpty': 'Hide projects without open tasks',
+  'tasks.nav.search': 'Search tasks',
+  'tasks.nav.noMatch': 'No project matches',
   'tasks.nav.hideHidden': 'Hide hidden projects',
   'tasks.nav.showHidden': '{count} hidden projects',
   'tasks.nav.showHidden#one': '{count} hidden project',

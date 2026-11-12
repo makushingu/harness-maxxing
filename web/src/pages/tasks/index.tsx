@@ -318,7 +318,19 @@ export default function TasksPage() {
     ) : null
 
   const filterProps = { filters, onChange: setFilters, projects, labels, withProject: false }
-  const nav = data ? <ProjectNav scope={scope} onScope={setScope} projects={projects} stats={stats} emojis={emojis} onManage={() => setProjectsOpen(true)} /> : null
+  // The list's 🔍: filters the tasks (title, notes, labels) and keeps only the projects with a match (or a matching name).
+  const listQuery = search.q
+  const matchedProjects = React.useMemo(() => {
+    if (!listQuery.trim()) return null
+    const ids = new Set<string>()
+    for (const x of tasks) if (matches(x, { ...EMPTY_FILTERS, q: listQuery }, today)) ids.add(x.project_id || '')
+    return ids
+  }, [tasks, listQuery, today])
+  const onListQuery = (q: string) => {
+    setSearch((s) => ({ ...s, q }))
+    if (q && scope === 'overview') setScope('all')
+  }
+  const nav = data ? <ProjectNav scope={scope} onScope={setScope} projects={projects} stats={stats} emojis={emojis} onManage={() => setProjectsOpen(true)} query={listQuery} matched={matchedProjects} /> : null
 
   return (
     <Page
@@ -355,7 +367,7 @@ export default function TasksPage() {
       }
     >
       {nav && (
-        <PageList id="tasks" label={t('nav.tasks')}>
+        <PageList id="tasks" label={t('nav.tasks')} search={{ value: listQuery, onChange: onListQuery, placeholder: t('tasks.nav.search') }}>
           {nav}
         </PageList>
       )}

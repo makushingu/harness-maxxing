@@ -21,9 +21,12 @@ type Props = {
   stats: Map<string, ProjectStats>
   emojis: Map<string, string>
   onManage: () => void
+  /** The list's search: projects whose name matches or that hold a matching task (`matched`, '' = no project). */
+  query?: string
+  matched?: Set<string> | null
 }
 
-export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }: Props) {
+export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage, query = '', matched = null }: Props) {
   const t = useT()
   const [showHidden, setShowHidden] = React.useState(false)
   // projects without an open task fold under "+ N without open tasks" (the one open stays)
@@ -31,15 +34,18 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
   const all = React.useMemo(() => [...stats.values()].reduce((n, s) => n + s.open, 0), [stats])
   const none = statsOf(stats, '')
   const hiddenCount = projects.filter((p) => p.hidden).length
-  const visible = projects.filter((p) => !p.hidden || showHidden || p.id === scope)
-  const empty = visible.filter((p) => statsOf(stats, p.id).open === 0 && p.id !== scope)
+  const q = query.trim().toLowerCase()
+  const visible = q
+    ? projects.filter((p) => p.name.toLowerCase().includes(q) || !!matched?.has(p.id))
+    : projects.filter((p) => !p.hidden || showHidden || p.id === scope)
+  const empty = q ? [] : visible.filter((p) => statsOf(stats, p.id).open === 0 && p.id !== scope)
   const shown = showEmpty || empty.length < 3 ? visible : visible.filter((p) => !empty.includes(p))
 
   return (
       <nav aria-label={t('tasks.nav.label')} className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto p-2" data-testid="task-nav" data-tour="tasks-projects">
         <ListEntry active={scope === 'overview'} onClick={() => onScope('overview')} icon={LayoutGrid} label={t('tasks.nav.overview')} />
         <ListEntry active={scope === 'all'} onClick={() => onScope('all')} icon={ListChecks} count={all} label={t('tasks.nav.all')} />
-        {(none.total > 0 || scope === 'none') && (
+        {(q ? !!matched?.has('') : none.total > 0 || scope === 'none') && (
           <ListEntry active={scope === 'none'} onClick={() => onScope('none')} icon={Inbox} count={none.open} label={t('tasks.noProject')} />
         )}
         <div className="mt-3 mb-1 flex h-6 items-center justify-between px-2.5">
@@ -54,6 +60,7 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
             <Settings2 className="size-3.5" />
           </button>
         </div>
+        {q && visible.length === 0 && <p className="px-2.5 py-1.5 text-[13px] text-muted-foreground">{t('tasks.nav.noMatch')}</p>}
         {projects.length === 0 && (
           <button type="button" onClick={onManage} className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground">
             <FolderKanban className="size-4" />
@@ -73,7 +80,7 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage }
             {showEmpty ? t('tasks.nav.hideEmpty') : t('tasks.nav.empty', { count: empty.length })}
           </button>
         )}
-        {hiddenCount > 0 && (
+        {hiddenCount > 0 && !q && (
           <button
             type="button"
             onClick={() => setShowHidden((v) => !v)}
