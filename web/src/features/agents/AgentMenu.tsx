@@ -3,7 +3,7 @@
 // (its settings sheet) and Delete… (the same confirmation as in its settings).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { BellOff, NotebookPen, Palette, Play, Power, Settings2, Trash2 } from 'lucide-react'
+import { BellOff, MoreHorizontal, NotebookPen, Palette, Play, Power, Settings2, Trash2 } from 'lucide-react'
 import { useT } from '@/i18n'
 import { agentRoute, usePatchAgent } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
@@ -56,6 +56,35 @@ export function useAgentMenu(a: Agent) {
     },
   }
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+  // the same entries in the menu at the pointer and in the "..." of a header (AgentMenuButton)
+  const items = (
+    <>
+    <DropdownMenuLabel className="truncate">{a.display_name}</DropdownMenuLabel>
+    <DropdownMenuCheckboxItem checked={a.silent} onCheckedChange={(v) => patch.mutate({ path: a.path, silent: v })} data-testid="agent-menu-silent">
+      <BellOff /> {t('agents.menu.silent')}
+    </DropdownMenuCheckboxItem>
+    <DropdownMenuCheckboxItem checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} data-testid="agent-menu-enabled">
+      <Power /> {t('agents.menu.enabled')}
+    </DropdownMenuCheckboxItem>
+    <DropdownMenuItem disabled={!a.enabled} onSelect={() => run.go(a)} data-testid="agent-menu-run">
+      <Play /> {t('agents.run.now')}
+    </DropdownMenuItem>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem onSelect={() => show('role')} data-testid="agent-menu-role">
+      <NotebookPen /> {t('agents.menu.role')}
+    </DropdownMenuItem>
+    <DropdownMenuItem onSelect={() => show('look')} data-testid="agent-menu-look">
+      <Palette /> {t('agents.menu.look')}
+    </DropdownMenuItem>
+    <DropdownMenuItem onSelect={() => navigate(`${agentRoute(a)}?settings=1`)} data-testid="agent-menu-properties">
+      <Settings2 /> {t('agents.menu.properties')}
+    </DropdownMenuItem>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem destructive disabled={del.pending} onSelect={() => del.ask(a)} data-testid="agent-menu-delete">
+      <Trash2 /> {t('agents.menu.delete')}
+    </DropdownMenuItem>
+    </>
+  )
   const menu = (
     <DropdownMenu open={!!at} onOpenChange={(o) => !o && setAt(null)}>
       <DropdownMenuTrigger asChild>
@@ -63,30 +92,7 @@ export function useAgentMenu(a: Agent) {
       </DropdownMenuTrigger>
       {/* the agent's element opens its page on a click and shows a tooltip on hover: nothing in the menu reaches it */}
       <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={keepFocus} onClick={stop} onKeyDown={stop} onPointerMove={stop} onFocus={stop} aria-label={t('agents.menu.label', { name: a.display_name })} data-testid="agent-menu">
-        <DropdownMenuLabel className="truncate">{a.display_name}</DropdownMenuLabel>
-        <DropdownMenuCheckboxItem checked={a.silent} onCheckedChange={(v) => patch.mutate({ path: a.path, silent: v })} data-testid="agent-menu-silent">
-          <BellOff /> {t('agents.menu.silent')}
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem checked={a.enabled} onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })} data-testid="agent-menu-enabled">
-          <Power /> {t('agents.menu.enabled')}
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuItem disabled={!a.enabled} onSelect={() => run.go(a)} data-testid="agent-menu-run">
-          <Play /> {t('agents.run.now')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => show('role')} data-testid="agent-menu-role">
-          <NotebookPen /> {t('agents.menu.role')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => show('look')} data-testid="agent-menu-look">
-          <Palette /> {t('agents.menu.look')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate(`${agentRoute(a)}?settings=1`)} data-testid="agent-menu-properties">
-          <Settings2 /> {t('agents.menu.properties')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem destructive disabled={del.pending} onSelect={() => del.ask(a)} data-testid="agent-menu-delete">
-          <Trash2 /> {t('agents.menu.delete')}
-        </DropdownMenuItem>
+        {items}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -113,6 +119,8 @@ export function useAgentMenu(a: Agent) {
   )
   return {
     props,
+    items,
+    dialogs,
     menu: (
       <>
         {menu}
@@ -120,6 +128,28 @@ export function useAgentMenu(a: Agent) {
       </>
     ),
   }
+}
+
+/** The agent's menu behind a "..." button: its page and the conversation panel next to the Office (right click on a
+ *  desk or a row opens the same one). */
+export function AgentMenuButton({ agent: a }: { agent: Agent }) {
+  const t = useT()
+  const ctx = useAgentMenu(a)
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={t('agents.menu.label', { name: a.display_name })} data-testid="agent-menu-button">
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56" data-testid="agent-menu">
+          {ctx.items}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {ctx.dialogs}
+    </>
+  )
 }
 
 /** The role (the first paragraph of its CLAUDE.md) in a small dialog, as in its profile. */

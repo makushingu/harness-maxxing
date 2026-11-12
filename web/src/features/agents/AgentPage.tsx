@@ -30,6 +30,7 @@ import {
 import { ModelPicker } from '@/pages/sessions/Widgets'
 import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, modelLabel, relPaths, toolIcon, type PathBases } from '@/pages/sessions/util'
+import { AgentMenuButton } from './AgentMenu'
 import { AgentAvatarIcon } from './Avatar'
 import { AgentTriggers } from './AgentTriggers'
 import { AgentSettings, readsOutside, type SectionId } from './AgentSettings'
@@ -164,6 +165,7 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
             <Button variant={wide ? 'secondary' : 'outline'} size="sm" onClick={openProfile} aria-pressed={dockable ? wide : undefined} data-testid="agent-profile-open">
               <Info /> <span className="max-sm:sr-only">{t('agents.panel.open')}</span>
             </Button>
+            <AgentMenuButton agent={a} />
           </>
         }
       />
@@ -220,6 +222,7 @@ export function AgentChatPanel({ path, onClose }: { path: string; onClose: () =>
             </Button>
           </Tooltip>
         )}
+        {a && <AgentMenuButton agent={a} />}
         <Button variant="ghost" size="icon-sm" aria-label={t('common.close')} onClick={onClose} data-testid="office-chat-close">
           <X />
         </Button>
