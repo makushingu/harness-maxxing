@@ -193,7 +193,9 @@ def test_turn_commands_call_flow_and_policy_as_the_callers_position(chart, monke
                                                   {"by": "lead", "outside": True})
     assert c("request", "spending", "Boost", "post", "--amount", "20")[0] == 0
     assert calls[-1] == ("request", ("acme-group", "lead", "spending", "Boost post"),
-                         {"amount": 20.0, "session": "sid-9", "outside": True})
+                         {"amount": 20.0, "session": "sid-9", "outside": True, "payload": None})
+    assert c("request", "edit_job", "Clearer", "--position", "writer", "--job", "Writes two posts a week")[0] == 0
+    assert calls[-1][2]["payload"] == {"position": "writer", "job": "Writes two posts a week"}
     assert c("decide", "r_1", "allow", "within", "plan")[0] == 0
     assert calls[-1] == ("decide", ("acme-group", "r_1", "allow"), {"reason": "within plan", "by": "lead", "outside": True})
     code, out, _ = c("assign", "writer", "x", "--json")

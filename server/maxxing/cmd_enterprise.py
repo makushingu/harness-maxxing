@@ -155,6 +155,9 @@ def _configure(p) -> None:
     s.add_argument("category")
     s.add_argument("text", nargs="+")
     s.add_argument("--amount", type=float, default=None)
+    s.add_argument("--position", default=None, help="edit_job / reseat: the position concerned")
+    s.add_argument("--job", default=None, help="edit_job: the new job description")
+    s.add_argument("--agent", default=None, help="reseat: the agent to seat")
     who(s)
     s = sub.add_parser("decide", help="decide a request")
     s.add_argument("id")
@@ -401,8 +404,7 @@ def _grant(a) -> int:
             left = [g for g in grants if g["id"] != a.revoke]
             if len(left) == len(grants):
                 raise _Refused(f"Grant {a.revoke!r} not found")
-            enterprises.update(a.slug, {"grants": left})
-            enterprises.log(a.slug, "grant", f"Grant {a.revoke} revoked")
+            enterprises.update(a.slug, {"grants": left})        # the model logs each grant made or revoked
             return _say(a, {"revoked": a.revoke}, f"grant {a.revoke} revoked")
         if not (a.position and a.category and a.ceiling is not None and a.until):
             raise _Refused("grant needs POSITION --category C --ceiling N --until DATE")
@@ -422,8 +424,6 @@ def _grant(a) -> int:
         g = {"id": "g_" + uuid.uuid4().hex[:6], "position": a.position, "category": a.category,
              "ceiling": a.ceiling, "until": until}
         enterprises.update(a.slug, {"grants": grants + [g]})
-        enterprises.log(a.slug, "grant", f"{a.position} may decide {a.category} up to {a.ceiling:g} until {a.until}",
-                        position=a.position)
     return _say(a, g, f"grant {g['id']}: {a.position} decides {a.category} up to {a.ceiling:g} until {a.until}")
 
 
@@ -590,8 +590,15 @@ def _turn_cmd(a) -> int:
                                                            outside=outside)
         return _say(a, r, f"{a.id}: answered")
     if c == "request":
+        payload = {k: v for k, v in (("position", a.position), ("job", a.job), ("agent", a.agent)) if v} or None
+        if payload and payload.get("agent"):
+            from . import cmd_agents
+            try:
+                payload["agent"] = cmd_agents.resolve(payload["agent"])
+            except ValueError as e:
+                raise _Refused(str(e)) from None
         r = _module("enterprise_policy", "request")(slug, _need_pos(pos, "`request`"), a.category, _text(a),
-                                                    amount=a.amount, session=sess, outside=outside)
+                                                    amount=a.amount, session=sess, outside=outside, payload=payload)
         return _say(a, r, f"request {r.get('id', '')} ({r.get('status', 'sent')})".replace("  ", " "))
     if c == "route":
         r = _module("enterprise_desk", "route")(slug, _need_pos(pos, "`route`"), a.department, _text(a), session=sess)

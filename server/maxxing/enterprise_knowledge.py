@@ -51,7 +51,7 @@ def _chart_line(slug: str, d: dict, pos: dict) -> str:
     if reports:
         parts.append("your direct reports: " + ", ".join(reports))
     extra = ""
-    workers = (d.get("settings") or {}).get("workers")
+    workers = enterprises.setting(slug, "workers", pos["id"])
     if workers == "discreet":
         extra += " For a side task you may use Claude Code sub-agents."
     elif workers == "visible":

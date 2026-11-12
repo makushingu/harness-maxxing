@@ -14,8 +14,9 @@ import logging
 import os
 import re
 import secrets
+import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 from . import agents, config, enterprises
 from .enterprises import EnterpriseError
@@ -23,6 +24,7 @@ from .enterprises import EnterpriseError
 log = logging.getLogger("maxxing.enterprise_policy")
 
 PROFILES = ("careful", "balanced", "autonomous")
+RUN_USD = 0.5                                       # what a run of an agent without a budget holds under a ceiling, at most
 GRANT_MAX_S = 30 * 86400 + 3600                     # a grant lasts 30 days at most (an hour of slack)
 KEEP = 500                                          # requests kept per enterprise (the oldest answered go first)
 
@@ -61,7 +63,7 @@ def _now(now: float | None = None) -> float:
 
 
 def _owner_by(by: Any) -> bool:
-    return by is None or by == "" or by == "owner"
+    return by is None or by == ""                       # the string "owner" is a position id like any other (reserved)
 
 
 # ---- requests: storage -------------------------------------------------------------------------------------
@@ -338,9 +340,11 @@ def _needs_note(r: dict) -> str:
     return GRANT_NOTE if r["category"] in NEEDS_GRANT or _NEEDS_RE.search(r["text"]) else ""
 
 
-def decide(slug: str, req_id: str, decision: str, *, reason: str = "", by: str | None = None, via: str = "") -> dict:
+def decide(slug: str, req_id: str, decision: str, *, reason: str = "", by: str | None = None, via: str = "",
+           outside: bool = False) -> dict:
     """Allow or deny a pending request. by None = the owner; else the position that decides it (the request's
-    current decider, never the requester, only for a request of its own subtree). via: where the owner clicked."""
+    current decider, never the requester, only for a request of its own subtree). via: where the owner clicked.
+    outside: the deciding run was started by outside text (the decision is then delivered as outside data)."""
     if decision not in ("allow", "deny"):
         raise EnterpriseError(400, "invalid", "decision: allow or deny")
     reason = " ".join(str(reason or "").split())[:300]
@@ -367,10 +371,13 @@ def decide(slug: str, req_id: str, decision: str, *, reason: str = "", by: str |
     who = "the owner" if owner else _title(slug, by)
     word = "allowed" if decision == "allow" else "denied"
     note = _needs_note(r) if decision == "allow" else ""
+    applied = _run_payload(slug, r) if decision == "allow" else ""
     _deliver(slug, r["position"], "decision",
              f"Your request {r['id']} ({r['category']}) was {word} by {who}." + (f" {reason}" if reason else "")
-             + (f" {note}" if note else ""), sender="" if owner else by, outside=bool(r.get("outside")),
-             session=r.get("session") or "")
+             + (f" {applied}" if applied else "") + (f" {note}" if note else ""), sender="" if owner else by,
+             outside=bool(r.get("outside")) or bool(outside), session=r.get("session") or "")
+    if applied == OWNER_APPLIES and not owner:
+        _tell_owner_applies(slug, r, who)
     enterprises.log(slug, f"request_{word}", f"{r['category']}: {r['text']}" + (f" ({reason})" if reason else ""),
                     by="owner" if owner else by, position=r["position"], session=r.get("session") or "")
     with contextlib.suppress(Exception):
@@ -378,25 +385,55 @@ def decide(slug: str, req_id: str, decision: str, *, reason: str = "", by: str |
         how = ("Allowed" if decision == "allow" else "Denied") + (" on Telegram" if via == "telegram" else "")
         feed.resolve(f"enterprise:{slug}:{r['id']}", how, read=True, level="info" if decision == "allow" else "warning")
     enterprises.invalidate(slug)
-    if decision == "allow":
-        _run_payload(slug, r)
     return _public(r)
 
 
-def _run_payload(slug: str, r: dict) -> None:
-    """An allowed cross-department assignment is carried out now (the flow module does not re-run it)."""
-    p = r.get("payload")
-    if r.get("category") != "assign_cross" or not isinstance(p, dict) or not p.get("to_pos"):
-        return
+OWNER_APPLIES = "Allowed: the owner applies it."
+APPLIED_BY_OWNER = ("raise_budget", "profile_edit", "deliver_cross", "edit_job", "reseat")   # a yes the owner still carries out
+
+
+def _tell_owner_applies(slug: str, r: dict, who: str) -> None:
+    """A lead allowed something only the owner can carry out: the owner hears it (no button, nothing to decide)."""
+    label = CATEGORIES.get(r["category"], {}).get("label", r["category"])
+    body = f"{who} allowed {_title(slug, r['position'])}: {r['text']} Nothing changed yet: you apply it."
     try:
-        from . import enterprise_flow
-        enterprise_flow.assign(slug, r["position"], p["to_pos"], p.get("deliverable") or r["text"], due=p.get("due"),
-                               parent=p.get("parent"), session=r.get("session") or "", outside=bool(r.get("outside")),
-                               approved=True)
-    except Exception:  # noqa: BLE001 - the decision stands; the log says why nothing was assigned
-        log.exception("enterprise %s: allowed assignment failed", slug)
-        enterprises.log(slug, "request_failed", f"The allowed assignment {r['id']} could not be made", by="policy",
-                        position=r["position"])
+        from . import enterprise_reports
+        enterprise_reports.notify_owner(slug, f"{label}: allowed, you apply it", body, level="info",
+                                        url=f"/enterprises/{slug}", dedupe=f"enterprise:{slug}:{r['id']}:applies")
+    except Exception:  # noqa: BLE001
+        log.exception("enterprise %s: owner notification failed", slug)
+
+
+def _run_payload(slug: str, r: dict) -> str:
+    """Carries out what an allowed request can be carried out as: an assignment across departments, a job description
+    or a re-seat of a position under the requester. -> a sentence for the requester ("" when nothing is left to do),
+    OWNER_APPLIES when the owner still has to apply it."""
+    p = r.get("payload") if isinstance(r.get("payload"), dict) else {}
+    cat, pos = r.get("category"), r["position"]
+    try:
+        if cat == "assign_cross" and p.get("to_pos"):
+            from . import enterprise_flow
+            enterprise_flow.assign(slug, pos, p["to_pos"], p.get("deliverable") or r["text"], due=p.get("due"),
+                                   parent=p.get("parent"), session=r.get("session") or "", outside=bool(r.get("outside")),
+                                   approved=True)
+            return ""
+        target = p.get("position")
+        if cat in ("edit_job", "reseat") and target in enterprises.subtree(slug, pos) and (
+                (cat == "edit_job" and isinstance(p.get("job"), str)) or (cat == "reseat" and p.get("agent"))):
+            rev = enterprises.load(slug)["rev"]
+            if cat == "edit_job":
+                enterprises.update_position(slug, target, {"job": p["job"]})
+                return f"Done: the job description of {_title(slug, target)} was updated."
+            if (enterprises.position(slug, target) or {}).get("agent"):
+                return OWNER_APPLIES
+            enterprises.update_position(slug, target, {"agent": p["agent"]}, rev=rev)
+            return f"Done: {_title(slug, target)} is now held by {p['agent']}."
+    except Exception:  # noqa: BLE001 - the decision stands; the log says why nothing was done
+        log.exception("enterprise %s: allowed request failed", slug)
+        enterprises.log(slug, "request_failed", f"The allowed request {r['id']} could not be carried out", by="policy",
+                        position=pos)
+        return OWNER_APPLIES if cat in APPLIED_BY_OWNER else ""
+    return OWNER_APPLIES if cat in APPLIED_BY_OWNER else ""
 
 
 def feed_action(rid: str, action: str, by: str, ev: dict) -> None:
@@ -475,9 +512,37 @@ def tick(now: float | None = None) -> None:
 
 
 # ---- envelopes: budget -------------------------------------------------------------------------------------------
-def _levels(path: str) -> tuple[str, list[tuple[str, str, float, list[str]]]]:
-    """(slug, [(id, label, usd per day, member agent paths)]) of the envelopes with a budget that apply to the agent."""
+def _seat(path: str) -> tuple[str, str] | None:
+    """The position an agent acts for: the one it holds, or the one a live (or ended today) worker was started for."""
     seat = enterprises.seat_of(path)
+    if seat or "-w" not in path.rsplit("/", 1)[-1]:
+        return seat
+    try:
+        from . import enterprise_workers
+        fn = getattr(enterprise_workers, "seat_of_worker", None)
+        return fn(path) if fn else None
+    except Exception:  # noqa: BLE001 - a lookup never raises
+        log.exception("worker seat of %s", path)
+        return None
+
+
+def _workers_cost(slug: str, positions: list[str] | None) -> float:
+    """USD the workers (live or ended today) of the positions spent today (None: the whole enterprise)."""
+    try:
+        from . import enterprise_workers
+        fn = getattr(enterprise_workers, "cost_today", None)
+        if fn is None:
+            return 0.0
+        return float(fn(slug) if positions is None else sum(fn(slug, x) for x in positions))
+    except Exception:  # noqa: BLE001
+        log.exception("worker cost of %s", slug)
+        return 0.0
+
+
+def _levels(path: str) -> tuple[str, list[tuple[str, str, float, list[str], Callable[[], float]]]]:
+    """(slug, [(id, label, usd per day, member agent paths, cost of the members' workers)]) of the envelopes with a
+    budget that apply to the agent (an occupant or one of its workers)."""
+    seat = _seat(path)
     d = _data(seat[0]) if seat else {}
     if not seat or not d:
         return "", []
@@ -486,30 +551,31 @@ def _levels(path: str) -> tuple[str, list[tuple[str, str, float, list[str]]]]:
     dept = enterprises.department_of(slug, pos)
     env = ((d.get("departments") or {}).get(dept) or {}).get("envelope") or {}
     if dept and (env.get("usd_per_day") or 0) > 0:
-        members = [p["agent"] for p in d["positions"] if p["department"] == dept and p["agent"]]
+        in_dept = [p for p in d["positions"] if p["department"] == dept]
         out.append((f"department:{dept}", f"The department {(d['departments'][dept].get('name') or dept)}",
-                    float(env["usd_per_day"]), members))
+                    float(env["usd_per_day"]), [p["agent"] for p in in_dept if p["agent"]],
+                    lambda ids=[p["id"] for p in in_dept]: _workers_cost(slug, ids)))
     top = d.get("envelope") or {}
     if (top.get("usd_per_day") or 0) > 0:
         out.append(("enterprise", f"The enterprise {d.get('name') or slug}", float(top["usd_per_day"]),
-                    [p["agent"] for p in d["positions"] if p["agent"]]))
+                    [p["agent"] for p in d["positions"] if p["agent"]], lambda: _workers_cost(slug, None)))
     return slug, out
 
 
-def _usage(members: list[str], session: str | None = None) -> tuple[float, float]:
-    """(spent today, held by runs in progress) over the distinct existing agents."""
+def _usage(members: list[str], session: str | None = None, workers: Callable[[], float] | None = None) -> tuple[float, float]:
+    """(spent today, held by runs in progress) over the distinct existing agents, plus what their workers spent."""
     spent = held = 0.0
     for m in dict.fromkeys(members):
         if not agents.exists(m):
             continue
         spent += agents.day_cost(m)
         held += agents._held(agents._read_state(m), but=session)
-    return spent, held
+    return spent + (workers() if workers else 0.0), held
 
 
 def has_ceiling(path: str) -> bool:
     try:
-        return bool(enterprises.seat_of(path)) and enterprises.feature_on() and bool(_levels(path)[1])
+        return enterprises.feature_on() and bool(_seat(path)) and bool(_levels(path)[1])
     except Exception:  # noqa: BLE001
         return False
 
@@ -518,7 +584,7 @@ _told: set[tuple] = set()
 
 
 def _tell(slug: str, key: str, label: str, usd: float) -> None:
-    """One owner notification per envelope per day."""
+    """One owner notification per envelope per day, sent from a thread: a slow Telegram call never holds a lock."""
     from .sessions import store
     day = store.day_of(time.time())
     if (slug, key, day) in _told:
@@ -526,7 +592,11 @@ def _tell(slug: str, key: str, label: str, usd: float) -> None:
     _told.add((slug, key, day))
     if len(_told) > 500:
         _told.clear()
-    ref = f"envelope:{slug}:{key}:{day}"
+    threading.Thread(target=_send_tell, args=(slug, f"envelope:{slug}:{key}:{day}", label, usd), daemon=True,
+                     name="enterprise-envelope-alert").start()
+
+
+def _send_tell(slug: str, ref: str, label: str, usd: float) -> None:
     title, body = f"{label} reached its daily budget", f"{usd:g} USD spent today: its agents wait until tomorrow."
     try:
         from . import enterprise_reports
@@ -544,11 +614,11 @@ def _tell(slug: str, key: str, label: str, usd: float) -> None:
 def over_ceiling(path: str) -> str | None:
     """The refusal text once the agent's department or enterprise has spent its daily envelope (None: room left)."""
     try:
-        if not enterprises.seat_of(path) or not enterprises.feature_on():
+        if not enterprises.feature_on() or not _seat(path):
             return None
         slug, levels = _levels(path)
-        for key, label, usd, members in levels:
-            if _usage(members)[0] >= usd:
+        for key, label, usd, members, workers in levels:
+            if _usage(members, workers=workers)[0] >= usd:
                 _tell(slug, key, label, usd)
                 return f"{label} reached its daily budget ({usd:g} USD): runs resume tomorrow."
     except Exception:  # noqa: BLE001
@@ -559,10 +629,10 @@ def over_ceiling(path: str) -> str | None:
 def ceiling_held(path: str) -> bool:
     """True when what is left of an envelope is all held by runs in progress (the delivery waits: busy)."""
     try:
-        if not enterprises.seat_of(path) or not enterprises.feature_on():
+        if not enterprises.feature_on() or not _seat(path):
             return False
-        for _key, _label, usd, members in _levels(path)[1]:
-            spent, held = _usage(members)
+        for _key, _label, usd, members, workers in _levels(path)[1]:
+            spent, held = _usage(members, workers=workers)
             if held and spent + held >= usd - 0.01:
                 return True
     except Exception:  # noqa: BLE001
@@ -571,13 +641,17 @@ def ceiling_held(path: str) -> bool:
 
 
 def cap(path: str, left: float, session: str | None = None) -> float:
-    """The per-run budget `left` lowered to what its department and enterprise envelopes still have."""
+    """The per-run budget `left` lowered to what its department and enterprise envelopes still have. An agent without
+    a budget of its own (`left` infinite) gets a bounded share, so its siblings run side by side."""
     try:
-        if not enterprises.seat_of(path) or not enterprises.feature_on():
+        if not enterprises.feature_on() or not _seat(path):
             return left
-        for _key, _label, usd, members in _levels(path)[1]:
-            spent, held = _usage(members, session)
-            left = min(left, max(usd - spent - held, 0.01))
+        for _key, _label, usd, members, workers in _levels(path)[1]:
+            spent, held = _usage(members, session, workers)
+            room = max(usd - spent - held, 0.01)
+            if left == float("inf"):
+                room = min(room, RUN_USD, usd / max(len(set(members)), 1))
+            left = min(left, max(room, 0.01))
     except Exception:  # noqa: BLE001
         log.exception("envelope cap failed (%s)", path)
     return left
@@ -616,8 +690,8 @@ def _outside(field: str, items: list[str], allowed: list[str]) -> list[str]:
 def check_envelope(path: str, fields: dict) -> None:
     """Refuses widening an agent's keys or domains beyond its department's / enterprise's lists: 400 exceeds_envelope.
     Only what is added counts (an agent already over its envelope is flagged by over_envelope, never edited)."""
-    seat = enterprises.seat_of(path)
-    if not seat or not enterprises.feature_on():
+    seat = enterprises.seat_of(path) if enterprises.feature_on() else None
+    if not seat:
         return
     cur = None
     for field, clean in (("keys", agents._clean_keys), ("domains", agents._clean_domains)):

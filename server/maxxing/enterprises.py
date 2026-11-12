@@ -27,7 +27,9 @@ _lock = config.ProcessLock("enterprises")
 FILE = "enterprise.json"
 PROFILE_FILE = "profile.json"
 SLUG_RE = agents.SLUG_RE
-RESERVED = ("templates", "import")                  # names of routes next to /{e}
+RESERVED = ("templates", "import", "esc")           # names of routes next to /{e}; `esc` is the escalation card prefix
+RESERVED_POS = ("owner", "server", "policy", "visitor", "free", "esc", "none")   # words written in `by`: never a position id
+DEPT_SETTINGS = ("communication", "allow", "workers", "autonomy", "escalation_timeout_h", "spending_threshold")
 MAX_ENTERPRISES = 20
 MAX_POSITIONS = 200
 DEPTH_MAX = 6
@@ -149,7 +151,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "escalation_timeout_h": 4,
     "digest": {"enabled": False, "hour": 8, "per_lead": False, "titles_only": False},
     "weekly": False, "monthly": False,
-    "desk": {"enabled": False, "label": "", "retention_days": 30, "full_for": [],
+    "desk": {"enabled": False, "label": "", "retention_days": 30,
              "public": {"enabled": False, "token": "", "rate_per_hour": 20, "max_chars": 1000}},
     "limits": {"depth": 4, "reports": 8, "workers_live": 5, "hops_per_task": 6},
 }
@@ -161,7 +163,6 @@ _CHECKS: dict[str, Callable[[Any], Any]] = {
                      DEFAULT_SETTINGS["digest"]),
     "weekly": _bool, "monthly": _bool,
     "desk": _group({"enabled": _bool, "label": lambda v: _text(v, 60), "retention_days": lambda v: _int(v, 1, 365),
-                    "full_for": _slugs,
                     "public": _group({"enabled": _bool, "token": _token, "rate_per_hour": lambda v: _int(v, 1, 600),
                                       "max_chars": lambda v: _int(v, 50, 4000)},
                                      DEFAULT_SETTINGS["desk"]["public"])}, DEFAULT_SETTINGS["desk"]),
@@ -237,8 +238,13 @@ def _departments(src: Any, strict: bool = False) -> dict:
                 raise EnterpriseError(400, "invalid", f"Invalid department id {did!r}")
             continue
         v = v if isinstance(v, dict) else {}
+        over = v.get("settings") if isinstance(v.get("settings"), dict) else {}
+        bad = [k for k in over if k not in DEPT_SETTINGS]
+        if bad and strict:
+            raise EnterpriseError(400, "invalid", f"A department overrides only: {', '.join(DEPT_SETTINGS)} (not {', '.join(bad)})")
         d = {"name": _text(v.get("name"), NAME_MAX) or did, "envelope": _envelope(v.get("envelope"), strict),
-             "settings": _settings(v.get("settings"), strict, partial=True), "notes": _text(v.get("notes"), NOTES_MAX)}
+             "settings": _settings({k: x for k, x in over.items() if k in DEPT_SETTINGS}, strict, partial=True),
+             "notes": _text(v.get("notes"), NOTES_MAX)}
         for k, x in v.items():
             if k not in d:
                 d[k] = x
@@ -273,6 +279,35 @@ def _grants(src: Any) -> list[dict]:
     return out
 
 
+GRANT_DAYS = 30
+
+
+def _check_grants(d: dict, src: Any) -> list[dict]:
+    """The grants as written by the owner. A new or changed one is checked like `maxxing enterprise grant`: the position
+    exists, the category is known, `until` is in the future and within 30 days, the ceiling is a number (400 invalid)."""
+    from . import enterprise_policy
+    if not isinstance(src, list):
+        raise EnterpriseError(400, "invalid", "grants: a list")
+    out = _grants(src)
+    if len(out) != len(src):
+        raise EnterpriseError(400, "invalid", "grants: each needs an id")
+    old = {g["id"]: g for g in d["grants"]}
+    now = time.time()
+    for g, raw in zip(out, src):
+        if old.get(g["id"]) == g:
+            continue                                    # untouched (maybe ended: the tick drops it)
+        if not any(p["id"] == g["position"] for p in d["positions"]):
+            raise EnterpriseError(400, "bad_position", f"Grant {g['id']}: the position {g['position']!r} does not exist")
+        if g["category"] not in enterprise_policy.CATEGORIES:
+            raise EnterpriseError(400, "invalid", f"Grant {g['id']}: unknown category {g['category']!r}")
+        end = enterprise_policy._until(g.get("until"))
+        if end is None or end <= now or end > now + GRANT_DAYS * 86400 + 3600:
+            raise EnterpriseError(400, "invalid", f"Grant {g['id']}: `until` must be within {GRANT_DAYS} days from now")
+        if raw.get("ceiling") is not None and g["ceiling"] is None:
+            raise EnterpriseError(400, "invalid", f"Grant {g['id']}: the ceiling is a number")
+    return out
+
+
 def _worker(v: Any) -> dict | None:
     if not isinstance(v, dict):
         return None
@@ -285,7 +320,7 @@ def _worker(v: Any) -> dict | None:
 
 
 def _position(p: Any) -> dict | None:
-    if not isinstance(p, dict) or not _slug_ok(p.get("id")):
+    if not isinstance(p, dict) or not _slug_ok(p.get("id")) or p["id"] in RESERVED_POS:
         return None
     rt = p.get("reports_to")
     dept = p.get("department")
@@ -651,8 +686,10 @@ _UPDATABLE = ("name", "emoji", "top", "settings", "envelope", "departments", "ob
 
 def update(slug: str, fields: dict) -> dict:
     f = {k: v for k, v in (fields or {}).items() if k in _UPDATABLE}
+    grants_log: list[str] = []
 
     def edit(d: dict) -> list[str]:
+        grants_log.clear()
         if "name" in f:
             name = _text(f["name"], NAME_MAX)
             if not name:
@@ -677,7 +714,15 @@ def update(slug: str, fields: dict) -> dict:
         if "objectives" in f:
             d["objectives"] = _objectives(f["objectives"])
         if "grants" in f:
-            d["grants"] = _grants(f["grants"])
+            old = {g["id"]: g for g in d["grants"]}
+            d["grants"] = _check_grants(d, f["grants"])
+            new = {g["id"]: g for g in d["grants"]}
+            for gid, g in new.items():
+                if old.get(gid) != g:
+                    grants_log.append(f"Grant {gid} made: {g['category']} for {g['position']}")
+            for gid, g in old.items():
+                if gid not in new:
+                    grants_log.append(f"Grant {gid} revoked: {g['category']} for {g['position']}")
         if "top" in f:
             roots = {p["id"] for p in d["positions"] if p["reports_to"] is None}
             if f["top"] != "owner" and f["top"] not in roots:
@@ -686,6 +731,8 @@ def update(slug: str, fields: dict) -> dict:
         return sorted(f)
 
     _apply(slug, edit, lambda d, keys: "Updated " + ", ".join(keys))
+    for line in grants_log:
+        log(slug, "grant", line)
     return get(slug)
 
 
@@ -776,11 +823,25 @@ def _open_tasks(slug: str) -> dict[str, int]:
     return out
 
 
-def _state_of(agent: dict | None, st: dict) -> str:
+BLOCKING = ("budget", "envelope", "disabled")        # why of a flow wait that stops the occupant: the box is Blocked
+
+
+def _waits(slug: str) -> dict:
+    """position -> {since, why} of the deliveries that wait (the flow's file; {} when none)."""
+    try:
+        w = json.loads((_peek(slug) / "flow.json").read_text(encoding="utf-8")).get("waits")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return w if isinstance(w, dict) else {}
+
+
+def _state_of(agent: dict | None, st: dict, wait: dict | None = None) -> str:
     if agent is None:
         return "vacant"
     if (st.get("waiting") or 0) > 0:
         return "waiting"
+    if isinstance(wait, dict) and wait.get("why") in BLOCKING:
+        return "blocked"
     if (st.get("running_now") or 0) > 0:
         return "working"
     if (st.get("thread_unread") or 0) > 0:
@@ -803,6 +864,7 @@ def get(slug: str, with_state: bool = True) -> dict:
     if with_state:
         by = agents._agent_metas()
         tasks = _open_tasks(slug)
+        waits = _waits(slug)
         total, paid = 0.0, set()
         for p in positions:
             path, occupant, st, cost = p["agent"], None, {}, 0.0
@@ -819,9 +881,11 @@ def get(slug: str, with_state: bool = True) -> dict:
                 if path not in paid:
                     paid.add(path)
                     total += cost
-            p.update(state=_state_of(occupant, st), occupant=occupant, cost_today=round(cost, 4),
-                     inbox=_inbox_count(slug, p["id"]), open_tasks=tasks.get(p["id"], 0),
-                     blocked_reason="agent missing" if path and occupant is None else "")
+            state = _state_of(occupant, st, waits.get(p["id"]))
+            why = (waits.get(p["id"]) or {}).get("why", "") if state == "blocked" else ""
+            p.update(state=state, occupant=occupant, cost_today=round(cost, 4), inbox=_inbox_count(slug, p["id"]),
+                     open_tasks=tasks.get(p["id"], 0),
+                     blocked_reason="agent missing" if path and occupant is None else why)
         out["cost_today"] = round(total, 4)
         cap = float(d["envelope"].get("usd_per_day") or 0)
         out["ceiling_hit"] = bool(cap and total >= cap)
@@ -899,6 +963,8 @@ def add_position(slug: str, fields: dict) -> dict:
     if not _slug_ok(pid):
         raise EnterpriseError(400, "invalid_name",
                               "Use 1-48 lowercase letters, digits or dashes (starting with a letter or digit)")
+    if pid in RESERVED_POS:
+        raise EnterpriseError(400, "invalid", f"{pid!r} is reserved: pick another id for the position")
 
     def edit(d: dict) -> dict:
         if any(p["id"] == pid for p in d["positions"]):
@@ -964,10 +1030,10 @@ def subtree_of(d: dict, pos: str) -> list[str]:
 
 
 def remove_position(slug: str, pos: str, reparent_to: str | None = None) -> dict:
-    def edit(d: dict) -> int:
+    def edit(d: dict) -> tuple[int, str]:
         p = _find(d, pos)
         reports = [x for x in d["positions"] if x["reports_to"] == pos]
-        new = None
+        new = p["reports_to"]                           # who takes over its requests: the new lead, else its own lead
         if reports:
             if reparent_to is None:
                 raise EnterpriseError(409, "has_reports", f"{pos!r} has {len(reports)} report(s): say where they go",
@@ -980,14 +1046,31 @@ def remove_position(slug: str, pos: str, reparent_to: str | None = None) -> dict
         d["positions"].remove(p)
         if d["top"] == pos:
             d["top"] = "owner"
-        return len(reports)
+        return len(reports), new or ""
 
-    _apply(slug, edit, lambda d, n: f"Position {pos} removed" + (f", {n} report(s) moved" if n else ""))
+    _, (_n, heir) = _apply(slug, edit, lambda d, res: f"Position {pos} removed" + (f", {res[0]} report(s) moved" if res[0] else ""))
     try:
         (_peek(slug) / "inbox" / f"{pos}.jsonl").unlink(missing_ok=True)
     except OSError:
         pass
+    _reassign_requester(slug, pos, heir)
     return get(slug)
+
+
+def _reassign_requester(slug: str, pos: str, heir: str) -> None:
+    """The open tasks the removed position asked for get its heir (the new lead; "" = the owner) as requester."""
+    try:
+        from .api import tasks as tasks_api
+        todo = [t for t in tasks_api.load(copy_=False).get("tasks") or []
+                if isinstance(t.get("enterprise"), dict) and t["enterprise"].get("id") == slug
+                and t["enterprise"].get("requester") == pos and t.get("status") != "done"]
+        for t in todo:
+            tasks_api.update_task(t["id"], {"enterprise": {**t["enterprise"], "requester": heir}})
+        if todo:
+            log(slug, "structure", f"{len(todo)} open task(s) of {pos} now have {heir or 'the owner'} as requester",
+                by="server", position=heir)
+    except Exception:  # noqa: BLE001 - the removal stands
+        logger.exception("requesters of %s/%s not reassigned", slug, pos)
 
 
 def hire(slug: str, pos: str, topic: str, name: str | None = None, template: str | None = None) -> str:
@@ -1072,6 +1155,7 @@ def remap(old_prefix: str, new_prefix: str) -> None:
             n += 1
         return f"{old_prefix} renamed to {new_prefix}" if n else None
     _each(fn)
+    from . import enterprise_workers; enterprise_workers.remap(old_prefix, new_prefix)  # noqa: E702 - the workers follow too
 
 
 def deleted_with(prefix: str, dest: Path) -> None:
@@ -1127,15 +1211,17 @@ def _restore_enterprise(dest: Path) -> None:
         d, kind = _read(slug)
         if kind != "ok":
             return
-        mine = [p for p in d["projects"] if (config.workspace() / "projects" / p).is_dir()
-                and enterprise_of_project(p) in (None, slug)]
+        taken_projects, taken_seats = set(), set()             # held by the OTHER enterprises (this one is in the index too)
+        for other, od in _index()["by"].items():
+            if other != slug:
+                taken_projects.update(od["projects"])
+                taken_seats.update(x["agent"] for x in od["positions"] if x["agent"])
+        mine = [p for p in d["projects"] if (config.workspace() / "projects" / p).is_dir() and p not in taken_projects]
         changed = mine != d["projects"]
         d["projects"] = mine
         for p in d["positions"]:
-            seat = seat_of(p["agent"]) if p["agent"] else None
             ap = agents.parse(p["agent"]) if p["agent"] else None
-            if p["agent"] and (not ap or ap[0] not in mine or not agents.exists(p["agent"])
-                               or (seat and seat != (slug, p["id"]))):
+            if p["agent"] and (not ap or ap[0] not in mine or not agents.exists(p["agent"]) or p["agent"] in taken_seats):
                 p["agent"], changed = None, True
         if changed:
             d["rev"] = int(d.get("rev") or 0) + 1

@@ -41,6 +41,15 @@ def _set(client, **f):
     assert client.patch(E, json=f).status_code == 200
 
 
+def _raw_grants(grants):
+    """Grants as an edited file would hold them (the API refuses bad ones): the runtime must still ignore them."""
+    p = enterprises.folder(SLUG) / enterprises.FILE
+    d = json.loads(p.read_text(encoding="utf-8"))
+    d["grants"] = grants
+    p.write_text(json.dumps(d), encoding="utf-8")
+    enterprises.invalidate(SLUG)
+
+
 def _autonomy(client, v):
     _set(client, settings={"autonomy": v})
 
@@ -141,7 +150,7 @@ def test_grant_bounds(ent):
 
     def grant(**kw):
         g = {"id": "g1", "position": "head", "category": "spending", "ceiling": 50, "until": now + 5 * 86400, **kw}
-        _set(ent, grants=[g])
+        _raw_grants([g])
 
     grant()
     assert pol.decider(SLUG, "writer", "spending", amount=40) == "lead"       # above the threshold, inside the ceiling
@@ -290,8 +299,8 @@ def test_a_lead_that_cannot_decide_is_skipped(ent):
 
 def test_tick_drops_ended_grants_and_waits_while_off(ent):
     now = time.time()
-    _set(ent, grants=[{"id": "old", "position": "head", "category": "edit_job", "ceiling": None, "until": now - 5},
-                      {"id": "live", "position": "head", "category": "edit_job", "ceiling": None, "until": now + 86400}])
+    _raw_grants([{"id": "old", "position": "head", "category": "edit_job", "ceiling": None, "until": now - 5},
+                 {"id": "live", "position": "head", "category": "edit_job", "ceiling": None, "until": now + 86400}])
     pol.tick(now=now)
     assert [g["id"] for g in ent.get(E).json()["grants"]] == ["live"]
     assert any(x["kind"] == "grant_expired" for x in enterprises.decisions(SLUG)[0])
@@ -302,6 +311,13 @@ def test_tick_drops_ended_grants_and_waits_while_off(ent):
 
 
 # ---- envelopes: budget ----------------------------------------------------------------------------------------
+def _flush_alerts():
+    import threading
+    for t in threading.enumerate():
+        if t.name == "enterprise-envelope-alert":
+            t.join(5)
+
+
 def _costs(monkeypatch, table):
     monkeypatch.setattr(agents, "day_cost", lambda path, when=None, **kw: table.get(path, 0.0))
 
@@ -321,6 +337,7 @@ def test_department_ceiling_gate_cap_and_one_notification(ent, monkeypatch):
     assert pol.cap(WRITER, 5.0) == 0.01
     for _ in range(3):
         pol.over_ceiling(EDITOR)
+    _flush_alerts()
     evs = [e for e in feed.list_events(source="enterprises")["events"] if "daily budget" in e["title"]]
     assert len(evs) == 1                                                       # once per envelope per day
     r = agents.fire(WRITER, trigger="manual", prompt="NOTOOL hi")
@@ -440,3 +457,84 @@ def test_agents_cannot_post_as_the_enterprise(ent, monkeypatch):
     assert feed.list_events(source="enterprises")["events"] == []
     monkeypatch.delenv("MAXXING_AGENT")
     assert feed.HANDLERS["enterprise"] == "enterprise_policy"
+
+
+# ---- reserved ids, outside mark, overrides, grants, workers, shares ------------------------------------------
+def test_a_position_named_owner_has_no_owner_right(ent):
+    for pid in ("owner", "server", "policy", "visitor", "free", "esc", "none"):
+        r = ent.post(f"{E}/positions", json={"id": pid, "title": pid})
+        assert r.status_code == 400 and r.json()["error"] == "invalid", pid
+    assert enterprises.clean({"positions": [{"id": "owner"}, {"id": "ok"}]})["positions"][0]["id"] == "ok"
+    r = pol.request(SLUG, "writer", "edit_job", "Change a job")
+    with pytest.raises(enterprises.EnterpriseError) as e:
+        pol.decide(SLUG, r["id"], "allow", by="owner")
+    assert e.value.status == 403
+
+
+def test_decision_carries_the_outside_mark_of_the_deciding_run(ent):
+    r = pol.request(SLUG, "writer", "edit_job", "Another job")
+    pol.decide(SLUG, r["id"], "allow", by="head", outside=True)
+    assert _msgs("writer", "decision")[-1]["outside"] is True
+
+
+def test_department_overrides_are_whitelisted(ent):
+    r = ent.patch(E, json={"departments": {"mkt": {"name": "M", "settings": {"trust_chain": True}}}})
+    assert r.status_code == 400 and r.json()["error"] == "invalid"
+    assert ent.patch(E, json={"departments": {"mkt": {"name": "M", "settings": {"autonomy": "careful"}}}}).status_code == 200
+
+
+def test_grants_are_validated_and_logged(ent):
+    g = {"id": "g1", "position": "head", "category": "edit_job", "ceiling": None}
+    assert ent.patch(E, json={"grants": [{**g, "until": time.time() + 60 * 86400}]}).status_code == 400
+    assert ent.patch(E, json={"grants": [{**g, "position": "nobody", "until": time.time() + 86400}]}).status_code == 400
+    assert ent.patch(E, json={"grants": [{**g, "until": time.time() + 86400}]}).status_code == 200
+    assert any(x["kind"] == "grant" and "g1 made" in x["text"] for x in enterprises.decisions(SLUG)[0])
+    assert ent.patch(E, json={"grants": []}).status_code == 200
+    assert any(x["kind"] == "grant" and "g1 revoked" in x["text"] for x in enterprises.decisions(SLUG)[0])
+
+
+def test_allowed_request_applies_or_says_the_owner_does(ent):
+    r = pol.request(SLUG, "head", "edit_job", "New job", payload={"position": "writer", "job": "Write posts"})
+    pol.decide(SLUG, r["id"], "allow")
+    assert enterprises.position(SLUG, "writer")["job"] == "Write posts"
+    _autonomy(ent, "autonomous")
+    r = pol.request(SLUG, "writer", "raise_budget", "More money")
+    pol.decide(SLUG, r["id"], "allow", by="head")
+    assert "the owner applies it" in _msgs("writer", "decision")[-1]["text"]
+
+
+def test_worker_spending_counts_in_the_envelope(ent, monkeypatch):
+    from maxxing import enterprise_workers as ew
+    _set(ent, departments={"mkt": {"name": "Marketing", "envelope": {"usd_per_day": 1}}, "ops": {"name": "Operations"}})
+    _costs(monkeypatch, {})
+    w = P + "writer-w1"
+    monkeypatch.setattr(ew, "seat_of_worker", lambda path: (SLUG, "writer") if path == w else None, raising=False)
+    monkeypatch.setattr(ew, "cost_today", lambda slug, pos=None: 1.5, raising=False)
+    monkeypatch.setattr(agents, "exists", lambda p, _e=agents.exists: True if p == w else _e(p))
+    assert "Marketing" in pol.over_ceiling(w) and "Marketing" in pol.over_ceiling(WRITER)
+    _flush_alerts()
+
+
+def test_budgetless_agent_holds_a_bounded_share(ent, monkeypatch):
+    _set(ent, departments={"mkt": {"name": "Marketing", "envelope": {"usd_per_day": 5}}, "ops": {"name": "Operations"}})
+    _costs(monkeypatch, {})
+    agents.update(WRITER, {"limits": {"usd_per_day": 0}})
+    assert pol.cap(WRITER, float("inf")) == pol.RUN_USD
+    args = agents.run_settings(WRITER)["args"]
+    assert args[args.index("--max-budget-usd") + 1] == "0.50"
+    _set(ent, departments={"mkt": {"name": "Marketing"}, "ops": {"name": "Operations"}})
+    assert "--max-budget-usd" not in agents.run_settings(WRITER)["args"]
+
+
+def test_blocked_state_and_requester_reassigned(ent):
+    import json as _j
+    f = enterprises.state(SLUG) / "flow.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_j.dumps({"waits": {"writer": {"since": 1, "why": "budget"}}}), encoding="utf-8")
+    p = next(x for x in enterprises.get(SLUG)["positions"] if x["id"] == "writer")
+    assert p["state"] == "blocked" and p["blocked_reason"] == "budget"
+    from maxxing.api import tasks as tasks_api
+    t = tasks_api.add_task({"title": "T", "enterprise": {"id": SLUG, "owner": "ops", "requester": "head"}})
+    ent.request  # noqa: B018
+    enterprises.remove_position(SLUG, "head", reparent_to="boss")
+    assert tasks_api.get_task(t["id"])["enterprise"]["requester"] == "boss"

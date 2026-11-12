@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -680,10 +681,12 @@ def test_private_paths_hide_other_enterprises(client, ent, topic, mx):
 
 
 def test_note_unused_ceiling_fields_roundtrip(client, ent):
+    _pos(client, "a")
+    until = time.time() + 5 * 86400
     r = client.patch(f"{E}/acme-group", json={
         "objectives": [{"id": "o1", "text": "Grow", "target": 10, "unit": "posts", "value": 2, "owner": "a", "parent": ""},
                        {"text": "no id"}],
-        "grants": [{"id": "g1", "position": "a", "category": "spend", "ceiling": 5, "until": "2030-01-01"}]})
+        "grants": [{"id": "g1", "position": "a", "category": "edit_job", "ceiling": 5, "until": until}]})
     c = r.json()
     assert [o["id"] for o in c["objectives"]] == ["o1"] and c["objectives"][0]["target"] == 10
-    assert c["grants"][0]["ceiling"] == 5 and c["grants"][0]["until"] == "2030-01-01"
+    assert c["grants"][0]["ceiling"] == 5 and c["grants"][0]["until"] == until
