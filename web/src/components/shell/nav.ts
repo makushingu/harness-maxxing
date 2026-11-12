@@ -1,5 +1,5 @@
 // Primary navigation — single source for the sidebar, the mobile tab bar, the palette and shortcuts.
-import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
+import { Bot, Building2, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 import { useExtensions, useSettings } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,7 @@ export const navRow = (collapsed: boolean, active?: boolean) =>
     collapsed && 'h-11 justify-center px-0 [&>svg]:[transform:scale(1.1112)] [@media(max-height:820px)]:h-9',
   )
 
-type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page'
+type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page' | 'enterprises_page'
 
 export type NavItem = {
   to: string
@@ -52,6 +52,7 @@ export const NAV: NavItem[] = [
   { to: '/', label: 'nav.home', icon: LayoutDashboard, key: 'd', end: true, group: 'main' },
   { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's', group: 'main' },
   { to: '/agents', label: 'nav.agents', icon: Bot, key: 'a', setting: 'agents_page', group: 'main' },
+  { to: '/enterprises', label: 'nav.enterprises', icon: Building2, key: 'n', setting: 'enterprises_page', group: 'main' },
   { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page', defaultOn: true, group: 'main' },
   { to: '/team', label: 'nav.team', icon: UsersRound, key: 'm', setting: 'team_page', group: 'main' },
   { to: '/mail', label: 'nav.mail', icon: Mail, key: 'e', setting: 'mail_page', group: 'main' },
@@ -106,7 +107,9 @@ export function useUnpinnedPages(): number {
 /** The pages shown on this install (optional ones only once switched on). */
 function usePages(): { pages: NavItem[]; order: string[] | undefined } {
   const { data: s } = useSettings()
-  return { pages: NAV.filter((n) => !n.setting || (s ? !!s[n.setting] : !!n.defaultOn)), order: s?.sidebar_order }
+  // Enterprises needs Agents: its entry shows only while both are on
+  const shown = (n: NavItem) => !n.setting || (s ? !!s[n.setting] && (n.setting !== 'enterprises_page' || !!s.agents_page) : !!n.defaultOn)
+  return { pages: NAV.filter(shown), order: s?.sidebar_order }
 }
 
 /** The pages shown on this install, in the user's order, Settings last (touch menu, palette, shortcuts). */

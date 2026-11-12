@@ -14,6 +14,7 @@ export const GROUPS = {
   git: ['git'],
   team: ['team'],
   agents: ['agents', 'groups'],
+  enterprises: ['ent'],
   mail: ['mail'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],

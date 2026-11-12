@@ -50,7 +50,7 @@ function meters() {
   return { cpu: 65.5 + 30.5 * wave(30), memAvail: 8e9 * (1 - (0.58 + 0.12 * wave(47, 1))), five: 69 + 29 * wave(40, 2), week: 47 + 4 * wave(90) }
 }
 const MOCK_ALL = process.env.MOCK_FEATURES === 'all'
-const PAGE_FLAGS = ['agents_page', 'mail_page', 'infra_page', 'team_page', 'tasks_page', 'git_page']
+const PAGE_FLAGS = ['agents_page', 'enterprises_page', 'mail_page', 'infra_page', 'team_page', 'tasks_page', 'git_page']
 
 /* =================================================================== helpers */
 const now = () => Date.now() / 1000
@@ -1965,6 +1965,116 @@ function mockAgents() {
   ]
 }
 R('GET', '/api/agents', () => ({ agents: mockAgents(), avatar: {} }))
+// Enterprises (MOCK_FEATURES=all or Settings -> Features): one chart of acme's agents, held in memory.
+const ENT = new Map()
+const ENT_TEMPLATES = [
+  { id: 'content', name: 'Content team', description: 'A head of content with a writer and a reviewer.', positions: [{ id: 'head', title: 'Head of content', reports_to: null, department: 'content' }, { id: 'writer', title: 'Writer', reports_to: 'head', department: 'content' }, { id: 'reviewer', title: 'Reviewer', reports_to: 'head', department: 'content' }] },
+  { id: 'support', name: 'Customer care', description: 'A support lead and two agents.', positions: [{ id: 'lead', title: 'Support lead', reports_to: null, department: 'support' }, { id: 'agent-a', title: 'First line', reports_to: 'lead', department: 'support' }, { id: 'agent-b', title: 'Second line', reports_to: 'lead', department: 'support' }] },
+]
+const ENT_SETTINGS = () => ({ communication: 'leads', allow: [], workers: 'discreet', autonomy: 'balanced', trust_chain: false, escalation_timeout_h: 4,
+  digest: { enabled: true, hour: 8, per_lead: false, titles_only: false }, weekly: false, monthly: false, limits: { depth: 4, reports: 8, workers_live: 5, hops_per_task: 6 } })
+function entSeed() {
+  const ag = (topic, name) => `${topicPath('acme', topic)}/agents/${name}`
+  ENT.set('acme-group', { version: 1, rev: 3, name: 'Acme Group', emoji: '🏢', projects: ['acme'], top: 'owner', settings: ENT_SETTINGS(),
+    envelope: { usd_per_day: 10, keys: null, domains: null },
+    departments: { marketing: { name: 'Marketing', envelope: { usd_per_day: 5 }, settings: {}, notes: '' }, support: { name: 'Support', envelope: {}, settings: { communication: 'strict' }, notes: '' } },
+    objectives: [], grants: [],
+    positions: [
+      { id: 'marketing-lead', title: 'Head of marketing', reports_to: null, department: 'marketing', agent: ag('blog', 'writer'), job: 'Owns traffic and brand reach. Breaks goals down for the team and reviews every public piece.' },
+      { id: 'writer', title: 'Articles, newsletters', reports_to: 'marketing-lead', department: 'marketing', agent: ag('blog', 'proofreader'), job: 'Writes the weekly article.' },
+      { id: 'seo', title: 'Search and rankings', reports_to: 'marketing-lead', department: 'marketing', agent: ag('seo', 'rank-watch'), job: '' },
+      { id: 'support-lead', title: 'Customer care', reports_to: null, department: 'support', agent: null, job: 'Answers customers within a day.' },
+    ] })
+}
+const entAgent = (path) => path ? mockAgents().find((a) => a.path === path) || null : null
+function entView(id) {
+  const e = ENT.get(id) || fail(404, 'not_found', 'Enterprise not found')
+  const positions = e.positions.map((p) => {
+    const a = entAgent(p.agent)
+    const state = !p.agent || !a ? 'vacant' : !a.enabled ? 'off' : a.waiting ? 'waiting' : a.running_now ? 'working' : a.thread_unread ? 'unread' : 'idle'
+    return { ...p, desk: !!p.desk, state, occupant: a ? { path: a.path, display_name: a.display_name, avatar: a.avatar, enabled: a.enabled, sandbox: a.sandbox } : null,
+      cost_today: a ? a.cost_today : 0, inbox: p.id === 'writer' ? 2 : 0, open_tasks: a ? 1 : 0, blocked_reason: '' }
+  })
+  return { id, name: e.name, emoji: e.emoji, rev: e.rev, projects: e.projects, top: e.top, settings: e.settings, envelope: e.envelope, departments: e.departments,
+    objectives: e.objectives, grants: e.grants, broken: false, positions, cost_today: +positions.reduce((n, p) => n + p.cost_today, 0).toFixed(2), ceiling_hit: false }
+}
+const entTouch = (e, id) => { e.rev += 1; bus('enterprises', `enterprises:${id}`) }
+const entGet = (id) => { if (!ENT.size) entSeed(); return ENT.get(id) || fail(404, 'not_found', 'Enterprise not found') }
+const entPos = (e, pos) => e.positions.find((p) => p.id === pos) || fail(404, 'not_found', 'Position not found')
+const entUnder = (e, pos) => { const out = [pos]; for (let i = 0; i < out.length; i++) for (const p of e.positions) if (p.reports_to === out[i]) out.push(p.id); return out }
+R('GET', '/api/enterprises', () => {
+  if (!ENT.size) entSeed()
+  return { enterprises: [...ENT.entries()].map(([id, e]) => ({ id, name: e.name, emoji: e.emoji, projects: e.projects, positions: e.positions.length, vacant: e.positions.filter((p) => !p.agent).length, top: e.top })) }
+})
+R('GET', '/api/enterprises/templates', () => ({ templates: ENT_TEMPLATES }))
+R('POST', '/api/enterprises', ({ body }) => {
+  if (!ENT.size) entSeed()
+  if (!SLUG.test(body.id || '')) fail(400, 'invalid_name', 'Use lowercase letters, digits and dashes')
+  if (ENT.has(body.id)) fail(409, 'exists', 'An enterprise with this name exists')
+  for (const e of ENT.values()) if ((body.projects || []).some((p) => e.projects.includes(p))) fail(409, 'project_linked', 'A project is already linked to another enterprise')
+  const tpl = ENT_TEMPLATES.find((x) => x.id === body.template)
+  ENT.set(body.id, { version: 1, rev: 1, name: body.name || body.id, emoji: body.emoji || '', projects: body.projects || [], top: 'owner', settings: ENT_SETTINGS(),
+    envelope: { usd_per_day: null, keys: null, domains: null }, departments: {}, objectives: [], grants: [],
+    positions: (tpl ? tpl.positions : []).map((p) => ({ ...p, agent: null, job: '' })) })
+  bus('enterprises')
+  return entView(body.id)
+})
+R('GET', '/api/enterprises/:e', ({ params }) => { entGet(params.e); return entView(params.e) })
+R('PATCH', '/api/enterprises/:e', ({ params, body }) => {
+  const e = entGet(params.e)
+  for (const k of ['name', 'emoji', 'top', 'settings', 'envelope', 'departments', 'objectives', 'grants']) if (body[k] !== undefined) e[k] = body[k]
+  entTouch(e, params.e)
+  return entView(params.e)
+})
+R('DELETE', '/api/enterprises/:e', ({ params }) => { entGet(params.e); ENT.delete(params.e); bus('enterprises'); return { ok: true } })
+R('PUT', '/api/enterprises/:e/projects', ({ params, body }) => {
+  const e = entGet(params.e)
+  const gone = e.projects.filter((p) => !(body.projects || []).includes(p))
+  const held = e.positions.filter((p) => gone.some((g) => (p.agent || '').startsWith(`projects/${g}/`)))
+  if (held.length && !body.vacate) fail(409, 'occupied', `${held.map((p) => p.title).join(', ')} held by agents of an unlinked project`)
+  for (const p of held) p.agent = null
+  e.projects = body.projects || []
+  entTouch(e, params.e)
+  return entView(params.e)
+})
+R('POST', '/api/enterprises/:e/positions', ({ params, body }) => {
+  const e = entGet(params.e)
+  if (e.positions.some((p) => p.id === body.id)) fail(409, 'exists', 'This position exists')
+  if (body.agent && e.positions.some((p) => p.agent === body.agent)) fail(409, 'agent_seated', 'This agent holds another position')
+  e.positions.push({ id: body.id, title: body.title || body.id, reports_to: body.reports_to || null, department: body.department || '', agent: body.agent || null, job: body.job || '' })
+  entTouch(e, params.e)
+  return entView(params.e)
+})
+R('PATCH', '/api/enterprises/:e/positions/:pos', ({ params, body }) => {
+  const e = entGet(params.e)
+  const p = entPos(e, params.pos)
+  const structural = body.reports_to !== undefined || body.agent !== undefined
+  if (structural && body.rev !== e.rev) fail(409, 'stale', 'The chart changed: reloaded')
+  if (body.reports_to && entUnder(e, p.id).includes(body.reports_to)) fail(400, 'cycle', 'A position cannot report to its own team')
+  if (body.agent && e.positions.some((x) => x.agent === body.agent && x.id !== p.id)) fail(409, 'agent_seated', 'This agent holds another position')
+  for (const k of ['title', 'reports_to', 'department', 'agent', 'job', 'worker_template', 'desk']) if (body[k] !== undefined) p[k] = body[k]
+  entTouch(e, params.e)
+  return entView(params.e)
+})
+R('DELETE', '/api/enterprises/:e/positions/:pos', ({ params, q }) => {
+  const e = entGet(params.e)
+  const p = entPos(e, params.pos)
+  const to = q.get('reparent_to') || p.reports_to || null
+  for (const x of e.positions) if (x.reports_to === p.id) x.reports_to = to
+  e.positions = e.positions.filter((x) => x.id !== p.id)
+  entTouch(e, params.e)
+  return { ok: true }
+})
+R('POST', '/api/enterprises/:e/positions/:pos/hire', ({ params, body }) => {
+  const e = entGet(params.e)
+  const p = entPos(e, params.pos)
+  const path = `${body.topic}/agents/${p.id}`
+  p.agent = path
+  entTouch(e, params.e)
+  return { agent: path }
+})
+R('GET', '/api/enterprises/:e/positions/:pos/inbox', ({ params }) => ({ items: params.pos === 'writer' ? [{ id: 'i1', kind: 'assignment', from: 'marketing-lead', text: 'Three articles on the spring kit', task: 't_9f3c2a', at: now() - 3600, outside: false }] : [] }))
+R('GET', '/api/enterprises/:e/decisions', () => ({ items: [], next: null }))
 R('GET', '/api/agents/layout', () => ({ projects: [], colors: {}, agents: {} }))
 // MOCK_FEATURES=all: three chats (a DM with unread messages, a quiet DM, a group) for the Team bubbles.
 const TEAM = (() => {

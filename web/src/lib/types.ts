@@ -451,7 +451,88 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'enterprises'
+
+/* ---------------------------------------------------------------- Enterprises (Settings -> Features -> enterprises_page) */
+export type PositionState = 'working' | 'waiting' | 'unread' | 'failed' | 'off' | 'vacant' | 'blocked' | 'idle'
+export type EnterpriseCommunication = 'strict' | 'leads' | 'open'
+export type EnterpriseWorkers = 'discreet' | 'visible' | 'off'
+export type EnterpriseAutonomy = 'careful' | 'balanced' | 'autonomous'
+export type EnterpriseSettings = {
+  communication: EnterpriseCommunication
+  allow: [string, string][]
+  workers: EnterpriseWorkers
+  autonomy: EnterpriseAutonomy
+  trust_chain: boolean
+  escalation_timeout_h: number
+  digest: { enabled: boolean; hour: number; per_lead: boolean; titles_only: boolean }
+  weekly: boolean
+  monthly: boolean
+  desk?: { enabled: boolean; label: string; retention_days: number; full_for: string[] }
+  limits: { depth: number; reports: number; workers_live: number; hops_per_task: number }
+}
+export type EnterpriseEnvelope = { usd_per_day: number | null; keys: string[] | null; domains: string[] | null }
+export type EnterpriseDepartment = { name: string; envelope?: Partial<EnterpriseEnvelope>; settings?: Partial<EnterpriseSettings>; notes?: string }
+export type EnterpriseObjective = { id: string; text: string; target: number | null; unit: string; value: number | null; owner: string; parent: string }
+export type EnterpriseGrant = { id: string; position: string; category: string; ceiling: number | null; until: string | null }
+export type PositionOccupant = { path: string; display_name: string; avatar: AgentAvatar; enabled: boolean; sandbox: boolean }
+export type Position = {
+  id: string
+  title: string
+  reports_to: string | null
+  department: string
+  /** agent path, null = vacant (also set while the agent is gone: `occupant` is then null) */
+  agent: string | null
+  job: string
+  desk?: boolean
+  worker_template?: { role: string; model: string; usd_per_day: number }
+  state: PositionState
+  occupant: PositionOccupant | null
+  cost_today: number
+  inbox: number
+  open_tasks: number
+  blocked_reason: string
+}
+export type EnterpriseSummary = { id: string; name: string; emoji: string; projects: string[]; positions: number; vacant: number; top: string }
+export type Enterprise = {
+  id: string
+  name: string
+  emoji: string
+  rev: number
+  projects: string[]
+  top: string
+  settings: EnterpriseSettings
+  envelope: EnterpriseEnvelope
+  departments: Record<string, EnterpriseDepartment>
+  objectives: EnterpriseObjective[]
+  grants: EnterpriseGrant[]
+  /** the file is unreadable or a position names a missing agent: what is wrong, in words */
+  broken?: string | boolean
+  positions: Position[]
+  cost_today: number
+  ceiling_hit: boolean
+}
+export type EnterpriseInput = { id: string; name: string; emoji?: string; projects?: string[]; template?: string }
+export type EnterprisePatch = Partial<Pick<Enterprise, 'name' | 'emoji' | 'top' | 'settings' | 'envelope' | 'departments' | 'objectives' | 'grants'>>
+export type PositionInput = { id: string; title: string; reports_to?: string | null; department?: string; agent?: string | null; job?: string }
+export type PositionPatch = { rev?: number; title?: string; reports_to?: string | null; department?: string; agent?: string | null; job?: string; worker_template?: Position['worker_template'] | null; desk?: boolean }
+export type EnterpriseTemplate = { id: string; name: string; description: string; positions: { id: string; title: string; reports_to: string | null; department: string }[] }
+export type InboxItem = { id: string; kind: string; from: string; text: string; task: string; at: number; outside: boolean }
+export type DecisionItem = { at: number; kind: string; by: string; position: string; text: string; task: string; session: string }
+export type EnterpriseOverview = {
+  departments: { id: string; name: string; cost_today: number; ceiling: number | null; open_tasks: number; late_tasks: number; blocked: number }[]
+  requests_waiting: number
+  escalations_open: number
+  objectives: EnterpriseObjective[]
+  digest: { date: string; text: string } | null
+  cost_today: number
+  digest_cost: number
+}
+export type EnterpriseReport = { name: string; date: string; kind: 'daily' | 'weekly' | 'monthly' }
+export type EnterpriseRequest = { id: string; category: string; position: string; text: string; amount: number | null; status: string; decider: string; at: number; outside: boolean }
+export type EnterpriseEscalation = { id: string; position: string; text: string; task: string; level: number; deadline: number; status: string; at: number; outside: boolean }
+export type EnterpriseInsights = { week: string; questions: unknown[]; topics: unknown[]; pains: unknown[]; unanswered: unknown[] }
+
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -776,6 +857,8 @@ export type Settings = {
   team_page?: boolean
   /** Settings -> Features: the Agents page (/agents, lasting roles of a topic with triggers) and the agent rows of the tree */
   agents_page?: boolean
+  /** Settings -> Features: the Enterprises page (/enterprises, org charts of agents above projects); needs Agents */
+  enterprises_page?: boolean
   /** Settings -> Features (beta): Maxxing mode on the Sessions page (its switch, meter and Alt+M) */
   maxxing_mode?: boolean
   /** Settings -> Features: the E-mail page (/mail) and its sidebar entry */

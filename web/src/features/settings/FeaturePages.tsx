@@ -14,6 +14,7 @@ type PageSetting = NonNullable<NavItem['setting']>
 
 /** What a page needs before it is useful (shown under its sentence), and where to set it. */
 const NEEDS: Partial<Record<PageSetting, { text: TKey; to?: string; link?: TKey }>> = {
+  enterprises_page: { text: 'features.need.enterprises' },
   team_page: { text: 'features.need.team' },
   mail_page: { text: 'features.need.mail' },
   infra_page: { text: 'features.need.infra', to: '/settings/keys', link: 'settings.keys' },
@@ -29,6 +30,7 @@ const CORE_DESC: Record<string, TKey> = {
 
 const DESC: Record<PageSetting, TKey> = {
   agents_page: 'features.page.agents',
+  enterprises_page: 'features.page.enterprises',
   tasks_page: 'features.page.tasks',
   team_page: 'features.page.team',
   mail_page: 'features.page.mail',
