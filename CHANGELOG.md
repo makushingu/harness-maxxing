@@ -5,7 +5,26 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Right click everywhere**: a right click (a long press on a phone) on a row or a card opens its menu where you
+  clicked - settings lists, crons, notifications, mail, tasks, Team, an agent's triggers, a session's header. The
+  browser's menu stays on selected text, fields and links.
+- **Agents: edit and delete from the agent's menu.** Right click on an agent of the list or a desk of the Office, or
+  the new **...** on its page and in the Office conversation panel: Edit role, Name and look (the character at its
+  desk) and Delete (same confirmation as in its settings).
+- **Sessions: Add now** on waiting messages sends them into the running task without interrupting it: Claude reads
+  them at its next step instead of after the whole task (Steer still interrupts the current step).
+- **Phone: search in one tap** - a magnifier in the top bar and a search field atop the left drawers.
+
+Changed:
+- **Sidebar**: a click on the open page's entry opens its list in the second sidebar and keeps it open; a page opened
+  by a click shows its list at once.
+- **Agents: a run stopped by its timeout counts in the daily budget** (its cost is estimated from its log; it used to
+  count 0 $). A cron job's timeout no longer goes past the agent's own limit, runs are told to do one pass and never
+  wait inside a run, and a group member's session is renewed after a long pause.
+
 Fixed:
+- **Phone**: the crons list fits the screen, trash rows keep their names, the notifications header keeps its title.
 - **Bugs reported in #75** (each one proven by a failing test, thanks to its reporter):
   - **Telegram**: long replies full of emoji are split by the length Telegram counts (an emoji counts 2), so they are
     no longer refused for being over 4096.
