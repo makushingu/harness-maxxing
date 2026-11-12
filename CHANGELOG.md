@@ -31,6 +31,11 @@ Fixed:
   rather than cut to two letters; Keyboard shortcuts is no longer offered in the search of a phone.
 - **Sessions: a message no longer shows twice.** On a slow connection, the message you just sent could appear a
   second time under Claude's first steps, greyed with "Sending…", until the turn ended. It was sent only once.
+- **Agents: a message you send is on screen.** When you had scrolled up in an agent's conversation (a long answer
+  read from its start, on a phone above all), the message you sent stayed below the screen, as if it had not gone:
+  the conversation now goes back to the bottom when you send.
+- **Team: a message shows the moment you send it.** It waited for the server's answer and for the chat to be read
+  again (slow on a phone connection); it is now in the chat at once, and goes back to the box if the send fails.
 
 Security:
 - **Agents: the ready-made jobs that read the web start Protected.** Sales of the day, Orders to handle, Watch, Blog

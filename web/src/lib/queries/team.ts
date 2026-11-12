@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
 import type { Ok, Profile, Session } from '../types'
 import { useMut } from './util'
@@ -25,6 +25,8 @@ export type TeamMessage = {
   summary?: { from: number; to: number; count: number; cost_usd: number; duration_ms: number }
   sent?: { session: string; title: string; at: number }[]
   reactions?: Record<string, string[]>
+  /** shown at the send, before the server answered (its id is not one of the server yet) */
+  sending?: boolean
 }
 export type TeamChat = {
   id: string
@@ -70,10 +72,60 @@ export function useTeamChat(id: string | null) {
 const inv = [teamKeys.all] as const
 const chatUrl = (cid: string) => `/api/team/chats/${seg(cid)}`
 
+type ChatData = { chat: TeamChat; messages: TeamMessage[] }
+type SendVars = { cid: string; text: string; reply_to?: string; files?: ({ path: string } & Partial<TeamFile>)[] }
+/** The message shown while each send is on its way (by its variables). */
+const sending = new WeakMap<SendVars, string>()
+
+/** The message is in the open chat at once (no wait for the answer, then for the chat read again): the server's
+ *  one takes its place when it answers, and it goes away if the send is refused. */
 export function useTeamSend() {
-  return useMut(({ cid, ...b }: { cid: string; text: string; reply_to?: string; files?: { path: string }[] }) => api.post<TeamMessage>(`${chatUrl(cid)}/messages`, b), {
-    invalidate: inv,
-  })
+  const qc = useQueryClient()
+  /** The message on its way leaves the chat; `msg` (the server's one) takes its place unless it is there already. */
+  const settle = (v: SendVars, msg?: TeamMessage) => {
+    const id = sending.get(v)
+    qc.setQueryData<ChatData>(teamKeys.chat(v.cid), (old) => {
+      if (!old) return old
+      const rest = old.messages.filter((m) => m.id !== id)
+      return { ...old, messages: !msg || rest.some((m) => m.id === msg.id) ? rest : [...rest, msg] }
+    })
+  }
+  return useMut(
+    ({ cid, files, ...b }: SendVars) => api.post<TeamMessage>(`${chatUrl(cid)}/messages`, { ...b, files: files?.map((f) => ({ path: f.path })) }),
+    {
+      invalidate: inv,
+      onMutate: async (v) => {
+        const key = teamKeys.chat(v.cid)
+        // only a chat already read (a send from elsewhere, or while it loads, has nothing to show it in)
+        if (!qc.getQueryData(key)) return
+        // a read on its way would bring the chat back without it
+        await qc.cancelQueries({ queryKey: key })
+        const id = `sending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        sending.set(v, id)
+        const me = qc.getQueryData<TeamState>(teamKeys.state)?.me || 'me'
+        const files = (v.files || []).filter((f): f is TeamFile => !!f.name && !!f.mime)
+        qc.setQueryData<ChatData>(key, (old) => old && {
+          ...old,
+          messages: [
+            ...old.messages,
+            {
+              id, author: me, at: Date.now() / 1000, text: v.text.trim(), kind: 'text', sending: true,
+              ...(v.reply_to && { reply_to: v.reply_to }),
+              ...(files.length && { files }),
+              // as the server's one will say: not delivered yet to the chat's real people (the clock shows at once)
+              ...(old.chat.remote && { pending: old.chat.members }),
+            },
+          ],
+        })
+      },
+      onSuccess: (msg, v) => settle(v, msg),
+      // refused: it goes (only it: another one sent meanwhile stays), and the chat is read again
+      onError: (_e, v) => {
+        settle(v)
+        void qc.invalidateQueries({ queryKey: teamKeys.chat(v.cid) })
+      },
+    },
+  )
 }
 /** "I am writing" (the server sends it at most every 3 s, never queued). */
 export function useTeamTyping() {
