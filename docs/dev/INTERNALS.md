@@ -870,7 +870,11 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
   `invalidate_sizes()` after writing deep inside an existing item (backup restore's previous versions).
 - `maxxing/importer.py`: `prompt(agent)`, `inspect(zip)` (preview, writes nothing), `apply(zip)`,
   `finish_prompt(result)`; uploads in `state_dir("import")` (24 h). Never overwrites; secret scan =
-  `backup.scan_bytes`. API `/api/import`, CLI `maxxing import`.
+  `backup.scan_bytes`. API `/api/import`, CLI `maxxing import` (prints `finish_prompt` after an import). `HINTS` =
+  where each agent keeps things (Hermes: `~/.hermes/` with `memories/`, `cron/jobs.json`; OpenClaw: its workspace,
+  jobs in its own store). `_entries` strips every single folder above the export; `_plan`: a skill = the first
+  folder that holds `SKILL.md` (`skills/<category>/<name>/`), `memories/MEMORY.md|USER.md` = root memory;
+  `_apply` keeps the generated `# ` heading of a new level when the imported CLAUDE.md has none (description).
 - `maxxing/videos.py`: lighter copies for the player. `probe(p)` (ffprobe, cached by `sha1(path, mtime_ns,
   size)`), `status(p)`, `prepare(p, q)` -> `_encode` on a 1-worker pool (`nice -n 10 ffmpeg ... -progress pipe:1`,
   writes `<key>.part.mp4` then renames; `_jobs[key]` = state/progress/error in memory, lost on restart: a

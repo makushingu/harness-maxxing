@@ -42,6 +42,11 @@ def test_prompt(client):
     assert r["agent"] == "hermes" and set(r["agents"]) == {"hermes", "claude-code", "openclaw", "other"}
     assert "~/.hermes/" in r["prompt"] and "projects/<project>/topics/<topic>/memory.md" in r["prompt"]
     assert "NEVER write a secret value" in r["prompt"]
+    # where Hermes really keeps things, and what a good export needs whatever the agent
+    assert all(x in r["prompt"] for x in ("memories/MEMORY.md", "SOUL.md", "hermes cron list", "Never copy .env"))
+    assert "in the language I use with you" in r["prompt"] and "python3 -m zipfile -c" in r["prompt"]
+    claw = client.get("/api/import/prompt", params={"agent": "openclaw"}).json()["prompt"]
+    assert all(x in claw for x in ("TOOLS.md", "openclaw cron list", "Never copy openclaw.json"))
     assert client.get("/api/import/prompt", params={"agent": "nope"}).json()["agent"] == "other"
 
 
@@ -159,6 +164,55 @@ def test_skills_that_give_the_same_folder_stay_apart(client, mx):
     assert {(sk / d / "SKILL.md").read_text()[-2] for d in ("my-skill", "my-skill-2")} == {"A", "B"}
 
 
+def test_an_export_zipped_from_higher_up_is_still_read(client, mx):
+    """The old agent zipped the parent folder ("out/harness-maxxing-export/..."): same import, not everything aside."""
+    p = _upload(client, _zip({"projects/shop/topics/seo/memory.md": "- fact\n", "memory.md": "- me\n",
+                              "tasks.md": "- call\n"}, top="out/harness-maxxing-export/")).json()
+    assert [x["name"] for x in p["projects"]] == ["shop"] and p["root_memory"] and p["aside"] == ["tasks.md"]
+
+
+def test_skills_sorted_in_categories(client, mx):
+    """Hermes keeps skills/<category>/<name>/SKILL.md: the skill is the folder that holds SKILL.md."""
+    p = _upload(client, _zip({"skills/ecommerce/DESCRIPTION.md": "about the category\n",
+                              "skills/ecommerce/weekly-report/SKILL.md": "---\nname: weekly-report\n---\nA\n",
+                              "skills/ecommerce/weekly-report/scripts/run.py": "print(1)\n",
+                              "skills/devops/weekly-report/SKILL.md": "---\nname: weekly-report\n---\nB\n",
+                              "skills/plain/SKILL.md": "---\nname: plain\n---\nC\n",
+                              "skills/plain/docs/SKILL.md": "an example\n",
+                              "skills/notes/how.md": "no SKILL.md here\n"})).json()
+    assert p["skills"] == ["notes", "plain", "weekly-report", "weekly-report-2"]
+    assert p["aside"] == ["skills/ecommerce/DESCRIPTION.md"]
+    client.post(f"/api/import/{p['id']}/apply")
+    sk = mx["ws"] / ".claude/skills"
+    assert sorted(d.name for d in sk.iterdir()) == ["notes", "plain", "weekly-report", "weekly-report-2"]
+    assert {(sk / d / "SKILL.md").read_text()[-2] for d in ("weekly-report", "weekly-report-2")} == {"A", "B"}
+    both = [sk / d / "scripts/run.py" for d in ("weekly-report", "weekly-report-2")]
+    assert sum(f.is_file() for f in both) == 1 and (sk / "plain/docs/SKILL.md").is_file()
+
+
+def test_a_raw_hermes_memory_folder_is_the_root_memory(client, mx):
+    p = _upload(client, _zip({"memories/MEMORY.md": "- runs a shop\n", "memories/USER.md": "- likes short answers\n",
+                              "memories/old/MEMORY.md": "- elsewhere\n", "SOUL.md": "calm\n"}, top="")).json()
+    assert p["root_memory"] and p["aside"] == ["SOUL.md", "memories/old/MEMORY.md"]
+    client.post(f"/api/import/{p['id']}/apply")
+    mem = (mx["ws"] / "memory.md").read_text()
+    assert "runs a shop" in mem and "likes short answers" in mem and "elsewhere" not in mem
+
+
+def test_a_new_folder_keeps_a_description_without_a_heading(client, mx):
+    """An imported CLAUDE.md with no "# " heading: the generated one stays, so the app has a description to show."""
+    from maxxing import workspace
+    p = _upload(client, _zip({"projects/shop/CLAUDE.md": "Online shop of the bakery.\n",
+                              "projects/shop/topics/seo/CLAUDE.md": "# SEO\n\nRank the shop.\n\n@memory.md\n",
+                              "projects/shop/topics/blog/CLAUDE.md": "Two posts a week.\n"})).json()
+    client.post(f"/api/import/{p['id']}/apply")
+    shop = mx["ws"] / "projects/shop"
+    assert (shop / "CLAUDE.md").read_text() == "# Project shop\n\nOnline shop of the bakery.\n\n@memory.md\n"
+    assert (shop / "topics/seo/CLAUDE.md").read_text() == "# SEO\n\nRank the shop.\n\n@memory.md\n"
+    assert workspace._parse_description(shop / "CLAUDE.md") == "Online shop of the bakery."
+    assert workspace._parse_description(shop / "topics/blog/CLAUDE.md") == "Two posts a week."
+
+
 def test_slug():
     assert importer.slug("Café Crème !") == "cafe-creme" and importer.slug("***") == "imported"
 
@@ -170,7 +224,10 @@ def test_cli(mx, tmp_path, capsys):
     assert cli.main(["import", "--prompt", "openclaw"]) == 0 and "~/.openclaw/workspace/" in capsys.readouterr().out
     assert cli.main(["import", str(z), "--dry-run"]) == 0 and "new    acme: +blog" in capsys.readouterr().out
     assert not (mx["ws"] / "projects/acme").exists()
-    assert cli.main(["import", str(z)]) == 0 and "Imported: 1 new projects" in capsys.readouterr().out
+    assert cli.main(["import", str(z)]) == 0
+    out = capsys.readouterr().out
+    assert "Imported: 1 new projects" in out
+    assert "Last step: open a session in general/inbox" in out and "IMPORT_REPORT.md first" in out   # how to finish
     assert (mx["ws"] / "projects/acme/topics/blog/memory.md").read_text().strip().endswith("- fact")
 
 

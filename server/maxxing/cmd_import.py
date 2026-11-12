@@ -55,6 +55,10 @@ def _handler(a) -> int:
         print(f"refused (contains {', '.join(s['kinds'])}): {s['file']}")
     for s in res["skipped"]:
         print(f"skipped ({s['reason']}): {s['file']}")
+    if not a.dry_run:
+        print("\nLast step: open a session in general/inbox and send it this message, so that Claude tidies the "
+              "memory, creates the tasks, proposes the scheduled jobs and lists the keys to add:\n")
+        print(res["finish_prompt"])
     return 0
 
 
