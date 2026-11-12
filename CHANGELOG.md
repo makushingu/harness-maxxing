@@ -54,6 +54,8 @@ Fixed:
 - **Odd requests get a clean answer instead of a server error**: a trash item whose name is longer than a file name
   can be, "mark as read" for a notification source with a broken character, or a repository path on the
   Git page with a folder name longer than a file name can be.
+- **Screen readers in French**: the close button of every window and side panel, the handles between session
+  columns and the masks of the presentation mode are read in your language, no longer always in English.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

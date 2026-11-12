@@ -135,6 +135,7 @@ function MobileTabs() {
 
 /* ---------------------------------------------------------------- shell */
 export function ColumnShell({ col, index, count, variant, place, children }: { col: Col; index: number; count: number; variant: ColumnVariant; place?: Place; children: React.ReactNode }) {
+  const t = useT()
   const focused = useSessionsUI((s) => s.focused === col.key)
   const focus = useSessionsUI((s) => s.focus)
   const strip = React.useContext(StripContext)
@@ -217,7 +218,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize"
+          aria-label={t('shell.resize')}
           onPointerDown={(e) => strip.startColResize(place?.top ?? col.key, e)}
           onDoubleClick={() => strip.resetColWidth(place?.top ?? col.key)}
           // Just past the right edge (never over the column's own scrollbar); the strip keeps an 8 px gutter at its
@@ -229,7 +230,7 @@ export function ColumnShell({ col, index, count, variant, place, children }: { c
         <div
           role="separator"
           aria-orientation="horizontal"
-          aria-label="Resize"
+          aria-label={t('shell.resizeRows')}
           onPointerDown={strip.startRowResize}
           onDoubleClick={strip.resetRowSplit}
           className="absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize touch-none after:absolute after:inset-x-0 after:top-1 after:h-[3px] after:transition-colors hover:after:bg-primary/40 active:after:bg-primary/60"
