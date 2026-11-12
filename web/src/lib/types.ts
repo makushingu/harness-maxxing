@@ -420,10 +420,18 @@ export type SessionEvent =
   | { type: 'init'; model: string; cwd: string; at: number }
   | { type: 'result'; ok: boolean; cost_usd: number; duration_ms: number; model: string; usage: Usage; at: number }
   | { type: 'note'; text: string; level: 'info' | 'warn' | 'error'; at: number }
+  /** What turn `n` changed in git repositories (Changes view, features/code). */
+  | ChangesEvent
   /** `ref` = `at` of a user event: hidden from the thread (or shown again). */
   | { type: 'hide'; ref: number; hidden: boolean; at: number }
   /** Background work of Claude Code (a sub-agent, a command): a partial update merged on `id`. */
   | TaskEvent
+export type ChangesEvent = {
+  type: 'changes'
+  n: number
+  repos: { root: string; name: string; branch: string | null; approx?: boolean; add: number; del: number; more?: number; files: { path: string; old: string | null; status: string; add: number; del: number; binary: boolean }[] }[]
+  at: number
+}
 export type TaskState = 'running' | 'completed' | 'failed' | 'stopped'
 export type TaskEvent = {
   type: 'task'

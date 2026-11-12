@@ -2,7 +2,7 @@
 // when the log grows, see log.ts), so appending events only renders the new rows.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, Brain, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Brain, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, History, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useLang } from '@/i18n'
 import { fmtDate, fmtNumber } from '@/lib/format'
@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Markdown } from '@/components/ui/markdown'
 import { filePreviewUrl, fileRawUrl, fileThumbUrl, knownFileStamp, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
 import { Thumb } from '@/features/files/Thumb'
-import type { ClaudeModel, ResultField } from '@/lib/types'
+import type { ChangesEvent, ClaudeModel, ResultField } from '@/lib/types'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
 import { isShownTask, taskStatus, type Item } from './log'
 import { TaskDetails, TaskElapsed, TaskStatusIcon, useOpenTaskLine } from './Tasks'
@@ -18,6 +18,8 @@ import type { Seed } from './store'
 import { useOpenPreview } from './FilePreview'
 import { MediaPlayer } from '@/features/files/MediaPlayer'
 import { QuotedFile } from './QuotedFile'
+import { ChangesChip } from './ChangesChip'
+import { useRevert } from '@/features/code/useRevert'
 import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
 import { gripRef } from './contentDrag'
 import { authServerOf, McpAuthButton } from '@/features/mcp/AuthButton'
@@ -35,6 +37,8 @@ export type ItemCtx = {
    *  folders whose paths become links, thumbnails and players (server: GET .../media-roots), each file checked by the
    *  server through `within`. Unset (sessions): every path of filesRoot. */
   scope?: readonly string[] | null
+  /** The session shown (unset outside a session column): what the Changes chip opens. */
+  sid?: string
 }
 /** Hover / focus on a media thumbnail: start loading what the viewer will show (light preview, video poster). */
 function prefetchMedia(p: string) {
@@ -58,6 +62,8 @@ export const ItemRow = React.memo(function ItemRow({
   onEdit?: (key: string, at: number, seed: Seed) => void
   onFork?: (seed: Seed) => void
 }) {
+  const { sid } = React.useContext(ItemContext)
+  const revert = useRevert(sid)
   switch (item.kind) {
     case 'user': {
       const { text, attachments, at, voice } = item.ev
@@ -76,6 +82,7 @@ export const ItemRow = React.memo(function ItemRow({
           onFork={onFork && (() => onFork(seed()))}
           onEdit={onHide && onEdit && (() => onEdit(item.key, at, seed()))}
           onDelete={onHide && (() => onHide(item.key, at))}
+          onRevert={item.changed != null && sid ? () => void revert(item.changed!) : undefined}
         />
       )
     }
@@ -90,7 +97,9 @@ export const ItemRow = React.memo(function ItemRow({
     case 'init':
       return <InitRow model={item.ev.model} />
     case 'result':
-      return <ResultRow ev={item.ev} />
+      return <ResultRow ev={item.ev} changes={item.changes} />
+    case 'changes':
+      return <LoneChanges ev={item.ev} />
     case 'note':
       return <NoteRow text={item.ev.text} level={item.ev.level} />
   }
@@ -113,18 +122,20 @@ export type MsgActions = {
   onEdit?: () => void
   /** The message got no answer (stopped): removed from the thread. */
   onDelete?: () => void
+  /** Its turn changed git repositories: "Revert to before this message" (files only, Restore for 10 s). */
+  onRevert?: () => void
   /** Offer the menu (Copy, Send to) even when there is nothing else in it. */
   copy?: boolean
 }
 
 /** Right click (a long press on a phone) on a message: a menu at the pointer (placed inside the row - the thread scroller is a containing block).
  *  A selection keeps the browser's own menu (copy it, or Quote from the pill), and so does a link. With Team on, "Send to" a friend. */
-export function useMessageMenu({ text, onFork, onEdit, onDelete, copy }: MsgActions) {
+export function useMessageMenu({ text, onFork, onEdit, onDelete, onRevert, copy }: MsgActions) {
   const t = useT()
   const [menuAt, setMenuAt] = React.useState<{ x: number; y: number } | null>(null)
   const after = React.useRef<(() => void) | undefined>(undefined)
   const [sendTo, setSendTo] = React.useState<SendTarget | null>(null)
-  const any = !!(onFork || onEdit || onDelete || (copy && text?.trim()))
+  const any = !!(onFork || onEdit || onDelete || onRevert || (copy && text?.trim()))
   const onContextMenu = any
     ? (e: React.MouseEvent<HTMLElement>) => {
         if ((e.target as Element).closest('a')) return
@@ -205,6 +216,11 @@ export function useMessageMenu({ text, onFork, onEdit, onDelete, copy }: MsgActi
             <Pencil /> {t('sessions.msg.edit')}
           </DropdownMenuItem>
         )}
+        {onRevert && (
+          <DropdownMenuItem onSelect={onRevert} data-testid="msg-revert">
+            <History /> {t('sessions.revert')}
+          </DropdownMenuItem>
+        )}
         {onDelete && (
           <DropdownMenuItem destructive onSelect={onDelete} data-testid="msg-delete">
             <Trash2 /> {t('sessions.msg.delete')}
@@ -261,6 +277,7 @@ export function UserMessage({
   onFork,
   onEdit,
   onDelete,
+  onRevert,
 }: {
   text: string
   attachments: string[]
@@ -281,7 +298,7 @@ export function UserMessage({
   const { tz } = React.useContext(ItemContext)
   // Quotes sent from the composer lead the message as Markdown blockquotes: shown as quote blocks (Copy keeps the raw text).
   const { quotes, rest } = React.useMemo(() => splitQuotes(text), [text])
-  const { onContextMenu, touch, menu } = useMessageMenu({ text: [text, heard?.text].filter(Boolean).join('\n\n'), onFork, onEdit, onDelete })
+  const { onContextMenu, touch, menu } = useMessageMenu({ text: [text, heard?.text].filter(Boolean).join('\n\n'), onFork, onEdit, onDelete, onRevert })
   return (
     <div className={cn('group/msg relative flex flex-col items-end gap-1.5 pl-8', pending && 'opacity-70')} onContextMenu={onContextMenu} {...touch}>
       {menu}
@@ -825,10 +842,19 @@ function InitRow({ model }: { model: string }) {
   )
 }
 
-function ResultRow({ ev }: { ev: Extract<Item, { kind: 'result' }>['ev'] }) {
+function LoneChanges({ ev }: { ev: ChangesEvent }) {
+  const { sid } = React.useContext(ItemContext)
+  return sid ? (
+    <div className="flex">
+      <ChangesChip sid={sid} ev={ev} />
+    </div>
+  ) : null
+}
+
+function ResultRow({ ev, changes }: { ev: Extract<Item, { kind: 'result' }>['ev']; changes?: ChangesEvent }) {
   const t = useT()
   const lang = useLang()
-  const { models } = React.useContext(ItemContext)
+  const { models, sid } = React.useContext(ItemContext)
   const { hidden } = useResultLine()
   const billed = useCostIsBilled()
   const show = (f: ResultField) => !hidden.includes(f)
@@ -856,6 +882,7 @@ function ResultRow({ ev }: { ev: Extract<Item, { kind: 'result' }>['ev'] }) {
       ]
         .filter(Boolean)
         .flatMap((el, i) => (i ? [<span key={`s${i}`} aria-hidden>·</span>, el] : [el]))}
+      {changes && sid && <ChangesChip sid={sid} ev={changes} />}
       <ResultLineMenu />
     </div>
   )

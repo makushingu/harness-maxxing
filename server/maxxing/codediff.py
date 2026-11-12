@@ -270,6 +270,12 @@ def repo_head(repo: Path) -> dict:
             "ahead": ahead, "behind": behind, "remote": remote or None}
 
 
+def dirty(repo: Path) -> int:
+    """How many files differ from HEAD (staged, unstaged or untracked): what a commit would take."""
+    out = _run(repo, "status", "--porcelain", "-z", "--untracked-files=all", check=False).stdout
+    return sum(1 for e in out.split("\0") if len(e) > 3 and e[2] == " ")
+
+
 def default_base(repo: Path) -> str | None:
     """The branch a feature branch is compared with: origin's HEAD, else main / master / beta that exists."""
     r = _run(repo, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD", check=False).stdout.strip()

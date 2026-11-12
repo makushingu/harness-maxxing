@@ -124,7 +124,7 @@ async def status(repo: str):
         r = codediff.checked_repo(repo)
         head = codediff.repo_head(r)
         full = gitview.github_name(head.get("remote") or "") if head.get("remote") else None
-        out = {**head, "github": full, "pr": None, "checks": None}
+        out = {**head, "dirty": codediff.dirty(r), "github": full, "pr": None, "checks": None}
         if full and head.get("branch"):
             try:
                 sha = codediff.head_sha(r)

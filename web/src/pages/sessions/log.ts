@@ -18,14 +18,16 @@ import { usePending } from './store'
 type Ev<T extends SessionEvent['type']> = Extract<SessionEvent, { type: T }>
 
 export type Item =
-  | { kind: 'user'; key: string; ev: Ev<'user'>; /** Voice message sent directly: its transcript once it came. */ heard?: Ev<'voice_text'> }
+  | { kind: 'user'; key: string; ev: Ev<'user'>; /** Voice message sent directly: its transcript once it came. */ heard?: Ev<'voice_text'>; /** The turn it started changed repositories (its number: "Revert to before this message"). */ changed?: number }
   | { kind: 'request'; key: string; ev: Ev<'user'> } // system-sourced prompt (compact / handoff summary)
   | { kind: 'assistant'; key: string; ev: Ev<'assistant'> }
   | { kind: 'thinking'; key: string; ev: Ev<'thinking'> }
   | { kind: 'tool'; key: string; use: Ev<'tool_use'>; result: Ev<'tool_result'> | null; /** The background work it started. */ task?: Task }
   | { kind: 'init'; key: string; ev: Ev<'init'> }
-  | { kind: 'result'; key: string; ev: Ev<'result'> }
+  | { kind: 'result'; key: string; ev: Ev<'result'>; /** What the turn changed in git repositories. */ changes?: Ev<'changes'> }
   | { kind: 'note'; key: string; ev: Ev<'note'> }
+  /** Changes of a turn that ended without a result line (stopped): shown alone. */
+  | { kind: 'changes'; key: string; ev: Ev<'changes'> }
 
 /** A task as the thread knows it: its `task` events merged. `interrupted`: a later turn started while it was
  *  still running (its Claude process is gone; a later event of the same task clears it). */
@@ -177,6 +179,22 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
       case 'note':
         items.push({ kind: 'note', key, ev })
         break
+      case 'changes': {
+        // On the turn's result line (written just before), and its message offers "Revert to before this message".
+        let placed = false
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i]
+          if (it.kind === 'result' && !placed) {
+            items[i] = { ...it, changes: ev }
+            placed = true
+          } else if (it.kind === 'user') {
+            items[i] = { ...it, changed: ev.n }
+            break
+          }
+        }
+        if (!placed) items.push({ kind: 'changes', key, ev })
+        break
+      }
       case 'hide':
         hidden = { ...hidden, [String(ev.ref)]: ev.hidden }
         break

@@ -91,6 +91,7 @@ import { ItemContext } from './Items'
 import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
 import { useSlashCommands } from './slashCommands'
 import { SessionOptions, type OptionAction } from './SessionOptions'
+import { QUOTE_EVENT } from '@/features/code/api'
 import { absTopicDir, fileQuote, findAgent, fmtCost, placeOptions, topicLabel, topicPathOf } from './util'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
@@ -433,6 +434,17 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   const thread = React.useRef<ThreadHandle>(null)
   const composer = React.useRef<ComposerHandle>(null)
   const body = React.useRef<HTMLDivElement>(null)
+  // "Ask Claude" on lines of the Changes view (the file viewer, outside this column): a quote in this composer.
+  React.useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ sid: string; text: string }>).detail
+      if (d?.sid !== sid) return
+      composer.current?.quote(d.text)
+      composer.current?.focus()
+    }
+    window.addEventListener(QUOTE_EVENT, on)
+    return () => window.removeEventListener(QUOTE_EVENT, on)
+  }, [sid])
   const [dragFiles, setDragFiles] = React.useState(false)
 
   const notFound = (isError && isApiError(error) && error.status === 404) || deleted
@@ -726,7 +738,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             </Button>
           </div>
         )}
-        <ItemContext.Provider value={React.useMemo(() => ({ filesRoot: settings?.files_root || null, models: claude?.models, running, tz: settings?.timezone, topicDir: dir, wsRoot: ws?.root || null }), [settings?.files_root, settings?.timezone, claude?.models, running, dir, ws?.root])}>
+        <ItemContext.Provider value={React.useMemo(() => ({ filesRoot: settings?.files_root || null, models: claude?.models, running, tz: settings?.timezone, topicDir: dir, wsRoot: ws?.root || null, sid }), [settings?.files_root, settings?.timezone, claude?.models, running, dir, ws?.root, sid])}>
           {notFound ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
               {t('sessions.deleted')}

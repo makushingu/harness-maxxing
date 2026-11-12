@@ -292,6 +292,7 @@ def test_api_commit_push_and_pull_request(client, worked, tmp_path, monkeypatch)
     _git(folder, "push", "-q", "origin", "main")
     _git(folder, "update-ref", "refs/remotes/origin/main", "main")
     assert client.post("/api/code/branch", json={"repo": str(folder), "name": "feat/x"}).json()["branch"] == "feat/x"
+    assert client.get("/api/code/status", params={"repo": str(folder)}).json()["dirty"] == 2
     out = client.post("/api/code/commit", json={"repo": str(folder), "message": "Add a and b", "push": True}).json()
     assert out["pushed"] and out["upstream"] == "origin/feat/x"
     made: list = []
@@ -304,7 +305,7 @@ def test_api_commit_push_and_pull_request(client, worked, tmp_path, monkeypatch)
         assert pr["number"] == 12 and made[0]["head"] == "feat/x" and made[0]["base"] == "main"
         assert made[0]["title"] == "Add a and b"
         st = client.get("/api/code/status", params={"repo": str(folder)}).json()
-        assert st["pr"]["number"] == 12 and st["checks"] == {"total": 2, "ok": 1, "failed": 0, "pending": 1}
+        assert st["dirty"] == 0 and st["pr"]["number"] == 12 and st["checks"] == {"total": 2, "ok": 1, "failed": 0, "pending": 1}
     finally:
         srv.close()
 
