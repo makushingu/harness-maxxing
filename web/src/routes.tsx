@@ -52,6 +52,7 @@ export const routes: RouteObject[] = [
           { path: 'git', lazy: page(() => import('./features/git/GitPage'), ['git']) },
           // the list of agents + the selected agent / one of its runs (the session column needs the files texts)
           { path: 'agents/*', lazy: page(() => import('./features/agents/AgentsLayout'), ['agents', 'tasks', 'files']) },
+          { path: 'enterprises/*', lazy: page(() => import('./features/enterprises/EnterprisesLayout'), ['enterprises', 'agents', 'tasks', 'files']) },
           { path: 'team', lazy: page(() => import('./features/team/TeamPage'), ['team']) },
           { path: 'infra', lazy: page(() => import('./features/infra/InfraPage'), ['infra']) },
           { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
