@@ -68,6 +68,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `dragleave` / `drop`; a cancelled drag fires neither. It is now `dropStack` in the sessions store (`setDropStack`),
   cleared with `dropBeside` by `setDragging(null)` (grip `dragend`, document `dragend` / `drop`), and one session at
   most shows it.
+- DESIGN.md §8/§11: the 9 `window.confirm` of Mail (`Compose`, `MailPage`) and Team (`Chat`, `Friends`) use
+  `confirm()` of `ui/alert-dialog` (Compose's `useBlocker` effect proceeds/resets from the promise; `run`, `tryClose`,
+  `remove` are async); `pages/sessions/Tabs` arrows lose `backdrop-blur`. Test: `tests/test_web_design_rules.py`
+  (browser dialogs and backdrop blur in `web/src`; only `features/agents/OfficeFuture.tsx` is exempt from the blur).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

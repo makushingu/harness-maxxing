@@ -63,6 +63,8 @@ Fixed:
   happen), the dashed frame stayed over the conversation until the next drag.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
+- **Confirmations in Mail and Team use the app's own dialog**, in the app's theme, instead of the browser's. The
+  session tab arrows no longer blur what is behind them.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
