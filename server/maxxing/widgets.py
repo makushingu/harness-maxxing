@@ -45,6 +45,9 @@ _T = {
         "No open task. Add one on the Tasks page, or just tell Harness \"remind me to...\".":
             "Aucune tâche ouverte. Ajoutez-en sur la page Tâches, ou dites simplement à Harness « rappelle-moi de… ».",
         "Nothing scheduled today.": "Rien de planifié aujourd'hui.",
+        "Enterprises": "Entreprises", "Waiting": "En attente", "Escalations": "Escalades", "Late": "En retard",
+        "No enterprise yet. Create one on the Enterprises page.": "Aucune entreprise. Créez-en une sur la page Entreprises.",
+        "waiting": "en attente", "escalated": "escalades", "late": "en retard",
         "Next run": "Prochaine exécution", "No active scheduled job.": "Aucune tâche planifiée active.",
         "Ask Harness to schedule one": "Demandez à Harness d'en programmer une",
         "Make it yours": "À votre image", "Take the tutorial": "Suivre le tutoriel",
@@ -152,6 +155,40 @@ def tasks(force: bool = False) -> dict:
             {"type": "stat", "label": t("Due today"), "value": s["due_today"]},
             {"type": "stat", "label": t("Overdue"), "value": s["overdue"], "tone": "error" if s["overdue"] else None}]},
         {"type": "list", "items": items, "empty": t("Nothing due - well done")}]}
+
+
+def enterprises_card(force: bool = False) -> dict:
+    from . import enterprise_reports, enterprises
+    rows = []
+    for e in enterprises.list_all():
+        try:
+            o = enterprise_reports.overview(e["id"])
+        except Exception:  # noqa: BLE001 - one broken enterprise never empties the card
+            continue
+        rows.append((e, o))
+    if not rows:
+        return {"title": t("Enterprises"), "link": "/enterprises",
+                "blocks": [{"type": "markdown", "text": t("No enterprise yet. Create one on the Enterprises page.")}]}
+    waiting = sum(o["requests_waiting"] for _, o in rows)
+    esc = sum(o["escalations_open"] for _, o in rows)
+    late = sum(d["late_tasks"] for _, o in rows for d in o["departments"])
+    items = []
+    for e, o in rows:
+        cost, cap = o["cost_today"], o["ceiling"]
+        n_late = sum(d["late_tasks"] for d in o["departments"])
+        spend = f"${cost:.2f}" + (f" / ${cap:.2f}" if cap else "")
+        extra = [f"{n} {t(w)}" for n, w in ((o["requests_waiting"], "waiting"), (o["escalations_open"], "escalated"),
+                                            (n_late, "late")) if n]
+        over = bool(cap and cost >= cap)
+        items.append({"title": f"{e.get('emoji') or ''} {e['name']}".strip(), "subtitle": " - ".join(extra) or t("Today"),
+                      "value": spend, "href": f"/enterprises/{e['id']}",
+                      "status": "error" if over else ("warn" if extra else "ok")})
+    return {"title": t("Enterprises"), "link": "/enterprises", "status": "warn" if (waiting or esc or late) else "ok",
+            "blocks": [{"type": "stats", "items": [
+                {"type": "stat", "label": t("Waiting"), "value": waiting, "tone": "warn" if waiting else None},
+                {"type": "stat", "label": t("Escalations"), "value": esc, "tone": "warn" if esc else None},
+                {"type": "stat", "label": t("Late"), "value": late, "tone": "error" if late else None}]},
+                {"type": "list", "items": items}]}
 
 
 def crons(force: bool = False) -> dict:
@@ -533,6 +570,7 @@ BUILTINS: list[Builtin] = [
     Builtin("server", "Server", "server", 1, server),
     Builtin("day", "Today's schedule", "calendar-clock", 2, day, sig=_crons_sig),
     Builtin("tasks", "Tasks", "list-checks", 1, tasks, available=lambda: bool(config.load_config().get("tasks_page"))),
+    Builtin("enterprises", "Enterprises", "building", 1, enterprises_card, available=lambda: _ent_on()),
     Builtin("usage", "Claude usage", "gauge", 1, usage,
             lambda: bool(config.load_config().get("usage_widget"))),
     Builtin("crons", "Scheduled jobs", "clock", 1, crons, sig=_crons_sig),
@@ -541,6 +579,11 @@ BUILTINS: list[Builtin] = [
     Builtin("shopify", "Shopify", "shopping-bag", 2, shopify),
     Builtin(CUSTOMIZE_ID, "Make it yours", "sparkles", 3, customize),
 ]
+
+
+def _ent_on() -> bool:
+    from . import enterprises
+    return enterprises.feature_on()
 
 
 def available() -> list[Builtin]:

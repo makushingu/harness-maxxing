@@ -396,6 +396,60 @@ def test_hire(client, ent, topic):
     _err(client.post(f"{E}/acme-group/positions/head/hire", json={"topic": topic}), 409, "not_vacant")
 
 
+def _suggest(mx, pos, tid):
+    f = _file(mx)
+    d = json.loads(f.read_text(encoding="utf-8"))
+    next(x for x in d["positions"] if x["id"] == pos)["suggested_template"] = tid
+    f.write_text(json.dumps(d), encoding="utf-8", newline="")
+
+
+def test_hire_with_an_agent_template(client, ent, topic, mx):
+    from maxxing import agent_templates
+    tpl = agent_templates.get("writer")
+    _pos(client, "head", title="Head of blog", job="Runs the blog.")
+    _pos(client, "b", title="Scribe", job="Writes.")
+    _pos(client, "c", title="Third", job="Does the third.")
+    _pos(client, "d", title="Fourth", job="Does the fourth.")
+    _err(client.post(f"{E}/acme-group/positions/head/hire", json={"topic": topic, "template": "nope"}), 400, "bad_template")
+    assert not (mx["ws"] / "projects/acme/topics/blog/agents/head").exists()
+    r = client.post(f"{E}/acme-group/positions/head/hire", json={"topic": topic, "template": "writer"})
+    assert r.status_code == 200, r.text
+    a = agents.get(r.json()["agent"])
+    assert a["allowed_tools"] == tpl["allowed_tools"] and a["permission_mode"] == tpl["permission_mode"]
+    assert "Head of blog" in a["description"] and "Runs the blog." in a["description"] and tpl["role"] not in a["description"]
+    # the suggested template of the position is the default; "" asks for none
+    _suggest(mx, "b", "writer")
+    _suggest(mx, "c", "writer")
+    r = client.post(f"{E}/acme-group/positions/b/hire", json={"topic": topic})
+    assert agents.get(r.json()["agent"])["allowed_tools"] == tpl["allowed_tools"]
+    r = client.post(f"{E}/acme-group/positions/c/hire", json={"topic": topic, "template": ""})
+    assert agents.get(r.json()["agent"])["allowed_tools"] != tpl["allowed_tools"]
+    r = client.post(f"{E}/acme-group/positions/d/hire", json={"topic": topic})
+    assert agents.get(r.json()["agent"])["allowed_tools"] != tpl["allowed_tools"]
+    assert next(p for p in _chart(client)["positions"] if p["id"] == "b")["suggested_template"] == "writer"
+
+
+def test_dashboard_widget_only_while_the_feature_is_on(client, ent):
+    def ids():
+        return {w["id"]: w for w in client.get("/api/dashboard").json()["widgets"]}
+    assert "enterprises" in ids()
+    card = client.get("/api/dashboard/widgets/enterprises").json()
+    assert card["error"] is None and card["card"]["link"] == "/enterprises"
+    stats, rows = card["card"]["blocks"]
+    assert [x["label"] for x in stats["items"]] == ["Waiting", "Escalations", "Late"]
+    assert rows["items"][0]["href"] == "/enterprises/acme-group" and rows["items"][0]["value"] == "$0.00"
+    assert "Acme Group" in rows["items"][0]["title"]
+    _on(client, enterprises_page=False)
+    assert "enterprises" not in ids()
+    _on(client)
+    assert client.put("/api/settings", json={"language": "fr"}).status_code == 200
+    assert client.get("/api/dashboard/widgets/enterprises").json()["card"]["title"] == "Entreprises"
+
+
+def test_the_envelope_skip_reason_has_a_text():
+    assert "envelope" in agents.SKIP_TEXT
+
+
 # ---- inbox, decisions ----------------------------------------------------------------------------------
 def test_inbox_and_inbox_count(client, ent, mx):
     _pos(client, "a")

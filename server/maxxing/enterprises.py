@@ -990,8 +990,9 @@ def remove_position(slug: str, pos: str, reparent_to: str | None = None) -> dict
     return get(slug)
 
 
-def hire(slug: str, pos: str, topic: str, name: str | None = None) -> str:
-    """Create the agent of a vacant position in a topic of a linked project and seat it. -> its path."""
+def hire(slug: str, pos: str, topic: str, name: str | None = None, template: str | None = None) -> str:
+    """Create the agent of a vacant position in a topic of a linked project and seat it. -> its path.
+    `template` (an agent template id; "" = none; default: the position's `suggested_template`) gives the settings; the role stays the job."""
     d = _load_ok(slug)
     p = _find(d, pos)
     m = TOPIC_RE.match((topic or "").strip("/"))
@@ -1000,7 +1001,18 @@ def hire(slug: str, pos: str, topic: str, name: str | None = None) -> str:
     if p["agent"] and agents.exists(p["agent"]):
         raise EnterpriseError(409, "not_vacant", f"The position {pos!r} already has an occupant")
     role = (p["title"] + ("\n\n" + p["job"] if p["job"] else "")).strip()
-    created = agents.create(topic.strip("/"), name or pos, {"description": role})
+    fields: dict[str, Any] = {}
+    tid = template if template is not None else (p.get("suggested_template") or "")
+    if tid:
+        from . import agent_templates, vault
+        tpl = agent_templates.get(tid, config.load_config().get("language") or "en")
+        if tpl is None:
+            if template:
+                raise EnterpriseError(400, "bad_template", f"No agent template {template!r}")
+        else:
+            fields = agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()])
+            fields.pop("name", None)
+    created = agents.create(topic.strip("/"), name or pos, {**fields, "description": role})
     path = created["path"]
     update_position(slug, pos, {"agent": path}, rev=load(slug)["rev"])
     return path

@@ -62,6 +62,7 @@ class PositionIn(BaseModel):
 class HireIn(BaseModel):
     topic: str = Field(max_length=200)
     name: Optional[str] = Field(None, max_length=48)
+    template: Optional[str] = Field(None, max_length=64)
 
 
 def _given(body: BaseModel, skip: tuple[str, ...] = ()) -> dict:
@@ -186,7 +187,7 @@ def remove_position(e: str, pos: str, reparent_to: Optional[str] = Query(None, m
 def hire(e: str, pos: str, body: HireIn):
     _on()
     try:
-        path = enterprises.hire(e, pos, body.topic, body.name)
+        path = enterprises.hire(e, pos, body.topic, body.name, body.template)
         return {"agent": path, "enterprise": enterprises.get(e)}
     except (enterprises.EnterpriseError, agents.AgentError) as x:
         raise _bad(x) from None
