@@ -226,6 +226,9 @@ into another app, the content arrives as plain text (a file as its path).
 - **Right click** a picture, a video, an attachment or a file path (long press on Android): **Open**, **Download**,
   **Quote** (adds the file to your next message as one line with its path - Claude reads it only if needed, the
   picture does not fill the context) and **Copy path**.
+- **Code changes**: when a turn changed files of a git repository, a button under the answer sums them up
+  (**app · 3 files · +12 −4**); click it to review the diff, undo a file, commit, push or open a pull request. Right
+  click one of your messages for **Revert to before this message**. See [Code in a session](35-code.md).
 - File paths are clickable and open the **file viewer**: ← / → go through every file of the conversation (see [Files](06-files.md#the-file-viewer)).
 - The header shows the **model that actually answered**, the **cost** and a **context gauge**
   (how full Claude's context window is, measured against the real window of the model in use - it
@@ -438,6 +441,7 @@ A Telegram session can be continued from the web UI and the other way round.
 | G then D / S / F / T / C | go to Dashboard / Sessions / Files / Tasks / Crons |
 | Alt+T | tabs view on / off (Sessions page) |
 | Alt+M | Maxxing mode on / off (Sessions page, once enabled in Settings -> Features) |
+| Ctrl+J | terminal under the session on / off (once enabled in Settings -> Features, see [Code in a session](35-code.md#terminal)) |
 
 ## Good to know
 

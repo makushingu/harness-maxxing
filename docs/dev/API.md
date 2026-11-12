@@ -589,7 +589,7 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | GET | `/api/sessions/{id}/changes?scope=turn&n=&base=` | – | `{scope, n, repos:[...]}` — `turn` (default: the last turn that changed something, or `n`): the `mx_changes` entry + live `branch, upstream, ahead, behind, remote`; `session` (first photo → now), `uncommitted` (HEAD → now), `branch` (merge-base with `base` or origin's default → now): one entry per known repository with changes (`error` when git failed) |
 | GET | `/api/code/diff?repo=&a=&b=&path=&old=&full=` | – | `{path, hunks:[{head, o, n, lines:[{t: ' '\|'+'\|'-', o, n, s}]}], binary, cut, lines}` (≤ 2 000 lines unless `full`) |
 | GET | `/api/code/commits?repo=&base=` | – | `[{sha, short, subject, author, at}]` (HEAD not in base, 100) |
-| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, github, pr:{number, url, title, draft, base}\|null, checks:{total, ok, failed, pending}\|null, github_error?}` |
+| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, dirty (files a commit would take), github, pr:{number, url, title, draft, base}\|null, checks:{total, ok, failed, pending}\|null, github_error?}` |
 | POST | `/api/code/restore` | `{repo, source, paths?}` | `{undo, restored, removed}` — files back as in `source` (all that differ when no `paths`); `undo` = photo taken first |
 | POST | `/api/code/undo` | `{repos:[{root, undo}]}` | `{repos:[...]}` — puts back what a restore / revert replaced |
 | POST | `/api/sessions/{id}/revert` | `{n}` | `{n, repos:[{root, name, undo, restored, removed, commits_kept}]}` — every repository changed by turn `n` or later back to its photo from before (files only; `409 running` during a turn) |
@@ -598,6 +598,25 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | POST | `/api/code/branch` | `{repo, name}` | head info (`git switch -c`) |
 | POST | `/api/code/pr` | `{repo, title?, body?, base?, draft}` | `{number, url, title, state, draft}` — pushes first if needed; title = the only commit's subject (else the newest), body = the commits; a token that can write to the repository |
 | POST | `/api/code/message` | `{repo, a=HEAD, b=now}` | `{message}` — proposed by a small `claude -p` call (Haiku) from the diff (40 kB) and the 10 last subjects; `Co-Authored-By` lines dropped |
+
+## Terminal
+
+`maxxing/terminal.py` + `maxxing/api/term.py`. Config `terminal_feature` (default false; shown read-only by
+`/api/settings`). A terminal = a login shell (`setsid -c $SHELL -l`) on a pseudo-terminal, child of the server: it
+ends when closed, after 30 min without input or output, or when the service stops. 4 at most; the folder must be
+inside the files root. Its output since the start (last 256 KB) is replayed to every new connection. Never for agents
+(the web app only offers it in normal sessions). Errors: `403 term_off|bad_token`, `400 bad_cwd`, `404 not_found`,
+`409 too_many`, `401 bad_password` / `429 throttled` (enable).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/term` | – | `{enabled, terms:[{id, cwd, title, started, last, alive, clients}], max}` |
+| POST | `/api/term/enable` | `{password}` | `{enabled:true}` — the current password again (same throttle as a password change) |
+| POST | `/api/term/disable` | – | `{enabled:false, closed}` — closes every terminal |
+| POST | `/api/term` | `{cwd, cols?, rows?}` | `{…term, token}` — opens one; `token` = one-time websocket token (30 s) |
+| POST | `/api/term/{tid}/token` | – | `{token}` — a new one-time token (reconnection, page reload) |
+| DELETE | `/api/term/{tid}` | – | `{ok}` |
+| WS | `/api/term/{tid}/ws?token=` | session cookie, same `Origin` as `Host` | server → browser: binary output frames; browser → server: text JSON `{"i": input}` or `{"r": [cols, rows]}` · close `4401` (cookie / origin), `4403` (token), `4000` (the shell ended) |
 
 ## Infra
 

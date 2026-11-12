@@ -574,9 +574,9 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   const toggleTerm = React.useCallback((open?: boolean) => useTermUI.getState().toggle(sid, open), [sid])
   const termPlaces = React.useMemo<TermPlace[]>(() => {
     const out = (session?.code_repos ?? []).map((r) => ({ path: r, label: r.split('/').pop() || r }))
-    if (dir && !out.some((x) => x.path === dir)) out.push({ path: dir, label: t('term.topicFolder') })
+    if (dir && !out.some((x) => x.path === dir)) out.push({ path: dir, label: '' }) // '' = "Topic folder" (TermDrawer)
     return out
-  }, [session?.code_repos, dir, t])
+  }, [session?.code_repos, dir])
   const hud = () => {
     const go = (path: string) => {
       navigate(path)

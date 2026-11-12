@@ -15,6 +15,7 @@ import { useIsMobile } from '@/stores/media'
 import { termApi, termKey, termSocketUrl, useTermState } from './api'
 import { useTermUI } from './store'
 
+/** `label` '' = the session's topic folder. */
 export type TermPlace = { path: string; label: string }
 
 /** Tokens of terminals just opened (the open call returns one): the view uses it instead of asking again. */
@@ -140,7 +141,7 @@ export default function TermDrawer({ sid, places, onQuote, onHide }: { sid: stri
             <DropdownMenuContent align="start">
               {places.map((p) => (
                 <DropdownMenuItem key={p.path} onSelect={() => void open(p.path)}>
-                  <Sensitive>{p.label}</Sensitive>
+                  <Sensitive>{p.label || t('term.topicFolder')}</Sensitive>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
