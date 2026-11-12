@@ -941,7 +941,7 @@ function ColumnHeader({
           <TouchSessionsButton className="-ml-2" />
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" nameClassName={maxxing ? 'max-[479px]:sr-only' : undefined} />
           <div className="flex shrink-0 items-center">
-            <TabsToggle compact />
+            <TabsToggle />
             {maxxing && <MaxxingControls compact />}
             {menu}
           </div>
@@ -1180,14 +1180,14 @@ function MoveSessionPicker({ session, rootLabel, locked }: { session: Session; r
 }
 
 /** One part of the session's place (project or topic) as a badge; hovering it explains what it is. */
-export function WhereBadge({ kind, name, description, dir, hint, generic, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; /** The word itself (page subtitle): no name, no folder in the card. */ generic?: boolean; children?: React.ReactNode }) {
+export function WhereBadge({ kind, name, description, dir, hint, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; children?: React.ReactNode }) {
   const t = useT()
   return (
     <TooltipRoot delayDuration={350}>
       <TooltipTrigger asChild>
-        <span className="inline-flex h-[18px] min-w-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 text-[11px] font-medium text-foreground/80 max-md:h-5 max-md:text-xs" data-testid={generic ? `where-word-${kind}` : `where-${kind}`} tabIndex={generic ? 0 : undefined}>
+        <span className="inline-flex h-[18px] min-w-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 text-[11px] font-medium text-foreground/80 max-md:h-5 max-md:text-xs" data-testid={`where-${kind}`}>
           {children}
-          <span className="truncate">{generic ? name : <Sensitive length={8}>{name}</Sensitive>}</span>
+          <span className="truncate"><Sensitive length={8}>{name}</Sensitive></span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" align="start" className="block w-72 rounded-lg border bg-popover p-3 text-popover-foreground font-normal">
@@ -1195,13 +1195,11 @@ export function WhereBadge({ kind, name, description, dir, hint, generic, childr
           {kind === 'project' ? <FolderOpen className="size-3" /> : kind === 'agent' ? <Bot className="size-3" /> : <Hash className="size-3" />}
           {t(kind === 'project' ? 'where.project' : kind === 'agent' ? 'where.agent' : 'where.topic')}
         </span>
-        {!generic && (
-          <span className="mt-1 block text-sm font-semibold">
-            <Sensitive length={8}>{name}</Sensitive>
-          </span>
-        )}
+        <span className="mt-1 block text-sm font-semibold">
+          <Sensitive length={8}>{name}</Sensitive>
+        </span>
         {description && <span className="mt-0.5 block text-xs text-muted-foreground"><Sensitive length={20}>{description.replace(/[*`_]+/g, '')}</Sensitive></span>}
-        <span className="mt-2 block text-xs leading-relaxed">{t(kind === 'project' ? 'where.projectHelp' : kind === 'agent' ? 'where.agentHelp' : generic ? 'where.topicHelpAny' : 'where.topicHelp')}</span>
+        <span className="mt-2 block text-xs leading-relaxed">{t(kind === 'project' ? 'where.projectHelp' : kind === 'agent' ? 'where.agentHelp' : 'where.topicHelp')}</span>
         {dir && <span className="mt-2 block truncate font-mono text-[11px] text-muted-foreground"><Sensitive length={16}>{dir}</Sensitive></span>}
         <span className="mt-2 block border-t pt-2 text-[11px] text-muted-foreground">{hint}</span>
       </TooltipContent>

@@ -379,7 +379,7 @@ export const useSessionsUI = create<State>()(
       toggle: (node, value) => set((s) => ({ expanded: { ...s.expanded, [node]: value ?? !s.expanded[node] } })),
       setExpanded: (nodes) => set((s) => ({ expanded: { ...s.expanded, ...nodes } })),
       setTreeHidden: (treeHidden) => set({ treeHidden }),
-      tabs: false,
+      tabs: true,
       setTabs: (tabs) => set({ tabs }),
       show: null,
       setShow: (show) => set({ show }),
@@ -432,6 +432,9 @@ export const useSessionsUI = create<State>()(
       // Unknown values (older or edited storage) fall back to the defaults.
       merge: (persisted, current) => {
         const p = { ...current, ...(persisted as Partial<State>) }
+        // Tabs is the mode of a new browser. One that already stored its sessions keeps its choice; stored before
+        // the choice existed, it showed columns: it stays in Zones.
+        if (persisted && typeof (persisted as Partial<State>).tabs !== 'boolean') p.tabs = false
         if (p.listBy !== 'session') p.listBy = 'project'
         p.cols = normalizeCols(Array.isArray(p.cols) ? p.cols : [])
         if (typeof p.rowSplit !== 'number' || !(p.rowSplit >= ROW_SPLIT_MIN && p.rowSplit <= ROW_SPLIT_MAX)) p.rowSplit = 0.5

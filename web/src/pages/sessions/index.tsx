@@ -7,7 +7,7 @@
 // (browsers without Document Picture-in-Picture) · /sessions/<id> → redirect.
 import * as React from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
-import { Columns2, FolderOpen, Hash, Keyboard, LayoutGrid, MessageSquarePlus, MessagesSquare, PanelLeftOpen } from 'lucide-react'
+import { Columns2, Keyboard, LayoutGrid, MessageSquarePlus, MessagesSquare, PanelLeftOpen } from 'lucide-react'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
@@ -17,14 +17,14 @@ import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
 import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
 import type { Session } from '@/lib/types'
-import { PageHeader } from '@/components/shell/Page'
+import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, Kbd, MOD, Tooltip } from '@/components/ui'
 import { focusComposer, MAX_STACK, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
 import { stripRows } from './layouts'
 import { SessionTree } from './Tree'
 import { AgentHover } from '@/features/agents/AgentHover'
 import { LayoutDropBar, LayoutPicker } from './LayoutPicker'
-import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, WhereBadge, StripContext, type ColumnVariant, type Place } from './Column'
+import { MIN_W, MAX_W, NewSessionColumn, SessionColumn, StripContext, type ColumnVariant, type Place } from './Column'
 import { PreviewProvider } from './FilePreview'
 import { HudBar } from './Hud'
 import { parseAgentPath, topicLabel, useIsMobile } from './util'
@@ -33,7 +33,7 @@ import { PageList } from '@/components/shell/PageList'
 import { useUI } from '@/stores/ui'
 import { enter, MaxxingDriver, promoteColumn, useMaxxing, useMaxxingEnabled } from './maxxing'
 import { MaxxingControls } from './MaxxingMeter'
-import { MobileTabsSlot, stepCol, TabsArrows, TabsBar, TabsToggle, useSwipe } from './Tabs'
+import { MobileTabsSlot, stepCol, TabsArrows, TabsBar, ViewSwitch, useSwipe } from './Tabs'
 
 /** Sessions sliding to their new place (reorder, stack, layout): short, the content is heavy. */
 const FLIP_MS = 180
@@ -57,6 +57,10 @@ function RedirectToSession() {
 }
 
 /* ---------------------------------------------------------------- main view */
+/** Sessions bar (computer): the width a tab needs to show its title, and what the actions take with their labels. */
+const TAB_ROOM = 190
+const ACTIONS_ROOM = 250
+
 function Workspace() {
   const t = useT()
   const navigate = useNavigate()
@@ -591,43 +595,53 @@ function Workspace() {
 
   const openIds = React.useMemo(() => new Set(cols.flatMap((c) => (c.kind === 'session' ? [c.id] : []))), [cols])
 
-  const header = (
-    <PageHeader
-      title={t('nav.sessions')}
-      description={<SubtitleWithBadges text={t('sessions.description')} />}
-      actions={
-        <>
-          {!mobile && <TabsToggle compact />}
-          {!mobile && !tabs && cols.length >= 2 && (
-            <LayoutPicker count={cols.length}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={stacked ? t('sessions.grid.off') : t('sessions.grid.on')}
-                aria-pressed={stacked}
-                onClick={() => (stacked ? useSessionsUI.getState().toColumns() : useSessionsUI.getState().toGrid())}
-                data-testid="sessions-grid"
-              >
-                {stacked ? <Columns2 /> : <LayoutGrid />}
-              </Button>
-            </LayoutPicker>
-          )}
-          {maxxingEnabled && <MaxxingControls />}
-          <Tooltip content={`${t('sessions.newSession')} (Alt+N)`}>
-            <Button size={mobile ? 'icon' : 'sm'} onClick={newInCurrent} disabled={defaultTopic === null} aria-label={t('sessions.newSession')} data-tour="new-session">
-              <MessageSquarePlus /> <span className="max-md:hidden">{t('sessions.newSession')}</span>
-            </Button>
-          </Tooltip>
-        </>
-      }
-    />
+  // Computer: the tabs and the actions share one bar. The actions keep their labels while every tab has room for
+  // its title; past that they are icons (the tabs narrow next, then the bar scrolls).
+  const bar = React.useRef<HTMLDivElement>(null)
+  const [barWidth, setBarWidth] = React.useState(0)
+  React.useLayoutEffect(() => {
+    const el = bar.current
+    if (!el) return
+    const read = () => setBarWidth(el.clientWidth)
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [mobile])
+  const tight = barWidth > 0 && barWidth - (tabs ? cols.length * TAB_ROOM : 0) < ACTIONS_ROOM + (maxxingEnabled ? 140 : 0)
+
+  const actions = (
+    <>
+      {!mobile && !tabs && cols.length >= 2 && (
+        <LayoutPicker count={cols.length}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={stacked ? t('sessions.grid.off') : t('sessions.grid.on')}
+            aria-pressed={stacked}
+            onClick={() => (stacked ? useSessionsUI.getState().toColumns() : useSessionsUI.getState().toGrid())}
+            data-testid="sessions-grid"
+          >
+            {stacked ? <Columns2 /> : <LayoutGrid />}
+          </Button>
+        </LayoutPicker>
+      )}
+      {!mobile && <ViewSwitch />}
+      {maxxingEnabled && <MaxxingControls />}
+      <Tooltip content={`${t('sessions.newSession')} (Alt+N)`}>
+        <Button size={mobile ? 'icon' : 'sm'} onClick={newInCurrent} disabled={defaultTopic === null} aria-label={t('sessions.newSession')} data-tour="new-session">
+          <MessageSquarePlus /> {!tight && <span className="max-md:hidden">{t('sessions.newSession')}</span>}
+        </Button>
+      </Tooltip>
+    </>
   )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {maxxingEnabled && <MaxxingDriver sessions={sessions} show={showMaxxing} />}
       {/* Touch layout: the session layer has its own header (☰, ⋯, ⊞); nothing while the session to show is picked. */}
-      {!mobileOpen && !touchPicking && header}
+      {mobile && !mobileOpen && !touchPicking && <PageHeader title={t('nav.sessions')} actions={actions} />}
+      {!mobile && <DocumentTitle title={t('nav.sessions')} />}
       <div className="flex min-h-0 flex-1">
         {mobile && !mobileOpen && !touchPicking && (
           <div className="flex flex-1 items-center justify-center p-6">
@@ -672,8 +686,14 @@ function Workspace() {
         )}
         {!mobile && (
           <StripContext.Provider value={strip_}>
-          <div className={cn('relative flex min-w-0 flex-1', tabs && 'flex-col')}>
-          {tabs && <TabsBar sessions={sessions} onPick={pickTab} />}
+          <div className="flex min-w-0 flex-1 flex-col">
+          {/* The page's one bar (no title: the list beside it names the page): the tabs on the left in Tabs mode, the
+              mode switch and the actions on the right. As high as the other pages' header: the top line does not move. */}
+          <div ref={bar} className="flex min-h-[var(--header-h)] shrink-0 items-center gap-2 border-b bg-background/95 pr-4 pl-2 md:pr-6" data-testid="sessions-bar">
+            <div className="flex min-w-0 flex-1">{tabs && <TabsBar sessions={sessions} onPick={pickTab} compact={tight} className="flex-1 border-b-0 bg-transparent p-0" />}</div>
+            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          </div>
+          <div className="relative flex min-h-0 min-w-0 flex-1">
           {!tabs && <LayoutDropBar />}
           {tabs && <TabsArrows onPick={pickTab} />}
           <div
@@ -710,6 +730,7 @@ function Workspace() {
             ) : (
               domCols.map((p) => <ColumnFor key={p.key} col={p.item} index={Math.max(0, cols.indexOf(p.item))} count={cols.length} variant="column" place={places.places.get(p.key)} />)
             )}
+          </div>
           </div>
           </div>
           </StripContext.Provider>
@@ -835,7 +856,7 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     [['Alt', '←'], t('sessions.shortcuts.prev')],
     [['Alt', '→'], t('sessions.shortcuts.next')],
     [['Alt', 'W'], t('sessions.shortcuts.close')],
-    [['Alt', 'T'], t('tabs.toggle')],
+    [['Alt', 'T'], t('tabs.switch')],
     ...(maxxing ? [[['Alt', 'M'], t('maxxing.toggle')] as [string[], string]] : []),
     [[MOD, 'K'], t('sessions.shortcuts.palette')],
   ]
@@ -863,25 +884,10 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   )
 }
 
-/** Page subtitle: the words in [brackets] (project, then topic) become badges that explain them on hover. */
-function SubtitleWithBadges({ text }: { text: string }) {
-  const t = useT()
-  const kinds = ['project', 'topic'] as const
-  let n = 0
-  return (
-    <>
-      {text.split(/(\[[^\]]+\])/).map((part, i) => {
-        const m = /^\[(.+)\]$/.exec(part)
-        if (!m) return part
-        const kind = kinds[Math.min(n++, 1)]
-        return (
-          <WhereBadge key={i} kind={kind} name={m[1]} hint={t('where.howTo')} generic>
-            {kind === 'project' ? <FolderOpen className="size-3 shrink-0 opacity-70" /> : <Hash className="size-3 shrink-0 opacity-70" />}
-          </WhereBadge>
-        )
-      })}
-    </>
-  )
+/** The tab's title on a computer, where the page has no header to set it. */
+function DocumentTitle({ title }: { title: string }) {
+  useDocumentTitle(title)
+  return null
 }
 
 const samePlace = (a: Place, b: Place) =>
