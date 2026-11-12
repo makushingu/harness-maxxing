@@ -10,11 +10,11 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
-import { ChevronLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronLeft, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { SECOND_W, useUI } from '@/stores/ui'
 import { useCompact } from '@/stores/media'
 import { ResizeEdge } from './ResizeEdge'
-import { TouchSearchField, useTouchNav } from './TouchNav'
+import { searchNow, useTouchNav } from './TouchNav'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Button, Tooltip } from '@/components/ui'
@@ -252,10 +252,20 @@ export function ListHead({ label, icon: Icon, children }: { label: string; icon?
       )}
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">{label}</h2>
+      {/* touch: the search, facing the title (the menu has the field; no magnifier at the top of the pages) */}
+      {touch && (
+        <button
+          type="button"
+          onClick={searchNow}
+          aria-label={t('palette.open')}
+          data-testid="touch-search-field"
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Search className="size-5" />
+        </button>
+      )}
       {children}
     </div>
-    {/* touch: the drawers' search field (a computer has the sidebar's) */}
-    {touch && <TouchSearchField />}
     </>
   )
 }

@@ -3,11 +3,11 @@
 // desktop sidebar itself, Sidebar.tsx `drawer`) and the list of a page (what its second-level sidebar holds,
 // PageList.tsx; the sessions on the Sessions page) with ‹ before its title (back to the menu). A tap in the menu on a page with a list
 // opens that page and slides to its list; any other page closes the drawer. The ☰ opens the list of the page open
-// when it has one, else the menu. The magnifier at the top right opens the search.
+// when it has one, else the menu. The search: the field atop the menu, the magnifier facing a list's title.
 import * as React from 'react'
 import { create } from 'zustand'
 import { useLocation, useNavigationType } from 'react-router'
-import { Download, Menu, Search } from 'lucide-react'
+import { Download, Menu } from 'lucide-react'
 import { useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
@@ -81,36 +81,9 @@ export const keepPageListOpen = () => {
 export const openPageList = () => useTouchNav.getState().setPanel('list')
 
 /** Closes the drawer and opens the search (the palette). */
-const searchNow = () => {
+export const searchNow = () => {
   useTouchNav.getState().setPanel(null)
   openPalette()
-}
-
-/** The search field atop the drawer's lists: one tap opens the search. */
-export function TouchSearchField() {
-  const t = useT()
-  return (
-    <div className="shrink-0 px-3 pt-2 pb-1">
-      <button
-        type="button"
-        onClick={searchNow}
-        data-testid="touch-search-field"
-        className="flex h-10 w-full items-center gap-2.5 rounded-xl bg-muted px-3 text-[15px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Search className="size-[18px] shrink-0" /> <span className="truncate">{t('shell.search')}</span>
-      </button>
-    </div>
-  )
-}
-
-/** 🔍 - the search in one tap, at the top right (the menu is the ☰). */
-export function TouchAppButton({ className }: { className?: string }) {
-  const t = useT()
-  return (
-    <button type="button" className={cn(topButton, '-mr-1', className)} aria-label={t('palette.open')} onClick={searchNow} data-testid="touch-search">
-      <Search />
-    </button>
-  )
 }
 
 const SessionsPanel = React.lazy(withGroups(['files'], () => import('@/pages/sessions/SessionsPanel')))

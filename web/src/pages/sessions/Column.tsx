@@ -32,7 +32,7 @@ import {
   Rows2,
 } from 'lucide-react'
 import { cn, copyText } from '@/lib/utils'
-import { TouchAppButton, TouchSessionsButton } from '@/components/shell/TouchNav'
+import { TouchSessionsButton } from '@/components/shell/TouchNav'
 import { Logo } from '@/components/shell/Logo'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUI } from '@/stores/ui'
@@ -979,7 +979,6 @@ function ColumnHeader({
             <TabsToggle compact />
             {maxxing && <MaxxingControls compact />}
             {menu}
-            <TouchAppButton className="-mr-2" />
           </div>
         </div>
         <MobileTabs />
@@ -1408,7 +1407,6 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
             {variant === 'mobile' && <TouchSessionsButton className="-ml-2" />}
             {variant === 'column' && <DragGrip colKey={col.key} />}
             <span className="truncate px-1 text-sm font-semibold max-md:flex-1 max-md:text-[15px]">{t('sessions.new.title')}</span>
-            {variant === 'mobile' && <TouchAppButton className="-mr-2" />}
             {variant === 'column' && (
               <Tooltip content={t('sessions.closeColumn')}>
                 <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t('sessions.closeColumn')} onClick={() => close(col.key)}>

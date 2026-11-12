@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useCompact } from '@/stores/media'
-import { TouchAppButton, TouchListButton } from './TouchNav'
+import { TouchListButton } from './TouchNav'
 
 export function useDocumentTitle(title?: string) {
   React.useEffect(() => {
@@ -49,7 +49,6 @@ export function PageHeader({
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {actions}
-        {touch && <TouchAppButton />}
       </div>
     </header>
   )
