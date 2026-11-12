@@ -81,6 +81,11 @@ def test_the_next_turn_does_not_count_an_estimated_turn_again():
     assert store.thread_estimated({"thread_cost": {"csid": "c1", "estimated": "x"}}, "c1") == 0.0
 
 
+def test_only_claudes_own_exit_after_a_sigterm_saved_the_turn():
+    assert agent_cost.saved_by_claude({"code": 143})
+    assert not any(agent_cost.saved_by_claude({"code": c}) for c in (-9, 137, -15, 1, 0, None))
+
+
 def test_a_turn_killed_before_its_result_counts_in_the_budget(client, topic, mx):
     _on(client)
     _create(client)
@@ -95,8 +100,9 @@ def test_a_turn_killed_before_its_result_counts_in_the_budget(client, topic, mx)
     assert agents.day_cost(A) == round(m["estimated_usd"], 4) and res[0]["cost"] == round(m["estimated_usd"], 4)
     assert agent_cost.charge_unbilled(sid) == 0.0          # once per turn
     assert store.read(sid)["cost_usd"] == m["cost_usd"]
-    tc = m["thread_cost"]                                  # taken off the next reported total of the same thread
-    assert tc["csid"] == (m.get("csid") or sid) and tc["estimated"] == m["estimated_usd"]
+    # ended without Claude's own exit after a SIGTERM (code 0 here, a SIGKILL or a crash in real life): Claude saved
+    # nothing in its thread, so nothing is taken off the next turn
+    assert "estimated" not in (m.get("thread_cost") or {})
     # a normal turn reports its cost itself: nothing estimated
     r = agents.fire(A, trigger="manual", prompt="NOTOOL ok", source="command line")
     wait_idle(client, r["session"]["id"])
@@ -111,13 +117,12 @@ def test_the_turn_after_a_killed_one_does_not_count_it_twice(client, topic, mx):
     wait_idle(client, sid)
     from maxxing.sessions import store
     wait_for(lambda: store.read(sid).get("estimated_usd"))
-    est = store.read(sid)["estimated_usd"]
     assert client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL go on"}).status_code == 200
     wait_idle(client, sid)
-    m = wait_for(lambda: (x := store.read(sid)) and int(x.get("turns") or 0) >= 2 and x)
-    # Claude reported 0.25 (the killed turn) + 0.0123 (this one): the estimate is not counted a second time
-    assert m["cost_usd"] == round(est + 0.25 + 0.0123 - est, 6) and "estimated" not in m["thread_cost"]
-
+    m = wait_for(lambda: (x := store.read(sid)) and "estimated" not in x["thread_cost"] and x)
+    # every turn ran in one Claude thread: what was counted is what Claude reported in all (0.25 for the killed turn,
+    # saved on its SIGTERM, + 0.0123 a turn), never the estimate on top of it
+    assert m["estimated_usd"] > 0 and m["cost_usd"] == round(m["thread_cost"]["total"], 6)
 
 def test_a_cron_timeout_never_goes_past_the_agents_own(client, topic, mx):
     _on(client)

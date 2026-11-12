@@ -105,6 +105,15 @@ def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]
     return done, usage, round(usd, 6)
 
 
+SAVED_CODES = (143,)    # Claude Code's own exit after a SIGTERM: it saved the turn's cost in its thread first
+
+
+def saved_by_claude(done: dict) -> bool:
+    """The lost turn's cost is in the thread's next reported total: Claude ended by itself on the runner's SIGTERM.
+    Not after a SIGKILL (no answer within 5 s, out of memory) or a crash: nothing saved, nothing to take off."""
+    return done.get("code") in SAVED_CODES
+
+
 def charge_unbilled(sid: str, at: float | None = None) -> float:
     """Adds the estimated cost of the session's ended turn (the one sent at `at` when given) when Claude never
     reported it -> the $ added (0: nothing to add, already added, or the turn reported its cost)."""
@@ -124,9 +133,10 @@ def charge_unbilled(sid: str, at: float | None = None) -> float:
         m["estimated_usd"] = round(float(m.get("estimated_usd") or 0) + usd, 6)
         m["cost_usd"] = round(float(m.get("cost_usd") or 0) + usd, 6)
         store.add_usage(m, usage, usd, at or time.time())
-        csid = str(m.get("csid") or sid)                # Claude keeps a SIGTERM-ed turn in the thread's total: the
-        tc = {"csid": csid, "total": store.thread_prev_cost(m, csid)}  # next turn takes this estimate off (turn_cost)
-        tc["estimated"] = round(store.thread_estimated(m, csid) + usd, 6)
-        m["thread_cost"] = tc
+        if saved_by_claude(done):                       # Claude keeps this turn in the thread's total: the next
+            csid = str(m.get("csid") or sid)            # turn takes this estimate off (turn_cost)
+            tc = {"csid": csid, "total": store.thread_prev_cost(m, csid)}
+            tc["estimated"] = round(store.thread_estimated(m, csid) + usd, 6)
+            m["thread_cost"] = tc
     log.info("session %s: turn ended without a reported cost, %.2f $ estimated from its log", sid, usd)
     return usd

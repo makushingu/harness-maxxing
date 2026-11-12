@@ -477,6 +477,7 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
                 before = 0.0
             STORE.mkdir(parents=True, exist_ok=True)
             f.write_text(str(round(before + float(half.group(1)), 6)))
+            return 143                                 # its own exit after a SIGTERM
         return 0
     emit({"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": sid})
     emit(msg(sid, model, [{"type": "thinking", "thinking": "", "signature": "c2lnbmF0dXJl"}]))

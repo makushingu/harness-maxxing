@@ -2402,7 +2402,8 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                 break
     if cost is None:                    # no `result`: stopped by its timeout (or crashed) before Claude said the cost
         try:
-            est = agent_cost.charge_unbilled(session["id"], _which_turn(session)[0])
+            at, died = _which_turn(session)             # a turn that died unrecorded: its message has no last_turn.at
+            est = agent_cost.charge_unbilled(session["id"], None if died else at)
         except Exception:  # noqa: BLE001 - an estimate never stops the end of a turn
             log.exception("agent %s: cost of a turn without result", path)
             est = 0.0
