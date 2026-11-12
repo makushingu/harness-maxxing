@@ -1,16 +1,14 @@
 import * as React from 'react'
-import { useState } from 'react'
 import { Link } from 'react-router'
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Download, Eye, EyeOff, HardDrive, Info, MemoryStick, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
-import { useHealth, useMarkHealthSeen } from '@/lib/queries'
+import { useFeedSettings, useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { resolveTheme, useUI, type Theme } from '@/stores/ui'
-import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
+import { ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
-import { CloseOnNav } from './CloseOnNav'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
@@ -185,19 +183,21 @@ const alertHover = {
  *  - Folded bar: three tiny meters (icon + short bar) and the health dot, then the Claude ring (the sparkle as a faint watermark inside).
  *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
- *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
- *  status panel (issues, CPU / RAM / disk); the Claude entry leads to Settings -> Stats. Under it, the theme and
+ *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The health line (folded:
+ *  the dot) leads to the problems (Notifications, health source, or Settings -> System when they stay out of the feed),
+ *  the meters to Settings -> System, the Claude entry to Settings -> Stats; no panel (the touch menu keeps StatusPanel). Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
 export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, at the start of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
+  const t = useT()
   const s = useStatusLine()
   const rows = useHealthRows()
   const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
-  // the panel's links (System, Stats) lead away: close it when the page changes
-  const [open, setOpen] = useState(false)
-  const close = React.useCallback(() => setOpen(false), [])
+  // the health line leads to the problems: the Notifications feed (health source) when they go there, else Settings -> System
+  const { data: feedSettings } = useFeedSettings()
+  const issuesTo = feedSettings?.health ? '/feed?source=health' : '/settings/system'
   const lang = useLang()
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
-  const label = [s.health, ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
+  const metersLabel = [t('health.details'), ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
   const tip = (
     <span className="grid gap-0.5 text-xs">
       <span className="font-medium">{s.health}</span>
@@ -208,70 +208,67 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
       ))}
     </span>
   )
+  const link = 'outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring'
   return (
     <div data-testid="sidebar-status" data-boot-rv className={cn('grid gap-1 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.75rem+var(--safe-bottom))]', collapsed && 'justify-items-center px-2')}>
-      {open && <CloseOnNav onNav={close} />}
-      <Popover open={open} onOpenChange={setOpen}>
-        <Tooltip content={collapsed ? tip : null} side="right">
-          <PopoverTrigger
-            data-tour="health"
-            data-testid="status-line"
-            aria-label={label}
-            className={cn(
-              'group grid h-[66px] w-full min-w-0 content-center gap-1.5 rounded-md px-1.5 text-left outline-none transition-colors duration-300 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
-              collapsed && 'w-11 justify-items-center px-0',
-              collapsed && alert && cn(alertBg[alert], alertHover[alert]),
-            )}
-          >
-            {!rows ? (
-              <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
-            ) : collapsed ? (
-              <>
+      <div data-tour="health" data-testid="status-line" className={cn('grid h-[66px] w-full min-w-0 content-center gap-1.5', collapsed && 'w-11 justify-items-center')}>
+        {!rows ? (
+          <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
+        ) : collapsed ? (
+          <>
+            {/* folded: the mini meters lead to Settings -> System, the health dot (only when something is wrong) to the problems */}
+            <Tooltip content={tip} side="right">
+              <Link to="/settings/system" aria-label={metersLabel} data-testid="status-system" className={cn(link, 'grid w-11 justify-items-center gap-1.5 rounded-md py-1 hover:bg-accent')}>
                 {rows.map((r) => (
                   <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
                 ))}
-                {/* the health dot only says something is wrong (all good = nothing; notifications live in the bell);
-                    its room is kept so the block never changes height */}
-                <span className="mt-0.5 flex size-3 items-center justify-center">
-                  {alert && <LiveDot tone={s.tone} />}
-                </span>
-              </>
-            ) : (
-              <>
-                {/* the health line: its alert colour while something needs attention (a stronger tint on hover) */}
-                <span
-                  className={cn(
-                    'mx-side-reveal -mx-0.5 flex h-6 min-w-0 items-center gap-2 rounded px-1.5 text-xs font-medium transition-colors duration-500',
-                    alert ? cn(alertBg[alert], alertHover[alert]) : 'text-muted-foreground',
-                  )}
-                >
-                  <span className="flex size-4 shrink-0 items-center justify-center">
+              </Link>
+            </Tooltip>
+            <span className="flex size-3 items-center justify-center">
+              {alert && (
+                <Tooltip content={s.health} side="right">
+                  <Link to={issuesTo} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
                     <LiveDot tone={s.tone} />
+                  </Link>
+                </Tooltip>
+              )}
+            </span>
+          </>
+        ) : (
+          <>
+            {/* the health line -> the problems; its alert colour while something needs attention (stronger on hover) */}
+            <Link
+              to={issuesTo}
+              data-testid="status-issues"
+              className={cn(
+                link,
+                'mx-side-reveal flex h-6 min-w-0 items-center gap-2 rounded px-1.5 text-xs font-medium transition-colors duration-500',
+                alert ? cn(alertBg[alert], alertHover[alert]) : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                <LiveDot tone={s.tone} />
+              </span>
+              <span className="min-w-0 flex-1 truncate">{s.health}</span>
+              <ChevronRight className="size-3.5 shrink-0 opacity-70" />
+            </Link>
+            {/* CPU / RAM / disk -> Settings -> System */}
+            <Link to="/settings/system" aria-label={metersLabel} data-testid="status-system" className={cn(link, 'mx-side-reveal -mx-1.5 grid grid-cols-3 items-center gap-x-3 rounded-md px-1.5 py-1 hover:bg-accent')}>
+              {rows.map((r) => (
+                <span key={r.key} className="grid min-w-0 gap-1">
+                  <span className="flex min-w-0 items-center gap-1.5 text-xs">
+                    <MeterIcon icon={r.icon} tone={r.tone} />
+                    <Sensitive length={3}>
+                      <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
+                    </Sensitive>
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{s.health}</span>
-                  <ChevronRight className="size-3.5 shrink-0 opacity-70" />
+                  <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
                 </span>
-                <span className="mx-side-reveal grid grid-cols-3 items-center gap-x-3" data-testid="sidebar-meters">
-                  {rows.map((r) => (
-                    <span key={r.key} className="grid min-w-0 gap-1">
-                      <span className="flex min-w-0 items-center gap-1.5 text-xs">
-                        <MeterIcon icon={r.icon} tone={r.tone} />
-                        <Sensitive length={3}>
-                          <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
-                        </Sensitive>
-                      </span>
-                      <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
-                    </span>
-                  ))}
-                </span>
-              </>
-            )}
-          </PopoverTrigger>
-        </Tooltip>
-        <PopoverContent side="right" align="end" className="w-80 p-3" data-testid="status-panel">
-          <StatusPanel />
-        </PopoverContent>
-      </Popover>
+              ))}
+            </Link>
+          </>
+        )}
+      </div>
       <ClaudeStatus collapsed={collapsed} />
       <SidebarLook collapsed={collapsed} lead={lead} tail={tail} />
     </div>
