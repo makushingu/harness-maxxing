@@ -11,8 +11,14 @@ stopped.
 
 - **Left pane**: the project / topic tree, in the second bar next to the sidebar (see below). Badges show
   running sessions and unread answers.
-- **Main area**: one or more **columns**, one session each. Open several sessions side by side,
-  resize and reorder the columns, or detach one into its own window.
+- **Main area**: the open sessions, in one of two modes. One button in the page's bar, top right, left of
+  **New session** (Alt+T), goes from one to the other at any time: its icon draws the mode in use (tab heads over a session for
+  **Tabs**, three columns for **Zones**) and moves from one picture to the other; a new browser starts in **Tabs**, and each browser remembers its
+  mode.
+  - **Tabs** (the default): one session at a time, full width, every open session as a tab at the top.
+  - **Zones**: the sessions side by side, in **columns**, one session each. Resize and reorder the columns, stack
+    them, or detach one into its own window.
+- **Grid**, **widening**, **scrolling sideways** and the **ready-made layouts** below belong to the Zones mode.
 - **Grid**: with two sessions or more, the grid button at the top right stacks them two per column (four sessions
   = 2x2). You can also drop a column on the lower part of another (it goes under it) or on its upper part (it goes above it), or pick **Put under the column on the left** in
   its **…** menu; a column holds up to three sessions (three stacked share the height evenly). Two stacked sessions
@@ -35,13 +41,14 @@ stopped.
   per column: when they do not all fit, the strip scrolls as usual (the half moves with it, nothing slides under
   it). While a half is shown the widths are fixed (no resize handle).
   **Grid of 3** stacks three per column.
-- **Tabs view**: the **Tabs** button (window icon) at the top right of the Sessions page (Alt+T) shows one session at a time,
-  full width, with every open session as a chip above it. A chip shows whether its session is working, finished
+- **Tabs mode**: one session at a time, full width, with every open session as a tab in the bar at the top of the
+  page, left of the buttons. A tab shows whether its session is working, finished
   with an unread answer or stopped on an error; click it to show that session, or use the arrows on the left and
   right edges (Alt+← / Alt+→). Its cross closes the session. **Waiting** jumps to the next session that finished and
-  waits for your answer. Click the **Tabs** button again: your columns come back exactly as they were. On a phone, the same
-  button sits in the session's header; the chips show under the top bar, and a sideways swipe on the session
-  shows the previous or next one.
+  waits for your answer. With many tabs open, the buttons of the bar keep only their icon to leave
+  the room to the tabs. Switch to **Zones**: the same sessions are side by side, and your columns are exactly as
+  you left them. On a phone, the **Tabs** button (window icon) in the session's header turns the tabs on or off;
+  they show under the top bar, and a sideways swipe on the session shows the previous or next one.
 - **Fold the sidebar** with the button at its top, next to the logo (`Ctrl+\`): only its icons stay. A new browser
   starts with it unfolded.
 - **The second bar**: on a computer, the pages with a list (Sessions, Agents, Team, Tasks, Infra, Files, E-mail,
@@ -404,7 +411,7 @@ A Telegram session can be continued from the web UI and the other way round.
 | Ctrl/⌘+\ | show / hide the sidebar |
 | Shift+P | presentation mode (hides sensitive data on screen) |
 | G then D / S / F / T / C | go to Dashboard / Sessions / Files / Tasks / Crons |
-| Alt+T | tabs view on / off (Sessions page) |
+| Alt+T | switch between Tabs and Zones (Sessions page) |
 | Alt+M | Maxxing mode on / off (Sessions page, once enabled in Settings -> Features) |
 
 ## Good to know

@@ -61,7 +61,7 @@ The first-run wizard asks the same question (**What will you use?**), and Settin
 soon as a GitHub key is in the vault. An install made before 2.0.0a132 keeps the pages it had.
 
 Under **Sessions**, indented: **Maxxing mode (beta)** and the **line under the answers** (cost, tokens, duration, model: tick what
-it shows) for everyone, and, saved in this browser only (marked **This browser**): the **Tabs view** (Alt+T) and
+it shows) for everyone, and, saved in this browser only (marked **This browser**): the **Tabs mode** (Alt+T; off = Zones) and
 the **HUD**. Under **Team**, while Team is on: **Team bubbles** (the chat bubbles at the bottom right of every page,
 saved in this browser). The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
 widget in **Settings -> Usage**, the presentation mode by default in **Settings -> Security**, the Telegram mode in
