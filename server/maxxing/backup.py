@@ -674,9 +674,11 @@ def history(limit: int = 100) -> list[dict]:
     try:
         for ln in _history_path().read_text().splitlines():
             try:
-                out.append(json.loads(ln))
+                e = json.loads(ln)
             except ValueError:
-                pass
+                continue
+            if isinstance(e, dict):                      # null / 5 / [] from a hand edit are skipped like garbage
+                out.append(e)
     except OSError:
         pass
     return list(reversed(out))[:limit]
