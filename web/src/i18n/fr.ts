@@ -28,6 +28,7 @@ export const fr: Record<keyof typeof en, string> = {
   'common.items': '{count} éléments',
   'common.items#one': '{count} élément',
   'common.more': 'Plus d’actions',
+  'common.networkError': "Erreur réseau : le serveur est injoignable.",
   'common.noResults': 'Aucun résultat.',
   'common.ok': 'OK',
   'common.refresh': 'Actualiser',

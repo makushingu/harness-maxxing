@@ -4,6 +4,9 @@
 // - errors throw ApiError {status, code, message}
 // - 401 `auth_required` on a protected endpoint → onUnauthorized() (the app redirects to /login?next=…)
 
+import { translate } from '@/i18n'
+import { useUI } from '@/stores/ui'
+
 export class ApiError extends Error {
   status: number
   code: string
@@ -14,6 +17,10 @@ export class ApiError extends Error {
     this.code = code
   }
 }
+
+/** Network failure, translated where it is built ('' while the core chunk is pending: English fallback). */
+export const networkError = () =>
+  new ApiError(0, 'network', translate(useUI.getState().language, 'common.networkError') || 'Network error: the server could not be reached.')
 
 export function isApiError(e: unknown, code?: string): e is ApiError {
   return e instanceof ApiError && (code === undefined || e.code === code)
@@ -82,7 +89,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     })
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') throw e
-    throw new ApiError(0, 'network', 'Network error — the server could not be reached.')
+    throw networkError()
   }
   const text = await res.text()
   let data: unknown = undefined

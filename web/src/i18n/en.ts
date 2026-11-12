@@ -28,6 +28,7 @@ export const en = {
   'common.items': '{count} items',
   'common.items#one': '{count} item',
   'common.more': 'More actions',
+  'common.networkError': "Network error: the server could not be reached.",
   'common.noResults': 'No results.',
   'common.ok': 'OK',
   'common.refresh': 'Refresh',
