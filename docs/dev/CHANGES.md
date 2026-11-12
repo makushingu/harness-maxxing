@@ -162,6 +162,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `test_hand_edited_history_lines_that_are_not_objects_are_skipped`.
   Not covered: the other raw readers of these settings (`sessions/runner.py`, `cmd_core.py`, `cmd_mcp.py`,
   `spawn.py`, `api/settings.py` returning the raw value).
+- `workspace.update_project` / `update_topic` run the validation (slug, emoji, permission mode, allowed tools) and the
+  busy (`409 has_running_sessions`) and destination (`409 exists`) checks before any write; they used to save emoji /
+  `permission_mode` / `allowed_tools` first, then refuse the rename. Tests: `tests/test_workspace.py`
+  (`test_a_refused_topic_rename_saves_nothing_else`, `..._of_a_busy_topic_...`, `test_a_refused_project_rename_...`).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

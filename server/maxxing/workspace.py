@@ -515,11 +515,14 @@ def update_project(project: str, name: str | None = None, description: str | Non
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
     check_description(description)
+    new = check_slug(name) if name and name != project else project
+    if new != project:
+        _ensure_idle(topic_path(project))
+    if new != project and (root() / topic_path(new)).exists():
+        raise WorkspaceError(409, "exists", f"{topic_path(new)} already exists")
     if emoji is not None:
         set_project_emoji(project, check_emoji(emoji))
-    new = project
-    if name and name != project:
-        new = check_slug(name)
+    if new != project:
         _rename(topic_path(project), topic_path(new))
         try:
             f = root() / "projects" / ORDER_FILE
@@ -543,14 +546,19 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
     check_description(description)
-    if permission_mode is not None:
-        _set_folder_meta(d, "permission_mode", check_permission_mode(permission_mode))
-    if allowed_tools is not None:
+    new = check_slug(name) if name and name != topic else topic
+    if new != topic:
+        _ensure_idle(topic_path(project, topic))
+    if new != topic and (root() / topic_path(project, new)).exists():
+        raise WorkspaceError(409, "exists", f"{topic_path(project, new)} already exists")
+    mode = check_permission_mode(permission_mode) if permission_mode is not None else None
+    tools = check_allowed_tools(allowed_tools) if allowed_tools is not None else None
+    if mode is not None:
+        _set_folder_meta(d, "permission_mode", mode)
+    if tools is not None:
         with _allowed_lock:
-            _set_folder_meta(d, "allowed_tools", check_allowed_tools(allowed_tools))
-    new = topic
-    if name and name != topic:
-        new = check_slug(name)
+            _set_folder_meta(d, "allowed_tools", tools)
+    if new != topic:
         _rename(topic_path(project, topic), topic_path(project, new))
         meta = _meta(project)
         if isinstance(meta.get("topics"), list):

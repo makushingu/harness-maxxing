@@ -122,6 +122,8 @@ Fixed:
   session tab arrows no longer blur what is behind them.
 - **A hand-edited setting of the wrong type no longer breaks the Settings, Extensions, Dashboard, Files, Git or Backup
   page**: the wrong value is ignored instead of a server error.
+- **Renaming a project or topic to a name that is refused no longer saves the other changes sent with it** (its
+  emoji, permission mode or allowed tools).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
