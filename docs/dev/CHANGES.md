@@ -131,6 +131,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (whitespace-only clears), `SystemExit` with a message, `config.json` untouched. A host without tz database now fails
   early on `init --timezone UTC` (`install.sh` installs tzdata). Tests: `test_cmd_core.py::test_init_refuses_an_unknown_zone_or_a_malformed_url`,
   `test_init_normalises_the_public_url_it_stores`.
+- CLI output: `cmd_proxy` status hint f-string; `cmd_deps` (`deps check --json`) prints `{checked: 0, vulnerable: [], skipped}` when
+  OSV is down; `cmd_import._fail` prints `{"error": code, "message"}` in --json; `cmd_mail list` clamps `--page` with `max(0, ...)`.
+  Tests: `test_status_names_the_port_when_the_address_is_on_no_interface`, `test_check_json_stays_json_when_osv_is_unreachable`,
+  `test_cli_json_errors_stay_json`, `test_cli_list_never_passes_a_negative_page`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

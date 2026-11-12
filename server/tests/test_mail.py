@@ -286,3 +286,15 @@ def test_real_imap_round_trip(mx, smtp):
     assert imap.messages(a, d["folder"], q="Round trip")["total"] == 0           # the draft is gone once sent
     assert imap.message(a, "INBOX", top["uid"])["answered"]
     imap.act(a, "INBOX", [top["uid"]], "trash")
+
+
+def test_cli_list_never_passes_a_negative_page(acc, monkeypatch, capsys):
+    from maxxing import cli
+    seen = []
+
+    def fake(a, folder, page, *args, **kw):
+        seen.append(page)
+        return {"messages": [], "total": 0, "page": page, "size": 20, "folder": folder}
+    monkeypatch.setattr(imap, "messages", fake)
+    assert cli.main(["mail", "list", "--page", "-2"]) == 0
+    assert seen == [0]

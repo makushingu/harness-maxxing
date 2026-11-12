@@ -340,3 +340,12 @@ def test_one_source_cannot_take_every_place(guarded, monkeypatch):
         assert c.get(f"http://{host}:{port}/", headers={"X-Maxxing-Proxy": "s"}).status_code == 200
     for x in socks:
         x.close()
+
+
+def test_status_names_the_port_when_the_address_is_on_no_interface(mx, monkeypatch, capsys):
+    monkeypatch.setattr(proxylisten, "configured", lambda cfg: ("172.17.0.1", 8790))
+    monkeypatch.setattr(proxylisten, "listening", lambda h, p: False)
+    monkeypatch.setattr(proxylisten, "address_present", lambda h: False)
+    assert run_cli("proxy", "status") == 0
+    out = capsys.readouterr().out
+    assert ":8790)" in out and "{addr" not in out

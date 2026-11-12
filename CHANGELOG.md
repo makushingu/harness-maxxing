@@ -93,6 +93,9 @@ Fixed:
 - **Translations**: the "network error" message is now in your language, and the "Today" / "Yesterday" headings of
   the feed and two Settings rows (Team bubbles, Team messages) no longer show blank for a moment while their texts load.
 - **`maxxing init`** refuses an unknown time zone or a malformed public URL instead of saving it.
+- **CLI output**: `maxxing proxy status` shows the port in its hint when the address is on no interface;
+  `maxxing deps check --json` and `maxxing import --json` print JSON, not a text line, when osv.dev is
+  unreachable or the zip is missing or refused; a negative `--page` of `maxxing mail list` lists the first page.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

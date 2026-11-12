@@ -536,3 +536,12 @@ def test_failed_voice_model_update_keeps_the_old_model(st, monkeypatch, tmp_path
     monkeypatch.setattr(voice, "download_model", ok)
     assert deps._up_whisper(c)[0] == "installed"
     assert (models / "base" / "model.bin").read_text() == "new" and not (models / "base.old").exists()
+
+
+def test_check_json_stays_json_when_osv_is_unreachable(mx, monkeypatch, capsys):
+    def down(timeout=30):
+        raise OSError("no route")
+    monkeypatch.setattr(deps, "check", down)
+    assert cli.main(["deps", "check", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert r["checked"] == 0 and r["vulnerable"] == [] and "no route" in r["skipped"]
