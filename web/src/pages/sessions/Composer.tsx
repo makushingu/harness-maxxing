@@ -15,7 +15,7 @@ import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
 import { pastedFile, pastedName } from './pasteAsFile'
 import { VoiceButton } from '@/features/voice/VoiceButton'
-import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand } from './SlashMenu'
+import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand, type SlashGroup } from './SlashMenu'
 import { mentionAt, mentionRows, usedMentions } from './mentions'
 
 const NO_ITEMS: QueueItem[] = []
@@ -427,7 +427,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
   // The "/" menu: open while the text is "/name" (or "/name value" for a command with values), closed by Esc
   // until the text changes.
   const [slashOff, setSlashOff] = React.useState<string | null>(null)
-  const menu = props.commands && slashOff !== text ? slashItems(text, props.commands) : null
+  const [expanded, setExpanded] = React.useState<SlashGroup[]>([])
+  const menu = props.commands && slashOff !== text ? slashItems(text, props.commands, expanded) : null
+  React.useEffect(() => {
+    if (!menu && expanded.length) setExpanded([]) // folded again the next time the menu opens
+  }, [!!menu]) // eslint-disable-line react-hooks/exhaustive-deps
   // The "@" menu (when no "/" menu): open while an "@name" is typed just before the caret.
   const [caret, setCaret] = React.useState(0)
   const [picked, setPicked] = React.useState<MentionTarget[]>([])
@@ -437,7 +441,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const rows: MenuRow[] = menu ? menu.items : atRows
   const [slashAt, setSlashAt] = React.useState(0)
   const menuKey = menu ? `${menu.stage}:${menu.items.map((i) => i.key).join('|')}` : atRows.length ? `@${atRows.map((i) => i.key).join('|')}` : ''
-  React.useEffect(() => setSlashAt(0), [menuKey])
+  const keepAt = React.useRef<number | null>(null)
+  React.useEffect(() => {
+    setSlashAt(keepAt.current ?? 0)
+    keepAt.current = null
+  }, [menuKey])
   const active = rows.length ? Math.min(slashAt, rows.length - 1) : 0
   const pickMention = (i: number) => {
     const row = atRows[i]
@@ -457,6 +465,12 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const it = menu?.items[i]
     if (!it) return
     const c = it.cmd
+    if (it.expand) {
+      const g = it.expand
+      keepAt.current = i
+      setExpanded((cur) => [...cur, g]) // "+ N more": the group unfolds, the selection stays on the same place
+      return
+    }
     if (menu!.stage === 'arg') {
       setText('')
       c.run?.(it.arg ?? '')

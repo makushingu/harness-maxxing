@@ -131,8 +131,9 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
 ## The composer
 
 - **Enter** sends, **Shift+Enter** adds a new line.
-- **Commands (`/`)**: type `/` at the start of a message, as in Claude Code: a menu lists the session's commands
-  and the skills of the topic (↑/↓ to choose, **Tab** completes, **Enter** runs, **Esc** closes).
+- **Commands (`/`)**: type `/` at the start of a message, as in Claude Code: a menu lists, in three groups, the
+  session's commands, the skills of this topic and project, then the other skills (a long group shows its first ones
+  and **+ N more**; typing searches them all). ↑/↓ to choose, **Tab** completes, **Enter** runs, **Esc** closes.
   `/model` and `/effort` show their values next (or type them: `/model opus`, `/effort high`), `/plan` turns plan
   mode on or off, `/compact` and `/handoff` as in the session menu, `/new` opens a new session in the topic,
   `/rename New title` renames the session. These never reach Claude. A skill (`/post`, `/seo-audit https://…`) is

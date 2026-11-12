@@ -6,11 +6,18 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 
+/** The menu's groups, in this order: the session's commands, the skills of this topic / project, the others. */
+export type SlashGroup = 'session' | 'here' | 'other'
+const GROUPS: SlashGroup[] = ['session', 'here', 'other']
+/** A group of skills longer than this is folded when nothing is typed: its first rows, then "+ N more". */
+const FOLD = 6
+
 export type SlashArg = { value: string; label: string; hint?: string; current?: boolean }
 export type SlashCommand = {
   name: string
   description: string
   kind: 'action' | 'skill'
+  group?: SlashGroup
   /** Values offered after "/name " (model ids, levels); free text is accepted too when `freeArg`. */
   args?: SlashArg[]
   freeArg?: boolean
@@ -19,20 +26,31 @@ export type SlashCommand = {
 }
 
 /** A row of the composer's menus ("/" commands, "@" mentions). */
-export type MenuRow = { key: string; label: string; hint: string; badge?: string; current?: boolean; icon?: React.ReactNode }
-export type SlashItem = MenuRow & { cmd: SlashCommand; arg?: string }
+export type MenuRow = { key: string; label: string; hint: string; badge?: string; current?: boolean; icon?: React.ReactNode; /** Title shown above the first row of its group. */ group?: SlashGroup; /** "+ N more": unfolds the group. */ more?: number }
+export type SlashItem = MenuRow & { cmd: SlashCommand; arg?: string; /** The "+ N more" row of this group. */ expand?: SlashGroup }
 
 export const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 /** What the menu shows for the text typed so far (null: no menu). */
-export function slashItems(text: string, commands: SlashCommand[]): { stage: 'name' | 'arg'; items: SlashItem[] } | null {
+export function slashItems(text: string, commands: SlashCommand[], expanded: SlashGroup[] = []): { stage: 'name' | 'arg'; items: SlashItem[] } | null {
   if (!text.startsWith('/') || text.includes('\n')) return null
   const named = /^\/(\S*)$/.exec(text)
   if (named) {
     const q = fold(named[1])
     const starts = commands.filter((c) => fold(c.name).startsWith(q))
-    const inside = q ? commands.filter((c) => !fold(c.name).startsWith(q) && (fold(c.name).includes(q) || fold(c.description).includes(q))) : []
-    const items = [...starts, ...inside].map((c) => ({ key: `${c.kind}:${c.name}`, label: `/${c.name}`, hint: c.description, badge: c.kind === 'skill' ? 'skill' : undefined, cmd: c }))
+    // then the names containing it; the descriptions only when no name matches ("/se" is /seo-audit, not every
+    // command whose description says "session")
+    const inName = q ? commands.filter((c) => !fold(c.name).startsWith(q) && fold(c.name).includes(q)) : []
+    const inside = !q ? [] : starts.length || inName.length ? inName : commands.filter((c) => fold(c.description).includes(q))
+    const found = [...starts, ...inside]
+    const items: SlashItem[] = []
+    for (const g of GROUPS) {
+      const rows = found.filter((c) => (c.group || (c.kind === 'skill' ? 'other' : 'session')) === g)
+      const fold = !q && g !== 'session' && rows.length > FOLD && !expanded.includes(g)
+      for (const c of fold ? rows.slice(0, FOLD - 1) : rows)
+        items.push({ key: `${c.kind}:${c.name}`, label: `/${c.name}`, hint: c.description, group: g, cmd: c })
+      if (fold) items.push({ key: `more:${g}`, label: '', hint: '', group: g, more: rows.length - FOLD + 1, expand: g, cmd: { name: '', kind: 'action', description: '' } })
+    }
     return items.length ? { stage: 'name', items } : null
   }
   const withArg = /^\/(\S+) (.*)$/.exec(text)
@@ -69,8 +87,13 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
     >
       <div ref={list} className="max-h-72 overflow-y-auto overscroll-contain p-1 [scrollbar-width:thin]">
         {items.map((it, i) => (
+          <React.Fragment key={it.key}>
+          {it.group && it.group !== items[i - 1]?.group && (
+            <div className={cn('px-2.5 pt-1.5 pb-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase', i > 0 && 'mt-1 border-t pt-2')}>
+              {t(`sessions.slash.group.${it.group}`)}
+            </div>
+          )}
           <div
-            key={it.key}
             role="option"
             aria-selected={i === active}
             data-index={i}
@@ -82,13 +105,18 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
             className={cn('flex cursor-pointer items-baseline gap-3 rounded-md px-2.5 py-1.5 text-sm', it.icon && 'items-center', i === active && 'bg-accent text-accent-foreground')}
           >
             {it.icon}
-            <span className={cn('shrink-0', stage === 'name' && 'font-mono text-[13px]', it.current && 'font-semibold')}>
-              {it.label}
-              {it.current && <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">✓</span>}
-            </span>
+            {it.more ? (
+              <span className="text-xs text-muted-foreground">{t('sessions.slash.more', { count: it.more })}</span>
+            ) : (
+              <span className={cn('shrink-0', stage === 'name' && 'font-mono text-[13px]', it.current && 'font-semibold')}>
+                {it.label}
+                {it.current && <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">✓</span>}
+              </span>
+            )}
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{it.hint}</span>
-            {it.badge && <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{it.badge === 'skill' ? t('sessions.slash.skill') : it.badge}</span>}
+            {it.badge && <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{it.badge}</span>}
           </div>
+          </React.Fragment>
         ))}
       </div>
       <div className="border-t px-2.5 py-1 text-[10px] text-muted-foreground max-md:hidden">{keys || t('sessions.slash.keys')}</div>

@@ -1,7 +1,7 @@
 // The commands of the composer's "/" menu (SlashMenu.tsx): the session's own, then the skills of its topic.
 import * as React from 'react'
 import { useT } from '@/i18n'
-import { useClaudeStatus, useTopicSkills } from '@/lib/queries'
+import { useClaudeStatus, useTopicSkills, type Skill } from '@/lib/queries'
 import { EFFORTS, type Effort } from '@/lib/types'
 import type { SlashCommand } from './SlashMenu'
 import { modelLabel } from './util'
@@ -68,11 +68,14 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
     if (a.onNew) out.push({ name: 'new', kind: 'action', description: t('sessions.slash.new'), run: () => live.current.onNew?.() })
     if (a.onRename)
       out.push({ name: 'rename', kind: 'action', freeArg: true, description: t('sessions.slash.rename'), run: (arg) => arg && live.current.onRename?.(arg) })
+    // Skills: this topic's and project's first, then the others - the product's last (Claude picks them by itself
+    // when the message is about crons, agents, the server...)
     const taken = new Set(out.map((c) => c.name))
-    for (const s of skills?.skills || []) {
+    const rank = (x: Skill) => (x.origin === 'topic' ? 0 : x.origin === 'project' ? 1 : x.name.startsWith('maxxing-') ? 3 : 2)
+    for (const s of [...(skills?.skills || [])].sort((x, y) => rank(x) - rank(y))) {
       if (taken.has(s.name)) continue
       taken.add(s.name)
-      out.push({ name: s.name, kind: 'skill', description: s.description })
+      out.push({ name: s.name, kind: 'skill', group: rank(s) < 2 ? 'here' : 'other', description: s.description })
     }
     return out
   }, [t, models, def, skills, a.model, a.effort, a.plan, !!a.onPlan, !!a.onCompact, !!a.onHandoff, !!a.onNew, !!a.onRename]) // eslint-disable-line react-hooks/exhaustive-deps

@@ -17,6 +17,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   topic's skills from `GET /api/skills?path=` = `skills.for_topic()`). Composer prop `commands`: a session command
   typed in full runs instead of being sent (only without attachments or quotes); a skill is sent as typed (Claude Code
   expands `/name args` in `-p` mode, checked with 2.1.285). New-session form: `model|effort|plan` only.
+  Menu groups (`SlashGroup` session | here | other, `SlashCommand.group`): skills ranked topic, project, others,
+  `maxxing-*` last; with nothing typed a skills group over 6 rows shows 5 + a "+ N more" row (`SlashItem.expand`,
+  Composer `expanded`); typing: names starting with it, then names containing it, descriptions only when no name
+  matches.
 - Composer `@` mentions: `pages/sessions/mentions.tsx` (`mentionAt(text, caret)`, `mentionRows`, `usedMentions`), the
   same list component as `/` (`SlashMenu` now takes `MenuRow[]`, `label`, `keys`, rows with an `icon`); Composer prop
   `mentionsFor` (session id), `onSend(..., mentions)`. `GET /api/sessions/{id}/mentions` = `mentions.candidates()`
