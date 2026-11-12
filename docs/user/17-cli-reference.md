@@ -220,6 +220,27 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents group create P/G --member AGENT[=ROLE] ... [--name N] [--emoji E] [--goal T] [--lead AGENT] [--no-shared-files] [--ask-on-handover] [--json]` | create a group of 2 to 6 agents of project P |
 | `maxxing agents group update P/G [--name N] [--emoji E] [--goal T] [--lead AGENT] [--member AGENT[=ROLE] ...] [--shared-files on\|off] [--trust-members on\|off]` | change a group (`--member` replaces the members) |
 | `maxxing agents group say P/G TEXT` | write to a group as yourself; its members answer in turn (refused in an agent's run) |
+| `maxxing enterprise list [--json]` | the enterprises: id, name, positions, vacant, projects (needs Settings -> Features -> Enterprises) |
+| `maxxing enterprise create SLUG [--name N] [--emoji E] [--project P ...] [--json]` | create an enterprise |
+| `maxxing enterprise link SLUG PROJECT ...` / `unlink SLUG PROJECT ... [--vacate]` | link or unlink projects (unlinking a project whose agents hold positions needs `--vacate`) |
+| `maxxing enterprise show [SLUG] [--json]` | the chart as a tree with every position's state (an agent of the enterprise sees its own position, its lead and its reports) |
+| `maxxing enterprise position add SLUG ID [--title T] [--reports-to P] [--agent A] [--department D] [--job T\|--job-file F]` | add a position |
+| `maxxing enterprise position move SLUG ID --reports-to P` / `seat SLUG ID --agent A` / `vacate SLUG ID` / `remove SLUG ID [--reparent-to P]` | change the chart (`owner` = the top) |
+| `maxxing enterprise settings SLUG KEY=VALUE ... [--department D]` | change a setting (`digest.enabled=true`), a department's override, `name` or `notes`, or the name, emoji, top, `envelope.*` |
+| `maxxing enterprise grant SLUG POSITION --category C --ceiling N --until DATE` / `--revoke ID` | let a lead decide a category up to a ceiling until a date (30 days at most) |
+| `maxxing enterprise report SLUG [--daily\|--weekly\|--monthly] [--now] [--json]` | print the last report; `--now` builds one |
+| `maxxing enterprise decisions SLUG [--since DATE] [--limit N] [--json]` | the decision log |
+| `maxxing enterprise export SLUG [-o FILE]` / `import FILE [--json]` | the enterprise as a zip / create one from a zip |
+| `maxxing enterprise assign POSITION TEXT [--due D] [--parent T] [--task T]` | from a position: a task for a direct report (`--task`: send one back) |
+| `maxxing enterprise done TASK TEXT` / `block TASK TEXT` | from a position: hand in a task / report a blocker |
+| `maxxing enterprise escalate TEXT [--task T]` / `answer ID TEXT` | from a position: ask one level up / answer an escalation of a report |
+| `maxxing enterprise request CATEGORY TEXT [--amount N]` / `decide ID allow\|deny [REASON]` | from a position: ask for something / decide a request of the team |
+| `maxxing enterprise objective set ID VALUE` | from a position: the value of an objective it owns |
+| `maxxing enterprise profile [--section S] [--json]` | the company profile (S: products, hours, terms, contact, faq) |
+
+`maxxing enterprise` commands from the last six rows act as the position of the calling agent; the owner adds `--as POSITION`
+(and `--enterprise SLUG` when there are several). The structure commands (create, link, position, settings, grant, ...) are
+refused in agent turns.
 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
 [Agents](30-agents.md) and [Agent groups](31-agent-groups.md).
