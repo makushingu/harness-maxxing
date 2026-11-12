@@ -11,7 +11,7 @@
 // The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
 import * as React from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { ChevronDown, LayoutGrid, Play, Plus, Rocket, UsersRound, WandSparkles } from 'lucide-react'
+import { ChevronDown, LayoutGrid, Network, Play, Plus, Rocket, UsersRound, WandSparkles } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { agentRoute, newGroupRoute, useAgents, useExtensions, usePatchAgent, useWorkspace } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
@@ -46,6 +46,7 @@ import { WaitingBubble } from './approvals'
 import { NewAgentForm, type CreateStart } from './CreateAgent'
 import { OfficeFuture } from './OfficeFuture'
 import { OfficeCustom } from './OfficeCustom'
+import { OfficeOrg, useOrgSeats } from './OfficeOrg'
 import { OfficeChat } from './office'
 import { AgentChatPanel } from './AgentPage'
 import { useMediaQuery } from '@/stores/media'
@@ -56,11 +57,12 @@ import { SilentMark, useAgentMenu } from './AgentMenu'
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
 /** A built-in view, or `x:<extension id>` (a view an extension brings). */
-export type OfficeView = 'classic' | 'future' | `x:${string}`
+export type OfficeView = 'classic' | 'future' | 'org' | `x:${string}`
 const VIEW_KEY = 'mx-agents-office-view'
 const BUILTIN_VIEWS = [
   { id: 'classic', icon: LayoutGrid, label: 'agents.office.classic' },
   { id: 'future', icon: Rocket, label: 'agents.office.future' },
+  { id: 'org', icon: Network, label: 'agents.office.org' },
 ] as const
 
 /** The view of the Office, kept per browser (Classic by default). */
@@ -69,7 +71,7 @@ function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
     const x = store.get(VIEW_KEY) || ''
     // `game` = the former Gamified view, replaced by Space.
     if (x === 'game') return 'future'
-    return x === 'future' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
+    return x === 'future' || x === 'org' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
   })
   const set = React.useCallback((x: OfficeView) => {
     store.set(VIEW_KEY, x)
@@ -124,7 +126,9 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
   const custom = useCustomViews()
   // A view of an extension that is gone (deleted, off, in error) shows Classic; the choice is kept for when it is back.
   const ext = picked.startsWith('x:') ? custom.views.find((v) => `x:${v.id}` === picked) : undefined
-  const view: OfficeView = picked.startsWith('x:') && !ext && !custom.loading ? 'classic' : picked
+  // Org is offered once an agent holds a position; until then a stored choice shows Classic
+  const seats = useOrgSeats()
+  const view: OfficeView = picked.startsWith('x:') && !ext && !custom.loading ? 'classic' : picked === 'org' && !seats ? 'classic' : picked
   // Projects and agents in the order of the layout (picked by hand, else workspace order / topic then name).
   const layout = useAgentsLayout()
   const groups = React.useMemo(() => layout.group(agents), [agents, layout])
@@ -153,10 +157,10 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
     <Page
       title={t('agents.side.office')}
       description={t('agents.desc')}
-      width={view === 'classic' ? 'default' : 'wide'}
+      width={view === 'classic' || view === 'org' ? 'default' : 'wide'}
       actions={
         <>
-          {agents.length > 0 && <ViewMenu view={view} custom={custom.views} onChange={setView} />}
+          {agents.length > 0 && <ViewMenu view={view} custom={custom.views} org={!!seats} onChange={setView} />}
           <NewButtons onNew={onNew} />
         </>
       }
@@ -182,8 +186,10 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
         <AgentsEmpty onStart={onStart} />
       ) : view === 'future' ? (
         <OfficeFuture groups={groups} layout={layout} onStart={onStart} />
+      ) : view === 'org' && seats ? (
+        <OfficeOrg groups={groups} seats={seats} renderTile={(a, j) => <AgentTile agent={a} index={j} layout={layout} />} />
       ) : view.startsWith('x:') ? (
-        ext ? <OfficeCustom ext={ext} groups={groups} layout={layout} /> : <Skeleton className="h-[40rem] rounded-xl" />
+        ext ? <OfficeCustom ext={ext} groups={groups} layout={layout} seats={seats} /> : <Skeleton className="h-[40rem] rounded-xl" />
       ) : (
         <div className="grid gap-8" data-testid="agents-overview">
           {groups.map(({ project: p, agents: list }, i) => (
@@ -225,7 +231,7 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
 
 /** The view picker: the current view's icon and name; the built-in views, the ones of extensions, then "Create my
  *  custom view" (a new session that builds one as an extension, its request already typed). */
-function ViewMenu({ view, custom, onChange }: { view: OfficeView; custom: { id: string; name: string; icon: string }[]; onChange: (v: OfficeView) => void }) {
+function ViewMenu({ view, custom, org, onChange }: { view: OfficeView; custom: { id: string; name: string; icon: string }[]; org: boolean; onChange: (v: OfficeView) => void }) {
   const t = useT()
   const navigate = useNavigate()
   const topic = useCustomViewTopic()
@@ -245,7 +251,7 @@ function ViewMenu({ view, custom, onChange }: { view: OfficeView; custom: { id: 
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>{t('agents.office.view')}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={view} onValueChange={(v) => onChange(v as OfficeView)}>
-          {BUILTIN_VIEWS.map((v) => (
+          {BUILTIN_VIEWS.filter((v) => v.id !== 'org' || org).map((v) => (
             <DropdownMenuRadioItem key={v.id} value={v.id} data-testid={`agents-view-${v.id}`}>
               <v.icon /> {t(v.label)}
             </DropdownMenuRadioItem>

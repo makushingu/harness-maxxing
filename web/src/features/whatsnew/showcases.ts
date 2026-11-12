@@ -25,6 +25,7 @@ export const SHOWCASES: Record<string, TourStep[]> = {
   git: [{ id: 'git', targets: [], title: 'show.git.title', body: 'show.git.body', route: (c) => (c.pathname === '/git' ? null : '/git') }],
   team: [{ id: 'team', targets: [], title: 'show.team.title', body: 'show.team.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   agents: [{ id: 'agents', targets: [], title: 'show.agents.title', body: 'show.agents.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
+  enterprises: [{ id: 'enterprises', targets: ['enterprises-new'], title: 'show.enterprises.title', body: 'show.enterprises.body', route: (c) => (c.pathname === '/enterprises' ? null : '/enterprises') }],
   'agent-groups': [{ id: 'agent-groups', targets: ['group-new'], title: 'show.agentGroups.title', body: 'show.agentGroups.body', route: (c) => (c.pathname === '/agents' ? null : '/agents') }],
   infra: [{ id: 'infra', targets: [], title: 'show.infra.title', body: 'show.infra.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   'infra-servers': [{ id: 'infra-servers', targets: [], title: 'show.infraServers.title', body: 'show.infraServers.body', route: (c) => (c.pathname === '/infra' ? null : '/infra?tab=servers') }],
