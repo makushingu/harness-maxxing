@@ -5,7 +5,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.141 - 2026-11-12
+
+- Cost of a lost agent turn, two fixes on top of `agent_cost`: (1) Claude Code still saves the cost of a turn
+  stopped by SIGTERM in its thread, so the next `--resume` reports it again in `total_cost_usd` (measured: a killed
+  turn was counted by the estimate, then again in the next turn's increase). `charge_unbilled` now adds its estimate
+  to `meta.thread_cost.estimated` (same `csid`), and `store.turn_cost(total, prev, estimated)` takes it off the next
+  reported increase, never below 0 (runner `Attempt.prev_est`, `aside.py`); `_record` writes a new `thread_cost`
+  without it. (2) `last_turn(lines, at)` / `charge_unbilled(sid, at)` find the lost turn by its message's time
+  (`last_turn.at`, from `agents._which_turn`): a queued message the runner already started no longer hides it.
+- `test_skills::test_folders_with_a_name_that_is_not_utf8_are_left_out` uses its own `claude_dir` (it listed the user
+  skills of the machine running the tests).
+- `test_approvals::test_outside_events_always_ask_unless_trusted` was flaky: its user run read the outside run's result
+  in its context as soon as `on_turn_end` had written it (then asked first, as designed since `020694531`); the user
+  run now comes first.
+- Upgrade note: agents whose cron jobs have a timeout above `limits.timeout_s` (now capped by `run_timeout`).
 
 - #75 (20 reported bugs, 18 fixed, each with its test): `telegram/format.py` measures the 4096 limit in UTF-16 units
   (`_u16`, in `render`, `_split_big`, `code`, `plain`); `mail/send._text` (HTML fallback shared by draft, reply,

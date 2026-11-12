@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.141 - 2026-11-12
 
 New:
 - **Right click everywhere**: a right click (a long press on a phone) on a row or a card opens its menu where you
