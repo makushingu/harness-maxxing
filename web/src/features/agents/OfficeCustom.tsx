@@ -16,6 +16,8 @@ import { OUTFIT } from './Avatar'
 import { avatarSvg, normalize } from './pixels'
 import { statusOf } from './parts'
 import type { AgentsLayoutApi, ProjectGroup } from './layout'
+import { maskOfficeData } from './officePresentation'
+import { usePresentation } from '@/components/ui'
 
 // The raw /api/agents is not offered: it holds trigger prompts and key names, the pushed data is enough.
 const READS = ['/api/agents/layout']
@@ -67,7 +69,8 @@ export function OfficeCustom({ ext, groups, layout }: { ext: { id: string; name:
   const emojis = React.useMemo(() => new Map((ws?.projects || []).map((p) => [p.name, p.emoji || ''])), [ws])
   // Pushed again only when what it says changed (the groups are rebuilt at every render of the Office).
   const here = useLocation().pathname                  // /agents or /agents/office: the Office stays, its panel opens
-  const json = JSON.stringify(officeData(groups, layout.colorOf, emojis, t, lang, here))
+  const presentation = usePresentation()
+  const json = JSON.stringify(maskOfficeData(officeData(groups, layout.colorOf, emojis, t, lang, here), presentation))
   const data = React.useMemo(() => JSON.parse(json) as unknown, [json])
   const host = React.useMemo<FrameHost>(() => ({ reads: READS, routes: ROUTES, data }), [data])
   const base = `/ext/${encodeURIComponent(ext.id)}`
