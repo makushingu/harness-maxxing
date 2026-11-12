@@ -1,9 +1,11 @@
 import * as React from 'react'
-import { Bug, CheckCircle2, Crop, Lightbulb, MessageSquare, X } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { Bug, CheckCircle2, Crop, Lightbulb, MessageSquare, MessageSquarePlus, Sparkles, X } from 'lucide-react'
 import { useT } from '@/i18n'
 import { ApiError } from '@/lib/api'
-import { type FeedbackType, useFeedbackDefaults, useSendFeedback } from '@/lib/queries'
+import { type FeedbackCheck, type FeedbackType, useCheckFeedback, useCreateSession, useFeedbackDefaults, useSendFeedback, useWorkspace } from '@/lib/queries'
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, Segmented, Spinner, Textarea } from '@/components/ui'
+import { Markdown } from '@/components/ui/markdown'
 import { DonationLine } from '@/features/donation/Donation'
 import { useUI } from '@/stores/ui'
 import { useFeedbackDialog } from './feedback-store'
@@ -14,12 +16,21 @@ const MAX = 4000
 
 /** Feedback to the authors: bug, idea or anything, with the user's email (required, against abuse; they answer
  *  there), and optionally a screenshot of a zone of the page (presentation mode on while it is taken = data hidden).
- *  Sent by the server to api.harness-maxxing.com with the version, nothing else (docs/user/23-license.md). */
+ *  This server's Claude reads the message first: a question, a setting or something this installation can do itself is
+ *  answered here (with a session one click away) and nothing leaves; a bug or a general idea is sent by the server to
+ *  api.harness-maxxing.com with the version, nothing else (docs/user/23-license.md). The check never blocks: no clear
+ *  answer = sent, and "send anyway" is always there. */
 export function FeedbackDialog() {
   const t = useT()
+  const navigate = useNavigate()
   const { open, setOpen } = useFeedbackDialog()
   const defaults = useFeedbackDefaults(open)
   const send = useSendFeedback()
+  const check = useCheckFeedback()
+  const create = useCreateSession()
+  const { data: ws } = useWorkspace()
+  const [reply, setReply] = React.useState<FeedbackCheck | null>(null)
+  const run = React.useRef(0)              // a check that comes back after the dialog was closed (or reopened) is dropped
   const [type, setType] = React.useState<FeedbackType>('bug')
   const [email, setEmail] = React.useState('')
   const [message, setMessage] = React.useState('')
@@ -40,7 +51,9 @@ export function FeedbackDialog() {
   React.useEffect(() => {
     if (open) return
     if (picking || shooting) return
-    const id = setTimeout(() => { setSent(false); setTried(false); setMessage(''); setShotUrl(null); setShotErr(false); send.reset() }, 200)   // after the close animation
+    run.current++
+    sending.current = false
+    const id = setTimeout(() => { setSent(false); setReply(null); setTried(false); setMessage(''); setShotUrl(null); setShotErr(false); send.reset(); check.reset() }, 200)   // after the close animation
     return () => clearTimeout(id)
   }, [open, picking, shooting]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -70,16 +83,35 @@ export function FeedbackDialog() {
     ? ({ rate: t('feedback.err.rate'), unreachable: t('feedback.err.unreachable'), offline: t('feedback.err.offline'), invalid_email: t('feedback.err.email'), bad_email: t('feedback.err.email'), bad_image: t('feedback.err.image'), image_refused: t('feedback.err.image') } as Record<string, string>)[err.code] || err.message
     : send.error ? t('feedback.err.unreachable') : ''
 
+  const busy = check.isPending || send.isPending
+  const deliver = async (forced: boolean) => {
+    const image = shot ? { mime: shot.mime, data: await blobBase64(shot.blob), width: shot.width, height: shot.height } : undefined
+    send.mutate({ email: email.trim(), type, message: message.trim(), image, ...(forced && { forced }) }, { onSuccess: () => setSent(true), onSettled: () => { sending.current = false } })
+  }
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     setTried(true)
-    if (emailBad || msgBad || send.isPending || sending.current) return
+    if (emailBad || msgBad || busy || sending.current) return
     sending.current = true
+    const id = ++run.current
     const go = async () => {
-      const image = shot ? { mime: shot.mime, data: await blobBase64(shot.blob), width: shot.width, height: shot.height } : undefined
-      send.mutate({ email: email.trim(), type, message: message.trim(), image }, { onSuccess: () => setSent(true), onSettled: () => { sending.current = false } })
+      const r = await check.mutateAsync({ type, message: message.trim() }).catch(() => null)   // a check that fails never holds a message back
+      if (id !== run.current) return
+      if (r && r.verdict !== 'send' && r.answer) { sending.current = false; setReply(r) }
+      else await deliver(false)
     }
     go().catch(() => { sending.current = false })
+  }
+  const force = () => {
+    if (busy || sending.current) return
+    sending.current = true
+    deliver(true).catch(() => { sending.current = false })
+  }
+  const openSession = () => {
+    if (!reply || create.isPending) return
+    const topics = (ws?.projects || []).flatMap((p) => p.topics)
+    const path = reply.topic || (topics.find((tp) => tp.path.endsWith('/topics/inbox')) || topics[0])?.path || ''
+    create.mutate({ path, message: reply.prompt || message.trim() }, { onSuccess: (s) => { setOpen(false); navigate(`/sessions/${s.id}`) } })
   }
 
   return (
@@ -95,6 +127,31 @@ export function FeedbackDialog() {
             <DialogDescription>{t('feedback.sentBody', { email: email.trim() })}</DialogDescription>
             <DonationLine text="donation.feedback" className="justify-center" />
             <Button className="mt-2" onClick={() => setOpen(false)}>{t('common.close')}</Button>
+          </div>
+        ) : reply ? (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4" data-feedback-reply={reply.verdict}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Sparkles className="size-4 shrink-0 text-primary" />{t(reply.verdict === 'self' ? 'feedback.reply.selfTitle' : 'feedback.reply.answerTitle')}</DialogTitle>
+              <DialogDescription>{t('feedback.reply.notSent')}</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[45dvh] overflow-y-auto rounded-md border bg-muted/40 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+              <Markdown>{reply.answer}</Markdown>
+            </div>
+            {reply.verdict === 'self' && reply.prompt && (
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground">{t('feedback.reply.prompt')}</summary>
+                <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-xs [overflow-wrap:anywhere]">{reply.prompt}</p>
+              </details>
+            )}
+            {errText && <p className="text-sm text-destructive" role="alert">{errText}</p>}
+            <DialogFooter>
+              <Button type="button" variant="ghost" className="sm:mr-auto" onClick={() => { setReply(null); send.reset() }}>{t('feedback.reply.edit')}</Button>
+              <Button type="button" variant={reply.verdict === 'self' ? 'outline' : 'default'} onClick={() => setOpen(false)}>{t('common.close')}</Button>
+              <Button type="button" variant={reply.verdict === 'self' ? 'default' : 'outline'} disabled={create.isPending} onClick={openSession}>{create.isPending ? <Spinner /> : <MessageSquarePlus />}{t('feedback.reply.open')}</Button>
+            </DialogFooter>
+            <button type="button" className="justify-self-center text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50" disabled={send.isPending} onClick={force}>
+              {send.isPending && <Spinner />} {t('feedback.reply.force')}
+            </button>
           </div>
         ) : (
           <form onSubmit={submit} className="grid gap-4" noValidate>
@@ -147,10 +204,11 @@ export function FeedbackDialog() {
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" inputMode="email" />
             </FormField>
             {errText && <p className="text-sm text-destructive" role="alert">{errText}</p>}
+            {check.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Spinner />{t('feedback.checking')}</p>}
             <DialogFooter className="items-center">
               <span className="mr-auto text-xs text-muted-foreground">{defaults.data?.version ? t('feedback.sentWith', { version: defaults.data.version }) : ''}</span>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-              <Button type="submit" disabled={send.isPending}>{send.isPending && <Spinner />}{t('feedback.send')}</Button>
+              <Button type="submit" disabled={busy}>{busy && <Spinner />}{t('feedback.send')}</Button>
             </DialogFooter>
           </form>
         )}
