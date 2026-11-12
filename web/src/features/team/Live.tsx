@@ -1,15 +1,15 @@
 // Team in the background of every page (Settings -> Features -> team_page on): the user's presence for their
-// contacts while Harness is open and visible, and a notification for a new message in a chat that is not on screen.
+// contacts while Harness is open and visible, and a new message of a chat that is not on screen: a system
+// notification when Harness is in the background, else the message itself in a popup to read and answer (MessagePopup).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { teamPresence, useTeam } from '@/lib/queries'
 import { useUI } from '@/stores/ui'
-import { useT } from '@/i18n'
-import { toast } from '@/components/ui'
 import { isCompact } from '@/stores/media'
 import { playChime, showSystemNotification } from '@/features/notify/useDoneNotifier'
 import { chatTitle, personOf } from './people'
 import { useTeamUI } from './store'
+import { dropMessagePopup, messagePopupChats, showMessagePopup } from './MessagePopup'
 
 const PRESENCE_MS = 150_000 // the server sends it on at most every 2 min anyway
 
@@ -27,13 +27,17 @@ function usePresencePing() {
 }
 
 function useMessageNotifier() {
-  const t = useT()
   const navigate = useNavigate()
   const enabled = useUI((s) => s.notifyTeam)
   const { data: team } = useTeam()
   const prev = React.useRef<Map<string, number> | null>(null)
   React.useEffect(() => {
     if (!team) return
+    // A popup leaves with its unread messages (chat opened here or on another device, muted, deleted).
+    for (const id of messagePopupChats()) {
+      const c = team.chats.find((x) => x.id === id)
+      if (!c || !c.unread || c.muted) dropMessagePopup(id)
+    }
     const before = prev.current
     prev.current = new Map(team.chats.map((c) => [c.id, c.last?.at || 0]))
     if (!before) return
@@ -56,11 +60,12 @@ function useMessageNotifier() {
       const who = c.kind === 'group' ? `${personOf(team, c.last!.author).name.split(' ')[0]} : ` : ''
       const body = who + (c.last!.kind === 'poll' ? `📊 ${c.last!.text}` : `${c.last!.files ? '📎 ' : ''}${c.last!.text}`).slice(0, 160)
       const open = () => (bubbles && !location.pathname.startsWith('/team') ? useTeamUI.getState().openChat(c.id) : navigate(`/team?chat=${encodeURIComponent(c.id)}`))
-      if (!away || !showSystemNotification(title, body, open, `mx-team-${c.id}`)) toast.action(title, body, { label: t('notify.open'), onClick: open })
       rang = true
+      if (away && showSystemNotification(title, body, open, `mx-team-${c.id}`)) continue
+      showMessagePopup(c.id, { at: c.last!.at, text: body }, open)
     }
     if (rang && useUI.getState().notifySound) playChime()
-  }, [team, enabled, navigate, t])
+  }, [team, enabled, navigate])
 }
 
 export function TeamLive() {

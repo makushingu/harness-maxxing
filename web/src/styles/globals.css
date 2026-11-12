@@ -560,3 +560,8 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
  * link preview), no text selection, no native image drag under the finger. */
 .mx-tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .mx-tile img { -webkit-user-drag: none; }
+
+/* A card of its own in the toast stack (toast.card): folded behind the front toast, its content hides like the others'. */
+[data-sonner-toast][data-styled='false'][data-expanded='false'][data-front='false'] > * {
+  opacity: 0;
+}

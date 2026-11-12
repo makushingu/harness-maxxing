@@ -19,6 +19,9 @@ New:
   you type finds sessions by their title first, at once, before pages, settings and commands.
 - **Phone: a simpler sessions drawer.** All / Running / Unread sit on one line, full width; the view options and
   the New session button moved up beside the title.
+- **Team: a new message pops up as a message.** Instead of a notice with an Open button, a message of a chat that is
+  not on screen shows who wrote and what they wrote, with a box to answer on the spot; tapping it opens the chat.
+  Chats that write at the same time share one popup; it leaves after a few seconds, never while you are writing.
 - **Phone: Team opens on the chats.** The page is the list of chats itself (no more "Choose a chat" screen with a
   button that slid the list in); a chat has a back arrow to the list, and the phone's back gesture returns to it too.
 
