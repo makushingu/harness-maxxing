@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.142 - 2026-11-12
+
+Fixed:
+- **Agents: the cost of a run cut short is counted once.** A run stopped by its time limit is counted from its log,
+  and the next answer in the same conversation no longer counts it a second time; a run that ended abruptly (out of
+  memory, a crash) no longer makes the next answer count 0 $.
+
 ## 2.0.0-alpha.141 - 2026-11-12
 
 New:

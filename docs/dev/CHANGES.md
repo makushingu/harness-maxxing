@@ -5,6 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.142 - 2026-11-12
+
+- `agent_cost.saved_by_claude(done)`: `thread_cost.estimated` is set only when the lost turn ended with Claude
+  Code's own exit after the runner's SIGTERM (`mx_done.code` 143, `SAVED_CODES`): after a SIGKILL (no exit within
+  5 s, OOM) or a crash Claude saved nothing in its thread, and taking the estimate off the next turn counted it 0 $.
+- `agents.on_turn_end`: `charge_unbilled(sid, at)` gets no `at` for a turn that died unrecorded (`turn_died`: its
+  message has no `last_turn.at`, which still names the turn before).
+- `stable` merged into `beta` with `-s ours`: the slow-connection fix pushed to `stable` (`f9af80a28`) is the same
+  code as `d9efa0d09`, already in `beta`; `stable` is again an ancestor of `main` for `publish.py`.
+- fake_claude: `HALFTURN HALFCOST=x` saves `x` in the thread and exits 143, like the real CLI on SIGTERM.
+
 ## 2.0.0-alpha.141 - 2026-11-12
 
 - Cost of a lost agent turn, two fixes on top of `agent_cost`: (1) Claude Code still saves the cost of a turn
