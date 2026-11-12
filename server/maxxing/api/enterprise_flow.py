@@ -7,6 +7,7 @@ import contextlib
 import importlib
 import logging
 import os
+import threading
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,7 +20,10 @@ log = logging.getLogger("maxxing.api.enterprise_flow")
 router = APIRouter(prefix="/api/enterprises", tags=["enterprises"], dependencies=[Depends(require_auth)])
 
 TICK_S = 60.0
-TICKERS = ("enterprise_policy", "enterprise_reports", "enterprise_workers")   # called after the flow's own tick
+TICKERS = ("enterprise_policy", "enterprise_reports", "enterprise_workers", "enterprise_desk")   # after the flow's tick
+SLOW = ("enterprise_reports", "enterprise_desk")    # may wait on `claude -p` for minutes: own thread, own guard
+_slow_guard = threading.Lock()
+_slow_thread: threading.Thread | None = None
 _task: asyncio.Task | None = None
 
 
@@ -63,8 +67,30 @@ def answer_escalation(e: str, esc_id: str, body: AnswerIn):
         raise _bad(x) from None
 
 
+def _run_ticker(name: str, now: float) -> None:
+    try:
+        fn = getattr(importlib.import_module(f"{__package__.rsplit('.', 1)[0]}.{name}"), "tick", None)
+    except ImportError:
+        return
+    try:
+        if fn:
+            fn(now)
+    except Exception:  # noqa: BLE001
+        log.exception("%s.tick", name)
+
+
+def _run_slow(now: float) -> None:
+    try:
+        for name in SLOW:
+            _run_ticker(name, now)
+    finally:
+        _slow_guard.release()
+
+
 def tick_all(now: float | None = None) -> None:
-    """One pass of every enterprise ticker, each on its own: a failure of one never stops the others."""
+    """One pass of every enterprise ticker, each on its own: a failure of one never stops the others. The slow ones
+    (reports, desk insights) run in their own thread and a pass is skipped while the previous one still runs."""
+    global _slow_thread
     now = now if now is not None else time.time()
     try:
         enterprise_flow.tick(now)
@@ -73,15 +99,11 @@ def tick_all(now: float | None = None) -> None:
     if not enterprises.feature_on():
         return
     for name in TICKERS:
-        try:
-            fn = getattr(importlib.import_module(f"{__package__.rsplit('.', 1)[0]}.{name}"), "tick", None)
-        except ImportError:
-            continue
-        try:
-            if fn:
-                fn(now)
-        except Exception:  # noqa: BLE001
-            log.exception("%s.tick", name)
+        if name not in SLOW:
+            _run_ticker(name, now)
+    if _slow_guard.acquire(blocking=False):
+        _slow_thread = threading.Thread(target=_run_slow, args=(now,), name="enterprise-slow", daemon=True)
+        _slow_thread.start()
 
 
 async def _loop() -> None:
@@ -101,6 +123,7 @@ async def startup() -> None:
     global _task
     if os.environ.get("MAXXING_ENTERPRISE_TICK", "1") == "0":
         return
+    enterprise_flow.SERVER = True
     _task = asyncio.get_running_loop().create_task(_loop())
 
 

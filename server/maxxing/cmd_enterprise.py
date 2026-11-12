@@ -574,7 +574,7 @@ def _turn_cmd(a) -> int:
     slug, pos, turn = _actor(a)
     sess, outside = turn["session"], turn["outside"]
     if c == "assign":
-        t = _module("enterprise_flow", "assign")(slug, pos or "owner", a.position, _text(a), due=a.due, parent=a.parent,
+        t = _module("enterprise_flow", "assign")(slug, pos or None, a.position, _text(a), due=a.due, parent=a.parent,
                                                  task=a.task, session=sess, outside=outside)
         return _say(a, t, f"assigned {t.get('id', '')} to {a.position}".replace("  ", " "))
     if c in ("done", "block"):
@@ -586,7 +586,8 @@ def _turn_cmd(a) -> int:
                                                    session=sess, outside=outside)
         return _say(a, r, f"escalated {r.get('id', '')}".strip())
     if c == "answer":
-        r = _module("enterprise_flow", "answer")(slug, a.id, _text(a), by=pos or None)
+        r = _module("enterprise_flow", "answer")(slug, a.id, _text(a), by=pos or None,
+                                                           outside=outside)
         return _say(a, r, f"{a.id}: answered")
     if c == "request":
         r = _module("enterprise_policy", "request")(slug, _need_pos(pos, "`request`"), a.category, _text(a),
@@ -599,7 +600,7 @@ def _turn_cmd(a) -> int:
         return _worker(a, slug, pos, turn)
     if c == "decide":
         r = _module("enterprise_policy", "decide")(slug, a.id, a.decision, reason=" ".join(a.reason).strip(),
-                                                   by=pos or None)
+                                                   by=pos or None, outside=outside)
         return _say(a, r, f"{a.id}: {a.decision}")
     return _objective(a, slug, pos)
 

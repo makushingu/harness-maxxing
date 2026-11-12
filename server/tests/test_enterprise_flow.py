@@ -444,4 +444,108 @@ def test_tick_all_runs_the_other_tickers(ent, monkeypatch):
     bad.tick = lambda now=None: (_ for _ in ()).throw(RuntimeError("boom"))
     monkeypatch.setitem(sys.modules, "maxxing.enterprise_reports", bad)
     api.tick_all(time.time())
-    assert seen == ["enterprise_policy", "enterprise_workers"]
+    wait_for(lambda: not api._slow_guard.locked())
+    assert sorted(seen) == ["enterprise_desk", "enterprise_policy", "enterprise_workers"]
+
+
+def test_every_ticking_module_is_scheduled():
+    from maxxing.api import enterprise_flow as api
+    root = Path(enterprises.__file__).parent
+    ticking = {f.stem for f in root.glob("enterprise_*.py")
+               if "\ndef tick(" in f.read_text(encoding="utf-8") and f.stem != "enterprise_flow"}
+    assert ticking == set(api.TICKERS) and set(api.SLOW) <= ticking
+
+
+def test_a_slow_ticker_never_holds_back_the_flow(ent, monkeypatch):
+    import threading
+    from maxxing.api import enterprise_flow as api
+    gate, started = threading.Event(), threading.Event()
+    slow = types.ModuleType("maxxing.enterprise_reports")
+    slow.tick = lambda now=None: (started.set(), gate.wait(10))
+    monkeypatch.setitem(sys.modules, "maxxing.enterprise_reports", slow)
+    flow.deliver(S, "ceo", "note", "NOTOOL hello", sender="writer")
+    n = len(_calls())
+    t0 = time.time()
+    api.tick_all(time.time() + 1)
+    assert started.wait(5) and time.time() - t0 < 5
+    wait_for(lambda: len(_calls()) == n + 1)                           # the delivery started while reports run
+    api.tick_all(time.time() + 2)                                      # skipped: the previous pass still runs
+    gate.set()
+    wait_for(lambda: not api._slow_guard.locked())
+
+
+def test_a_position_named_owner_has_no_owner_right(ent):
+    with pytest.raises(EnterpriseError) as x:
+        flow.assign(S, "owner", "writer", "as the owner")              # the word is a plain (unknown) position id
+    assert x.value.code == "bad_position"
+    assert flow._who(None) == "" and flow._who("") == "" and flow._who("owner") == "owner"
+
+
+def test_an_answer_from_an_outside_run_is_outside_data(ent):
+    e = flow.escalate(S, "intern", "NOTOOL which tone?")
+    flow.answer(S, e["id"], "formal", by="writer", outside=True)
+    (a,) = [i for i in _inbox("intern") if i["kind"] == "answer"]
+    assert a["outside"] is True
+    e2 = flow.escalate(S, "intern", "NOTOOL again?")
+    flow.answer(S, e2["id"], "casual", by="writer")
+    assert [i["outside"] for i in _inbox("intern") if i["kind"] == "answer"] == [True, False]
+
+
+def test_timers_only_in_the_server(ent, monkeypatch):
+    monkeypatch.setenv("MAXXING_ENTERPRISE_TICK", "1")
+    monkeypatch.setattr(flow, "SERVER", False)
+    flow.deliver(S, "ceo", "note", "NOTOOL hello", sender="writer")
+    assert flow._timers == {}
+    monkeypatch.setattr(flow, "SERVER", True)
+    monkeypatch.setattr(flow.threading, "Timer", lambda *a, **k: types.SimpleNamespace(
+        daemon=False, start=lambda: flow._timers.setdefault("started", 1)))
+    flow.deliver(S, "ceo", "note", "NOTOOL again", sender="writer")
+    assert ("acme-group", "ceo") in flow._timers
+    flow._timers.clear()
+
+
+def test_send_back_goes_to_the_owner_of_the_task(ent, mx):
+    t = flow.assign(S, "ceo", "writer", "Draft")
+    with pytest.raises(EnterpriseError) as x:
+        flow.assign(S, "ceo", "editor", "redo", task=t["id"])           # a position that never had it
+    assert x.value.code == "invalid"
+    with pytest.raises(EnterpriseError) as x:
+        flow.assign(S, "writer", "intern", "redo", task=t["id"])        # not the requester
+    assert x.value.code == "not_yours"
+    back = flow.assign(S, "", "writer", "owner notes", task=t["id"])    # the owner acts on any task
+    assert back["enterprise"]["requester"] == "ceo" and back["enterprise"]["hops"] == 2
+    assert flow.assign(S, "ceo", "writer", "notes", task=t["id"])["enterprise"]["hops"] == 3
+
+
+def test_the_parent_defaults_to_the_task_delivered_in_the_session(ent, mx):
+    top = flow.assign(S, "", "ceo", "Big goal")
+    path = flow._inbox_dir(S) / "ceo.seen.jsonl"
+    flow._write(path, [{"id": "i_1", "kind": "assign", "task": top["id"], "from": "", "text": "x", "run": "sess-1"}])
+    kid = flow.assign(S, "ceo", "writer", "Part", session="sess-1")      # no --parent
+    e = kid["enterprise"]
+    assert e["parent"] == top["id"] and e["hops"] == 2 and e["chain"] == ["ceo"]
+    other = flow.assign(S, "ceo", "editor", "Other", session="sess-2")  # another run: nothing inherited
+    assert other["enterprise"]["parent"] == "" and other["enterprise"]["hops"] == 1
+
+
+def test_a_full_inbox_logs_what_it_drops(ent, monkeypatch):
+    monkeypatch.setattr(flow, "INBOX_MAX", 2)
+    for i in range(3):
+        flow.deliver(S, "ceo", "note", f"NOTOOL n{i}", sender="writer")
+    assert [i["text"] for i in _inbox("ceo")] == ["NOTOOL n1", "NOTOOL n2"]
+    assert any("dropped" in d["text"] for d in enterprises.decisions(S)[0])
+
+
+def test_climb_rechecks_after_computing_the_target(ent, notes):
+    e = flow.escalate(S, "intern", "NOTOOL slow answer")
+    real = flow._target
+
+    def target(slug, pos):
+        flow.answer(S, e["id"], "late", by="writer")                   # answered while the target is computed
+        return real(slug, pos)
+    flow._target = target
+    try:
+        flow._climb(S, e["id"], time.time(), "no answer in time")
+    finally:
+        flow._target = real
+    assert flow.escalations(S)[0]["status"] == "answered" and flow.escalations(S)[0]["to"] == "writer"

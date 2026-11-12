@@ -36,6 +36,7 @@ WORD = {"assign": "Assignment", "handin": "Hand-in", "escalation": "Escalation",
 _flush_lock = threading.Lock()                      # one delivery run at a time (timer thread, tick)
 _timers: dict[tuple[str, str], threading.Timer] = {}
 _tlock = threading.Lock()
+SERVER = False                                      # set by the server's startup: only it owns delivery timers
 
 
 def _now() -> float:
@@ -154,8 +155,8 @@ def _timeout_s(slug: str, pos: str) -> float:
 
 
 def _who(pos: str | None) -> str:
-    """The owner is "" (the CLI says "owner")."""
-    return "" if pos in (None, "owner") else pos
+    """The owner is None or "" only: the word "owner" is never an owner."""
+    return "" if pos in (None, "") else pos
 
 
 def _need(slug: str, pos: str) -> dict:
@@ -237,7 +238,11 @@ def _put(slug: str, pos: str, kind: str, text: str, sender: str, task: str, outs
         item["session"] = session
     with enterprises._lock:
         f = _inbox_file(slug, pos)
-        _write(f, (_read(f) + [item])[-INBOX_MAX:])
+        merged = _read(f) + [item]
+        _write(f, merged[-INBOX_MAX:])
+    if len(merged) > INBOX_MAX:
+        enterprises.log(slug, "note", f"Inbox of {pos} is full ({INBOX_MAX}): {len(merged) - INBOX_MAX} oldest deliveries dropped",
+                        by="server", position=pos)
     enterprises.invalidate(slug)
     _schedule(slug, pos)
     return item
@@ -267,7 +272,7 @@ def _debounce(path: str) -> float:
 
 def _schedule(slug: str, pos: str) -> None:
     """The quick path: a timer in the server for the end of the debounce (the tick catches up when it is lost)."""
-    if os.environ.get("MAXXING_ENTERPRISE_TICK", "1") == "0" or not enterprises.feature_on():
+    if not SERVER or os.environ.get("MAXXING_ENTERPRISE_TICK", "1") == "0" or not enterprises.feature_on():
         return
     p = enterprises.position(slug, pos)
     delay = _debounce(p["agent"]) if p and p.get("agent") else 0.0
@@ -369,14 +374,15 @@ def _flush(slug: str, pos: str, now: float) -> str:
         if not r.get("started"):
             return _wait(slug, pos, now, r.get("reason") or "busy")
         ids = {i["id"] for i in items}
+        run = (r.get("session") or {}).get("id", "") if isinstance(r.get("session"), dict) else ""
         with enterprises._lock:
             f1 = _inbox_file(slug, pos)
             _write(f1, [i for i in _read(f1) if i.get("id") not in ids])
             f2 = _inbox_dir(slug) / f"{pos}.seen.jsonl"
-            _write(f2, (_read(f2) + items)[-SEEN_KEEP:])
+            _write(f2, (_read(f2) + [{**i, "run": run} for i in items])[-SEEN_KEEP:])
         _unwait(slug, pos)
     enterprises.log(slug, "run", f"{len(items)} deliveries handed to {pos} in one run", by="server", position=pos,
-                    session=(r.get("session") or {}).get("id", "") if isinstance(r.get("session"), dict) else "")
+                    session=run)
     enterprises.invalidate(slug)
     return "started"
 
@@ -452,8 +458,9 @@ def escalations(slug: str, open_only: bool = False) -> list[dict]:
     return sorted(items, key=lambda i: i.get("at") or 0, reverse=True)
 
 
-def answer(slug: str, esc_id: str, text: str, *, by: str | None = None) -> dict:
-    """The holder of the escalation (`by` a position) or the owner (`by` None) answers: the asker hears it."""
+def answer(slug: str, esc_id: str, text: str, *, by: str | None = None, outside: bool = False) -> dict:
+    """The holder of the escalation (`by` a position) or the owner (`by` None) answers: the asker hears it.
+    `outside`: the answering run was started from outside; the answer is then outside data for the asker too."""
     _chart(slug)
     text = (text or "").strip()
     if not text:
@@ -475,7 +482,8 @@ def answer(slug: str, esc_id: str, text: str, *, by: str | None = None) -> dict:
                     position=snap["position"], task=snap.get("task") or "")
     if enterprises.position(slug, snap["position"]):
         deliver_text = f"Answer to your escalation {esc_id}: {text}"
-        _put(slug, snap["position"], "answer", deliver_text, by or "", snap.get("task") or "", bool(snap.get("outside")), "")
+        _put(slug, snap["position"], "answer", deliver_text, by or "", snap.get("task") or "",
+             bool(snap.get("outside")) or bool(outside), "")
     try:
         from . import feed
         feed.resolve(f"enterprise:esc:{slug}:{esc_id}", "Answered", read=True)
@@ -486,13 +494,16 @@ def answer(slug: str, esc_id: str, text: str, *, by: str | None = None) -> dict:
 
 
 def _climb(slug: str, esc_id: str, now: float, why: str) -> None:
+    pre = next((i for i in _esc_items(slug) if i.get("id") == esc_id and i.get("status") == "open"), None)
+    if pre is None or pre["to"] == "owner":
+        return
+    cur = pre["to"]
+    nxt, skipped = _target(slug, cur)                   # agent gates and state reads: never under the lock
     with enterprises._lock:
         items = _esc_items(slug)
         e = next((i for i in items if i.get("id") == esc_id and i.get("status") == "open"), None)
-        if e is None or e["to"] == "owner":
-            return
-        cur = e["to"]
-        nxt, skipped = _target(slug, cur)
+        if e is None or e["to"] != cur:
+            return                                      # answered or moved meanwhile
         e["trail"] = [*e.get("trail", []), cur]
         e["level"] = int(e.get("level", 0)) + 1
         e["to"] = nxt
@@ -549,6 +560,20 @@ def _load_task(slug: str, task_id: str) -> tuple[dict | None, dict | None]:
     return t, _ent(t, slug)
 
 
+def _default_parents(slug: str, pos: str, session: str) -> list[dict]:
+    """The enterprise objects (with `_id`) of the open tasks delivered to this session's run of `pos`."""
+    if not session:
+        return []
+    out: list[dict] = []
+    for it in seen(slug, pos):
+        if it.get("run") != session or it.get("kind") != "assign" or not it.get("task"):
+            continue
+        t, e = _load_task(slug, it["task"])
+        if t and e and t.get("status") != "done" and e.get("owner") == pos and all(x["_id"] != t["id"] for x in out):
+            out.append({**e, "_id": t["id"]})
+    return out
+
+
 def assign(slug: str, from_pos: str, to_pos: str, deliverable: str, *, due: str | None = None,
            parent: str | None = None, task: str | None = None, session: str = "", outside: bool = False,
            approved: bool = False) -> dict:
@@ -581,22 +606,33 @@ def assign(slug: str, from_pos: str, to_pos: str, deliverable: str, *, due: str 
     limit = int((enterprises.setting(slug, "limits", to_pos) or {}).get("hops_per_task") or 6)
     existing, e0 = _load_task(slug, task or "")
     pe = _ent(_load_task(slug, parent or "")[0], slug) if parent and not e0 else None
+    if not e0 and not parent and not task and from_pos:
+        defaults = _default_parents(slug, from_pos, session)
+    else:
+        defaults = []
     if e0:
-        if e0.get("requester", "") != from_pos:
-            raise EnterpriseError(403, "not_yours", "Only the requester of a task sends it back")
+        if from_pos and e0.get("requester", "") != from_pos:
+            raise EnterpriseError(403, "not_yours", "Only the requester of a task (or the owner) sends it back")
+        if to_pos != e0.get("owner"):
+            raise EnterpriseError(400, "invalid", f"A task is sent back to its owner ({e0.get('owner') or 'none'})")
         hops, chain = int(e0.get("hops") or 0) + 1, list(e0.get("chain") or [])
         outside = outside or bool(e0.get("outside"))
     else:
-        hops = int((pe or {}).get("hops") or 0) + 1
-        chain = [*list((pe or {}).get("chain") or []), *([from_pos] if from_pos else [])]
-        outside = outside or bool((pe or {}).get("outside"))
+        pes = [pe] if pe else defaults
+        hops = max([int(x.get("hops") or 0) for x in pes] or [0]) + 1
+        chain = list(dict.fromkeys(c for x in pes for c in (x.get("chain") or [])))
+        if from_pos and from_pos not in chain:
+            chain.append(from_pos)
+        outside = outside or any(bool(x.get("outside")) for x in pes)
+        if defaults:
+            parent = defaults[0]["_id"]
         if to_pos in chain:
             raise EnterpriseError(409, "in_chain", f"{to_pos} is already in the chain of this work")
     if hops > limit:
         _new_esc(slug, from_pos or to_pos, f"Too many hands on one task (limit {limit}): {deliverable}",
                  task or parent or "", outside, session, _now(), to_owner=True)
         raise EnterpriseError(409, "too_many_hops", f"A task changes hands at most {limit} times: the owner was asked")
-    sub = {"id": slug, "owner": to_pos, "requester": from_pos, "parent": (parent or "") if not e0 else e0.get("parent", ""),
+    sub = {"id": slug, "owner": to_pos, "requester": e0.get("requester", "") if e0 else from_pos, "parent": (parent or "") if not e0 else e0.get("parent", ""),
            "deliverable": (e0 or {}).get("deliverable") or deliverable[:2000], "stage": "", "hops": hops,
            "outside": bool(outside), "chain": chain}
     t = _tasks()

@@ -189,12 +189,13 @@ def test_turn_commands_call_flow_and_policy_as_the_callers_position(chart, monke
     assert c("escalate", "need", "a", "decision", "--task", "t_1")[0] == 0
     assert calls[-1] == ("escalate", ("acme-group", "lead", "need a decision"),
                          {"task": "t_1", "session": "sid-9", "outside": True})
-    assert c("answer", "e_1", "go", "A")[0] == 0 and calls[-1] == ("answer", ("acme-group", "e_1", "go A"), {"by": "lead"})
+    assert c("answer", "e_1", "go", "A")[0] == 0 and calls[-1] == ("answer", ("acme-group", "e_1", "go A"),
+                                                  {"by": "lead", "outside": True})
     assert c("request", "spending", "Boost", "post", "--amount", "20")[0] == 0
     assert calls[-1] == ("request", ("acme-group", "lead", "spending", "Boost post"),
                          {"amount": 20.0, "session": "sid-9", "outside": True})
     assert c("decide", "r_1", "allow", "within", "plan")[0] == 0
-    assert calls[-1] == ("decide", ("acme-group", "r_1", "allow"), {"reason": "within plan", "by": "lead"})
+    assert calls[-1] == ("decide", ("acme-group", "r_1", "allow"), {"reason": "within plan", "by": "lead", "outside": True})
     code, out, _ = c("assign", "writer", "x", "--json")
     assert code == 0 and json.loads(out) == {"id": "t_1"}
 
@@ -208,8 +209,8 @@ def test_as_is_honoured_only_for_the_owner(chart, monkeypatch):
     assert calls[-1][0][:2] == ("acme-group", "writer")
     assert chart("done", "t_1", "ok")[0] == 2                                # the owner must say which position
     assert chart("done", "t_1", "ok", "--as", "ghost")[0] == 2
-    assert chart("assign", "writer", "x")[0] == 0 and calls[-1][0][1] == "owner"
-    assert chart("answer", "e_1", "yes")[0] == 0 and calls[-1][1] == {"by": None}
+    assert chart("assign", "writer", "x")[0] == 0 and calls[-1][0][1] is None
+    assert chart("answer", "e_1", "yes")[0] == 0 and calls[-1][1] == {"by": None, "outside": False}
     n = len(calls)
     monkeypatch.setenv("MAXXING_AGENT", W)
     code, _, err = chart("done", "t_1", "ok", "--as", "lead")
