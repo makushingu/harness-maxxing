@@ -5,8 +5,33 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.143 - 2026-11-12
 
+- Web, list pages (`components/shell/PageList.tsx`): `PageList`/`ListHead` `search` ({value, onChange, placeholder}:
+  the 🔍 of the head filters the list; touch without `search` = the palette, `searchNow`), `actions` (buttons of the
+  list in its head), `ListChips` (one-line filters), `ListEntry` (Overview / All rows). `Page` `sensitiveTitle`, its
+  description is a `div`. Applied to Agents (`AgentsLayout/AgentsList/AgentsPage`, i18n "Office" -> "Overview", route
+  `/agents/office` kept), Team (`TeamPage/Chat/Friends/Side`), Infra, Mail (`CountBadge exact` = no 99+ cap),
+  Files (`HeaderSearch` and `useFileSearch` removed: Ctrl+K finds files), Tasks (`ProjectNav` `query`/`matched`,
+  the list search = `TaskFilters.q`), Feed, Sessions (`SessionTree` `query`, also in `SessionsPanel`).
+- Web, Git (`features/git/GitPage.tsx`): `GitNav` = the sources only (`?source=github`, `&account=<login>` with
+  several accounts); `SourceCards` = the former cards; `RepoView` in its own `Page` (title, Server | GitHub
+  `Segmented`), side column (commit, pull requests) from 1700 px, below it the commit opens in a sheet.
+- Web, Infra: place colours unused (`PlaceTag`/`PlaceIcon` neutral, `MixBar` removed), one problems pill per list
+  entry, `HowItWorks` in a `Dialog` from the header's ? (`extra` = the tab's note; `useHowItWorks` and its
+  localStorage key removed), search = the list's, project `Select` + hidden toggle + refresh icon in the header.
+- Web, touch: `TouchNav.tsx` one left drawer, level 1 = `<Sidebar drawer />`, level 2 = the page's list (`LISTS`,
+  `levelHere`, `.mx-level-in/back` in globals.css); `TouchAppButton`/`TouchSearchField` removed.
+- Web, sidebar: last line Settings + `SidebarLook` (theme, presentation) + Help (`iconBtn` in `nav.ts`); health line
+  -> `/feed` or `IssuesDialog` (one card per open issue, `ISSUE_TO`); `StatusPanel`, `HealthMeters`,
+  `HealthIssues` removed.
+- i18n: new group `composer` (`slash`, `mention`, `effort`; keys were `sessions.slash.*`, `sessions.mention.*`,
+  `sessions.effort.*`), loaded on the first key asked: keeps the first-load dictionary under its budget.
+- Sessions, safety of `sessions send` / `@`: `service.find_session` and `mentions.resolve` refuse an agent's sessions
+  (`403 agent_session`; `agents send` only); `mentions._plain` (Team names: one line, no `[]` or backticks, 64
+  chars); `service._merged_relay`: one sender = its relay kept, mixed = a preface per relayed text and `relay =
+  {hops: max}`; `runner._inject_step` raises `turn_hops` to the injected item's hops. Tests `test_mentions.py`.
+- `tests/test_web_ext_hub.py`: the touch drawer's entry comes from `<Sidebar drawer />`.
 - Sessions: meta `effort` (`spawn.EFFORTS` = low|medium|high|xhigh|max, `""` = Claude Code's default) -> runner adds
   `--effort <level>`; `POST /api/sessions` and `PATCH /api/sessions/{id}` take `effort` (`400 bad_effort`), Session
   carries `effort`; a hand-off copies it. Agents and crons unchanged (no effort). `tests/fake_claude.py` knows

@@ -3,9 +3,25 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.143 - 2026-11-12
 
 New:
+- **Every page with a list works the same way.** Agents, Team, Infra, E-mail, Files, Tasks, Notifications, Sessions
+  and Git: the page's title is what you picked in its list (the page's name is at the top of the list), the 🔍
+  facing the list's title filters the list, its filters sit on one line, one purple button with its label. Agents:
+  the **Overview** (was the Office), **New group** in the ▾ of **New agent**. Team: one header. Files: the path under
+  the title. Tasks: projects without an open task folded, and a search that finds tasks. E-mail: the real number of
+  unread mails (no more 99+). Notifications: readable source names.
+- **Git, simpler.** The list holds the sources: this server, then one line per GitHub account; each shows its
+  repositories as cards. A repository opens its graph over the whole width, with a **Server | GitHub** switch when it
+  has both.
+- **Infra, calmer.** Colours tell a state only (down, to watch, fine); the places are grey. "How it works" and the
+  tabs' notes open from the **?** of the header instead of coming back by themselves; the search is the list's, the
+  project filter sits in the header.
+- **Phone: one drawer.** ☰ at the top left opens the sidebar of the computer; a page with a list slides to its
+  list, **‹** goes back to the menu. Search: the field at the top of the menu, and the 🔍 facing each list's title.
+- **Sidebar's last line.** Settings, then light / dark, presentation mode and Help as icons. The health line opens
+  the Notifications, or a window with one card per open problem (Open, Seen).
 - **Commands with `/` in the composer**, as in Claude Code: type `/` and a menu lists the session's commands
   (`/model`, `/effort`, `/plan`, `/compact`, `/handoff`, `/new`, `/rename`) and the skills of the topic, with their
   description. Arrows to choose, Tab to complete, Enter to run.
@@ -39,6 +55,9 @@ New:
   button that slid the list in); a chat has a back arrow to the list, and the phone's back gesture returns to it too.
 
 Fixed:
+- **Sessions: `maxxing sessions send` never writes into an agent's conversation** (an agent is reached with
+  `maxxing agents send`, with its own guards), a Team name goes into Claude's prompt as plain text, and your own
+  words merged with a message from another session are no longer introduced as that session's.
 - **Phone: closing a tab no longer sweeps the tabs sideways.** In tabs view, closing or changing a tab restarted
   the row of tabs from its start and slid it across the screen.
 - **Narrow phones (320-360 px)**: option groups too wide for the screen (theme, priority, Telegram) go on a second
