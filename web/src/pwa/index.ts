@@ -108,6 +108,34 @@ function announceUpdate(w: ServiceWorker) {
   stopIdle = onIdle(soon)
 }
 
+/** The hashed files this page's index.html loads (entry script, styles), read before the app adds lazy chunks. */
+let pageFiles: string[] = []
+function readPageFiles() {
+  const els = document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>('script[type="module"][src], link[rel="stylesheet"][href]')
+  pageFiles = [...els].map((el) => new URL('src' in el ? el.src : el.href, location.href).pathname).filter((p) => p.startsWith('/assets/'))
+}
+
+/** Is this page already the build of the installed worker `w`? Navigations are network-first, so a page opened
+ *  after an update is the new build before its worker has finished installing (seconds on a slow connection):
+ *  every file of its index.html is then in that worker's precache. In doubt (no answer, a file missing): no. */
+async function sameBuild(w: ServiceWorker): Promise<boolean> {
+  try {
+    if (!pageFiles.length) return false
+    const version = await new Promise<string>((resolve, reject) => {
+      const ch = new MessageChannel()
+      ch.port1.onmessage = (e) => resolve(String(e.data))
+      w.postMessage({ type: 'VERSION' }, [ch.port2])
+      setTimeout(() => reject(new Error('timeout')), 3000)
+    })
+    const name = `mx-assets-${version}`
+    if (!(await caches.has(name))) return false
+    const cache = await caches.open(name)
+    return (await Promise.all(pageFiles.map((f) => cache.match(f, { ignoreVary: true })))).every(Boolean)
+  } catch {
+    return false
+  }
+}
+
 let registration: ServiceWorkerRegistration | null = null
 /** Look for a new build now (the server came back after a restart, maybe from an update). */
 export function checkForUpdate() {
@@ -125,9 +153,11 @@ export function initPWA() {
   window.addEventListener('appinstalled', () => usePWA.setState({ installEvent: null, installed: true, helpOpen: false }))
 
   if (!import.meta.env.PROD || !('serviceWorker' in navigator) || !window.isSecureContext) return
+  readPageFiles()
   let reloading = false
   // The page that is loading came from the network (navigations are network-first), so it is already the
-  // newest build: activating a worker that was waiting at load time must not reload it a second time.
+  // newest build: activating a worker that was waiting at load time, or that finishes installing after it (a slow
+  // connection), must not reload it a second time.
   let silentSwap = false
   const hadController = !!navigator.serviceWorker.controller
   navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -147,7 +177,12 @@ export function initPWA() {
       const track = (w: ServiceWorker | null) => {
         if (!w) return
         w.addEventListener('statechange', () => {
-          if (w.state === 'installed' && navigator.serviceWorker.controller) announceUpdate(w)
+          if (w.state !== 'installed' || !navigator.serviceWorker.controller) return
+          void sameBuild(w).then((same) => {
+            if (!same) return announceUpdate(w)
+            silentSwap = true // this page is that build already: switch workers, keep the page
+            w.postMessage({ type: 'SKIP_WAITING' })
+          })
         })
       }
       // Already waiting when the page loads (the user reloaded after an update): nothing is in progress

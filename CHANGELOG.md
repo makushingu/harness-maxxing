@@ -8,6 +8,10 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 Fixed:
 - **Memory backup**: a password noted by the name of its key ("password: SHOP_DB_PASS") no longer stops the
   nightly backup as a leaked secret.
+- **Slow connection: the interface no longer loads twice after an update.** Opening or reloading Harness Maxxing
+  after an update loaded the new version, then reloaded the page by itself a few seconds later (up to 20 s on a
+  phone network), once its offline copy was ready. The page you just loaded is kept; a tab left open over an update
+  still switches to the new version by itself.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
