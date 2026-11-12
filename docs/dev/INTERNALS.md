@@ -852,6 +852,7 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 - `MAXXING_LICENSE_API` license server (default `https://api.harness-maxxing.com`) · `MAXXING_GIT_URL` repository an install still on archives moves to (tests) · `MAXXING_LICENSE_PING=0` no hourly loop: no registration heartbeat, no call to the cloud (tests)
 - `MAXXING_AUTH_CHECK=0` no background Claude sign-in verification (tests) · `MAXXING_AUTH_CHECK_DELAY` seconds
   before the first one (default 5)
+- `MAXXING_SEARCH_LOOP=0` no background search index refresh (tests: a query brings the sessions up to date itself)
 - `MAXXING_CLAUDE_UPDATE=0` no background Claude Code update (tests), `=1` also on a non-default state dir · `MAXXING_CLAUDE_UPDATE_DELAY` seconds before
   the first pass (default 600)
 - `MAXXING_GROQ_API` / `MAXXING_OPENAI_API` base URLs of the speech-to-text APIs (default the providers' `/v1`)

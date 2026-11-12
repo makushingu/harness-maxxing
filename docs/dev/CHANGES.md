@@ -27,6 +27,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `crons.restore_job` goes through `_commit(old, jobs)` like `create_job`, `update_job` and `delete_job` (crontab,
   then `jobs.json`, the crontab put back when the save fails). It called `sync_crontab` then `_save_raw`, so a failed
   save left a crontab line for a job that `jobs.json` does not hold. Test added in `tests/test_crons.py`.
+- `tests/test_search.py::test_unchanged_sessions_are_not_read_again` counts only the `store.read` calls of its own
+  thread: the sessions watcher of the test server (`service._scan`) reads the same metas in the background, and the
+  test failed now and then when its pass landed between `reads.clear()` and the assertion (with the next fix: 3 runs
+  of `test_search.py` out of 12 failed on beta, 0 out of 20 with both).
+- `api/search.startup`: `MAXXING_SEARCH_LOOP=0` leaves the background refresh loop off, like `MAXXING_CRON_TICK=0`;
+  `tests/conftest.py` sets it. The loop started with every test server and could clean the index up before
+  `test_search.py::test_data_files_leave_the_index_and_the_base_shrinks` did (its "compacted" log was then
+  missing).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
