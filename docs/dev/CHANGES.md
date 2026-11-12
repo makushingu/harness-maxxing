@@ -78,7 +78,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   link, no session). Delegated tasks are entries of `tasks.json` with an `enterprise` sub-object (`{id, owner,
   requester, parent, deliverable, stage, hops, outside}`). Agents carry `enterprise`, `position`, `reports_to` in
   the data given to Office extension views. Skill `maxxing-enterprises`, user docs page
-  `docs/user/33-enterprises.md`.
+  `docs/user/33-enterprises.md`. Front desk: `desk_page.py` serves `GET /desk/<token>` (static, strict CSP,
+  `frame-ancestors 'none'`); `GET .../desk` returns `unfit` and `public.path`; going live answers `400
+  desk_not_restricted` after `unprotected_occupants`; hourly caps (300 messages per enterprise, 1500 reads per
+  visitor). Export drops the desk link, `trust_chain` and `worker_template`; import lists `skipped`. Reserved position
+  ids, a department overrides `DEPT_SETTINGS` only, PATCH `grants` is validated, `blocked` position state. `request`
+  carries `--position/--job/--agent` (`edit_job`, `reseat`). The slow tickers run in a thread, `SERVER` gates the
+  delivery timers, `seat_of_worker` / `cost_today` count the workers' spending.
 - #75 (20 reported bugs, 18 fixed, each with its test): `telegram/format.py` measures the 4096 limit in UTF-16 units
   (`_u16`, in `render`, `_split_big`, `code`, `plain`); `mail/send._text` (HTML fallback shared by draft, reply,
   forward); `mail/imap._size` counts a `=\r\n` soft break as 0; `infra/actions.pg_install` raises `start_failed` when

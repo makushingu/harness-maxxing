@@ -107,7 +107,8 @@ that, it goes to you.
 ## Requests and approvals
 
 An occupant can **ask for something** that the chart must decide: spending, a purchase, a change to a job
-description, a worker, a budget raise, a profile edit... Each category is decided by the **requester's lead** or by
+description, a worker, a budget raise, a profile edit... A request to change a job description or to seat an agent
+names its target (`--position`, with `--job` or `--agent`), which must be in the requester's own team. Each category is decided by the **requester's lead** or by
 **you**, depending on the **autonomy** profile of the enterprise (setting):
 
 | Request | Careful | Balanced | Autonomous |
@@ -166,7 +167,8 @@ refused.
 
 **Departments** (settings): a branch of the chart with its own envelope and notes, and overrides of some settings
 (shown as *Same as the enterprise* when not overridden): communication, who may be written to, workers, autonomy,
-escalation timeout and spending threshold. Trust along the chain is enterprise-wide.
+escalation timeout and spending threshold. Nothing else can be overridden (the server refuses it), and trust along
+the chain is enterprise-wide.
 
 ## Who may talk to whom
 
@@ -229,11 +231,15 @@ The **front desk** is a position that answers people **outside** the company on 
   events, or no daily budget or hourly run limit on its occupant, the desk answers *unavailable*. It routes, it does not solve: a refund request becomes a task for customer care, **marked as coming from
   outside**, so everything it triggers asks you first.
 - **Going live is your decision**, and **needs every occupant of the chart to be protected** (sandboxed, so they cannot
-  read what they should not): the chart lists those who are not. The public link is an entry point without a session,
-  so it ships **off**, with its own **rate limit** per visitor (20 messages an hour by default), a limit for all
-  visitors together, a size limit per message (1,000 characters) and the agent's own limits. The **link to share** is
+  read what they should not) and **the desk's agent to be restricted** (no key, no domain, no writable folder, no trust
+  in outside events, a daily budget and an hourly run limit). The Front desk settings list each position that is not
+  ready, with what to fix and a link to open the agent; saving is refused until it is. The public link is an entry point without a session,
+  so it ships **off**, with its own **rate limit** per visitor (20 messages an hour by default), a limit of 300
+  messages an hour for all visitors together (and of 30 routed requests an hour), a limit on how often one visitor can
+  read the page, a size limit per message (1,000 characters) and the agent's own limits. The **link to share** is
   `<your address>/desk/<token>`: a plain chat page (no account, no cookie, no outside script) that says it is an AI
-  assistant. Regenerate the link to cancel the old one.
+  assistant. It cannot be embedded in an iframe on another site: share the link itself. Regenerate the link to cancel
+  the old one.
 - **Retention**: conversations are kept 30 days by default (1 to 365) and you can delete any of them. They are never
   exported, and deleting one (or its retention running out) removes the visitor's words everywhere, sessions included.
   Other positions receive summaries and themes only, never the visitors' words.
@@ -257,7 +263,7 @@ key or domain list, no front desk conversation and no live public link: the desk
 **trust along the chain** comes back off and approved worker templates are left out (listed as skipped).
 **Import** (the same tab, or the **Enterprises** page) creates a **new** enterprise from a zip (a free name is chosen if
 needed), with **vacant** positions and no linked project: link your projects, then hire or seat the agents. Files
-that could not be kept are listed. Agent
+that could not be kept are listed (a worker template to approve again, a file that looks like a secret). Agent
 definitions found in the zip are kept in `files/imported-agents/` to hire from.
 
 ## Unlink or delete

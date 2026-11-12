@@ -360,6 +360,10 @@ Enterprises: an org chart of agents above projects (API.md#enterprises). Needs `
 ## maxxing.enterprise_flow  (owner: organisation)
 Inboxes, deliveries, delegated tasks and escalations of the enterprises (API.md#enterprises); `api/enterprise_flow.py`
 holds the routes and the one background loop (`MAXXING_ENTERPRISE_TICK=0` switches it off, `tick_all()` is what it runs).
+  `tick_all` runs the quick tickers inline and the `SLOW` ones (reports, desk insights: they may wait minutes on
+  `claude -p`) in a daemon thread `enterprise-slow`, one pass at a time (a pass is skipped while the last one runs).
+  `enterprise_flow.SERVER` is set by the loop's startup only: the delivery debounce timers (`_schedule`) exist in the
+  server process alone, never in the CLI or in tests (the tick catches up).
 - `deliver(slug, pos, kind, text, *, sender, task, outside, session)` appends to `inbox/<pos>.jsonl`; one run of the
   occupant (`agents.fire`, trigger `enterprise:<slug>:<sender|owner>`) takes everything waiting once the agent's
   `debounce_s` has passed since the oldest item, started by a timer (server only) or by `tick`. A run that cannot start
@@ -434,8 +438,17 @@ Who decides, who may spend, who may write to whom. Nothing here grants a right: 
   live; `tick(now)` retires a worker (agents.delete, its result handed to the position's inbox) when its run ended and its
   linked task is done, or after 24 h; `stop(slug, id)` is the owner's. `workers: off` adds `Agent` and `Task` to the
   occupant's `--disallowedTools` (`agents._enterprise_no_workers`); `discreet` / `visible` add a sentence to the note.
+- Worker lookups: `seat_of_worker(path) -> (slug, pos) | None` (a live worker, or one ended today, whose spending
+  still counts toward its position and the enterprise ceilings) and `cost_today(slug, pos=None)` (USD spent today by
+  the workers: live ones read from the agent, ended ones as recorded).
 - **Desk** (`enterprise_desk`): `check_live` (called by `enterprises.update` when `desk.enabled` turns on) -> `400
-  unprotected_occupants`. Public link: `public_info/public_post(token, client, message, conv)` (api/enterprise_desk.py,
+  unprotected_occupants`, then `400 desk_not_restricted` from `desk_unfit(d)` (`{position: [issues]}` from
+  `desk_issues(path)`: keys, domains, writable folders, trust in outside events, no daily budget, no hourly run limit;
+  `status()` returns it as `unfit`, and `public_post` answers 503 while it is not empty). Limits: `GLOBAL_PER_HOUR` (300
+  visitor messages an hour per enterprise), `GET_PER_HOUR` (1500 reads a visitor and hour, page and poll alike). The
+  visitor's page `GET /desk/<token>` is `desk_page.py`: one static document (inline style and script allowed by CSP hash
+  only, `frame-ancestors 'none'`, `no-referrer`, `noindex`, no cookie, texts set with `textContent`) that calls
+  `/api/public/desk/<token>` of its own origin; the route answers 404 unless the link is live. Public link: `public_info/public_post(token, client, message, conv)` (api/enterprise_desk.py,
   `/api/public/desk/<token>`, listed public in bodylimit): token compared in constant time, `rate_per_hour` per client key
   (in memory), `max_chars`, 40 visitor messages a conversation, one unanswered message at a time, the desk agent's own gate
   (budget / rate) answers a generic 503. A conversation is `desk/<conv>.jsonl` lines `visitor | run | assistant | error`;

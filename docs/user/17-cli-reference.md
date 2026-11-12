@@ -234,11 +234,13 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing enterprise assign POSITION TEXT [--due D] [--parent T] [--task T]` | from a position: a task for a direct report (`--task`: send one back) |
 | `maxxing enterprise done TASK TEXT` / `block TASK TEXT` | from a position: hand in a task / report a blocker |
 | `maxxing enterprise escalate TEXT [--task T]` / `answer ID TEXT` | from a position: ask one level up / answer an escalation of a report |
-| `maxxing enterprise request CATEGORY TEXT [--amount N]` / `decide ID allow\|deny [REASON]` | from a position: ask for something / decide a request of the team |
+| `maxxing enterprise request CATEGORY TEXT [--amount N] [--position P --job TEXT\|--agent A]` / `decide ID allow\|deny [REASON]` | from a position: ask for something / decide a request of the team |
 | `maxxing enterprise objective set ID VALUE` | from a position: the value of an objective it owns |
 | `maxxing enterprise route DEPARTMENT TEXT` | from the front desk position: pass a request on to a department (a task marked as coming from outside) |
 | `maxxing enterprise worker start TEXT [--for TASK]` / `list` / `stop ID` | from a position: start a temporary worker (needs workers set to visible) / list them / stop one (`stop`: the owner) |
 | `maxxing enterprise profile [--section S] [--json]` | the company profile (S: products, hours, terms, contact, faq) |
+
+`request` takes `--position` with `--job` (change a job description) or `--agent` (seat an agent on a vacant position) for a position of the caller's own team. Position ids `owner`, `server`, `policy`, `visitor`, `free`, `esc` and `none` are reserved. A department overrides only communication, allow, workers, autonomy, escalation timeout and spending threshold. The front desk's agent needs no key, domain, writable folder or trust in outside events, and a daily budget and hourly run limit, before the desk goes live. Export leaves out grants, agent paths, key and domain lists, worker templates, trust along the chain and the public desk link.
 
 `maxxing enterprise` commands from `assign` down to `worker` act as the position of the calling agent; the owner adds `--as POSITION`
 (and `--enterprise SLUG` when there are several). The structure commands (create, link, position, settings, grant, ...) are

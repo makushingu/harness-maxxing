@@ -557,6 +557,7 @@ export type EnterpriseDesk = {
   position: string | null
   public: { enabled: boolean; token: string; rate_per_hour: number; max_chars: number; path: string }
   unprotected: string[]
+  unfit: Record<string, string[]>
   conversations: DeskConversationSummary[]
 }
 export type DeskSettingsPatch = { enabled?: boolean; label?: string; retention_days?: number; public?: { enabled?: boolean; rate_per_hour?: number; max_chars?: number } }

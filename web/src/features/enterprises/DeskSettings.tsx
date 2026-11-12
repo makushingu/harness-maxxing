@@ -4,9 +4,9 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import { KeyRound, RefreshCw } from 'lucide-react'
-import { useT } from '@/i18n'
-import { errorMessage } from '@/lib/api'
-import { agentRoute, useDeskLink, useSaveDeskSettings } from '@/lib/queries'
+import { useT, type TKey } from '@/i18n'
+import { errorMessage, isApiError } from '@/lib/api'
+import { agentRoute, useDeskLink, useEnterpriseDesk, useSaveDeskSettings } from '@/lib/queries'
 import type { DeskSettingsPatch, Enterprise } from '@/lib/types'
 import { Button, confirm, CopyButton, FormField, Input, Sensitive, Switch, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
@@ -38,6 +38,7 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
   const t = useT()
   const save = useSaveDeskSettings()
   const link = useDeskLink()
+  const desk = useEnterpriseDesk(e.id).data
   const initial = React.useMemo(() => draftOf(e), [e])
   const [d, setD] = React.useState<Draft>(initial)
   const dirty = JSON.stringify(d) !== JSON.stringify(initial)
@@ -48,7 +49,20 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
   }, [initial])
   const set = (v: Partial<Draft>) => setD((x) => ({ ...x, ...v }))
   const token = e.settings.desk?.public?.token || ''
-  const url = token ? `${window.location.origin}/desk/${token}` : ''
+  const path = desk?.public.path || (token ? `/desk/${token}` : '')
+  const url = path ? `${window.location.origin}${path}` : ''
+  // the desk occupants that cannot answer the public yet, with why (server reasons mapped to texts)
+  const unfit = Object.entries(desk?.unfit || {})
+  const titleOf = (id: string) => e.positions.find((p) => p.id === id)?.title || id
+  const reasonKeys: Record<string, TKey> = {
+    'holds keys': 'ent.deskSettings.why.keys',
+    'has domains': 'ent.deskSettings.why.domains',
+    'has writable folders': 'ent.deskSettings.why.writable',
+    'trusts outside events': 'ent.deskSettings.why.trust',
+    'has no daily budget': 'ent.deskSettings.why.budget',
+    'has no hourly run limit': 'ent.deskSettings.why.runs',
+  }
+  const reason = (r: string) => (reasonKeys[r] ? t(reasonKeys[r]) : r)
   // the occupants that are not Protected (sandboxed): the desk cannot be live while one exists
   const unprotected = e.positions.filter((p) => p.occupant && !p.occupant.sandbox)
 
@@ -101,9 +115,34 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
             </ul>
           </div>
         )}
+        {(d.enabled || isApiError(save.error, 'desk_not_restricted')) && unfit.length > 0 && (
+          <div role="status" className="grid gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-[13px]" data-testid="desk-unfit">
+            <p className="font-medium">{t('ent.deskSettings.unfit')}</p>
+            <p className="text-muted-foreground">{t('ent.deskSettings.unfitHint')}</p>
+            <ul className="grid gap-2">
+              {unfit.map(([id, reasons]) => (
+                <li key={id} className="grid gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">
+                      <Sensitive length={10}>{titleOf(id)}</Sensitive>
+                    </span>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={agentRoute(agentOf(e.positions.find((p) => p.id === id)?.agent || ''))}>{t('ent.deskSettings.openAgent')}</Link>
+                    </Button>
+                  </div>
+                  <ul className="list-disc pl-5 text-muted-foreground">
+                    {reasons.map((r) => (
+                      <li key={r}>{reason(r)}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {save.error && (
           <p role="alert" className="text-[13px] text-destructive" data-testid="desk-error">
-            {errorMessage(save.error)}
+            {isApiError(save.error, 'desk_not_restricted') ? t('ent.deskSettings.notRestricted') : errorMessage(save.error)}
           </p>
         )}
         <FormField label={t('ent.deskSettings.label')} hint={t('ent.deskSettings.labelHint')}>

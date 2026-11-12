@@ -187,7 +187,7 @@ export function useDeskConversation(id: string | null, conv: string | null) {
 export function useDeleteDeskConversation() {
   return useMut(({ id, conv }: { id: string; conv: string }) => api.del<Ok>(base(id, `/desk/${seg(conv)}`)), { invalidate: [['enterprises', 'desk']] })
 }
-/** Only the desk's settings go (the server merges partial settings). `400 unprotected_occupants` when going live: the form shows it. */
+/** Only the desk's settings go (the server merges partial settings). `400 unprotected_occupants` or `400 desk_not_restricted` (+ positions) when going live: the form shows them. */
 export function useSaveDeskSettings() {
   const put = usePutEnterprise()
   return useMut(({ id, desk }: { id: string; desk: DeskSettingsPatch }) => api.patch<Enterprise>(base(id), { settings: { desk } }), { onSuccess: put, invalidate: [['enterprises', 'desk'], entKeys.list], errorToast: false })

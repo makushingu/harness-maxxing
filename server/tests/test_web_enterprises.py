@@ -121,7 +121,7 @@ def test_the_front_desk_and_workers_are_wired():
     settings = (WEB / "features" / "enterprises" / "EnterpriseSettings.tsx").read_text(encoding="utf-8")
     assert "<DeskSettings" in settings
     desk = (WEB / "features" / "enterprises" / "DeskSettings.tsx").read_text(encoding="utf-8")
-    assert "/api/public/desk/" in desk and "ent.deskSettings.warning" in desk and "CopyButton" in desk
+    assert "public.path" in desk and "/api/public/desk/" not in desk and "ent.deskSettings.warning" in desk and "CopyButton" in desk
     sheet = (WEB / "features" / "enterprises" / "PositionSheet.tsx").read_text(encoding="utf-8")
     assert all(x in sheet for x in ("<DeskSwitch", "<WorkerTemplateEditor", "<PositionWorkers"))
     dialogs = (WEB / "features" / "enterprises" / "dialogs.tsx").read_text(encoding="utf-8")
