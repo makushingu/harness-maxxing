@@ -101,17 +101,30 @@ export function NewButtons({ onNew }: { onNew: () => void }) {
   const t = useT()
   const [params] = useSearchParams()
   const project = (params.get('topic') || '').split('/')[0] || undefined
+  // one primary button (New agent), the group in its ▾ menu: one creation button per page header
   return (
-    <>
-      <Button asChild size="sm" variant="outline" data-testid="group-new" data-tour="group-new">
-        <Link to={newGroupRoute(project)}>
-          <UsersRound /> <span className="max-[429px]:sr-only">{t('groups.new')}</span>
-        </Link>
-      </Button>
-      <Button size="sm" onClick={onNew} data-testid="agent-new">
+    <div className="flex items-center">
+      <Button size="sm" onClick={onNew} className="rounded-r-none" data-testid="agent-new">
         <Plus /> <span className="max-[429px]:sr-only">{t('agents.new')}</span>
       </Button>
-    </>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" className="rounded-l-none border-l border-primary-foreground/20 px-1.5" aria-label={t('groups.new')} data-testid="group-new" data-tour="group-new">
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onNew}>
+            <Plus /> {t('agents.new')}
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link to={newGroupRoute(project)} data-testid="group-new-item">
+              <UsersRound /> {t('groups.new')}
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
 
@@ -152,7 +165,7 @@ export function AgentsOverview({ onNew, onStart }: { onNew: () => void; onStart:
   const page = (
     <Page
       title={t('agents.side.office')}
-      description={t('agents.desc')}
+      description={t('agents.overviewDesc')}
       width={view === 'classic' ? 'default' : 'wide'}
       actions={
         <>

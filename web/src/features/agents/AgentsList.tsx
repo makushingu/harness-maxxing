@@ -9,7 +9,8 @@
 // On a phone it is the whole page at /agents (an agent then opens full screen); on a desktop, the page's left column.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
-import { Bot, Building2, Plus, TriangleAlert, UsersRound, X } from 'lucide-react'
+import { Bot, LayoutGrid, Plus, TriangleAlert, UsersRound, X } from 'lucide-react'
+import { ListChips, ListEntry } from '@/components/shell/PageList'
 import { useT, type TFn } from '@/i18n'
 import { agentRoute, groupRoute, useAgentGroups, useAgents, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentGroup } from '@/lib/types'
@@ -54,22 +55,12 @@ export function OfficeLink({ onNew }: { onNew?: () => void }) {
   const touch = useCompact()
   const { pathname } = useLocation()
   const office = !touch && /^\/agents(\/office)?\/?$/.test(pathname)
+  // the first entry of the list, like Overview in Infra and Tasks; New agent is the page's button (touch: here too,
+  // the drawer hides the page's header)
   return (
-    <div className="flex shrink-0 items-center gap-1 border-y px-2 py-1.5">
-      <Link
-        to={touch ? '/agents/office' : '/agents'}
-        aria-current={office ? 'page' : undefined}
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-          touch ? 'h-11' : 'h-9',
-          office && 'bg-accent text-foreground',
-        )}
-        data-testid="agents-office"
-      >
-        <Building2 className="size-4" />
-        {t('agents.side.office')}
-      </Link>
-      {onNew && (
+    <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
+      <ListEntry icon={LayoutGrid} label={t('agents.side.office')} to={touch ? '/agents/office' : '/agents'} active={office} testid="agents-office" />
+      {onNew && touch && (
         <Button variant="ghost" size="icon" onClick={onNew} aria-label={t('agents.new')} title={t('agents.new')} data-testid="agent-new-list">
           <Plus />
         </Button>
@@ -78,10 +69,9 @@ export function OfficeLink({ onNew }: { onNew?: () => void }) {
   )
 }
 
-export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode; nav?: React.ReactNode; className?: string }) {
+export function AgentsList({ empty, nav, query = '', className }: { empty?: React.ReactNode; nav?: React.ReactNode; query?: string; className?: string }) {
   const t = useT()
   const mask = useMask()
-  const touch = useCompact()
   const { data, isLoading, error, refetch } = useAgents()
   const { data: ws } = useWorkspace()
   const { data: allGroups } = useAgentGroups()
@@ -91,13 +81,15 @@ export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode;
   const onAgents = useLocation().pathname.startsWith('/agents')
   const topic = (onAgents && params.get('topic')) || ''
 
+  const q = query.trim().toLowerCase()
   // The topic chip narrows first; the state chips count what is left.
   const matching = React.useMemo(() => {
     const all = data?.agents || []
     return all
       .filter((a) => !topic || `${a.project}/${a.topic}` === topic)
+      .filter((a) => !q || [a.display_name, a.name, a.project, a.topic].some((x) => x?.toLowerCase().includes(q)))
       .sort(byActivity)
-  }, [data, topic])
+  }, [data, topic, q])
   const counts = React.useMemo(() => {
     const c = {} as Record<StateFilter, number>
     for (const g of STATE_GROUPS) c[g.id] = matching.filter((a) => g.has(agentState(a))).length
@@ -113,9 +105,10 @@ export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode;
     const g = filter === null || filter === 'unread' || filter === 'running' ? allGroups || [] : []
     return g
       .filter((x) => !topic || x.members.some((m) => m.path.startsWith(`projects/${topic.replace('/', '/topics/')}/`)))
+      .filter((x) => !q || [x.display_name, x.name, x.project].some((y) => y?.toLowerCase().includes(q)))
       .filter((x) => (filter === 'unread' ? x.unread > 0 : filter === 'running' ? x.busy : true))
       .sort((a, b) => (b.last_at || b.created) - (a.last_at || a.created))
-  }, [allGroups, filter, topic])
+  }, [allGroups, filter, topic, q])
 
   const layout = useAgentsLayout()
   const groups = React.useMemo(() => {
@@ -140,18 +133,22 @@ export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode;
     <div className={cn('flex min-h-0 flex-col [@media(max-height:500px)]:overflow-y-auto', className)} data-testid="agents-list">
       {nav}
       <div className="grid shrink-0 gap-2 px-3 pt-2 pb-1.5">
-        <div className={cn('flex min-w-0 gap-1.5', touch ? '-my-1 overflow-x-auto py-1' : 'flex-wrap')} role="group" aria-label={t('agents.side.filter')} data-hscroll-ok data-testid="agents-filter">
-          <button type="button" className={chip(!filter, touch)} aria-pressed={!filter} onClick={() => setFilter(null)}>
-            {t('agents.side.all')}
-            <span className="tabular-nums opacity-70">{matching.length}</span>
-          </button>
-          {STATE_GROUPS.filter((g) => counts[g.id] > 0 || filter === g.id).map((g) => (
-            <button key={g.id} type="button" className={chip(filter === g.id, touch)} aria-pressed={filter === g.id} onClick={() => setFilter(filter === g.id ? null : g.id)} data-testid={`agents-filter-${g.id}`}>
-              <StatusDot tone={g.tone} pulse={g.id === 'waiting' || g.id === 'running'} className="size-1.5" /> {g.label(t)}
-              <span className="tabular-nums opacity-70">{counts[g.id]}</span>
-            </button>
-          ))}
-        </div>
+        <ListChips<StateFilter | 'all'>
+          label={t('agents.side.filter')}
+          value={filter ?? 'all'}
+          onChange={(k) => setFilter(k === 'all' || k === filter ? null : k)}
+          items={[
+            { key: 'all', label: t('agents.side.all') },
+            ...STATE_GROUPS.filter((g) => counts[g.id] > 0 || filter === g.id).map((g) => ({
+              key: g.id,
+              label: g.label(t),
+              count: counts[g.id],
+              dot: <StatusDot tone={g.tone} pulse={g.id === 'waiting' || g.id === 'running'} className="size-1.5 shrink-0" />,
+              testid: `agents-filter-${g.id}`,
+            })),
+          ]}
+          className="min-w-0"
+        />
         {topic && (
           <span className="flex min-w-0 items-center gap-1 self-start rounded-full bg-secondary py-0.5 pr-0.5 pl-2.5 text-xs">
             <span className="truncate">
@@ -190,7 +187,7 @@ export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode;
         ) : !groups.length && empty && !data?.agents.length ? (
           empty
         ) : !groups.length ? (
-          <EmptyState compact icon={Bot} title={topic || filter ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
+          <EmptyState compact icon={Bot} title={topic || filter || q ? t('agents.side.noMatch') : t('agents.emptyTitle')} />
         ) : (
           groups.map((g, i) => (
             <Group
@@ -221,14 +218,6 @@ export function AgentsList({ empty, nav, className }: { empty?: React.ReactNode;
     </div>
   )
 }
-
-/** The look of the filter chips (the All / Running / Unread chips of the Sessions list). */
-const chip = (on: boolean, touch: boolean) =>
-  cn(
-    'flex shrink-0 items-center gap-1.5 rounded-full font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-    touch ? 'h-10 px-3 text-[13px]' : 'h-6 px-2.5 text-xs',
-    on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:text-foreground active:bg-accent',
-  )
 
 /** A project: its header (colour, name and count, "..." menu; dragged to move the project), then its agents. */
 function Group({ project, label, index, layout, among, head, children }: { project: string; label: string; index: number; layout: AgentsLayoutApi; among: string[]; head: React.ReactNode; children: React.ReactNode }) {

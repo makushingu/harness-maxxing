@@ -62,6 +62,7 @@ export default function AgentsLayout() {
   const topicPath = topic ? `projects/${topic.replace('/', '/topics/')}` : undefined
   // "New agent": the sheet asks where (the listed topic if the list is narrowed to one) and a name.
   const newAgent = React.useCallback(() => openWith({}), [openWith])
+  const [query, setQuery] = React.useState('')
 
   if (on === false) return <AgentsOff />
 
@@ -84,12 +85,12 @@ export default function AgentsLayout() {
   // Office in the page.
   return (
     <div className="flex min-h-0 flex-1" data-testid="agents-layout">
-      <PageList id="agents" label={t('agents.title')}>
+      <PageList id="agents" label={t('agents.title')} search={{ value: query, onChange: setQuery, placeholder: t('agents.side.search') }}>
         {touch ? (
-          <AgentsList nav={<OfficeLink onNew={newAgent} />} className="min-h-0 flex-1" />
+          <AgentsList nav={<OfficeLink onNew={newAgent} />} query={query} className="min-h-0 flex-1" />
         ) : (
           <AgentHover className="min-h-0 flex-1">
-            <AgentsList nav={<OfficeLink onNew={newAgent} />} className="flex-1" />
+            <AgentsList nav={<OfficeLink onNew={newAgent} />} query={query} className="flex-1" />
           </AgentHover>
         )}
       </PageList>

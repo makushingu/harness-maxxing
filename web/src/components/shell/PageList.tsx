@@ -9,8 +9,9 @@
 // when the page has a list), whose body is the slot (ListSlot).
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router'
 import { create } from 'zustand'
-import { ChevronLeft, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { ChevronLeft, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react'
 import { SECOND_W, useUI } from '@/stores/ui'
 import { useCompact } from '@/stores/media'
 import { ResizeEdge } from './ResizeEdge'
@@ -174,7 +175,11 @@ export function SecondBar({ left }: { left: number }) {
 
 /** The page's list in the second-level sidebar, with its head (the page's name and the open / close button). Touch
  *  layout: in the left drawer, or in the page itself while `inline` (nothing is picked yet: the list is the page). */
-export function PageList({ id, entry, label, icon: Icon, inline, children }: {
+/** The list's own filter: the 🔍 of its head shows a field under it that narrows the list (a list without one: the 🔍
+ *  of the touch head opens the search of the app instead, Ctrl K on a desktop). */
+export type ListSearch = { value: string; onChange: (v: string) => void; placeholder?: string }
+
+export function PageList({ id, entry, label, icon: Icon, inline, search, children }: {
   id: string
   /** the main sidebar entry that shows the list on hover when closed, when it is not the page's own (`id`) */
   entry?: string
@@ -182,6 +187,7 @@ export function PageList({ id, entry, label, icon: Icon, inline, children }: {
   icon?: React.ComponentType<{ className?: string }>
   /** touch layout: shown in the page, in place (no drawer to open, no ☰) */
   inline?: boolean
+  search?: ListSearch
   children: React.ReactNode
 }) {
   const t = useT()
@@ -206,7 +212,7 @@ export function PageList({ id, entry, label, icon: Icon, inline, children }: {
   const toggle = open ? t('shell.listHide') : t('shell.listKeep')
   return createPortal(
     <>
-      <ListHead label={label} icon={Icon}>
+      <ListHead label={label} icon={Icon} search={search}>
         {!touch && <Tooltip content={toggle}>
           <Button
             variant="ghost"
@@ -232,9 +238,17 @@ export function PageList({ id, entry, label, icon: Icon, inline, children }: {
 
 /** The head of a list (its page's name): the second-level sidebar's, and the touch drawers' (the sessions drawer has
  *  its own body but the same head). */
-export function ListHead({ label, icon: Icon, children }: { label: string; icon?: React.ComponentType<{ className?: string }>; children?: React.ReactNode }) {
+export function ListHead({ label, icon: Icon, search, children }: { label: string; icon?: React.ComponentType<{ className?: string }>; search?: ListSearch; children?: React.ReactNode }) {
   const t = useT()
   const touch = useCompact()
+  const [asked, setAsked] = React.useState(false)
+  const field = !!search && (asked || !!search.value)
+  const close = () => {
+    search?.onChange('')
+    setAsked(false)
+  }
+  const glass = search ? (field ? close : () => setAsked(true)) : touch ? searchNow : null
+  const glassLabel = search ? search.placeholder || t('common.search') : t('palette.open')
   return (
     <>
     <div className={cn('flex min-h-[var(--header-h)] shrink-0 items-center gap-2 border-b border-sidebar-border pr-2', touch ? 'pl-1.5' : 'pl-4')}>
@@ -252,20 +266,133 @@ export function ListHead({ label, icon: Icon, children }: { label: string; icon?
       )}
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">{label}</h2>
-      {/* touch: the search, facing the title (the menu has the field; no magnifier at the top of the pages) */}
-      {touch && (
+      {/* the search, facing the title: the list's filter, or (touch, a list without one) the search of the app */}
+      {glass && (touch ? (
         <button
           type="button"
-          onClick={searchNow}
-          aria-label={t('palette.open')}
+          onClick={glass}
+          aria-label={glassLabel}
+          aria-pressed={search ? field : undefined}
           data-testid="touch-search-field"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring', field && 'text-foreground')}
         >
           <Search className="size-5" />
         </button>
-      )}
+      ) : (
+        <Tooltip content={glassLabel}>
+          <Button variant="ghost" size="icon-sm" aria-label={glassLabel} aria-pressed={field} className={cn('shrink-0 text-muted-foreground', field && 'bg-accent text-foreground')} onClick={glass} data-testid="list-search">
+            <Search />
+          </Button>
+        </Tooltip>
+      ))}
       {children}
     </div>
+    {field && search && (
+      <div className={cn('relative shrink-0', touch ? 'px-3 pt-2' : 'px-2 pt-2')}>
+        <Search className={cn('pointer-events-none absolute top-1/2 mt-1 size-4 -translate-y-1/2 text-muted-foreground', touch ? 'left-6' : 'left-4.5')} />
+        <input
+          autoFocus={asked}
+          value={search.value}
+          onChange={(e) => search.onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              close()
+            }
+          }}
+          placeholder={search.placeholder || t('common.search')}
+          aria-label={search.placeholder || t('common.search')}
+          className={cn('w-full rounded-lg border border-input bg-transparent pr-8 pl-8 text-sm outline-none placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25 dark:bg-input/30', touch ? 'h-10 text-base' : 'h-8')}
+          data-testid="list-search-field"
+        />
+        {search.value && (
+          <button type="button" onClick={() => search.onChange('')} aria-label={t('common.close')} className={cn('absolute top-1/2 mt-1 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:text-foreground', touch ? 'right-4.5' : 'right-3.5')}>
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+    )}
     </>
+  )
+}
+
+/** A row of filters at the top of a list (All / Running / Unread…): one line, the one picked filled. `count` shows after
+ *  the label, `dot` before it. Touch: equal parts in a grey track. */
+export function ListChips<K extends string>({ items, value, onChange, label, className }: {
+  items: { key: K; label: string; count?: number; dot?: React.ReactNode; testid?: string }[]
+  value: K
+  onChange: (k: K) => void
+  label: string
+  className?: string
+}) {
+  const touch = useCompact()
+  return (
+    <div
+      className={cn('shrink-0', touch ? 'flex gap-1 overflow-x-auto rounded-xl bg-muted p-1' : '-my-1 flex gap-1.5 overflow-x-auto py-1', className)}
+      role="group"
+      aria-label={label}
+      data-hscroll-ok
+    >
+      {items.map((it) => {
+        const on = it.key === value
+        return (
+          <button
+            key={it.key}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(it.key)}
+            data-testid={it.testid}
+            className={cn(
+              'flex items-center font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+              touch ? 'h-9 shrink-0 flex-auto justify-center gap-1 rounded-lg px-2.5 text-[13px]' : 'h-6 shrink-0 gap-1.5 rounded-full px-2 text-xs',
+              on ? 'bg-foreground text-background' : cn('text-muted-foreground hover:text-foreground', touch ? 'active:bg-accent' : 'bg-muted active:bg-accent'),
+            )}
+          >
+            {it.dot}
+            <span className="truncate">{it.label}</span>
+            {!!it.count && <span className="tabular-nums opacity-70">{it.count}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** An entry of a list's navigation (Overview, All tasks, All mailboxes…): the same row on every page. A link (`to`) or a
+ *  button (`onClick`); `count` at the end (a plain total), `badge` before it (to read, problems). */
+export function ListEntry({ icon: Icon, label, to, onClick, active, count, badge, testid, className }: {
+  icon: React.ComponentType<{ className?: string }>
+  label: React.ReactNode
+  to?: string
+  onClick?: () => void
+  active?: boolean
+  count?: number
+  badge?: React.ReactNode
+  testid?: string
+  className?: string
+}) {
+  const touch = useCompact()
+  const cls = cn(
+    'flex w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+    touch ? 'h-11' : 'h-9',
+    active && 'bg-accent font-medium text-foreground hover:bg-accent',
+    className,
+  )
+  const body = (
+    <>
+      <Icon className={cn('size-4 shrink-0', active && 'text-primary')} />
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+      {badge}
+      {count != null && count > 0 && <span className="min-w-5 text-right text-xs tabular-nums text-muted-foreground">{count}</span>}
+    </>
+  )
+  return to ? (
+    <Link to={to} aria-current={active ? 'page' : undefined} className={cls} data-testid={testid}>
+      {body}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} aria-current={active ? 'page' : undefined} className={cls} data-testid={testid}>
+      {body}
+    </button>
   )
 }
