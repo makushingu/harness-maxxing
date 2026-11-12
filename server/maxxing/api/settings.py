@@ -325,7 +325,7 @@ def put_settings(body: SettingsIn):
             raise _err("invalid_timezone", f"unknown time zone {changes['timezone']!r}") from None
     if "public_url" in changes:
         url = changes["public_url"].strip().rstrip("/")
-        if url and not _URL.match(url):
+        if url and not (_URL.match(url) and _utf8(url)):
             raise _err("invalid_url", "public_url must look like https://ui.example.com")
         changes["public_url"] = url
     if "memory_max_lines" in changes:

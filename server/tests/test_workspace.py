@@ -209,3 +209,11 @@ def test_a_refused_project_rename_saves_nothing_else(client, topic):
     assert r.status_code == 409 and r.json()["error"] == "has_running_sessions"
     assert _tree_node(client, "acme")["emoji"] == before
     client.post(f"/api/sessions/{s['id']}/stop")
+
+
+def test_a_lone_surrogate_emoji_is_refused(client, mx):
+    """Valid JSON (`\\ud800`) that no UTF-8 file can hold: bad_emoji, not a 500 from the metadata write."""
+    client.post("/api/workspace/projects", json={"name": "shop"})
+    r = client.patch("/api/workspace/projects/shop", content=b'{"emoji": "\\ud800"}',
+                     headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_emoji", r.text

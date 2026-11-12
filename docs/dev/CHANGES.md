@@ -166,6 +166,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   busy (`409 has_running_sessions`) and destination (`409 exists`) checks before any write; they used to save emoji /
   `permission_mode` / `allowed_tools` first, then refuse the rename. Tests: `tests/test_workspace.py`
   (`test_a_refused_topic_rename_saves_nothing_else`, `..._of_a_busy_topic_...`, `test_a_refused_project_rename_...`).
+- A lone surrogate (valid JSON, not encodable to the UTF-8 state files) is refused where it is validated instead of
+  raising `UnicodeEncodeError` in `config._atomic_write` (500): `api/dashboard.layout` drops such ids (reuses
+  `api.settings._utf8`), `workspace.check_emoji` -> 400 `bad_emoji`, `backup.clean_include` -> 400 `invalid_include`
+  (reuses `backup._utf8`), `api/settings` `public_url` -> 400 `invalid_url` (`_utf8`; other non-ASCII still accepted).
+  Tests: `test_dashboard`, `test_workspace`, `test_backup`, `test_settings`.
+- `api/files.resolve` refuses a NUL in the last name with 400 `bad_path` for `follow=False` and `new=True`, which never
+  resolve the last part (mkdir/move raised `ValueError`, 500). `follow=False` on an existing path (`/delete`, the `from`
+  of `/move`) with a NUL in the last name now answers 400 `bad_path` instead of 404. Test: `test_files_guard`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

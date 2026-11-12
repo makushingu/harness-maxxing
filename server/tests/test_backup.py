@@ -667,3 +667,12 @@ def test_hand_edited_history_lines_that_are_not_objects_are_skipped(mx_state):
     assert backup.status()["last"]["ok"] is True
     assert backup.last_success_age_h() is not None
     assert backup.history() == [{"at": 1, "ok": True}]
+
+
+async def test_a_lone_surrogate_in_the_backup_include_is_refused(gh, ws):
+    """Valid JSON that config.json cannot store: invalid_include, not a 500."""
+    app = bare_app(backup_api.router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.put("/api/backup/settings", content=b'{"include": ["\\ud800"]}',
+                        headers={"content-type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "invalid_include", r.text

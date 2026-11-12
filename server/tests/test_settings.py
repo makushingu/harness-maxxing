@@ -166,3 +166,10 @@ def test_a_hand_edited_result_line_hidden_of_the_wrong_type_never_breaks_the_set
         config.update_config(result_line_hidden=bad)
         r = client.get("/api/settings")
         assert r.status_code == 200 and r.json()["result_line_hidden"] == []
+
+
+def test_a_lone_surrogate_in_the_public_url_is_refused(client, org):
+    """Valid JSON that config.json cannot store: invalid_url, not a 500."""
+    r = client.put("/api/settings", content=b'{"public_url": "https://ui.example.com/\\ud800"}',
+                   headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_url", r.text
