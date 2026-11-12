@@ -795,6 +795,8 @@ class Runner:
                 return
             q.pop(0)
             m["queue"], m["updated"] = q, time.time()
+            # a relayed message now part of this turn: the turn's own sends count from its hops (MAX_HOPS holds)
+            m["turn_hops"] = max(int(m.get("turn_hops") or 0), int((head.get("relay") or {}).get("hops") or 0))
             refs = list(head.get("refs") or [])
             if refs:                                   # Telegram: answered by this turn
                 self.injected_refs += refs

@@ -17,6 +17,12 @@ MAX = 8                                   # mentions read per message
 SESSIONS = 60                             # most recent sessions offered
 
 
+def _plain(name: str) -> str:
+    """A name chosen elsewhere (a Team contact's, set by their server) as it goes into the prompt: one line, no
+    brackets or backticks that could pass for Harness's own notes or for a command."""
+    return " ".join(str(name or "").replace("`", "'").replace("[", "(").replace("]", ")").split())[:64]
+
+
 def _topic(path: str) -> str:
     m = re.match(r"^projects/([^/]+)/topics/([^/]+)", path or "")
     return f"{m.group(1)} / {m.group(2)}" if m else (path or "")
@@ -61,7 +67,7 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
         seen.add((kind, ref))
         if kind == "session":
             s = service.get_session(ref) if ref != sender else None
-            if s:
+            if s and not agents.is_agent_path(s["path"]):
                 out.append({"kind": kind, "ref": ref, "label": s["title"], "where": _topic(s["path"]),
                             "command": f"maxxing sessions send {ref[:8]}"})
         elif kind == "agent":
@@ -75,6 +81,6 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
                 team_rows = team.recipients() if config.load_config().get("team_page") else []
             r = next((x for x in team_rows if ref in (x["id"], x.get("chat"))), None)
             if r:
-                out.append({"kind": kind, "ref": r["id"], "label": r["name"], "group": r["kind"] == "group",
+                out.append({"kind": kind, "ref": r["id"], "label": _plain(r["name"]), "group": r["kind"] == "group",
                             "command": f"maxxing team send {r['id']}"})
     return out

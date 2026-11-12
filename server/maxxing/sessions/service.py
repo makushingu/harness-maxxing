@@ -467,9 +467,13 @@ def find_session(to: str) -> dict:
     want = (to or "").strip()
     if not want:
         raise SessionError(400, "no_session", "Say which session the message is for")
+    from .. import agents
+    # an agent's sessions are reached through `maxxing agents send` only (its guards, outside text marked as such)
     if store.is_valid_id(want) and (s := get_session(want)):
+        if agents.is_agent_path(s["path"]):
+            raise SessionError(403, "agent_session", "This is an agent's session: use `maxxing agents send <agent>`")
         return s
-    rows = list_sessions()
+    rows = [s for s in list_sessions() if not agents.is_agent_path(s["path"])]
     rows.sort(key=lambda s: bool(s.get("archived")))
     if len(want) >= 6 and (hit := [s for s in rows if s["id"].startswith(want.lower())]):
         if len(hit) == 1:
@@ -596,9 +600,28 @@ def take_queue(sid: str) -> dict:
     return {"messages": out, "session": get_session(sid)}
 
 
+def _merged_relay(mine: list[dict]) -> tuple[list[str], dict | None]:
+    """Texts and relay of merged messages. One sender for all: its relay as is (one preface, the "↩ session" mark).
+    Mixed (the user's own text with a message sent by another session, or two senders): each relayed text gets its
+    own preface inline, so the user's words are never introduced as a colleague's. The hops are the highest."""
+    from .runner import relay_preface
+    relays = [x.get("relay") for x in mine if x.get("relay")]
+    texts = [x["text"] for x in mine if x.get("text")]
+    if not relays:
+        return texts, None
+    hops = max(int(r.get("hops") or 0) for r in relays)
+    senders = {r.get("from") or "" for r in relays}
+    if len(relays) == len(mine) and len(senders) == 1:
+        return texts, {**relays[0], "hops": hops}
+    texts = [(relay_preface(x["relay"]) if (x.get("relay") or {}).get("from") else "") + x["text"]
+             for x in mine if x.get("text")]
+    return texts, {"hops": hops}
+
+
 def _merged(mine: list[dict], **extra: Any) -> dict:
     """The queued user messages `mine` as ONE queue item (texts, files, voice, ids and refs kept)."""
-    return _item("\n\n".join(x["text"] for x in mine if x.get("text")),
+    texts, relay = _merged_relay(mine)
+    return _item("\n\n".join(texts),
                  [a for x in mine for a in x.get("attachments") or []],
                  mine[-1].get("source") or "web", **extra,
                  **({"voice": [v for x in mine for v in x.get("voice") or []]}
@@ -607,7 +630,7 @@ def _merged(mine: list[dict], **extra: Any) -> dict:
                  **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
                  **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
                  **({"mentions": ms} if (ms := [mm for x in mine for mm in x.get("mentions") or []]) else {}),
-                 **({"relay": rl} if (rl := next((x["relay"] for x in mine if x.get("relay")), None)) else {}),
+                 **({"relay": relay} if relay else {}),
                  **({"refs": refs} if (refs := [r for x in mine for r in x.get("refs") or []]) else {}))
 
 
